@@ -81,24 +81,22 @@ Both agents support the same beacon protocol and features.
 
 ```mermaid
 graph TD
-    A[Web UI - Gin + Templates + Tailwind/HTMX] --> B[Internal Server]
-    B --> C[Auth Middleware JWT + bcrypt]
-    B --> D[Agent API /api/v1/beacon + /screen_frame]
-    B --> E[Task Queue + Results]
-    B --> F[SQLite via GORM]
+    A[Web UI<br/>Gin + Tailwind + HTMX] --> B[Internal Server]
+    B --> C[Auth<br/>JWT + bcrypt]
+    B --> D[Agent API<br/>/api/v1/beacon]
+    B --> E[Task Queue<br/>+ Results]
+    B --> F[SQLite<br/>via GORM]
     
-    G[Windows EXE Agent] -->|HTTPS Beacon + Results| D
-    H[PowerShell Agent] -->|HTTPS Beacon + Results| D
+    G[Windows EXE Agent] -->|HTTPS Beacon| D
+    H[PowerShell Agent] -->|HTTPS Beacon| D
     
-    D --> I[Task Dispatch + Live Screen Stream]
-    E --> J[Screenshots (on-demand only)]
-    F --> K[Agent & Task Models]
-    
-    style A fill:#18181b,stroke:#22d3ee
-    style G fill:#1e40af,stroke:#3b82f6,color:#fff
-    style H fill:#6b21a8,stroke:#a855f7,color:#fff
+    D --> I[Task Dispatch<br/>shell / file / stream]
+    E --> J[Live Screen Stream<br/>no file retention]
+    F --> K[Models]
 ```
 
+> Mermaid diagrams are rendered on GitHub. If it doesn't show, try refreshing or view the raw Markdown.
+```
 ## Configuration
 
 Edit `config.yaml` (auto-created on first run):

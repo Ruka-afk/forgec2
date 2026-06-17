@@ -103,24 +103,22 @@ docker-compose up --build
 
 ```mermaid
 graph TD
-    A[Web UI - Gin + Templates + Tailwind/HTMX] --> B[Internal Server]
-    B --> C[Auth Middleware JWT + bcrypt]
-    B --> D[Agent API /api/v1/beacon + /screen_frame]
-    B --> E[Task Queue + Results]
-    B --> F[SQLite via GORM]
+    A[Web UI<br/>Gin + Tailwind + HTMX] --> B[Internal Server]
+    B --> C[Auth<br/>JWT + bcrypt]
+    B --> D[Agent API<br/>/api/v1/beacon]
+    B --> E[Task Queue<br/>+ Results]
+    B --> F[SQLite<br/>via GORM]
     
-    G[Windows EXE Agent] -->|HTTPS Beacon + Results| D
-    H[PowerShell Agent] -->|HTTPS Beacon + Results| D
+    G[Windows EXE Agent] -->|HTTPS Beacon| D
+    H[PowerShell Agent] -->|HTTPS Beacon| D
     
-    D --> I[Task Dispatch + Live Screen Stream]
-    E --> J[Screenshots (仅按需保存)]
-    F --> K[Agent & Task Models]
-    
-    style A fill:#18181b,stroke:#22d3ee
-    style G fill:#1e40af,stroke:#3b82f6,color:#fff
-    style H fill:#6b21a8,stroke:#a855f7,color:#fff
+    D --> I[Task Dispatch<br/>shell / file / stream]
+    E --> J[Live Screen Stream<br/>no file retention]
+    F --> K[Models]
 ```
 
+> Mermaid 图表在 GitHub 上会自动渲染。如果无法显示，请尝试刷新页面，或直接查看原始 Markdown 文件。
+```
 ## 配置说明
 
 首次运行会自动生成 `config.yaml`：
