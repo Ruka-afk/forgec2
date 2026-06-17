@@ -6,28 +6,6 @@
 
 ForgeC2 是一个基于纯 Go 构建的现代化、单二进制、面向操作员的 C2 框架。它拥有美观的深色主题 Web 界面、两种 Agent 类型（原生 Windows EXE + PowerShell）、实时屏幕流（不落盘）、按需截图（EXE 使用纯 Go）、文件操作以及强大的任务管理功能，专为独立操作员和专业安全团队设计。
 
-## 功能截图
-
-### 仪表盘
-![Dashboard](assets/screenshots/dashboard.png)
-
-### Agent 管理
-![Agents](assets/screenshots/agents.png)
-
-### 实时屏幕监控（流式）
-![Screen Monitor](assets/screenshots/screen.png)
-
-### Shell 命令执行
-![Shell](assets/screenshots/shell.png)
-
-### 文件浏览器
-![Files](assets/screenshots/files.png)
-
-### 生成 Agent
-![Generate](assets/screenshots/generate.png)
-
-> **提示**：以上为占位图片，请将实际运行截图替换到 `assets/screenshots/` 目录下。
-
 ## 功能特性
 
 - **美观的现代化 Web UI**（端口 8080）—— 采用 Tailwind + HTMX 的专业深色主题

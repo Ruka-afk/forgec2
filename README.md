@@ -36,28 +36,6 @@ ForgeC2 is a modern, single-binary, operator-friendly C2 framework built in pure
 - File transfer size limits
 - Refactored handlers and improved WebSocket push notifications
 
-## Screenshots
-
-### Dashboard
-![Dashboard](assets/screenshots/dashboard.png)
-
-### Agents Management
-![Agents](assets/screenshots/agents.png)
-
-### Live Screen Monitoring (Stream)
-![Screen Monitor](assets/screenshots/screen.png)
-
-### Shell Command Execution
-![Shell](assets/screenshots/shell.png)
-
-### File Browser
-![Files](assets/screenshots/files.png)
-
-### Generate Agent
-![Generate](assets/screenshots/generate.png)
-
-> **Tip**: These are placeholder images. Replace them with real screenshots from your runs in `assets/screenshots/`.
-
 ## Quick Start
 
 ### 1. Build & Run (Recommended)
