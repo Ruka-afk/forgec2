@@ -6,8 +6,6 @@
 
 ForgeC2 is a modern, single-binary, operator-friendly C2 framework built in pure Go. It features a beautiful dark-themed web interface, two agent types (native Windows EXE + PowerShell), live screen streaming (no file retention), on-demand screenshots (pure Go for EXE), file operations, and robust task management — designed for solo operators and professional security teams.
 
-![ForgeC2 Dashboard](https://via.placeholder.com/1200x600/18181b/22d3ee?text=ForgeC2+Professional+UI)
-
 ## Features
 
 - **Beautiful Modern Web UI** (port 8080) — Deep professional dark theme with Tailwind + HTMX
@@ -37,6 +35,28 @@ ForgeC2 is a modern, single-binary, operator-friendly C2 framework built in pure
 - Enhanced audit logging
 - File transfer size limits
 - Refactored handlers and improved WebSocket push notifications
+
+## Screenshots
+
+### Dashboard
+![Dashboard](assets/screenshots/dashboard.png)
+
+### Agents Management
+![Agents](assets/screenshots/agents.png)
+
+### Live Screen Monitoring (Stream)
+![Screen Monitor](assets/screenshots/screen.png)
+
+### Shell Command Execution
+![Shell](assets/screenshots/shell.png)
+
+### File Browser
+![Files](assets/screenshots/files.png)
+
+### Generate Agent
+![Generate](assets/screenshots/generate.png)
+
+> **Tip**: These are placeholder images. Replace them with real screenshots from your runs in `assets/screenshots/`.
 
 ## Quick Start
 
