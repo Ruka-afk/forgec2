@@ -1,0 +1,247 @@
+{{define "agents_content"}}
+<div class="max-w-7xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">Agent 管理</h1>
+            <p class="text-slate-500 text-sm">管理已连接的植入程序 • 共 {{len .Agents}} 个</p>
+        </div>
+        <a href="/generate" class="inline-flex items-center gap-x-2 bg-indigo-600 hover:bg-indigo-700 transition-colors px-5 h-10 rounded-2xl text-sm font-medium text-white">
+            <i class="fa-solid fa-plus"></i>
+            <span>生成新 Agent</span>
+        </a>
+    </div>
+
+    <!-- 搜索和筛选 -->
+    <form class="flex gap-3 mb-4" hx-get="/agents" hx-target="#agents-table">
+        <input type="text" name="search" value="{{.Search}}" placeholder="搜索主机名、用户、IP..."
+               class="flex-1 bg-white border border-slate-300 focus:border-indigo-500 transition-colors text-sm rounded-2xl px-4 h-10">
+        <select name="status" class="bg-white border border-slate-300 text-sm rounded-2xl px-4 h-10" onchange="this.form.submit()">
+            <option value="">全部状态</option>
+            <option value="online" {{if eq .Status "online"}}selected{{end}}>在线</option>
+            <option value="offline" {{if eq .Status "offline"}}selected{{end}}>离线</option>
+        </select>
+        <button type="submit" class="px-6 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl text-sm">筛选</button>
+    </form>
+
+    <div id="agents-table" class="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+        <table class="w-full text-sm">
+            <thead>
+            <tr class="border-b border-slate-200 text-xs text-slate-500">
+                <th class="text-left py-3.5 px-6 font-normal">主机名</th>
+                <th class="text-left py-3.5 px-4 font-normal">用户名</th>
+                <th class="text-left py-3.5 px-4 font-normal">操作系统/架构</th>
+                <th class="text-left py-3.5 px-4 font-normal">IP 地址</th>
+                <th class="text-left py-3.5 px-4 font-normal">最后上线</th>
+                <th class="text-center py-3.5 px-4 font-normal">状态</th>
+                <th class="text-right py-3.5 px-6 font-normal">操作</th>
+            </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+            {{range .Agents}}
+            <tr class="hover:bg-slate-50 transition-colors">
+                <td class="py-4 px-6 font-medium text-slate-900">{{.Hostname}}</td>
+                <td class="py-4 px-4 text-slate-600">{{.Username}}</td>
+                <td class="py-4 px-4"><span class="font-mono text-xs px-2 py-0.5 bg-slate-100 rounded">{{.OS}}/{{.Arch}}</span></td>
+                <td class="py-4 px-4 font-mono text-xs text-slate-500">{{.IP}}</td>
+                <td class="py-4 px-4 text-xs text-slate-500 font-mono">{{.LastSeen | formatTime}}</td>
+                <td class="py-4 px-4 text-center">
+                    {{if eq .Status "online"}}
+                    <span class="inline-flex items-center gap-x-1.5 text-emerald-600 text-xs font-medium">
+                            <span class="w-2 h-2 bg-emerald-500 rounded-full"></span> 在线
+                        </span>
+                    {{else}}
+                    <span class="text-slate-400 text-xs">离线</span>
+                    {{end}}
+                </td>
+                <td class="py-4 px-6 text-right">
+                    <div class="flex items-center justify-end gap-x-2">
+                        <a href="/agents/{{.ID}}" class="px-4 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors text-slate-700">详情</a>
+                        <a href="/agents/{{.ID}}/files" class="px-4 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors">文件</a>
+                        <a href="/agents/{{.ID}}/shell" class="px-4 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-colors">Shell</a>
+                        <button onclick="showOfflineModal('{{.ID}}', '{{.Hostname}}')" class="px-4 py-1.5 text-xs bg-orange-600 hover:bg-orange-700 text-white rounded-xl transition-colors">下线</button>
+                        <button onclick="showDeleteModal('{{.ID}}', '{{.Hostname}}')" class="px-4 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-xl transition-colors">删除</button>
+                    </div>
+                </td>
+            </tr>
+            {{else}}
+            <tr><td colspan="7" class="py-16 text-center text-slate-400">暂无已连接的 Agent。</td></tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 下线确认弹窗 -->
+<div id="offline-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="hideOfflineModal()"></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transform transition-all">
+        <div class="bg-gradient-to-r from-orange-500 to-red-500 px-6 py-5">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <i class="fa-solid fa-power-off text-white text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">下线 Agent</h3>
+                    <p class="text-white/80 text-sm">确认操作</p>
+                </div>
+            </div>
+        </div>
+        <div class="px-6 py-5">
+            <div class="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-4">
+                <div class="flex items-start gap-3">
+                    <i class="fa-solid fa-exclamation-triangle text-orange-500 mt-0.5"></i>
+                    <p class="text-sm text-slate-700">
+                        您确定要让 <span class="font-semibold text-orange-600" id="modal-hostname"></span> 下线吗？
+                        <br>此操作将发送终止命令给agent，并从列表中删除该agent。此操作无法撤销。
+                    </p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="hideOfflineModal()" class="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium transition-colors">
+                    取消
+                </button>
+                <button onclick="confirmOffline()" class="flex-1 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-medium transition-colors">
+                    确认下线
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 删除确认弹窗 -->
+<div id="delete-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="hideDeleteModal()"></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transform transition-all">
+        <div class="bg-gradient-to-r from-red-500 to-red-700 px-6 py-5">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <i class="fa-solid fa-trash text-white text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">删除 Agent</h3>
+                    <p class="text-white/80 text-sm">确认操作</p>
+                </div>
+            </div>
+        </div>
+        <div class="px-6 py-5">
+            <div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+                <div class="flex items-start gap-3">
+                    <i class="fa-solid fa-exclamation-triangle text-red-500 mt-0.5"></i>
+                    <p class="text-sm text-slate-700">
+                        您确定要删除 <span class="font-semibold text-red-600" id="delete-hostname"></span> 吗？
+                        <br>此操作将永久删除该agent及其所有任务记录，且无法撤销。
+                    </p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="hideDeleteModal()" class="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium transition-colors">
+                    取消
+                </button>
+                <button onclick="confirmDelete()" class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors">
+                    确认删除
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentAgentId = '';
+    let currentHostname = '';
+
+    function showOfflineModal(agentId, hostname) {
+        currentAgentId = agentId;
+        currentHostname = hostname;
+        document.getElementById('modal-hostname').textContent = hostname;
+        document.getElementById('offline-modal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function hideOfflineModal() {
+        document.getElementById('offline-modal').classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    function confirmOffline() {
+        const button = event.target;
+        button.disabled = true;
+        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> 处理中...';
+        
+        fetch(`/agents/${currentAgentId}/kill`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        }).then(r => r.json()).then(data => {
+            hideOfflineModal();
+            if (data.success) {
+                // 显示成功提示
+                showToast('Agent已成功下线', 'success');
+                // 刷新页面
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast('下线失败: ' + (data.error || '未知错误'), 'error');
+            }
+            button.disabled = false;
+            button.innerHTML = '确认下线';
+        }).catch(err => {
+            hideOfflineModal();
+            showToast('网络错误: ' + err, 'error');
+            button.disabled = false;
+            button.innerHTML = '确认下线';
+        });
+    }
+
+    function showDeleteModal(agentId, hostname) {
+        currentAgentId = agentId;
+        currentHostname = hostname;
+        document.getElementById('delete-hostname').textContent = hostname;
+        document.getElementById('delete-modal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function hideDeleteModal() {
+        document.getElementById('delete-modal').classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    function confirmDelete() {
+        const button = event.target;
+        button.disabled = true;
+        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> 删除中...';
+        
+        fetch(`/agents/${currentAgentId}`, {
+            method: 'DELETE'
+        }).then(r => r.json()).then(data => {
+            hideDeleteModal();
+            if (data.success) {
+                showToast('Agent已成功删除', 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast('删除失败: ' + (data.error || '未知错误'), 'error');
+            }
+            button.disabled = false;
+            button.innerHTML = '确认删除';
+        }).catch(err => {
+            hideDeleteModal();
+            showToast('网络错误: ' + err, 'error');
+            button.disabled = false;
+            button.innerHTML = '确认删除';
+        });
+    }
+
+    function showToast(message, type) {
+        // 创建toast元素
+        const toast = document.createElement('div');
+        toast.className = `fixed bottom-6 right-6 px-6 py-4 rounded-xl shadow-lg text-sm font-medium z-50 transition-all transform ${
+            type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`;
+        toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-2"></i>${message}`;
+        document.body.appendChild(toast);
+        
+        // 3秒后移除
+        setTimeout(() => {
+            toast.classList.add('opacity-0', 'translate-y-4');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+</script>
+{{end}}

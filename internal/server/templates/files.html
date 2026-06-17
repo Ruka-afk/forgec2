@@ -1,0 +1,459 @@
+{{define "files_content"}}
+<div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <!-- Header -->
+    <div class="bg-white border-b border-slate-200 px-6 py-4 shadow-sm">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-x-4">
+                <a href="/agents/{{.Agent.ID}}" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-arrow-left text-lg"></i>
+                </a>
+                <div>
+                    <h1 class="text-2xl font-semibold text-slate-900">文件浏览器</h1>
+                    <div class="flex items-center gap-x-2 text-sm text-slate-500">
+                        <span>{{.Agent.Hostname}}</span>
+                        <span class="text-slate-300">•</span>
+                        <span>{{.Agent.Username}}@{{.Agent.IP}}</span>
+                        {{if eq .Agent.Status "online"}}
+                        <span class="flex items-center text-emerald-500"><i class="fa-solid fa-circle fa-beat mr-1 text-[6px]"></i> 在线</span>
+                        {{else}}
+                        <span class="text-red-500">离线</span>
+                        {{end}}
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-x-3">
+                <button onclick="refreshList()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 h-9 rounded-xl text-sm flex items-center gap-x-2">
+                    <i class="fa-solid fa-sync-alt"></i>
+                    <span>刷新</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Path Bar -->
+    <div class="bg-white border-b border-slate-200 px-6 py-3">
+        <div class="flex items-center gap-x-2">
+            <i class="fa-solid fa-folder text-indigo-500"></i>
+            <input type="text" id="current-path" value="C:\" 
+                   class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 h-10 text-sm font-mono"
+                   placeholder="输入路径...">
+            <button onclick="navigateToPath()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 h-10 rounded-xl text-sm">
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </div>
+        <div class="flex items-center gap-x-2 mt-2 text-xs text-slate-500">
+            <span>快捷路径:</span>
+            <button onclick="goTo('C:\\')" class="hover:text-indigo-600">C:\</button>
+            <span class="text-slate-300">|</span>
+            <button onclick="goTo('C:\\Users')" class="hover:text-indigo-600">Users</button>
+            <span class="text-slate-300">|</span>
+            <button onclick="goTo('C:\\Windows')" class="hover:text-indigo-600">Windows</button>
+            <span class="text-slate-300">|</span>
+            <button onclick="goTo('C:\\Program Files')" class="hover:text-indigo-600">Program Files</button>
+            <span class="text-slate-300">|</span>
+            <button onclick="goTo('%TEMP%')" class="hover:text-indigo-600">Temp</button>
+        </div>
+    </div>
+
+    <!-- File List -->
+    <div class="px-6 py-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <!-- Loading State -->
+            <div id="loading-state" class="hidden p-8 text-center">
+                <i class="fa-solid fa-spinner fa-spin text-2xl text-indigo-500 mb-3"></i>
+                <p class="text-slate-500">正在加载文件列表...</p>
+            </div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="hidden p-8 text-center">
+                <i class="fa-solid fa-folder-open text-4xl text-slate-300 mb-3"></i>
+                <p class="text-slate-500">目录为空或无法访问</p>
+            </div>
+
+            <!-- File Table -->
+            <div id="file-table">
+                <table class="w-full">
+                    <thead class="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">类型</th>
+                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">名称</th>
+                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">大小</th>
+                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">修改时间</th>
+                            <th class="text-right py-3 px-4 text-xs font-medium text-slate-500">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="file-list" class="divide-y divide-slate-100">
+                        <!-- Files will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Preview Modal -->
+    <div id="preview-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-xl max-w-3xl w-full mx-4 max-h-[80vh] overflow-hidden">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                <h3 id="preview-title" class="text-lg font-semibold text-slate-900">文件预览</h3>
+                <button onclick="closePreview()" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="preview-content" class="p-6 overflow-auto max-h-[60vh]">
+                <!-- Preview content -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirm Modal -->
+    <div id="delete-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4">
+            <div class="p-6">
+                <div class="flex items-center gap-x-3 mb-4">
+                    <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+                        <i class="fa-solid fa-trash text-red-500"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-900">确认删除</h3>
+                        <p id="delete-file-name" class="text-sm text-slate-500"></p>
+                    </div>
+                </div>
+                <p class="text-slate-600 mb-6">此操作无法撤销，确定要删除此文件或目录吗？</p>
+                <div class="flex gap-x-3">
+                    <button onclick="closeDeleteModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 h-10 rounded-xl text-sm">
+                        取消
+                    </button>
+                    <button onclick="confirmDelete()" class="flex-1 bg-red-600 hover:bg-red-700 text-white h-10 rounded-xl text-sm">
+                        确认删除
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div id="upload-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4">
+            <div class="p-6">
+                <div class="flex items-center gap-x-3 mb-4">
+                    <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+                        <i class="fa-solid fa-upload text-emerald-500"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-900">上传文件到服务器</h3>
+                        <p id="upload-file-name" class="text-sm text-slate-500"></p>
+                    </div>
+                </div>
+                <p class="text-slate-600 mb-6">将此文件从目标机器上传到服务器保存？</p>
+                <div class="flex gap-x-3">
+                    <button onclick="closeUploadModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 h-10 rounded-xl text-sm">
+                        取消
+                    </button>
+                    <button onclick="confirmUpload()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white h-10 rounded-xl text-sm">
+                        确认上传
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const agentId = '{{.Agent.ID}}';
+    let currentPath = 'C:\\';
+    let deleteTargetPath = '';
+    let uploadTargetPath = '';
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        listDir(currentPath);
+    });
+
+    function listDir(path) {
+        currentPath = path;
+        document.getElementById('current-path').value = path;
+        
+        // Show loading
+        document.getElementById('loading-state').classList.remove('hidden');
+        document.getElementById('file-table').classList.add('hidden');
+        document.getElementById('empty-state').classList.add('hidden');
+
+        fetch(`/agents/${agentId}/files/ls`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `path=${encodeURIComponent(path)}`
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                // Wait for result
+                setTimeout(() => fetchListResult(data.task_id), 2000);
+            } else {
+                showError(data.error || '请求失败');
+            }
+        }).catch(err => {
+            showError('网络错误: ' + err);
+        });
+    }
+
+    function fetchListResult(taskId) {
+        fetch(`/agents/${agentId}/tasks/${taskId}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'completed') {
+                    renderFileList(data.result);
+                } else if (data.status === 'failed') {
+                    showError(data.error || '获取文件列表失败');
+                } else {
+                    // Still pending
+                    setTimeout(() => fetchListResult(taskId), 2000);
+                }
+            }).catch(err => {
+                showError('网络错误: ' + err);
+            });
+    }
+
+    function renderFileList(rawResult) {
+        document.getElementById('loading-state').classList.add('hidden');
+        
+        if (!rawResult || rawResult.trim() === '') {
+            document.getElementById('empty-state').classList.remove('hidden');
+            return;
+        }
+
+        // Parse the result (tab-separated)
+        const lines = rawResult.split('\n');
+        const fileList = document.getElementById('file-list');
+        fileList.innerHTML = '';
+
+        let files = [];
+        for (let i = 2; i < lines.length; i++) { // Skip header lines
+            const line = lines[i].trim();
+            if (!line) continue;
+            
+            const parts = line.split('\t');
+            if (parts.length >= 4) {
+                files.push({
+                    type: parts[0],
+                    name: parts[1],
+                    size: parts[2],
+                    modified: parts[3]
+                });
+            }
+        }
+
+        if (files.length === 0) {
+            document.getElementById('empty-state').classList.remove('hidden');
+            return;
+        }
+
+        document.getElementById('file-table').classList.remove('hidden');
+
+        // Sort: directories first, then files
+        files.sort((a, b) => {
+            if (a.type === 'DIR' && b.type !== 'DIR') return -1;
+            if (a.type !== 'DIR' && b.type === 'DIR') return 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        for (const file of files) {
+            const fullPath = currentPath.endsWith('\\') ? currentPath + file.name : currentPath + '\\' + file.name;
+            const isDir = file.type === 'DIR';
+            
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-slate-50 transition-colors';
+            row.innerHTML = `
+                <td class="py-3 px-4">
+                    ${isDir 
+                        ? '<i class="fa-solid fa-folder text-indigo-500"></i>' 
+                        : '<i class="fa-solid fa-file text-slate-400"></i>'}
+                </td>
+                <td class="py-3 px-4">
+                    <span class="text-sm ${isDir ? 'text-indigo-600 font-medium hover:underline cursor-pointer' : 'text-slate-700'}" 
+                          ${isDir ? `onclick="goTo('${escapeJs(fullPath)}')"` : ''}>
+                        ${escapeHtml(file.name)}
+                    </span>
+                </td>
+                <td class="py-3 px-4 text-sm text-slate-500">
+                    ${formatSize(file.size)}
+                </td>
+                <td class="py-3 px-4 text-sm text-slate-500">
+                    ${escapeHtml(file.modified)}
+                </td>
+                <td class="py-3 px-4 text-right">
+                    <div class="flex items-center justify-end gap-x-2">
+                        ${isDir ? `
+                            <button onclick="goTo('${escapeJs(fullPath)}')" 
+                                    class="text-indigo-600 hover:text-indigo-800 text-xs px-2 py-1 rounded hover:bg-indigo-50">
+                                <i class="fa-solid fa-folder-open"></i>
+                            </button>
+                        ` : `
+                            <button onclick="readFile('${escapeJs(fullPath)}', '${escapeJs(file.name)}')" 
+                                    class="text-slate-600 hover:text-slate-800 text-xs px-2 py-1 rounded hover:bg-slate-100" title="查看内容">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                            <button onclick="uploadFile('${escapeJs(fullPath)}', '${escapeJs(file.name)}')" 
+                                    class="text-emerald-600 hover:text-emerald-800 text-xs px-2 py-1 rounded hover:bg-emerald-50" title="上传到服务器">
+                                <i class="fa-solid fa-upload"></i>
+                            </button>
+                        `}
+                        <button onclick="deleteFile('${escapeJs(fullPath)}', '${escapeJs(file.name)}')" 
+                                class="text-red-600 hover:text-red-800 text-xs px-2 py-1 rounded hover:bg-red-50" title="删除">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            fileList.appendChild(row);
+        }
+    }
+
+    function goTo(path) {
+        listDir(path);
+    }
+
+    function navigateToPath() {
+        const path = document.getElementById('current-path').value.trim();
+        if (path) {
+            listDir(path);
+        }
+    }
+
+    function refreshList() {
+        listDir(currentPath);
+    }
+
+    function readFile(path, name) {
+        fetch(`/agents/${agentId}/files/read`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `path=${encodeURIComponent(path)}`
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                showToast('正在读取文件...');
+                setTimeout(() => fetchReadResult(data.task_id, name), 2000);
+            } else {
+                showError(data.error || '请求失败');
+            }
+        });
+    }
+
+    function fetchReadResult(taskId, name) {
+        fetch(`/agents/${agentId}/tasks/${taskId}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'completed') {
+                    showPreview(name, data.result);
+                } else if (data.status === 'failed') {
+                    showError(data.error || '读取文件失败');
+                } else {
+                    setTimeout(() => fetchReadResult(taskId, name), 2000);
+                }
+            });
+    }
+
+    function showPreview(name, content) {
+        document.getElementById('preview-title').textContent = name;
+        document.getElementById('preview-content').innerHTML = `
+            <pre class="bg-slate-50 rounded-xl p-4 text-sm font-mono text-slate-700 whitespace-pre-wrap overflow-auto">${escapeHtml(content)}</pre>
+        `;
+        document.getElementById('preview-modal').classList.remove('hidden');
+    }
+
+    function closePreview() {
+        document.getElementById('preview-modal').classList.add('hidden');
+    }
+
+    function deleteFile(path, name) {
+        deleteTargetPath = path;
+        document.getElementById('delete-file-name').textContent = name;
+        document.getElementById('delete-modal').classList.remove('hidden');
+    }
+
+    function closeDeleteModal() {
+        document.getElementById('delete-modal').classList.add('hidden');
+        deleteTargetPath = '';
+    }
+
+    function confirmDelete() {
+        if (!deleteTargetPath) return;
+        
+        fetch(`/agents/${agentId}/files/delete`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `path=${encodeURIComponent(deleteTargetPath)}`
+        }).then(r => r.json()).then(data => {
+            closeDeleteModal();
+            if (data.success) {
+                showToast('删除请求已发送');
+                setTimeout(() => refreshList(), 3000);
+            } else {
+                showError(data.error || '请求失败');
+            }
+        });
+    }
+
+    function uploadFile(path, name) {
+        uploadTargetPath = path;
+        document.getElementById('upload-file-name').textContent = name;
+        document.getElementById('upload-modal').classList.remove('hidden');
+    }
+
+    function closeUploadModal() {
+        document.getElementById('upload-modal').classList.add('hidden');
+        uploadTargetPath = '';
+    }
+
+    function confirmUpload() {
+        if (!uploadTargetPath) return;
+        
+        fetch(`/agents/${agentId}/files/upload`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `path=${encodeURIComponent(uploadTargetPath)}`
+        }).then(r => r.json()).then(data => {
+            closeUploadModal();
+            if (data.success) {
+                showToast('上传请求已发送，请稍后查看任务结果');
+            } else {
+                showError(data.error || '请求失败');
+            }
+        });
+    }
+
+    function formatSize(size) {
+        if (size === '-' || !size) return '-';
+        const bytes = parseInt(size);
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function escapeJs(text) {
+        return text.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    }
+
+    function showError(msg) {
+        document.getElementById('loading-state').classList.add('hidden');
+        document.getElementById('file-table').classList.add('hidden');
+        document.getElementById('empty-state').classList.remove('hidden');
+        document.getElementById('empty-state').innerHTML = `
+            <i class="fa-solid fa-exclamation-circle text-4xl text-red-300 mb-3"></i>
+            <p class="text-red-500">${escapeHtml(msg)}</p>
+        `;
+    }
+
+    function showToast(msg) {
+        const toast = document.createElement('div');
+        toast.className = 'fixed bottom-4 right-4 bg-slate-800 text-white px-4 py-2 rounded-xl text-sm shadow-lg z-50';
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+</script>
+{{end}}

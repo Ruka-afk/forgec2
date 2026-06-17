@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ForgeC2 - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen flex items-center justify-center">
+<div class="max-w-md w-full mx-4">
+    <div class="bg-white border border-slate-200 rounded-3xl shadow-sm p-10">
+        <div class="flex justify-center mb-8">
+            <div class="flex items-center gap-x-3">
+                <div class="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center">
+                    <i class="fa-solid fa-shield-halved text-white text-3xl"></i>
+                </div>
+                <div>
+                    <span class="font-bold text-4xl tracking-tighter text-slate-900">Forge</span>
+                    <span class="font-bold text-4xl tracking-tighter text-indigo-600">C2</span>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="text-center text-2xl font-semibold text-slate-900 mb-2">Operator Login</h2>
+        <p class="text-center text-slate-500 text-sm mb-8">Single User Professional C2</p>
+
+        {{if .Error}}
+        <div class="bg-red-100 text-red-700 text-sm p-3 rounded-2xl mb-6 text-center">
+            {{.Error}}
+        </div>
+        {{end}}
+
+        <form method="POST" action="/login" class="space-y-6">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div>
+                <label class="block text-xs section-header mb-2">PASSWORD</label>
+                <input type="password" name="password" required autofocus
+                       class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-5 h-12 text-lg">
+            </div>
+
+            <button type="submit"
+                    class="w-full h-12 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white font-medium rounded-2xl text-base">
+                LOGIN TO CONSOLE
+            </button>
+        </form>
+
+        <div class="text-center text-[10px] text-slate-400 mt-8">
+            First time? Enter any password to set it.<br>
+            Authorized Use Only
+        </div>
+    </div>
+</div>
+</body>
+</html>
