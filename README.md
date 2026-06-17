@@ -1,5 +1,7 @@
 # ForgeC2
 
+[English](./README.md) | [中文](./README.zh.md)
+
 **Professional Command & Control Framework for Authorized Red Team Operations**
 
 ForgeC2 is a modern, single-binary, operator-friendly C2 framework built in pure Go. It features a beautiful dark-themed web interface, two agent types (native Windows EXE + PowerShell), live screen streaming (no file retention), on-demand screenshots (pure Go for EXE), file operations, and robust task management — designed for solo operators and professional security teams.
