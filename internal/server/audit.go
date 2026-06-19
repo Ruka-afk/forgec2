@@ -4,25 +4,33 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/gin-gonic/gin"
 )
 
 // LogAuditRecord creates an audit log entry
+// c may be nil for non-HTTP paths (e.g. TCP transport beacons)
 func (s *Server) LogAuditRecord(c *gin.Context, action, resource, agentID, details string, success bool, err error) {
 	var user string
-	if u, exists := c.Get("user"); exists {
-		user = u.(string)
+	if c != nil {
+		if u, exists := c.Get("user"); exists {
+			user = u.(string)
+		} else {
+			user = "system"
+		}
 	} else {
 		user = "system"
 	}
 
-	ip := c.ClientIP()
-	if ip == "" {
-		ip = c.Request.Header.Get("X-Forwarded-For")
-	}
-	if ip == "" {
-		ip = c.Request.Header.Get("X-Real-IP")
+	ip := ""
+	if c != nil {
+		ip = c.ClientIP()
+		if ip == "" {
+			ip = c.Request.Header.Get("X-Forwarded-For")
+		}
+		if ip == "" {
+			ip = c.Request.Header.Get("X-Real-IP")
+		}
 	}
 
 	errorMsg := ""
@@ -31,14 +39,14 @@ func (s *Server) LogAuditRecord(c *gin.Context, action, resource, agentID, detai
 	}
 
 	logEntry := db.AuditLog{
-		User:      user,
-		Action:    action,
-		Resource:  resource,
-		AgentID:   agentID,
-		IP:        ip,
-		Success:   success,
-		Error:     errorMsg,
-		Details:   details,
+		User:     user,
+		Action:   action,
+		Resource: resource,
+		AgentID:  agentID,
+		IP:       ip,
+		Success:  success,
+		Error:    errorMsg,
+		Details:  details,
 	}
 
 	if err := s.db.Create(&logEntry).Error; err != nil {

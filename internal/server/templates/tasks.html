@@ -1,80 +1,280 @@
 {{define "tasks_content"}}
 <div class="max-w-7xl mx-auto">
-    <div class="flex items-center justify-between mb-8">
+    <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-3xl font-semibold tracking-tight text-slate-900">任务历史</h1>
             <p class="text-slate-500">所有 Agent 执行过的任务记录</p>
         </div>
-        <div class="text-sm text-slate-500 font-mono">共 {{len .Tasks}} 个任务</div>
+        <div class="flex items-center gap-3">
+            <span id="live-status" class="text-xs text-slate-400 font-mono hidden">
+                <i class="fa-solid fa-circle text-emerald-500 fa-beat mr-1" style="font-size:6px"></i> 实时
+            </span>
+            <span class="text-sm text-slate-500 font-mono">共 {{.Total}} 个任务</span>
+            <button onclick="exportTasks()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 h-9 rounded-xl text-sm font-medium flex items-center gap-x-2">
+                <i class="fa-solid fa-download"></i>
+                <span>导出 CSV</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="bg-white border border-slate-200 rounded-2xl p-4 mb-4 shadow-sm">
+        <form method="GET" action="/tasks" class="flex flex-wrap items-center gap-3">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-filter text-slate-400 text-sm"></i>
+                <span class="text-sm font-medium text-slate-600">筛选</span>
+            </div>
+
+            <input type="text" name="q" placeholder="搜索命令..." value="{{.FilterQuery}}"
+                   class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-9 w-44 focus:outline-none focus:border-indigo-300 font-mono">
+
+            <select name="type" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-9 focus:outline-none focus:border-indigo-300">
+                <option value="">全部类型</option>
+                {{range .TaskTypes}}
+                <option value="{{.}}" {{if eq . $.FilterType}}selected{{end}}>{{.}}</option>
+                {{end}}
+            </select>
+
+            <select name="status" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-9 focus:outline-none focus:border-indigo-300">
+                <option value="">全部状态</option>
+                <option value="completed" {{if eq "completed" $.FilterStatus}}selected{{end}}>已完成</option>
+                <option value="pending" {{if eq "pending" $.FilterStatus}}selected{{end}}>等待中</option>
+                <option value="failed" {{if eq "failed" $.FilterStatus}}selected{{end}}>失败</option>
+            </select>
+
+            <select name="agent" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-9 focus:outline-none focus:border-indigo-300 max-w-[200px]">
+                <option value="">全部 Agent</option>
+                {{range .Agents}}
+                <option value="{{.ID}}" {{if eq .ID $.FilterAgent}}selected{{end}}>{{.Hostname}} ({{.IP}})</option>
+                {{end}}
+            </select>
+
+            <button type="submit" class="px-4 h-9 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium">
+                <i class="fa-solid fa-search mr-1"></i> 筛选
+            </button>
+            {{if or .FilterQuery .FilterType .FilterStatus .FilterAgent}}
+            <a href="/tasks" class="px-4 h-9 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-medium flex items-center gap-x-1">
+                <i class="fa-solid fa-times"></i> 清除
+            </a>
+            {{end}}
+        </form>
     </div>
 
     <div class="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-        <table class="w-full text-sm">
-            <thead class="bg-slate-50 border-b border-slate-200">
-            <tr class="text-xs text-slate-500">
-                <th class="text-left py-4 px-6 font-normal">时间</th>
-                <th class="text-left py-4 px-4 font-normal">Agent</th>
-                <th class="text-left py-4 px-4 font-normal">类型</th>
-                <th class="text-left py-4 px-4 font-normal">命令</th>
-                <th class="text-left py-4 px-6 font-normal">结果</th>
-                <th class="text-center py-4 px-4 font-normal">状态</th>
-            </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-            {{range .Tasks}}
-            <tr class="hover:bg-slate-50 transition-colors">
-                <td class="py-4 px-6 font-mono text-xs text-slate-500 whitespace-nowrap">
-                    {{.CreatedAt | formatTime}}
-                </td>
-                <td class="py-4 px-4">
-                    <div class="font-medium text-slate-900">{{if .Agent}}{{.Agent.Hostname}}{{else}}未知{{end}}</div>
-                    <div class="text-xs text-slate-500">{{if .Agent}}{{.Agent.IP}}{{end}}</div>
-                </td>
-                <td class="py-4 px-4">
-                        <span class="inline-block px-3 py-1 text-xs rounded-2xl
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 border-b border-slate-200">
+                <tr class="text-xs text-slate-500">
+                    <th class="text-left py-3 px-4 font-normal">时间</th>
+                    <th class="text-left py-3 px-4 font-normal">Agent</th>
+                    <th class="text-left py-3 px-4 font-normal">类型</th>
+                    <th class="text-left py-3 px-4 font-normal">命令</th>
+                    <th class="text-left py-3 px-4 font-normal">结果</th>
+                    <th class="text-center py-3 px-4 font-normal">状态</th>
+                    <th class="text-center py-3 px-4 font-normal">操作</th>
+                </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100" id="tasks-tbody">
+                {{range .Tasks}}
+                <tr class="hover:bg-slate-50 transition-colors task-row {{if eq .Status "pending"}}bg-amber-50/50{{end}}" data-task-id="{{.ID}}" data-agent-id="{{.AgentID}}" data-status="{{.Status}}">
+                    <td class="py-3 px-4 font-mono text-xs text-slate-500 whitespace-nowrap">
+                        {{.CreatedAt | formatTime}}
+                        {{if .UpdatedAt.After .CreatedAt}}
+                        <span class="ml-1 text-emerald-500 text-[10px]" title="耗时 {{.UpdatedAt.Sub .CreatedAt}}">⚡</span>
+                        {{end}}
+                    </td>
+                    <td class="py-3 px-4">
+                        <div class="font-medium text-slate-900">{{if .Agent}}{{.Agent.Hostname}}{{else}}未知{{end}}</div>
+                        <div class="text-xs text-slate-500">{{if .Agent}}{{.Agent.IP}}{{end}}</div>
+                    </td>
+                    <td class="py-3 px-4">
+                        <span class="inline-block px-2.5 py-1 text-xs rounded-2xl
                             {{if eq .Type "shell"}}bg-amber-100 text-amber-700
-                    {{else if eq .Type "screenshot"}}bg-purple-100 text-purple-700
-                    {{end}}">
-                    {{.Type}}
-                    </span>
-                </td>
-                <td class="py-4 px-4 font-mono text-xs text-slate-600 max-w-md truncate">
-                    {{if .Command}}{{.Command}}{{else}}—{{end}}
-                </td>
-                <td class="py-4 px-6">
-                    {{if .Result}}
-                    <details class="cursor-pointer">
-                        <summary class="text-xs text-slate-500 hover:text-slate-700">查看结果（点击展开）</summary>
-                        <pre class="mt-2 text-xs bg-slate-900 text-emerald-300 p-4 rounded-2xl overflow-auto max-h-60 font-mono whitespace-pre-wrap">{{.Result}}</pre>
-                    </details>
-                    {{else if .Error}}
-                    <details class="cursor-pointer">
-                        <summary class="text-xs text-red-500 hover:text-red-700">查看错误信息</summary>
-                        <pre class="mt-2 text-xs bg-red-900 text-red-300 p-4 rounded-2xl overflow-auto max-h-60 font-mono whitespace-pre-wrap">{{.Error}}</pre>
-                    </details>
-                    {{else}}
-                    <span class="text-slate-400 text-xs">—</span>
-                    {{end}}
-                </td>
-                <td class="py-4 px-4 text-center">
-                    {{if eq .Status "completed"}}
-                    <span class="inline-flex items-center px-3 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-2xl">已完成</span>
-                    {{else if eq .Status "failed"}}
-                    <span class="inline-flex items-center px-3 py-1 text-xs font-medium bg-red-100 text-red-700 rounded-2xl">失败</span>
-                    {{else}}
-                    <span class="inline-flex items-center px-3 py-1 text-xs font-medium bg-amber-100 text-amber-700 rounded-2xl">{{.Status}}</span>
-                    {{end}}
-                </td>
-            </tr>
-            {{else}}
-            <tr>
-                <td colspan="6" class="py-20 text-center text-slate-400">
-                    暂无任务记录
-                </td>
-            </tr>
-            {{end}}
-            </tbody>
-        </table>
+                        {{else if eq .Type "screenshot"}}bg-purple-100 text-purple-700
+                        {{else if eq .Type "kill"}}bg-red-100 text-red-700
+                        {{else if eq .Type "upload"}}bg-blue-100 text-blue-700
+                        {{else if eq .Type "download"}}bg-teal-100 text-teal-700
+                        {{else if eq .Type "ps"}}bg-cyan-100 text-cyan-700
+                        {{else}}bg-slate-100 text-slate-700
+                        {{end}}">
+                        {{.Type}}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 font-mono text-xs text-slate-600 max-w-xs truncate" title="{{.Command}}">
+                        {{if .Command}}{{.Command}}{{else}}—{{end}}
+                    </td>
+                    <td class="py-3 px-4 max-w-sm">
+                        {{if .Result}}
+                        <details class="cursor-pointer group">
+                            <summary class="text-xs text-slate-500 hover:text-indigo-600 group-open:text-indigo-600"><span class="group-open:hidden">▶</span><span class="hidden group-open:inline">▼</span> 结果</summary>
+                            <pre class="mt-1 text-xs bg-slate-900 text-emerald-300 p-3 rounded-xl overflow-auto max-h-48 font-mono whitespace-pre-wrap leading-relaxed">{{.Result}}</pre>
+                        </details>
+                        {{else if .Error}}
+                        <details class="cursor-pointer group">
+                            <summary class="text-xs text-red-500 hover:text-red-700 group-open:text-red-700"><span class="group-open:hidden">▶</span><span class="hidden group-open:inline">▼</span> 错误</summary>
+                            <pre class="mt-1 text-xs bg-red-900 text-red-300 p-3 rounded-xl overflow-auto max-h-48 font-mono whitespace-pre-wrap">{{.Error}}</pre>
+                        </details>
+                        {{else}}
+                        <span class="text-slate-400 text-xs">—</span>
+                        {{end}}
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        {{if eq .Status "completed"}}
+                        <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-2xl"><i class="fa-solid fa-check mr-1 text-[10px]"></i> 完成</span>
+                        {{else if eq .Status "failed"}}
+                        <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-red-100 text-red-700 rounded-2xl"><i class="fa-solid fa-times mr-1 text-[10px]"></i> 失败</span>
+                        {{else}}
+                        <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-amber-100 text-amber-700 rounded-2xl pending-badge"><i class="fa-solid fa-spinner fa-spin mr-1 text-[10px]"></i> 等待</span>
+                        {{end}}
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="rerunTask('{{.AgentID}}', {{.ID}})"
+                                class="inline-flex items-center gap-x-1 px-2.5 py-1.5 text-xs font-medium bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl transition-colors">
+                            <i class="fa-solid fa-redo text-[10px]"></i> 重跑
+                        </button>
+                    </td>
+                </tr>
+                {{else}}
+                <tr>
+                    <td colspan="7" class="py-20 text-center text-slate-400">
+                        {{if or $.FilterQuery $.FilterType $.FilterStatus $.FilterAgent}}
+                        <i class="fa-solid fa-filter text-2xl mb-2"></i><br>没有匹配的任务
+                        {{else}}
+                        <i class="fa-solid fa-inbox text-2xl mb-2"></i><br>暂无任务记录
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+                </tbody>
+            </table>
+        </div>
     </div>
+
+    {{if gt .Total (int64 .PageSize)}}
+    <div class="flex items-center justify-center gap-2 mt-6">
+        {{if gt .Page 1}}
+        <a href="?page={{subtract .Page 1}}&pageSize={{.PageSize}}{{if .FilterQuery}}&q={{.FilterQuery}}{{end}}{{if .FilterType}}&type={{.FilterType}}{{end}}{{if .FilterStatus}}&status={{.FilterStatus}}{{end}}{{if .FilterAgent}}&agent={{.FilterAgent}}{{end}}"
+           class="px-4 h-9 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl text-sm flex items-center gap-x-1">
+            <i class="fa-solid fa-chevron-left text-xs"></i> 上一页
+        </a>
+        {{end}}
+        <span class="px-4 h-9 bg-indigo-600 text-white rounded-xl text-sm font-medium flex items-center">
+            第 {{.Page}} / {{.TotalPages}} 页
+        </span>
+        <span class="text-xs text-slate-400 font-mono">(共 {{.Total}} 条)</span>
+        {{if lt .Page .TotalPages}}
+        <a href="?page={{add .Page 1}}&pageSize={{.PageSize}}{{if .FilterQuery}}&q={{.FilterQuery}}{{end}}{{if .FilterType}}&type={{.FilterType}}{{end}}{{if .FilterStatus}}&status={{.FilterStatus}}{{end}}{{if .FilterAgent}}&agent={{.FilterAgent}}{{end}}"
+           class="px-4 h-9 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl text-sm flex items-center gap-x-1">
+            下一页 <i class="fa-solid fa-chevron-right text-xs"></i>
+        </a>
+        {{end}}
+    </div>
+    {{end}}
+
+    <!-- Failed tasks retry all -->
+    {{if .HasFailedTasks}}
+    <div class="mt-4 text-center">
+        <button onclick="retryAllFailed()" class="px-4 h-9 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl text-sm font-medium">
+            <i class="fa-solid fa-redo mr-1"></i> 重试所有失败任务
+        </button>
+    </div>
+    {{end}}
 </div>
+
+<script>
+    // Auto-refresh: poll for pending tasks
+    let refreshTimer = null;
+
+    function autoRefresh() {
+        const pending = document.querySelectorAll('.task-row[data-status="pending"]');
+        if (pending.length > 0) {
+            document.getElementById('live-status').classList.remove('hidden');
+            fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(r => r.text())
+                .then(html => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const newTbody = doc.getElementById('tasks-tbody');
+                    const oldTbody = document.getElementById('tasks-tbody');
+                    if (newTbody && oldTbody) {
+                        oldTbody.innerHTML = newTbody.innerHTML;
+                    }
+                    // re-check pending count
+                    const stillPending = document.querySelectorAll('.task-row[data-status="pending"]');
+                    if (stillPending.length === 0) {
+                        document.getElementById('live-status').classList.add('hidden');
+                        if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+                    } else {
+                        refreshTimer = setTimeout(autoRefresh, 5000);
+                    }
+                })
+                .catch(() => {
+                    refreshTimer = setTimeout(autoRefresh, 5000);
+                });
+        } else {
+            document.getElementById('live-status').classList.add('hidden');
+            if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+        }
+    }
+
+    // Start auto-refresh on load
+    document.addEventListener('DOMContentLoaded', function() {
+        const pending = document.querySelectorAll('.task-row[data-status="pending"]');
+        if (pending.length > 0) {
+            refreshTimer = setTimeout(autoRefresh, 5000);
+        }
+    });
+
+    function exportTasks() {
+        const a = document.createElement('a');
+        a.href = '/tasks/export';
+        a.download = 'forgec2_tasks_' + new Date().toISOString().split('T')[0] + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        showToast && showToast('正在导出任务报告...');
+    }
+
+    function rerunTask(agentId, taskId) {
+        fetch(`/agents/${agentId}/task/${taskId}/rerun`, { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('任务已重新创建，等待 Agent 执行');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast('重跑失败: ' + (data.error || '未知错误'), 'error');
+                }
+            })
+            .catch(err => showToast('请求失败: ' + err, 'error'));
+    }
+
+    function retryAllFailed() {
+        if (!confirm('确认要重试所有失败任务？')) return;
+        const rows = document.querySelectorAll('.task-row[data-status="failed"]');
+        let count = 0;
+        rows.forEach(row => {
+            const agentId = row.dataset.agentId;
+            const taskId = row.dataset.taskId;
+            if (agentId && taskId) {
+                fetch(`/agents/${agentId}/task/${taskId}/rerun`, { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => { if (data.success) count++; });
+            }
+        });
+        showToast(`正在重试 ${rows.length} 个失败任务...`);
+        setTimeout(() => location.reload(), 2000);
+    }
+
+    // Keyboard shortcut: Ctrl+F to focus search
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+            const searchInput = document.querySelector('input[name="q"]');
+            if (searchInput && !e.target.closest('input, textarea')) {
+                e.preventDefault();
+                searchInput.focus();
+            }
+        }
+    });
+</script>
 {{end}}

@@ -1,64 +1,76 @@
 {{define "generate_content"}}
-<div class="max-w-4xl mx-auto">
-    <div class="mb-8">
+<div class="max-w-7xl mx-auto">
+    <div class="mb-6">
         <h1 class="text-3xl font-semibold tracking-tight text-slate-900">生成 Agent</h1>
-        <p class="text-slate-500">创建 Windows 植入程序（EXE 或 PowerShell）</p>
+        <p class="text-slate-500">创建植入程序（Windows EXE / PS1 / Linux ELF）— 跨平台支持</p>
+        <p class="text-xs text-amber-600 mt-1">注意：生成原生 EXE / ELF 需要本机安装 Go 工具链（https://go.dev/dl/）。PowerShell 脚本不需要。</p>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- 共享设置 -->
+    <div class="bg-white border border-slate-200 rounded-3xl p-6 mb-6 shadow-sm">
+        <div class="flex items-center gap-x-2 mb-4">
+            <i class="fa-solid fa-sliders text-slate-400"></i>
+            <span class="text-sm font-semibold text-slate-900">公共设置</span>
+            <span class="text-[10px] text-slate-400 ml-1">以下设置对所有平台生效</span>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-xs section-header mb-1.5">Malleable Profile</label>
+                <select id="shared-profile" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                    <option value="default">Default</option>
+                    <option value="google">Google-like</option>
+                    <option value="bing">Bing-like</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs section-header mb-1.5">心跳间隔（秒）</label>
+                <input type="number" id="shared-interval" value="{{.DefaultInt}}"
+                       class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs section-header mb-1.5">抖动值 (%)</label>
+                <input type="number" id="shared-jitter" value="{{.DefaultJitter}}"
+                       class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs section-header mb-1.5">User-Agent</label>
+                <input type="text" id="shared-ua" value="{{.DefaultUA}}"
+                       class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-4 flex items-center gap-3">
+        <button type="button" onclick="createListener()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-2xl">
+            + 创建新监听器
+        </button>
+        <span id="listener-hint" class="text-xs text-slate-400">先选择监听器，然后选择平台生成</span>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- EXE 生成器 -->
-        <div class="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
-            <div class="flex items-center gap-x-3 mb-6">
+        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+            <div class="flex items-center gap-x-3 mb-5">
                 <div class="w-10 h-10 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center text-2xl">🪟</div>
                 <div>
                     <div class="font-semibold text-lg text-slate-900">Windows EXE</div>
-                    <div class="text-xs text-slate-500">原生 Go 植入程序 • 高度隐蔽</div>
+                    <div class="text-xs text-slate-500">原生 Go 植入程序</div>
                 </div>
             </div>
 
-            <form id="exe-form" class="space-y-5">
+            <form id="exe-form" class="space-y-4">
                 <div>
-                    <label class="block text-xs section-header mb-1.5">C2 服务器地址</label>
-                    <input type="text" name="c2_url" value="{{.DefaultC2}}"
-                           class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
-                </div>
-
-                <div>
-                    <label class="block text-xs section-header mb-1.5">通信协议</label>
-                    <select name="protocol" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
-                        <option value="http" selected>HTTP (REST API)</option>
-                        <option value="tcp">TCP (Raw Socket)</option>
+                    <label class="block text-xs section-header mb-1.5">监听器</label>
+                    <select name="listener_id" id="listener-exe" onchange="onListenerChange('exe')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm" required>
+                        <option value="" disabled selected>-- 请选择 --</option>
+                        {{range .Listeners}}
+                        <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
+                        {{end}}
                     </select>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs section-header mb-1.5">心跳间隔（秒）</label>
-                        <input type="number" name="interval" value="{{.DefaultInt}}"
-                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs section-header mb-1.5">抖动值 (%)</label>
-                        <input type="number" name="jitter" value="{{.DefaultJitter}}"
-                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-xs section-header mb-1.5">User-Agent</label>
-                    <input type="text" name="user_agent" value="{{.DefaultUA}}"
-                           class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
-                </div>
-
-                <div class="flex items-center gap-x-2">
-                    <input type="checkbox" name="persist" id="persist-exe" class="w-4 h-4 accent-indigo-600">
-                    <label for="persist-exe" class="text-sm text-slate-700">启用持久化（注册表自启动）</label>
-                </div>
-
-                <div class="flex items-center gap-x-2">
-                    <input type="checkbox" name="skip_tls_verify" id="skip-tls-exe" class="w-4 h-4 accent-indigo-600" {{if .DefaultSkipTLS}}checked{{end}}>
-                    <label for="skip-tls-exe" class="text-sm text-slate-700">跳过 TLS 证书验证（自签名证书推荐）</label>
-                </div>
+                <input type="hidden" name="c2_url" id="c2-url-exe" value="">
+                <input type="hidden" name="protocol" id="protocol-exe" value="http">
 
                 <div>
                     <label class="block text-xs section-header mb-1.5">文件名</label>
@@ -66,19 +78,63 @@
                            class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
                 </div>
 
+                <div class="mt-2 pt-2 border-t border-slate-100">
+                    <details class="group">
+                        <summary class="text-xs text-slate-500 cursor-pointer hover:text-indigo-600 select-none"><i class="fa-solid fa-link mr-1"></i> P2P / DNS 设置（可选）</summary>
+                        <div class="mt-2 space-y-2">
+                            <div>
+                                <label class="block text-xs section-header mb-1.5">传输协议</label>
+                                <select name="p2p_mode" class="p2p-mode w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                                    <option value="">直接连接（HTTP/TCP）</option>
+                                    <option value="parent">P2P 父节点（接受子节点）</option>
+                                    <option value="child">P2P 子节点（通过父节点回连）</option>
+                                    <option value="dns">DNS 信标</option>
+                                </select>
+                            </div>
+                            <div class="p2p-parent-field hidden">
+                                <label class="block text-xs section-header mb-1.5">父节点地址（子节点模式）</label>
+                                <input type="text" name="p2p_parent" placeholder="tcp://192.168.1.100:4444 或 pipe://agent_pipe" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                            </div>
+                            <div class="p2p-listen-field hidden">
+                                <label class="block text-xs section-header mb-1.5">监听地址（父节点模式）</label>
+                                <input type="text" name="p2p_listen_addr" placeholder="TCP: :4444 / SMB: agent_pipe" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                            </div>
+                            <div class="dns-fields hidden">
+                                <div class="mb-2">
+                                    <label class="block text-xs section-header mb-1.5">DNS 域名</label>
+                                    <input type="text" name="dns_domain" placeholder="c2.example.com" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-xs section-header mb-1.5">DNS 服务器 IP</label>
+                                    <input type="text" name="dns_server" placeholder="192.168.1.100" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <div class="flex items-center gap-x-2">
+                    <input type="checkbox" name="persist" id="persist-exe" class="w-4 h-4 accent-indigo-600">
+                    <label for="persist-exe" class="text-sm text-slate-700">启用持久化</label>
+                </div>
+
+                <div class="flex items-center gap-x-2">
+                    <input type="checkbox" name="skip_tls_verify" id="skip-tls-exe" class="w-4 h-4 accent-indigo-600" {{if .DefaultSkipTLS}}checked{{end}}>
+                    <label for="skip-tls-exe" class="text-sm text-slate-700">跳过 TLS 验证</label>
+                </div>
+
                 <button type="button" onclick="generateEXE()"
-                        class="w-full h-12 bg-orange-600 hover:bg-orange-700 transition-colors text-white font-medium rounded-2xl flex items-center justify-center gap-x-2">
+                        class="w-full h-11 bg-orange-600 hover:bg-orange-700 transition-colors text-white font-medium rounded-2xl flex items-center justify-center gap-x-2">
                     <i class="fa-solid fa-download"></i>
                     生成 EXE
                 </button>
             </form>
-
-            <div id="exe-result" class="mt-4"></div>
+            <div id="exe-result" class="mt-3"></div>
         </div>
 
-        <!-- PowerShell 生成器 -->
-        <div class="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
-            <div class="flex items-center gap-x-3 mb-6">
+        <!-- PS1 生成器 -->
+        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+            <div class="flex items-center gap-x-3 mb-5">
                 <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center text-2xl">🐚</div>
                 <div>
                     <div class="font-semibold text-lg text-slate-900">PowerShell 脚本</div>
@@ -86,89 +142,315 @@
                 </div>
             </div>
 
-            <form id="ps1-form" class="space-y-5">
-                <!-- 复用与 EXE 相同的表单字段 -->
+            <form id="ps1-form" class="space-y-4">
                 <div>
-                    <label class="block text-xs section-header mb-1.5">C2 服务器地址</label>
-                    <input type="text" name="c2_url" value="{{.DefaultC2}}"
-                           class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
-                </div>
-
-                <div>
-                    <label class="block text-xs section-header mb-1.5">通信协议</label>
-                    <select name="protocol" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
-                        <option value="http" selected>HTTP (REST API)</option>
-                        <option value="tcp">TCP (Raw Socket)</option>
+                    <label class="block text-xs section-header mb-1.5">监听器</label>
+                    <select name="listener_id" id="listener-ps1" onchange="onListenerChange('ps1')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm" required>
+                        <option value="" disabled selected>-- 请选择 --</option>
+                        {{range .Listeners}}
+                        <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
+                        {{end}}
                     </select>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs section-header mb-1.5">心跳间隔（秒）</label>
-                        <input type="number" name="interval" value="{{.DefaultInt}}"
-                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs section-header mb-1.5">抖动值 (%)</label>
-                        <input type="number" name="jitter" value="{{.DefaultJitter}}"
-                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-xs section-header mb-1.5">User-Agent</label>
-                    <input type="text" name="user_agent" value="{{.DefaultUA}}"
-                           class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
-                </div>
+                <input type="hidden" name="c2_url" id="c2-url-ps1" value="">
+                <input type="hidden" name="protocol" id="protocol-ps1" value="http">
 
                 <div class="flex items-center gap-x-2">
                     <input type="checkbox" name="persist" id="persist-ps1" class="w-4 h-4 accent-indigo-600">
-                    <label for="persist-ps1" class="text-sm text-slate-700">启用持久化</label>
+                    <label for="persist-ps1" class="text-sm text-slate-700">启用持久化（有限）</label>
                 </div>
 
                 <div class="flex items-center gap-x-2">
                     <input type="checkbox" name="skip_tls_verify" id="skip-tls-ps1" class="w-4 h-4 accent-indigo-600" {{if .DefaultSkipTLS}}checked{{end}}>
-                    <label for="skip-tls-ps1" class="text-sm text-slate-700">跳过 TLS 证书验证（自签名证书推荐）</label>
+                    <label for="skip-tls-ps1" class="text-sm text-slate-700">跳过 TLS 验证</label>
                 </div>
 
                 <button type="button" onclick="generatePS1()"
-                        class="w-full h-12 bg-blue-600 hover:bg-blue-700 transition-colors text-white font-medium rounded-2xl flex items-center justify-center gap-x-2">
+                        class="w-full h-11 bg-blue-600 hover:bg-blue-700 transition-colors text-white font-medium rounded-2xl flex items-center justify-center gap-x-2">
                     <i class="fa-solid fa-magic"></i>
-                    生成混淆 PS1
+                    生成 PS1
                 </button>
             </form>
+            <div id="ps1-result" class="mt-3"></div>
+        </div>
 
-            <div id="ps1-result" class="mt-4"></div>
+        <!-- Linux ELF 生成器 -->
+        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+            <div class="flex items-center gap-x-3 mb-5">
+                <div class="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center text-2xl">🐧</div>
+                <div>
+                    <div class="font-semibold text-lg text-slate-900">Linux ELF</div>
+                    <div class="text-xs text-slate-500">原生 Go 植入程序 • amd64</div>
+                </div>
+            </div>
+
+            <form id="linux-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs section-header mb-1.5">监听器</label>
+                    <select name="listener_id" id="listener-linux" onchange="onListenerChange('linux')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm" required>
+                        <option value="" disabled selected>-- 请选择 --</option>
+                        {{range .Listeners}}
+                        <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
+                        {{end}}
+                    </select>
+                </div>
+
+                <input type="hidden" name="c2_url" id="c2-url-linux" value="">
+                <input type="hidden" name="protocol" id="protocol-linux" value="http">
+
+                <div>
+                    <label class="block text-xs section-header mb-1.5">文件名</label>
+                    <input type="text" name="filename" value="forgec2_agent"
+                           class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                </div>
+
+                <div class="mt-2 pt-2 border-t border-slate-100">
+                    <details class="group">
+                        <summary class="text-xs text-slate-500 cursor-pointer hover:text-indigo-600 select-none"><i class="fa-solid fa-link mr-1"></i> P2P / DNS 设置（可选）</summary>
+                        <div class="mt-2 space-y-2">
+                            <div>
+                                <label class="block text-xs section-header mb-1.5">传输协议</label>
+                                <select name="p2p_mode" class="p2p-mode w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                                    <option value="">直接连接（HTTP/TCP）</option>
+                                    <option value="parent">P2P 父节点（接受子节点）</option>
+                                    <option value="child">P2P 子节点（通过父节点回连）</option>
+                                    <option value="dns">DNS 信标</option>
+                                </select>
+                            </div>
+                            <div class="p2p-parent-field hidden">
+                                <label class="block text-xs section-header mb-1.5">父节点地址（子节点模式）</label>
+                                <input type="text" name="p2p_parent" placeholder="tcp://192.168.1.100:4444 或 pipe://agent_pipe" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                            </div>
+                            <div class="p2p-listen-field hidden">
+                                <label class="block text-xs section-header mb-1.5">监听地址（父节点模式）</label>
+                                <input type="text" name="p2p_listen_addr" placeholder="TCP: :4444 / SMB: agent_pipe" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                            </div>
+                            <div class="dns-fields hidden">
+                                <div class="mb-2">
+                                    <label class="block text-xs section-header mb-1.5">DNS 域名</label>
+                                    <input type="text" name="dns_domain" placeholder="c2.example.com" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-xs section-header mb-1.5">DNS 服务器 IP</label>
+                                    <input type="text" name="dns_server" placeholder="192.168.1.100" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <div class="flex items-center gap-x-2">
+                    <input type="checkbox" name="persist" id="persist-linux" class="w-4 h-4 accent-indigo-600">
+                    <label for="persist-linux" class="text-sm text-slate-700">启用持久化</label>
+                </div>
+
+                <div class="flex items-center gap-x-2">
+                    <input type="checkbox" name="skip_tls_verify" id="skip-tls-linux" class="w-4 h-4 accent-indigo-600" {{if .DefaultSkipTLS}}checked{{end}}>
+                    <label for="skip-tls-linux" class="text-sm text-slate-700">跳过 TLS 验证</label>
+                </div>
+
+                <button type="button" onclick="generateLinux()"
+                        class="w-full h-11 bg-emerald-600 hover:bg-emerald-700 transition-colors text-white font-medium rounded-2xl flex items-center justify-center gap-x-2">
+                    <i class="fa-solid fa-download"></i>
+                    生成 ELF
+                </button>
+            </form>
+            <div id="linux-result" class="mt-3"></div>
         </div>
     </div>
 
-    <div class="mt-8 text-center text-xs text-slate-400">
+    <!-- Artifact Kit: Stager -->
+    <div class="mt-8">
+        <div class="flex items-center gap-x-2 mb-4">
+            <i class="fa-solid fa-box-open text-slate-400"></i>
+            <span class="text-sm font-semibold text-slate-900">Artifact Kit / 加载器</span>
+            <span class="text-[10px] text-slate-400">生成 XOR 编码的 Shellcode 加载器</span>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Windows Stager -->
+            <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+                <div class="flex items-center gap-x-3 mb-5">
+                    <div class="w-10 h-10 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center text-2xl">📦</div>
+                    <div>
+                        <div class="font-semibold text-lg text-slate-900">Windows 加载器</div>
+                        <div class="text-xs text-slate-500">小型 EXE → 下载 + XOR 解码 → 执行完整 Beacon</div>
+                    </div>
+                </div>
+
+                <form id="stager-form" class="space-y-4">
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">监听器</label>
+                        <select name="listener_id" id="listener-stager" onchange="onListenerChange('stager')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm" required>
+                            <option value="" disabled selected>-- 请选择 --</option>
+                            {{range .Listeners}}
+                            <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
+                            {{end}}
+                        </select>
+                    </div>
+
+                    <input type="hidden" name="c2_url" id="c2-url-stager" value="">
+                    <input type="hidden" name="protocol" id="protocol-stager" value="http">
+
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">加载器文件名</label>
+                        <input type="text" name="filename" value="stager.exe"
+                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                    </div>
+
+                    <div class="flex items-center gap-x-2">
+                        <input type="checkbox" name="skip_tls_verify" id="skip-tls-stager" class="w-4 h-4 accent-indigo-600" {{if .DefaultSkipTLS}}checked{{end}}>
+                        <label for="skip-tls-stager" class="text-sm text-slate-700">跳过 TLS 验证</label>
+                    </div>
+
+                    <button type="button" onclick="generateStager()"
+                            class="w-full h-11 bg-purple-600 hover:bg-purple-700 transition-colors text-white font-medium rounded-2xl flex items-center justify-center gap-x-2">
+                        <i class="fa-solid fa-download"></i>
+                        生成加载器 + 阶段负载
+                    </button>
+                </form>
+                <div id="stager-result" class="mt-3"></div>
+            </div>
+
+            <!-- Linux Stager -->
+            <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+                <div class="flex items-center gap-x-3 mb-5">
+                    <div class="w-10 h-10 bg-teal-100 text-teal-600 rounded-2xl flex items-center justify-center text-2xl">📦</div>
+                    <div>
+                        <div class="font-semibold text-lg text-slate-900">Linux 加载器</div>
+                        <div class="text-xs text-slate-500">小型 ELF → 下载 + XOR 解码 → 执行完整 Beacon</div>
+                    </div>
+                </div>
+
+                <form id="stager-linux-form" class="space-y-4">
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">监听器</label>
+                        <select name="listener_id" id="listener-stager-linux" onchange="onListenerChange('stager-linux')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm" required>
+                            <option value="" disabled selected>-- 请选择 --</option>
+                            {{range .Listeners}}
+                            <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
+                            {{end}}
+                        </select>
+                    </div>
+
+                    <input type="hidden" name="c2_url" id="c2-url-stager-linux" value="">
+                    <input type="hidden" name="protocol" id="protocol-stager-linux" value="http">
+
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">加载器文件名</label>
+                        <input type="text" name="filename" value="stager"
+                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                    </div>
+
+                    <div class="flex items-center gap-x-2">
+                        <input type="checkbox" name="skip_tls_verify" id="skip-tls-stager-linux" class="w-4 h-4 accent-indigo-600" {{if .DefaultSkipTLS}}checked{{end}}>
+                        <label for="skip-tls-stager-linux" class="text-sm text-slate-700">跳过 TLS 验证</label>
+                    </div>
+
+                    <button type="button" onclick="generateStagerLinux()"
+                            class="w-full h-11 bg-teal-600 hover:bg-teal-700 transition-colors text-white font-medium rounded-2xl flex items-center justify-center gap-x-2">
+                        <i class="fa-solid fa-download"></i>
+                        生成加载器 + 阶段负载
+                    </button>
+                </form>
+                <div id="stager-linux-result" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-6 text-center text-xs text-slate-400">
         生成的 Agent 将定时回连您的 C2 服务器。<br>
         <span class="text-amber-600">⚠️ 仅限授权的渗透测试使用</span>
     </div>
 </div>
 
 <script>
+    // P2P / DNS mode toggles
+    document.querySelectorAll('.p2p-mode').forEach(sel => {
+        sel.addEventListener('change', function() {
+            const card = this.closest('.space-y-4') || this.closest('form') || this.parentElement;
+            const parentField = card.querySelector('.p2p-parent-field');
+            const listenField = card.querySelector('.p2p-listen-field');
+            const dnsFields = card.querySelector('.dns-fields');
+            if (this.value === 'child') {
+                if (parentField) parentField.classList.remove('hidden');
+                if (listenField) listenField.classList.add('hidden');
+                if (dnsFields) dnsFields.classList.add('hidden');
+            } else if (this.value === 'parent') {
+                if (parentField) parentField.classList.add('hidden');
+                if (listenField) listenField.classList.remove('hidden');
+                if (dnsFields) dnsFields.classList.add('hidden');
+            } else if (this.value === 'dns') {
+                if (parentField) parentField.classList.add('hidden');
+                if (listenField) listenField.classList.add('hidden');
+                if (dnsFields) dnsFields.classList.remove('hidden');
+            } else {
+                if (parentField) parentField.classList.add('hidden');
+                if (listenField) listenField.classList.add('hidden');
+                if (dnsFields) dnsFields.classList.add('hidden');
+            }
+        });
+    });
+
+    function onListenerChange(prefix) {
+        const sel = document.getElementById('listener-' + prefix);
+        const opt = sel.options[sel.selectedIndex];
+        if (!opt) return;
+        const scheme = opt.dataset.scheme;
+        const host = opt.dataset.host;
+        const port = opt.dataset.port;
+        const type = opt.dataset.type;
+        const c2url = scheme + '://' + host + ':' + port;
+        document.getElementById('c2-url-' + prefix).value = c2url;
+        let transport = 'http';
+        if (scheme === 'tcp' || scheme === 'tls') {
+            transport = 'tcp';
+        } else if (scheme === 'dns' || type === 'dns') {
+            transport = 'dns';
+        }
+        document.getElementById('protocol-' + prefix).value = transport;
+        document.getElementById('listener-hint').textContent = '已选择: ' + opt.text;
+    }
+
+    function getSharedSettings() {
+        return {
+            profile: document.getElementById('shared-profile').value,
+            interval: document.getElementById('shared-interval').value,
+            jitter: document.getElementById('shared-jitter').value,
+            user_agent: document.getElementById('shared-ua').value
+        };
+    }
+
     function getFormData(formId) {
         const form = document.getElementById(formId);
         const formData = new FormData(form);
-        const persistEl = document.getElementById(formId).querySelector('input[name="persist"]');
+        const shared = getSharedSettings();
+        formData.set('profile', shared.profile);
+        formData.set('interval', shared.interval);
+        formData.set('jitter', shared.jitter);
+        formData.set('user_agent', shared.user_agent);
+        const persistEl = form.querySelector('input[name="persist"]');
         if (persistEl) formData.set('persist', persistEl.checked ? 'true' : '');
-        const skipEl = document.getElementById(formId).querySelector('input[name="skip_tls_verify"]');
+        const skipEl = form.querySelector('input[name="skip_tls_verify"]');
         if (skipEl) formData.set('skip_tls_verify', skipEl.checked ? 'true' : '');
         return formData;
     }
 
     async function generateEXE() {
+        const listenerSel = document.getElementById('listener-exe');
+        if (!listenerSel.value) { showToast('请先选择一个监听器', 'error'); return; }
         const formData = getFormData('exe-form');
-        document.getElementById('exe-result').innerHTML = '<div class="text-sm text-slate-500"><i class="fa-solid fa-spinner fa-spin"></i> 正在生成 EXE...</div>';
+        const btn = document.querySelector('#exe-form button');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在生成...';
+        document.getElementById('exe-result').innerHTML = '';
 
         try {
             const response = await fetch('/generate/exe', {
                 method: 'POST',
+                headers: { 'X-CSRF-Token': getCSRFToken() },
                 body: formData
             });
-
             if (response.ok) {
                 const blob = await response.blob();
                 const contentDisposition = response.headers.get('Content-Disposition');
@@ -179,12 +461,9 @@
                 }
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                a.remove();
+                a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click();
+                window.URL.revokeObjectURL(url); a.remove();
                 showToast('EXE 生成并下载成功！', 'success');
             } else {
                 const text = await response.text();
@@ -192,37 +471,43 @@
             }
         } catch (err) {
             document.getElementById('exe-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + err.message + '</div>';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-download"></i> 生成 EXE';
         }
     }
 
     async function generatePS1() {
+        const listenerSel = document.getElementById('listener-ps1');
+        if (!listenerSel.value) { showToast('请先选择一个监听器', 'error'); return; }
         const formData = getFormData('ps1-form');
-        document.getElementById('ps1-result').innerHTML = '<div class="text-sm text-slate-500"><i class="fa-solid fa-spinner fa-spin"></i> 正在生成混淆 PowerShell...</div>';
+        const btn = document.querySelector('#ps1-form button');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在生成...';
+        document.getElementById('ps1-result').innerHTML = '';
 
         try {
             const response = await fetch('/generate/ps1', {
                 method: 'POST',
+                headers: { 'X-CSRF-Token': getCSRFToken() },
                 body: formData
             });
-
             if (response.ok) {
                 const data = await response.json();
                 if (data.success) {
                     document.getElementById('ps1-result').innerHTML = `
-                        <div class="mt-4">
+                        <div class="mt-3">
                             <div class="flex items-center justify-between mb-2">
                                 <span class="text-xs text-emerald-600 font-medium">
                                     <i class="fa-solid fa-check-circle"></i> 生成成功！
-                                    原始: ${data.original_length} 字节 → 混淆后: ${data.obfuscated_len} 字节
+                                    原始: ${data.original_length} B → 混淆: ${data.obfuscated_len} B
                                 </span>
-                                <button onclick="copyToClipboard()" class="text-xs px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center gap-x-1">
+                                <button onclick="copyToClipboard()" class="text-xs px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center gap-x-1">
                                     <i class="fa-solid fa-copy"></i> 复制
                                 </button>
                             </div>
-                            <textarea id="ps1-code" readonly class="w-full h-64 bg-slate-900 text-emerald-400 font-mono text-xs rounded-xl p-4 border border-slate-700 resize-none">${escapeHtml(data.code)}</textarea>
-                    <div class="mt-2 text-xs text-slate-500">
-                                <i class="fa-solid fa-info-circle"></i> 这是<span class="text-emerald-600 font-medium">一键执行命令</span> - 直接在 PowerShell 中粘贴执行即可
-                            </div>
+                            <textarea id="ps1-code" readonly class="w-full h-48 bg-slate-900 text-emerald-400 font-mono text-xs rounded-xl p-3 border border-slate-700 resize-none">${escapeHtml(data.code)}</textarea>
+                            <div class="mt-1 text-xs text-slate-500"><i class="fa-solid fa-info-circle"></i> 直接在 PowerShell 中粘贴执行</div>
                         </div>
                     `;
                 }
@@ -232,6 +517,149 @@
             }
         } catch (err) {
             document.getElementById('ps1-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + err.message + '</div>';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-magic"></i> 生成 PS1';
+        }
+    }
+
+    async function generateStager() {
+        const listenerSel = document.getElementById('listener-stager');
+        if (!listenerSel.value) { showToast('请先选择一个监听器', 'error'); return; }
+        const form = document.getElementById('stager-form');
+        const formData = new FormData(form);
+        const shared = getSharedSettings();
+        formData.set('profile', shared.profile);
+        formData.set('interval', shared.interval);
+        formData.set('jitter', shared.jitter);
+        formData.set('user_agent', shared.user_agent);
+        const skipEl = form.querySelector('input[name="skip_tls_verify"]');
+        if (skipEl) formData.set('skip_tls_verify', skipEl.checked ? 'true' : '');
+
+        const btn = form.querySelector('button');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在生成...';
+        document.getElementById('stager-result').innerHTML = '';
+
+        try {
+            const response = await fetch('/generate/stager', {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': getCSRFToken() },
+                body: formData
+            });
+            if (response.ok) {
+                const blob = await response.blob();
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = 'stager.exe';
+                if (contentDisposition) {
+                    const match = contentDisposition.match(/filename=(.+)/);
+                    if (match) filename = match[1].replace(/"/g, '');
+                }
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click();
+                window.URL.revokeObjectURL(url); a.remove();
+                showToast('加载器 + 阶段负载生成成功！', 'success');
+            } else {
+                const text = await response.text();
+                document.getElementById('stager-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + text + '</div>';
+            }
+        } catch (err) {
+            document.getElementById('stager-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + err.message + '</div>';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-download"></i> 生成加载器 + 阶段负载';
+        }
+    }
+
+    async function generateStagerLinux() {
+        const listenerSel = document.getElementById('listener-stager-linux');
+        if (!listenerSel.value) { showToast('请先选择一个监听器', 'error'); return; }
+        const form = document.getElementById('stager-linux-form');
+        const formData = new FormData(form);
+        const shared = getSharedSettings();
+        formData.set('profile', shared.profile);
+        formData.set('interval', shared.interval);
+        formData.set('jitter', shared.jitter);
+        formData.set('user_agent', shared.user_agent);
+        const skipEl = form.querySelector('input[name="skip_tls_verify"]');
+        if (skipEl) formData.set('skip_tls_verify', skipEl.checked ? 'true' : '');
+
+        const btn = form.querySelector('button');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在生成...';
+        document.getElementById('stager-linux-result').innerHTML = '';
+
+        try {
+            const response = await fetch('/generate/stager_linux', {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': getCSRFToken() },
+                body: formData
+            });
+            if (response.ok) {
+                const blob = await response.blob();
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = 'stager';
+                if (contentDisposition) {
+                    const match = contentDisposition.match(/filename=(.+)/);
+                    if (match) filename = match[1].replace(/"/g, '');
+                }
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click();
+                window.URL.revokeObjectURL(url); a.remove();
+                showToast('Linux 加载器 + 阶段负载生成成功！', 'success');
+            } else {
+                const text = await response.text();
+                document.getElementById('stager-linux-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + text + '</div>';
+            }
+        } catch (err) {
+            document.getElementById('stager-linux-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + err.message + '</div>';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-download"></i> 生成加载器 + 阶段负载';
+        }
+    }
+
+    async function generateLinux() {
+        const listenerSel = document.getElementById('listener-linux');
+        if (!listenerSel.value) { showToast('请先选择一个监听器', 'error'); return; }
+        const formData = getFormData('linux-form');
+        const btn = document.querySelector('#linux-form button');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在生成...';
+
+        try {
+            const response = await fetch('/generate/linux', {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': getCSRFToken() },
+                body: formData
+            });
+            if (response.ok) {
+                const blob = await response.blob();
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = 'forgec2_agent';
+                if (contentDisposition) {
+                    const match = contentDisposition.match(/filename=(.+)/);
+                    if (match) filename = match[1].replace(/"/g, '');
+                }
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click();
+                window.URL.revokeObjectURL(url); a.remove();
+                showToast('Linux ELF 生成并下载成功！', 'success');
+            } else {
+                const text = await response.text();
+                document.getElementById('linux-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + text + '</div>';
+            }
+        } catch (err) {
+            document.getElementById('linux-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + err.message + '</div>';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-download"></i> 生成 ELF';
         }
     }
 
@@ -240,7 +668,6 @@
         navigator.clipboard.writeText(code).then(() => {
             showToast('代码已复制到剪贴板！', 'success');
         }).catch(() => {
-            // Fallback
             const textarea = document.getElementById('ps1-code');
             textarea.select();
             document.execCommand('copy');
@@ -254,13 +681,33 @@
         return div.innerHTML;
     }
 
-    // Helper to get CSRF token (required for POST requests)
     function getCSRFToken() {
         if (window.getCSRFToken) return window.getCSRFToken();
         const value = `; ${document.cookie}`;
         const parts = value.split(`; csrf_token=`);
         if (parts.length === 2) return parts.pop().split(';').shift();
         return '';
+    }
+
+    async function createListener() {
+        const name = prompt("监听器名称:", "My DNS Listener");
+        if (!name) return;
+        const ltype = prompt("类型 (http/tcp/dns):", "dns");
+        const host = prompt("Domain/IP:", "c2.example.com");
+        const port = ltype === 'dns' ? 53 : parseInt(prompt("Port:", "8080") || "8080");
+        const proto = ltype === 'dns' ? 'dns' : prompt("协议 (http/https/tcp/tls):", ltype);
+        const res = await fetch('/listeners', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCSRFToken() },
+            body: JSON.stringify({ name, type: ltype, host, port, protocol: proto, enabled: true })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('监听器创建成功，请刷新页面', 'success');
+            location.reload();
+        } else {
+            alert('创建失败: ' + (data.error || ''));
+        }
     }
 </script>
 {{end}}

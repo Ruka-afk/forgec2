@@ -1,0 +1,102 @@
+{{define "listener_detail_content"}}
+<div class="max-w-7xl mx-auto">
+    <div class="flex items-center gap-x-4 mb-6">
+        <a href="/listeners" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left text-xl"></i></a>
+        <div>
+            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">{{.Listener.Name}}</h1>
+            <div class="text-slate-500 text-sm">{{if .Listener.Scheme}}{{.Listener.Scheme}}{{else}}{{.Listener.Type}}{{end}}://{{.Listener.Host}}:{{.Listener.Port}}</div>
+        </div>
+        <div class="ml-auto">
+            {{if .Listener.Enabled}}
+            <span class="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm">启用</span>
+            {{else}}
+            <span class="px-3 py-1 bg-slate-200 text-slate-600 rounded-full text-sm">禁用</span>
+            {{end}}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Info -->
+        <div class="lg:col-span-1">
+            <div class="bg-white border border-slate-200 rounded-3xl p-6">
+                <h3 class="font-semibold mb-4">监听器信息</h3>
+                <div class="space-y-3 text-sm">
+                    <div><span class="text-slate-500">方案:</span> {{if .Listener.Scheme}}{{.Listener.Scheme}}{{else}}{{.Listener.Protocol}}{{end}}</div>
+                    <div><span class="text-slate-500">地址:</span> {{.Listener.Host}}:{{.Listener.Port}}</div>
+                    <div><span class="text-slate-500">传输类型:</span> {{.Listener.Type}}</div>
+                    <div><span class="text-slate-500">备注:</span> {{.Listener.Notes}}</div>
+                    <div><span class="text-slate-500">创建:</span> {{.Listener.CreatedAt | formatTime}}</div>
+                </div>
+                <div class="mt-6 flex gap-2">
+                    <a href="/generate?listener_id={{.Listener.ID}}" class="flex-1 text-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm">为此监听器生成 Agent</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="lg:col-span-2">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white border border-slate-200 rounded-3xl p-5">
+                    <div class="text-xs text-slate-500">关联 Agent 总数</div>
+                    <div class="text-4xl font-semibold mt-2">{{.TotalAgents}}</div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-3xl p-5">
+                    <div class="text-xs text-slate-500">当前活跃</div>
+                    <div class="text-4xl font-semibold mt-2 text-emerald-600">{{.ActiveAgents}}</div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-3xl p-5">
+                    <div class="text-xs text-slate-500">负载均衡提示</div>
+                    <div class="text-sm mt-2 text-slate-600">可将多个监听器指向不同服务器或端口实现多播/负载均衡。Agent 可随机或按策略连接不同监听器。</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Agents using this listener -->
+    <div class="mt-8">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-semibold">使用此监听器的 Agent ({{.TotalAgents}})</h2>
+            <a href="/agents" class="text-sm text-indigo-600">查看全部 Agent →</a>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-3xl overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th class="text-left py-3 px-6">Agent</th>
+                        <th class="text-left py-3 px-4">IP</th>
+                        <th class="text-left py-3 px-4">系统</th>
+                        <th class="text-left py-3 px-4">最后在线</th>
+                        <th class="text-center py-3 px-4">状态</th>
+                        <th class="text-right py-3 px-6">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    {{range .Agents}}
+                    <tr>
+                        <td class="py-3 px-6 font-medium">{{.Hostname}}</td>
+                        <td class="py-3 px-4 font-mono text-xs">{{.IP}}</td>
+                        <td class="py-3 px-4 text-xs">{{.OS}}/{{.Arch}}</td>
+                        <td class="py-3 px-4 text-xs text-slate-500">{{.LastSeen | formatTime}}</td>
+                        <td class="py-3 px-4 text-center">
+                            {{if eq .Status "online"}}
+                            <span class="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-700 rounded">在线</span>
+                            {{else}}
+                            <span class="px-2 py-0.5 text-xs bg-slate-200 text-slate-600 rounded">离线</span>
+                            {{end}}
+                        </td>
+                        <td class="py-3 px-6 text-right">
+                            <a href="/agents/{{.ID}}" class="text-indigo-600 hover:underline text-sm">详情</a>
+                        </td>
+                    </tr>
+                    {{else}}
+                    <tr>
+                        <td colspan="6" class="py-10 text-center text-slate-400">暂无 Agent 使用此监听器</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{{end}}

@@ -1,9 +1,9 @@
-{{define "dashboard_content"}}
+﻿{{define "dashboard_content"}}
 <div class="max-w-7xl mx-auto">
     <div class="flex items-end justify-between mb-8">
         <div>
             <h1 class="text-4xl font-semibold tracking-tighter text-slate-900">控制台</h1>
-            <p class="text-slate-500 mt-1">红队行动实时概览</p>
+            <p class="text-slate-500 mt-1 text-sm">红队行动实时概览 · 共 {{.TotalTasks}} 个任务 · {{.TotalAudits}} 条审计</p>
         </div>
         <div class="text-right text-sm text-slate-500">
             最后更新<br>
@@ -11,13 +11,14 @@
         </div>
     </div>
 
-    <!-- 统计卡片 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Row 1: 核心指标 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <div class="metric-card bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
             <div class="flex justify-between items-start">
                 <div>
                     <div class="text-xs section-header">总 Agent 数</div>
                     <div class="text-5xl font-semibold tabular-nums mt-3 text-slate-900">{{.TotalAgents}}</div>
+                    <div class="text-xs text-emerald-600 mt-2">{{.OnlineAgents}} 在线</div>
                 </div>
                 <i class="fa-solid fa-users text-3xl text-slate-300"></i>
             </div>
@@ -26,18 +27,9 @@
         <div class="metric-card bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
             <div class="flex justify-between items-start">
                 <div>
-                    <div class="text-xs section-header">在线数量</div>
-                    <div class="text-5xl font-semibold tabular-nums mt-3 text-emerald-600">{{.OnlineAgents}}</div>
-                </div>
-                <i class="fa-solid fa-satellite text-3xl text-emerald-400"></i>
-            </div>
-        </div>
-
-        <div class="metric-card bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
-            <div class="flex justify-between items-start">
-                <div>
                     <div class="text-xs section-header">今日任务</div>
                     <div class="text-5xl font-semibold tabular-nums mt-3 text-indigo-600">{{.TodayTasks}}</div>
+                    <div class="text-xs text-slate-500 mt-2">进行中 {{.PendingTasks}} · 失败 {{.FailedTasks}}</div>
                 </div>
                 <i class="fa-solid fa-tasks text-3xl text-indigo-400"></i>
             </div>
@@ -46,51 +38,152 @@
         <div class="metric-card bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
             <div class="flex justify-between items-start">
                 <div>
-                    <div class="text-xs section-header">操作员</div>
-                    <div class="text-3xl font-semibold mt-3 text-slate-900">单用户模式</div>
-                    <div class="text-emerald-600 text-xs mt-1">就绪</div>
+                    <div class="text-xs section-header">凭据保险库</div>
+                    <div class="text-5xl font-semibold tabular-nums mt-3 text-purple-600">{{.TotalCreds}}</div>
+                    <div class="text-xs text-slate-500 mt-2">Token 战利品 {{.TotalTokens}}</div>
                 </div>
-                <i class="fa-solid fa-user-shield text-3xl text-slate-300"></i>
+                <i class="fa-solid fa-key text-3xl text-purple-400"></i>
+            </div>
+        </div>
+
+        <div class="metric-card bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+            <div class="flex justify-between items-start">
+                <div>
+                    <div class="text-xs section-header">监听器</div>
+                    <div class="text-5xl font-semibold tabular-nums mt-3 text-cyan-600">{{.TotalListeners}}</div>
+                    <div class="text-xs text-slate-500 mt-2">SOCKS 隧道 {{.TotalSocks}}</div>
+                </div>
+                <i class="fa-solid fa-plug text-3xl text-cyan-400"></i>
             </div>
         </div>
     </div>
 
-    <!-- 最近活动 -->
-    <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-        <div class="flex items-center justify-between mb-4">
-            <div class="font-semibold flex items-center gap-x-2 text-slate-900">
-                <i class="fa-solid fa-clock-rotate-left"></i>
-                <span>最近活动</span>
+    <!-- Row 2: Agent 在线列表 + 最近活动 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <!-- 在线 Agent -->
+        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+                <div class="font-semibold flex items-center gap-x-2 text-slate-900">
+                    <i class="fa-solid fa-satellite text-emerald-500"></i>
+                    <span>在线 Agent</span>
+                    <span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs rounded-full font-mono">{{len .RecentAgents}}</span>
+                </div>
+                <a href="/agents" class="text-xs text-indigo-600 hover:underline flex items-center gap-x-1">查看全部 <i class="fa-solid fa-arrow-right text-[10px]"></i></a>
             </div>
-            <a href="/tasks" class="text-xs text-indigo-600 hover:underline flex items-center gap-x-1">查看全部 <i class="fa-solid fa-arrow-right text-[10px]"></i></a>
+            <div class="space-y-1">
+                {{range .RecentAgents}}
+                <a href="/agents/{{.ID}}" class="flex items-center justify-between py-2.5 px-4 bg-slate-50 hover:bg-slate-100 rounded-2xl transition-colors">
+                    <div class="flex items-center gap-x-3">
+                        <span class="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                        <div>
+                            <div class="text-sm font-medium text-slate-900">{{.Hostname}}</div>
+                            <div class="text-xs text-slate-500">{{.IP}} · {{.OS}} {{.Arch}}</div>
+                        </div>
+                    </div>
+                    <div class="text-[10px] text-slate-400 font-mono">{{.LastSeen | relativeTime}}</div>
+                </a>
+                {{else}}
+                <div class="text-center py-8 text-slate-400 text-sm">暂无在线 Agent</div>
+                {{end}}
+            </div>
         </div>
 
-        <div class="space-y-1 text-sm">
-            {{range .RecentTasks}}
-            <div class="flex items-center justify-between py-3 px-4 bg-slate-50 rounded-2xl">
-                <div class="flex items-center gap-x-4">
-                    <div class="w-8 h-8 rounded-2xl bg-slate-100 flex items-center justify-center flex-shrink-0">
-                        {{if eq .Type "shell"}}<i class="fa-solid fa-terminal text-amber-500"></i>
-                        {{else if eq .Type "screenshot"}}<i class="fa-solid fa-camera text-purple-500"></i>
-                        {{end}}
+        <!-- 最近活动 -->
+        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+                <div class="font-semibold flex items-center gap-x-2 text-slate-900">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>最近活动</span>
+                </div>
+                <a href="/tasks" class="text-xs text-indigo-600 hover:underline flex items-center gap-x-1">查看全部 <i class="fa-solid fa-arrow-right text-[10px]"></i></a>
+            </div>
+            <div class="space-y-1 text-sm">
+                {{range .RecentTasks}}
+                <div class="flex items-center justify-between py-3 px-4 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition-colors" data-task-id="{{.ID}}" data-agent-id="{{.AgentID}}" onclick="showRecentTaskModal(this)">
+                    <div class="flex items-center gap-x-4 min-w-0">
+                        <div class="w-8 h-8 rounded-2xl bg-slate-100 flex items-center justify-center flex-shrink-0">
+                            {{if eq .Type "shell"}}<i class="fa-solid fa-terminal text-amber-500"></i>
+                            {{else if eq .Type "screenshot"}}<i class="fa-solid fa-camera text-purple-500"></i>
+                            {{else if eq .Type "keylogger_start"}}<i class="fa-solid fa-keyboard text-emerald-500"></i>
+                            {{else if eq .Type "keylogger_stop"}}<i class="fa-solid fa-keyboard text-red-500"></i>
+                            {{else if eq .Type "keylogger_dump"}}<i class="fa-solid fa-keyboard text-amber-500"></i>
+                            {{else}}<i class="fa-solid fa-terminal text-slate-400"></i>
+                            {{end}}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-medium text-slate-900 truncate">{{.Agent.Hostname}}</div>
+                            <div class="text-xs text-slate-500 font-mono truncate max-w-[200px]">{{.Command}}</div>
+                        </div>
                     </div>
-                    <div>
-                        <div class="font-medium text-slate-900">{{.Agent.Hostname}}</div>
-                        <div class="text-xs text-slate-500 font-mono truncate max-w-[300px]">{{.Command}}</div>
+                    <div class="text-right text-xs flex-shrink-0 ml-2">
+                        <div class="font-mono text-slate-400">{{.CreatedAt | relativeTime}}</div>
+                        <div class="mt-0.5">
+                            {{if eq .Status "completed"}}<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px]">完成</span>
+                            {{else if eq .Status "failed"}}<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[10px]">失败</span>
+                            {{else}}<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px]">{{.Status}}</span>{{end}}
+                        </div>
                     </div>
                 </div>
-                <div class="text-right text-xs">
-                    <div class="font-mono text-slate-400">{{.CreatedAt | formatTime}}</div>
-                    <div class="mt-0.5">
-                        {{if eq .Status "completed"}}<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px]">已完成</span>
-                        {{else if eq .Status "failed"}}<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[10px]">失败</span>
-                        {{else}}<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px]">{{.Status}}</span>{{end}}
-                    </div>
+                {{else}}
+                <div class="text-center py-8 text-slate-400 text-sm">暂无任务记录</div>
+                {{end}}
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 3: 任务类型分布 + 任务状态分布 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+            <div class="font-semibold flex items-center gap-x-2 text-slate-900 mb-4">
+                <i class="fa-solid fa-chart-pie text-slate-400"></i>
+                <span>系统概况</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div class="bg-slate-50 rounded-2xl p-4 text-center">
+                    <div class="text-xs text-slate-500">任务总数</div>
+                    <div class="text-2xl font-bold text-slate-800 mt-1">{{.TotalTasks}}</div>
+                </div>
+                <div class="bg-emerald-50 rounded-2xl p-4 text-center">
+                    <div class="text-xs text-emerald-600">等待中</div>
+                    <div class="text-2xl font-bold text-emerald-700 mt-1">{{.PendingTasks}}</div>
+                </div>
+                <div class="bg-amber-50 rounded-2xl p-4 text-center">
+                    <div class="text-xs text-amber-600">失败</div>
+                    <div class="text-2xl font-bold text-amber-700 mt-1">{{.FailedTasks}}</div>
+                </div>
+                <div class="bg-purple-50 rounded-2xl p-4 text-center">
+                    <div class="text-xs text-purple-600">审计日志</div>
+                    <div class="text-2xl font-bold text-purple-700 mt-1">{{.TotalAudits}}</div>
                 </div>
             </div>
-            {{else}}
-            <div class="text-center py-8 text-slate-400 text-sm">暂无任务记录</div>
-            {{end}}
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+            <div class="font-semibold flex items-center gap-x-2 text-slate-900 mb-4">
+                <i class="fa-solid fa-database text-slate-400"></i>
+                <span>保险库概要</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div class="bg-purple-50 rounded-2xl p-4 text-center">
+                    <div class="text-xs text-purple-600">凭据</div>
+                    <div class="text-2xl font-bold text-purple-700 mt-1">{{.TotalCreds}}</div>
+                </div>
+                <div class="bg-indigo-50 rounded-2xl p-4 text-center">
+                    <div class="text-xs text-indigo-600">Token</div>
+                    <div class="text-2xl font-bold text-indigo-700 mt-1">{{.TotalTokens}}</div>
+                </div>
+                <div class="bg-cyan-50 rounded-2xl p-4 text-center">
+                    <div class="text-xs text-cyan-600">SOCKS</div>
+                    <div class="text-2xl font-bold text-cyan-700 mt-1">{{.TotalSocks}}</div>
+                </div>
+                <div class="bg-blue-50 rounded-2xl p-4 text-center">
+                    <div class="text-xs text-blue-600">监听器</div>
+                    <div class="text-2xl font-bold text-blue-700 mt-1">{{.TotalListeners}}</div>
+                </div>
+            </div>
+            <div class="mt-4 text-xs text-slate-400 text-center">
+                操作员模式 · 单用户 · ForgeC2 v1.2
+            </div>
         </div>
     </div>
 </div>

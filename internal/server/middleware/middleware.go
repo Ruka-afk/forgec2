@@ -53,12 +53,6 @@ func (rl *RateLimiter) Limit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
 		if ip == "" {
-			ip = c.Request.Header.Get("X-Forwarded-For")
-		}
-		if ip == "" {
-			ip = c.Request.Header.Get("X-Real-IP")
-		}
-		if ip == "" {
 			ip = "unknown"
 		}
 
@@ -84,9 +78,15 @@ func (rl *RateLimiter) Limit() gin.HandlerFunc {
 
 		// Check limit
 		if v.count >= rl.limit {
+			// For form submissions, redirect back with error instead of JSON
+			if c.Request.Method == "POST" && c.Request.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
+				c.Redirect(http.StatusFound, "/login?error=rate_limited")
+				c.Abort()
+				return
+			}
 			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error":   "rate_limit_exceeded",
-				"message": "Too many requests, please try again later",
+				"error":       "rate_limit_exceeded",
+				"message":     "Too many requests, please try again later",
 				"retry_after": int(rl.window.Seconds()),
 			})
 			c.Abort()
@@ -106,7 +106,7 @@ func ErrorHandler() gin.HandlerFunc {
 		// Check if there are any errors
 		if len(c.Errors) > 0 {
 			lastError := c.Errors.Last()
-			
+
 			// Determine status code
 			statusCode := http.StatusInternalServerError
 			if c.Writer.Status() != http.StatusOK && c.Writer.Status() != http.StatusInternalServerError {
@@ -129,7 +129,7 @@ func Recovery() gin.HandlerFunc {
 			if r := recover(); r != nil {
 				// Log the panic
 				// In production, you would want to log this to a service like Sentry
-				
+
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"error":   "server_error",
 					"message": "An unexpected error occurred",
@@ -153,6 +153,7 @@ func CSRFProtection() gin.HandlerFunc {
 		if c.Request.Method == "GET" || c.Request.Method == "HEAD" {
 			if _, err := c.Cookie("csrf_token"); err != nil {
 				token := GenerateCSRFToken()
+				// Secure flag requires TLS; Gin handler has no access to TLS config, so keep false for now
 				c.SetCookie("csrf_token", token, CookieMaxAge, "/", "", false, false)
 			}
 			c.Next()

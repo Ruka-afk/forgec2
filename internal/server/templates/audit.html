@@ -26,10 +26,22 @@
                 <option value="">所有操作</option>
                 <option value="login">登录</option>
                 <option value="logout">退出</option>
+                <option value="send_command">发送命令</option>
+                <option value="command_result">命令结果</option>
+                <option value="batch_command">批量命令</option>
                 <option value="agent_action">Agent 操作</option>
+                <option value="kill_agent">终止 Agent</option>
+                <option value="delete_agent">删除 Agent</option>
+                <option value="request_screenshot">请求截图</option>
+                <option value="request_ps">请求进程列表</option>
                 <option value="generate">生成 Agent</option>
                 <option value="screen_monitor_start">启动监控</option>
                 <option value="screen_monitor_stop">停止监控</option>
+                <option value="file_ls">文件列表</option>
+                <option value="file_delete">文件删除</option>
+                <option value="file_read">文件读取</option>
+                <option value="file_upload_exfil">文件上传(内传)</option>
+                <option value="file_download_exfil">文件下载(外传)</option>
             </select>
             <button onclick="applyFilters()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 h-11 rounded-xl text-sm flex items-center gap-x-2">
                 <i class="fa-solid fa-filter"></i>
@@ -163,10 +175,22 @@ function getActionClass(action) {
     const classes = {
         'login': 'bg-emerald-100 text-emerald-700',
         'logout': 'bg-slate-100 text-slate-700',
+        'send_command': 'bg-indigo-100 text-indigo-700',
+        'command_result': 'bg-teal-100 text-teal-700',
+        'batch_command': 'bg-violet-100 text-violet-700',
         'agent_action': 'bg-blue-100 text-blue-700',
+        'kill_agent': 'bg-red-100 text-red-700',
+        'delete_agent': 'bg-rose-100 text-rose-700',
+        'request_screenshot': 'bg-sky-100 text-sky-700',
+        'request_ps': 'bg-amber-100 text-amber-700',
         'generate': 'bg-purple-100 text-purple-700',
         'screen_monitor_start': 'bg-cyan-100 text-cyan-700',
         'screen_monitor_stop': 'bg-orange-100 text-orange-700',
+        'file_ls': 'bg-slate-100 text-slate-700',
+        'file_delete': 'bg-red-100 text-red-700',
+        'file_read': 'bg-blue-100 text-blue-700',
+        'file_upload_exfil': 'bg-emerald-100 text-emerald-700',
+        'file_download_exfil': 'bg-emerald-100 text-emerald-700',
     };
     return classes[action] || 'bg-gray-100 text-gray-700';
 }
@@ -175,10 +199,22 @@ function getActionLabel(action) {
     const labels = {
         'login': '登录',
         'logout': '退出',
+        'send_command': '发送命令',
+        'command_result': '命令结果',
+        'batch_command': '批量命令',
         'agent_action': 'Agent 操作',
+        'kill_agent': '终止 Agent',
+        'delete_agent': '删除 Agent',
+        'request_screenshot': '请求截图',
+        'request_ps': '请求进程列表',
         'generate': '生成 Agent',
         'screen_monitor_start': '启动监控',
         'screen_monitor_stop': '停止监控',
+        'file_ls': '文件列表',
+        'file_delete': '文件删除',
+        'file_read': '文件读取',
+        'file_upload_exfil': '文件上传(内传)',
+        'file_download_exfil': '文件下载(外传)',
     };
     return labels[action] || action;
 }

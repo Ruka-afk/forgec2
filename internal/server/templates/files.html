@@ -26,6 +26,10 @@
                     <i class="fa-solid fa-sync-alt"></i>
                     <span>刷新</span>
                 </button>
+                <button onclick="uploadLocalFileToAgent()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 h-9 rounded-xl text-sm flex items-center gap-x-2">
+                    <i class="fa-solid fa-upload"></i>
+                    <span>上传本地文件</span>
+                </button>
             </div>
         </div>
     </div>
@@ -294,6 +298,10 @@
                                     class="text-emerald-600 hover:text-emerald-800 text-xs px-2 py-1 rounded hover:bg-emerald-50" title="上传到服务器">
                                 <i class="fa-solid fa-upload"></i>
                             </button>
+                            <button onclick="downloadToLocal('${escapeJs(fullPath)}')" 
+                                    class="text-blue-600 hover:text-blue-800 text-xs px-2 py-1 rounded hover:bg-blue-50" title="下载到本地">
+                                <i class="fa-solid fa-download"></i>
+                            </button>
                         `}
                         <button onclick="deleteFile('${escapeJs(fullPath)}', '${escapeJs(file.name)}')" 
                                 class="text-red-600 hover:text-red-800 text-xs px-2 py-1 rounded hover:bg-red-50" title="删除">
@@ -454,6 +462,137 @@
         toast.textContent = msg;
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 3000);
+    }
+
+    // Chunked upload from local browser to agent (push large files with progress)
+    function uploadLocalFileToAgent() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const targetPath = currentPath.endsWith('\\') ? currentPath + file.name : currentPath + '\\' + file.name;
+            if (!confirm(`上传本地文件 ${file.name} (${formatSize(file.size)}) 到 ${targetPath} ?`)) return;
+            await chunkedUploadToAgent(file, targetPath);
+        };
+        input.click();
+    }
+
+    async function chunkedUploadToAgent(file, targetPath) {
+        const chunkSize = 1024 * 1024; // 1MB chunks
+        const totalChunks = Math.ceil(file.size / chunkSize);
+        let uploaded = 0;
+
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const chunk = file.slice(start, start + chunkSize);
+
+            const formData = new FormData();
+            formData.append('target_path', targetPath);
+            formData.append('offset', start);
+            formData.append('file', chunk);
+
+            try {
+                const response = await fetch(`/agents/${agentId}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    showError(data.error || '上传块失败');
+                    return;
+                }
+                uploaded += chunk.size;
+                const percent = Math.round((uploaded / file.size) * 100);
+                showToast(`上传进度: ${percent}%`);
+            } catch (err) {
+                showError('上传错误: ' + err.message);
+                return;
+            }
+        }
+        showToast('文件上传完成！');
+        setTimeout(() => refreshList(), 1500);
+    }
+
+    // Simple chunked download from agent to browser (for large files)
+    async function downloadToLocal(path) {
+        const chunkSize = 1024 * 1024;
+        let offset = 0;
+        const chunks = [];
+        const fileName = path.split('\\').pop() || 'downloaded_file';
+
+        showToast('开始分块下载...');
+
+        while (true) {
+            const resp = await fetch(`/agents/${agentId}/files/download`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: `path=${encodeURIComponent(path)}&offset=${offset}&size=${chunkSize}`
+            });
+            const data = await resp.json();
+            if (!data.success) {
+                showError(data.error || '下载块请求失败');
+                return;
+            }
+            // poll task
+            const taskResult = await pollDownloadChunk(data.task_id);
+            if (!taskResult || taskResult.status !== 'completed' || !taskResult.result) {
+                break;
+            }
+            // result is base64 of chunk
+            try {
+                const binary = atob(taskResult.result);
+                const bytes = new Uint8Array(binary.length);
+                for (let j = 0; j < binary.length; j++) {
+                    bytes[j] = binary.charCodeAt(j);
+                }
+                chunks.push(bytes);
+                offset += chunkSize;
+                showToast(`已下载 ${Math.floor(offset / 1024 / 1024)} MB`);
+                if (bytes.length < chunkSize) break;
+            } catch (e) {
+                showError('解码块失败');
+                return;
+            }
+        }
+
+        // assemble
+        let totalLen = 0;
+        chunks.forEach(c => totalLen += c.length);
+        const allBytes = new Uint8Array(totalLen);
+        let pos = 0;
+        chunks.forEach(c => {
+            allBytes.set(c, pos);
+            pos += c.length;
+        });
+        const blob = new Blob([allBytes]);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('下载完成');
+    }
+
+    async function pollDownloadChunk(taskId) {
+        return new Promise((resolve) => {
+            const check = () => {
+                fetch(`/agents/${agentId}/tasks/${taskId}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'completed' || data.status === 'failed') {
+                            resolve(data);
+                        } else {
+                            setTimeout(check, 1500);
+                        }
+                    })
+                    .catch(() => resolve(null));
+            };
+            check();
+        });
     }
 </script>
 {{end}}

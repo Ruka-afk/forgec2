@@ -1,0 +1,168 @@
+{{define "loot_content"}}
+<div class="max-w-7xl mx-auto">
+    <div class="flex items-end justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">战利品 <span class="text-amber-500">Loot</span></h1>
+            <p class="text-slate-500 mt-1">汇总所有截图、键盘记录、下载的文件等收获</p>
+        </div>
+        <div class="text-right text-sm">
+            <div class="text-slate-400">总计</div>
+            <div class="text-2xl font-semibold tabular-nums text-amber-600">{{len .Screenshots}} + {{len .KeylogTasks}} + {{len .DownloadTasks}}</div>
+        </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="grid grid-cols-3 gap-4 mb-8">
+        <div class="bg-white border border-slate-200 rounded-3xl p-5">
+            <div class="text-xs section-header text-purple-600">截图</div>
+            <div class="text-4xl font-semibold mt-2 text-purple-700">{{len .Screenshots}}</div>
+            <div class="text-xs text-slate-500 mt-1">来自所有 Agent</div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-3xl p-5">
+            <div class="text-xs section-header text-emerald-600">键盘记录</div>
+            <div class="text-4xl font-semibold mt-2 text-emerald-700">{{len .KeylogTasks}}</div>
+            <div class="text-xs text-slate-500 mt-1">Keylogger 转储</div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-3xl p-5">
+            <div class="text-xs section-header text-blue-600">文件下载</div>
+            <div class="text-4xl font-semibold mt-2 text-blue-700">{{len .DownloadTasks}}</div>
+            <div class="text-xs text-slate-500 mt-1">Exfil / 下载</div>
+        </div>
+    </div>
+
+    <!-- Screenshots Gallery -->
+    <div class="bg-white border border-slate-200 rounded-3xl p-6 mb-8">
+        <div class="flex items-center justify-between mb-4">
+            <div class="font-semibold flex items-center gap-x-2">
+                <i class="fa-solid fa-images text-purple-500"></i>
+                <span>截图画廊</span>
+            </div>
+            <span class="text-xs text-slate-400">{{len .Screenshots}} 张</span>
+        </div>
+
+        {{if .Screenshots}}
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
+            {{range .Screenshots}}
+            <div class="group relative rounded-xl overflow-hidden border border-slate-200 cursor-pointer bg-slate-50" onclick="showLootScreenshot('{{.AgentID}}', '{{.Filename}}')">
+                <img src="/screenshots/{{.Path}}" class="w-full h-20 object-contain bg-white" alt="{{.Filename}}" loading="lazy">
+                <div class="absolute bottom-0 left-0 right-0 bg-black/50 text-[9px] text-white px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition flex justify-between items-center">
+                    <span class="truncate">{{.AgentID}}</span>
+                    <a href="/screenshots/{{.Path}}" download onclick="event.stopImmediatePropagation()" class="hover:text-emerald-300 px-1"><i class="fa-solid fa-download"></i></a>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{else}}
+        <div class="text-center py-8 text-slate-400 text-sm">暂无截图</div>
+        {{end}}
+    </div>
+
+    <!-- Keylogger Dumps -->
+    <div class="bg-white border border-slate-200 rounded-3xl p-6 mb-8">
+        <div class="flex items-center justify-between mb-4">
+            <div class="font-semibold flex items-center gap-x-2">
+                <i class="fa-solid fa-keyboard text-emerald-500"></i>
+                <span>键盘记录转储</span>
+            </div>
+            <span class="text-xs text-slate-400">{{len .KeylogTasks}} 条</span>
+        </div>
+
+        {{if .KeylogTasks}}
+        <div class="space-y-3">
+            {{range .KeylogTasks}}
+            <div class="border border-slate-100 rounded-2xl p-4">
+                <div class="flex justify-between text-xs mb-1">
+                    <span class="font-medium">{{.Agent.Hostname}}</span>
+                    <span class="text-slate-400">{{.CreatedAt | formatTime}}</span>
+                </div>
+                <pre class="bg-slate-900 text-emerald-300 p-3 rounded-xl text-xs max-h-40 overflow-auto whitespace-pre-wrap font-mono">{{if .Result}}{{/* decode base64 in browser */}}<script>(function(){const p=document.currentScript.parentElement;let t={{.Result|printf "%q"}};try{if(t.length>40&&/^[A-Za-z0-9+/=]+$/.test(t))t=atob(t);}catch(e){}p.innerText=t;})();</script>{{else}}{{.Error}}{{end}}</pre>
+                <div class="text-[10px] text-slate-500 mt-1">Task #{{.ID}} · {{.Status}}</div>
+            </div>
+            {{end}}
+        </div>
+        {{else}}
+        <div class="text-center py-6 text-slate-400 text-sm">暂无键盘记录</div>
+        {{end}}
+    </div>
+
+    <!-- Downloaded / Exfil Files -->
+    <div class="bg-white border border-slate-200 rounded-3xl p-6">
+        <div class="flex items-center justify-between mb-4">
+            <div class="font-semibold flex items-center gap-x-2">
+                <i class="fa-solid fa-download text-blue-500"></i>
+                <span>文件下载与外传</span>
+            </div>
+            <span class="text-xs text-slate-400">{{len .DownloadTasks}} 条</span>
+        </div>
+
+        {{if .DownloadTasks}}
+        <div class="overflow-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs text-slate-500 border-b">
+                        <th class="py-2 pr-4">时间</th>
+                        <th class="py-2 pr-4">Agent</th>
+                        <th class="py-2 pr-4">命令/路径</th>
+                        <th class="py-2">状态</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    {{range .DownloadTasks}}
+                    <tr>
+                        <td class="py-2 pr-4 font-mono text-xs">{{.CreatedAt | formatTime}}</td>
+                        <td class="py-2 pr-4"><span class="font-medium">{{.Agent.Hostname}}</span></td>
+                        <td class="py-2 pr-4 font-mono text-xs break-all">{{.Command}}</td>
+                        <td class="py-2">
+                            <span class="text-[10px] px-2 py-0.5 rounded {{if eq .Status "completed"}}bg-emerald-100 text-emerald-700{{else}}bg-slate-100{{end}}">{{.Status}}</span>
+                        </td>
+                    </tr>
+                    {{if .Result}}
+                    <tr>
+                        <td colspan="4" class="py-1 pl-4">
+                            <div class="text-xs bg-slate-50 p-2 rounded font-mono max-w-full overflow-hidden text-ellipsis">{{.Result}}</div>
+                        </td>
+                    </tr>
+                    {{end}}
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <div class="text-center py-6 text-slate-400 text-sm">暂无下载记录</div>
+        {{end}}
+    </div>
+</div>
+
+<!-- Simple screenshot modal -->
+<div id="loot-modal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
+    <div class="max-w-[95vw] max-h-[90vh] bg-white rounded-3xl overflow-hidden shadow-2xl" onclick="event.stopImmediatePropagation()">
+        <div class="flex items-center justify-between px-4 py-3 border-b bg-slate-50">
+            <div id="modal-title" class="font-mono text-sm"></div>
+            <div class="flex gap-2">
+                <a id="modal-download" class="text-xs px-3 py-1.5 bg-white border rounded-xl hover:bg-slate-100" download>下载</a>
+                <button onclick="document.getElementById('loot-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 px-2">✕</button>
+            </div>
+        </div>
+        <div class="p-2">
+            <img id="modal-img" class="max-w-[90vw] max-h-[80vh] object-contain mx-auto" />
+        </div>
+    </div>
+</div>
+
+<script>
+function showLootScreenshot(agentId, filename) {
+    const modal = document.getElementById('loot-modal');
+    const img = document.getElementById('modal-img');
+    const title = document.getElementById('modal-title');
+    const dl = document.getElementById('modal-download');
+
+    const src = `/screenshots/${agentId}/${filename}`;
+    img.src = src;
+    title.textContent = `${agentId} / ${filename}`;
+    dl.href = src;
+    dl.download = filename;
+
+    modal.classList.remove('hidden');
+}
+</script>
+{{end}}

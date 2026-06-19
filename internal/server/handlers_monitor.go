@@ -2,21 +2,16 @@ package server
 
 import (
 	"bytes"
-	"fmt"
+	"encoding/json"
 	"html/template"
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 )
-
-var screenMonitorAgents = make(map[string]time.Time)
-var screenMonitorMu sync.Mutex
 
 func (s *Server) handleScreenMonitorPage(c *gin.Context) {
 	id := c.Param("id")
@@ -27,11 +22,16 @@ func (s *Server) handleScreenMonitorPage(c *gin.Context) {
 		return
 	}
 
+	stats := s.getNavStats()
 	data := gin.H{
-		"Title":     "ForgeC2 - 屏幕监控",
+		"Title":     "ForgeC2 - Screen Monitoring",
 		"Agent":     agent,
 		"ActiveNav": "agents",
-		"Online":    s.cfg.Auth.PasswordHash != "",
+		"Online":    time.Since(agent.LastSeen) < s.offlineThreshold(),
+	}
+	s.addUserToData(c, data)
+	for k, v := range stats {
+		data[k] = v
 	}
 
 	var contentBuf bytes.Buffer
@@ -50,24 +50,17 @@ func (s *Server) handleScreenMonitorPage(c *gin.Context) {
 func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 	id := c.Param("id")
 
-	var agent db.Agent
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		slog.Error("Screen monitor: agent not found", "agent_id", id, "err", err)
-		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
+	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
 
-	screenMonitorMu.Lock()
-	screenMonitorAgents[strings.ToLower(id)] = time.Now()
-	screenMonitorMu.Unlock()
+	s.screenMonitorMu.Lock()
+	s.screenMonitorAgents[strings.ToLower(id)] = time.Now()
+	s.screenMonitorMu.Unlock()
 
-	task := db.Task{
-		AgentID: id,
-		Type:    "screen_stream_start",
-		Status:  "pending",
-	}
-	if result := s.db.Create(&task); result.Error != nil {
-		slog.Error("Screen monitor: failed to create task", "agent_id", id, "err", result.Error)
+	task, err := s.createTask(id, "screen_stream_start", "", "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Screen monitor: failed to create task", "agent_id", id, "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
 		return
 	}
@@ -80,67 +73,56 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 func (s *Server) handleStopScreenMonitor(c *gin.Context) {
 	id := c.Param("id")
 
-	screenMonitorMu.Lock()
-	startTime, ok := screenMonitorAgents[strings.ToLower(id)]
-	delete(screenMonitorAgents, strings.ToLower(id))
-	screenMonitorMu.Unlock()
+	s.screenMonitorMu.Lock()
+	startTime, ok := s.screenMonitorAgents[strings.ToLower(id)]
+	delete(s.screenMonitorAgents, strings.ToLower(id))
+	s.screenMonitorMu.Unlock()
 
-	// Auto clean up placeholder/monitoring tasks generated during this session
-	// (stop task kept briefly to reach agent, deleted on ack in beacon)
 	if ok {
 		s.db.Where("agent_id = ? AND created_at >= ? AND type IN (?)", id, startTime,
 			[]string{"screenshot", "screen_stream_start"}).
 			Delete(&db.Task{})
 	}
 
-	// send stop to agent
-	task := db.Task{
-		AgentID: id,
-		Type:    "screen_stream_stop",
-		Status:  "pending",
+	stopTask, err := s.createTask(id, "screen_stream_stop", "", "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Screen monitor stop: failed to create task", "agent_id", id, "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create stop task"})
+		return
 	}
-	s.db.Create(&task)
+	s.broadcastTaskUpdate(id, *stopTask)
 
 	s.LogAuditRecord(c, "screen_monitor_stop", "agent", id, "Stopped screen monitoring", true, nil)
 	slog.Info("Screen monitoring stopped", "agent", id)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
-func IsScreenMonitoring(agentID string) bool {
-	screenMonitorMu.Lock()
-	defer screenMonitorMu.Unlock()
-	_, ok := screenMonitorAgents[agentID]
-	if ok {
-		return true
-	}
-	_, ok = screenMonitorAgents[strings.ToLower(agentID)]
-	if ok {
-		return true
-	}
-	_, ok = screenMonitorAgents[strings.ToUpper(agentID)]
-	if ok {
-		return true
-	}
-	return false
+func (s *Server) IsScreenMonitoring(agentID string) bool {
+	s.screenMonitorMu.Lock()
+	defer s.screenMonitorMu.Unlock()
+	_, ok := s.screenMonitorAgents[strings.ToLower(agentID)]
+	return ok
 }
 
 func (s *Server) BroadcastScreenshot(agentID string, base64Data string) {
-	message := fmt.Sprintf(`{"type":"screenshot","agent_id":"%s","data":"%s"}`, agentID, base64Data)
-
-	s.wsMutex.Lock()
-	defer s.wsMutex.Unlock()
-
-	for conn := range s.wsClients {
-		if err := conn.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
-			slog.Error("Failed to send screenshot via WebSocket", "err", err)
-		}
+	payload := map[string]string{
+		"type":     "screenshot",
+		"agent_id": agentID,
+		"data":     base64Data,
 	}
+	message, err := json.Marshal(payload)
+	if err != nil {
+		slog.Error("Failed to marshal screenshot payload", "err", err)
+		return
+	}
+
+	s.broadcastToClients(message)
 }
 
 func (s *Server) handleScreenFrame(c *gin.Context) {
 	var req struct {
 		UUID string `json:"uuid"`
-		Data string `json:"data"` // base64 encoded jpeg/png
+		Data string `json:"data"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
@@ -151,8 +133,7 @@ func (s *Server) handleScreenFrame(c *gin.Context) {
 		return
 	}
 
-	if IsScreenMonitoring(req.UUID) {
-		// Live monitoring: broadcast only, never save to disk
+	if s.IsScreenMonitoring(req.UUID) {
 		s.BroadcastScreenshot(req.UUID, req.Data)
 	}
 

@@ -3,16 +3,28 @@
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-3xl font-semibold tracking-tight text-slate-900">Agent 管理</h1>
-            <p class="text-slate-500 text-sm">管理已连接的植入程序 • 共 {{len .Agents}} 个</p>
+            <p class="text-slate-500 text-sm flex items-center gap-2">
+                <span>共 {{len .Agents}} 个</span>
+                <span id="agent-online-count" class="inline-flex items-center gap-1 text-emerald-600">
+                    <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                    <span class="font-mono" id="online-num">{{.OnlineCount}}</span> 在线
+                </span>
+            </p>
         </div>
-        <a href="/generate" class="inline-flex items-center gap-x-2 bg-indigo-600 hover:bg-indigo-700 transition-colors px-5 h-10 rounded-2xl text-sm font-medium text-white">
-            <i class="fa-solid fa-plus"></i>
-            <span>生成新 Agent</span>
-        </a>
+        <div class="flex items-center gap-2">
+            <button onclick="location.reload()" class="px-4 h-10 bg-white border border-slate-200 hover:bg-slate-50 rounded-2xl text-sm flex items-center gap-2">
+                <i class="fa-solid fa-sync text-slate-500"></i>
+                <span class="text-slate-600">刷新</span>
+            </button>
+            <a href="/generate" class="inline-flex items-center gap-x-2 bg-indigo-600 hover:bg-indigo-700 transition-colors px-5 h-10 rounded-2xl text-sm font-medium text-white">
+                <i class="fa-solid fa-plus"></i>
+                <span>生成新 Agent</span>
+            </a>
+        </div>
     </div>
 
     <!-- 搜索和筛选 -->
-    <form class="flex gap-3 mb-4" hx-get="/agents" hx-target="#agents-table">
+    <form class="flex gap-3 mb-4" id="agent-filter-form">
         <input type="text" name="search" value="{{.Search}}" placeholder="搜索主机名、用户、IP..."
                class="flex-1 bg-white border border-slate-300 focus:border-indigo-500 transition-colors text-sm rounded-2xl px-4 h-10">
         <select name="status" class="bg-white border border-slate-300 text-sm rounded-2xl px-4 h-10" onchange="this.form.submit()">
@@ -20,61 +32,104 @@
             <option value="online" {{if eq .Status "online"}}selected{{end}}>在线</option>
             <option value="offline" {{if eq .Status "offline"}}selected{{end}}>离线</option>
         </select>
+        <select name="os" class="bg-white border border-slate-300 text-sm rounded-2xl px-4 h-10" onchange="this.form.submit()">
+            <option value="">全部系统</option>
+            <option value="windows" {{if eq .FilterOS "windows"}}selected{{end}}>Windows</option>
+            <option value="linux" {{if eq .FilterOS "linux"}}selected{{end}}>Linux</option>
+            <option value="darwin" {{if eq .FilterOS "darwin"}}selected{{end}}>macOS</option>
+        </select>
         <button type="submit" class="px-6 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl text-sm">筛选</button>
     </form>
 
     <div id="agents-table" class="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-        <table class="w-full text-sm">
-            <thead>
-            <tr class="border-b border-slate-200 text-xs text-slate-500">
-                <th class="text-left py-3.5 px-6 font-normal">主机名</th>
-                <th class="text-left py-3.5 px-4 font-normal">用户名</th>
-                <th class="text-left py-3.5 px-4 font-normal">操作系统/架构</th>
-                <th class="text-left py-3.5 px-4 font-normal">IP 地址</th>
-                <th class="text-left py-3.5 px-4 font-normal">最后上线</th>
-                <th class="text-center py-3.5 px-4 font-normal">状态</th>
-                <th class="text-right py-3.5 px-6 font-normal">操作</th>
-            </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-            {{range .Agents}}
-            <tr class="hover:bg-slate-50 transition-colors">
-                <td class="py-4 px-6 font-medium text-slate-900">{{.Hostname}}</td>
-                <td class="py-4 px-4 text-slate-600">{{.Username}}</td>
-                <td class="py-4 px-4"><span class="font-mono text-xs px-2 py-0.5 bg-slate-100 rounded">{{.OS}}/{{.Arch}}</span></td>
-                <td class="py-4 px-4 font-mono text-xs text-slate-500">{{.IP}}</td>
-                <td class="py-4 px-4 text-xs text-slate-500 font-mono">{{.LastSeen | formatTime}}</td>
-                <td class="py-4 px-4 text-center">
-                    {{if eq .Status "online"}}
-                    <span class="inline-flex items-center gap-x-1.5 text-emerald-600 text-xs font-medium">
-                            <span class="w-2 h-2 bg-emerald-500 rounded-full"></span> 在线
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                <tr class="border-b border-slate-200 text-xs text-slate-500">
+                    <th class="text-left py-3.5 px-5 font-normal w-8">
+                        <input type="checkbox" id="select-all" class="w-3.5 h-3.5 accent-indigo-600 rounded">
+                    </th>
+                    <th class="text-left py-3.5 px-3 font-normal">主机名</th>
+                    <th class="text-left py-3.5 px-3 font-normal">用户</th>
+                    <th class="text-left py-3.5 px-3 font-normal">系统 / 完整性</th>
+                    <th class="text-left py-3.5 px-3 font-normal">IP / 域</th>
+                    <th class="text-left py-3.5 px-3 font-normal">最后上线</th>
+                    <th class="text-center py-3.5 px-3 font-normal">状态</th>
+                    <th class="text-right py-3.5 px-5 font-normal">操作</th>
+                </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                {{range .Agents}}
+                <tr class="hover:bg-slate-50 transition-colors agent-row {{if eq .Status "online"}}bg-emerald-50/30{{end}}" data-agent-id="{{.ID}}">
+                    <td class="py-3.5 px-5">
+                        <input type="checkbox" class="agent-checkbox w-3.5 h-3.5 accent-indigo-600 rounded">
+                    </td>
+                    <td class="py-3.5 px-3">
+                        <a href="/agents/{{.ID}}" class="font-medium text-indigo-600 hover:text-indigo-800 transition-colors">{{.Hostname}}</a>
+                        {{if .Notes}}<span class="ml-1 text-[10px]" title="{{.Notes}}">📝</span>{{end}}
+                    </td>
+                    <td class="py-3.5 px-3 text-slate-600 text-xs font-mono">{{.Username}}</td>
+                    <td class="py-3.5 px-3">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono bg-slate-100 rounded-full">{{.OS}}/{{.Arch}}</span>
+                        {{if .Integrity}}
+                        <span class="ml-1 text-[10px] px-1.5 py-0.5 rounded font-medium
+                            {{if eq .Integrity "High"}}bg-emerald-100 text-emerald-700
+                            {{else if eq .Integrity "System"}}bg-red-100 text-red-700
+                            {{else if eq .Integrity "Low"}}bg-orange-100 text-orange-700
+                            {{else}}bg-blue-100 text-blue-700{{end}}">{{.Integrity}}</span>
+                        {{end}}
+                        {{if .Elevated}}<span class="ml-0.5 text-[10px] px-1 py-0.5 bg-red-100 text-red-600 rounded font-bold" title="管理员权限">★</span>{{end}}
+                    </td>
+                    <td class="py-3.5 px-3">
+                        <span class="font-mono text-xs text-slate-500">{{.IP}}</span>
+                        {{if .Domain}}<span class="ml-1 text-[10px] px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded">{{.Domain}}</span>{{end}}
+                    </td>
+                    <td class="py-3.5 px-3 text-xs text-slate-500 font-mono" title="{{.LastSeen | formatTime}}">
+                        <span class="time-ago" data-time="{{.LastSeen.Unix}}">{{.LastSeen | formatTime}}</span>
+                    </td>
+                    <td class="py-3.5 px-3 text-center">
+                        {{if eq .Status "online"}}
+                        <span class="inline-flex items-center gap-1.5 text-emerald-600 text-xs font-medium">
+                            <span class="w-2 h-2 bg-emerald-500 rounded-full status-dot"></span> 在线
                         </span>
-                    {{else}}
-                    <span class="text-slate-400 text-xs">离线</span>
-                    {{end}}
-                </td>
-                <td class="py-4 px-6 text-right">
-                    <div class="flex items-center justify-end gap-x-2">
-                        <a href="/agents/{{.ID}}" class="px-4 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors text-slate-700">详情</a>
-                        <a href="/agents/{{.ID}}/files" class="px-4 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors">文件</a>
-                        <a href="/agents/{{.ID}}/shell" class="px-4 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-colors">Shell</a>
-                        <button onclick="showOfflineModal('{{.ID}}', '{{.Hostname}}')" class="px-4 py-1.5 text-xs bg-orange-600 hover:bg-orange-700 text-white rounded-xl transition-colors">下线</button>
-                        <button onclick="showDeleteModal('{{.ID}}', '{{.Hostname}}')" class="px-4 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-xl transition-colors">删除</button>
-                    </div>
-                </td>
-            </tr>
-            {{else}}
-            <tr><td colspan="7" class="py-16 text-center text-slate-400">暂无已连接的 Agent。</td></tr>
-            {{end}}
-            </tbody>
-        </table>
+                        {{else}}
+                        <span class="text-slate-400 text-xs">离线</span>
+                        {{end}}
+                    </td>
+                    <td class="py-3.5 px-5 text-right">
+                        <div class="flex items-center justify-end gap-1.5">
+                            <a href="/agents/{{.ID}}" class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors text-slate-700" title="详情"><i class="fa-solid fa-eye"></i></a>
+                            <a href="/agents/{{.ID}}/files" class="px-3 py-1.5 text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-xl transition-colors" title="文件"><i class="fa-solid fa-folder-open"></i></a>
+                            <a href="/agents/{{.ID}}/shell" class="px-3 py-1.5 text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-xl transition-colors" title="Shell"><i class="fa-solid fa-terminal"></i></a>
+                            <button onclick="showOfflineModal('{{.ID}}', '{{.Hostname}}')" class="px-3 py-1.5 text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-xl transition-colors" title="下线"><i class="fa-solid fa-power-off"></i></button>
+                            <button onclick="showDeleteModal('{{.ID}}', '{{.Hostname}}')" class="px-3 py-1.5 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-xl transition-colors" title="删除"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </td>
+                </tr>
+                {{else}}
+                <tr><td colspan="8" class="py-20 text-center text-slate-400">
+                    <i class="fa-solid fa-users-slash text-3xl mb-3"></i><br>暂无已连接的 Agent
+                </td></tr>
+                {{end}}
+                </tbody>
+            </table>
+        </div>
     </div>
+</div>
+
+<!-- 批量操作栏 -->
+<div id="batch-bar" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white rounded-2xl shadow-2xl px-5 py-3 hidden items-center gap-4 z-50">
+    <span class="text-sm" id="batch-count">已选择 0 个</span>
+    <div class="w-px h-6 bg-slate-600"></div>
+    <button onclick="batchShell()" class="text-xs px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 rounded-xl"><i class="fa-solid fa-terminal mr-1"></i>批量执行</button>
+    <button onclick="batchDelete()" class="text-xs px-3 py-1.5 bg-red-500 hover:bg-red-400 rounded-xl"><i class="fa-solid fa-trash mr-1"></i>批量删除</button>
+    <button onclick="deselectAll()" class="text-xs px-3 py-1.5 bg-slate-600 hover:bg-slate-500 rounded-xl">取消</button>
 </div>
 
 <!-- 下线确认弹窗 -->
 <div id="offline-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
     <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="hideOfflineModal()"></div>
-    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transform transition-all">
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
         <div class="bg-gradient-to-r from-orange-500 to-red-500 px-6 py-5">
             <div class="flex items-center gap-3">
                 <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
@@ -91,18 +146,13 @@
                 <div class="flex items-start gap-3">
                     <i class="fa-solid fa-exclamation-triangle text-orange-500 mt-0.5"></i>
                     <p class="text-sm text-slate-700">
-                        您确定要让 <span class="font-semibold text-orange-600" id="modal-hostname"></span> 下线吗？
-                        <br>此操作将发送终止命令给agent，并从列表中删除该agent。此操作无法撤销。
+                        确定要让 <span class="font-semibold text-orange-600" id="modal-hostname"></span> 下线？
                     </p>
                 </div>
             </div>
             <div class="flex gap-3">
-                <button onclick="hideOfflineModal()" class="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium transition-colors">
-                    取消
-                </button>
-                <button onclick="confirmOffline()" class="flex-1 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-medium transition-colors">
-                    确认下线
-                </button>
+                <button onclick="hideOfflineModal()" class="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium">取消</button>
+                <button onclick="confirmOffline()" class="flex-1 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-medium">确认下线</button>
             </div>
         </div>
     </div>
@@ -111,7 +161,7 @@
 <!-- 删除确认弹窗 -->
 <div id="delete-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
     <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="hideDeleteModal()"></div>
-    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transform transition-all">
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
         <div class="bg-gradient-to-r from-red-500 to-red-700 px-6 py-5">
             <div class="flex items-center gap-3">
                 <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
@@ -128,18 +178,13 @@
                 <div class="flex items-start gap-3">
                     <i class="fa-solid fa-exclamation-triangle text-red-500 mt-0.5"></i>
                     <p class="text-sm text-slate-700">
-                        您确定要删除 <span class="font-semibold text-red-600" id="delete-hostname"></span> 吗？
-                        <br>此操作将永久删除该agent及其所有任务记录，且无法撤销。
+                        确定删除 <span class="font-semibold text-red-600" id="delete-hostname"></span>？
                     </p>
                 </div>
             </div>
             <div class="flex gap-3">
-                <button onclick="hideDeleteModal()" class="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium transition-colors">
-                    取消
-                </button>
-                <button onclick="confirmDelete()" class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors">
-                    确认删除
-                </button>
+                <button onclick="hideDeleteModal()" class="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium">取消</button>
+                <button onclick="confirmDelete()" class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium">确认删除</button>
             </div>
         </div>
     </div>
@@ -149,99 +194,137 @@
     let currentAgentId = '';
     let currentHostname = '';
 
+    // ---- Selection / Batch ----
+    document.addEventListener('DOMContentLoaded', function() {
+        const selectAll = document.getElementById('select-all');
+        if (selectAll) {
+            selectAll.addEventListener('change', function() {
+                document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = this.checked);
+                updateBatchBar();
+            });
+            document.querySelectorAll('.agent-checkbox').forEach(cb => {
+                cb.addEventListener('change', updateBatchBar);
+            });
+        }
+        updateTimeAgo();
+        setInterval(updateTimeAgo, 30000);
+    });
+
+    function updateBatchBar() {
+        const checked = document.querySelectorAll('.agent-checkbox:checked');
+        const bar = document.getElementById('batch-bar');
+        const count = document.getElementById('batch-count');
+        if (checked.length > 0) {
+            bar.classList.remove('hidden');
+            bar.classList.add('flex');
+            count.textContent = '已选择 ' + checked.length + ' 个';
+        } else {
+            bar.classList.add('hidden');
+            bar.classList.remove('flex');
+        }
+    }
+
+    function getSelectedIds() {
+        return Array.from(document.querySelectorAll('.agent-checkbox:checked')).map(cb =>
+            cb.closest('.agent-row').dataset.agentId
+        );
+    }
+
+    function deselectAll() {
+        document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = false);
+        document.getElementById('select-all').checked = false;
+        updateBatchBar();
+    }
+
+    function batchShell() {
+        const ids = getSelectedIds();
+        if (ids.length === 0) return;
+        const cmd = prompt('批量执行命令 (将在所有选中 Agent 上执行):', 'whoami');
+        if (!cmd) return;
+        fetch('/agents/batch', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ agent_ids: ids, command: cmd, shell: 'cmd.exe' })
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                showToast('已向 ' + data.tasks_created + ' 个 Agent 发送命令');
+                deselectAll();
+            } else {
+                showToast('失败: ' + (data.error || ''), 'error');
+            }
+        }).catch(err => showToast('错误: ' + err, 'error'));
+    }
+
+    function batchDelete() {
+        const ids = getSelectedIds();
+        if (ids.length === 0) return;
+        if (!confirm('确认删除选中的 ' + ids.length + ' 个 Agent？')) return;
+        let done = 0;
+        ids.forEach(id => {
+            fetch('/agents/' + id, { method: 'DELETE' })
+                .then(() => { done++; if (done === ids.length) { showToast('已删除 ' + done + ' 个 Agent'); setTimeout(() => location.reload(), 1000); } })
+                .catch(() => {});
+        });
+    }
+
+    // ---- Time Ago ----
+    function updateTimeAgo() {
+        document.querySelectorAll('.time-ago').forEach(el => {
+            const ts = parseInt(el.dataset.time);
+            if (!ts) return;
+            const diff = Math.floor(Date.now() / 1000) - ts;
+            if (diff < 60) el.textContent = '刚刚';
+            else if (diff < 3600) el.textContent = Math.floor(diff / 60) + 'm前';
+            else if (diff < 86400) el.textContent = Math.floor(diff / 3600) + 'h前';
+            else el.textContent = Math.floor(diff / 86400) + 'd前';
+        });
+    }
+
+    // ---- Modal helpers ----
     function showOfflineModal(agentId, hostname) {
-        currentAgentId = agentId;
-        currentHostname = hostname;
+        currentAgentId = agentId; currentHostname = hostname;
         document.getElementById('modal-hostname').textContent = hostname;
         document.getElementById('offline-modal').classList.remove('hidden');
         document.body.style.overflow = 'hidden';
     }
-
     function hideOfflineModal() {
         document.getElementById('offline-modal').classList.add('hidden');
         document.body.style.overflow = '';
     }
-
     function confirmOffline() {
-        const button = event.target;
-        button.disabled = true;
-        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> 处理中...';
-        
-        fetch(`/agents/${currentAgentId}/kill`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        }).then(r => r.json()).then(data => {
-            hideOfflineModal();
-            if (data.success) {
-                // 显示成功提示
-                showToast('Agent已成功下线', 'success');
-                // 刷新页面
-                setTimeout(() => location.reload(), 1500);
-            } else {
-                showToast('下线失败: ' + (data.error || '未知错误'), 'error');
-            }
-            button.disabled = false;
-            button.innerHTML = '确认下线';
-        }).catch(err => {
-            hideOfflineModal();
-            showToast('网络错误: ' + err, 'error');
-            button.disabled = false;
-            button.innerHTML = '确认下线';
-        });
+        fetch(`/agents/${currentAgentId}/kill`, { method: 'POST', headers: {'Content-Type': 'application/json'} })
+            .then(r => r.json()).then(data => {
+                hideOfflineModal();
+                if (data.success) { showToast('Agent已下线', 'success'); setTimeout(() => location.reload(), 1500); }
+                else { showToast('下线失败: ' + (data.error || ''), 'error'); }
+            }).catch(err => { hideOfflineModal(); showToast('错误: ' + err, 'error'); });
     }
-
     function showDeleteModal(agentId, hostname) {
-        currentAgentId = agentId;
-        currentHostname = hostname;
+        currentAgentId = agentId; currentHostname = hostname;
         document.getElementById('delete-hostname').textContent = hostname;
         document.getElementById('delete-modal').classList.remove('hidden');
         document.body.style.overflow = 'hidden';
     }
-
     function hideDeleteModal() {
         document.getElementById('delete-modal').classList.add('hidden');
         document.body.style.overflow = '';
     }
-
     function confirmDelete() {
-        const button = event.target;
-        button.disabled = true;
-        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> 删除中...';
-        
-        fetch(`/agents/${currentAgentId}`, {
-            method: 'DELETE'
-        }).then(r => r.json()).then(data => {
-            hideDeleteModal();
-            if (data.success) {
-                showToast('Agent已成功删除', 'success');
-                setTimeout(() => location.reload(), 1500);
-            } else {
-                showToast('删除失败: ' + (data.error || '未知错误'), 'error');
-            }
-            button.disabled = false;
-            button.innerHTML = '确认删除';
-        }).catch(err => {
-            hideDeleteModal();
-            showToast('网络错误: ' + err, 'error');
-            button.disabled = false;
-            button.innerHTML = '确认删除';
-        });
+        fetch(`/agents/${currentAgentId}`, { method: 'DELETE' })
+            .then(r => r.json()).then(data => {
+                hideDeleteModal();
+                if (data.success) { showToast('Agent已删除', 'success'); setTimeout(() => location.reload(), 1500); }
+                else { showToast('删除失败: ' + (data.error || ''), 'error'); }
+            }).catch(err => { hideDeleteModal(); showToast('错误: ' + err, 'error'); });
     }
 
     function showToast(message, type) {
-        // 创建toast元素
         const toast = document.createElement('div');
-        toast.className = `fixed bottom-6 right-6 px-6 py-4 rounded-xl shadow-lg text-sm font-medium z-50 transition-all transform ${
-            type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`;
-        toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-2"></i>${message}`;
+        toast.className = 'fixed bottom-6 right-6 px-5 py-3 rounded-xl shadow-lg text-sm font-medium z-50 ' +
+            (type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white');
+        toast.innerHTML = '<i class="fa-solid ' + (type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle') + ' mr-2"></i>' + message;
         document.body.appendChild(toast);
-        
-        // 3秒后移除
-        setTimeout(() => {
-            toast.classList.add('opacity-0', 'translate-y-4');
-            setTimeout(() => toast.remove(), 300);
-        }, 3000);
+        setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(10px)'; toast.style.transition = 'all 0.3s'; setTimeout(() => toast.remove(), 300); }, 3000);
     }
 </script>
 {{end}}

@@ -32,6 +32,22 @@
             font-weight: 600;
             color: #64748b;
         }
+
+        .nav-section {
+            margin-bottom: 2px;
+        }
+
+        .section-header.collapsed + .nav-section {
+            display: none;
+        }
+
+        .section-header .fa-chevron-down {
+            transition: transform 0.15s ease;
+        }
+
+        .section-header.collapsed .fa-chevron-down {
+            transform: rotate(-90deg);
+        }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800">
@@ -51,37 +67,120 @@
             <div class="text-[10px] text-slate-500 mt-0.5 pl-1">PROFESSIONAL RED TEAM FRAMEWORK</div>
         </div>
 
-        <div class="p-3 flex-1">
-            <nav class="space-y-1 text-sm">
-                <a href="/dashboard" class="flex items-center gap-x-3 px-4 py-2.5 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "dashboard"}}nav-active{{end}}">
-                <i class="fa-solid fa-chart-line w-4"></i>
-                <span>控制台</span>
-                </a>
-                <a href="/agents" class="flex items-center gap-x-3 px-4 py-2.5 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "agents"}}nav-active{{end}}">
-                <i class="fa-solid fa-users w-4"></i>
-                <span>Agent 管理</span>
-                </a>
-                <a href="/generate" class="flex items-center gap-x-3 px-4 py-2.5 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "generate"}}nav-active{{end}}">
-                <i class="fa-solid fa-magic w-4"></i>
-                <span>生成 Agent</span>
-                </a>
-                <a href="/tasks" class="flex items-center gap-x-3 px-4 py-2.5 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "tasks"}}nav-active{{end}}">
-                <i class="fa-solid fa-history w-4"></i>
-                <span>任务历史</span>
-                </a>
-                <a href="/audit" class="flex items-center gap-x-3 px-4 py-2.5 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "audit"}}nav-active{{end}}">
-                <i class="fa-solid fa-shield w-4"></i>
-                <span>安全审计</span>
-                </a>
-                <a href="/settings" class="flex items-center gap-x-3 px-4 py-2.5 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "settings"}}nav-active{{end}}">
-                <i class="fa-solid fa-cog w-4"></i>
-                <span>设置</span>
-                </a>
+        <div class="p-3 flex-1 overflow-auto">
+            <!-- Sidebar search / filter (UX refinement) -->
+            <div class="px-2 pb-2">
+                <input id="nav-search" type="text" placeholder="搜索菜单..." 
+                       class="w-full bg-slate-100 border border-slate-200 text-xs rounded-lg px-3 py-1 focus:outline-none focus:border-indigo-300"
+                       oninput="filterNav(this.value)">
+            </div>
+            <nav class="space-y-1 text-sm" id="sidebar-nav">
+                <!-- 核心 -->
+                <div class="section-header px-4 pt-3 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
+                    <i class="fa-solid fa-chevron-down w-3 text-[10px] transition-transform"></i>
+                    <span>核心</span>
+                </div>
+                <div class="nav-section">
+                    <a href="/dashboard" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "dashboard"}}nav-active{{end}}">
+                        <i class="fa-solid fa-chart-line w-4"></i>
+                        <span>控制台</span>
+                    </a>
+                    <a href="/topology" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "topology"}}nav-active{{end}}">
+                        <i class="fa-solid fa-project-diagram w-4"></i>
+                        <span>网络拓扑</span>
+                    </a>
+                    <a href="/agents" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "agents"}}nav-active{{end}}">
+                        <i class="fa-solid fa-users w-4"></i>
+                        <span class="flex-1">Agent 管理</span>
+                        {{if .OnlineCount}}<span class="ml-1 px-1.5 py-px text-[10px] leading-none rounded bg-emerald-100 text-emerald-700 font-mono">{{.OnlineCount}}</span>{{end}}
+                    </a>
+                </div>
+
+                <!-- 生成与接入 -->
+                <div class="section-header px-4 pt-3 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
+                    <i class="fa-solid fa-chevron-down w-3 text-[10px] transition-transform"></i>
+                    <span>生成与接入</span>
+                </div>
+                <div class="nav-section">
+                    <a href="/generate" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "generate"}}nav-active{{end}}">
+                        <i class="fa-solid fa-magic w-4"></i>
+                        <span>生成 Agent</span>
+                    </a>
+                    <a href="/listeners" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "listeners"}}nav-active{{end}}">
+                        <i class="fa-solid fa-plug w-4"></i>
+                        <span class="flex-1">监听器</span>
+                        {{if .ListenerCount}}<span class="ml-1 px-1.5 py-px text-[10px] leading-none rounded bg-indigo-100 text-indigo-700 font-mono">{{.ListenerCount}}</span>{{end}}
+                    </a>
+                </div>
+
+                <!-- 后渗透行动 -->
+                <div class="section-header px-4 pt-3 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
+                    <i class="fa-solid fa-chevron-down w-3 text-[10px] transition-transform"></i>
+                    <span>后渗透行动</span>
+                </div>
+                <div class="nav-section">
+                    <a href="/tasks" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "tasks"}}nav-active{{end}}">
+                        <i class="fa-solid fa-history w-4"></i>
+                        <span>任务历史</span>
+                    </a>
+                    <a href="/credentials" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "credentials"}}nav-active{{end}}">
+                        <i class="fa-solid fa-key w-4"></i>
+                        <span>凭据中心</span>
+                    </a>
+                    <a href="/tokens" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "tokens"}}nav-active{{end}}">
+                        <i class="fa-solid fa-id-badge w-4"></i>
+                        <span>Token 战利品库</span>
+                    </a>
+                    <a href="/pivoting" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "pivoting"}}nav-active{{end}}">
+                        <i class="fa-solid fa-exchange-alt w-4"></i>
+                        <span>隧道与代理</span>
+                    </a>
+                    <a href="/loot" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "loot"}}nav-active{{end}}">
+                        <i class="fa-solid fa-trophy w-4"></i>
+                        <span>战利品</span>
+                    </a>
+                </div>
+
+                <!-- 系统与审计 -->
+                <div class="section-header px-4 pt-3 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
+                    <i class="fa-solid fa-chevron-down w-3 text-[10px] transition-transform"></i>
+                    <span>系统与审计</span>
+                </div>
+                <div class="nav-section">
+                    <a href="/audit" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "audit"}}nav-active{{end}}">
+                        <i class="fa-solid fa-shield w-4"></i>
+                        <span>安全审计</span>
+                    </a>
+                    <a href="/users" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "users"}}nav-active{{end}}">
+                        <i class="fa-solid fa-users-gear w-4"></i>
+                        <span>用户管理</span>
+                    </a>
+                    <a href="/settings" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "settings"}}nav-active{{end}}">
+                        <i class="fa-solid fa-cog w-4"></i>
+                        <span>设置</span>
+                    </a>
+                </div>
             </nav>
+
+            <!-- Quick Actions -->
+            <div class="mt-4 px-2">
+                <div class="text-[10px] uppercase tracking-widest text-slate-400 px-3 mb-1">快捷操作</div>
+                <div class="flex flex-wrap gap-1.5">
+                    <a href="/generate" class="text-xs px-2.5 py-1 bg-slate-100 hover:bg-indigo-100 rounded-xl flex items-center gap-x-1 text-slate-700">
+                        <i class="fa-solid fa-plus text-[10px]"></i> <span class="text-[11px]">生成Agent</span>
+                    </a>
+                    <a href="/listeners" onclick="event.preventDefault(); showCreateListenerModal()" class="text-xs px-2.5 py-1 bg-slate-100 hover:bg-indigo-100 rounded-xl flex items-center gap-x-1 text-slate-700">
+                        <i class="fa-solid fa-plug text-[10px]"></i> <span class="text-[11px]">新监听器</span>
+                    </a>
+                    <a href="/agents" class="text-xs px-2.5 py-1 bg-slate-100 hover:bg-indigo-100 rounded-xl flex items-center gap-x-1 text-slate-700">
+                        <i class="fa-solid fa-sync text-[10px]"></i> <span class="text-[11px]">刷新</span>
+                    </a>
+                </div>
+            </div>
         </div>
 
         <div class="p-4 border-t border-slate-200 mt-auto text-xs text-slate-500">
-            ForgeC2 v1.0<br>
+            ForgeC2 v1.2<br>
             <span class="text-[10px]">专业红队 C2 框架</span>
         </div>
     </div>
@@ -90,17 +189,32 @@
     <div class="flex-1 flex flex-col overflow-hidden">
         <!-- 顶部栏 -->
         <div class="h-14 border-b border-slate-200 bg-white flex items-center justify-between px-6 shadow-sm">
-            <div class="text-sm font-medium text-slate-600">{{.Title}}</div>
+            <div class="flex items-center gap-x-4 flex-1">
+                <div class="text-sm font-medium text-slate-600">{{.Title}}</div>
+
+                <!-- Global Search -->
+                <form action="/search" method="GET" class="flex-1 max-w-md ml-4">
+                    <div class="relative">
+                        <input type="text" name="q" placeholder="全局搜索 Agent / 任务 / 监听器..." 
+                               value="{{.SearchQuery}}" 
+                               class="w-full bg-slate-100 border border-slate-200 text-sm rounded-xl pl-9 pr-4 py-1.5 focus:outline-none focus:border-indigo-400">
+                        <i class="fa-solid fa-search absolute left-3 top-2 text-slate-400 text-sm"></i>
+                    </div>
+                </form>
+            </div>
 
             <div class="flex items-center gap-x-4">
                 <div class="flex items-center bg-slate-100 rounded-full px-3 py-1 text-xs">
                     <i class="fa-solid fa-user-shield mr-2 text-indigo-600"></i>
-                    <span class="text-slate-700">管理员</span>
+                    <span class="text-slate-700">{{.UserDisplayName}}</span>
                 </div>
-                <a href="/logout" class="text-xs px-3 py-1.5 hover:bg-slate-100 rounded-lg flex items-center gap-x-1.5 text-slate-500 hover:text-slate-700">
-                    <i class="fa-solid fa-sign-out-alt"></i>
-                    <span>退出</span>
-                </a>
+                <form method="POST" action="/logout" class="inline">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <button type="submit" class="text-xs px-3 py-1.5 hover:bg-slate-100 rounded-lg flex items-center gap-x-1.5 text-slate-500 hover:text-slate-700 cursor-pointer">
+                        <i class="fa-solid fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </button>
+                </form>
             </div>
         </div>
 
@@ -145,6 +259,30 @@
                     showToast(`新 Agent 上线: ${data.hostname} (${data.ip})`, 'success');
                     if (window.location.pathname === '/agents' || window.location.pathname === '/dashboard') {
                         setTimeout(() => window.location.reload(), 1000);
+                    }
+                } else if (data.type === 'task_update') {
+                    const agentId = data.agent_id || '';
+                    const taskType = data.task_type || '';
+                    const status = data.status || '';
+                    const cmd = (data.command || '').substring(0, 50);
+
+                    // Silent task types – file browser handles polling internally
+                    if (taskType === 'ls') return;
+
+                    if (status === 'completed') {
+                        showToast(`任务完成 [${taskType}]: ${cmd}`, 'success');
+                        const path = window.location.pathname;
+                        if (path === '/tasks' || path.includes('/agents/' + agentId)) {
+                            setTimeout(() => {
+                                if (path === '/tasks') {
+                                    location.reload();
+                                } else if (typeof refreshTasks === 'function') {
+                                    refreshTasks(agentId);
+                                }
+                            }, 800);
+                        }
+                    } else if (status === 'failed') {
+                        showToast(`任务失败 [${taskType}]: ${cmd}`, 'error');
                     }
                 }
             } catch (e) {
@@ -209,6 +347,200 @@
             return originalFetch(resource, init);
         };
     })();
+
+    // Collapsible sidebar sections + persistence
+    window.toggleNavSection = function(headerEl) {
+        headerEl.classList.toggle('collapsed');
+        const section = headerEl.nextElementSibling;
+        if (section) {
+            // already controlled by CSS
+        }
+        // persist
+        const key = 'forgec2_nav_collapsed';
+        let collapsed = JSON.parse(localStorage.getItem(key) || '{}');
+        const label = headerEl.textContent.trim();
+        collapsed[label] = headerEl.classList.contains('collapsed');
+        localStorage.setItem(key, JSON.stringify(collapsed));
+    };
+
+    // Restore collapsed state
+    document.addEventListener('DOMContentLoaded', function() {
+        try {
+            const key = 'forgec2_nav_collapsed';
+            const collapsed = JSON.parse(localStorage.getItem(key) || '{}');
+            const headers = document.querySelectorAll('#sidebar-nav .section-header');
+            headers.forEach(h => {
+                const label = h.textContent.trim();
+                if (collapsed[label]) {
+                    h.classList.add('collapsed');
+                }
+            });
+        } catch(e){}
+    });
+
+    // Live filter for sidebar nav (UX)
+    window.filterNav = function(query) {
+        const q = (query || '').toLowerCase().trim();
+        const nav = document.getElementById('sidebar-nav');
+        if (!nav) return;
+
+        const links = nav.querySelectorAll('a');
+        const sections = nav.querySelectorAll('.section-header');
+
+        links.forEach(link => {
+            const text = link.textContent.toLowerCase();
+            const match = !q || text.includes(q);
+            link.style.display = match ? '' : 'none';
+        });
+
+        // Show/hide section headers if they have visible children
+        sections.forEach(header => {
+            const next = header.nextElementSibling;
+            if (!next || !next.classList.contains('nav-section')) return;
+            const visible = Array.from(next.querySelectorAll('a')).some(a => a.style.display !== 'none');
+            header.style.display = (visible || !q) ? '' : 'none';
+            // also show the section container
+            next.style.display = (visible || !q) ? '' : 'none';
+        });
+    };
+
+    // Placeholder for quick listener modal (opens listeners page for now)
+    window.showCreateListenerModal = function() {
+        window.location.href = '/listeners';
+    };
+</script>
+
+<!-- Global Task Detail Modal -->
+<div id="task-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick="if (event.target.id === 'task-modal') hideTaskModal()">
+    <div class="bg-white rounded-3xl shadow-xl w-full max-w-2xl mx-4 overflow-hidden" onclick="event.stopImmediatePropagation()">
+        <div class="flex items-center justify-between px-6 py-4 border-b">
+            <div class="font-semibold text-lg">任务详情</div>
+            <button onclick="hideTaskModal()" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+        </div>
+        <div class="p-6 space-y-4 text-sm">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <div class="text-xs text-slate-500">Agent</div>
+                    <div id="modal-agent" class="font-medium"></div>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500">类型</div>
+                    <div id="modal-type" class="font-mono"></div>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500">状态</div>
+                    <div id="modal-status"></div>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500">时间</div>
+                    <div id="modal-time" class="font-mono text-xs"></div>
+                </div>
+            </div>
+
+            <div>
+                <div class="text-xs text-slate-500 mb-1">命令</div>
+                <pre id="modal-command" class="bg-slate-900 text-emerald-400 p-3 rounded-2xl text-xs overflow-auto max-h-24 whitespace-pre-wrap"></pre>
+            </div>
+
+            <div id="modal-result-box" class="hidden">
+                <div class="text-xs text-slate-500 mb-1">结果</div>
+                <pre id="modal-result" class="bg-slate-100 p-3 rounded-2xl text-xs overflow-auto max-h-48 whitespace-pre-wrap"></pre>
+            </div>
+
+            <div id="modal-error-box" class="hidden">
+                <div class="text-xs text-red-500 mb-1">错误</div>
+                <pre id="modal-error" class="bg-red-100 text-red-700 p-3 rounded-2xl text-xs overflow-auto max-h-32 whitespace-pre-wrap"></pre>
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t bg-slate-50 flex justify-between">
+            <button id="modal-rerun-btn" onclick="rerunFromModal()" class="px-4 py-2 text-sm rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-x-1.5">
+                <i class="fa-solid fa-redo"></i> 重跑
+            </button>
+            <button onclick="hideTaskModal()" class="px-4 py-2 text-sm rounded-xl bg-white border hover:bg-slate-100">关闭</button>
+        </div>
+    </div>
+</div>
+
+<script>
+var _modalAgentId = '';
+var _modalTaskId = 0;
+
+function showRecentTaskModal(el) {
+    const taskId = el.getAttribute('data-task-id');
+    const agentId = el.getAttribute('data-agent-id');
+    if (!taskId) return;
+    _modalTaskId = taskId;
+    _modalAgentId = agentId || '';
+
+    // Hide result/error initially
+    const resultBox = document.getElementById('modal-result-box');
+    const errorBox = document.getElementById('modal-error-box');
+    resultBox.classList.add('hidden');
+    errorBox.classList.add('hidden');
+
+    // Fill initial from DOM text (fast & safe)
+    const hostnameEl = el.querySelector('.font-medium.text-slate-900');
+    document.getElementById('modal-agent').textContent = hostnameEl ? hostnameEl.textContent : '-';
+    const cmdEl = el.querySelector('.font-mono.truncate');
+    document.getElementById('modal-command').textContent = cmdEl ? cmdEl.textContent : '-';
+    const timeEl = el.querySelector('.font-mono.text-slate-400');
+    document.getElementById('modal-time').textContent = timeEl ? timeEl.textContent : '';
+
+    // Show modal immediately
+    document.getElementById('task-modal').classList.remove('hidden');
+    document.getElementById('task-modal').classList.add('flex');
+
+    // Then fetch full details
+    fetch(`/tasks/${taskId}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                document.getElementById('modal-command').textContent = '(详情加载失败)';
+                return;
+            }
+            document.getElementById('modal-type').textContent = data.type || '-';
+            document.getElementById('modal-agent').textContent = data.agent || document.getElementById('modal-agent').textContent;
+            document.getElementById('modal-time').textContent = data.created || document.getElementById('modal-time').textContent;
+            document.getElementById('modal-command').textContent = data.command || '-';
+
+            if (data.result) {
+                document.getElementById('modal-result').textContent = data.result;
+                resultBox.classList.remove('hidden');
+            }
+            if (data.error) {
+                document.getElementById('modal-error').textContent = data.error;
+                errorBox.classList.remove('hidden');
+            }
+            document.getElementById('modal-status').innerHTML = data.status === 'completed' ? 
+                '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs">已完成</span>' : 
+                (data.status === 'failed' ? '<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">失败</span>' : '<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">' + (data.status || '') + '</span>');
+        })
+        .catch(err => {
+            console.error('fetch task detail error', err);
+        });
+}
+
+function hideTaskModal() {
+    const modal = document.getElementById('task-modal');
+    modal.classList.remove('flex');
+    modal.classList.add('hidden');
+}
+
+function rerunFromModal() {
+    if (!_modalAgentId || !_modalTaskId) return;
+    fetch(`/agents/${_modalAgentId}/task/${_modalTaskId}/rerun`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showToast('任务已重新创建', 'success');
+                hideTaskModal();
+                setTimeout(() => location.reload(), 1200);
+            } else {
+                showToast('重跑失败: ' + (data.error || ''), 'error');
+            }
+        })
+        .catch(err => showToast('请求失败: ' + err, 'error'));
+}
 </script>
 </body>
 </html>
