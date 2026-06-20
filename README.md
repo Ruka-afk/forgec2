@@ -5,6 +5,7 @@
 **Professional Command & Control Framework for Authorized Red Team Operations**
 
 ForgeC2 is a modern, single-binary, operator-friendly C2 framework built in pure Go. It features P2P beacon chaining (SMB/TCP), DNS beaconing, an Artifact Kit (stager/stage), credential harvesting, 50+ task types, live screen streaming, and a beautiful dark-themed web interface — designed for solo operators and professional red teams.
+<img width="2560" height="1350" alt="image" src="https://github.com/user-attachments/assets/f64ba946-865c-4388-8e7a-ae60812a7eff" />
 
 ## Features
 
