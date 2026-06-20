@@ -147,17 +147,14 @@ let lastFpsTime = Date.now();
 let startTime = null;
 let monitorTimer = null;
 
-console.log('Screen monitor page loaded, agentId:', agentId);
 
 function startMonitor() {
-    console.log('startMonitor called, agentId:', agentId);
     showLoading(true);
     
     fetch(`/agents/${agentId}/screen/start`, {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'}
     }).then(r => r.json()).then(data => {
-        console.log('Server response:', data);
         showLoading(false);
         
         if (data.success) {
@@ -379,7 +376,6 @@ function setupWebSocket() {
     ws.onopen = function() {
         document.getElementById('ws-status').innerHTML = 
             '<span class="w-2 h-2 bg-emerald-500 rounded-full mr-2"></span><span class="text-emerald-600">已连接</span>';
-        console.log('WebSocket connected for screen monitoring');
     };
 
     ws.onmessage = function(event) {

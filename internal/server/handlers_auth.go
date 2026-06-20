@@ -51,11 +51,14 @@ func (s *Server) handleLoginPage(c *gin.Context) {
 }
 
 func (s *Server) renderLoginError(c *gin.Context, errMsg, lastUsername string, rememberMe bool) {
+	csrfToken := middleware.GenerateCSRFToken()
+	c.SetCookie("csrf_token", csrfToken, middleware.CookieMaxAge, "/", "", middleware.CookieSecure, false)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	s.tmpl.ExecuteTemplate(c.Writer, "login.html", gin.H{
 		"Error":       errMsg,
 		"LastUsername": lastUsername,
 		"RememberMe":  rememberMe,
+		"CSRFToken":   csrfToken,
 	})
 }
 
@@ -249,7 +252,7 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 		"DefaultUA":        s.cfg.Agent.DefaultUA,
 		"ServerPort":       s.cfg.Server.Port,
 		"ServerHost":       s.cfg.Server.Host,
-		"TLSSEnabled":      s.cfg.Server.TLSEnabled,
+		"TLSEnabled":       s.cfg.Server.TLSEnabled,
 		"TCPEnabled":       s.cfg.Server.TCPEnabled,
 		"TCPAddr":          s.cfg.Server.TCPAddr,
 		"LogLevel":         s.cfg.Logging.Level,

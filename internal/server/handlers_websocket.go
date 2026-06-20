@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"gorm.io/gorm"
 )
 
 var upgrader = websocket.Upgrader{
@@ -220,6 +221,7 @@ func (s *Server) handleWebSocketChat(c *gin.Context) {
 	// Initialize chat hub if not exists
 	if s.chatHub == nil {
 		s.chatHub = NewChatHub()
+		go s.chatHub.Run()
 	}
 
 	client := &ChatClient{
@@ -228,6 +230,7 @@ func (s *Server) handleWebSocketChat(c *gin.Context) {
 		UserID:   userID,
 		Send:     make(chan []byte, 256),
 		JoinedAt: time.Now(),
+		DB:       s.db,
 	}
 
 	s.chatHub.register <- client
@@ -282,6 +285,7 @@ type ChatClient struct {
 	UserID   string
 	Send     chan []byte
 	JoinedAt time.Time
+	DB       *gorm.DB
 }
 
 func (c *ChatClient) readPump() {
@@ -324,8 +328,9 @@ func (c *ChatClient) readPump() {
 			Channel:   chatMsg.Channel,
 			CreatedAt: time.Now(),
 		}
-		// TODO: Save dbMsg to database
-		_ = dbMsg
+		if c.DB != nil {
+			c.DB.Create(&dbMsg)
+		}
 		c.Hub.broadcast <- message
 	}
 }

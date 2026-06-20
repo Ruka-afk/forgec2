@@ -77,7 +77,7 @@
                 </div>
             </div>
             <div class="p-6">
-                <form hx-post="/settings/password" hx-target="#password-result" hx-swap="innerHTML" class="max-w-md space-y-4">
+                <form hx-post="/settings/password" hx-target="#password-result" hx-target-error="#password-result" hx-swap="innerHTML" class="max-w-md space-y-4">
                     <div><label class="block text-xs section-header mb-1.5">当前密码</label><input type="password" name="current_password" required class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
                     <div class="grid grid-cols-2 gap-3">
                         <div><label class="block text-xs section-header mb-1.5">新密码</label><input type="password" name="new_password" required minlength="8" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
@@ -98,7 +98,7 @@
                 </div>
             </div>
             <div class="p-6">
-                <form hx-post="/settings/server" hx-target="#server-result" hx-swap="innerHTML" class="space-y-4">
+                <form hx-post="/settings/server" hx-target="#server-result" hx-target-error="#server-result" hx-swap="innerHTML" class="space-y-4">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div><label class="block text-xs section-header mb-1.5">HTTP 端口</label><input type="number" value="{{.ServerPort}}" readonly class="w-full bg-slate-100 border border-slate-200 text-slate-500 rounded-xl px-4 h-11 text-sm cursor-not-allowed"></div>
                         <div><label class="block text-xs section-header mb-1.5">监听地址</label><input type="text" value="{{.ServerAddress}}" readonly class="w-full bg-slate-100 border border-slate-200 text-slate-500 rounded-xl px-4 h-11 text-sm cursor-not-allowed font-mono"></div>
@@ -111,7 +111,7 @@
                             </select>
                         </div>
                         <div><label class="block text-xs section-header mb-1.5">TLS</label>
-                            <div class="h-11 flex items-center"><span class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-xl {{if .TLSSEnabled}}bg-emerald-100 text-emerald-700{{else}}bg-slate-100 text-slate-500{{end}}"><i class="fa-solid {{if .TLSSEnabled}}fa-lock{{else}}fa-unlock{{end}} mr-1"></i>{{if .TLSSEnabled}}已启用{{else}}未启用{{end}}</span></div>
+                            <div class="h-11 flex items-center"><span class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-xl {{if .TLSEnabled}}bg-emerald-100 text-emerald-700{{else}}bg-slate-100 text-slate-500{{end}}"><i class="fa-solid {{if .TLSEnabled}}fa-lock{{else}}fa-unlock{{end}} mr-1"></i>{{if .TLSEnabled}}已启用{{else}}未启用{{end}}</span></div>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
@@ -149,7 +149,7 @@
                 </div>
             </div>
             <div class="p-6">
-                <form hx-post="/settings/agent" hx-target="#agent-result" hx-swap="innerHTML" class="space-y-4">
+                <form hx-post="/settings/agent" hx-target="#agent-result" hx-target-error="#agent-result" hx-swap="innerHTML" class="space-y-4">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div><label class="block text-xs section-header mb-1.5">心跳间隔 (秒)</label><input type="number" name="interval" value="{{.DefaultInterval}}" min="1" max="300" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
                         <div><label class="block text-xs section-header mb-1.5">抖动值 (%)</label><input type="number" name="jitter" value="{{.DefaultJitter}}" min="0" max="100" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
@@ -197,7 +197,7 @@
                 </div>
             </div>
             <div class="p-6">
-                <form hx-post="/settings/malleable" hx-target="#malleable-result" hx-swap="innerHTML" class="space-y-4">
+                <form hx-post="/settings/malleable" hx-target="#malleable-result" hx-target-error="#malleable-result" hx-swap="innerHTML" class="space-y-4">
                     <div class="flex items-center gap-3">
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" name="enabled" value="true" class="sr-only peer" {{if .MalleableEnabled}}checked{{end}}>
@@ -323,7 +323,7 @@
             </div>
             <div class="p-6">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><div class="text-xs text-slate-500">版本</div><div class="font-medium text-slate-700 mt-1 flex items-center gap-x-2">v{{.ServerVersion}} <span id="update-status"></span></div><div id="hot-update-btn" class="hidden mt-2"><button onclick="hotUpdate()" class="text-xs bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg transition-colors"><i class="fa-solid fa-cloud-arrow-down mr-1"></i>热更新到 <span class="update-version font-mono"></span></button></div></div>
+                    <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><div class="text-xs text-slate-500">版本</div><div class="font-medium text-slate-700 mt-1 flex items-center gap-x-2 flex-wrap">v{{.ServerVersion}} <span id="update-status"></span> <button onclick="checkForUpdate(event)" class="text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-2 py-0.5 rounded-lg transition-colors"><i class="fa-solid fa-rotate mr-1"></i>检查更新</button></div><div id="hot-update-btn" class="hidden mt-2"><button onclick="hotUpdate()" class="text-xs bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg transition-colors"><i class="fa-solid fa-cloud-arrow-down mr-1"></i>热更新到 <span class="update-version font-mono"></span></button></div></div>
                     <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><div class="text-xs text-slate-500">运行时长</div><div class="font-medium text-slate-700 mt-1 font-mono text-xs">{{.Uptime | formatDuration}}</div></div>
                     <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><div class="text-xs text-slate-500">Go 版本</div><div class="font-medium text-slate-700 mt-1 font-mono text-xs">{{.GoVersion}}</div></div>
                     <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><div class="text-xs text-slate-500">平台</div><div class="font-medium text-slate-700 mt-1">{{.GOOS}} / {{.GOARCH}}</div></div>
@@ -375,7 +375,7 @@
                 hotBtn.classList.remove('hidden');
                 hotBtn.querySelector('.update-version').textContent = data.latest_version;
             }
-        }).catch(() => {});
+        }).catch(() => showToast('更新检查失败', 'error'));
 
         // Smooth scroll for nav links
         document.querySelectorAll('.settings-nav').forEach(a => {
@@ -458,6 +458,36 @@
                 else showToast('失败: ' + (d.error || ''), 'error');
             }).catch(e => showToast('错误: ' + e, 'error'))
             .finally(() => { if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-copy mr-1"></i>立即备份'; } });
+    }
+
+    function checkForUpdate() {
+        const btn = event && event.target || document.querySelector('button[onclick="checkForUpdate()"]');
+        const orig = btn.innerHTML;
+        btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>检查中...';
+        fetch('/api/update-check/refresh', { method: 'POST' })
+            .then(r => r.json()).then(data => {
+                const badge = document.getElementById('update-status');
+                const hotBtn = document.getElementById('hot-update-btn');
+                if (data.update_available) {
+                    badge.innerHTML = `<span class="inline-flex items-center gap-x-1 text-xs bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full"><i class="fa-solid fa-circle-up"></i> ${data.latest_version}</span>`;
+                    if (hotBtn) {
+                        hotBtn.classList.remove('hidden');
+                        hotBtn.querySelector('.update-version').textContent = data.latest_version;
+                    }
+                    showToast('发现新版本 ' + data.latest_version, 'info');
+                } else if (data.check_error) {
+                    badge.innerHTML = `<span class="text-xs text-red-500">检查失败</span>`;
+                    showToast('检查更新失败: ' + data.check_error, 'error');
+                } else {
+                    badge.innerHTML = `<span class="text-xs text-emerald-600">✓ 已是最新</span>`;
+                    if (hotBtn) hotBtn.classList.add('hidden');
+                    showToast('已是最新版本', 'success');
+                }
+            }).catch(e => {
+                showToast('检查更新请求失败', 'error');
+            }).finally(() => {
+                btn.disabled = false; btn.innerHTML = orig;
+            });
     }
 
     function hotUpdate() {

@@ -315,7 +315,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     label.className = 'text-slate-400';
                 }
             });
-        }).catch(() => {});
+        }).catch(() => showToast('在线状态刷新失败', 'error'));
     }
     updateOnlineStatus();
     setInterval(updateOnlineStatus, 10000);

@@ -330,7 +330,7 @@ function tokenListProcs(id) {
 function tokenSteal(id) {
   const pid = document.getElementById('steal-pid').value.trim();
   const procName = document.getElementById('steal-procname').value.trim();
-  if (!pid) { alert('请输入目标 PID'); return; }
+  if (!pid) { showToast('请输入目标 PID', 'error'); return; }
 
   setOutput(`正在向 Agent 发送 steal_token pid=${pid}...`);
   fetch(`/agents/${id}/token/steal`, {
@@ -354,7 +354,7 @@ function tokenMake(id) {
   const user = document.getElementById('make-user').value.trim();
   const password = document.getElementById('make-password').value;
   const logonType = document.getElementById('make-logon-type').value;
-  if (!user) { alert('请输入用户名'); return; }
+  if (!user) { showToast('请输入用户名', 'error'); return; }
 
   setOutput(`正在创建令牌 ${user} (${logonType})...`);
   fetch(`/agents/${id}/token/make`, {
@@ -428,7 +428,7 @@ function dropToken(id, tokenId, btn) {
         btn.closest('.token-entry').remove();
         showToast('令牌已删除');
       } else {
-        alert('删除失败: ' + (d.error || ''));
+        showToast('删除失败: ' + (d.error || ''), 'error');
       }
     });
 }

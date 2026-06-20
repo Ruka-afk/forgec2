@@ -391,7 +391,7 @@
                 <span>新版本 <strong class="update-version"></strong> 已可用 (当前: {{.ServerVersion}})</span>
             </div>
             <div class="flex items-center gap-x-3">
-                <a class="update-download" href="#" target="_blank" class="text-white/90 hover:text-white underline">下载更新</a>
+                <a class="update-download text-white/90 hover:text-white underline" href="#" target="_blank">下载更新</a>
                 <button onclick="this.closest('#update-banner').classList.add('hidden')" class="text-white/70 hover:text-white">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
@@ -482,7 +482,7 @@
                 d.messages.forEach(m => appendChatMessage(m, m.role || ''));
                 el.scrollTop = el.scrollHeight;
             }
-        }).catch(() => {});
+        }).catch(() => showToast('聊天消息加载失败', 'error'));
     }
 
     function appendChatMessage(msg, role) {
@@ -520,7 +520,7 @@
         input.value = '';
         const fd = new FormData();
         fd.append('content', content);
-        fetch('/api/collab/chat', { method: 'POST', headers: { 'X-CSRF-Token': getCSRFToken() }, body: fd }).catch(() => {});
+        fetch('/api/collab/chat', { method: 'POST', headers: { 'X-CSRF-Token': getCSRFToken() }, body: fd }).catch(() => showToast('聊天发送失败', 'error'));
     }
 
     function updateAgentLockUI(agentId, username) {

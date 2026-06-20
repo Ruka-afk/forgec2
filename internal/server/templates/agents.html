@@ -467,7 +467,7 @@
         ids.forEach(id => {
             fetch('/agents/' + id, { method: 'DELETE' })
                 .then(() => { done++; if (done === ids.length) { showToast('已删除 ' + done + ' 个 Agent'); setTimeout(() => location.reload(), 1000); } })
-                .catch(() => {});
+                .catch(() => showToast('删除 Agent 失败', 'error'));
         });
     }
 
@@ -537,7 +537,7 @@
                         el.innerHTML = '—';
                     }
                 });
-            }).catch(() => {});
+            }).catch(() => showToast('锁状态刷新失败', 'error'));
         }
         refreshLocks();
         setInterval(refreshLocks, 30000); // fallback: WS handles real-time

@@ -28,6 +28,7 @@ type Config struct {
 		OfflineThreshold     int    `yaml:"offline_threshold"`      // seconds
 		SessionMaxAgeHours   int    `yaml:"session_max_age_hours"`  // JWT expiry
 		CleanupRetentionDays int    `yaml:"cleanup_retention_days"` // auto-purge cutoff
+		UpdateCheckRepo      string `yaml:"update_check_repo"`      // GitHub repo for update checks (e.g. "owner/repo")
 	} `yaml:"server"`
 
 	Database struct {
@@ -73,6 +74,7 @@ func DefaultConfig() *Config {
 	cfg.Server.OfflineThreshold = 60
 	cfg.Server.SessionMaxAgeHours = 24
 	cfg.Server.CleanupRetentionDays = 30
+	cfg.Server.UpdateCheckRepo = "forgec2/forgec2"
 
 	cfg.Database.Path = filepath.Join(cfg.Server.DataDir, "db/forgec2.db")
 	cfg.Server.CertFile = filepath.Join(cfg.Server.DataDir, "server.crt")

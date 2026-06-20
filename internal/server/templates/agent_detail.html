@@ -361,7 +361,7 @@
                 <span class="text-xs text-slate-400">输出显示在下方</span>
             </div>
 
-            <form hx-post="/agents/{{.Agent.ID}}/command" hx-target="#cmd-result" hx-swap="innerHTML" hx-on::after-request="this.reset()">
+            <form hx-post="/agents/{{.Agent.ID}}/command" hx-target="#cmd-result" hx-target-error="#cmd-result" hx-swap="innerHTML" hx-on::after-request="this.reset()">
                 <div class="flex gap-2">
                     <select name="shell" class="bg-white border border-slate-300 text-sm rounded-2xl px-4 h-12 w-44">
                         <option value="cmd.exe">cmd.exe</option>
@@ -627,7 +627,7 @@
                 const oldList = document.getElementById('tasks-list');
                 if (newList && oldList) oldList.innerHTML = newList.innerHTML;
             })
-            .catch(() => {});
+            .catch(() => showToast('任务列表刷新失败', 'error'));
     }
 
     // ---- Commands ----
@@ -720,8 +720,8 @@
     function tokenListProcsQuick(agentId) { fetch(`/agents/${agentId}/token/list`, { method: 'POST' }).then(r => r.json()).then(d => { if (d.success) showToast('Enum tokens sent'); }); }
     function tokenWhoamiQuick(agentId) { fetch(`/agents/${agentId}/token/whoami`, { method: 'POST' }).then(r => r.json()).then(d => { if (d.success) showToast('Token whoami sent'); }); }
     function tokenRevertQuick(agentId) { fetch(`/agents/${agentId}/token/revert`, { method: 'POST' }).then(r => r.json()).then(d => { if (d.success) showToast('Rev2Self sent'); }); }
-    function suspendQuick(agentId) { const inp = document.getElementById('proc-target-' + agentId); const target = inp ? inp.value.trim() : ''; if (!target) { alert('请输入 PID 或进程名'); return; } fetch(`/agents/${agentId}/suspend`, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'target=' + encodeURIComponent(target) }).then(() => showToast('Suspend sent')); }
-    function resumeQuick(agentId) { const inp = document.getElementById('proc-target-' + agentId); const target = inp ? inp.value.trim() : ''; if (!target) { alert('请输入 PID 或进程名'); return; } fetch(`/agents/${agentId}/resume`, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'target=' + encodeURIComponent(target) }).then(() => showToast('Resume sent')); }
+    function suspendQuick(agentId) { const inp = document.getElementById('proc-target-' + agentId); const target = inp ? inp.value.trim() : ''; if (!target) { showToast('请输入 PID 或进程名', 'error'); return; } fetch(`/agents/${agentId}/suspend`, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'target=' + encodeURIComponent(target) }).then(() => showToast('Suspend sent')); }
+    function resumeQuick(agentId) { const inp = document.getElementById('proc-target-' + agentId); const target = inp ? inp.value.trim() : ''; if (!target) { showToast('请输入 PID 或进程名', 'error'); return; } fetch(`/agents/${agentId}/resume`, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'target=' + encodeURIComponent(target) }).then(() => showToast('Resume sent')); }
 
     function addNote() {
         const display = document.getElementById('notes-display');
@@ -850,7 +850,7 @@
                 } else {
                     el.innerHTML = '<span class="text-slate-400">未启用</span>';
                 }
-            }).catch(() => {});
+            }).catch(() => showToast('端口转发状态刷新失败', 'error'));
     }
 
     // ── P0 Feature Functions ────────────────────────────────────────────
@@ -1069,7 +1069,7 @@
                     indicator.innerHTML = `<span class="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full"><i class="fa-solid fa-lock mr-1"></i>${lock.username}</span>`;
                 }
             }
-        }).catch(() => {});
+        }).catch(() => showToast('Agent 状态刷新失败', 'error'));
         refreshAgentViewers(agentId);
         setInterval(() => refreshAgentViewers(agentId), 10000);
         // Listen for real-time viewer updates via WS

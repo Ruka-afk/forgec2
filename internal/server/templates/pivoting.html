@@ -169,8 +169,8 @@ function formatBytes(bytes) {
 async function startRelay() {
     const agentId = document.getElementById('relay-agent').value;
     const port = document.getElementById('relay-port').value;
-    if (!agentId) { alert('请选择一个 Agent'); return; }
-    if (!port || port < 1 || port > 65535) { alert('请输入有效端口 (1-65535)'); return; }
+    if (!agentId) { showToast('请选择一个 Agent', 'error'); return; }
+    if (!port || port < 1 || port > 65535) { showToast('请输入有效端口 (1-65535)', 'error'); return; }
 
     try {
         const resp = await fetch(`/agents/${agentId}/socks_relay/start`, {
@@ -180,13 +180,13 @@ async function startRelay() {
         });
         const data = await resp.json();
         if (data.success) {
-            alert(`SOCKS 中继已启动！\n\n监听地址: 0.0.0.0:${data.port}\n\n将代理工具指向 C2 服务器的 ${data.port} 端口即可。`);
+            showToast(`SOCKS 中继已启动！端口: ${data.port}`, 'success');
             refreshSessions();
         } else {
-            alert('启动失败: ' + (data.error || '未知错误'));
+            showToast('启动失败: ' + (data.error || '未知错误'), 'error');
         }
     } catch (e) {
-        alert('请求失败: ' + e.message);
+        showToast('请求失败: ' + e.message, 'error');
     }
 }
 
@@ -200,10 +200,10 @@ async function stopRelay(agentId) {
         if (data.success) {
             refreshSessions();
         } else {
-            alert('停止失败: ' + (data.error || '未知错误'));
+            showToast('停止失败: ' + (data.error || '未知错误'), 'error');
         }
     } catch (e) {
-        alert('请求失败: ' + e.message);
+        showToast('请求失败: ' + e.message, 'error');
     }
 }
 
@@ -214,7 +214,7 @@ function startSocksLocal(agentId) {
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: 'port=' + encodeURIComponent(port || '1080')
     }).then(r => r.json()).then(() => {
-        alert('Agent 本地 SOCKS 任务已下发');
+        showToast('Agent 本地 SOCKS 任务已下发', 'success');
     });
 }
 

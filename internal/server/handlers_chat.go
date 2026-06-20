@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -9,9 +10,11 @@ import (
 )
 
 func (s *Server) handleChatPage(c *gin.Context) {
+	user, _ := c.Get("user")
 	data := gin.H{
-		"ActiveNav": "chat",
-		"Title":     "操作员聊天",
+		"ActiveNav":      "chat",
+		"Title":          "操作员聊天",
+		"CurrentUsername": user,
 	}
 	s.addUserToData(c, data)
 	s.renderPage(c, "chat_content", data)
@@ -49,6 +52,7 @@ func (s *Server) handleSendChatMessage(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
+	role, _ := c.Get("user_role")
 
 	msg := db.ChatMessage{
 		User:      user.(string),
@@ -58,17 +62,20 @@ func (s *Server) handleSendChatMessage(c *gin.Context) {
 	}
 	s.db.Create(&msg)
 
-	// Broadcast via WebSocket if chatHub exists
+	// Broadcast via WebSocket to all connected chat clients
 	if s.chatHub != nil {
-		chatMsg := map[string]interface{}{
-			"type":      "message",
-			"user":      msg.User,
-			"message":   msg.Message,
-			"channel":   msg.Channel,
-			"timestamp": msg.CreatedAt,
+		payload := gin.H{
+			"user":       msg.User,
+			"message":    msg.Message,
+			"channel":    msg.Channel,
+			"timestamp":  msg.CreatedAt,
+			"created_at": msg.CreatedAt,
+			"role":       role,
 		}
-		// TODO: Marshal and broadcast
-		_ = chatMsg
+		data, err := json.Marshal(payload)
+		if err == nil {
+			s.chatHub.broadcast <- data
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

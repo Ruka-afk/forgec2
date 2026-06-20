@@ -1185,7 +1185,7 @@ func (s *Server) handleGenerateStager(c *gin.Context) {
 	}
 
 	// Generate the stage (full beacon EXE, XOR-encoded, base64-encoded)
-	stagePath, xorKeyHex, err := payload.GenerateStage(cfg, agentsDir)
+	_, xorKeyHex, err := payload.GenerateStage(cfg, agentsDir)
 	if err != nil {
 		s.logBuild("windows", "stager", form.C2URL, form.ListenerID, form.Filename, "failed", err.Error(), "")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1210,8 +1210,6 @@ func (s *Server) handleGenerateStager(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "stager not found: " + statErr.Error()})
 		return
 	}
-
-	_ = stagePath // the stage file is already saved; serve the stager
 
 	s.logBuild("windows", "stager", form.C2URL, form.ListenerID, form.Filename, "success", "", stagerPath)
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filepath.Base(stagerPath)))
@@ -1298,7 +1296,7 @@ func (s *Server) handleGenerateStagerLinux(c *gin.Context) {
 		}
 	}
 
-	stagePath, xorKeyHex, err := payload.GenerateStage(cfg, agentsDir)
+	_, xorKeyHex, err := payload.GenerateStage(cfg, agentsDir)
 	if err != nil {
 		s.logBuild("linux", "stager", form.C2URL, form.ListenerID, form.Filename, "failed", err.Error(), "")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1321,8 +1319,6 @@ func (s *Server) handleGenerateStagerLinux(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "stager not found: " + statErr.Error()})
 		return
 	}
-
-	_ = stagePath
 
 	s.logBuild("linux", "stager", form.C2URL, form.ListenerID, form.Filename, "success", "", stagerPath)
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filepath.Base(stagerPath)))

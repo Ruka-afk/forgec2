@@ -166,14 +166,14 @@ document.getElementById('scan-form').addEventListener('submit', async function(e
         
         const result = await response.json();
         if (result.success) {
-            showNotification('扫描任务已创建', 'success');
+            showToast('扫描任务已创建', 'success');
             // 开始轮询结果
             pollScanResults(result.task_id);
         } else {
-            showNotification(result.error || '创建失败', 'error');
+            showToast(result.error || '创建失败', 'error');
         }
     } catch (error) {
-        showNotification('网络错误', 'error');
+        showToast('网络错误', 'error');
     }
 });
 
@@ -194,7 +194,7 @@ function pollScanResults(taskId) {
             // 继续轮询（可根据任务状态调整）
             setTimeout(poll, 3000);
         } catch (error) {
-            console.error('Poll error:', error);
+            showToast('扫描结果轮询失败', 'error');
         }
     };
     
@@ -241,27 +241,11 @@ function displayScanResults(results) {
 // 导出结果
 function exportResults() {
     if (!currentTaskId) {
-        showNotification('请先执行扫描', 'warning');
+        showToast('请先执行扫描', 'warning');
         return;
     }
     window.open(`/api/scan/export/${currentTaskId}`, '_blank');
 }
 
-// 通知函数
-function showNotification(message, type = 'info') {
-    const colors = {
-        success: 'bg-emerald-500',
-        error: 'bg-red-500',
-        warning: 'bg-amber-500',
-        info: 'bg-blue-500'
-    };
-    
-    const notification = document.createElement('div');
-    notification.className = `fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-xl shadow-lg z-50`;
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    
-    setTimeout(() => notification.remove(), 3000);
-}
 </script>
 {{end}}

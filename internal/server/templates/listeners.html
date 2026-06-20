@@ -284,7 +284,7 @@ async function saveListener() {
         hideListenerModal();
         location.reload();
     } else {
-        alert('保存失败: ' + (data.error || '未知错误'));
+        showToast('保存失败: ' + (data.error || '未知错误'), 'error');
     }
 }
 

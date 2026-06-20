@@ -495,6 +495,7 @@ func (s *Server) setupRoutes() {
 	// Version update check & hot-update
 	auth.GET("/api/update-check", s.handleUpdateCheck)
 	auth.GET("/api/update-check/version", s.handleCheckVersion)
+	auth.POST("/api/update-check/refresh", s.handleRefreshUpdateCheck)
 	auth.POST("/api/update-check/hot-update", s.handleHotUpdate)
 
 	// Stage serving for Artifact Kit (no auth — stagers are unauthenticated)

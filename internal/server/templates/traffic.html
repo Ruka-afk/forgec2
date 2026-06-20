@@ -67,7 +67,7 @@ function loadTraffic() {
         if (data.success) {
             renderTraffic(data.data);
         }
-    }).catch(() => {});
+    }).catch(() => showToast('流量数据加载失败', 'error'));
 }
 
 function renderTraffic(logs) {

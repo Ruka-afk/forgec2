@@ -94,8 +94,6 @@ const ThemeManager = (function() {
         
         currentTheme = theme;
         
-        console.log(`[ThemeManager] Applied theme: ${themeData.name}`);
-        
         // Dispatch event
         window.dispatchEvent(new CustomEvent('theme-changed', {
             detail: { theme, name: themeData.name }
@@ -230,7 +228,6 @@ const ThemeManager = (function() {
     function init() {
         loadSaved();
         
-        console.log('[ThemeManager] Initialized');
     }
     
     // Cleanup
@@ -354,7 +351,6 @@ const Accessibility = (function() {
         KeyboardShortcuts.register('alt+minus', '减小字体', decreaseFontSize);
         KeyboardShortcuts.register('alt+0', '重置字体', resetFontSize);
         
-        console.log('[Accessibility] Initialized');
     }
     
     return {

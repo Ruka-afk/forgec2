@@ -719,6 +719,9 @@ func (s *Server) addUserToData(c *gin.Context, data gin.H) {
 		data["CSRFToken"] = csrf
 	}
 	data["ServerVersion"] = ServerVersion
+	if _, ok := data["SearchQuery"]; !ok {
+		data["SearchQuery"] = ""
+	}
 }
 
 // handlePivoting shows SOCKS / proxy status and agents useful for pivoting

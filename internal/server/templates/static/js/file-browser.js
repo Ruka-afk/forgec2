@@ -28,8 +28,6 @@ const FileBrowser = (function() {
     // Load directory contents
     function loadDirectory(path) {
         // This would call the agent's ls command
-        console.log('Loading directory:', path);
-        
         // Show loading
         const container = document.getElementById('file-list');
         if (container) {
@@ -112,7 +110,6 @@ const FileBrowser = (function() {
         reader.onload = function(e) {
             const base64 = e.target.result.split(',')[1];
             // Send to agent (would be implemented)
-            console.log('Uploading:', file.name, 'Size:', file.size);
         };
         reader.readAsDataURL(file);
     }
@@ -120,7 +117,6 @@ const FileBrowser = (function() {
     // Download file
     function download(filePath, fileName) {
         // Trigger download task (would be implemented)
-        console.log('Downloading:', filePath);
     }
     
     // Delete file
@@ -129,7 +125,6 @@ const FileBrowser = (function() {
             return;
         }
         // Send delete command (would be implemented)
-        console.log('Deleting:', filePath);
     }
     
     // Rename file
@@ -139,7 +134,6 @@ const FileBrowser = (function() {
             return;
         }
         // Send rename command (would be implemented)
-        console.log('Renaming:', oldPath, '->', newName);
     }
     
     // Create new folder
@@ -149,7 +143,6 @@ const FileBrowser = (function() {
         
         const newPath = currentPath + (currentPath.includes('/') ? '/' : '\\') + name;
         // Send mkdir command (would be implemented)
-        console.log('Creating folder:', newPath);
     }
     
     // Search files
@@ -159,7 +152,6 @@ const FileBrowser = (function() {
             return;
         }
         // Send find command (would be implemented)
-        console.log('Searching for:', pattern);
     }
     
     // Show context menu
@@ -207,7 +199,6 @@ const FileBrowser = (function() {
     function copyToClipboard(text) {
         navigator.clipboard.writeText(text).then(() => {
             // Show toast notification
-            console.log('Copied:', text);
         });
     }
     

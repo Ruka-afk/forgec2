@@ -17,8 +17,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// defaultUpdateCheckURL is the GitHub releases API for ForgeC2
-const defaultUpdateCheckURL = "https://api.github.com/repos/forgec2/forgec2/releases/latest"
+// defaultUpdateCheckURLFmt is the GitHub releases API format for ForgeC2
+const defaultUpdateCheckURLFmt = "https://api.github.com/repos/%s/releases/latest"
+const defaultReleaseAssetsURLFmt = "https://api.github.com/repos/%s/releases/tags/%s"
 
 // updateCheckState holds the latest version check result
 type updateCheckState struct {
@@ -51,7 +52,7 @@ func (s *Server) initUpdateChecker() {
 
 // checkForUpdate fetches the latest version and broadcasts if newer
 func (s *Server) checkForUpdate() {
-	latest, err := fetchLatestVersion()
+	latest, err := fetchLatestVersion(s.cfg.Server.UpdateCheckRepo)
 	s.updateState.mu.Lock()
 	s.updateState.CheckedAt = time.Now()
 	if err != nil {
@@ -64,6 +65,10 @@ func (s *Server) checkForUpdate() {
 	s.updateState.LatestVersion = latest
 	s.updateState.Error = ""
 	s.updateState.mu.Unlock()
+
+	if latest == "" {
+		return
+	}
 
 	if compareVersions(latest, ServerVersion) > 0 {
 		slog.Info("New version available", "current", ServerVersion, "latest", latest)
@@ -79,9 +84,10 @@ func (s *Server) checkForUpdate() {
 }
 
 // fetchLatestVersion calls the GitHub API and returns the latest tag
-func fetchLatestVersion() (string, error) {
+func fetchLatestVersion(repo string) (string, error) {
+	url := fmt.Sprintf(defaultUpdateCheckURLFmt, repo)
 	client := &http.Client{Timeout: 15 * time.Second}
-	req, err := http.NewRequest("GET", defaultUpdateCheckURL, nil)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
@@ -99,6 +105,9 @@ func fetchLatestVersion() (string, error) {
 		return "", fmt.Errorf("read response: %w", err)
 	}
 
+	if resp.StatusCode == http.StatusNotFound {
+		return "", nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("github api status %d", resp.StatusCode)
 	}
@@ -176,7 +185,7 @@ func (s *Server) handleCheckVersion(c *gin.Context) {
 		resp["latest_version"] = latest
 	}
 	if available {
-		resp["download_url"] = fmt.Sprintf("https://github.com/forgec2/forgec2/releases/tag/%s", latest)
+		resp["download_url"] = s.releaseURL(latest)
 	}
 	if errStr != "" {
 		resp["check_error"] = errStr
@@ -217,7 +226,7 @@ func (s *Server) handleHotUpdate(c *gin.Context) {
 
 // performHotUpdate downloads the latest binary, replaces itself, and restarts
 func (s *Server) performHotUpdate(latest string) error {
-	assets, err := fetchReleaseAssets(latest)
+	assets, err := fetchReleaseAssets(s.cfg.Server.UpdateCheckRepo, latest)
 	if err != nil {
 		return fmt.Errorf("fetch release assets: %w", err)
 	}
@@ -327,8 +336,8 @@ exec "%s" "$@"
 }
 
 // fetchReleaseAssets gets the asset list for a given tag
-func fetchReleaseAssets(tag string) ([]GitHubAsset, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/forgec2/forgec2/releases/tags/%s", tag)
+func fetchReleaseAssets(repo, tag string) ([]GitHubAsset, error) {
+	url := fmt.Sprintf(defaultReleaseAssetsURLFmt, repo, tag)
 	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -394,13 +403,18 @@ func downloadFile(url, dest string) error {
 	return nil
 }
 
+// releaseURL returns the GitHub release page URL for a given version
+func (s *Server) releaseURL(version string) string {
+	return fmt.Sprintf("https://github.com/%s/releases/tag/%s", s.cfg.Server.UpdateCheckRepo, version)
+}
+
 // broadcastUpdateNotification sends a new-version alert via WebSocket
 func (s *Server) broadcastUpdateNotification(latest string) {
 	payload := map[string]interface{}{
 		"type":          "update_available",
 		"current":       ServerVersion,
 		"latest":        latest,
-		"download_url":  fmt.Sprintf("https://github.com/forgec2/forgec2/releases/tag/%s", latest),
+		"download_url":  s.releaseURL(latest),
 	}
 	msg, err := json.Marshal(payload)
 	if err != nil {
@@ -408,6 +422,28 @@ func (s *Server) broadcastUpdateNotification(latest string) {
 		return
 	}
 	s.broadcastToClients(msg)
+}
+
+// handleRefreshUpdateCheck forces a fresh update check and returns the result
+func (s *Server) handleRefreshUpdateCheck(c *gin.Context) {
+	s.checkForUpdate()
+
+	s.updateState.mu.RLock()
+	defer s.updateState.mu.RUnlock()
+
+	resp := gin.H{
+		"current_version":  ServerVersion,
+		"checked_at":       s.updateState.CheckedAt,
+		"update_available": s.updateState.Available,
+	}
+	if s.updateState.Available {
+		resp["latest_version"] = s.updateState.LatestVersion
+		resp["download_url"] = s.releaseURL(s.updateState.LatestVersion)
+	}
+	if s.updateState.Error != "" {
+		resp["check_error"] = s.updateState.Error
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // handleUpdateCheck returns the current update check status as JSON
@@ -422,7 +458,7 @@ func (s *Server) handleUpdateCheck(c *gin.Context) {
 	}
 	if s.updateState.Available {
 		resp["latest_version"] = s.updateState.LatestVersion
-		resp["download_url"] = fmt.Sprintf("https://github.com/forgec2/forgec2/releases/tag/%s", s.updateState.LatestVersion)
+		resp["download_url"] = s.releaseURL(s.updateState.LatestVersion)
 	}
 	if s.updateState.Error != "" {
 		resp["check_error"] = s.updateState.Error

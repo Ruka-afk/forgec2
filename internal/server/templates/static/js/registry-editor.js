@@ -76,8 +76,6 @@ const RegistryEditor = (function() {
     // Load subkeys
     function loadSubKeys(parentPath, nodeDiv) {
         // This would call the agent's registry command
-        console.log('Loading subkeys for:', parentPath);
-        
         // Create children container
         const children = document.createElement('div');
         children.className = 'registry-children ml-4 space-y-1';
@@ -99,7 +97,6 @@ const RegistryEditor = (function() {
         container.innerHTML = '<div class="text-center py-8 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-2xl"></i><p class="mt-2">加载中...</p></div>';
         
         // Would call: fetch(`/agents/${agentId}/reg/get?key=${keyPath}`)
-        console.log('Loading values for:', keyPath);
     }
     
     // Render values table
@@ -154,7 +151,6 @@ const RegistryEditor = (function() {
         const newData = prompt('输入新值:');
         if (newData === null) return;
         
-        console.log('Setting value:', currentKey, name, newData);
         // Would call: fetch(`/agents/${agentId}/reg/set`, { ... })
     }
     
@@ -162,7 +158,6 @@ const RegistryEditor = (function() {
     function deleteValue(name) {
         if (!confirm(`确定要删除键值 ${name} 吗？`)) return;
         
-        console.log('Deleting value:', currentKey, name);
         // Would call: fetch(`/agents/${agentId}/reg/delete`, { ... })
     }
     
@@ -172,7 +167,6 @@ const RegistryEditor = (function() {
         if (!name) return;
         
         const newPath = currentKey + '\\' + name;
-        console.log('Creating key:', newPath);
         // Would call agent command
     }
     
@@ -187,7 +181,6 @@ const RegistryEditor = (function() {
         const data = prompt('输入数据:');
         if (data === null) return;
         
-        console.log('Creating value:', currentKey, name, type, data);
         // Would call agent command
     }
     
@@ -195,13 +188,11 @@ const RegistryEditor = (function() {
     function search(query) {
         if (!query) return;
         
-        console.log('Searching registry for:', query);
         // Would call agent command
     }
     
     // Export registry key
     function exportKey(keyPath) {
-        console.log('Exporting:', keyPath);
         // Would call agent command to export as .reg file
     }
     

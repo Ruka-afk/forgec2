@@ -1010,7 +1010,7 @@
             showToast('监听器创建成功，请刷新页面', 'success');
             location.reload();
         } else {
-            alert('创建失败: ' + (data.error || ''));
+            showToast('创建失败: ' + (data.error || ''), 'error');
         }
     }
 </script>

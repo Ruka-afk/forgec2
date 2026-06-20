@@ -119,7 +119,6 @@ function connectWebSocket() {
     ws = new WebSocket(wsUrl);
     
     ws.onopen = function() {
-        console.log('Chat WebSocket connected');
         reconnectAttempts = 0;
     };
     
@@ -140,7 +139,6 @@ function connectWebSocket() {
     };
     
     ws.onclose = function() {
-        console.log('Chat WebSocket disconnected');
         if (reconnectAttempts < maxReconnectAttempts) {
             reconnectAttempts++;
             setTimeout(connectWebSocket, 2000 * reconnectAttempts);
@@ -250,7 +248,7 @@ function sendMessage() {
     })
     .catch(err => {
         console.error('Failed to send message:', err);
-        alert('发送失败，请重试');
+        showToast('发送失败，请重试', 'error');
     });
 }
 

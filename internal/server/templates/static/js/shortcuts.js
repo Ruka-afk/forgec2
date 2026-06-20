@@ -57,7 +57,6 @@ const KeyboardShortcuts = (function() {
             enabled: true
         });
         
-        console.log(`[Shortcuts] Registered: ${shortcut} - ${description}`);
     }
     
     // Unregister a shortcut
@@ -188,7 +187,6 @@ const KeyboardShortcuts = (function() {
             if (modal) modal.remove();
         });
         
-        console.log('[Shortcuts] Initialized');
     }
     
     // Cleanup
@@ -300,7 +298,6 @@ const ShellShortcuts = (function() {
         KeyboardShortcuts.register('ctrl+e', '光标到行尾', cursorToEnd, 'shell');
         KeyboardShortcuts.register('ctrl+r', '搜索历史', searchHistory, 'shell');
         
-        console.log('[ShellShortcuts] Initialized');
     }
     
     function clearTerminal() {
