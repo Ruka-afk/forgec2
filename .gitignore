@@ -25,3 +25,19 @@ Thumbs.db
 
 # Temp
 tmp/
+
+# IDE / editor
+.opencode/
+.qoder/
+opencode.json
+
+# Build artifacts
+*.exe~
+server.err
+server.log
+*.exe
+data/
+
+# OS
+.DS_Store
+Thumbs.db

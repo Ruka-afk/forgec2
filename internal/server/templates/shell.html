@@ -107,36 +107,75 @@
                 <span id="prompt" class="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-mono">CMD></span>
                 <input type="text" id="cmd-input" placeholder="" 
                        class="w-full bg-slate-700 border border-slate-600 text-white font-mono text-sm rounded-lg pl-12 pr-4 h-11 focus:border-emerald-500 focus:outline-none"
-                       onkeydown="handleKeyDown(event)">
+                       onkeydown="handleKeyDown(event)" oninput="handleInput(event)" autocomplete="off">
+                <!-- Autocomplete dropdown -->
+                <div id="autocomplete-container" class="hidden absolute bottom-full left-0 right-0 mb-2 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto z-50"></div>
             </div>
             <button onclick="executeCommand()" class="px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg h-11 text-sm font-medium">
                 <i class="fa-solid fa-play mr-1"></i> Execute
             </button>
         </div>
+        <div class="mt-2 text-xs text-slate-500 flex gap-4">
+            <span><kbd class="px-2 py-1 bg-slate-700 rounded">↑↓</kbd> 历史</span>
+            <span><kbd class="px-2 py-1 bg-slate-700 rounded">Tab</kbd> 补全</span>
+            <span><kbd class="px-2 py-1 bg-slate-700 rounded">Ctrl+Enter</kbd> 执行</span>
+            <span><kbd class="px-2 py-1 bg-slate-700 rounded">Ctrl+L</kbd> 清屏</span>
+        </div>
     </div>
 </div>
 
+<script src="/static/js/command-history.js"></script>
 <script>
     const agentId = '{{.Agent.ID}}';
-    let commandHistory = [];
-    let historyIndex = -1;
+    const osType = '{{.Agent.OS}}' === 'Linux' ? 'linux' : 'windows';
 
     function handleKeyDown(event) {
+        const input = document.getElementById('cmd-input');
+        const autocompleteContainer = document.getElementById('autocomplete-container');
+        
         if (event.key === 'Enter') {
+            event.preventDefault();
             executeCommand();
         } else if (event.key === 'ArrowUp') {
-            if (historyIndex > 0) {
-                historyIndex--;
-                document.getElementById('cmd-input').value = commandHistory[historyIndex];
-            }
+            event.preventDefault();
+            const prevValue = CommandHistory.up(input.value);
+            input.value = prevValue;
         } else if (event.key === 'ArrowDown') {
-            if (historyIndex < commandHistory.length - 1) {
-                historyIndex++;
-                document.getElementById('cmd-input').value = commandHistory[historyIndex];
+            event.preventDefault();
+            const nextValue = CommandHistory.down(input.value);
+            input.value = nextValue;
+        } else if (event.key === 'Tab') {
+            event.preventDefault();
+            const selected = AutoComplete.getSelected();
+            if (selected) {
+                input.value = selected;
+                AutoComplete.hide(autocompleteContainer);
             } else {
-                historyIndex = commandHistory.length;
-                document.getElementById('cmd-input').value = '';
+                // Show suggestions
+                const suggestions = AutoComplete.getSuggestions(input.value, osType);
+                if (suggestions.length > 0) {
+                    input.value = suggestions[0];
+                }
             }
+        } else if (event.key === 'Escape') {
+            AutoComplete.hide(autocompleteContainer);
+        } else if (event.key === 'l' && event.ctrlKey) {
+            event.preventDefault();
+            clearTerminal();
+        }
+    }
+
+    function handleInput(event) {
+        const input = document.getElementById('cmd-input');
+        const autocompleteContainer = document.getElementById('autocomplete-container');
+        
+        if (input.value.trim()) {
+            AutoComplete.show(autocompleteContainer, input.value, (selected) => {
+                input.value = selected;
+                input.focus();
+            });
+        } else {
+            AutoComplete.hide(autocompleteContainer);
         }
     }
 
@@ -171,9 +210,9 @@
         
         if (!cmd) return;
         
-        // Add to history
-        commandHistory.push(cmd);
-        historyIndex = commandHistory.length;
+        // Add to history (using CommandHistory module)
+        CommandHistory.add(cmd);
+        CommandHistory.resetIndex();
         
         // Update prompt
         const prompt = shell === 'powershell.exe' ? 'PS>' : 'CMD>';

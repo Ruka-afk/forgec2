@@ -1,0 +1,16 @@
+{
+  "name": "zoom",
+  "description": "Mimics Zoom video conferencing traffic",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Zoom/5.16.10",
+  "beacon_uri": "/v4/meetings/status",
+  "method": "GET",
+  "headers": {
+    "Accept": "application/json",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Language": "en-US,en;q=0.9",
+    "X-Zoom-Client": "windows",
+    "X-Zoom-Client-Version": "5.16.10"
+  },
+  "sleep": 15,
+  "jitter": 25
+}

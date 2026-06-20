@@ -22,9 +22,13 @@ import (
 )
 
 func (s *Server) handleLoginPage(c *gin.Context) {
-	csrfToken := middleware.GenerateCSRFToken()
-	secure := s.cfg.Server.TLSEnabled
-	c.SetCookie("csrf_token", csrfToken, middleware.CookieMaxAge, "/", "", secure, false)
+	// Use token from CSRFProtection middleware if available, otherwise generate
+	csrfToken, exists := c.Get("csrf_token_value")
+	if !exists {
+		csrfToken = middleware.GenerateCSRFToken()
+	}
+	csrfTokenStr := csrfToken.(string)
+	c.SetCookie("csrf_token", csrfTokenStr, middleware.CookieMaxAge, "/", "", middleware.CookieSecure, false)
 
 	// Check if already logged in
 	if _, err := c.Cookie("forgec2_session"); err == nil {
@@ -41,7 +45,7 @@ func (s *Server) handleLoginPage(c *gin.Context) {
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	s.tmpl.ExecuteTemplate(c.Writer, "login.html", gin.H{
 		"Title":     "ForgeC2 - Login",
-		"CSRFToken": csrfToken,
+		"CSRFToken": csrfTokenStr,
 		"Error":     errMsg,
 	})
 }
@@ -94,12 +98,18 @@ func (s *Server) handleLogin(c *gin.Context) {
 			"last_login":    time.Now(),
 			"last_ip":       c.ClientIP(),
 		})
+		// Update local user object with the new hash
+		user.PasswordHash = hash
 		slog.Info("Password set for user", "username", username)
 	} else if !middleware.CheckPassword(user.PasswordHash, password) {
 		slog.Warn("Login failed: wrong password", "username", username, "ip", c.ClientIP())
 		s.LogAuditRecord(c, "login_failed", "auth", username, "Wrong password", false, nil)
-		// Progressive delay to slow brute-force attacks
-		time.Sleep(time.Duration(user.LoginAttempts) * 500 * time.Millisecond)
+		// Progressive delay to slow brute-force attacks (cap at 10 attempts = 5 seconds)
+		delay := user.LoginAttempts
+		if delay > 10 {
+			delay = 10
+		}
+		time.Sleep(time.Duration(delay) * 500 * time.Millisecond)
 		s.db.Model(&user).UpdateColumn("login_attempts", user.LoginAttempts+1)
 		s.renderLoginError(c, "Invalid username or password", username, rememberMe)
 		return
@@ -112,7 +122,7 @@ func (s *Server) handleLogin(c *gin.Context) {
 		})
 	}
 
-	token, err := middleware.GenerateToken(user, c.ClientIP(), rememberMe)
+	token, err := middleware.GenerateToken(user, rememberMe, s.cfg.Server.SessionMaxAgeHours)
 	if err != nil {
 		s.renderLoginError(c, "Token generation error", username, rememberMe)
 		return
@@ -126,20 +136,33 @@ func (s *Server) handleLogin(c *gin.Context) {
 	if rememberMe {
 		maxAge = 7 * 86400
 	}
-	secure := s.cfg.Server.TLSEnabled
-	c.SetCookie("forgec2_session", token, maxAge, "/", "", secure, true)
+	c.SetCookie("forgec2_session", token, maxAge, "/", "", middleware.CookieSecure, true)
+
+	// Clear force logout flag after successful login
+	s.db.Model(&db.User{}).Where("id = ?", user.ID).Update("force_logout_at", nil)
 
 	s.LogAuditRecord(c, "login", "auth", username, "Login successful", true, nil)
-	slog.Info("Login successful", "username", username, "role", user.Role, "ip", c.ClientIP())
+	slog.Info("Login successful, session cookie set", 
+		"username", username, 
+		"role", user.Role, 
+		"ip", c.ClientIP(),
+		"max_age", maxAge,
+		"secure", middleware.CookieSecure)
 
 	c.Redirect(http.StatusFound, "/")
 }
 
 func (s *Server) handleLogout(c *gin.Context) {
-	user, _ := c.Get("user")
-	s.LogAuditRecord(c, "logout", "auth", user.(string), "User logged out", true, nil)
-	secure := s.cfg.Server.TLSEnabled
-	c.SetCookie("forgec2_session", "", -1, "/", "", secure, true)
+	user, exists := c.Get("user")
+	username := "unknown"
+	if exists {
+		if u, ok := user.(string); ok {
+			username = u
+		}
+	}
+	s.LogAuditRecord(c, "logout", "auth", username, "User logged out", true, nil)
+	slog.Info("User logged out", "username", username, "ip", c.ClientIP())
+	c.SetCookie("forgec2_session", "", -1, "/", "", middleware.CookieSecure, true)
 	c.Redirect(http.StatusFound, "/login")
 }
 
@@ -188,10 +211,38 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 		jwtMasked = strings.Repeat("*", len(jwtSecret))
 	}
 
+	currentUser, _ := c.Get("user")
+	currentRole, _ := c.Get("user_role")
+	currentUserID, _ := c.Get("user_id")
+
+	var totalUsers int64
+	s.db.Model(&db.User{}).Count(&totalUsers)
+
+	var profileUser db.User
+	profileInfo := gin.H{}
+	if currentUserID != nil {
+		if uid, ok := currentUserID.(uint); ok {
+			if err := s.db.First(&profileUser, uid).Error; err == nil {
+				profileInfo = gin.H{
+					"username":      profileUser.Username,
+					"role":          profileUser.Role,
+					"last_activity": profileUser.LastActivity,
+					"last_login":    profileUser.LastLogin,
+					"created_at":    profileUser.CreatedAt,
+				}
+			}
+		}
+	}
+
 	stats := s.getNavStats()
 	data := gin.H{
 		"Title":            "ForgeC2 - Settings",
 		"ActiveNav":        "settings",
+		"CurrentUsername":  currentUser,
+		"CurrentUserRole":  currentRole,
+		"CurrentUserId":    currentUserID,
+		"ProfileInfo":      profileInfo,
+		"TotalUsers":       totalUsers,
 		"DefaultInterval":  s.cfg.Agent.DefaultInterval,
 		"DefaultJitter":    s.cfg.Agent.DefaultJitter,
 		"DefaultSkipTLS":   s.cfg.Agent.DefaultSkipTLS,

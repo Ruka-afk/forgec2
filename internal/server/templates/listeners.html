@@ -13,7 +13,7 @@
     </div>
 
     <!-- 统计卡片 -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <div class="bg-white border border-slate-200 rounded-3xl p-5">
             <div class="text-xs text-slate-500">总监听器</div>
             <div class="text-3xl font-semibold mt-1">{{.Total}}</div>
@@ -29,6 +29,10 @@
         <div class="bg-white border border-slate-200 rounded-3xl p-5">
             <div class="text-xs text-slate-500">TCP 监听器</div>
             <div class="text-3xl font-semibold mt-1">{{.TcpCount}}</div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-3xl p-5">
+            <div class="text-xs text-slate-500">DNS 监听器</div>
+            <div class="text-3xl font-semibold mt-1 text-purple-600">{{.DnsCount}}</div>
         </div>
     </div>
 

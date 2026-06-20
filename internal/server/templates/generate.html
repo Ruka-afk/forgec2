@@ -2,66 +2,101 @@
 <div class="max-w-7xl mx-auto">
     <div class="mb-6">
         <h1 class="text-3xl font-semibold tracking-tight text-slate-900">生成 Agent</h1>
-        <p class="text-slate-500">创建植入程序（Windows EXE / PS1 / Linux ELF）— 跨平台支持</p>
-        <p class="text-xs text-amber-600 mt-1">注意：生成原生 EXE / ELF 需要本机安装 Go 工具链（https://go.dev/dl/）。PowerShell 脚本不需要。</p>
+        <p class="text-slate-500 text-sm mt-1">创建植入程序 (Windows EXE / PS1 / Linux ELF / macOS Binary) — 跨平台支持</p>
+        <div class="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl">
+            <i class="fa-solid fa-circle-info text-amber-600 text-sm"></i>
+            <span class="text-xs text-amber-700">生成原生 EXE / ELF / macOS Binary 需要本机安装 Go 工具链（<a href="https://go.dev/dl/" target="_blank" class="underline hover:text-amber-800">下载</a>）。PowerShell 脚本不需要。</span>
+        </div>
     </div>
 
     <!-- 共享设置 -->
-    <div class="bg-white border border-slate-200 rounded-3xl p-6 mb-6 shadow-sm">
-        <div class="flex items-center gap-x-2 mb-4">
-            <i class="fa-solid fa-sliders text-slate-400"></i>
-            <span class="text-sm font-semibold text-slate-900">公共设置</span>
-            <span class="text-[10px] text-slate-400 ml-1">以下设置对所有平台生效</span>
+    <div class="bg-white border border-slate-200 rounded-2xl p-6 mb-6 shadow-sm hover:shadow-md transition-shadow">
+        <div class="flex items-center justify-between mb-5">
+            <div class="flex items-center gap-x-3">
+                <div class="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                    <i class="fa-solid fa-sliders text-indigo-600"></i>
+                </div>
+                <div>
+                    <div class="text-sm font-semibold text-slate-900">公共设置</div>
+                    <div class="text-xs text-slate-500">以下设置对所有平台生效</div>
+                </div>
+            </div>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
-                <label class="block text-xs section-header mb-1.5">Malleable Profile</label>
-                <select id="shared-profile" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
-                    <option value="default">Default</option>
-                    <option value="google">Google-like</option>
-                    <option value="bing">Bing-like</option>
+                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Malleable Profile</label>
+                <select id="shared-profile" class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm cursor-pointer transition-all">
+                    <option value="default">Default - 默认配置</option>
+                    <option value="google">Google - 搜索服务</option>
+                    <option value="bing">Bing - 微软搜索</option>
+                    <option value="amazon">Amazon - AWS CDN</option>
+                    <option value="cloudflare">Cloudflare - CDN 健康检查</option>
+                    <option value="github">GitHub - API 请求</option>
+                    <option value="office365">Office 365 - 企业遥测</option>
+                    <option value="teams">Microsoft Teams - 桌面应用</option>
+                    <option value="slack">Slack - 企业通讯</option>
+                    <option value="zoom">Zoom - 视频会议</option>
+                    <option value="dropbox">Dropbox - 云存储同步</option>
+                    <option value="windows_update">Windows Update - 系统更新</option>
+                    <option value="firefox_update">Firefox - 浏览器更新</option>
+                    <option value="apple">Apple - 苹果服务</option>
+                    <option value="adobe">Adobe - Creative Cloud</option>
                 </select>
             </div>
             <div>
-                <label class="block text-xs section-header mb-1.5">心跳间隔（秒）</label>
+                <label class="block text-xs font-semibold text-slate-600 mb-1.5">心跳间隔（秒）</label>
                 <input type="number" id="shared-interval" value="{{.DefaultInt}}"
-                       class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                       class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm transition-all">
             </div>
             <div>
-                <label class="block text-xs section-header mb-1.5">抖动值 (%)</label>
+                <label class="block text-xs font-semibold text-slate-600 mb-1.5">抖动值 (%)</label>
                 <input type="number" id="shared-jitter" value="{{.DefaultJitter}}"
-                       class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                       class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm transition-all">
+            </div>
+            <div class="col-span-2 lg:col-span-1">
+                <label class="block text-xs font-semibold text-slate-600 mb-1.5">User-Agent</label>
+                <input type="text" id="shared-ua" value="{{.DefaultUA}}"
+                       class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-xs font-mono transition-all">
             </div>
             <div>
-                <label class="block text-xs section-header mb-1.5">User-Agent</label>
-                <input type="text" id="shared-ua" value="{{.DefaultUA}}"
-                       class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                <label class="block text-xs font-semibold text-slate-600 mb-1.5">HTTP 代理</label>
+                <input type="text" id="shared-proxy" placeholder="http://proxy:8080"
+                       class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-xs font-mono transition-all">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1.5">备用 C2 (逗号分隔)</label>
+                <input type="text" id="shared-failover" placeholder="http://backup1:8080, http://backup2:8080"
+                       class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-xs font-mono transition-all">
             </div>
         </div>
     </div>
 
-    <div class="mb-4 flex items-center gap-3">
-        <button type="button" onclick="createListener()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-2xl">
-            + 创建新监听器
+    <div class="mb-6 flex flex-wrap items-center gap-3">
+        <button type="button" onclick="createListener()" class="px-4 h-10 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-xl font-medium flex items-center gap-x-2 transition-colors">
+            <i class="fa-solid fa-plus"></i>
+            <span>创建新监听器</span>
         </button>
-        <span id="listener-hint" class="text-xs text-slate-400">先选择监听器，然后选择平台生成</span>
+        <span id="listener-hint" class="text-xs text-slate-500 flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-info text-slate-400"></i>
+            先选择监听器，然后选择平台生成
+        </span>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
         <!-- EXE 生成器 -->
-        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-            <div class="flex items-center gap-x-3 mb-5">
-                <div class="w-10 h-10 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center text-2xl">🪟</div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
+                <div class="w-11 h-11 bg-orange-100 rounded-xl flex items-center justify-center text-2xl">🪟</div>
                 <div>
-                    <div class="font-semibold text-lg text-slate-900">Windows EXE</div>
+                    <div class="font-semibold text-base text-slate-900">Windows EXE</div>
                     <div class="text-xs text-slate-500">原生 Go 植入程序</div>
                 </div>
             </div>
 
-            <form id="exe-form" class="space-y-4">
+            <form id="exe-form" class="space-y-3">
                 <div>
-                    <label class="block text-xs section-header mb-1.5">监听器</label>
-                    <select name="listener_id" id="listener-exe" onchange="onListenerChange('exe')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm" required>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">监听器</label>
+                    <select name="listener_id" id="listener-exe" onchange="onListenerChange('exe')" class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm cursor-pointer transition-all" required>
                         <option value="" disabled selected>-- 请选择 --</option>
                         {{range .Listeners}}
                         <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
@@ -73,9 +108,9 @@
                 <input type="hidden" name="protocol" id="protocol-exe" value="http">
 
                 <div>
-                    <label class="block text-xs section-header mb-1.5">文件名</label>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">文件名</label>
                     <input type="text" name="filename" value="forge_agent.exe"
-                           class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                           class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm transition-all">
                 </div>
 
                 <div class="mt-2 pt-2 border-t border-slate-100">
@@ -124,7 +159,7 @@
                 </div>
 
                 <button type="button" onclick="generateEXE()"
-                        class="w-full h-11 bg-orange-600 hover:bg-orange-700 transition-colors text-white font-medium rounded-2xl flex items-center justify-center gap-x-2">
+                        class="w-full h-10 bg-orange-600 hover:bg-orange-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
                     <i class="fa-solid fa-download"></i>
                     生成 EXE
                 </button>
@@ -133,16 +168,16 @@
         </div>
 
         <!-- PS1 生成器 -->
-        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-            <div class="flex items-center gap-x-3 mb-5">
-                <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center text-2xl">🐚</div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
+                <div class="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center text-2xl">🐚</div>
                 <div>
-                    <div class="font-semibold text-lg text-slate-900">PowerShell 脚本</div>
+                    <div class="font-semibold text-base text-slate-900">PowerShell 脚本</div>
                     <div class="text-xs text-slate-500">高度混淆 • 易于部署</div>
                 </div>
             </div>
 
-            <form id="ps1-form" class="space-y-4">
+            <form id="ps1-form" class="space-y-3">
                 <div>
                     <label class="block text-xs section-header mb-1.5">监听器</label>
                     <select name="listener_id" id="listener-ps1" onchange="onListenerChange('ps1')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm" required>
@@ -167,7 +202,7 @@
                 </div>
 
                 <button type="button" onclick="generatePS1()"
-                        class="w-full h-11 bg-blue-600 hover:bg-blue-700 transition-colors text-white font-medium rounded-2xl flex items-center justify-center gap-x-2">
+                        class="w-full h-10 bg-blue-600 hover:bg-blue-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
                     <i class="fa-solid fa-magic"></i>
                     生成 PS1
                 </button>
@@ -176,16 +211,16 @@
         </div>
 
         <!-- Linux ELF 生成器 -->
-        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-            <div class="flex items-center gap-x-3 mb-5">
-                <div class="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center text-2xl">🐧</div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
+                <div class="w-11 h-11 bg-emerald-100 rounded-xl flex items-center justify-center text-2xl">🐧</div>
                 <div>
-                    <div class="font-semibold text-lg text-slate-900">Linux ELF</div>
+                    <div class="font-semibold text-base text-slate-900">Linux ELF</div>
                     <div class="text-xs text-slate-500">原生 Go 植入程序 • amd64</div>
                 </div>
             </div>
 
-            <form id="linux-form" class="space-y-4">
+            <form id="linux-form" class="space-y-3">
                 <div>
                     <label class="block text-xs section-header mb-1.5">监听器</label>
                     <select name="listener_id" id="listener-linux" onchange="onListenerChange('linux')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm" required>
@@ -251,29 +286,117 @@
                 </div>
 
                 <button type="button" onclick="generateLinux()"
-                        class="w-full h-11 bg-emerald-600 hover:bg-emerald-700 transition-colors text-white font-medium rounded-2xl flex items-center justify-center gap-x-2">
+                        class="w-full h-10 bg-emerald-600 hover:bg-emerald-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
                     <i class="fa-solid fa-download"></i>
                     生成 ELF
                 </button>
             </form>
             <div id="linux-result" class="mt-3"></div>
         </div>
+
+        <!-- macOS 生成器 -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
+                <div class="w-11 h-11 bg-purple-100 rounded-xl flex items-center justify-center text-2xl">🍎</div>
+                <div>
+                    <div class="font-semibold text-base text-slate-900">macOS Binary</div>
+                    <div class="text-xs text-slate-500">原生 Go 植入程序 • amd64 (Intel Mac)</div>
+                </div>
+            </div>
+
+            <form id="macos-form" class="space-y-3">
+                <div>
+                    <label class="block text-xs section-header mb-1.5">监听器</label>
+                    <select name="listener_id" id="listener-macos" onchange="onListenerChange('macos')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm" required>
+                        <option value="" disabled selected>-- 请选择 --</option>
+                        {{range .Listeners}}
+                        <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
+                        {{end}}
+                    </select>
+                </div>
+
+                <input type="hidden" name="c2_url" id="c2-url-macos" value="">
+                <input type="hidden" name="protocol" id="protocol-macos" value="http">
+
+                <div>
+                    <label class="block text-xs section-header mb-1.5">文件名</label>
+                    <input type="text" name="filename" value="forgec2_agent"
+                           class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                </div>
+
+                <div class="mt-2 pt-2 border-t border-slate-100">
+                    <details class="group">
+                        <summary class="text-xs text-slate-500 cursor-pointer hover:text-indigo-600 select-none"><i class="fa-solid fa-link mr-1"></i> P2P / DNS 设置（可选）</summary>
+                        <div class="mt-2 space-y-2">
+                            <div>
+                                <label class="block text-xs section-header mb-1.5">传输协议</label>
+                                <select name="p2p_mode" class="p2p-mode w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                                    <option value="">直接连接（HTTP/TCP）</option>
+                                    <option value="parent">P2P 父节点（接受子节点）</option>
+                                    <option value="child">P2P 子节点（通过父节点回连）</option>
+                                    <option value="dns">DNS 信标</option>
+                                </select>
+                            </div>
+                            <div class="p2p-parent-field hidden">
+                                <label class="block text-xs section-header mb-1.5">父节点地址（子节点模式）</label>
+                                <input type="text" name="p2p_parent" placeholder="tcp://192.168.1.100:4444" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                            </div>
+                            <div class="p2p-listen-field hidden">
+                                <label class="block text-xs section-header mb-1.5">监听地址（父节点模式）</label>
+                                <input type="text" name="p2p_listen_addr" placeholder="TCP: :4444" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                            </div>
+                            <div class="dns-fields hidden">
+                                <div class="mb-2">
+                                    <label class="block text-xs section-header mb-1.5">DNS 域名</label>
+                                    <input type="text" name="dns_domain" placeholder="c2.example.com" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-xs section-header mb-1.5">DNS 服务器 IP</label>
+                                    <input type="text" name="dns_server" placeholder="192.168.1.100" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <div class="flex items-center gap-x-2">
+                    <input type="checkbox" name="persist" id="persist-macos" class="w-4 h-4 accent-indigo-600">
+                    <label for="persist-macos" class="text-sm text-slate-700">启用持久化</label>
+                </div>
+
+                <div class="flex items-center gap-x-2">
+                    <input type="checkbox" name="skip_tls_verify" id="skip-tls-macos" class="w-4 h-4 accent-indigo-600" {{if .DefaultSkipTLS}}checked{{end}}>
+                    <label for="skip-tls-macos" class="text-sm text-slate-700">跳过 TLS 验证</label>
+                </div>
+
+                <button type="button" onclick="generateMacOS()"
+                        class="w-full h-10 bg-purple-600 hover:bg-purple-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
+                    <i class="fa-solid fa-download"></i>
+                    生成 macOS Binary
+                </button>
+            </form>
+            <div id="macos-result" class="mt-3"></div>
+        </div>
     </div>
 
     <!-- Artifact Kit: Stager -->
     <div class="mt-8">
-        <div class="flex items-center gap-x-2 mb-4">
-            <i class="fa-solid fa-box-open text-slate-400"></i>
-            <span class="text-sm font-semibold text-slate-900">Artifact Kit / 加载器</span>
-            <span class="text-[10px] text-slate-400">生成 XOR 编码的 Shellcode 加载器</span>
+        <div class="flex items-center gap-x-3 mb-5">
+            <div class="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                <i class="fa-solid fa-box-open text-indigo-600"></i>
+            </div>
+            <div>
+                <div class="text-sm font-semibold text-slate-900">Artifact Kit / 加载器</div>
+                <div class="text-xs text-slate-500">生成 XOR 编码的 Shellcode 加载器</div>
+            </div>
         </div>
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <!-- Windows Stager -->
-            <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-                <div class="flex items-center gap-x-3 mb-5">
-                    <div class="w-10 h-10 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center text-2xl">📦</div>
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
+                    <div class="w-11 h-11 bg-purple-100 rounded-xl flex items-center justify-center text-2xl">📦</div>
                     <div>
-                        <div class="font-semibold text-lg text-slate-900">Windows 加载器</div>
+                        <div class="font-semibold text-base text-slate-900">Windows 加载器</div>
                         <div class="text-xs text-slate-500">小型 EXE → 下载 + XOR 解码 → 执行完整 Beacon</div>
                     </div>
                 </div>
@@ -304,7 +427,7 @@
                     </div>
 
                     <button type="button" onclick="generateStager()"
-                            class="w-full h-11 bg-purple-600 hover:bg-purple-700 transition-colors text-white font-medium rounded-2xl flex items-center justify-center gap-x-2">
+                            class="w-full h-10 bg-purple-600 hover:bg-purple-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
                         <i class="fa-solid fa-download"></i>
                         生成加载器 + 阶段负载
                     </button>
@@ -313,11 +436,11 @@
             </div>
 
             <!-- Linux Stager -->
-            <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-                <div class="flex items-center gap-x-3 mb-5">
-                    <div class="w-10 h-10 bg-teal-100 text-teal-600 rounded-2xl flex items-center justify-center text-2xl">📦</div>
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
+                    <div class="w-11 h-11 bg-teal-100 rounded-xl flex items-center justify-center text-2xl">📦</div>
                     <div>
-                        <div class="font-semibold text-lg text-slate-900">Linux 加载器</div>
+                        <div class="font-semibold text-base text-slate-900">Linux 加载器</div>
                         <div class="text-xs text-slate-500">小型 ELF → 下载 + XOR 解码 → 执行完整 Beacon</div>
                     </div>
                 </div>
@@ -348,13 +471,78 @@
                     </div>
 
                     <button type="button" onclick="generateStagerLinux()"
-                            class="w-full h-11 bg-teal-600 hover:bg-teal-700 transition-colors text-white font-medium rounded-2xl flex items-center justify-center gap-x-2">
+                            class="w-full h-10 bg-teal-600 hover:bg-teal-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
                         <i class="fa-solid fa-download"></i>
                         生成加载器 + 阶段负载
                     </button>
                 </form>
                 <div id="stager-linux-result" class="mt-3"></div>
             </div>
+        </div>
+    </div>
+
+    <!-- One-Liner Generator -->
+    <div class="mt-8">
+        <div class="flex items-center gap-x-3 mb-5">
+            <div class="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center">
+                <i class="fa-solid fa-terminal text-rose-600"></i>
+            </div>
+            <div>
+                <div class="text-sm font-semibold text-slate-900">One-Liner / 一键执行</div>
+                <div class="text-xs text-slate-500">生成 10+ 种一键执行命令（自动托管负载）</div>
+            </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+            <form id="oneliner-form" class="space-y-4">
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">负载类型</label>
+                        <select name="payload_type" id="payload-type" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                            <option value="exe">Windows EXE</option>
+                            <option value="ps1">PowerShell 脚本</option>
+                            <option value="linux">Linux ELF</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">监听器</label>
+                        <select name="listener_id" id="listener-oneliner" onchange="onListenerChange('oneliner')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                            <option value="" disabled selected>-- 请选择 --</option>
+                            {{range .Listeners}}
+                            <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
+                            {{end}}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">心跳间隔（秒）</label>
+                        <input type="number" name="beacon_time" value="{{.DefaultInt}}" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">抖动 (%)</label>
+                        <input type="number" name="jitter" value="{{.DefaultJitter}}" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                    </div>
+                </div>
+
+                <input type="hidden" name="c2_url" id="c2-url-oneliner" value="">
+                <input type="hidden" name="protocol" id="protocol-oneliner" value="http">
+
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="flex items-center gap-x-2">
+                        <input type="checkbox" name="skip_tls_verify" id="skip-tls-oneliner" class="w-4 h-4 accent-indigo-600" {{if .DefaultSkipTLS}}checked{{end}}>
+                        <label for="skip-tls-oneliner" class="text-sm text-slate-700">跳过 TLS</label>
+                    </div>
+                    <div class="flex items-center gap-x-2">
+                        <input type="checkbox" name="persist" id="persist-oneliner" class="w-4 h-4 accent-indigo-600">
+                        <label for="persist-oneliner" class="text-sm text-slate-700">持久化</label>
+                    </div>
+                </div>
+
+                <button type="button" onclick="generateOneLiner()"
+                        class="w-full h-10 bg-rose-600 hover:bg-rose-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
+                    <i class="fa-solid fa-bolt"></i>
+                    生成 One-Liner 命令
+                </button>
+            </form>
+            <div id="oneliner-result" class="mt-4"></div>
         </div>
     </div>
 
@@ -400,7 +588,12 @@
         const host = opt.dataset.host;
         const port = opt.dataset.port;
         const type = opt.dataset.type;
-        const c2url = scheme + '://' + host + ':' + port;
+        let c2url = scheme + '://' + host + ':' + port;
+        // Multi-C2 failover: append backup URLs from shared settings
+        const failover = document.getElementById('shared-failover');
+        if (failover && failover.value.trim()) {
+            c2url += ',' + failover.value.trim();
+        }
         document.getElementById('c2-url-' + prefix).value = c2url;
         let transport = 'http';
         if (scheme === 'tcp' || scheme === 'tls') {
@@ -417,7 +610,8 @@
             profile: document.getElementById('shared-profile').value,
             interval: document.getElementById('shared-interval').value,
             jitter: document.getElementById('shared-jitter').value,
-            user_agent: document.getElementById('shared-ua').value
+            user_agent: document.getElementById('shared-ua').value,
+            proxy: document.getElementById('shared-proxy').value
         };
     }
 
@@ -533,6 +727,7 @@
         formData.set('interval', shared.interval);
         formData.set('jitter', shared.jitter);
         formData.set('user_agent', shared.user_agent);
+        formData.set('proxy', shared.proxy);
         const skipEl = form.querySelector('input[name="skip_tls_verify"]');
         if (skipEl) formData.set('skip_tls_verify', skipEl.checked ? 'true' : '');
 
@@ -583,6 +778,7 @@
         formData.set('interval', shared.interval);
         formData.set('jitter', shared.jitter);
         formData.set('user_agent', shared.user_agent);
+        formData.set('proxy', shared.proxy);
         const skipEl = form.querySelector('input[name="skip_tls_verify"]');
         if (skipEl) formData.set('skip_tls_verify', skipEl.checked ? 'true' : '');
 
@@ -661,6 +857,114 @@
             btn.disabled = false;
             btn.innerHTML = '<i class="fa-solid fa-download"></i> 生成 ELF';
         }
+    }
+
+    async function generateMacOS() {
+        const listenerSel = document.getElementById('listener-macos');
+        if (!listenerSel.value) { showToast('请先选择一个监听器', 'error'); return; }
+        const formData = getFormData('macos-form');
+        const btn = document.querySelector('#macos-form button');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在生成...';
+        document.getElementById('macos-result').innerHTML = '';
+
+        try {
+            const response = await fetch('/generate/macos', {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': getCSRFToken() },
+                body: formData
+            });
+            if (response.ok) {
+                const blob = await response.blob();
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = 'forgec2_agent';
+                if (contentDisposition) {
+                    const match = contentDisposition.match(/filename=(.+)/);
+                    if (match) filename = match[1].replace(/"/g, '');
+                }
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click();
+                window.URL.revokeObjectURL(url); a.remove();
+                showToast('macOS Binary 生成并下载成功！', 'success');
+            } else {
+                const text = await response.text();
+                document.getElementById('macos-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + text + '</div>';
+            }
+        } catch (err) {
+            document.getElementById('macos-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + err.message + '</div>';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-download"></i> 生成 macOS Binary';
+        }
+    }
+
+    async function generateOneLiner() {
+        const listenerSel = document.getElementById('listener-oneliner');
+        if (!listenerSel.value) { showToast('请先选择一个监听器', 'error'); return; }
+        const form = document.getElementById('oneliner-form');
+        const formData = new FormData(form);
+        const shared = getSharedSettings();
+        formData.set('profile', shared.profile);
+        formData.set('interval', shared.interval);
+        formData.set('jitter', shared.jitter);
+        formData.set('user_agent', shared.user_agent);
+        formData.set('proxy', shared.proxy);
+        const persistEl = form.querySelector('input[name="persist"]');
+        if (persistEl) formData.set('persist', persistEl.checked ? 'true' : '');
+        const skipEl = form.querySelector('input[name="skip_tls_verify"]');
+        if (skipEl) formData.set('skip_tls_verify', skipEl.checked ? 'true' : '');
+
+        const btn = form.querySelector('button');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在生成...';
+        document.getElementById('oneliner-result').innerHTML = '';
+
+        try {
+            const response = await fetch('/generate/one-liner', {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': getCSRFToken() },
+                body: formData
+            });
+            const result = await response.json();
+            if (!result.success) {
+                document.getElementById('oneliner-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + escapeHtml(result.error || '') + '</div>';
+                return;
+            }
+            let html = '<div class="text-xs text-emerald-600 mb-3 flex items-center gap-x-2"><i class="fa-solid fa-check-circle"></i>负载已托管: <code class="text-xs bg-slate-100 px-2 py-0.5 rounded">' + escapeHtml(result.download_url) + '</code>（1小时有效）</div>';
+            html += '<div class="space-y-2">';
+            for (const item of result.types) {
+                html += '<div class="border border-slate-200 rounded-2xl p-3 hover:border-rose-200 transition-colors">';
+                html += '<div class="flex items-center justify-between mb-1.5">';
+                html += '<div><span class="text-sm font-medium text-slate-800">' + escapeHtml(item.name) + '</span><span class="text-[10px] text-slate-400 ml-2">' + escapeHtml(item.desc) + '</span></div>';
+                html += '<button onclick="copyOneLiner(this)" class="text-xs px-2.5 py-1 bg-slate-100 hover:bg-rose-100 rounded-xl text-slate-600"><i class="fa-regular fa-copy mr-1"></i>复制</button>';
+                html += '</div>';
+                html += '<code class="block text-[11px] font-mono bg-slate-50 text-slate-700 p-2 rounded-xl whitespace-pre-wrap break-all leading-relaxed select-all">' + escapeHtml(item.command) + '</code>';
+                html += '</div>';
+            }
+            html += '</div>';
+            document.getElementById('oneliner-result').innerHTML = html;
+            showToast('生成 ' + result.types.length + ' 条 One-Liner 命令', 'success');
+        } catch (err) {
+            document.getElementById('oneliner-result').innerHTML = '<div class="text-sm text-red-500">请求失败: ' + escapeHtml(err.message) + '</div>';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-bolt"></i> 生成 One-Liner 命令';
+        }
+    }
+
+    function copyOneLiner(btn) {
+        const code = btn.closest('.border').querySelector('code').textContent;
+        navigator.clipboard.writeText(code).then(() => {
+            showToast('命令已复制！', 'success');
+        }).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            document.execCommand('copy'); ta.remove();
+            showToast('命令已复制！', 'success');
+        });
     }
 
     function copyToClipboard() {

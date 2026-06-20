@@ -1,0 +1,268 @@
+{{define "chat_content"}}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-semibold tracking-tight text-slate-900">操作员聊天</h1>
+        <p class="text-slate-500 text-sm mt-1">实时团队协作通信</p>
+    </div>
+
+    <!-- Chat Container -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 h-[calc(100vh-200px)]">
+        <!-- Sidebar: Channels -->
+        <div class="lg:col-span-1 bg-white rounded-lg shadow-sm border border-slate-200 flex flex-col">
+            <div class="p-4 border-b border-slate-200">
+                <h2 class="font-semibold text-slate-900">频道</h2>
+            </div>
+            <div class="flex-1 overflow-y-auto p-2 space-y-1">
+                <button onclick="switchChannel('global')" 
+                        class="channel-btn w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveChannel "global"}}bg-indigo-50 text-indigo-700{{else}}text-slate-700{{end}}"
+                        data-channel="global">
+                    <i class="fa-solid fa-hashtag w-5"></i>
+                    <span class="ml-2">全局</span>
+                </button>
+                <button onclick="switchChannel('team-red')" 
+                        class="channel-btn w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-700"
+                        data-channel="team-red">
+                    <i class="fa-solid fa-users w-5"></i>
+                    <span class="ml-2">红队</span>
+                </button>
+                <button onclick="switchChannel('team-blue')" 
+                        class="channel-btn w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-700"
+                        data-channel="team-blue">
+                    <i class="fa-solid fa-shield-halved w-5"></i>
+                    <span class="ml-2">蓝队</span>
+                </button>
+            </div>
+            <div class="p-4 border-t border-slate-200">
+                <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span class="text-sm text-slate-600">在线</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="lg:col-span-3 bg-white rounded-lg shadow-sm border border-slate-200 flex flex-col">
+            <!-- Chat Header -->
+            <div class="p-4 border-b border-slate-200 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-hashtag text-slate-400"></i>
+                    <h2 class="font-semibold text-slate-900" id="channel-name">全局</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="loadMessages()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors" title="刷新">
+                        <i class="fa-solid fa-rotate-right text-slate-500"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Messages Area -->
+            <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+                <!-- Messages will be loaded here -->
+                <div class="text-center text-slate-400 text-sm py-8">
+                    <i class="fa-solid fa-comments text-4xl mb-2"></i>
+                    <p>加载中...</p>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="p-4 border-t border-slate-200">
+                <form id="chat-form" class="flex gap-2">
+                    <input type="text" 
+                           id="message-input" 
+                           placeholder="输入消息... (Ctrl+Enter 发送)" 
+                           class="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                           autocomplete="off">
+                    <button type="submit" 
+                            class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                        <i class="fa-solid fa-paper-plane mr-2"></i>发送
+                    </button>
+                </form>
+                <div class="mt-2 text-xs text-slate-400">
+                    <span class="mr-4">快捷键: Ctrl+Enter 发送 | @提及 用户</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentChannel = 'global';
+let ws = null;
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    loadMessages();
+    connectWebSocket();
+    
+    // Form submit
+    document.getElementById('chat-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        sendMessage();
+    });
+    
+    // Ctrl+Enter to send
+    document.getElementById('message-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+});
+
+function connectWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/chat?user_id={{.CurrentUsername}}`;
+    
+    ws = new WebSocket(wsUrl);
+    
+    ws.onopen = function() {
+        console.log('Chat WebSocket connected');
+        reconnectAttempts = 0;
+    };
+    
+    ws.onmessage = function(event) {
+        try {
+            const msg = JSON.parse(event.data);
+            if (msg.channel === currentChannel) {
+                appendMessage(msg);
+                scrollToBottom();
+            }
+        } catch (e) {
+            console.error('Failed to parse message:', e);
+        }
+    };
+    
+    ws.onerror = function(error) {
+        console.error('WebSocket error:', error);
+    };
+    
+    ws.onclose = function() {
+        console.log('Chat WebSocket disconnected');
+        if (reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            setTimeout(connectWebSocket, 2000 * reconnectAttempts);
+        }
+    };
+}
+
+function switchChannel(channel) {
+    currentChannel = channel;
+    
+    // Update UI
+    document.querySelectorAll('.channel-btn').forEach(btn => {
+        if (btn.dataset.channel === channel) {
+            btn.classList.add('bg-indigo-50', 'text-indigo-700');
+            btn.classList.remove('text-slate-700');
+        } else {
+            btn.classList.remove('bg-indigo-50', 'text-indigo-700');
+            btn.classList.add('text-slate-700');
+        }
+    });
+    
+    // Update channel name
+    const channelNames = {
+        'global': '全局',
+        'team-red': '红队',
+        'team-blue': '蓝队'
+    };
+    document.getElementById('channel-name').textContent = channelNames[channel] || channel;
+    
+    // Load messages for new channel
+    loadMessages();
+}
+
+function loadMessages() {
+    fetch(`/api/chat/messages?channel=${currentChannel}`)
+        .then(r => r.json())
+        .then(data => {
+            const container = document.getElementById('messages-container');
+            container.innerHTML = '';
+            
+            if (data.messages && data.messages.length > 0) {
+                data.messages.forEach(msg => appendMessage(msg));
+            } else {
+                container.innerHTML = `
+                    <div class="text-center text-slate-400 text-sm py-8">
+                        <i class="fa-solid fa-comments text-4xl mb-2"></i>
+                        <p>暂无消息，开始聊天吧！</p>
+                    </div>
+                `;
+            }
+            scrollToBottom();
+        })
+        .catch(err => {
+            console.error('Failed to load messages:', err);
+        });
+}
+
+function appendMessage(msg) {
+    const container = document.getElementById('messages-container');
+    const isMe = msg.user === '{{.CurrentUsername}}';
+    
+    const msgEl = document.createElement('div');
+    msgEl.className = `flex ${isMe ? 'justify-end' : 'justify-start'}`;
+    
+    const time = new Date(msg.timestamp || msg.created_at).toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    
+    msgEl.innerHTML = `
+        <div class="max-w-[70%] ${isMe ? 'order-2' : 'order-1'}">
+            <div class="flex items-center gap-2 mb-1 ${isMe ? 'justify-end' : 'justify-start'}">
+                <span class="text-sm font-medium ${isMe ? 'text-indigo-600' : 'text-slate-700'}">${msg.user}</span>
+                <span class="text-xs text-slate-400">${time}</span>
+            </div>
+            <div class="${isMe ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200'} rounded-lg px-4 py-2">
+                <p class="text-sm whitespace-pre-wrap break-words">${escapeHtml(msg.message)}</p>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(msgEl);
+}
+
+function sendMessage() {
+    const input = document.getElementById('message-input');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    fetch('/api/chat/send', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            message: message,
+            channel: currentChannel
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.message === 'sent') {
+            input.value = '';
+            // Message will be received via WebSocket
+        }
+    })
+    .catch(err => {
+        console.error('Failed to send message:', err);
+        alert('发送失败，请重试');
+    });
+}
+
+function scrollToBottom() {
+    const container = document.getElementById('messages-container');
+    container.scrollTop = container.scrollHeight;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{{end}}

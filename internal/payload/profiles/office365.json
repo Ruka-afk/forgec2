@@ -1,0 +1,16 @@
+{
+  "name": "office365",
+  "description": "Mimics Microsoft Office 365 telemetry traffic",
+  "user_agent": "Microsoft Office/16.0 (Windows NT 10.0; Microsoft Outlook 16.0.17126; Pro)",
+  "beacon_uri": "/config/v1/autodiscover",
+  "method": "POST",
+  "headers": {
+    "Accept": "application/json",
+    "Accept-Encoding": "gzip, deflate",
+    "Accept-Language": "en-US",
+    "Content-Type": "application/soap+msbins1",
+    "User-Agent": "Microsoft Office/16.0"
+  },
+  "sleep": 15,
+  "jitter": 20
+}

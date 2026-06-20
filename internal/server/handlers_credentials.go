@@ -2,17 +2,39 @@ package server
 
 import (
 	"encoding/csv"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+// Pre-compiled regex patterns for credential parsing (performance optimization)
+var (
+	credReBlock    *regexp.Regexp
+	credReDomain   *regexp.Regexp
+	credReNTLM     *regexp.Regexp
+	credReSHA1     *regexp.Regexp
+	credRePassword *regexp.Regexp
+	credReSAM      *regexp.Regexp
+	credOnce       sync.Once
+)
+
+func initCredRegexps() {
+	credOnce.Do(func() {
+		credReBlock = regexp.MustCompile(`(?i)(?:Username|User)\s*:\s*(.+)`)
+		credReDomain = regexp.MustCompile(`(?i)Domain\s*:\s*(.+)`)
+		credReNTLM = regexp.MustCompile(`(?i)NTLM\s*:\s*([a-fA-F0-9]{32})`)
+		credReSHA1 = regexp.MustCompile(`(?i)SHA1?\s*:\s*([a-fA-F0-9]{40})`)
+		credRePassword = regexp.MustCompile(`(?i)Password\s*:\s*(.+?)\s*$`)
+		credReSAM = regexp.MustCompile(`^([^\s:]+):(\d+):([a-fA-F0-9]{32}):([a-fA-F0-9]{32}):::`)
+	})
+}
 
 // parseAndStoreCredentials parses common credential dump formats (mimikatz-style)
 // and stores extracted entries in the credential vault.
@@ -21,17 +43,30 @@ func parseAndStoreCredentials(database *gorm.DB, agentID string, raw string, tas
 	if len(entries) == 0 {
 		return
 	}
-	// De-duplicate in batches to reduce DB round-trips
+	
+	// Optimization: Load existing creds once and use HashSet for O(1) lookup
+	type credKey struct {
+		AgentID, Domain, Username, Hash, Password string
+	}
+	
+	var existing []db.CredentialEntry
+	database.Where("agent_id = ?", agentID).Find(&existing)
+	
+	existingSet := make(map[credKey]bool, len(existing))
+	for _, e := range existing {
+		existingSet[credKey{e.AgentID, e.Domain, e.Username, e.Hash, e.Password}] = true
+	}
+	
+	// Filter duplicates using HashSet
 	var batch []db.CredentialEntry
 	for _, e := range entries {
-		var count int64
-		database.Model(&db.CredentialEntry{}).
-			Where("agent_id = ? AND domain = ? AND username = ? AND hash = ? AND password = ?",
-				e.AgentID, e.Domain, e.Username, e.Hash, e.Password).Count(&count)
-		if count == 0 {
+		key := credKey{e.AgentID, e.Domain, e.Username, e.Hash, e.Password}
+		if !existingSet[key] {
 			batch = append(batch, e)
+			existingSet[key] = true // Mark as added to avoid duplicates in batch
 		}
 	}
+	
 	if len(batch) > 0 {
 		database.CreateInBatches(batch, 50)
 		slog.Info("Credentials stored in vault", "agent", agentID, "count", len(batch))
@@ -92,15 +127,10 @@ func parseAndStoreKerberoastResults(database *gorm.DB, agentID string, raw strin
 
 // parseCredentialsFromText handles multiple output formats
 func parseCredentialsFromText(raw string, agentID string, taskID uint) []db.CredentialEntry {
+	initCredRegexps() // Ensure regexps are compiled
 	var entries []db.CredentialEntry
 
 	// Pattern 1: mimikatz sekurlsa::logonpasswords style
-	reBlock := regexp.MustCompile(`(?i)(?:Username|User)\s*:\s*(.+)`)
-	reDomain := regexp.MustCompile(`(?i)Domain\s*:\s*(.+)`)
-	reNTLM := regexp.MustCompile(`(?i)NTLM\s*:\s*([a-fA-F0-9]{32})`)
-	reSHA1 := regexp.MustCompile(`(?i)SHA1?\s*:\s*([a-fA-F0-9]{40})`)
-	rePassword := regexp.MustCompile(`(?i)Password\s*:\s*(.+?)\s*$`)
-
 	blocks := regexp.MustCompile(`\n\s*\n`).Split(raw, -1)
 	for _, block := range blocks {
 		var entry db.CredentialEntry
@@ -108,21 +138,21 @@ func parseCredentialsFromText(raw string, agentID string, taskID uint) []db.Cred
 		entry.TaskID = taskID
 		entry.Source = "mimikatz"
 
-		if m := reBlock.FindStringSubmatch(block); len(m) > 1 {
+		if m := credReBlock.FindStringSubmatch(block); len(m) > 1 {
 			entry.Username = strings.TrimSpace(m[1])
 		}
-		if m := reDomain.FindStringSubmatch(block); len(m) > 1 {
+		if m := credReDomain.FindStringSubmatch(block); len(m) > 1 {
 			entry.Domain = strings.TrimSpace(m[1])
 		}
-		if m := reNTLM.FindStringSubmatch(block); len(m) > 1 {
+		if m := credReNTLM.FindStringSubmatch(block); len(m) > 1 {
 			entry.Hash = strings.TrimSpace(m[1])
 			entry.Type = "ntlm"
 		}
-		if m := reSHA1.FindStringSubmatch(block); len(m) > 1 && entry.Hash == "" {
+		if m := credReSHA1.FindStringSubmatch(block); len(m) > 1 && entry.Hash == "" {
 			entry.Hash = strings.TrimSpace(m[1])
 			entry.Type = "sha1"
 		}
-		if m := rePassword.FindStringSubmatch(block); len(m) > 1 {
+		if m := credRePassword.FindStringSubmatch(block); len(m) > 1 {
 			pw := strings.TrimSpace(m[1])
 			if pw != "(null)" && pw != "" {
 				entry.Password = pw
@@ -138,9 +168,8 @@ func parseCredentialsFromText(raw string, agentID string, taskID uint) []db.Cred
 	}
 
 	// Pattern 2: SAM hash dump format — username:rid:lmhash:nthash:::
-	reSAM := regexp.MustCompile(`^([^\s:]+):(\d+):([a-fA-F0-9]{32}):([a-fA-F0-9]{32}):::`)
 	for _, line := range strings.Split(raw, "\n") {
-		if m := reSAM.FindStringSubmatch(strings.TrimSpace(line)); len(m) > 4 {
+		if m := credReSAM.FindStringSubmatch(strings.TrimSpace(line)); len(m) > 4 {
 			entries = append(entries, db.CredentialEntry{
 				AgentID:  agentID,
 				Username: m[1],
@@ -210,15 +239,7 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	var contentBuf strings.Builder
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "credentials_content", data); err != nil {
-		slog.Error("Failed to render credentials", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "credentials_content", data)
 }
 
 func (s *Server) handleExportCredentials(c *gin.Context) {

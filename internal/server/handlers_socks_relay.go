@@ -253,10 +253,12 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 
 	sess.mu.Lock()
 	sess.connCount++
+	countCopy := sess.connCount
 	sess.mu.Unlock()
 
+	// Update database atomically
 	s.db.Model(&db.SocksSession{}).Where("id = ?", sess.dbID).Updates(map[string]interface{}{
-		"conn_count": sess.connCount,
+		"conn_count": countCopy,
 		"updated_at": time.Now(),
 	})
 

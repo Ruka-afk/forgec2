@@ -1,0 +1,197 @@
+{{define "templates_content"}}
+<div class="max-w-7xl mx-auto">
+    <!-- 页面标题 -->
+    <div class="flex items-end justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">命令模板库</h1>
+            <p class="text-slate-500 text-sm mt-1">预定义常用红队命令，一键执行</p>
+        </div>
+        <button onclick="showAddTemplateModal()" class="px-4 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm flex items-center gap-2 transition-colors">
+            <i class="fa-solid fa-plus"></i>
+            <span>添加模板</span>
+        </button>
+    </div>
+
+    <!-- 分类展示 -->
+    {{range $category, $templates := .Categories}}
+    <div class="mb-8">
+        <h2 class="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
+            {{if eq $category "recon"}}🔍
+            {{else if eq $category "privesc"}}🛡️
+            {{else if eq $category "lateral"}}🔗
+            {{else if eq $category "exfil"}}📤
+            {{else if eq $category "persist"}}💾
+            {{else}}📋{{end}}
+            {{$category}}
+            <span class="text-sm font-normal text-slate-500">({{len $templates}} 个模板)</span>
+        </h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {{range $templates}}
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow group">
+                <div class="flex items-start justify-between mb-3">
+                    <h3 class="font-semibold text-slate-900">{{.Name}}</h3>
+                    <button onclick="deleteTemplate({{.ID}})" class="text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+
+                {{if .Description}}
+                <p class="text-xs text-slate-500 mb-3">{{.Description}}</p>
+                {{end}}
+
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3">
+                    <code class="text-xs font-mono text-slate-700 break-all">{{.Command}}</code>
+                </div>
+
+                <button onclick="useTemplate('{{.Command}}')" class="w-full h-9 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-medium transition-colors">
+                    <i class="fa-solid fa-play mr-1"></i>使用此模板
+                </button>
+            </div>
+            {{end}}
+        </div>
+    </div>
+    {{else}}
+    <div class="bg-white border border-slate-200 rounded-2xl p-12 text-center">
+        <i class="fa-solid fa-file-lines text-6xl text-slate-300 mb-4"></i>
+        <h3 class="text-lg font-medium text-slate-700 mb-2">暂无命令模板</h3>
+        <p class="text-slate-500 mb-4">添加第一个命令模板开始使用</p>
+        <button onclick="showAddTemplateModal()" class="px-4 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm">
+            <i class="fa-solid fa-plus mr-2"></i>添加模板
+        </button>
+    </div>
+    {{end}}
+</div>
+
+<!-- 添加模板弹窗 -->
+<div id="add-template-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="hideAddTemplateModal()"></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
+        <div class="bg-gradient-to-r from-indigo-500 to-purple-500 px-6 py-5">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                    <i class="fa-solid fa-file-circle-plus text-white text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">添加命令模板</h3>
+                    <p class="text-sm text-white/80">创建可重复使用的命令模板</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-6 space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-2">模板名称</label>
+                <input type="text" id="template-name" placeholder="例: 枚举本地管理员"
+                       class="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-4 h-10 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-2">分类</label>
+                <select id="template-category" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-4 h-10 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all cursor-pointer">
+                    <option value="recon">🔍 信息收集 (Recon)</option>
+                    <option value="privesc">🛡️ 权限提升 (Privesc)</option>
+                    <option value="lateral">🔗 横向移动 (Lateral)</option>
+                    <option value="exfil">📤 数据外传 (Exfil)</option>
+                    <option value="persist">💾 持久化 (Persist)</option>
+                    <option value="other">📋 其他 (Other)</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-2">命令</label>
+                <textarea id="template-command" rows="4" placeholder="net localgroup administrators"
+                          class="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all font-mono"></textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-2">描述（可选）</label>
+                <input type="text" id="template-description" placeholder="枚举本地管理员组成员"
+                       class="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-4 h-10 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all">
+            </div>
+        </div>
+
+        <div class="px-6 pb-6 flex gap-3">
+            <button onclick="saveTemplate()" class="flex-1 h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors">
+                <i class="fa-solid fa-save mr-2"></i>保存模板
+            </button>
+            <button onclick="hideAddTemplateModal()" class="px-6 h-11 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium rounded-xl transition-colors">
+                取消
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function showAddTemplateModal() {
+    document.getElementById('add-template-modal').classList.remove('hidden');
+}
+
+function hideAddTemplateModal() {
+    document.getElementById('add-template-modal').classList.add('hidden');
+}
+
+function saveTemplate() {
+    const data = {
+        name: document.getElementById('template-name').value,
+        category: document.getElementById('template-category').value,
+        command: document.getElementById('template-command').value,
+        description: document.getElementById('template-description').value
+    };
+
+    if (!data.name || !data.command) {
+        showToast('请填写名称和命令', 'error');
+        return;
+    }
+
+    fetch('/api/templates', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.success) {
+            showToast('模板已保存', 'success');
+            location.reload();
+        } else {
+            showToast('失败: ' + (result.error || ''), 'error');
+        }
+    })
+    .catch(err => {
+        console.error('Failed:', err);
+        showToast('错误: ' + err, 'error');
+    });
+}
+
+function deleteTemplate(id) {
+    if (!confirm('确认删除此模板？')) return;
+
+    fetch(`/api/templates/${id}`, {
+        method: 'DELETE'
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.success) {
+            showToast('模板已删除', 'success');
+            location.reload();
+        } else {
+            showToast('失败: ' + (result.error || ''), 'error');
+        }
+    })
+    .catch(err => {
+        console.error('Failed:', err);
+        showToast('错误: ' + err, 'error');
+    });
+}
+
+function useTemplate(command) {
+    // Copy to clipboard
+    navigator.clipboard.writeText(command).then(() => {
+        showToast('命令已复制到剪贴板', 'success');
+    }).catch(() => {
+        showToast('复制失败，请手动选择', 'error');
+    });
+}
+</script>
+{{end}}

@@ -1,0 +1,15 @@
+{
+  "name": "apple",
+  "description": "Mimics Apple services traffic",
+  "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+  "beacon_uri": "/library/test/success.html",
+  "method": "GET",
+  "headers": {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Connection": "keep-alive"
+  },
+  "sleep": 25,
+  "jitter": 20
+}

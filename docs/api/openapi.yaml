@@ -1,0 +1,609 @@
+openapi: 3.0.3
+info:
+  title: ForgeC2 Command & Control API
+  description: |
+    ForgeC2 is a professional-grade command and control framework for red team operations.
+    
+    ## Authentication
+    All API endpoints require authentication unless otherwise noted.
+    Use Bearer token authentication with the `/api/auth/login` endpoint.
+    
+    ## Rate Limiting
+    API requests are limited to 100 requests per minute per IP address.
+    
+    ## WebSocket
+    Real-time communication is available via WebSocket endpoints:
+    - `/ws/beacon` - Agent beacon communication
+    - `/ws/chat` - Operator chat system
+    
+  version: 2.0.0
+  contact:
+    name: ForgeC2 Support
+    email: support@forgec2.io
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://c2.example.com
+    description: Production server
+
+paths:
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login and obtain access token
+      description: Authenticate user and receive JWT token for API access
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  format: password
+                  example: admin
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: JWT access token
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /api/agents:
+    get:
+      tags: [Agents]
+      summary: List all agents
+      description: Retrieve a list of all connected agents with optional filters
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [online, offline]
+        - name: listener_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Agent'
+    
+    post:
+      tags: [Agents]
+      summary: Create agent (internal use)
+      description: Register a new agent (typically called by agent beacon)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentCreate'
+      responses:
+        '201':
+          description: Agent created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+  
+  /api/agents/{agent_id}:
+    get:
+      tags: [Agents]
+      summary: Get agent details
+      description: Retrieve detailed information about a specific agent
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '404':
+          description: Agent not found
+    
+    delete:
+      tags: [Agents]
+      summary: Delete agent
+      description: Remove an agent from the system
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Agent deleted
+  
+  /api/agents/{agent_id}/tasks:
+    get:
+      tags: [Tasks]
+      summary: List agent tasks
+      description: Retrieve all tasks for a specific agent
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, completed, failed]
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+    
+    post:
+      tags: [Tasks]
+      summary: Create task
+      description: Create a new task for an agent
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreate'
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+  
+  /api/tasks/{task_id}:
+    get:
+      tags: [Tasks]
+      summary: Get task details
+      description: Retrieve detailed information about a specific task
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+  
+  /api/listeners:
+    get:
+      tags: [Listeners]
+      summary: List all listeners
+      description: Retrieve all configured listeners
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Listener'
+    
+    post:
+      tags: [Listeners]
+      summary: Create listener
+      description: Create a new listener configuration
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListenerCreate'
+      responses:
+        '201':
+          description: Listener created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Listener'
+  
+  /api/credentials:
+    get:
+      tags: [Credentials]
+      summary: List all credentials
+      description: Retrieve all collected credentials
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Credential'
+  
+  /api/audit:
+    get:
+      tags: [Audit]
+      summary: List audit logs
+      description: Retrieve audit log entries
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLog'
+  
+  /api/report/generate:
+    post:
+      tags: [Reports]
+      summary: Generate report
+      description: Generate a comprehensive report
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                date_range:
+                  type: object
+                  properties:
+                    start:
+                      type: string
+                      format: date
+                    end:
+                      type: string
+                      format: date
+                format:
+                  type: string
+                  enum: [html, json, markdown]
+                sections:
+                  type: array
+                  items:
+                    type: string
+                    enum: [agents, tasks, credentials, vulnerabilities, ioc]
+      responses:
+        '200':
+          description: Report generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  download_url:
+                    type: string
+  
+  /ws/beacon:
+    get:
+      tags: [WebSocket]
+      summary: Agent beacon WebSocket
+      description: |
+        WebSocket endpoint for agent beacon communication.
+        Supports real-time command dispatch and result collection.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: agent_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '101':
+          description: Switching protocols
+  
+  /ws/chat:
+    get:
+      tags: [WebSocket]
+      summary: Operator chat WebSocket
+      description: |
+        WebSocket endpoint for real-time operator chat.
+        Supports channels, direct messages, and file sharing.
+      security:
+        - BearerAuth: []
+      responses:
+        '101':
+          description: Switching protocols
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+    
+    Agent:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique agent identifier (UUID)
+        hostname:
+          type: string
+        username:
+          type: string
+        os:
+          type: string
+          example: Windows 10 Pro
+        arch:
+          type: string
+          example: amd64
+        ip:
+          type: string
+        last_seen:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [online, offline]
+        listener_id:
+          type: integer
+        parent_id:
+          type: string
+          description: Parent agent ID (for P2P chaining)
+        p2p_mode:
+          type: string
+          enum: [smb, tcp, ""]
+        version:
+          type: string
+        pid:
+          type: integer
+        process_name:
+          type: string
+        integrity:
+          type: string
+          enum: [Low, Medium, High, System]
+        elevated:
+          type: boolean
+        domain:
+          type: string
+        current_interval:
+          type: integer
+          description: Sleep interval in seconds
+        current_jitter:
+          type: integer
+          description: Jitter percentage
+    
+    AgentCreate:
+      type: object
+      required: [id, hostname, username, os, ip]
+      properties:
+        id:
+          type: string
+        hostname:
+          type: string
+        username:
+          type: string
+        os:
+          type: string
+        arch:
+          type: string
+        ip:
+          type: string
+    
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+        agent_id:
+          type: string
+        type:
+          type: string
+          enum: [shell, screenshot, ps, ls, delete, read, upload, download, kill, keylogger_start, keylogger_stop, suspend, resume, killproc, clipboard_get, clipboard_set, find, reg_query, reg_set, elevate, screen_stream_start, screen_stream_stop]
+        command:
+          type: string
+          description: Primary command or path
+        shell:
+          type: string
+          description: Shell choice or secondary data
+        status:
+          type: string
+          enum: [pending, completed, failed]
+        result:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    
+    TaskCreate:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [shell, screenshot, ps, ls, delete, read, upload, download, kill]
+        command:
+          type: string
+        shell:
+          type: string
+        path:
+          type: string
+    
+    Listener:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        protocol:
+          type: string
+          enum: [http, https, ws, wss]
+        host:
+          type: string
+        port:
+          type: integer
+        profile:
+          type: string
+          description: Malleable profile name
+        status:
+          type: string
+          enum: [active, inactive]
+        created_at:
+          type: string
+          format: date-time
+    
+    ListenerCreate:
+      type: object
+      required: [name, protocol, host, port]
+      properties:
+        name:
+          type: string
+        protocol:
+          type: string
+          enum: [http, https, ws, wss]
+        host:
+          type: string
+        port:
+          type: integer
+        profile:
+          type: string
+    
+    Credential:
+      type: object
+      properties:
+        id:
+          type: integer
+        agent_id:
+          type: string
+        source:
+          type: string
+          example: mimikatz
+        username:
+          type: string
+        password:
+          type: string
+        hash:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        user:
+          type: string
+        action:
+          type: string
+        details:
+          type: string
+        ip_address:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        details:
+          type: string

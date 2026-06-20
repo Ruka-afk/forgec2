@@ -198,7 +198,10 @@ ForgeC2 支持父子 Agent 拓扑，适用于网络隔离环境：
 - [x] 多监听器支持
 - [x] 安全审计（12 项修复）
 - [ ] 增强持久化选项
-- [ ] 多用户 / RBAC
+- [x] 多用户 / RBAC（admin/operator/viewer 角色）
+- [x] 多用户协作（聊天、在线状态、Agent 锁定）
+- [x] 全局搜索（Agent / 任务 / 监听器）
+- [x] CDN 无关性 —— Tailwind CDN 被屏蔽时 CSS 降级
 - [ ] macOS Agent
 - [ ] EDR 规避模块
 

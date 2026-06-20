@@ -5,28 +5,60 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}}</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
+    <!-- Critical layout fallback (when Tailwind CDN is blocked) -->
     <style>
-        body { font-family: 'Inter', system-ui, sans-serif; }
+        /* fallback: ensure basic flex layout works even without Tailwind */
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .flex-1 { flex: 1 1 0%; }
+        .h-screen { height: 100vh; }
+        .overflow-hidden { overflow: hidden; }
+        .overflow-auto { overflow: auto; }
+        .hidden { display: none; }
+        .w-56 { width: 14rem; }
+        .fixed { position: fixed; }
+        .bg-white { background-color: #ffffff; }
+        .bg-slate-100 { background-color: #f1f5f9; }
+        .border-r { border-right: 1px solid #e2e8f0; }
+        .border-b { border-bottom: 1px solid #e2e8f0; }
+        .border-t { border-top: 1px solid #e2e8f0; }
+        .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .text-slate-800 { color: #1e293b; }
+        .text-slate-600 { color: #475569; }
+        .text-slate-500 { color: #64748b; }
+        .text-sm { font-size: 0.875rem; }
+        .p-4 { padding: 1rem; }
+        .px-4 { padding-left: 1rem; padding-right: 1rem; }
+        .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+        .h-12 { height: 3rem; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .gap-x-4 { column-gap: 1rem; }
+        .max-w-7xl { max-width: 80rem; }
+        .mx-auto { margin-left: auto; margin-right: auto; }
+    </style>
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; font-size: 14px; }
         .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
 
         .nav-active {
             background-color: #e0e7ff;
             color: #4338ca;
-            border-left: 3px solid #6366f1;
+            border-left: 2px solid #6366f1;
         }
 
         .metric-card {
-            transition: all 0.2s ease;
+            transition: all 0.15s ease;
         }
         .metric-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
         }
 
         .section-header {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             letter-spacing: 0.5px;
             text-transform: uppercase;
             font-weight: 600;
@@ -34,7 +66,7 @@
         }
 
         .nav-section {
-            margin-bottom: 2px;
+            margin-bottom: 1px;
         }
 
         .section-header.collapsed + .nav-section {
@@ -48,20 +80,54 @@
         .section-header.collapsed .fa-chevron-down {
             transform: rotate(-90deg);
         }
+
+        /* Mobile sidebar */
+        .mobile-sidebar {
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+        }
+        .mobile-sidebar.open {
+            transform: translateX(0);
+        }
+        .mobile-overlay {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .mobile-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        @media (max-width: 768px) {
+            .desktop-sidebar {
+                display: none;
+            }
+            .main-content {
+                margin-left: 0 !important;
+            }
+        }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800">
+<!-- Mobile overlay -->
+<div id="mobile-overlay" class="mobile-overlay fixed inset-0 bg-black/50 z-40 md:hidden" onclick="toggleMobileSidebar()"></div>
+
+<!-- Mobile menu button -->
+<button id="mobile-menu-btn" class="md:hidden fixed top-4 left-4 z-50 w-10 h-10 bg-white rounded-xl shadow-lg flex items-center justify-center" onclick="toggleMobileSidebar()">
+    <i class="fa-solid fa-bars text-slate-700"></i>
+</button>
+
 <div class="flex h-screen overflow-hidden">
-    <!-- 左侧边栏（浅色） -->
-    <div class="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm">
-        <div class="p-6 border-b border-slate-200">
-            <div class="flex items-center gap-x-3">
-                <div class="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center">
-                    <i class="fa-solid fa-shield-halved text-white text-2xl"></i>
+    <!-- 左侧边栏（浅色）- Desktop -->
+    <div class="desktop-sidebar w-56 bg-white border-r border-slate-200 flex flex-col shadow-sm">
+        <div class="px-4 py-3 border-b border-slate-200">
+            <div class="flex items-center gap-x-2">
+                <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+                    <i class="fa-solid fa-shield-halved text-white text-lg"></i>
                 </div>
                 <div>
-                    <span class="font-semibold text-2xl tracking-tighter text-slate-900">Forge</span>
-                    <span class="font-semibold text-2xl tracking-tighter text-indigo-600">C2</span>
+                    <span class="font-bold text-lg tracking-tight text-slate-900">Forge</span>
+                    <span class="font-bold text-lg tracking-tight text-indigo-600">C2</span>
                 </div>
             </div>
             <div class="text-[10px] text-slate-500 mt-0.5 pl-1">PROFESSIONAL RED TEAM FRAMEWORK</div>
@@ -70,93 +136,132 @@
         <div class="p-3 flex-1 overflow-auto">
             <!-- Sidebar search / filter (UX refinement) -->
             <div class="px-2 pb-2">
-                <input id="nav-search" type="text" placeholder="搜索菜单..." 
-                       class="w-full bg-slate-100 border border-slate-200 text-xs rounded-lg px-3 py-1 focus:outline-none focus:border-indigo-300"
-                       oninput="filterNav(this.value)">
+                <div class="relative">
+                    <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input id="nav-search" type="text" placeholder="搜索菜单..." 
+                           class="w-full bg-slate-100 border border-slate-200 text-xs rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all"
+                           oninput="filterNav(this.value)">
+                </div>
             </div>
-            <nav class="space-y-1 text-sm" id="sidebar-nav">
+            <nav class="space-y-0.5 text-[13px]" id="sidebar-nav">
                 <!-- 核心 -->
-                <div class="section-header px-4 pt-3 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
+                <div class="section-header px-3 pt-2 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
                     <i class="fa-solid fa-chevron-down w-3 text-[10px] transition-transform"></i>
                     <span>核心</span>
                 </div>
                 <div class="nav-section">
-                    <a href="/dashboard" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "dashboard"}}nav-active{{end}}">
-                        <i class="fa-solid fa-chart-line w-4"></i>
+                    <a href="/dashboard" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "dashboard"}}nav-active{{end}}">
+                        <i class="fa-solid fa-chart-line w-4 text-center"></i>
                         <span>控制台</span>
                     </a>
-                    <a href="/topology" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "topology"}}nav-active{{end}}">
-                        <i class="fa-solid fa-project-diagram w-4"></i>
+                    <a href="/topology" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "topology"}}nav-active{{end}}">
+                        <i class="fa-solid fa-project-diagram w-4 text-center"></i>
                         <span>网络拓扑</span>
                     </a>
-                    <a href="/agents" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "agents"}}nav-active{{end}}">
-                        <i class="fa-solid fa-users w-4"></i>
+                    <a href="/agents" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "agents"}}nav-active{{end}}">
+                        <i class="fa-solid fa-users w-4 text-center"></i>
                         <span class="flex-1">Agent 管理</span>
                         {{if .OnlineCount}}<span class="ml-1 px-1.5 py-px text-[10px] leading-none rounded bg-emerald-100 text-emerald-700 font-mono">{{.OnlineCount}}</span>{{end}}
                     </a>
                 </div>
 
                 <!-- 生成与接入 -->
-                <div class="section-header px-4 pt-3 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
+                <div class="section-header px-3 pt-2 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
                     <i class="fa-solid fa-chevron-down w-3 text-[10px] transition-transform"></i>
                     <span>生成与接入</span>
                 </div>
                 <div class="nav-section">
-                    <a href="/generate" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "generate"}}nav-active{{end}}">
-                        <i class="fa-solid fa-magic w-4"></i>
+                    <a href="/generate" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "generate"}}nav-active{{end}}">
+                        <i class="fa-solid fa-magic w-4 text-center"></i>
                         <span>生成 Agent</span>
                     </a>
-                    <a href="/listeners" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "listeners"}}nav-active{{end}}">
-                        <i class="fa-solid fa-plug w-4"></i>
+                    <a href="/listeners" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "listeners"}}nav-active{{end}}">
+                        <i class="fa-solid fa-plug w-4 text-center"></i>
                         <span class="flex-1">监听器</span>
                         {{if .ListenerCount}}<span class="ml-1 px-1.5 py-px text-[10px] leading-none rounded bg-indigo-100 text-indigo-700 font-mono">{{.ListenerCount}}</span>{{end}}
+                    </a>
+                    <a href="/builds" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "builds"}}nav-active{{end}}">
+                        <i class="fa-solid fa-hammer w-4 text-center"></i>
+                        <span>构建日志</span>
                     </a>
                 </div>
 
                 <!-- 后渗透行动 -->
-                <div class="section-header px-4 pt-3 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
+                <div class="section-header px-3 pt-2 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
                     <i class="fa-solid fa-chevron-down w-3 text-[10px] transition-transform"></i>
                     <span>后渗透行动</span>
                 </div>
                 <div class="nav-section">
-                    <a href="/tasks" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "tasks"}}nav-active{{end}}">
-                        <i class="fa-solid fa-history w-4"></i>
+                    <a href="/scanner" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "scanner"}}nav-active{{end}}">
+                        <i class="fa-solid fa-satellite-dish w-4 text-center"></i>
+                        <span>网络扫描</span>
+                    </a>
+                    <a href="/lateral" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "lateral"}}nav-active{{end}}">
+                        <i class="fa-solid fa-arrows-split-up-and-left w-4 text-center"></i>
+                        <span>横向移动</span>
+                    </a>
+                    <a href="/privesc" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "privesc"}}nav-active{{end}}">
+                        <i class="fa-solid fa-shield-virus w-4 text-center"></i>
+                        <span>提权侦查</span>
+                    </a>
+                    <a href="/tasks" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "tasks"}}nav-active{{end}}">
+                        <i class="fa-solid fa-history w-4 text-center"></i>
                         <span>任务历史</span>
                     </a>
-                    <a href="/credentials" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "credentials"}}nav-active{{end}}">
-                        <i class="fa-solid fa-key w-4"></i>
+                    <a href="/traffic" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "traffic"}}nav-active{{end}}">
+                        <i class="fa-solid fa-network-wired w-4 text-center"></i>
+                        <span>流量监控</span>
+                    </a>
+                    <a href="/credentials" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "credentials"}}nav-active{{end}}">
+                        <i class="fa-solid fa-key w-4 text-center"></i>
                         <span>凭据中心</span>
                     </a>
-                    <a href="/tokens" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "tokens"}}nav-active{{end}}">
-                        <i class="fa-solid fa-id-badge w-4"></i>
+                    <a href="/tokens" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "tokens"}}nav-active{{end}}">
+                        <i class="fa-solid fa-id-badge w-4 text-center"></i>
                         <span>Token 战利品库</span>
                     </a>
-                    <a href="/pivoting" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "pivoting"}}nav-active{{end}}">
-                        <i class="fa-solid fa-exchange-alt w-4"></i>
+                    <a href="/pivoting" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "pivoting"}}nav-active{{end}}">
+                        <i class="fa-solid fa-exchange-alt w-4 text-center"></i>
                         <span>隧道与代理</span>
                     </a>
-                    <a href="/loot" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "loot"}}nav-active{{end}}">
-                        <i class="fa-solid fa-trophy w-4"></i>
+                    <a href="/loot" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "loot"}}nav-active{{end}}">
+                        <i class="fa-solid fa-trophy w-4 text-center"></i>
                         <span>战利品</span>
+                    </a>
+                    <a href="/timeline" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "timeline"}}nav-active{{end}}">
+                        <i class="fa-solid fa-clock-rotate-left w-4 text-center"></i>
+                        <span>行动时间线</span>
+                    </a>
+                    <a href="/report" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "report"}}nav-active{{end}}">
+                        <i class="fa-solid fa-file-lines w-4 text-center"></i>
+                        <span>报告生成器</span>
+                    </a>
+                    <a href="/chat" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "chat"}}nav-active{{end}}">
+                        <i class="fa-solid fa-comments w-4 text-center"></i>
+                        <span>操作员聊天</span>
+                    </a>
+                    <a href="/templates" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "templates"}}nav-active{{end}}">
+                        <i class="fa-solid fa-file-circle-check w-4 text-center"></i>
+                        <span>命令模板</span>
                     </a>
                 </div>
 
                 <!-- 系统与审计 -->
-                <div class="section-header px-4 pt-3 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
+                <div class="section-header px-3 pt-2 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
                     <i class="fa-solid fa-chevron-down w-3 text-[10px] transition-transform"></i>
                     <span>系统与审计</span>
                 </div>
                 <div class="nav-section">
-                    <a href="/audit" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "audit"}}nav-active{{end}}">
-                        <i class="fa-solid fa-shield w-4"></i>
+                    <a href="/audit" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "audit"}}nav-active{{end}}">
+                        <i class="fa-solid fa-shield w-4 text-center"></i>
                         <span>安全审计</span>
                     </a>
-                    <a href="/users" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "users"}}nav-active{{end}}">
-                        <i class="fa-solid fa-users-gear w-4"></i>
+                    <a href="/users" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "users"}}nav-active{{end}}">
+                        <i class="fa-solid fa-users-gear w-4 text-center"></i>
                         <span>用户管理</span>
                     </a>
-                    <a href="/settings" class="flex items-center gap-x-3 px-4 py-2 rounded-xl hover:bg-slate-100 transition-colors {{if eq .ActiveNav "settings"}}nav-active{{end}}">
-                        <i class="fa-solid fa-cog w-4"></i>
+                    <a href="/settings" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "settings"}}nav-active{{end}}">
+                        <i class="fa-solid fa-cog w-4 text-center"></i>
                         <span>设置</span>
                     </a>
                 </div>
@@ -179,17 +284,75 @@
             </div>
         </div>
 
-        <div class="p-4 border-t border-slate-200 mt-auto text-xs text-slate-500">
-            ForgeC2 v1.2<br>
+        <!-- ═══════ 协作: 在线用户 ═══════ -->
+        <div class="px-4 py-3 border-t border-slate-200">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">在线用户</span>
+                <span id="online-count" class="text-[10px] bg-slate-200 text-slate-500 px-1.5 rounded-full">0</span>
+            </div>
+            <div id="online-users" class="space-y-1 max-h-[200px] overflow-y-auto">
+                <div class="text-[11px] text-slate-400 italic">加载中...</div>
+            </div>
+        </div>
+
+        <div class="p-4 border-t border-slate-200 text-xs text-slate-500">
+            <div class="flex items-center justify-between">
+                <span>ForgeC2 v{{.ServerVersion}}</span>
+                <button onclick="toggleChat()" class="text-slate-400 hover:text-indigo-600 transition-colors relative" title="打开聊天">
+                    <i class="fa-solid fa-comment-dots"></i>
+                    <span id="chat-badge" class="hidden absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                </button>
+            </div>
             <span class="text-[10px]">专业红队 C2 框架</span>
+        </div>
+    </div>
+
+    <!-- Mobile Sidebar -->
+    <div id="mobile-sidebar" class="mobile-sidebar fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-2xl md:hidden">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <div class="flex items-center gap-x-3">
+                <div class="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center">
+                    <i class="fa-solid fa-shield-halved text-white text-2xl"></i>
+                </div>
+                <div>
+                    <span class="font-semibold text-2xl tracking-tighter text-slate-900">Forge</span>
+                    <span class="font-semibold text-2xl tracking-tighter text-indigo-600">C2</span>
+                </div>
+            </div>
+            <button onclick="toggleMobileSidebar()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100">
+                <i class="fa-solid fa-xmark text-slate-600"></i>
+            </button>
+        </div>
+        <div class="p-3 flex-1 overflow-auto" style="height: calc(100vh - 180px);">
+            <!-- Same nav content as desktop -->
+            <nav class="space-y-1 text-sm" id="mobile-sidebar-nav">
+                <!-- Will be cloned from desktop nav -->
+            </nav>
+        </div>
+    </div>
+
+    <!-- ═══════ 浮动聊天窗口 ═══════ -->
+    <div id="chat-window" class="hidden fixed bottom-4 right-4 z-50 w-80 h-96 bg-white border border-slate-200 rounded-3xl shadow-2xl flex flex-col overflow-hidden" style="box-shadow: 0 20px 60px rgba(0,0,0,0.2);">
+        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 flex items-center justify-between">
+            <span class="text-sm font-semibold text-white"><i class="fa-solid fa-comments mr-2"></i>作战聊天</span>
+            <button onclick="toggleChat()" class="text-white/70 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-3 space-y-2 text-sm bg-slate-50">
+            <div class="text-center text-xs text-slate-400 py-4">正在连接...</div>
+        </div>
+        <div class="p-3 border-t border-slate-200 bg-white">
+            <form onsubmit="sendChat(event)" class="flex gap-x-2">
+                <input id="chat-input" type="text" placeholder="输入消息..." class="flex-1 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
+                <button type="submit" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm"><i class="fa-solid fa-paper-plane"></i></button>
+            </form>
         </div>
     </div>
 
     <!-- 主内容区 -->
     <div class="flex-1 flex flex-col overflow-hidden">
         <!-- 顶部栏 -->
-        <div class="h-14 border-b border-slate-200 bg-white flex items-center justify-between px-6 shadow-sm">
-            <div class="flex items-center gap-x-4 flex-1">
+        <div class="h-12 border-b border-slate-200 bg-white flex items-center justify-between px-4 shadow-sm">
+            <div class="flex items-center gap-x-3 flex-1">
                 <div class="text-sm font-medium text-slate-600">{{.Title}}</div>
 
                 <!-- Global Search -->
@@ -204,9 +367,12 @@
             </div>
 
             <div class="flex items-center gap-x-4">
-                <div class="flex items-center bg-slate-100 rounded-full px-3 py-1 text-xs">
-                    <i class="fa-solid fa-user-shield mr-2 text-indigo-600"></i>
+                <div class="flex items-center bg-slate-100 rounded-full px-3 py-1 text-xs gap-x-1.5">
+                    <i class="fa-solid fa-user-shield text-indigo-600"></i>
                     <span class="text-slate-700">{{.UserDisplayName}}</span>
+                    {{if eq .UserRole "admin"}}<span class="bg-indigo-200 text-indigo-800 px-1.5 py-0.5 rounded text-[9px] font-medium">ADMIN</span>
+                    {{else if eq .UserRole "viewer"}}<span class="bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded text-[9px] font-medium">VIEW</span>
+                    {{else}}<span class="bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded text-[9px] font-medium">OP</span>{{end}}
                 </div>
                 <form method="POST" action="/logout" class="inline">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
@@ -218,8 +384,22 @@
             </div>
         </div>
 
+        <!-- 更新可用通知横幅 -->
+        <div id="update-banner" class="hidden bg-gradient-to-r from-sky-500 to-indigo-600 text-white text-xs flex items-center justify-between px-6 py-2">
+            <div class="flex items-center gap-x-2">
+                <i class="fa-solid fa-circle-up text-sm"></i>
+                <span>新版本 <strong class="update-version"></strong> 已可用 (当前: {{.ServerVersion}})</span>
+            </div>
+            <div class="flex items-center gap-x-3">
+                <a class="update-download" href="#" target="_blank" class="text-white/90 hover:text-white underline">下载更新</a>
+                <button onclick="this.closest('#update-banner').classList.add('hidden')" class="text-white/70 hover:text-white">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+
         <!-- 页面内容 -->
-        <div class="flex-1 overflow-auto p-6 bg-slate-100">
+        <div class="flex-1 overflow-auto p-4 bg-slate-100">
             {{.Content}}
         </div>
     </div>
@@ -231,9 +411,19 @@
     function showToast(message, type = 'success') {
         const container = document.getElementById('toast-container');
         const toast = document.createElement('div');
-        toast.className = `px-4 py-3 rounded-2xl shadow-xl flex items-center gap-x-3 text-sm border ${type === 'success' ? 'bg-emerald-100 border-emerald-300 text-emerald-700' : 'bg-red-100 border-red-300 text-red-700'}`;
+        const colorMap = {
+            'success': 'bg-emerald-100 border-emerald-300 text-emerald-700',
+            'error': 'bg-red-100 border-red-300 text-red-700',
+            'info': 'bg-sky-100 border-sky-300 text-sky-700',
+        };
+        const iconMap = {
+            'success': 'fa-check-circle',
+            'error': 'fa-exclamation-circle',
+            'info': 'fa-circle-info',
+        };
+        toast.className = `px-4 py-3 rounded-2xl shadow-xl flex items-center gap-x-3 text-sm border ${colorMap[type] || colorMap.success}`;
         toast.innerHTML = `
-                <i class="fa-solid ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+                <i class="fa-solid ${iconMap[type] || iconMap.success}"></i>
                 <span>${message}</span>
             `;
         container.appendChild(toast);
@@ -244,15 +434,139 @@
         }, 2800);
     }
 
+    // ─── 多用户协作: 在线用户 / 聊天 / 锁定 ───
+
+    function updateOnlineUsers(users) {
+        const container = document.getElementById('online-users');
+        const count = document.getElementById('online-count');
+        if (!container) return;
+        if (count) count.textContent = (users && users.length) || 0;
+        if (!users || users.length === 0) {
+            container.innerHTML = '<div class="text-[11px] text-slate-400 italic">无其他在线用户</div>';
+            return;
+        }
+        const currentUser = '{{.UserDisplayName}}';
+        container.innerHTML = users.map(u => {
+            const isMe = u.username === currentUser;
+            const roleIcon = u.role === 'admin' ? 'fa-crown text-amber-500' :
+                           u.role === 'viewer' ? 'fa-eye text-slate-400' :
+                           'fa-user text-sky-500';
+            const badge = u.role === 'admin' ? '<span class="text-[8px] bg-indigo-100 text-indigo-700 px-1 rounded">ADMIN</span>' :
+                         u.role === 'viewer' ? '<span class="text-[8px] bg-slate-100 text-slate-500 px-1 rounded">VIEW</span>' :
+                         '<span class="text-[8px] bg-sky-100 text-sky-600 px-1 rounded">OP</span>';
+            const nameClass = isMe ? 'text-indigo-600 font-semibold' : 'text-slate-700';
+            const selfLabel = isMe ? '<span class="text-[8px] text-indigo-400 ml-0.5">(你)</span>' : '';
+            const pageInfo = u.current_page && !isMe
+                ? `<span class="text-[9px] text-slate-400 block truncate pl-4">${escapeHtml(u.current_page)}</span>`
+                : '';
+            return `<div class="flex items-center gap-x-1.5 text-[11px]"><span class="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0"></span><i class="fa-solid ${roleIcon} text-[10px] w-3 text-center shrink-0"></i><span class="${nameClass} truncate max-w-[80px]">${u.username}${selfLabel}</span>${badge}${pageInfo}</div>`;
+        }).join('');
+    }
+
+    function toggleChat() {
+        const w = document.getElementById('chat-window');
+        w.classList.toggle('hidden');
+        if (!w.classList.contains('hidden')) {
+            document.getElementById('chat-badge').classList.add('hidden');
+            if (document.getElementById('chat-messages').children.length <= 1) {
+                loadChatHistory();
+            }
+        }
+    }
+
+    function loadChatHistory() {
+        fetch('/api/collab/chat').then(r => r.json()).then(d => {
+            if (d.success && d.messages) {
+                const el = document.getElementById('chat-messages');
+                el.innerHTML = '';
+                d.messages.forEach(m => appendChatMessage(m, m.role || ''));
+                el.scrollTop = el.scrollHeight;
+            }
+        }).catch(() => {});
+    }
+
+    function appendChatMessage(msg, role) {
+        const el = document.getElementById('chat-messages');
+        if (!el) return;
+        // Show badge when chat is closed and message is from someone else
+        const chatWin = document.getElementById('chat-window');
+        if (chatWin && chatWin.classList.contains('hidden') && msg.username !== '[系统]' && msg.username !== '{{.UserDisplayName}}') {
+            const badge = document.getElementById('chat-badge');
+            if (badge) badge.classList.remove('hidden');
+        }
+        if (el.children.length === 1 && el.children[0].textContent.includes('连接')) {
+            el.innerHTML = '';
+        }
+        const time = msg.created_at ? new Date(msg.created_at).toLocaleTimeString() : '';
+        const div = document.createElement('div');
+        const isSystem = msg.username === '[系统]';
+        if (isSystem) {
+            div.className = 'bg-slate-100 rounded-xl px-3 py-2 border border-slate-200';
+            div.innerHTML = `<div class="flex items-center gap-2 text-[10px] text-slate-500"><i class="fa-solid fa-circle-info text-slate-400"></i><span>${escapeHtml(msg.content)}</span><span class="ml-auto text-[9px] text-slate-400">${time}</span></div>`;
+        } else {
+            const roleColor = role === 'admin' ? 'text-amber-600' : role === 'viewer' ? 'text-slate-500' : 'text-indigo-600';
+            div.className = 'bg-white rounded-xl px-3 py-2 border border-slate-100';
+            div.innerHTML = `<div class="flex items-center justify-between"><span class="text-xs font-semibold ${roleColor}">${escapeHtml(msg.username)}</span><span class="text-[9px] text-slate-400">${time}</span></div><div class="text-xs text-slate-700 mt-0.5">${escapeHtml(msg.content)}</div>`;
+        }
+        el.appendChild(div);
+        el.scrollTop = el.scrollHeight;
+    }
+
+    function sendChat(e) {
+        e.preventDefault();
+        const input = document.getElementById('chat-input');
+        const content = input.value.trim();
+        if (!content) return;
+        input.value = '';
+        const fd = new FormData();
+        fd.append('content', content);
+        fetch('/api/collab/chat', { method: 'POST', headers: { 'X-CSRF-Token': getCSRFToken() }, body: fd }).catch(() => {});
+    }
+
+    function updateAgentLockUI(agentId, username) {
+        const indicator = document.getElementById('lock-indicator-' + agentId);
+        if (!indicator) return;
+        if (username) {
+            indicator.innerHTML = `<span class="text-xs text-amber-600"><i class="fa-solid fa-lock mr-1"></i>${username}</span>`;
+        } else {
+            indicator.innerHTML = '';
+        }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    var _ws = null;  // global WS reference
+
+    function wsSend(data) {
+        if (_ws && _ws.readyState === WebSocket.OPEN) {
+            _ws.send(JSON.stringify(data));
+        }
+    }
+
+    function sendWSPageUpdate() {
+        const path = window.location.pathname;
+        wsSend({ type: 'page_update', page: path });
+        // If on agent detail page, also send agent_view
+        const m = path.match(/^\/agents\/([a-fA-F0-9-]+)/);
+        if (m) {
+            wsSend({ type: 'agent_view', agent_id: m[1] });
+        }
+    }
+
     function connectWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
+        _ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
 
-        ws.onopen = function() {
-            console.log('WebSocket connected');
+        _ws.onopen = function() {
+            sendWSPageUpdate();
         };
 
-        ws.onmessage = function(event) {
+        _ws.onmessage = function(event) {
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'agent_online') {
@@ -266,7 +580,6 @@
                     const status = data.status || '';
                     const cmd = (data.command || '').substring(0, 50);
 
-                    // Silent task types – file browser handles polling internally
                     if (taskType === 'ls') return;
 
                     if (status === 'completed') {
@@ -284,18 +597,53 @@
                     } else if (status === 'failed') {
                         showToast(`任务失败 [${taskType}]: ${cmd}`, 'error');
                     }
+                } else if (data.type === 'update_available') {
+                    showToast(`新版本可用: ${data.latest} (当前: ${data.current})`, 'info');
+                    const banner = document.getElementById('update-banner');
+                    if (banner) {
+                        banner.classList.remove('hidden');
+                        banner.querySelector('.update-version').textContent = data.latest;
+                        banner.querySelector('.update-download').href = data.download_url || '#';
+                    }
+                } else if (data.type === 'user_online' || data.type === 'user_offline') {
+                    updateOnlineUsers(data.users);
+                    if (data.type === 'user_online') {
+                        data.users.forEach(u => {
+                            if (u.username !== '{{.UserDisplayName}}') {
+                                showToast(`${u.username} 上线`, 'info');
+                            }
+                        });
+                    } else if (data.users) {
+                        // no toast for offline to avoid spam
+                    }
+                } else if (data.type === 'chat') {
+                    appendChatMessage(data.message, data.message.role);
+                } else if (data.type === 'agent_locked') {
+                    showToast(`Agent ${data.agent_id.substring(0,8)} 已被 ${data.username} 锁定`, 'info');
+                    updateAgentLockUI(data.agent_id, data.username);
+                    // Update lock indicators on agent list
+                    const lockEl = document.querySelector('#lock-col-' + data.agent_id + ' .lock-text');
+                    if (lockEl) lockEl.textContent = '🔒 ' + data.username;
+                } else if (data.type === 'agent_unlocked') {
+                    showToast(`Agent ${data.agent_id.substring(0,8)} 已解锁`, 'info');
+                    updateAgentLockUI(data.agent_id, null);
+                    const lockEl = document.querySelector('#lock-col-' + data.agent_id + ' .lock-text');
+                    if (lockEl) lockEl.textContent = '';
+                } else if (data.type === 'user_viewing_agent') {
+                    // Dispatch a custom event so agent detail page can react
+                    window.dispatchEvent(new CustomEvent('collab:viewing_agent', { detail: data }));
                 }
             } catch (e) {
                 console.error('Failed to parse WebSocket message:', e);
             }
         };
 
-        ws.onerror = function(error) {
+        _ws.onerror = function(error) {
             console.error('WebSocket error:', error);
         };
 
-        ws.onclose = function() {
-            console.log('WebSocket closed, reconnecting...');
+        _ws.onclose = function() {
+            _ws = null;
             setTimeout(connectWebSocket, 5000);
         };
     }
@@ -305,9 +653,18 @@
         connectWebSocket();
 
         const csrfToken = getCookie('csrf_token');
-        if (csrfToken) {
+        if (csrfToken && typeof htmx !== 'undefined' && htmx.config && htmx.config.headers) {
             htmx.config.headers['X-CSRF-Token'] = csrfToken;
         }
+    });
+
+    // Send WS page update on HTMX navigation
+    document.addEventListener('htmx:afterSettle', function() {
+        sendWSPageUpdate();
+    });
+    // Also on popstate (browser back/forward)
+    window.addEventListener('popstate', function() {
+        setTimeout(sendWSPageUpdate, 100);
     });
 
     function getCookie(name) {
@@ -330,14 +687,15 @@
             const method = (init.method || 'GET').toUpperCase();
             if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
                 let headers = init.headers || {};
-                const hasCSRF = headers['X-CSRF-Token'] || headers['x-csrf-token'] ||
-                                (headers instanceof Headers && headers.has('X-CSRF-Token'));
+                const hasCSRF = headers && (headers['X-CSRF-Token'] || headers['x-csrf-token'] ||
+                                (headers instanceof Headers && headers.has('X-CSRF-Token')));
                 if (!hasCSRF) {
                     const token = window.getCSRFToken ? window.getCSRFToken() : '';
                     if (token) {
                         if (headers instanceof Headers) {
                             headers.set('X-CSRF-Token', token);
                         } else {
+                            headers = headers || {};
                             headers['X-CSRF-Token'] = token;
                         }
                         init.headers = headers;
@@ -464,6 +822,30 @@
 <script>
 var _modalAgentId = '';
 var _modalTaskId = 0;
+
+// Mobile sidebar toggle
+function toggleMobileSidebar() {
+    const sidebar = document.getElementById('mobile-sidebar');
+    const overlay = document.getElementById('mobile-overlay');
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('active');
+    
+    // Clone nav from desktop if not already cloned
+    const mobileNav = document.getElementById('mobile-sidebar-nav');
+    if (mobileNav.children.length === 0) {
+        const desktopNav = document.getElementById('sidebar-nav');
+        if (desktopNav) {
+            mobileNav.innerHTML = desktopNav.innerHTML;
+        }
+    }
+}
+
+// Close mobile sidebar on link click
+document.addEventListener('click', function(e) {
+    if (e.target.closest('#mobile-sidebar-nav a')) {
+        toggleMobileSidebar();
+    }
+});
 
 function showRecentTaskModal(el) {
     const taskId = el.getAttribute('data-task-id');

@@ -3,14 +3,13 @@
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-3xl font-semibold tracking-tight text-slate-900">任务历史</h1>
-            <p class="text-slate-500">所有 Agent 执行过的任务记录</p>
+            <p class="text-slate-500 text-sm mt-1">所有 Agent 执行过的任务记录 · 共 <span class="font-semibold text-slate-700">{{.Total}}</span> 个任务</p>
         </div>
         <div class="flex items-center gap-3">
             <span id="live-status" class="text-xs text-slate-400 font-mono hidden">
                 <i class="fa-solid fa-circle text-emerald-500 fa-beat mr-1" style="font-size:6px"></i> 实时
             </span>
-            <span class="text-sm text-slate-500 font-mono">共 {{.Total}} 个任务</span>
-            <button onclick="exportTasks()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 h-9 rounded-xl text-sm font-medium flex items-center gap-x-2">
+            <button onclick="exportTasks()" class="px-4 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium flex items-center gap-x-2 transition-colors">
                 <i class="fa-solid fa-download"></i>
                 <span>导出 CSV</span>
             </button>
@@ -21,39 +20,42 @@
     <div class="bg-white border border-slate-200 rounded-2xl p-4 mb-4 shadow-sm">
         <form method="GET" action="/tasks" class="flex flex-wrap items-center gap-3">
             <div class="flex items-center gap-2">
-                <i class="fa-solid fa-filter text-slate-400 text-sm"></i>
-                <span class="text-sm font-medium text-slate-600">筛选</span>
+                <i class="fa-solid fa-filter text-indigo-500 text-sm"></i>
+                <span class="text-sm font-semibold text-slate-700">筛选</span>
             </div>
 
-            <input type="text" name="q" placeholder="搜索命令..." value="{{.FilterQuery}}"
-                   class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-9 w-44 focus:outline-none focus:border-indigo-300 font-mono">
+            <div class="flex-1 min-w-[200px] relative">
+                <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                <input type="text" name="q" placeholder="搜索命令..." value="{{.FilterQuery}}"
+                       class="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl pl-9 pr-3 h-10 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all font-mono">
+            </div>
 
-            <select name="type" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-9 focus:outline-none focus:border-indigo-300">
+            <select name="type" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-10 focus:outline-none focus:border-indigo-500 cursor-pointer">
                 <option value="">全部类型</option>
                 {{range .TaskTypes}}
                 <option value="{{.}}" {{if eq . $.FilterType}}selected{{end}}>{{.}}</option>
                 {{end}}
             </select>
 
-            <select name="status" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-9 focus:outline-none focus:border-indigo-300">
+            <select name="status" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-10 focus:outline-none focus:border-indigo-500 cursor-pointer">
                 <option value="">全部状态</option>
                 <option value="completed" {{if eq "completed" $.FilterStatus}}selected{{end}}>已完成</option>
                 <option value="pending" {{if eq "pending" $.FilterStatus}}selected{{end}}>等待中</option>
                 <option value="failed" {{if eq "failed" $.FilterStatus}}selected{{end}}>失败</option>
             </select>
 
-            <select name="agent" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-9 focus:outline-none focus:border-indigo-300 max-w-[200px]">
+            <select name="agent" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-10 focus:outline-none focus:border-indigo-500 max-w-[200px] cursor-pointer">
                 <option value="">全部 Agent</option>
                 {{range .Agents}}
                 <option value="{{.ID}}" {{if eq .ID $.FilterAgent}}selected{{end}}>{{.Hostname}} ({{.IP}})</option>
                 {{end}}
             </select>
 
-            <button type="submit" class="px-4 h-9 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium">
+            <button type="submit" class="px-4 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors">
                 <i class="fa-solid fa-search mr-1"></i> 筛选
             </button>
             {{if or .FilterQuery .FilterType .FilterStatus .FilterAgent}}
-            <a href="/tasks" class="px-4 h-9 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-medium flex items-center gap-x-1">
+            <a href="/tasks" class="px-4 h-10 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-medium flex items-center gap-x-1 transition-colors">
                 <i class="fa-solid fa-times"></i> 清除
             </a>
             {{end}}
@@ -67,6 +69,7 @@
                 <tr class="text-xs text-slate-500">
                     <th class="text-left py-3 px-4 font-normal">时间</th>
                     <th class="text-left py-3 px-4 font-normal">Agent</th>
+                    <th class="text-left py-3 px-4 font-normal">操作员</th>
                     <th class="text-left py-3 px-4 font-normal">类型</th>
                     <th class="text-left py-3 px-4 font-normal">命令</th>
                     <th class="text-left py-3 px-4 font-normal">结果</th>
@@ -86,6 +89,9 @@
                     <td class="py-3 px-4">
                         <div class="font-medium text-slate-900">{{if .Agent}}{{.Agent.Hostname}}{{else}}未知{{end}}</div>
                         <div class="text-xs text-slate-500">{{if .Agent}}{{.Agent.IP}}{{end}}</div>
+                    </td>
+                    <td class="py-3 px-4 text-xs text-slate-500 font-mono">
+                        {{if .CreatedBy}}{{.CreatedBy}}{{else}}—{{end}}
                     </td>
                     <td class="py-3 px-4">
                         <span class="inline-block px-2.5 py-1 text-xs rounded-2xl

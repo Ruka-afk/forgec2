@@ -1,0 +1,16 @@
+{
+  "name": "teams",
+  "description": "Mimics Microsoft Teams desktop app traffic",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.228 Safari/537.36 Teams/1.6.00.32462",
+  "beacon_uri": "/v1/users/ME/contacts",
+  "method": "GET",
+  "headers": {
+    "Accept": "application/json",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Language": "en-US,en;q=0.9",
+    "X-Ms-Client-Version": "1.6.00.32462",
+    "X-Ms-Client-Platform": "Windows"
+  },
+  "sleep": 20,
+  "jitter": 25
+}

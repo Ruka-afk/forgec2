@@ -1,0 +1,17 @@
+{
+  "name": "amazon",
+  "description": "Mimics Amazon AWS CDN traffic",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+  "beacon_uri": "/cdn/content/static/resource.js",
+  "method": "GET",
+  "headers": {
+    "Accept": "*/*",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Sec-Fetch-Dest": "script",
+    "Sec-Fetch-Mode": "no-cors",
+    "Sec-Fetch-Site": "cross-site"
+  },
+  "sleep": 20,
+  "jitter": 25
+}

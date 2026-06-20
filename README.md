@@ -198,7 +198,10 @@ The codebase has undergone a comprehensive security audit addressing 12 findings
 - [x] Multi-listener support
 - [x] Security audit (12 fixes)
 - [ ] Enhanced persistence options
-- [ ] Multi-user / RBAC
+- [x] Multi-user / RBAC (admin/operator/viewer roles)
+- [x] Multi-user collaboration (chat, online presence, agent locking)
+- [x] Global search across agents, tasks, listeners
+- [x] CDN independence — critical CSS fallback when Tailwind CDN is blocked
 - [ ] macOS agent
 - [ ] EDR evasion modules
 

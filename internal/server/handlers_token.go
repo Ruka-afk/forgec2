@@ -1,11 +1,9 @@
 package server
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -55,16 +53,7 @@ func (s *Server) handleTokenPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "token_content", data); err != nil {
-		slog.Error("Failed to render token content", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "token_content", data)
 }
 
 // handleGlobalTokensPage shows all tokens across all agents
@@ -102,16 +91,7 @@ func (s *Server) handleGlobalTokensPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "tokens_global_content", data); err != nil {
-		slog.Error("Failed to render global tokens content", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "tokens_global_content", data)
 }
 
 // ─────────────────────────────────────────────────────────────

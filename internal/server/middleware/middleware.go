@@ -151,10 +151,17 @@ func GenerateCSRFToken() string {
 func CSRFProtection() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Method == "GET" || c.Request.Method == "HEAD" {
-			if _, err := c.Cookie("csrf_token"); err != nil {
+			// Only generate CSRF token if not already present
+			_, err := c.Cookie("csrf_token")
+			if err != nil {
+				// No CSRF cookie, generate one
 				token := GenerateCSRFToken()
-				// Secure flag requires TLS; Gin handler has no access to TLS config, so keep false for now
-				c.SetCookie("csrf_token", token, CookieMaxAge, "/", "", false, false)
+				c.SetCookie("csrf_token", token, CookieMaxAge, "/", "", CookieSecure, false)
+				c.Set("csrf_token_value", token)
+			} else {
+				// CSRF cookie exists, use it
+				token, _ := c.Cookie("csrf_token")
+				c.Set("csrf_token_value", token)
 			}
 			c.Next()
 			return

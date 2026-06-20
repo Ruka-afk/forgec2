@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/server/middleware"
@@ -40,8 +41,13 @@ func (s *Server) handleUsersPage(c *gin.Context) {
 	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
 }
 
-// handleAddUser creates a new user
+// handleAddUser creates a new user (admin only)
 func (s *Server) handleAddUser(c *gin.Context) {
+	currentRole, _ := c.Get("user_role")
+	if currentRole != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		return
+	}
 	username := c.PostForm("username")
 	password := c.PostForm("password")
 	role := c.PostForm("role")
@@ -57,7 +63,7 @@ func (s *Server) handleAddUser(c *gin.Context) {
 	if role == "" {
 		role = "operator"
 	}
-	if role != "admin" && role != "operator" {
+	if role != "admin" && role != "operator" && role != "viewer" {
 		role = "operator"
 	}
 
@@ -122,6 +128,138 @@ func (s *Server) handleToggleUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("User %s", status)})
 }
 
+// handleKickUser disconnects a user's WebSocket connections (admin only)
+func (s *Server) handleKickUser(c *gin.Context) {
+	idStr := c.Param("id")
+	currentRole, _ := c.Get("user_role")
+	if currentRole != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		return
+	}
+
+	var target db.User
+	if err := s.db.First(&target, idStr).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// Disconnect all WS connections for this user
+	s.collab.mu.Lock()
+	kicked := 0
+	for conn, wc := range s.collab.wsConns {
+		if wc.username == target.Username {
+			wc.conn.Close()
+			delete(s.collab.wsConns, conn)
+			kicked++
+		}
+	}
+	online := s.onlineUserListLocked()
+	s.collab.mu.Unlock()
+
+	s.broadcastCollab(gin.H{"type": "user_offline", "users": online})
+
+	currentUser, _ := c.Get("user")
+	s.LogAuditRecord(c, "user_kick", "auth", currentUser.(string),
+		fmt.Sprintf("Kicked user %s (%d connections)", target.Username, kicked), true, nil)
+	slog.Info("User kicked", "username", target.Username, "by", currentUser, "connections", kicked)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Kicked %s (%d connections)", target.Username, kicked)})
+}
+
+// handleEditUser updates username/role (admin only)
+func (s *Server) handleEditUser(c *gin.Context) {
+	idStr := c.Param("id")
+	currentRole, _ := c.Get("user_role")
+	if currentRole != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		return
+	}
+
+	var user db.User
+	if err := s.db.First(&user, idStr).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	username := c.PostForm("username")
+	role := c.PostForm("role")
+
+	updates := make(map[string]interface{})
+	if username != "" && username != user.Username {
+		// Check uniqueness
+		var dup db.User
+		if s.db.Where("username = ?", username).First(&dup).Error == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
+			return
+		}
+		updates["username"] = username
+	}
+	if role != "" && role != user.Role {
+		if role != "admin" && role != "operator" && role != "viewer" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role"})
+			return
+		}
+		updates["role"] = role
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "No changes"})
+		return
+	}
+
+	s.db.Model(&user).Updates(updates)
+	currentUser, _ := c.Get("user")
+	s.LogAuditRecord(c, "user_edit", "auth", currentUser.(string),
+		fmt.Sprintf("Edited user %s: %v", user.Username, updates), true, nil)
+	slog.Info("User edited", "user_id", idStr, "updates", updates, "by", currentUser)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "User updated"})
+}
+
+// handleForceLogoutUser invalidates all sessions for a user (admin only)
+func (s *Server) handleForceLogoutUser(c *gin.Context) {
+	idStr := c.Param("id")
+	currentRole, _ := c.Get("user_role")
+	if currentRole != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		return
+	}
+
+	currentUser, _ := c.Get("user")
+	var target db.User
+	if err := s.db.First(&target, idStr).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	if currentUser == target.Username {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot force-logout yourself"})
+		return
+	}
+
+	// Set ForceLogoutAt to now — AuthRequired will reject tokens issued before this
+	now := time.Now()
+	s.db.Model(&target).Update("force_logout_at", now)
+
+	// Also disconnect WebSocket
+	s.collab.mu.Lock()
+	for conn, wc := range s.collab.wsConns {
+		if wc.username == target.Username {
+			wc.conn.Close()
+			delete(s.collab.wsConns, conn)
+		}
+	}
+	online := s.onlineUserListLocked()
+	s.collab.mu.Unlock()
+	s.broadcastCollab(gin.H{"type": "user_offline", "users": online})
+
+	s.LogAuditRecord(c, "user_force_logout", "auth", currentUser.(string),
+		fmt.Sprintf("Force logged out user %s", target.Username), true, nil)
+	slog.Info("User force logged out", "username", target.Username, "by", currentUser)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Force logged out %s", target.Username)})
+}
+
 // handleDeleteUser removes a user (admin only)
 func (s *Server) handleDeleteUser(c *gin.Context) {
 	idStr := c.Param("id")
@@ -145,7 +283,32 @@ func (s *Server) handleDeleteUser(c *gin.Context) {
 		return
 	}
 
-	s.db.Delete(&user)
+	// Use transaction to clean up associated data
+	tx := s.db.Begin()
+	if err := tx.Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
+		return
+	}
+
+	// Clean up agent locks held by this user
+	if err := tx.Where("user_id = ?", user.ID).Delete(&db.AgentLock{}).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clean up agent locks"})
+		return
+	}
+
+	// Delete the user
+	if err := tx.Delete(&user).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+		return
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		return
+	}
+
 	s.LogAuditRecord(c, "user_delete", "auth", currentUser.(string),
 		fmt.Sprintf("Deleted user %s", user.Username), true, nil)
 	slog.Info("User deleted", "username", user.Username, "by", currentUser)

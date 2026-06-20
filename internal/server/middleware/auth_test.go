@@ -4,8 +4,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/config"
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
 
@@ -32,7 +34,8 @@ func TestGenerateToken(t *testing.T) {
 	cfg.Server.JWTSecret = "test-jwt-secret-for-testing-12345"
 	InitJWTSecret(cfg)
 
-	token, err := GenerateToken("admin", "192.168.1.1")
+	user := db.User{ID: 1, Username: "admin", Role: "admin", IsActive: true, LastLogin: time.Now()}
+	token, err := GenerateToken(user, false, 24)
 	if err != nil {
 		t.Fatalf("GenerateToken() error = %v", err)
 	}
@@ -74,7 +77,7 @@ func TestAuthRequired(t *testing.T) {
 	})
 
 	t.Run("valid cookie", func(t *testing.T) {
-		token, _ := GenerateToken("admin", "192.168.1.1")
+		token, _ := GenerateToken(user, false, 24)
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)

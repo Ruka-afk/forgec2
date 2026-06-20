@@ -1,59 +1,69 @@
 ﻿{{define "dashboard_content"}}
 <div class="max-w-7xl mx-auto">
-    <div class="flex items-end justify-between mb-8">
+    <div class="flex items-end justify-between mb-6">
         <div>
-            <h1 class="text-4xl font-semibold tracking-tighter text-slate-900">控制台</h1>
-            <p class="text-slate-500 mt-1 text-sm">红队行动实时概览 · 共 {{.TotalTasks}} 个任务 · {{.TotalAudits}} 条审计</p>
+            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">控制台</h1>
+            <p class="text-slate-500 mt-1 text-sm">红队行动实时概览 · 共 <span class="font-semibold text-slate-700">{{.TotalTasks}}</span> 个任务 · <span class="font-semibold text-slate-700">{{.TotalAudits}}</span> 条审计</p>
         </div>
-        <div class="text-right text-sm text-slate-500">
-            最后更新<br>
-            <span class="font-mono">实时</span>
+        <div class="text-right text-sm text-slate-500 flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-medium">
+                <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                实时更新
+            </span>
         </div>
     </div>
 
     <!-- Row 1: 核心指标 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        <div class="metric-card bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="metric-card bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex justify-between items-start">
                 <div>
-                    <div class="text-xs section-header">总 Agent 数</div>
-                    <div class="text-5xl font-semibold tabular-nums mt-3 text-slate-900">{{.TotalAgents}}</div>
-                    <div class="text-xs text-emerald-600 mt-2">{{.OnlineAgents}} 在线</div>
+                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">总 Agent 数</div>
+                    <div class="text-4xl font-bold tabular-nums mt-2 text-slate-900">{{.TotalAgents}}</div>
+                    <div class="text-xs text-emerald-600 mt-2 font-medium">{{.OnlineAgents}} 在线</div>
                 </div>
-                <i class="fa-solid fa-users text-3xl text-slate-300"></i>
+                <div class="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
+                    <i class="fa-solid fa-users text-xl text-slate-400"></i>
+                </div>
             </div>
         </div>
 
-        <div class="metric-card bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+        <div class="metric-card bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex justify-between items-start">
                 <div>
-                    <div class="text-xs section-header">今日任务</div>
-                    <div class="text-5xl font-semibold tabular-nums mt-3 text-indigo-600">{{.TodayTasks}}</div>
-                    <div class="text-xs text-slate-500 mt-2">进行中 {{.PendingTasks}} · 失败 {{.FailedTasks}}</div>
+                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">今日任务</div>
+                    <div class="text-4xl font-bold tabular-nums mt-2 text-indigo-600">{{.TodayTasks}}</div>
+                    <div class="text-xs text-slate-500 mt-2 font-medium">进行中 <span class="text-amber-600">{{.PendingTasks}}</span> · 失败 <span class="text-red-600">{{.FailedTasks}}</span></div>
                 </div>
-                <i class="fa-solid fa-tasks text-3xl text-indigo-400"></i>
+                <div class="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center">
+                    <i class="fa-solid fa-tasks text-xl text-indigo-400"></i>
+                </div>
             </div>
         </div>
 
-        <div class="metric-card bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+        <div class="metric-card bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex justify-between items-start">
                 <div>
-                    <div class="text-xs section-header">凭据保险库</div>
-                    <div class="text-5xl font-semibold tabular-nums mt-3 text-purple-600">{{.TotalCreds}}</div>
-                    <div class="text-xs text-slate-500 mt-2">Token 战利品 {{.TotalTokens}}</div>
+                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">凭据保险库</div>
+                    <div class="text-4xl font-bold tabular-nums mt-2 text-purple-600">{{.TotalCreds}}</div>
+                    <div class="text-xs text-slate-500 mt-2 font-medium">Token 战利品 <span class="text-purple-600">{{.TotalTokens}}</span></div>
                 </div>
-                <i class="fa-solid fa-key text-3xl text-purple-400"></i>
+                <div class="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center">
+                    <i class="fa-solid fa-key text-xl text-purple-400"></i>
+                </div>
             </div>
         </div>
 
-        <div class="metric-card bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+        <div class="metric-card bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex justify-between items-start">
                 <div>
-                    <div class="text-xs section-header">监听器</div>
-                    <div class="text-5xl font-semibold tabular-nums mt-3 text-cyan-600">{{.TotalListeners}}</div>
-                    <div class="text-xs text-slate-500 mt-2">SOCKS 隧道 {{.TotalSocks}}</div>
+                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">监听器</div>
+                    <div class="text-4xl font-bold tabular-nums mt-2 text-cyan-600">{{.TotalListeners}}</div>
+                    <div class="text-xs text-slate-500 mt-2 font-medium">SOCKS 隧道 <span class="text-cyan-600">{{.TotalSocks}}</span></div>
                 </div>
-                <i class="fa-solid fa-plug text-3xl text-cyan-400"></i>
+                <div class="w-12 h-12 bg-cyan-50 rounded-xl flex items-center justify-center">
+                    <i class="fa-solid fa-plug text-xl text-cyan-400"></i>
+                </div>
             </div>
         </div>
     </div>
