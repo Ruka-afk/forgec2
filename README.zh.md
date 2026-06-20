@@ -5,6 +5,7 @@
 **专业授权红队作战的命令与控制框架**
 
 ForgeC2 是一个基于纯 Go 构建的现代化、单二进制、面向操作员的 C2 框架。支持 P2P 信标链式通信（SMB/TCP）、DNS 信标、Artifact Kit（stager/stage）、凭据收集、50+ 任务类型、实时屏幕流以及美观的深色主题 Web 界面 —— 专为独立操作员和专业红队设计。
+![Uploading image.png…]()
 
 ## 功能特性
 
