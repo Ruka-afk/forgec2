@@ -13,7 +13,7 @@
         <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex items-center justify-between">
                 <div>
-                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">在线 Agent</div>
+                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">在线 Implant</div>
                     <div class="text-3xl font-bold mt-2 text-emerald-600">{{len .Agents}}</div>
                     <div class="text-xs text-slate-500 mt-1">可用于侦查</div>
                 </div>
@@ -67,7 +67,7 @@
                     <i class="fa-solid fa-robot mr-1.5 text-slate-400"></i>目标 Agent
                 </label>
                 <select id="target-agent" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl px-4 h-10 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all cursor-pointer">
-                    <option value="">选择在线 Agent...</option>
+                    <option value="">选择在线 Implant...</option>
                     {{range .Agents}}
                     <option value="{{.ID}}" data-os="{{.OS}}">{{.Hostname}} ({{.IP}}) - {{.OS}}</option>
                     {{end}}
@@ -145,37 +145,5 @@
     </div>
 </div>
 
-<script>
-function executePrivescCheck() {
-    const agentId = document.getElementById('target-agent').value;
-    const checkType = document.querySelector('input[name="check_type"]:checked').value;
-
-    if (!agentId) {
-        showToast('请选择目标 Agent', 'error');
-        return;
-    }
-
-    showToast('正在执行提权侦查...', 'success');
-
-    fetch(`/agents/${agentId}/privesc`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            check_type: checkType
-        })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            showToast('提权侦查任务已创建', 'success');
-        } else {
-            showToast('失败: ' + (data.error || ''), 'error');
-        }
-    })
-    .catch(err => {
-        console.error('Failed:', err);
-        showToast('错误: ' + err, 'error');
-    });
-}
-</script>
+<script src="/static/js/privesc.js"></script>
 {{end}}

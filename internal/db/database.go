@@ -33,10 +33,21 @@ func InitDB(dbPath string, logLevel slog.Level) (*gorm.DB, error) {
 		return nil, err
 	}
 
+	// Rename legacy table (Agent → Implant rename, ignore if already renamed)
+	_ = db.Exec("ALTER TABLE agents RENAME TO implants").Error
+
 	// Auto-migrate all models
-	if err := db.AutoMigrate(&Agent{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &AgentLock{}, &ScanResult{}, &ChatMessage{}, &OperatorNote{}, &NetworkHost{}, &CommandTemplate{}); err != nil {
+	if err := db.AutoMigrate(&Implant{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &AgentLock{}, &ScanResult{}, &ChatMessage{}, &OperatorNote{}, &NetworkHost{}, &CommandTemplate{}, &BOFFile{}, &ServerConfig{}, &WebhookConfig{}, &Plugin{}); err != nil {
 		return nil, err
 	}
+
+	// Ensure new columns exist (glebarez/sqlite AutoMigrate may not add all; ignore "duplicate column" errors)
+	_ = db.Exec("ALTER TABLE implants ADD COLUMN pid INTEGER DEFAULT 0").Error
+	_ = db.Exec("ALTER TABLE implants ADD COLUMN public_ip TEXT DEFAULT ''").Error
+	_ = db.Exec("ALTER TABLE implants ADD COLUMN country TEXT DEFAULT ''").Error
+	_ = db.Exec("ALTER TABLE implants ADD COLUMN city TEXT DEFAULT ''").Error
+	_ = db.Exec("ALTER TABLE implants ADD COLUMN latitude REAL DEFAULT 0").Error
+	_ = db.Exec("ALTER TABLE implants ADD COLUMN longitude REAL DEFAULT 0").Error
 
 	// Seed default admin user if none exist
 	var userCount int64
@@ -61,10 +72,34 @@ func InitDB(dbPath string, logLevel slog.Level) (*gorm.DB, error) {
 	// Enable SQLite foreign key constraints
 	db.Exec("PRAGMA foreign_keys = ON;")
 
-	// Performance indexes for common queries (agents by last_seen, tasks by agent+status+created)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_agents_last_seen ON agents(last_seen)")
+	// Performance indexes for common queries
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_last_seen ON implants(last_seen)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_status ON implants(status)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_listener_id ON implants(listener_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_hostname ON implants(hostname)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_ip ON implants(ip)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_agent_status_created ON tasks(agent_id, status, created_at)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_created_status ON tasks(created_at, status)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_type ON tasks(type)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_credentials_agent_id ON credentials(agent_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_credentials_source ON credentials(source)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_credentials_created ON credentials(created_at)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_scan_agent_id ON scan_results(agent_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_scan_type ON scan_results(scan_type)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_scan_created ON scan_results(created_at)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_chat_channel ON chat_messages(channel)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_chat_user ON chat_messages(user)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_chat_created ON chat_messages(created_at DESC)")
+
+	// SQLite performance optimizations
+	db.Exec("PRAGMA journal_mode = WAL;")
+	db.Exec("PRAGMA cache_size = -2000;")
+	db.Exec("PRAGMA temp_store = MEMORY;")
+	db.Exec("PRAGMA synchronous = NORMAL;")
+	db.Exec("PRAGMA mmap_size = 268435456;")
 
 	// Configure connection pool (optimization)
 	sqlDB, err := db.DB()

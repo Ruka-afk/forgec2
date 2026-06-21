@@ -186,7 +186,7 @@ func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
 		req.UUID = beacon.AgentID
 
 		// Process beacon
-		resp := s.processBeacon(req)
+		resp := s.processBeacon(req, "")
 
 		// Send response
 		respJSON, err := json.Marshal(resp)
@@ -314,7 +314,6 @@ func (c *ChatClient) readPump() {
 		var chatMsg struct {
 			Type    string `json:"type"`
 			Message string `json:"message"`
-			Channel string `json:"channel"`
 		}
 		if err := json.Unmarshal(message, &chatMsg); err != nil {
 			slog.Error("Chat message parse error", "user_id", c.UserID, "error", err)
@@ -325,7 +324,6 @@ func (c *ChatClient) readPump() {
 		dbMsg := db.ChatMessage{
 			User:      c.UserID,
 			Message:   chatMsg.Message,
-			Channel:   chatMsg.Channel,
 			CreatedAt: time.Now(),
 		}
 		if c.DB != nil {
@@ -368,3 +366,4 @@ func (c *ChatClient) writePump() {
 		}
 	}
 }
+

@@ -39,8 +39,6 @@ func (s *Server) handleTimelinePage(c *gin.Context) {
 		"FilterUser":  filterUser,
 		"FilterAgent": filterAgent,
 	}
-	s.addUserToData(c, data)
-
 	s.renderPage(c, "timeline_content", data)
 }
 

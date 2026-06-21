@@ -1,8 +1,8 @@
-﻿{{define "dashboard_content"}}
+{{define "dashboard_content"}}
 <div class="max-w-7xl mx-auto">
     <div class="flex items-end justify-between mb-6">
         <div>
-            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">控制台</h1>
+            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">Dashboard</h1>
             <p class="text-slate-500 mt-1 text-sm">红队行动实时概览 · 共 <span class="font-semibold text-slate-700">{{.TotalTasks}}</span> 个任务 · <span class="font-semibold text-slate-700">{{.TotalAudits}}</span> 条审计</p>
         </div>
         <div class="text-right text-sm text-slate-500 flex items-center gap-2">
@@ -18,7 +18,7 @@
         <div class="metric-card bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex justify-between items-start">
                 <div>
-                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">总 Agent 数</div>
+                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">总 Implant 数</div>
                     <div class="text-4xl font-bold tabular-nums mt-2 text-slate-900">{{.TotalAgents}}</div>
                     <div class="text-xs text-emerald-600 mt-2 font-medium">{{.OnlineAgents}} 在线</div>
                 </div>
@@ -46,7 +46,7 @@
                 <div>
                     <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">凭据保险库</div>
                     <div class="text-4xl font-bold tabular-nums mt-2 text-purple-600">{{.TotalCreds}}</div>
-                    <div class="text-xs text-slate-500 mt-2 font-medium">Token 战利品 <span class="text-purple-600">{{.TotalTokens}}</span></div>
+                    <div class="text-xs text-slate-500 mt-2 font-medium">Token 存储 <span class="text-purple-600">{{.TotalTokens}}</span></div>
                 </div>
                 <div class="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center">
                     <i class="fa-solid fa-key text-xl text-purple-400"></i>
@@ -70,12 +70,12 @@
 
     <!-- Row 2: Agent 在线列表 + 最近活动 -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <!-- 在线 Agent -->
+        <!-- 在线 Implant -->
         <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
             <div class="flex items-center justify-between mb-4">
                 <div class="font-semibold flex items-center gap-x-2 text-slate-900">
                     <i class="fa-solid fa-satellite text-emerald-500"></i>
-                    <span>在线 Agent</span>
+                    <span>在线 Implant</span>
                     <span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs rounded-full font-mono">{{len .RecentAgents}}</span>
                 </div>
                 <a href="/agents" class="text-xs text-indigo-600 hover:underline flex items-center gap-x-1">查看全部 <i class="fa-solid fa-arrow-right text-[10px]"></i></a>
@@ -93,7 +93,7 @@
                     <div class="text-[10px] text-slate-400 font-mono">{{.LastSeen | relativeTime}}</div>
                 </a>
                 {{else}}
-                <div class="text-center py-8 text-slate-400 text-sm">暂无在线 Agent</div>
+                <div class="text-center py-8 text-slate-400 text-sm">暂无在线 Implant</div>
                 {{end}}
             </div>
         </div>

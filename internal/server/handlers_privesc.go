@@ -130,7 +130,7 @@ func (s *Server) handlePrivescPage(c *gin.Context) {
 	stats := s.getNavStats()
 
 	// Get available agents
-	var agents []db.Agent
+	var agents []db.Implant
 	s.db.Where("status = 'online'").Find(&agents)
 
 	data := gin.H{
@@ -139,8 +139,6 @@ func (s *Server) handlePrivescPage(c *gin.Context) {
 		"Stats":     stats,
 		"Agents":    agents,
 	}
-	s.addUserToData(c, data)
-
 	s.renderPage(c, "privesc_content", data)
 }
 

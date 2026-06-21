@@ -1,0 +1,124 @@
+{{define "ai_content"}}
+<div class="max-w-5xl mx-auto h-[calc(100vh-8rem)] flex flex-col">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">
+                <i class="fa-solid fa-robot text-indigo-500 mr-2"></i>AI 智能助手
+            </h1>
+            <p class="text-slate-500 text-sm mt-1">
+                {{if not .AIConfig.Enabled}}请在设置中配置 API Key 后启用{{else}}对接
+                <span class="font-semibold text-indigo-600">{{.AIConfig.Provider | default "deepseek"}}</span>
+                · 模型 <span class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">{{.AIConfig.Model | default "deepseek-chat"}}</span>{{end}}
+            </p>
+        </div>
+        <button onclick="toggleSettings()" class="px-4 h-9 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-medium flex items-center gap-2">
+            <i class="fa-solid fa-gear"></i> 设置
+        </button>
+        <button onclick="clearChat()" class="px-4 h-9 bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-600 rounded-xl text-sm font-medium flex items-center gap-2">
+            <i class="fa-solid fa-broom"></i> 清除
+        </button>
+        <button onclick="exportChat()" class="px-4 h-9 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl text-sm font-medium flex items-center gap-2">
+            <i class="fa-solid fa-download"></i> 导出
+        </button>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="ai-settings" class="hidden mb-4 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-slate-900">AI 配置</h2>
+            <button onclick="toggleSettings()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-times"></i></button>
+        </div>
+        <form id="ai-config-form" onsubmit="saveAIConfig(event)" class="space-y-4">
+            <div class="flex items-center gap-3">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="enabled" value="true" {{if .AIConfig.Enabled}}checked{{end}} class="w-4 h-4 rounded accent-indigo-600">
+                    <span class="text-sm text-slate-700">启用 AI 助手</span>
+                </label>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">提供商</label>
+                    <select name="provider" id="cfg-provider" class="w-full bg-white border border-slate-300 text-sm rounded-xl px-3 h-10" onchange="onProviderChange()">
+                        <option value="deepseek" {{if eq .AIConfig.Provider "deepseek"}}selected{{end}}>DeepSeek (推荐)</option>
+                        <option value="openai" {{if eq .AIConfig.Provider "openai"}}selected{{end}}>OpenAI (ChatGPT)</option>
+                        <option value="claude" {{if eq .AIConfig.Provider "claude"}}selected{{end}}>Anthropic (Claude)</option>
+                        <option value="qianwen" {{if eq .AIConfig.Provider "qianwen"}}selected{{end}}>通义千问 (Qianwen)</option>
+                        <option value="custom" {{if eq .AIConfig.Provider "custom"}}selected{{end}}>自定义 (OpenAI 兼容)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">模型</label>
+                    <input type="text" name="model" id="cfg-model" value="{{.AIConfig.Model | default "deepseek-chat"}}" class="w-full bg-white border border-slate-300 text-sm font-mono rounded-xl px-3 h-10">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs text-slate-500 mb-1">API Key</label>
+                    <input type="password" name="api_key" value="{{.AIConfig.APIKey}}" placeholder="sk-..." class="w-full bg-white border border-slate-300 text-sm font-mono rounded-xl px-3 h-10">
+                </div>
+                <div id="cfg-endpoint-group" class="md:col-span-2 {{if ne .AIConfig.Provider "custom"}}hidden{{end}}">
+                    <label class="block text-xs text-slate-500 mb-1">自定义 Endpoint (OpenAI 兼容)</label>
+                    <input type="text" name="endpoint" value="{{.AIConfig.Endpoint}}" placeholder="https://your-api.com/v1" class="w-full bg-white border border-slate-300 text-sm font-mono rounded-xl px-3 h-10">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs text-slate-500 mb-1">提示词模板</label>
+                    <select id="prompt-template" onchange="onPromptTemplateChange()" class="w-full bg-white border border-slate-300 text-sm rounded-xl px-3 h-10 mb-2">
+                        <option value="">-- 自定义 --</option>
+                        <option value="redteam">Red Team 操作员（默认）</option>
+                        <option value="concise">简洁分析师</option>
+                        <option value="verbose">详细渗透报告</option>
+                        <option value="social">社会工程辅助</option>
+                    </select>
+                    <textarea name="system_prompt" rows="3" class="w-full bg-white border border-slate-300 text-sm rounded-xl px-3 py-2">{{.AIConfig.SystemPrompt | default "你是 ForgeC2 红队行动助手..."}}</textarea>
+                </div>
+            </div>
+            <button type="submit" class="w-full h-10 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl">保存配置</button>
+        </form>
+        <div id="ai-config-result" class="mt-2"></div>
+    </div>
+
+    <!-- Chat Messages -->
+    <div id="ai-messages" class="flex-1 overflow-y-auto space-y-4 mb-4 pr-2" onscroll="scrollToBottomFloat()">
+        <div id="ai-welcome" class="flex gap-3">
+            <div class="w-8 h-8 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">
+                <i class="fa-solid fa-robot text-indigo-500 text-sm"></i>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-sm max-w-[85%]">
+                <p class="text-sm text-slate-700">你好！我是 ForgeC2 AI 助手。<br>
+                我可以帮你：列出在线 Implant、查看目标详情、执行命令、查看凭据、管理监听器等。<br>
+                直接告诉我你想做什么吧 🎯</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scroll to bottom -->
+    <button id="scroll-bottom-btn" onclick="scrollToBottom();scrollToBottomFloat()" class="hidden fixed bottom-24 right-8 w-9 h-9 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg flex items-center justify-center z-30 transition-all">
+        <i class="fa-solid fa-chevron-down text-xs"></i>
+    </button>
+
+    <!-- Tool Call Display Area -->
+    <div id="ai-tool-calls" class="mb-3 space-y-2"></div>
+
+    <!-- Input -->
+    <div class="bg-white border border-slate-200 rounded-2xl p-2 shadow-sm flex items-end gap-2">
+        <textarea id="ai-input" rows="1" placeholder="输入你的需求..."
+            class="flex-1 resize-none border-0 focus:ring-0 text-sm py-2 px-2 max-h-32 bg-transparent"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.repeat){event.preventDefault();sendMessage()}"></textarea>
+        <button onclick="sendMessage()" id="ai-send-btn" class="w-10 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center justify-center flex-shrink-0 transition-colors">
+            <i class="fa-solid fa-paper-plane text-sm"></i>
+        </button>
+    </div>
+    <div class="flex justify-between items-center mt-1 px-1">
+        <span id="msg-count" class="text-[10px] text-slate-400">0/40</span>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="flex gap-2 mt-3 pb-2 overflow-x-auto">
+        <button onclick="sendQuick('列出所有在线 Implant')" class="flex-shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs text-slate-600">📋 在线 Implant</button>
+        <button onclick="sendQuick('列出所有监听器')" class="flex-shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs text-slate-600">📡 监听器</button>
+        <button onclick="sendQuick('查看凭据保险库摘要')" class="flex-shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs text-slate-600">🔑 凭据摘要</button>
+        <button onclick="sendQuick('谁在线？')" class="flex-shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs text-slate-600">👤 在线操作员</button>
+    </div>
+</div>
+<script>const csrfToken = '{{.CSRFToken}}';</script>
+<script src="/static/js/ai.js?v=3"></script>
+{{end}}

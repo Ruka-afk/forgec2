@@ -19,7 +19,6 @@ func (s *Server) handleScannerPage(c *gin.Context) {
 		"ActiveNav": "scanner",
 		"Stats":     stats,
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}

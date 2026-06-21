@@ -1,0 +1,142 @@
+{{define "automation_content"}}
+<div class="max-w-6xl mx-auto space-y-6">
+    <div class="bg-gradient-to-r from-amber-600 to-orange-600 rounded-3xl shadow-sm p-6 text-white">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center"><i class="fa-solid fa-robot text-2xl"></i></div>
+            <div><h1 class="text-xl font-bold">事件系统与自动化</h1><p class="text-sm text-amber-200">事件驱动的任务链、Webhook、条件触发</p></div>
+        </div>
+    </div>
+
+    <div class="flex gap-4 flex-wrap">
+        <div class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden flex-1 min-w-[300px]">
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+                <div class="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600"><i class="fa-solid fa-bolt"></i></div>
+                <div><h2 class="text-sm font-semibold">事件监听</h2><p class="text-[11px] text-slate-500">内置事件: agent.checkin / disconnect / task.complete / task.fail / credential.found</p></div>
+            </div>
+            <div class="p-6 space-y-3 text-sm text-slate-600">
+                <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl"><span class="w-2 h-2 bg-emerald-500 rounded-full"></span>agent.checkin — Agent 上线</div>
+                <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl"><span class="w-2 h-2 bg-red-500 rounded-full"></span>agent.disconnect — Agent 离线</div>
+                <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl"><span class="w-2 h-2 bg-blue-500 rounded-full"></span>task.complete — 任务完成</div>
+                <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl"><span class="w-2 h-2 bg-rose-500 rounded-full"></span>task.fail — 任务失败</div>
+                <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl"><span class="w-2 h-2 bg-purple-500 rounded-full"></span>credential.found — 凭证发现</div>
+            </div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden flex-1 min-w-[300px]">
+            <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+                <div class="w-8 h-8 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600"><i class="fa-solid fa-link"></i></div>
+                <div><h2 class="text-sm font-semibold">任务链规则</h2><p class="text-[11px] text-slate-500">事件 + 条件 → 自动动作</p></div>
+            </div>
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-xs text-slate-500">{{len .Rules}} 条规则</span>
+                    <button onclick="showNewRuleModal()" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5"><i class="fa-solid fa-plus"></i> 新建规则</button>
+                </div>
+                <div id="rules-list" class="space-y-2">
+                    {{range .Rules}}
+                    <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                        <div class="flex items-center gap-3">
+                            <span class="w-2 h-2 {{if .Enabled}}bg-emerald-500{{else}}bg-slate-300{{end}} rounded-full"></span>
+                            <div>
+                                <div class="text-sm font-medium">{{.Name}}</div>
+                                <div class="text-[10px] text-slate-500">{{.EventType}} · {{len .Conditions}} 条件 · {{len .Actions}} 动作</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="toggleRule('{{.ID}}')" class="text-xs px-2 py-1 rounded-lg {{if .Enabled}}bg-amber-100 text-amber-700{{else}}bg-slate-200 text-slate-500{{end}}">{{if .Enabled}}禁用{{else}}启用{{end}}</button>
+                            <button onclick="deleteRule('{{.ID}}')" class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded-lg"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                    {{else}}
+                    <div class="text-center text-xs text-slate-400 py-8">暂无规则，点击"新建规则"创建</div>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+            <div class="w-8 h-8 bg-sky-100 rounded-xl flex items-center justify-center text-sky-600"><i class="fa-solid fa-globe"></i></div>
+            <div><h2 class="text-sm font-semibold">Webhook</h2><p class="text-[11px] text-slate-500">事件触发 HTTP 回调</p></div>
+        </div>
+        <div class="p-6">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-xs text-slate-500">{{len .Webhooks}} 个 Webhook</span>
+                <button onclick="showNewWebhookModal()" class="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5"><i class="fa-solid fa-plus"></i> 新建 Webhook</button>
+            </div>
+            <div id="webhooks-list" class="space-y-2">
+                {{range .Webhooks}}
+                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                    <div class="flex items-center gap-3">
+                        <span class="w-2 h-2 {{if .Enabled}}bg-emerald-500{{else}}bg-slate-300{{end}} rounded-full"></span>
+                        <div>
+                            <div class="text-sm font-medium">{{.Name}}</div>
+                            <div class="text-[10px] text-slate-500 font-mono">{{.URL}}</div>
+                        </div>
+                    </div>
+                    <div class="text-xs text-slate-400">{{.EventType}}</div>
+                    <button onclick="deleteWebhook({{.ID}})" class="text-xs px-2 py-1 bg-red-100 text-red-600 rounded-lg"><i class="fa-solid fa-trash"></i></button>
+                </div>
+                {{else}}
+                <div class="text-center text-xs text-slate-400 py-8">暂无 Webhook</div>
+                {{end}}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Rule Modal -->
+<div id="rule-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50" onclick="if(event.target.id==='rule-modal')closeRuleModal()">
+    <div class="bg-white rounded-3xl shadow-xl w-full max-w-lg mx-4 max-h-[85vh] overflow-auto" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white"><div class="font-semibold">新建自动化规则</div><button onclick="closeRuleModal()" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button></div>
+        <div class="p-6 space-y-4">
+            <div><label class="text-xs font-medium text-slate-700">规则名称</label><input id="rule-name" class="w-full bg-slate-50 border rounded-xl px-4 py-2.5 text-sm mt-1"></div>
+            <div><label class="text-xs font-medium text-slate-700">触发事件</label>
+                <select id="rule-event" class="w-full bg-slate-50 border rounded-xl px-4 py-2.5 text-sm mt-1">
+                    <option value="agent.checkin">agent.checkin</option>
+                    <option value="agent.disconnect">agent.disconnect</option>
+                    <option value="task.complete">task.complete</option>
+                    <option value="task.fail">task.fail</option>
+                    <option value="credential.found">credential.found</option>
+                </select>
+            </div>
+            <div><label class="text-xs font-medium text-slate-700">条件 (主机名包含)</label><input id="rule-condition" class="w-full bg-slate-50 border rounded-xl px-4 py-2.5 text-sm mt-1" placeholder="例如: DC 表示仅匹配域控"></div>
+            <div><label class="text-xs font-medium text-slate-700">动作: 发送命令</label><input id="rule-command" class="w-full bg-slate-50 border rounded-xl px-4 py-2.5 text-sm mt-1" placeholder="例如: ldap_users"></div>
+            <div><label class="text-xs font-medium text-slate-700">动作: Webhook URL (可选)</label><input id="rule-webhook" class="w-full bg-slate-50 border rounded-xl px-4 py-2.5 text-sm mt-1" placeholder="https://hooks.example.com/alert"></div>
+        </div>
+        <div class="px-6 py-4 border-t bg-slate-50 flex justify-end gap-2 rounded-b-3xl">
+            <button onclick="closeRuleModal()" class="px-4 py-2 text-sm rounded-xl bg-white border hover:bg-slate-100">取消</button>
+            <button onclick="saveRule()" class="px-4 py-2 text-sm rounded-xl bg-amber-600 hover:bg-amber-700 text-white">保存规则</button>
+        </div>
+    </div>
+</div>
+
+<!-- New Webhook Modal -->
+<div id="webhook-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50" onclick="if(event.target.id==='webhook-modal')closeWebhookModal()">
+    <div class="bg-white rounded-3xl shadow-xl w-full max-w-md mx-4" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between px-6 py-4 border-b"><div class="font-semibold">新建 Webhook</div><button onclick="closeWebhookModal()" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button></div>
+        <div class="p-6 space-y-4">
+            <div><label class="text-xs font-medium text-slate-700">名称</label><input id="wh-name" class="w-full bg-slate-50 border rounded-xl px-4 py-2.5 text-sm mt-1"></div>
+            <div><label class="text-xs font-medium text-slate-700">URL</label><input id="wh-url" class="w-full bg-slate-50 border rounded-xl px-4 py-2.5 text-sm mt-1" placeholder="https://hooks.example.com/forgec2"></div>
+            <div><label class="text-xs font-medium text-slate-700">事件类型</label>
+                <select id="wh-event" class="w-full bg-slate-50 border rounded-xl px-4 py-2.5 text-sm mt-1">
+                    <option value="agent.checkin">agent.checkin</option>
+                    <option value="agent.disconnect">agent.disconnect</option>
+                    <option value="task.complete">task.complete</option>
+                    <option value="task.fail">task.fail</option>
+                    <option value="credential.found">credential.found</option>
+                </select>
+            </div>
+            <div><label class="text-xs font-medium text-slate-700">请求方法</label><select id="wh-method" class="w-full bg-slate-50 border rounded-xl px-4 py-2.5 text-sm mt-1"><option>POST</option><option>PUT</option></select></div>
+            <button onclick="testWebhook()" class="w-full px-4 py-2 text-xs rounded-xl bg-sky-100 text-sky-700 hover:bg-sky-200">测试 Webhook</button>
+        </div>
+        <div class="px-6 py-4 border-t bg-slate-50 flex justify-end gap-2 rounded-b-3xl">
+            <button onclick="closeWebhookModal()" class="px-4 py-2 text-sm rounded-xl bg-white border hover:bg-slate-100">取消</button>
+            <button onclick="saveWebhook()" class="px-4 py-2 text-sm rounded-xl bg-sky-600 hover:bg-sky-700 text-white">保存</button>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/automation.js"></script>
+{{end}}

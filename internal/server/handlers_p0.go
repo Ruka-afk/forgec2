@@ -474,7 +474,7 @@ func (s *Server) cleanupStaleRPortFwd() {
 	s.rportfwdMu.Lock()
 	defer s.rportfwdMu.Unlock()
 	for key, relay := range s.rportfwdListeners {
-		var agent db.Agent
+		var agent db.Implant
 		if err := s.db.First(&agent, "id = ?", relay.agentID).Error; err != nil {
 			relay.stop()
 			delete(s.rportfwdListeners, key)

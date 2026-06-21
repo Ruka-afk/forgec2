@@ -28,8 +28,6 @@ func (s *Server) handleTemplatesPage(c *gin.Context) {
 		"Templates":  templates,
 		"Categories": categories,
 	}
-	s.addUserToData(c, data)
-
 	s.renderPage(c, "templates_content", data)
 }
 

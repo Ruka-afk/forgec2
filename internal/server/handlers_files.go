@@ -1,9 +1,7 @@
 package server
 
 import (
-	"bytes"
 	"encoding/base64"
-	"html/template"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -18,7 +16,7 @@ import (
 func (s *Server) handleFileBrowserPage(c *gin.Context) {
 	id := c.Param("id")
 
-	var agent db.Agent
+	var agent db.Implant
 	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
 		c.Redirect(http.StatusFound, "/agents")
 		return
@@ -32,22 +30,11 @@ func (s *Server) handleFileBrowserPage(c *gin.Context) {
 		"ActiveNav": "agents",
 		"Online":    time.Since(agent.LastSeen) < s.offlineThreshold(),
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "files_content", data); err != nil {
-		slog.Error("Failed to render content", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-
-	data["Content"] = template.HTML(contentBuf.String())
-
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "files_content", data)
 }
 
 func (s *Server) handleListDir(c *gin.Context) {

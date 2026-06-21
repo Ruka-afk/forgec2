@@ -25,20 +25,10 @@ type wsConn struct {
 }
 
 type collabState struct {
-	mu        sync.RWMutex
-	wsConns   map[*websocket.Conn]*wsConn
+	mu         sync.RWMutex
+	wsConns    map[*websocket.Conn]*wsConn
 	agentLocks map[string]db.AgentLock
-	chatMsgs  []chatMessage
 }
-
-type chatMessage struct {
-	Username  string    `json:"username"`
-	Content   string    `json:"content"`
-	Role      string    `json:"role,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-const maxChatHistory = 100
 
 // ── Initialization ────────────────────────────────────────────────────────────
 
@@ -75,12 +65,17 @@ func (s *Server) addWSConn(conn *websocket.Conn, userID uint, username, role str
 
 func (s *Server) removeWSConn(conn *websocket.Conn) {
 	s.collab.mu.Lock()
+	wc := s.collab.wsConns[conn]
 	delete(s.collab.wsConns, conn)
+	offlineUser := ""
+	if wc != nil {
+		offlineUser = wc.username
+	}
 	online := s.onlineUserListLocked()
 	s.collab.mu.Unlock()
 
-	s.broadcastCollab(gin.H{"type": "user_offline", "users": online})
-	slog.Info("WS user disconnected")
+	s.broadcastCollab(gin.H{"type": "user_offline", "users": online, "username": offlineUser})
+	slog.Info("WS user disconnected", "user", offlineUser)
 }
 
 func (s *Server) onlineUserListLocked() []gin.H {
@@ -203,7 +198,7 @@ func (s *Server) handleLockAgent(c *gin.Context) {
 	s.LogAuditRecord(c, "agent_lock", "agent", agentID, fmt.Sprintf("locked by %s", username), true, nil)
 	s.broadcastCollab(gin.H{"type": "agent_locked", "agent_id": agentID, "username": username})
 	// System chat message for lock event
-	s.addChatMessage("[系统]", fmt.Sprintf("%s 锁定了 Agent %s", username, agentID[:8]))
+	s.addSystemChatMessage("[系统]", fmt.Sprintf("%s 锁定了 Agent %s", username, agentID[:8]))
 	slog.Info("Agent locked", "agent", agentID, "by", username)
 	c.JSON(http.StatusOK, gin.H{"success": true, "lock": lock})
 }
@@ -222,7 +217,7 @@ func (s *Server) handleUnlockAgent(c *gin.Context) {
 	s.LogAuditRecord(c, "agent_unlock", "agent", agentID, fmt.Sprintf("unlocked by %s", username), true, nil)
 	s.broadcastCollab(gin.H{"type": "agent_unlocked", "agent_id": agentID, "username": username})
 	// System chat message for unlock event
-	s.addChatMessage("[系统]", fmt.Sprintf("%s 解锁了 Agent %s", username, agentID[:8]))
+	s.addSystemChatMessage("[系统]", fmt.Sprintf("%s 解锁了 Agent %s", username, agentID[:8]))
 	slog.Info("Agent unlocked", "agent", agentID, "by", username)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
@@ -282,62 +277,30 @@ func (s *Server) checkAgentLock(agentID string, currentUser string) (string, boo
 	return lock.Username, false
 }
 
-// ── Chat ──────────────────────────────────────────────────────────────────────
+// ── System Chat Messages ───────────────────────────────────────────────────────
 
-// addChatMessage appends a chat message (internal use for system messages)
-func (s *Server) addChatMessage(username, content string) {
-	msg := chatMessage{
-		Username:  username,
-		Content:   content,
+// addSystemChatMessage broadcasts a system message to the operator chat
+func (s *Server) addSystemChatMessage(username, content string) {
+	msg := db.ChatMessage{
+		User:      username,
+		Message:   content,
 		CreatedAt: time.Now(),
 	}
-	s.collab.mu.Lock()
-	s.collab.chatMsgs = append(s.collab.chatMsgs, msg)
-	if len(s.collab.chatMsgs) > maxChatHistory {
-		s.collab.chatMsgs = s.collab.chatMsgs[len(s.collab.chatMsgs)-maxChatHistory:]
+	s.db.Create(&msg)
+
+	if s.chatHub != nil {
+		payload := gin.H{
+			"user":       msg.User,
+			"message":    msg.Message,
+			"timestamp":  msg.CreatedAt,
+			"created_at": msg.CreatedAt,
+			"role":       "system",
+		}
+		data, err := json.Marshal(payload)
+		if err == nil {
+			s.chatHub.broadcast <- data
+		}
 	}
-	s.collab.mu.Unlock()
-
-	s.broadcastCollab(gin.H{"type": "chat", "message": msg})
-}
-
-func (s *Server) handleChatSend(c *gin.Context) {
-	var req struct {
-		Content string `json:"content" form:"content"`
-	}
-	if err := c.ShouldBind(&req); err != nil || req.Content == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "empty message"})
-		return
-	}
-	user, _ := c.Get("user")
-	username := fmt.Sprintf("%v", user)
-	role, _ := c.Get("user_role")
-	roleStr := fmt.Sprintf("%v", role)
-
-	msg := chatMessage{
-		Username:  username,
-		Content:   req.Content,
-		Role:      roleStr,
-		CreatedAt: time.Now(),
-	}
-
-	s.collab.mu.Lock()
-	s.collab.chatMsgs = append(s.collab.chatMsgs, msg)
-	if len(s.collab.chatMsgs) > maxChatHistory {
-		s.collab.chatMsgs = s.collab.chatMsgs[len(s.collab.chatMsgs)-maxChatHistory:]
-	}
-	s.collab.mu.Unlock()
-
-	s.broadcastCollab(gin.H{"type": "chat", "message": msg})
-	c.JSON(http.StatusOK, gin.H{"success": true})
-}
-
-func (s *Server) handleChatHistory(c *gin.Context) {
-	s.collab.mu.RLock()
-	msgs := make([]chatMessage, len(s.collab.chatMsgs))
-	copy(msgs, s.collab.chatMsgs)
-	s.collab.mu.RUnlock()
-	c.JSON(http.StatusOK, gin.H{"success": true, "messages": msgs})
 }
 
 // ── Online Users ──────────────────────────────────────────────────────────────

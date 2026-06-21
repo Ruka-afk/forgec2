@@ -1,0 +1,622 @@
+{{define "toolkit_content"}}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">后渗透工具包</h1>
+            <p class="text-sm text-slate-500 mt-1">Post-Exploitation Toolkit — 一键执行常见后渗透操作</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <span class="text-sm text-slate-500">目标 Agent:</span>
+            <select id="toolkit-agent-select" class="px-3 py-2 border border-slate-300 rounded-xl text-sm bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 min-w-[200px]">
+                <option value="">-- 选择 Agent --</option>
+                {{range .Agents}}
+                <option value="{{.ID}}">{{.Hostname}} ({{.IP}}) [{{.OS}}]</option>
+                {{end}}
+            </select>
+            <span id="selected-agent-badge" class="hidden px-3 py-1.5 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">
+                <i class="fa-solid fa-check-circle mr-1"></i><span id="selected-agent-name"></span>
+            </span>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
+        <!-- Left: Command Toolkit (3 cols) -->
+        <div class="xl:col-span-3 space-y-6">
+            <!-- Search / Filter -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <div class="flex items-center gap-4">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                        <input type="text" id="toolkit-search" placeholder="搜索命令..." class="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-xl text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="expandAllCategories()" class="px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+                            <i class="fa-solid fa-expand mr-1"></i>全部展开
+                        </button>
+                        <button onclick="collapseAllCategories()" class="px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+                            <i class="fa-solid fa-compress mr-1"></i>全部收起
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions Strip -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <div class="flex items-center gap-1.5 mb-3">
+                    <i class="fa-solid fa-bolt text-amber-500 text-xs"></i>
+                    <span class="text-xs font-semibold text-slate-700">快速操作 — 选中目标后一键执行</span>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button class="quick-action-btn px-3 py-2 bg-slate-50 hover:bg-indigo-100 border border-slate-200 hover:border-indigo-300 rounded-xl text-xs text-slate-600 hover:text-indigo-700 transition-all" data-action="whoami">
+                        <i class="fa-solid fa-user mr-1"></i>whoami
+                    </button>
+                    <button class="quick-action-btn px-3 py-2 bg-slate-50 hover:bg-indigo-100 border border-slate-200 hover:border-indigo-300 rounded-xl text-xs text-slate-600 hover:text-indigo-700 transition-all" data-action="hostname">
+                        <i class="fa-solid fa-server mr-1"></i>hostname
+                    </button>
+                    <button class="quick-action-btn px-3 py-2 bg-slate-50 hover:bg-indigo-100 border border-slate-200 hover:border-indigo-300 rounded-xl text-xs text-slate-600 hover:text-indigo-700 transition-all" data-action="ipconfig">
+                        <i class="fa-solid fa-network-wired mr-1"></i>ipconfig
+                    </button>
+                    <button class="quick-action-btn px-3 py-2 bg-slate-50 hover:bg-indigo-100 border border-slate-200 hover:border-indigo-300 rounded-xl text-xs text-slate-600 hover:text-indigo-700 transition-all" data-action="systeminfo">
+                        <i class="fa-solid fa-info-circle mr-1"></i>systeminfo
+                    </button>
+                    <button class="quick-action-btn px-3 py-2 bg-slate-50 hover:bg-indigo-100 border border-slate-200 hover:border-indigo-300 rounded-xl text-xs text-slate-600 hover:text-indigo-700 transition-all" data-action="ps">
+                        <i class="fa-solid fa-list mr-1"></i>进程列表
+                    </button>
+                    <button class="quick-action-btn px-3 py-2 bg-slate-50 hover:bg-indigo-100 border border-slate-200 hover:border-indigo-300 rounded-xl text-xs text-slate-600 hover:text-indigo-700 transition-all" data-action="screenshot">
+                        <i class="fa-solid fa-camera mr-1"></i>截图
+                    </button>
+                    <button class="quick-action-btn px-3 py-2 bg-slate-50 hover:bg-indigo-100 border border-slate-200 hover:border-indigo-300 rounded-xl text-xs text-slate-600 hover:text-indigo-700 transition-all" data-action="beacon_now">
+                        <i class="fa-solid fa-bolt mr-1"></i>立即回连
+                    </button>
+                    <button class="quick-action-btn px-3 py-2 bg-slate-50 hover:bg-rose-100 border border-slate-200 hover:border-rose-300 rounded-xl text-xs text-slate-600 hover:text-rose-700 transition-all" data-action="mimikatz">
+                        <i class="fa-solid fa-mask mr-1"></i>Mimikatz
+                    </button>
+                    <button class="quick-action-btn px-3 py-2 bg-slate-50 hover:bg-rose-100 border border-slate-200 hover:border-rose-300 rounded-xl text-xs text-slate-600 hover:text-rose-700 transition-all" data-action="creds">
+                        <i class="fa-solid fa-key mr-1"></i>导出凭据
+                    </button>
+                    <button class="quick-action-btn px-3 py-2 bg-slate-50 hover:bg-amber-100 border border-slate-200 hover:border-amber-300 rounded-xl text-xs text-slate-600 hover:text-amber-700 transition-all" data-action="elevate">
+                        <i class="fa-solid fa-shield-halved mr-1"></i>提权
+                    </button>
+                    <button class="quick-action-btn px-3 py-2 bg-slate-50 hover:bg-purple-100 border border-slate-200 hover:border-purple-300 rounded-xl text-xs text-slate-600 hover:text-purple-700 transition-all" data-action="privesc_check">
+                        <i class="fa-solid fa-search mr-1"></i>提权检测
+                    </button>
+                </div>
+            </div>
+
+            <!-- Categorized Commands -->
+            <div id="toolkit-categories" class="space-y-3">
+                <!-- 1. 系统信息收集 -->
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div class="category-header flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-slate-50 transition-colors select-none" onclick="toggleCategory(this)">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-cyan-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-microchip text-cyan-600 text-sm"></i></div>
+                            <span class="font-semibold text-slate-800 text-sm">系统信息收集</span>
+                            <span class="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-medium">System Recon</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+                    </div>
+                    <div class="category-body hidden px-5 pb-4 space-y-1.5">
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="whoami">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">whoami</span>
+                            <span class="text-xs text-slate-500">当前用户身份</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="hostname">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">hostname</span>
+                            <span class="text-xs text-slate-500">主机名</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="ipconfig">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">ipconfig</span>
+                            <span class="text-xs text-slate-500">网络配置</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="systeminfo">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">systeminfo</span>
+                            <span class="text-xs text-slate-500">系统信息详情</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="env">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">env</span>
+                            <span class="text-xs text-slate-500">环境变量</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="uptime">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">uptime</span>
+                            <span class="text-xs text-slate-500">运行时长</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="whoami_priv">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">whoami /priv</span>
+                            <span class="text-xs text-slate-500">当前权限</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="whoami_groups">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">whoami /groups</span>
+                            <span class="text-xs text-slate-500">用户组成员</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2. 进程与服务 -->
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div class="category-header flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-slate-50 transition-colors select-none" onclick="toggleCategory(this)">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-emerald-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-diagram-project text-emerald-600 text-sm"></i></div>
+                            <span class="font-semibold text-slate-800 text-sm">进程与服务</span>
+                            <span class="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-medium">Process & Service</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+                    </div>
+                    <div class="category-body hidden px-5 pb-4 space-y-1.5">
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="ps">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">ps</span>
+                            <span class="text-xs text-slate-500">进程列表</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="tasklist">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">tasklist</span>
+                            <span class="text-xs text-slate-500">任务列表 (详细)</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="services">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">services</span>
+                            <span class="text-xs text-slate-500">服务列表</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="schtasks">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">schtasks</span>
+                            <span class="text-xs text-slate-500">计划任务</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="drivers">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">drivers</span>
+                            <span class="text-xs text-slate-500">驱动列表</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3. 网络侦查 -->
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div class="category-header flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-slate-50 transition-colors select-none" onclick="toggleCategory(this)">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-network-wired text-blue-600 text-sm"></i></div>
+                            <span class="font-semibold text-slate-800 text-sm">网络侦查</span>
+                            <span class="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-medium">Network Recon</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+                    </div>
+                    <div class="category-body hidden px-5 pb-4 space-y-1.5">
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="netstat">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">netstat</span>
+                            <span class="text-xs text-slate-500">连接状态 (进程关联)</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="netstat_an">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">netstat -an</span>
+                            <span class="text-xs text-slate-500">所有连接与端口</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="netstat_b">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">netstat -b</span>
+                            <span class="text-xs text-slate-500">可执行文件关联</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="arp">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">arp -a</span>
+                            <span class="text-xs text-slate-500">ARP 缓存表</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="route">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">route print</span>
+                            <span class="text-xs text-slate-500">路由表</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="netusers">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">net user</span>
+                            <span class="text-xs text-slate-500">本地用户列表</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="netlocalgroup">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">net localgroup</span>
+                            <span class="text-xs text-slate-500">本地管理员组</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="av">
+                            <span class="text-xs font-mono font-medium text-indigo-600 w-28 shrink-0">av</span>
+                            <span class="text-xs text-slate-500">杀毒软件检测</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4. 凭证访问 -->
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div class="category-header flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-slate-50 transition-colors select-none" onclick="toggleCategory(this)">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-rose-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-key text-rose-600 text-sm"></i></div>
+                            <span class="font-semibold text-slate-800 text-sm">凭证访问</span>
+                            <span class="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-medium">Credential Access</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+                    </div>
+                    <div class="category-body hidden px-5 pb-4 space-y-1.5">
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all text-left" data-action="mimikatz">
+                            <span class="text-xs font-mono font-medium text-rose-600 w-28 shrink-0">mimikatz</span>
+                            <span class="text-xs text-slate-500">Mimikatz 内存凭据提取</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all text-left" data-action="creds">
+                            <span class="text-xs font-mono font-medium text-rose-600 w-28 shrink-0">creds_dump</span>
+                            <span class="text-xs text-slate-500">系统凭据导出</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all text-left" data-action="browser_steal">
+                            <span class="text-xs font-mono font-medium text-rose-600 w-28 shrink-0">browser_steal</span>
+                            <span class="text-xs text-slate-500">浏览器密码窃取</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all text-left" data-action="wifi_creds">
+                            <span class="text-xs font-mono font-medium text-rose-600 w-28 shrink-0">wifi_creds</span>
+                            <span class="text-xs text-slate-500">WiFi 密码提取</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all text-left" data-action="kerberoast">
+                            <span class="text-xs font-mono font-medium text-rose-600 w-28 shrink-0">kerberoast</span>
+                            <span class="text-xs text-slate-500">Kerberoast 攻击</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all text-left" data-action="dcsync">
+                            <span class="text-xs font-mono font-medium text-rose-600 w-28 shrink-0">dcsync</span>
+                            <span class="text-xs text-slate-500">DCSync 域控同步</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all text-left" data-action="keylogger_start">
+                            <span class="text-xs font-mono font-medium text-rose-600 w-28 shrink-0">keylogger</span>
+                            <span class="text-xs text-slate-500">键盘记录</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all text-left" data-action="clipboard_get">
+                            <span class="text-xs font-mono font-medium text-rose-600 w-28 shrink-0">clipboard</span>
+                            <span class="text-xs text-slate-500">剪贴板获取</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 5. 提权与绕过 -->
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div class="category-header flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-slate-50 transition-colors select-none" onclick="toggleCategory(this)">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-shield-halved text-amber-600 text-sm"></i></div>
+                            <span class="font-semibold text-slate-800 text-sm">提权与防御绕过</span>
+                            <span class="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-medium">PrivEsc & Bypass</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+                    </div>
+                    <div class="category-body hidden px-5 pb-4 space-y-1.5">
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-amber-50 border border-transparent hover:border-amber-200 transition-all text-left" data-action="privesc_check">
+                            <span class="text-xs font-mono font-medium text-amber-600 w-28 shrink-0">privesc_check</span>
+                            <span class="text-xs text-slate-500">提权漏洞检测</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-amber-50 border border-transparent hover:border-amber-200 transition-all text-left" data-action="elevate">
+                            <span class="text-xs font-mono font-medium text-amber-600 w-28 shrink-0">elevate</span>
+                            <span class="text-xs text-slate-500">提权 (BypassUAC)</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-amber-50 border border-transparent hover:border-amber-200 transition-all text-left" data-action="uac_bypass">
+                            <span class="text-xs font-mono font-medium text-amber-600 w-28 shrink-0">uac_bypass</span>
+                            <span class="text-xs text-slate-500">UAC 绕过</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-amber-50 border border-transparent hover:border-amber-200 transition-all text-left" data-action="amsi_bypass">
+                            <span class="text-xs font-mono font-medium text-amber-600 w-28 shrink-0">amsi_bypass</span>
+                            <span class="text-xs text-slate-500">AMSI 绕过</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-amber-50 border border-transparent hover:border-amber-200 transition-all text-left" data-action="etw_bypass">
+                            <span class="text-xs font-mono font-medium text-amber-600 w-28 shrink-0">etw_bypass</span>
+                            <span class="text-xs text-slate-500">ETW 绕过</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 6. 屏幕与监控 -->
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div class="category-header flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-slate-50 transition-colors select-none" onclick="toggleCategory(this)">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-purple-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-desktop text-purple-600 text-sm"></i></div>
+                            <span class="font-semibold text-slate-800 text-sm">屏幕与监控</span>
+                            <span class="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-medium">Screen & Monitor</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+                    </div>
+                    <div class="category-body hidden px-5 pb-4 space-y-1.5">
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-purple-50 border border-transparent hover:border-purple-200 transition-all text-left" data-action="screenshot">
+                            <span class="text-xs font-mono font-medium text-purple-600 w-28 shrink-0">screenshot</span>
+                            <span class="text-xs text-slate-500">单次截图</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-purple-50 border border-transparent hover:border-purple-200 transition-all text-left" data-action="keylogger_start">
+                            <span class="text-xs font-mono font-medium text-purple-600 w-28 shrink-0">keylogger_start</span>
+                            <span class="text-xs text-slate-500">启动键盘记录</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-purple-50 border border-transparent hover:border-purple-200 transition-all text-left" data-action="keylogger_stop">
+                            <span class="text-xs font-mono font-medium text-purple-600 w-28 shrink-0">keylogger_stop</span>
+                            <span class="text-xs text-slate-500">停止键盘记录</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-purple-50 border border-transparent hover:border-purple-200 transition-all text-left" data-action="keylogger_dump">
+                            <span class="text-xs font-mono font-medium text-purple-600 w-28 shrink-0">keylogger_dump</span>
+                            <span class="text-xs text-slate-500">导出键盘记录</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-purple-50 border border-transparent hover:border-purple-200 transition-all text-left" data-action="clipboard_get">
+                            <span class="text-xs font-mono font-medium text-purple-600 w-28 shrink-0">clipboard_get</span>
+                            <span class="text-xs text-slate-500">获取剪贴板</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 7. C2 控制 -->
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div class="category-header flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-slate-50 transition-colors select-none" onclick="toggleCategory(this)">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-slate-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-sliders text-slate-600 text-sm"></i></div>
+                            <span class="font-semibold text-slate-800 text-sm">C2 控制</span>
+                            <span class="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-medium">C2 Control</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+                    </div>
+                    <div class="category-body hidden px-5 pb-4 space-y-1.5">
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" data-action="beacon_now">
+                            <span class="text-xs font-mono font-medium text-slate-600 w-28 shrink-0">beacon_now</span>
+                            <span class="text-xs text-slate-500">立即回连</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" onclick="showCustomCmdModal()">
+                            <span class="text-xs font-mono font-medium text-slate-600 w-28 shrink-0">自定义命令</span>
+                            <span class="text-xs text-slate-500">发送任意 shell 命令</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-solid fa-terminal"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all text-left" onclick="showPowerShellModal()">
+                            <span class="text-xs font-mono font-medium text-slate-600 w-28 shrink-0">PowerShell</span>
+                            <span class="text-xs text-slate-500">执行 PowerShell 脚本</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-solid fa-terminal"></i></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 8. 后门与持久化 -->
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div class="category-header flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-slate-50 transition-colors select-none" onclick="toggleCategory(this)">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-teal-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-chain text-teal-600 text-sm"></i></div>
+                            <span class="font-semibold text-slate-800 text-sm">横向移动与持久化</span>
+                            <span class="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full font-medium">Lateral & Persist</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform"></i>
+                    </div>
+                    <div class="category-body hidden px-5 pb-4 space-y-1.5">
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-teal-50 border border-transparent hover:border-teal-200 transition-all text-left" onclick="showLateralModal()">
+                            <span class="text-xs font-mono font-medium text-teal-600 w-28 shrink-0">lateral</span>
+                            <span class="text-xs text-slate-500">横向移动到目标</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                        <button class="cmd-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl hover:bg-teal-50 border border-transparent hover:border-teal-200 transition-all text-left" onclick="showPersistenceModal()">
+                            <span class="text-xs font-mono font-medium text-teal-600 w-28 shrink-0">persistence</span>
+                            <span class="text-xs text-slate-500">安装持久化</span>
+                            <span class="ml-auto text-[10px] text-slate-400"><i class="fa-regular fa-circle-play"></i></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Recent Results (1 col) -->
+        <div class="space-y-4">
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                <div class="flex items-center justify-between px-4 py-3.5 border-b border-slate-100">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-slate-400 text-xs"></i>
+                        <span class="text-sm font-semibold text-slate-700">最近结果</span>
+                    </div>
+                    <span class="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">{{len .RecentTasks}}</span>
+                </div>
+                <div class="divide-y divide-slate-100 max-h-[600px] overflow-y-auto" id="recent-results">
+                    {{if .RecentTasks}}
+                    {{range .RecentTasks}}
+                    <div class="px-4 py-3 hover:bg-slate-50 transition-colors task-result-item" data-task-id="{{.ID}}">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-[10px] font-mono text-slate-400 truncate max-w-[100px]">{{shortID .AgentID}}</span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded font-medium {{if eq .Status "completed"}}text-emerald-600 bg-emerald-50{{else}}text-red-600 bg-red-50{{end}}">
+                                {{if eq .Status "completed"}}完成{{else}}失败{{end}}
+                            </span>
+                        </div>
+                        <div class="text-xs font-medium text-slate-700 truncate">{{.Type}}: {{truncate .Command 40}}</div>
+                        <div class="text-[10px] text-slate-400 mt-0.5">{{.CreatedAt | formatTime}}</div>
+                        <div class="result-preview hidden mt-2 p-2 bg-slate-800 text-green-300 text-[10px] font-mono rounded-lg max-h-32 overflow-y-auto whitespace-pre-wrap">{{.Result}}</div>
+                    </div>
+                    {{end}}
+                    {{else}}
+                    <div class="px-4 py-8 text-center text-slate-400 text-xs">
+                        <i class="fa-solid fa-inbox text-2xl mb-2 block"></i>
+                        还没有任务结果
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+
+            <!-- Selected Agent Info -->
+            <div id="agent-info-panel" class="hidden bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                <div class="flex items-center gap-2 px-4 py-3.5 border-b border-slate-100">
+                    <i class="fa-solid fa-circle-info text-slate-400 text-xs"></i>
+                    <span class="text-sm font-semibold text-slate-700">目标信息</span>
+                </div>
+                <div class="p-4 space-y-3 text-xs" id="agent-info-body">
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500">主机名</span>
+                        <span class="font-medium text-slate-700" id="info-hostname">—</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500">IP</span>
+                        <span class="font-mono text-slate-700" id="info-ip">—</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500">用户</span>
+                        <span class="text-slate-700" id="info-user">—</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500">OS</span>
+                        <span class="text-slate-700" id="info-os">—</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500">权限</span>
+                        <span id="info-integrity">—</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500">任务数</span>
+                        <span class="text-slate-700" id="info-task-count">—</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500">成功率</span>
+                        <span class="text-emerald-600 font-medium" id="info-success-rate">—</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Custom Command Modal -->
+<div id="custom-cmd-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl mx-4" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-900">发送自定义命令</h3>
+            <button onclick="closeModal('custom-cmd-modal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1.5">Shell 命令</label>
+                <input type="text" id="custom-cmd-input" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono" placeholder="whoami /all">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1.5">Shell 类型</label>
+                <select id="custom-cmd-shell" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                    <option value="cmd.exe">cmd.exe</option>
+                    <option value="powershell.exe">powershell.exe</option>
+                </select>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeModal('custom-cmd-modal')" class="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">取消</button>
+                <button onclick="sendCustomCmd()" class="px-4 py-2 text-sm text-white bg-indigo-600 rounded-xl hover:bg-indigo-700"><i class="fa-solid fa-paper-plane mr-1"></i>发送</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- PowerShell Modal -->
+<div id="ps-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl mx-4" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-900">执行 PowerShell</h3>
+            <button onclick="closeModal('ps-modal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1.5">PowerShell 脚本/命令</label>
+                <textarea id="ps-input" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono min-h-[120px]" placeholder="Get-Process | Select-Object Name,CPU,WorkingSet"></textarea>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeModal('ps-modal')" class="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">取消</button>
+                <button onclick="sendPowerShell()" class="px-4 py-2 text-sm text-white bg-indigo-600 rounded-xl hover:bg-indigo-700"><i class="fa-solid fa-paper-plane mr-1"></i>执行</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lateral Modal -->
+<div id="lateral-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl mx-4" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-900">横向移动</h3>
+            <button onclick="closeModal('lateral-modal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1.5">目标主机</label>
+                <input type="text" id="lateral-target" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono" placeholder="192.168.1.100">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1.5">方法</label>
+                <select id="lateral-method" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                    <option value="wmi">WMI (Win32_Process.Create)</option>
+                    <option value="winrm">WinRM</option>
+                    <option value="psexec">PsExec</option>
+                    <option value="dcom">DCOM (MMC20.Application)</option>
+                    <option value="scf">SCF (Net-NTLM 捕获)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1.5">命令/载荷</label>
+                <input type="text" id="lateral-command" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono" placeholder="powershell -e ...">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1.5">用户名 (可选)</label>
+                <input type="text" id="lateral-user" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono" placeholder="DOMAIN\Administrator">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1.5">密码 (可选)</label>
+                <input type="password" id="lateral-pass" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" placeholder="password">
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeModal('lateral-modal')" class="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">取消</button>
+                <button onclick="sendLateral()" class="px-4 py-2 text-sm text-white bg-indigo-600 rounded-xl hover:bg-indigo-700"><i class="fa-solid fa-paper-plane mr-1"></i>执行横向移动</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Persistence Modal -->
+<div id="persistence-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div class="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl mx-4" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-900">安装持久化</h3>
+            <button onclick="closeModal('persistence-modal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1.5">持久化方法</label>
+                <select id="persistence-method" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                    <option value="registry">Registry Run Key</option>
+                    <option value="scheduled_task">计划任务</option>
+                    <option value="startup_folder">启动文件夹</option>
+                    <option value="service">服务</option>
+                    <option value="wmi_event">WMI 事件订阅</option>
+                    <option value="bitsadmin">BITSAdmin</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1.5">载荷路径/命令</label>
+                <input type="text" id="persistence-payload" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono" placeholder="C:\Users\Public\beacon.exe">
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeModal('persistence-modal')" class="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">取消</button>
+                <button onclick="sendPersistence()" class="px-4 py-2 text-sm text-white bg-indigo-600 rounded-xl hover:bg-indigo-700"><i class="fa-solid fa-paper-plane mr-1"></i>安装持久化</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toolkit-toast" class="hidden fixed bottom-8 right-8 z-50 px-5 py-3.5 rounded-2xl shadow-xl text-sm font-medium backdrop-blur-sm transition-all duration-300"></div>
+
+<script src="/static/js/toolkit.js"></script>
+{{end}}

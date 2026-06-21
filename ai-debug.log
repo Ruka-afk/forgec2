@@ -1,0 +1,9 @@
+﻿time=2026-06-21T09:58:41.519+08:00 level=INFO msg="Starting ForgeC2 Professional C2 Framework"
+time=2026-06-21T09:58:41.534+08:00 level=INFO msg="Cleared force_logout_at flags for all users"
+time=2026-06-21T09:58:41.534+08:00 level=INFO msg="Database initialized" path=data/db/forgec2.db
+time=2026-06-21T09:58:41.537+08:00 level=INFO msg="ForgeC2 ready" web_ui=http://localhost:8080
+
+鈺斺晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晽
+鈺? ForgeC2 v1.0  鈥? Professional Red Team C2 Framework       鈺?鈺? Web UI: http://your-ip:8080    |   Login with your pass    鈺?鈺氣晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨暆
+time=2026-06-21T09:58:41.537+08:00 level=INFO msg="Starting ForgeC2 server" addr=0.0.0.0:8080 tls=false
+time=2026-06-21T09:58:41.538+08:00 level=INFO msg="old data cleanup completed"

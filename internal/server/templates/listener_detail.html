@@ -28,7 +28,7 @@
                     <div><span class="text-slate-500">创建:</span> {{.Listener.CreatedAt | formatTime}}</div>
                 </div>
                 <div class="mt-6 flex gap-2">
-                    <a href="/generate?listener_id={{.Listener.ID}}" class="flex-1 text-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm">为此监听器生成 Agent</a>
+                    <a href="/generate?listener_id={{.Listener.ID}}" class="flex-1 text-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm">为此监听器生成 Implant</a>
                 </div>
             </div>
         </div>
@@ -91,7 +91,7 @@
                     </tr>
                     {{else}}
                     <tr>
-                        <td colspan="6" class="py-10 text-center text-slate-400">暂无 Agent 使用此监听器</td>
+                        <td colspan="6" class="py-10 text-center text-slate-400">暂无 Implant 使用此监听器</td>
                     </tr>
                     {{end}}
                 </tbody>

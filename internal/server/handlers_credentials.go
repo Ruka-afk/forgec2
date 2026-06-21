@@ -234,7 +234,6 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 		"RelatedTasks": related,
 		"VaultCount":   len(creds),
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
@@ -284,6 +283,21 @@ func (s *Server) handleAddCredential(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "id": entry.ID})
+}
+
+func (s *Server) handleGetCredential(c *gin.Context) {
+	idStr := c.Param("cred_id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	var cred db.CredentialEntry
+	if err := s.db.First(&cred, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "credential not found"})
+		return
+	}
+	c.JSON(http.StatusOK, cred)
 }
 
 func (s *Server) handleDeleteCredential(c *gin.Context) {

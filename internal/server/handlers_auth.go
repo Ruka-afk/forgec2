@@ -1,11 +1,9 @@
 package server
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"html/template"
 	"io"
 	"log/slog"
 	"net/http"
@@ -28,7 +26,7 @@ func (s *Server) handleLoginPage(c *gin.Context) {
 		csrfToken = middleware.GenerateCSRFToken()
 	}
 	csrfTokenStr := csrfToken.(string)
-	c.SetCookie("csrf_token", csrfTokenStr, middleware.CookieMaxAge, "/", "", middleware.CookieSecure, false)
+	c.SetCookie("csrf_token", csrfTokenStr, middleware.CookieMaxAge, "/", "", middleware.CookieSecure, true)
 
 	// Check if already logged in
 	if _, err := c.Cookie("forgec2_session"); err == nil {
@@ -52,7 +50,7 @@ func (s *Server) handleLoginPage(c *gin.Context) {
 
 func (s *Server) renderLoginError(c *gin.Context, errMsg, lastUsername string, rememberMe bool) {
 	csrfToken := middleware.GenerateCSRFToken()
-	c.SetCookie("csrf_token", csrfToken, middleware.CookieMaxAge, "/", "", middleware.CookieSecure, false)
+	c.SetCookie("csrf_token", csrfToken, middleware.CookieMaxAge, "/", "", middleware.CookieSecure, true)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	s.tmpl.ExecuteTemplate(c.Writer, "login.html", gin.H{
 		"Error":       errMsg,
@@ -171,8 +169,8 @@ func (s *Server) handleLogout(c *gin.Context) {
 
 func (s *Server) handleSettingsPage(c *gin.Context) {
 	var totalAgents, onlineAgents int64
-	s.db.Model(&db.Agent{}).Count(&totalAgents)
-	s.db.Model(&db.Agent{}).Where("last_seen > ?", time.Now().Add(-s.offlineThreshold())).Count(&onlineAgents)
+	s.db.Model(&db.Implant{}).Count(&totalAgents)
+	s.db.Model(&db.Implant{}).Where("last_seen > ?", time.Now().Add(-s.offlineThreshold())).Count(&onlineAgents)
 
 	// Database statistics
 	var (
@@ -246,10 +244,10 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 		"CurrentUserId":    currentUserID,
 		"ProfileInfo":      profileInfo,
 		"TotalUsers":       totalUsers,
-		"DefaultInterval":  s.cfg.Agent.DefaultInterval,
-		"DefaultJitter":    s.cfg.Agent.DefaultJitter,
-		"DefaultSkipTLS":   s.cfg.Agent.DefaultSkipTLS,
-		"DefaultUA":        s.cfg.Agent.DefaultUA,
+		"DefaultInterval":  s.cfg.Implant.DefaultInterval,
+		"DefaultJitter":    s.cfg.Implant.DefaultJitter,
+		"DefaultSkipTLS":   s.cfg.Implant.DefaultSkipTLS,
+		"DefaultUA":        s.cfg.Implant.DefaultUA,
 		"ServerPort":       s.cfg.Server.Port,
 		"ServerHost":       s.cfg.Server.Host,
 		"TLSEnabled":       s.cfg.Server.TLSEnabled,
@@ -289,21 +287,11 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 		"MalleablePrepend":  s.cfg.Malleable.Prepend,
 		"MalleableAppend":   s.cfg.Malleable.Append,
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "settings_content", data); err != nil {
-		slog.Error("Failed to render content", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "settings_content", data)
 }
 
 func (s *Server) handleSaveAgentConfig(c *gin.Context) {
@@ -315,29 +303,29 @@ func (s *Server) handleSaveAgentConfig(c *gin.Context) {
 	if interval != "" {
 		var intInterval int
 		if _, err := fmt.Sscanf(interval, "%d", &intInterval); err == nil && intInterval > 0 {
-			s.cfg.Agent.DefaultInterval = intInterval
+			s.cfg.Implant.DefaultInterval = intInterval
 		}
 	}
 
 	if jitter != "" {
 		var intJitter int
 		if _, err := fmt.Sscanf(jitter, "%d", &intJitter); err == nil && intJitter >= 0 && intJitter <= 100 {
-			s.cfg.Agent.DefaultJitter = intJitter
+			s.cfg.Implant.DefaultJitter = intJitter
 		}
 	}
 
 	if userAgent != "" {
-		s.cfg.Agent.DefaultUA = userAgent
+		s.cfg.Implant.DefaultUA = userAgent
 	}
 
-	s.cfg.Agent.DefaultSkipTLS = skipTLS == "true" || skipTLS == "1"
+	s.cfg.Implant.DefaultSkipTLS = skipTLS == "true" || skipTLS == "1"
 
 	if err := s.cfg.Save("config.yaml"); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save config"})
 		return
 	}
 
-	slog.Info("Agent config updated", "interval", s.cfg.Agent.DefaultInterval, "jitter", s.cfg.Agent.DefaultJitter, "skip_tls", s.cfg.Agent.DefaultSkipTLS)
+	slog.Info("Agent config updated", "interval", s.cfg.Implant.DefaultInterval, "jitter", s.cfg.Implant.DefaultJitter, "skip_tls", s.cfg.Implant.DefaultSkipTLS)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Agent configuration saved successfully"})
 }
 
@@ -581,27 +569,20 @@ func (s *Server) handleDownloadConfig(c *gin.Context) {
 
 func (s *Server) handleAuditLogPage(c *gin.Context) {
 	stats := s.getNavStats()
+	var users []db.User
+	s.db.Model(&db.User{}).Select("username, role").Where("is_active = ?", true).Find(&users)
+
 	data := gin.H{
 		"Title":     "ForgeC2 - Security Audit",
 		"ActiveNav": "audit",
 		"Online":    s.cfg.Auth.PasswordHash != "",
+		"UserList":  users,
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "audit_content", data); err != nil {
-		slog.Error("Failed to render content", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-
-	data["Content"] = template.HTML(contentBuf.String())
-
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "audit_content", data)
 }
 
 func (s *Server) handleGetAuditLogs(c *gin.Context) {
@@ -610,6 +591,7 @@ func (s *Server) handleGetAuditLogs(c *gin.Context) {
 	pageSize := c.DefaultQuery("pageSize", "50")
 	search := c.DefaultQuery("search", "")
 	action := c.DefaultQuery("action", "")
+	user := c.DefaultQuery("user", "")
 
 	query := s.db.Model(&db.AuditLog{}).Order("created_at DESC")
 
@@ -620,6 +602,10 @@ func (s *Server) handleGetAuditLogs(c *gin.Context) {
 
 	if action != "" {
 		query = query.Where("action = ?", action)
+	}
+
+	if user != "" {
+		query = query.Where("user = ?", user)
 	}
 
 	var total int64

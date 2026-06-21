@@ -1,10 +1,10 @@
-{{define "pivoting_content"}}
+﻿{{define "pivoting_content"}}
 <div class="max-w-7xl mx-auto space-y-6">
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div>
             <h1 class="text-3xl font-semibold tracking-tight">隧道与代理 (Pivoting)</h1>
-            <p class="text-slate-500 mt-1">通过 C2 中继的 SOCKS5 反向代理 — 服务端开口，Agent 端拨号</p>
+             <p class="text-slate-500 mt-1">通过 C2 中继的 SOCKS5 反向代理 — 服务端开口，Implant 端拨号</p>
         </div>
         <button onclick="refreshSessions()" class="flex items-center gap-x-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm transition-colors">
             <i class="fa-solid fa-rotate"></i> 刷新
@@ -17,7 +17,7 @@
             <div class="font-semibold flex items-center gap-x-2">
                 <i class="fa-solid fa-tower-broadcast text-emerald-500"></i> C2 SOCKS 中继（服务端转发）
             </div>
-            <div class="text-xs text-slate-400">操作员代理工具 → C2 服务器 → Beacon 隧道 → Agent → 目标</div>
+             <div class="text-xs text-slate-400">操作员代理工具 → C2 服务器 → Beacon 隧道 → Implant → 目标</div>
         </div>
 
         <div id="sessions-container">
@@ -34,9 +34,9 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Agent selector -->
             <div>
-                <label class="text-xs font-medium text-slate-500 mb-1 block">选择在线 Agent</label>
+                <label class="text-xs font-medium text-slate-500 mb-1 block">选择在线 Implant</label>
                 <select id="relay-agent" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400">
-                    <option value="">-- 选择 Agent --</option>
+                    <option value="">-- 选择 Implant --</option>
                     {{range .Agents}}
                     <option value="{{.ID}}" data-hostname="{{.Hostname}}">{{.Hostname}} ({{.IP}}) - {{.ID}}</option>
                     {{end}}
@@ -59,17 +59,17 @@
         <div class="mt-4 p-3 bg-indigo-50 rounded-2xl text-xs text-indigo-700">
             <i class="fa-solid fa-info-circle mr-1"></i>
             <b>使用方法：</b>启动后，将你的代理工具（proxychains / Proxifier / 浏览器代理设置）指向 <code>C2服务器IP:端口</code>。
-            流量将通过 Beacon 隧道中转到 Agent，由 Agent 在内网拨号连接目标。
+            流量将通过 Beacon 隧道中转到 Implant，由 Implant 在内网拨号连接目标。
         </div>
     </div>
 
     <!-- Agent-Local SOCKS (Legacy) -->
     <div class="bg-white border border-slate-200 rounded-3xl p-6">
         <div class="font-semibold flex items-center gap-x-2 mb-3">
-            <i class="fa-solid fa-network-wired text-amber-500"></i> Agent 本地 SOCKS5（传统模式）
+            <i class="fa-solid fa-network-wired text-amber-500"></i> Implant 本地 SOCKS5（传统模式）
         </div>
         <p class="text-sm text-slate-500 mb-3">
-            在 Agent 主机上直接监听 SOCKS5 端口。适用于 Agent IP 可直达的场景（如同一内网）。
+            在 Implant 主机上直接监听 SOCKS5 端口。适用于 Implant IP 可直达的场景（如同一内网）。
             如需通过 C2 中继，请使用上方的「C2 SOCKS 中继」。
         </p>
 
@@ -90,7 +90,7 @@
             {{end}}
         </div>
         {{else}}
-        <div class="text-slate-400 text-sm py-4 text-center">暂无在线 Agent</div>
+        <div class="text-slate-400 text-sm py-4 text-center">暂无在线 Implant</div>
         {{end}}
     </div>
 </div>

