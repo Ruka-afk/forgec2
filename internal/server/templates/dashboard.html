@@ -21,6 +21,8 @@
                     <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">总 Implant 数</div>
                     <div class="text-4xl font-bold tabular-nums mt-2 text-slate-900">{{.TotalAgents}}</div>
                     <div class="text-xs text-emerald-600 mt-2 font-medium">{{.OnlineAgents}} 在线</div>
+                    {{if .StaleCount}}<div class="text-xs text-amber-600 font-medium">{{.StaleCount}} 超时</div>{{end}}
+                    {{if .OfflineCount}}<div class="text-xs text-red-500 font-medium">{{.OfflineCount}} 离线</div>{{end}}
                 </div>
                 <div class="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
                     <i class="fa-solid fa-users text-xl text-slate-400"></i>

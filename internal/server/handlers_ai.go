@@ -145,7 +145,13 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 				return
 			}
 
-			toolCalls, content, _, finishReason := s.parseStreamChunks(resp, ch)
+			var toolCalls []toolCall
+			var content, finishReason string
+			if s.cfg.AI.Provider == "claude" {
+				toolCalls, content, finishReason = s.parseClaudeStream(resp, ch)
+			} else {
+				toolCalls, content, _, finishReason = s.parseStreamChunks(resp, ch)
+			}
 			resp.Body.Close()
 
 			// Safety: cap content length
@@ -342,23 +348,38 @@ type sseEvent struct {
 
 func (s *Server) aiDoRequest(payload []byte) (*http.Response, error) {
 	baseURL := strings.TrimRight(s.cfg.AIEndpoint(), "/")
-	// If the endpoint has no path segment (just a domain like https://api.example.com), append /v1
 	hostAndPath := baseURL
 	hostAndPath = strings.TrimPrefix(hostAndPath, "https://")
 	hostAndPath = strings.TrimPrefix(hostAndPath, "http://")
 	if !strings.Contains(hostAndPath, "/") {
 		baseURL += "/v1"
 	}
-	url := baseURL + "/chat/completions"
 
-	slog.Info("AI API request", "url", url, "model", s.cfg.AI.Model)
+	var url string
+	if s.cfg.AI.Provider == "claude" {
+		// Claude uses /v1/messages (baseURL already includes /v1)
+		// But our auto-append adds /v1, and Anthropic's base is https://api.anthropic.com
+		// So baseURL is https://api.anthropic.com/v1, need /messages → https://api.anthropic.com/v1/messages
+		url = baseURL + "/messages"
+		// Rebuild payload for Claude format (Anthropic API)
+		payload = s.buildClaudeRequest(payload)
+	} else {
+		url = baseURL + "/chat/completions"
+	}
+
+	slog.Info("AI API request", "url", url, "model", s.cfg.AI.Model, "provider", s.cfg.AI.Provider)
 
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+s.cfg.AI.APIKey)
+	if s.cfg.AI.Provider == "claude" {
+		httpReq.Header.Set("x-api-key", s.cfg.AI.APIKey)
+		httpReq.Header.Set("anthropic-version", "2023-06-01")
+	} else {
+		httpReq.Header.Set("Authorization", "Bearer "+s.cfg.AI.APIKey)
+	}
 	if s.cfg.AI.Provider == "deepseek" {
 		httpReq.Header.Set("Accept", "application/json")
 	}
@@ -694,6 +715,158 @@ func truncateStr(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// buildClaudeRequest converts an OpenAI-format JSON payload to Anthropic Claude format
+func (s *Server) buildClaudeRequest(openAIPayload []byte) []byte {
+	var req struct {
+		Model    string        `json:"model"`
+		Messages []chatMessage `json:"messages"`
+		Stream   bool          `json:"stream"`
+		Tools    []toolDef     `json:"tools,omitempty"`
+	}
+	json.Unmarshal(openAIPayload, &req)
+
+	// Build Claude-format messages (system is top-level, not a message)
+	var claudeMessages []map[string]interface{}
+	var systemPrompt string
+	for _, msg := range req.Messages {
+		if msg.Role == "system" {
+			systemPrompt = msg.Content
+			continue
+		}
+		claudeMsg := map[string]interface{}{"role": msg.Role}
+		if msg.Content != "" {
+			claudeMsg["content"] = msg.Content
+		}
+		// Convert tool calls to Claude format
+		if len(msg.ToolCalls) > 0 {
+			var claudeToolUses []map[string]interface{}
+			for _, tc := range msg.ToolCalls {
+				claudeToolUses = append(claudeToolUses, map[string]interface{}{
+					"type":  "tool_use",
+					"id":    tc.ID,
+					"name":  tc.Function.Name,
+					"input": parseJSONMap(tc.Function.Arguments),
+				})
+			}
+			claudeMsg["content"] = claudeToolUses
+		}
+		// Tool results
+		if msg.Role == "tool" {
+			claudeMsg["content"] = []map[string]interface{}{{
+				"type":        "tool_result",
+				"tool_use_id": msg.ToolCallID,
+				"content":      msg.Content,
+			}}
+		}
+		claudeMessages = append(claudeMessages, claudeMsg)
+	}
+
+	// Claude tools format
+	var claudeTools []map[string]interface{}
+	for _, t := range req.Tools {
+		claudeTools = append(claudeTools, map[string]interface{}{
+			"name":         t.Function.Name,
+			"description":  t.Function.Description,
+			"input_schema": t.Function.Parameters,
+		})
+	}
+
+	claudeReq := map[string]interface{}{
+		"model":      req.Model,
+		"messages":   claudeMessages,
+		"max_tokens": 4096,
+		"stream":     req.Stream,
+	}
+	if systemPrompt != "" {
+		claudeReq["system"] = systemPrompt
+	}
+	if len(claudeTools) > 0 {
+		claudeReq["tools"] = claudeTools
+	}
+
+	b, _ := json.Marshal(claudeReq)
+	return b
+}
+
+func parseJSONMap(s string) map[string]interface{} {
+	var m map[string]interface{}
+	json.Unmarshal([]byte(s), &m)
+	if m == nil {
+		m = map[string]interface{}{}
+	}
+	return m
+}
+
+func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent) (toolCalls []toolCall, content, finishReason string) {
+	reader := io.Reader(resp.Body)
+	buf := make([]byte, 4096)
+	var leftover string
+
+	for {
+		n, err := reader.Read(buf)
+		if n > 0 {
+			data := leftover + string(buf[:n])
+			lines := strings.Split(data, "\n")
+			leftover = lines[len(lines)-1]
+			lines = lines[:len(lines)-1]
+
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line == "" || !strings.HasPrefix(line, "data: ") {
+					continue
+				}
+				jsonStr := strings.TrimPrefix(line, "data: ")
+
+				var event struct {
+					Type  string `json:"type"`
+					Delta struct {
+						Type string `json:"type"`
+						Text string `json:"text"`
+					} `json:"delta"`
+					ContentBlock struct {
+						Type string `json:"type"`
+						ID   string `json:"id"`
+						Name string `json:"name"`
+					} `json:"content_block"`
+					Message struct {
+						StopReason string `json:"stop_reason"`
+					} `json:"message"`
+				}
+				if err := json.Unmarshal([]byte(jsonStr), &event); err != nil {
+					continue
+				}
+
+				switch event.Type {
+				case "content_block_delta":
+					if event.Delta.Type == "text_delta" {
+						content += event.Delta.Text
+						ch <- sseEvent{"text", content}
+					}
+				case "content_block_start":
+					// Tool use started
+					if event.ContentBlock.Type == "tool_use" {
+						// Collect tool call info later from content_block_stop or message_stop
+					}
+				case "message_delta":
+					if event.Delta.Type == "stop_reason" {
+						finishReason = event.Message.StopReason
+					}
+				case "message_stop":
+					// Check for tool_use in accumulated content
+				}
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return
+		}
+	}
+	finishReason = "stop"
+	return
 }
 
 func (s *Server) resolveAgentID(idOrHost string) string {

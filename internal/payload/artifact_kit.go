@@ -177,6 +177,12 @@ go 1.25
 		return "", err
 	}
 
+	tidyCmd := exec.Command(goCmd, "mod", "tidy")
+	tidyCmd.Dir = tmpDir
+	if out, err := tidyCmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("go mod tidy failed: %w\n%s", err, string(out))
+	}
+
 	cmd := exec.Command(goCmd, "build",
 		"-ldflags", ldflags,
 		"-o", outPath,
@@ -324,6 +330,12 @@ go 1.25
 	goCmd, err := getGoCmd()
 	if err != nil {
 		return "", err
+	}
+
+	tidyCmd := exec.Command(goCmd, "mod", "tidy")
+	tidyCmd.Dir = tmpDir
+	if out, err := tidyCmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("go mod tidy failed: %w\n%s", err, string(out))
 	}
 
 	cmd := exec.Command(goCmd, "build",

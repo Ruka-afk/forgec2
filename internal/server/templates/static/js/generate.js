@@ -39,7 +39,7 @@ function onSharedListenerChange() {
     const opt = sel.options[sel.selectedIndex];
     if (!opt) return;
     // Fill all platform hidden fields
-    ['exe', 'ps1', 'linux', 'macos', 'stager', 'stager-linux'].forEach(p => fillC2URL(opt, p));
+    ['exe', 'ps1', 'linux', 'macos', 'stager', 'stager-linux', 'oneliner'].forEach(p => fillC2URL(opt, p));
     // Show C2 URL in shared panel
     const scheme = opt.dataset.scheme;
     const host = opt.dataset.host;
