@@ -13,9 +13,10 @@ config.yaml
 *.out
 go.work
 
-# IDE
+# IDE / editor
 .idea/
 .vscode/
+.opencode/
 *.swp
 *.swo
 
@@ -23,21 +24,10 @@ go.work
 .DS_Store
 Thumbs.db
 
+# Debug logs
+*.log
+
 # Temp
 tmp/
-
-# IDE / editor
-.opencode/
-.qoder/
-opencode.json
-
-# Build artifacts
 *.exe~
-server.err
-server.log
-*.exe
-data/
 
-# OS
-.DS_Store
-Thumbs.db

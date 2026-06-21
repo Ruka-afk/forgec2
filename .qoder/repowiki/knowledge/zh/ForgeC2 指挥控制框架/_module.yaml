@@ -1,0 +1,75 @@
+schema_version: 1
+module_path: ""
+title: ForgeC2 指挥控制框架
+scope:
+    - .gitignore
+    - README.md
+    - README.zh.md
+    - Dockerfile
+    - docker-compose.yml
+    - go.mod
+    - go.sum
+    - .idea\.gitignore
+    - .idea\forgec2.iml
+    - .idea\modules.xml
+    - .idea\workspace.xml
+    - cmd\server\main.go
+    - config.yaml
+    - data\agents\forge.ps1
+    - data\agents\forge_agent.exe
+    - data\db\forgec2.db
+    - data\server.crt
+    - data\server.key
+    - forgec2.exe
+    - internal\config\config.go
+    - internal\config\config_test.go
+    - internal\crypto\cert.go
+    - internal\db\database.go
+    - internal\db\models.go
+    - internal\obfuscation\obfuscation.go
+    - internal\payload\agent\agent.go
+    - internal\payload\agent\agent_linux.go
+    - internal\payload\agent\agent_windows.go
+    - internal\payload\generator.go
+    - internal\payload\powershell_template.ps1
+    - internal\payload\profiles\bing.json
+    - internal\payload\profiles\default.json
+    - internal\payload\profiles\google.json
+    - internal\server\audit.go
+    - internal\server\constants.go
+    - internal\server\handlers_agents.go
+    - internal\server\handlers_auth.go
+    - internal\server\handlers_beacon.go
+    - internal\server\handlers_commands.go
+    - internal\server\handlers_files.go
+    - internal\server\handlers_generate.go
+    - internal\server\handlers_monitor.go
+    - internal\server\middleware\auth.go
+    - internal\server\middleware\auth_test.go
+    - internal\server\middleware\middleware.go
+    - internal\server\middleware\middleware_test.go
+    - internal\server\server.go
+    - internal\server\templates\agent_detail.html
+    - internal\server\templates\agent_tasks_list.html
+    - internal\server\templates\agents.html
+    - internal\server\templates\audit.html
+    - internal\server\templates\credentials.html
+    - internal\server\templates\dashboard.html
+    - internal\server\templates\files.html
+    - internal\server\templates\generate.html
+    - internal\server\templates\layout.html
+    - internal\server\templates\listener_detail.html
+    - internal\server\templates\listeners.html
+    - internal\server\templates\login.html
+    - internal\server\templates\loot.html
+    - internal\server\templates\pivoting.html
+    - internal\server\templates\screen.html
+    - internal\server\templates\settings.html
+    - internal\server\templates\shell.html
+    - internal\server\templates\tasks.html
+    - internal\server\templates\tasks_list.html
+    - server.exe
+    - server_test.exe
+source_files: []
+depends_on: []
+related_to: []
