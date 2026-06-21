@@ -14,7 +14,7 @@ func (s *Server) handleLateralPage(c *gin.Context) {
 	stats := s.getNavStats()
 
 	// Get available agents
-	var agents []db.Agent
+	var agents []db.Implant
 	s.db.Where("status = 'online'").Find(&agents)
 
 	// Get credentials from vault
@@ -23,7 +23,7 @@ func (s *Server) handleLateralPage(c *gin.Context) {
 
 	// Get statistics
 	var onlineAgents int64
-	s.db.Model(&db.Agent{}).Where("status = 'online'").Count(&onlineAgents)
+	s.db.Model(&db.Implant{}).Where("status = 'online'").Count(&onlineAgents)
 
 	var totalCreds int64
 	s.db.Model(&db.CredentialEntry{}).Count(&totalCreds)
@@ -41,8 +41,6 @@ func (s *Server) handleLateralPage(c *gin.Context) {
 		"TotalCreds":   totalCreds,
 		"TotalTasks":   totalTasks,
 	}
-	s.addUserToData(c, data)
-
 	s.renderPage(c, "lateral_content", data)
 }
 

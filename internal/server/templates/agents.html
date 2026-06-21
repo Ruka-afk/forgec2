@@ -2,13 +2,25 @@
 <div class="max-w-7xl mx-auto">
     <div class="flex items-center justify-between mb-6">
         <div>
-            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">Agent 管理</h1>
-            <p class="text-slate-500 text-sm flex items-center gap-2">
+            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">Implant 管理</h1>
+            <p class="text-slate-500 text-sm flex items-center gap-3">
                 <span>共 {{len .Agents}} 个</span>
-                <span id="agent-online-count" class="inline-flex items-center gap-1 text-emerald-600">
+                <span class="inline-flex items-center gap-1 text-emerald-600">
                     <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                    <span class="font-mono" id="online-num">{{.OnlineCount}}</span> 在线
+                    <span class="font-mono">{{.OnlineCount}}</span> 在线
                 </span>
+                {{if .StaleCount}}
+                <span class="inline-flex items-center gap-1 text-amber-600">
+                    <span class="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+                    <span class="font-mono">{{.StaleCount}}</span> 超时
+                </span>
+                {{end}}
+                {{if .OfflineCount}}
+                <span class="inline-flex items-center gap-1 text-red-500">
+                    <span class="w-1.5 h-1.5 bg-red-500 rounded-full"></span>
+                    <span class="font-mono">{{.OfflineCount}}</span> 离线
+                </span>
+                {{end}}
             </p>
         </div>
         <div class="flex items-center gap-2">
@@ -18,7 +30,7 @@
             </button>
             <a href="/generate" class="inline-flex items-center gap-x-2 bg-indigo-600 hover:bg-indigo-700 transition-colors px-5 h-10 rounded-2xl text-sm font-medium text-white">
                 <i class="fa-solid fa-plus"></i>
-                <span>生成新 Agent</span>
+                <span>生成新 Implant</span>
             </a>
         </div>
     </div>
@@ -34,6 +46,7 @@
             <select name="status" class="bg-slate-50 border border-slate-200 focus:border-indigo-500 text-sm rounded-xl px-3 h-10 cursor-pointer" onchange="this.form.submit()">
                 <option value="">全部状态</option>
                 <option value="online" {{if eq .Status "online"}}selected{{end}}>在线</option>
+                <option value="stale" {{if eq .Status "stale"}}selected{{end}}>超时</option>
                 <option value="offline" {{if eq .Status "offline"}}selected{{end}}>离线</option>
             </select>
             <select name="os" class="bg-slate-50 border border-slate-200 focus:border-indigo-500 text-sm rounded-xl px-3 h-10 cursor-pointer" onchange="this.form.submit()">
@@ -60,6 +73,7 @@
                     <th class="text-left py-3.5 px-4 w-28">锁定</th>
                     <th class="text-left py-3.5 px-4 w-32">用户</th>
                     <th class="text-left py-3.5 px-4 w-36">系统 / 完整性</th>
+                    <th class="text-left py-3.5 px-4 w-32">公网IP</th>
                     <th class="text-left py-3.5 px-4 w-36">IP / 域</th>
                     <th class="text-left py-3.5 px-4 w-32">最后上线</th>
                     <th class="text-center py-3.5 px-4 w-24">状态</th>
@@ -68,7 +82,7 @@
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                 {{range .Agents}}
-                <tr class="hover:bg-indigo-50/50 transition-colors agent-row {{if eq .Status "online"}}border-l-2 border-l-emerald-500{{end}}" data-agent-id="{{.ID}}">
+                <tr class="hover:bg-indigo-50/50 transition-colors agent-row {{if eq .Status "online"}}border-l-2 border-l-emerald-500{{else if eq .Status "stale"}}border-l-2 border-l-amber-500{{else}}border-l-2 border-l-red-500{{end}}" data-agent-id="{{.ID}}">
                     <td class="py-3.5 px-5">
                         <input type="checkbox" class="agent-checkbox w-4 h-4 accent-indigo-600 rounded cursor-pointer">
                     </td>
@@ -99,6 +113,9 @@
                         </div>
                     </td>
                     <td class="py-3.5 px-4">
+                        <span class="font-mono text-xs text-slate-700">{{.PublicIP | default "—"}}</span>
+                    </td>
+                    <td class="py-3.5 px-4">
                         <div class="flex items-center gap-2">
                             <span class="font-mono text-xs text-slate-700 font-medium">{{.IP}}</span>
                             {{if .Domain}}<span class="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md font-medium">{{.Domain}}</span>{{end}}
@@ -112,9 +129,13 @@
                         <span class="inline-flex items-center gap-2 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-semibold">
                             <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>在线
                         </span>
+                        {{else if eq .Status "stale"}}
+                        <span class="inline-flex items-center gap-2 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-semibold">
+                            <span class="w-2 h-2 bg-amber-500 rounded-full"></span>超时
+                        </span>
                         {{else}}
-                        <span class="inline-flex items-center gap-2 px-2.5 py-1 bg-slate-100 text-slate-500 rounded-lg text-xs font-medium">
-                            <span class="w-2 h-2 bg-slate-400 rounded-full"></span>离线
+                        <span class="inline-flex items-center gap-2 px-2.5 py-1 bg-red-50 text-red-700 rounded-lg text-xs font-semibold">
+                            <span class="w-2 h-2 bg-red-500 rounded-full"></span>离线
                         </span>
                         {{end}}
                     </td>
@@ -144,14 +165,14 @@
                     </td>
                 </tr>
                 {{else}}
-                <tr><td colspan="9" class="py-20">
+                <tr><td colspan="10" class="py-20">
                     <div class="text-center">
                         <i class="fa-solid fa-users-slash text-6xl text-slate-300 mb-4"></i>
-                        <h3 class="text-lg font-medium text-slate-700 mb-2">暂无已连接的 Agent</h3>
-                        <p class="text-slate-500 mb-4">生成第一个 Agent 开始红队行动</p>
+                        <h3 class="text-lg font-medium text-slate-700 mb-2">暂无已连接的 Implant</h3>
+                        <p class="text-slate-500 mb-4">部署第一个 Implant 开始红队行动</p>
                         <a href="/generate" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors">
                             <i class="fa-solid fa-plus"></i>
-                            <span>生成 Agent</span>
+                            <span>生成 Implant</span>
                         </a>
                     </div>
                 </td></tr>
@@ -229,7 +250,7 @@
                     <i class="fa-solid fa-power-off text-white text-xl"></i>
                 </div>
                 <div>
-                    <h3 class="text-lg font-semibold text-white">下线 Agent</h3>
+                    <h3 class="text-lg font-semibold text-white">下线 Implant</h3>
                     <p class="text-white/80 text-sm">确认操作</p>
                 </div>
             </div>
@@ -261,7 +282,7 @@
                     <i class="fa-solid fa-trash text-white text-xl"></i>
                 </div>
                 <div>
-                    <h3 class="text-lg font-semibold text-white">删除 Agent</h3>
+                    <h3 class="text-lg font-semibold text-white">删除 Implant</h3>
                     <p class="text-white/80 text-sm">确认操作</p>
                 </div>
             </div>
@@ -283,273 +304,5 @@
     </div>
 </div>
 
-<script>
-    let currentAgentId = '';
-    let currentHostname = '';
-
-    // ---- Selection / Batch ----
-    document.addEventListener('DOMContentLoaded', function() {
-        const selectAll = document.getElementById('select-all');
-        if (selectAll) {
-            selectAll.addEventListener('change', function() {
-                document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = this.checked);
-                updateBatchBar();
-            });
-            document.querySelectorAll('.agent-checkbox').forEach(cb => {
-                cb.addEventListener('change', updateBatchBar);
-            });
-        }
-        updateTimeAgo();
-        setInterval(updateTimeAgo, 30000);
-    });
-
-    function updateBatchBar() {
-        const checked = document.querySelectorAll('.agent-checkbox:checked');
-        const bar = document.getElementById('batch-bar');
-        const count = document.getElementById('batch-count');
-        if (checked.length > 0) {
-            bar.classList.remove('hidden');
-            bar.classList.add('flex');
-            count.textContent = '已选择 ' + checked.length + ' 个';
-        } else {
-            bar.classList.add('hidden');
-            bar.classList.remove('flex');
-        }
-    }
-
-    function getSelectedIds() {
-        return Array.from(document.querySelectorAll('.agent-checkbox:checked')).map(cb =>
-            cb.closest('.agent-row').dataset.agentId
-        );
-    }
-
-    function deselectAll() {
-        document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = false);
-        document.getElementById('select-all').checked = false;
-        updateBatchBar();
-    }
-
-    function batchShell() {
-        const ids = getSelectedIds();
-        if (ids.length === 0) return;
-        const cmd = prompt('批量执行命令 (将在所有选中 Agent 上执行):', 'whoami');
-        if (!cmd) return;
-        fetch('/agents/batch', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ agent_ids: ids, command: cmd, shell: 'cmd.exe', task_type: 'shell' })
-        }).then(r => r.json()).then(data => {
-            if (data.success) {
-                showToast('已向 ' + data.tasks_created + ' 个 Agent 发送命令' + (data.skipped_locked > 0 ? ' (跳过 ' + data.skipped_locked + ' 个锁定)' : ''));
-                deselectAll();
-            } else {
-                showToast('失败: ' + (data.error || ''), 'error');
-            }
-        }).catch(err => showToast('错误: ' + err, 'error'));
-    }
-
-    function batchScreenshot() {
-        const ids = getSelectedIds();
-        if (ids.length === 0) return;
-        if (!confirm('向 ' + ids.length + ' 个 Agent 发送截图命令？')) return;
-        fetch('/agents/batch', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ agent_ids: ids, task_type: 'screenshot' })
-        }).then(r => r.json()).then(data => {
-            if (data.success) {
-                showToast('已向 ' + data.tasks_created + ' 个 Agent 发送截图命令');
-                deselectAll();
-            } else {
-                showToast('失败: ' + (data.error || ''), 'error');
-            }
-        }).catch(err => showToast('错误: ' + err, 'error'));
-    }
-
-    function batchKeylogger(action) {
-        const ids = getSelectedIds();
-        if (ids.length === 0) return;
-        const actionNames = { start: '启动键盘记录', dump: '导出键盘记录', stop: '停止键盘记录' };
-        if (!confirm('向 ' + ids.length + ' 个 Agent ' + actionNames[action] + '？')) return;
-        fetch('/agents/batch', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ agent_ids: ids, task_type: 'keylogger_' + action })
-        }).then(r => r.json()).then(data => {
-            if (data.success) {
-                showToast('已向 ' + data.tasks_created + ' 个 Agent ' + actionNames[action]);
-                deselectAll();
-            } else {
-                showToast('失败: ' + (data.error || ''), 'error');
-            }
-        }).catch(err => showToast('错误: ' + err, 'error'));
-    }
-
-    function batchClipboard() {
-        const ids = getSelectedIds();
-        if (ids.length === 0) return;
-        fetch('/agents/batch', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ agent_ids: ids, task_type: 'clipboard_get' })
-        }).then(r => r.json()).then(data => {
-            if (data.success) {
-                showToast('已向 ' + data.tasks_created + ' 个 Agent 获取剪贴板');
-                deselectAll();
-            } else {
-                showToast('失败: ' + (data.error || ''), 'error');
-            }
-        }).catch(err => showToast('错误: ' + err, 'error'));
-    }
-
-    function batchCredsDump() {
-        const ids = getSelectedIds();
-        if (ids.length === 0) return;
-        if (!confirm('向 ' + ids.length + ' 个 Agent 发送凭据提取命令？\n此操作可能需要管理员权限。')) return;
-        fetch('/agents/batch', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ agent_ids: ids, task_type: 'creds_dump' })
-        }).then(r => r.json()).then(data => {
-            if (data.success) {
-                showToast('已向 ' + data.tasks_created + ' 个 Agent 发送凭据提取命令');
-                deselectAll();
-            } else {
-                showToast('失败: ' + (data.error || ''), 'error');
-            }
-        }).catch(err => showToast('错误: ' + err, 'error'));
-    }
-
-    function batchPrivescCheck() {
-        const ids = getSelectedIds();
-        if (ids.length === 0) return;
-        if (!confirm('向 ' + ids.length + ' 个 Agent 发送提权侦查命令？')) return;
-        fetch('/agents/batch', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ agent_ids: ids, task_type: 'privesc_check' })
-        }).then(r => r.json()).then(data => {
-            if (data.success) {
-                showToast('已向 ' + data.tasks_created + ' 个 Agent 发送提权侦查命令');
-                deselectAll();
-            } else {
-                showToast('失败: ' + (data.error || ''), 'error');
-            }
-        }).catch(err => showToast('错误: ' + err, 'error'));
-    }
-
-    function batchSleep() {
-        const ids = getSelectedIds();
-        if (ids.length === 0) return;
-        const interval = prompt('请输入新的睡眠间隔 (秒):', '30');
-        if (!interval) return;
-        const jitter = prompt('请输入抖动百分比 (0-100):', '20');
-        if (!jitter) return;
-        fetch('/agents/batch', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ agent_ids: ids, task_type: 'sleep', args: interval + ',' + jitter })
-        }).then(r => r.json()).then(data => {
-            if (data.success) {
-                showToast('已向 ' + data.tasks_created + ' 个 Agent 更改睡眠间隔');
-                deselectAll();
-            } else {
-                showToast('失败: ' + (data.error || ''), 'error');
-            }
-        }).catch(err => showToast('错误: ' + err, 'error'));
-    }
-
-    function batchDelete() {
-        const ids = getSelectedIds();
-        if (ids.length === 0) return;
-        if (!confirm('确认删除选中的 ' + ids.length + ' 个 Agent？')) return;
-        let done = 0;
-        ids.forEach(id => {
-            fetch('/agents/' + id, { method: 'DELETE' })
-                .then(() => { done++; if (done === ids.length) { showToast('已删除 ' + done + ' 个 Agent'); setTimeout(() => location.reload(), 1000); } })
-                .catch(() => showToast('删除 Agent 失败', 'error'));
-        });
-    }
-
-    // ---- Time Ago ----
-    function updateTimeAgo() {
-        document.querySelectorAll('.time-ago').forEach(el => {
-            const ts = parseInt(el.dataset.time);
-            if (!ts) return;
-            const diff = Math.floor(Date.now() / 1000) - ts;
-            if (diff < 60) el.textContent = '刚刚';
-            else if (diff < 3600) el.textContent = Math.floor(diff / 60) + 'm前';
-            else if (diff < 86400) el.textContent = Math.floor(diff / 3600) + 'h前';
-            else el.textContent = Math.floor(diff / 86400) + 'd前';
-        });
-    }
-
-    // ---- Modal helpers ----
-    function showOfflineModal(agentId, hostname) {
-        currentAgentId = agentId; currentHostname = hostname;
-        document.getElementById('modal-hostname').textContent = hostname;
-        document.getElementById('offline-modal').classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
-    }
-    function hideOfflineModal() {
-        document.getElementById('offline-modal').classList.add('hidden');
-        document.body.style.overflow = '';
-    }
-    function confirmOffline() {
-        fetch(`/agents/${currentAgentId}/kill`, { method: 'POST', headers: {'Content-Type': 'application/json'} })
-            .then(r => r.json()).then(data => {
-                hideOfflineModal();
-                if (data.success) { showToast('Agent已下线', 'success'); setTimeout(() => location.reload(), 1500); }
-                else { showToast('下线失败: ' + (data.error || ''), 'error'); }
-            }).catch(err => { hideOfflineModal(); showToast('错误: ' + err, 'error'); });
-    }
-    function showDeleteModal(agentId, hostname) {
-        currentAgentId = agentId; currentHostname = hostname;
-        document.getElementById('delete-hostname').textContent = hostname;
-        document.getElementById('delete-modal').classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
-    }
-    function hideDeleteModal() {
-        document.getElementById('delete-modal').classList.add('hidden');
-        document.body.style.overflow = '';
-    }
-    function confirmDelete() {
-        fetch(`/agents/${currentAgentId}`, { method: 'DELETE' })
-            .then(r => r.json()).then(data => {
-                hideDeleteModal();
-                if (data.success) { showToast('Agent已删除', 'success'); setTimeout(() => location.reload(), 1500); }
-                else { showToast('删除失败: ' + (data.error || ''), 'error'); }
-            }).catch(err => { hideDeleteModal(); showToast('错误: ' + err, 'error'); });
-    }
-
-    // ─── Lock indicator sync ───
-    document.addEventListener('DOMContentLoaded', function() {
-        function refreshLocks() {
-            fetch('/api/collab/locks').then(r => r.json()).then(d => {
-                if (!d.success || !d.locks) return;
-                const lockMap = {};
-                d.locks.forEach(l => { lockMap[l.agent_id] = l.username; });
-                document.querySelectorAll('.agent-lock').forEach(el => {
-                    const aid = el.getAttribute('data-agent-id');
-                    if (lockMap[aid]) {
-                        el.innerHTML = `<span class="flex items-center gap-1 text-amber-600"><i class="fa-solid fa-lock text-[9px]"></i>${lockMap[aid]}</span>`;
-                    } else {
-                        el.innerHTML = '—';
-                    }
-                });
-            }).catch(() => showToast('锁状态刷新失败', 'error'));
-        }
-        refreshLocks();
-        setInterval(refreshLocks, 30000); // fallback: WS handles real-time
-    });
-
-    function showToast(message, type) {
-        const toast = document.createElement('div');
-        toast.className = 'fixed bottom-6 right-6 px-5 py-3 rounded-xl shadow-lg text-sm font-medium z-50 ' +
-            (type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white');
-        toast.innerHTML = '<i class="fa-solid ' + (type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle') + ' mr-2"></i>' + message;
-        document.body.appendChild(toast);
-        setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(10px)'; toast.style.transition = 'all 0.3s'; setTimeout(() => toast.remove(), 300); }, 3000);
-    }
-</script>
+<script src="/static/js/agents.js"></script>
 {{end}}

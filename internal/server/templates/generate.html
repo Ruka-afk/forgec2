@@ -1,7 +1,7 @@
 {{define "generate_content"}}
 <div class="max-w-7xl mx-auto">
     <div class="mb-6">
-        <h1 class="text-3xl font-semibold tracking-tight text-slate-900">生成 Agent</h1>
+        <h1 class="text-3xl font-semibold tracking-tight text-slate-900">生成 Implant</h1>
         <p class="text-slate-500 text-sm mt-1">创建植入程序 (Windows EXE / PS1 / Linux ELF / macOS Binary) — 跨平台支持</p>
         <div class="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl">
             <i class="fa-solid fa-circle-info text-amber-600 text-sm"></i>
@@ -10,7 +10,7 @@
     </div>
 
     <!-- 共享设置 -->
-    <div class="bg-white border border-slate-200 rounded-2xl p-6 mb-6 shadow-sm hover:shadow-md transition-shadow">
+    <div class="bg-white border border-slate-200 rounded-2xl p-6 mb-6 shadow-sm">
         <div class="flex items-center justify-between mb-5">
             <div class="flex items-center gap-x-3">
                 <div class="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
@@ -18,11 +18,27 @@
                 </div>
                 <div>
                     <div class="text-sm font-semibold text-slate-900">公共设置</div>
-                    <div class="text-xs text-slate-500">以下设置对所有平台生效</div>
+                    <div class="text-xs text-slate-500">选择监听器，其余自动填充</div>
                 </div>
             </div>
+            <button type="button" onclick="createListener()" class="px-4 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-xl font-medium flex items-center gap-x-1.5">
+                <i class="fa-solid fa-plus"></i> 创建监听器
+            </button>
         </div>
-        <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1.5">监听器 *</label>
+                <select id="shared-listener" onchange="onSharedListenerChange()" class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm cursor-pointer transition-all">
+                    <option value="" disabled selected>-- 选择监听器 --</option>
+                    {{range .Listeners}}
+                    <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}" data-host="{{.Host}}" data-port="{{.Port}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
+                    {{end}}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1.5">C2 地址（自动）</label>
+                <input type="text" id="shared-c2url" readonly class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 h-10 text-xs font-mono text-slate-500">
+            </div>
             <div>
                 <label class="block text-xs font-semibold text-slate-600 mb-1.5">Malleable Profile</label>
                 <select id="shared-profile" class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm cursor-pointer transition-all">
@@ -68,18 +84,15 @@
                 <input type="text" id="shared-failover" placeholder="http://backup1:8080, http://backup2:8080"
                        class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-xs font-mono transition-all">
             </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1.5">加密密钥 (32字节 Hex，可选)</label>
+                <input type="text" id="shared-crypto-key" placeholder="例如: a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890"
+                       class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-xs font-mono transition-all">
+            </div>
         </div>
     </div>
 
     <div class="mb-6 flex flex-wrap items-center gap-3">
-        <button type="button" onclick="createListener()" class="px-4 h-10 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-xl font-medium flex items-center gap-x-2 transition-colors">
-            <i class="fa-solid fa-plus"></i>
-            <span>创建新监听器</span>
-        </button>
-        <span id="listener-hint" class="text-xs text-slate-500 flex items-center gap-1.5">
-            <i class="fa-solid fa-circle-info text-slate-400"></i>
-            先选择监听器，然后选择平台生成
-        </span>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
@@ -94,16 +107,7 @@
             </div>
 
             <form id="exe-form" class="space-y-3">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">监听器</label>
-                    <select name="listener_id" id="listener-exe" onchange="onListenerChange('exe')" class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm cursor-pointer transition-all" required>
-                        <option value="" disabled selected>-- 请选择 --</option>
-                        {{range .Listeners}}
-                        <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
-                        {{end}}
-                    </select>
-                </div>
-
+                <input type="hidden" name="listener_id" id="listener-exe" value="">
                 <input type="hidden" name="c2_url" id="c2-url-exe" value="">
                 <input type="hidden" name="protocol" id="protocol-exe" value="http">
 
@@ -161,7 +165,7 @@
                 <button type="button" onclick="generateEXE()"
                         class="w-full h-10 bg-orange-600 hover:bg-orange-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
                     <i class="fa-solid fa-download"></i>
-                    生成 EXE
+                    构建 EXE
                 </button>
             </form>
             <div id="exe-result" class="mt-3"></div>
@@ -178,22 +182,13 @@
             </div>
 
             <form id="ps1-form" class="space-y-3">
-                <div>
-                    <label class="block text-xs section-header mb-1.5">监听器</label>
-                    <select name="listener_id" id="listener-ps1" onchange="onListenerChange('ps1')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm" required>
-                        <option value="" disabled selected>-- 请选择 --</option>
-                        {{range .Listeners}}
-                        <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
-                        {{end}}
-                    </select>
-                </div>
-
+                <input type="hidden" name="listener_id" value="">
                 <input type="hidden" name="c2_url" id="c2-url-ps1" value="">
                 <input type="hidden" name="protocol" id="protocol-ps1" value="http">
 
                 <div class="flex items-center gap-x-2">
                     <input type="checkbox" name="persist" id="persist-ps1" class="w-4 h-4 accent-indigo-600">
-                    <label for="persist-ps1" class="text-sm text-slate-700">启用持久化（有限）</label>
+                    <label for="persist-ps1" class="text-sm text-slate-700">启用持久化</label>
                 </div>
 
                 <div class="flex items-center gap-x-2">
@@ -202,9 +197,8 @@
                 </div>
 
                 <button type="button" onclick="generatePS1()"
-                        class="w-full h-10 bg-blue-600 hover:bg-blue-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
-                    <i class="fa-solid fa-magic"></i>
-                    生成 PS1
+                        class="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
+                    <i class="fa-solid fa-magic"></i> 构建 PS1
                 </button>
             </form>
             <div id="ps1-result" class="mt-3"></div>
@@ -221,74 +215,26 @@
             </div>
 
             <form id="linux-form" class="space-y-3">
-                <div>
-                    <label class="block text-xs section-header mb-1.5">监听器</label>
-                    <select name="listener_id" id="listener-linux" onchange="onListenerChange('linux')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm" required>
-                        <option value="" disabled selected>-- 请选择 --</option>
-                        {{range .Listeners}}
-                        <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
-                        {{end}}
-                    </select>
-                </div>
-
+                <input type="hidden" name="listener_id" value="">
                 <input type="hidden" name="c2_url" id="c2-url-linux" value="">
                 <input type="hidden" name="protocol" id="protocol-linux" value="http">
 
                 <div>
-                    <label class="block text-xs section-header mb-1.5">文件名</label>
-                    <input type="text" name="filename" value="forgec2_agent"
-                           class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
-                </div>
-
-                <div class="mt-2 pt-2 border-t border-slate-100">
-                    <details class="group">
-                        <summary class="text-xs text-slate-500 cursor-pointer hover:text-indigo-600 select-none"><i class="fa-solid fa-link mr-1"></i> P2P / DNS 设置（可选）</summary>
-                        <div class="mt-2 space-y-2">
-                            <div>
-                                <label class="block text-xs section-header mb-1.5">传输协议</label>
-                                <select name="p2p_mode" class="p2p-mode w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
-                                    <option value="">直接连接（HTTP/TCP）</option>
-                                    <option value="parent">P2P 父节点（接受子节点）</option>
-                                    <option value="child">P2P 子节点（通过父节点回连）</option>
-                                    <option value="dns">DNS 信标</option>
-                                </select>
-                            </div>
-                            <div class="p2p-parent-field hidden">
-                                <label class="block text-xs section-header mb-1.5">父节点地址（子节点模式）</label>
-                                <input type="text" name="p2p_parent" placeholder="tcp://192.168.1.100:4444 或 pipe://agent_pipe" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
-                            </div>
-                            <div class="p2p-listen-field hidden">
-                                <label class="block text-xs section-header mb-1.5">监听地址（父节点模式）</label>
-                                <input type="text" name="p2p_listen_addr" placeholder="TCP: :4444 / SMB: agent_pipe" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
-                            </div>
-                            <div class="dns-fields hidden">
-                                <div class="mb-2">
-                                    <label class="block text-xs section-header mb-1.5">DNS 域名</label>
-                                    <input type="text" name="dns_domain" placeholder="c2.example.com" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
-                                </div>
-                                <div>
-                                    <label class="block text-xs section-header mb-1.5">DNS 服务器 IP</label>
-                                    <input type="text" name="dns_server" placeholder="192.168.1.100" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
-                                </div>
-                            </div>
-                        </div>
-                    </details>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">文件名</label>
+                    <input type="text" name="filename" value="forge_implant"
+                           class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 h-10 text-sm">
                 </div>
 
                 <div class="flex items-center gap-x-2">
                     <input type="checkbox" name="persist" id="persist-linux" class="w-4 h-4 accent-indigo-600">
-                    <label for="persist-linux" class="text-sm text-slate-700">启用持久化</label>
-                </div>
-
-                <div class="flex items-center gap-x-2">
-                    <input type="checkbox" name="skip_tls_verify" id="skip-tls-linux" class="w-4 h-4 accent-indigo-600" {{if .DefaultSkipTLS}}checked{{end}}>
-                    <label for="skip-tls-linux" class="text-sm text-slate-700">跳过 TLS 验证</label>
+                    <label for="persist-linux" class="text-sm text-slate-700">持久化</label>
+                    <input type="checkbox" name="skip_tls_verify" id="skip-tls-linux" class="w-4 h-4 accent-indigo-600 ml-3" {{if .DefaultSkipTLS}}checked{{end}}>
+                    <label for="skip-tls-linux" class="text-sm text-slate-700">跳过 TLS</label>
                 </div>
 
                 <button type="button" onclick="generateLinux()"
-                        class="w-full h-10 bg-emerald-600 hover:bg-emerald-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
-                    <i class="fa-solid fa-download"></i>
-                    生成 ELF
+                        class="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
+                    <i class="fa-solid fa-download"></i> 构建 ELF
                 </button>
             </form>
             <div id="linux-result" class="mt-3"></div>
@@ -305,74 +251,26 @@
             </div>
 
             <form id="macos-form" class="space-y-3">
-                <div>
-                    <label class="block text-xs section-header mb-1.5">监听器</label>
-                    <select name="listener_id" id="listener-macos" onchange="onListenerChange('macos')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm" required>
-                        <option value="" disabled selected>-- 请选择 --</option>
-                        {{range .Listeners}}
-                        <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
-                        {{end}}
-                    </select>
-                </div>
-
+                <input type="hidden" name="listener_id" value="">
                 <input type="hidden" name="c2_url" id="c2-url-macos" value="">
                 <input type="hidden" name="protocol" id="protocol-macos" value="http">
 
                 <div>
-                    <label class="block text-xs section-header mb-1.5">文件名</label>
-                    <input type="text" name="filename" value="forgec2_agent"
-                           class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
-                </div>
-
-                <div class="mt-2 pt-2 border-t border-slate-100">
-                    <details class="group">
-                        <summary class="text-xs text-slate-500 cursor-pointer hover:text-indigo-600 select-none"><i class="fa-solid fa-link mr-1"></i> P2P / DNS 设置（可选）</summary>
-                        <div class="mt-2 space-y-2">
-                            <div>
-                                <label class="block text-xs section-header mb-1.5">传输协议</label>
-                                <select name="p2p_mode" class="p2p-mode w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
-                                    <option value="">直接连接（HTTP/TCP）</option>
-                                    <option value="parent">P2P 父节点（接受子节点）</option>
-                                    <option value="child">P2P 子节点（通过父节点回连）</option>
-                                    <option value="dns">DNS 信标</option>
-                                </select>
-                            </div>
-                            <div class="p2p-parent-field hidden">
-                                <label class="block text-xs section-header mb-1.5">父节点地址（子节点模式）</label>
-                                <input type="text" name="p2p_parent" placeholder="tcp://192.168.1.100:4444" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
-                            </div>
-                            <div class="p2p-listen-field hidden">
-                                <label class="block text-xs section-header mb-1.5">监听地址（父节点模式）</label>
-                                <input type="text" name="p2p_listen_addr" placeholder="TCP: :4444" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
-                            </div>
-                            <div class="dns-fields hidden">
-                                <div class="mb-2">
-                                    <label class="block text-xs section-header mb-1.5">DNS 域名</label>
-                                    <input type="text" name="dns_domain" placeholder="c2.example.com" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
-                                </div>
-                                <div>
-                                    <label class="block text-xs section-header mb-1.5">DNS 服务器 IP</label>
-                                    <input type="text" name="dns_server" placeholder="192.168.1.100" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
-                                </div>
-                            </div>
-                        </div>
-                    </details>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">文件名</label>
+                    <input type="text" name="filename" value="forge_implant"
+                           class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 h-10 text-sm">
                 </div>
 
                 <div class="flex items-center gap-x-2">
                     <input type="checkbox" name="persist" id="persist-macos" class="w-4 h-4 accent-indigo-600">
-                    <label for="persist-macos" class="text-sm text-slate-700">启用持久化</label>
-                </div>
-
-                <div class="flex items-center gap-x-2">
-                    <input type="checkbox" name="skip_tls_verify" id="skip-tls-macos" class="w-4 h-4 accent-indigo-600" {{if .DefaultSkipTLS}}checked{{end}}>
-                    <label for="skip-tls-macos" class="text-sm text-slate-700">跳过 TLS 验证</label>
+                    <label for="persist-macos" class="text-sm text-slate-700">持久化</label>
+                    <input type="checkbox" name="skip_tls_verify" id="skip-tls-macos" class="w-4 h-4 accent-indigo-600 ml-3" {{if .DefaultSkipTLS}}checked{{end}}>
+                    <label for="skip-tls-macos" class="text-sm text-slate-700">跳过 TLS</label>
                 </div>
 
                 <button type="button" onclick="generateMacOS()"
-                        class="w-full h-10 bg-purple-600 hover:bg-purple-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
-                    <i class="fa-solid fa-download"></i>
-                    生成 macOS Binary
+                        class="w-full h-10 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
+                    <i class="fa-solid fa-download"></i> 构建 macOS
                 </button>
             </form>
             <div id="macos-result" class="mt-3"></div>
@@ -402,16 +300,7 @@
                 </div>
 
                 <form id="stager-form" class="space-y-4">
-                    <div>
-                        <label class="block text-xs section-header mb-1.5">监听器</label>
-                        <select name="listener_id" id="listener-stager" onchange="onListenerChange('stager')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm" required>
-                            <option value="" disabled selected>-- 请选择 --</option>
-                            {{range .Listeners}}
-                            <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
-                            {{end}}
-                        </select>
-                    </div>
-
+                    <input type="hidden" name="listener_id" value="">
                     <input type="hidden" name="c2_url" id="c2-url-stager" value="">
                     <input type="hidden" name="protocol" id="protocol-stager" value="http">
 
@@ -446,16 +335,7 @@
                 </div>
 
                 <form id="stager-linux-form" class="space-y-4">
-                    <div>
-                        <label class="block text-xs section-header mb-1.5">监听器</label>
-                        <select name="listener_id" id="listener-stager-linux" onchange="onListenerChange('stager-linux')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm" required>
-                            <option value="" disabled selected>-- 请选择 --</option>
-                            {{range .Listeners}}
-                            <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
-                            {{end}}
-                        </select>
-                    </div>
-
+                    <input type="hidden" name="listener_id" value="">
                     <input type="hidden" name="c2_url" id="c2-url-stager-linux" value="">
                     <input type="hidden" name="protocol" id="protocol-stager-linux" value="http">
 
@@ -477,6 +357,138 @@
                     </button>
                 </form>
                 <div id="stager-linux-result" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shellcode / Donut / sRDI Generator (Phase 9) -->
+    <div class="mt-8">
+        <div class="flex items-center gap-x-3 mb-5">
+            <div class="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
+                <i class="fa-solid fa-microchip text-yellow-600"></i>
+            </div>
+            <div>
+                <div class="text-sm font-semibold text-slate-900">Shellcode / Donut / sRDI</div>
+                <div class="text-xs text-slate-500">生成自定义 Shellcode、.NET → Shellcode（Donut）、DLL → Shellcode（sRDI）</div>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <!-- Basic Shellcode -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
+                    <div class="w-11 h-11 bg-amber-100 rounded-xl flex items-center justify-center text-2xl">💾</div>
+                    <div>
+                        <div class="font-semibold text-base text-slate-900">基础 Shellcode</div>
+                        <div class="text-xs text-slate-500">WinExec + PowerShell 加载器</div>
+                    </div>
+                </div>
+                <form id="shellcode-form" class="space-y-4">
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">执行命令</label>
+                        <input type="text" name="command" id="shellcode-cmd" value="powershell -NoP -EP Bypass -Enc ..."
+                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">文件名</label>
+                        <input type="text" name="filename" value="shellcode.bin"
+                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                    </div>
+                    <button type="button" onclick="generateShellcode()"
+                            class="w-full h-10 bg-amber-600 hover:bg-amber-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
+                        <i class="fa-solid fa-download"></i> 生成 Shellcode
+                    </button>
+                </form>
+                <div id="shellcode-result" class="mt-3"></div>
+            </div>
+
+            <!-- Donut (.NET → Shellcode) -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
+                    <div class="w-11 h-11 bg-orange-100 rounded-xl flex items-center justify-center text-2xl">🍩</div>
+                    <div>
+                        <div class="font-semibold text-base text-slate-900">Donut 加载器</div>
+                        <div class="text-xs text-slate-500">.NET 程序集 → PIC Shellcode</div>
+                    </div>
+                </div>
+                <form id="donut-form" class="space-y-4" enctype="multipart/form-data">
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">.NET 程序集 (EXE/DLL)</label>
+                        <input type="file" name="assembly" accept=".exe,.dll"
+                               class="w-full text-sm file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                    </div>
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">架构</label>
+                        <select name="arch" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                            <option value="amd64">x64 (amd64)</option>
+                            <option value="x86">x86</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">类名（可选）</label>
+                        <input type="text" name="class" placeholder="Leave blank for Main"
+                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">方法名（可选）</label>
+                        <input type="text" name="method" placeholder="Main"
+                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">参数（可选）</label>
+                        <input type="text" name="args" placeholder="程序参数"
+                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">文件名</label>
+                        <input type="text" name="filename" value="donut_loader.bin"
+                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                    </div>
+                    <button type="button" onclick="generateDonut()"
+                            class="w-full h-10 bg-orange-600 hover:bg-orange-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
+                        <i class="fa-solid fa-download"></i> 生成 Donut Shellcode
+                    </button>
+                </form>
+                <div id="donut-result" class="mt-3"></div>
+            </div>
+
+            <!-- sRDI (DLL → Shellcode) -->
+            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
+                    <div class="w-11 h-11 bg-red-100 rounded-xl flex items-center justify-center text-2xl">📦</div>
+                    <div>
+                        <div class="font-semibold text-base text-slate-900">sRDI 反射加载</div>
+                        <div class="text-xs text-slate-500">DLL → PIC Shellcode</div>
+                    </div>
+                </div>
+                <form id="srdi-form" class="space-y-4" enctype="multipart/form-data">
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">DLL 文件</label>
+                        <input type="file" name="dll" accept=".dll"
+                               class="w-full text-sm file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                    </div>
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">导出函数（可选）</label>
+                        <input type="text" name="export" placeholder="DllMain 或自定义函数"
+                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                    </div>
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">架构</label>
+                        <select name="arch" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                            <option value="amd64">x64 (amd64)</option>
+                            <option value="x86">x86</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs section-header mb-1.5">文件名</label>
+                        <input type="text" name="filename" value="rdi_loader.bin"
+                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                    </div>
+                    <button type="button" onclick="generateSRDI()"
+                            class="w-full h-10 bg-red-600 hover:bg-red-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
+                        <i class="fa-solid fa-download"></i> 生成 sRDI Shellcode
+                    </button>
+                </form>
+                <div id="srdi-result" class="mt-3"></div>
             </div>
         </div>
     </div>
@@ -539,7 +551,7 @@
                 <button type="button" onclick="generateOneLiner()"
                         class="w-full h-10 bg-rose-600 hover:bg-rose-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
                     <i class="fa-solid fa-bolt"></i>
-                    生成 One-Liner 命令
+                    构建 One-Liner 命令
                 </button>
             </form>
             <div id="oneliner-result" class="mt-4"></div>
@@ -552,466 +564,5 @@
     </div>
 </div>
 
-<script>
-    // P2P / DNS mode toggles
-    document.querySelectorAll('.p2p-mode').forEach(sel => {
-        sel.addEventListener('change', function() {
-            const card = this.closest('.space-y-4') || this.closest('form') || this.parentElement;
-            const parentField = card.querySelector('.p2p-parent-field');
-            const listenField = card.querySelector('.p2p-listen-field');
-            const dnsFields = card.querySelector('.dns-fields');
-            if (this.value === 'child') {
-                if (parentField) parentField.classList.remove('hidden');
-                if (listenField) listenField.classList.add('hidden');
-                if (dnsFields) dnsFields.classList.add('hidden');
-            } else if (this.value === 'parent') {
-                if (parentField) parentField.classList.add('hidden');
-                if (listenField) listenField.classList.remove('hidden');
-                if (dnsFields) dnsFields.classList.add('hidden');
-            } else if (this.value === 'dns') {
-                if (parentField) parentField.classList.add('hidden');
-                if (listenField) listenField.classList.add('hidden');
-                if (dnsFields) dnsFields.classList.remove('hidden');
-            } else {
-                if (parentField) parentField.classList.add('hidden');
-                if (listenField) listenField.classList.add('hidden');
-                if (dnsFields) dnsFields.classList.add('hidden');
-            }
-        });
-    });
-
-    function onListenerChange(prefix) {
-        const sel = document.getElementById('listener-' + prefix);
-        const opt = sel.options[sel.selectedIndex];
-        if (!opt) return;
-        const scheme = opt.dataset.scheme;
-        const host = opt.dataset.host;
-        const port = opt.dataset.port;
-        const type = opt.dataset.type;
-        let c2url = scheme + '://' + host + ':' + port;
-        // Multi-C2 failover: append backup URLs from shared settings
-        const failover = document.getElementById('shared-failover');
-        if (failover && failover.value.trim()) {
-            c2url += ',' + failover.value.trim();
-        }
-        document.getElementById('c2-url-' + prefix).value = c2url;
-        let transport = 'http';
-        if (scheme === 'tcp' || scheme === 'tls') {
-            transport = 'tcp';
-        } else if (scheme === 'dns' || type === 'dns') {
-            transport = 'dns';
-        }
-        document.getElementById('protocol-' + prefix).value = transport;
-        document.getElementById('listener-hint').textContent = '已选择: ' + opt.text;
-    }
-
-    function getSharedSettings() {
-        return {
-            profile: document.getElementById('shared-profile').value,
-            interval: document.getElementById('shared-interval').value,
-            jitter: document.getElementById('shared-jitter').value,
-            user_agent: document.getElementById('shared-ua').value,
-            proxy: document.getElementById('shared-proxy').value
-        };
-    }
-
-    function getFormData(formId) {
-        const form = document.getElementById(formId);
-        const formData = new FormData(form);
-        const shared = getSharedSettings();
-        formData.set('profile', shared.profile);
-        formData.set('interval', shared.interval);
-        formData.set('jitter', shared.jitter);
-        formData.set('user_agent', shared.user_agent);
-        const persistEl = form.querySelector('input[name="persist"]');
-        if (persistEl) formData.set('persist', persistEl.checked ? 'true' : '');
-        const skipEl = form.querySelector('input[name="skip_tls_verify"]');
-        if (skipEl) formData.set('skip_tls_verify', skipEl.checked ? 'true' : '');
-        return formData;
-    }
-
-    async function generateEXE() {
-        const listenerSel = document.getElementById('listener-exe');
-        if (!listenerSel.value) { showToast('请先选择一个监听器', 'error'); return; }
-        const formData = getFormData('exe-form');
-        const btn = document.querySelector('#exe-form button');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在生成...';
-        document.getElementById('exe-result').innerHTML = '';
-
-        try {
-            const response = await fetch('/generate/exe', {
-                method: 'POST',
-                headers: { 'X-CSRF-Token': getCSRFToken() },
-                body: formData
-            });
-            if (response.ok) {
-                const blob = await response.blob();
-                const contentDisposition = response.headers.get('Content-Disposition');
-                let filename = 'forge_agent.exe';
-                if (contentDisposition) {
-                    const match = contentDisposition.match(/filename=(.+)/);
-                    if (match) filename = match[1].replace(/"/g, '');
-                }
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url; a.download = filename;
-                document.body.appendChild(a); a.click();
-                window.URL.revokeObjectURL(url); a.remove();
-                showToast('EXE 生成并下载成功！', 'success');
-            } else {
-                const text = await response.text();
-                document.getElementById('exe-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + text + '</div>';
-            }
-        } catch (err) {
-            document.getElementById('exe-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + err.message + '</div>';
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-download"></i> 生成 EXE';
-        }
-    }
-
-    async function generatePS1() {
-        const listenerSel = document.getElementById('listener-ps1');
-        if (!listenerSel.value) { showToast('请先选择一个监听器', 'error'); return; }
-        const formData = getFormData('ps1-form');
-        const btn = document.querySelector('#ps1-form button');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在生成...';
-        document.getElementById('ps1-result').innerHTML = '';
-
-        try {
-            const response = await fetch('/generate/ps1', {
-                method: 'POST',
-                headers: { 'X-CSRF-Token': getCSRFToken() },
-                body: formData
-            });
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    document.getElementById('ps1-result').innerHTML = `
-                        <div class="mt-3">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-xs text-emerald-600 font-medium">
-                                    <i class="fa-solid fa-check-circle"></i> 生成成功！
-                                    原始: ${data.original_length} B → 混淆: ${data.obfuscated_len} B
-                                </span>
-                                <button onclick="copyToClipboard()" class="text-xs px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center gap-x-1">
-                                    <i class="fa-solid fa-copy"></i> 复制
-                                </button>
-                            </div>
-                            <textarea id="ps1-code" readonly class="w-full h-48 bg-slate-900 text-emerald-400 font-mono text-xs rounded-xl p-3 border border-slate-700 resize-none">${escapeHtml(data.code)}</textarea>
-                            <div class="mt-1 text-xs text-slate-500"><i class="fa-solid fa-info-circle"></i> 直接在 PowerShell 中粘贴执行</div>
-                        </div>
-                    `;
-                }
-            } else {
-                const text = await response.text();
-                document.getElementById('ps1-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + text + '</div>';
-            }
-        } catch (err) {
-            document.getElementById('ps1-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + err.message + '</div>';
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-magic"></i> 生成 PS1';
-        }
-    }
-
-    async function generateStager() {
-        const listenerSel = document.getElementById('listener-stager');
-        if (!listenerSel.value) { showToast('请先选择一个监听器', 'error'); return; }
-        const form = document.getElementById('stager-form');
-        const formData = new FormData(form);
-        const shared = getSharedSettings();
-        formData.set('profile', shared.profile);
-        formData.set('interval', shared.interval);
-        formData.set('jitter', shared.jitter);
-        formData.set('user_agent', shared.user_agent);
-        formData.set('proxy', shared.proxy);
-        const skipEl = form.querySelector('input[name="skip_tls_verify"]');
-        if (skipEl) formData.set('skip_tls_verify', skipEl.checked ? 'true' : '');
-
-        const btn = form.querySelector('button');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在生成...';
-        document.getElementById('stager-result').innerHTML = '';
-
-        try {
-            const response = await fetch('/generate/stager', {
-                method: 'POST',
-                headers: { 'X-CSRF-Token': getCSRFToken() },
-                body: formData
-            });
-            if (response.ok) {
-                const blob = await response.blob();
-                const contentDisposition = response.headers.get('Content-Disposition');
-                let filename = 'stager.exe';
-                if (contentDisposition) {
-                    const match = contentDisposition.match(/filename=(.+)/);
-                    if (match) filename = match[1].replace(/"/g, '');
-                }
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url; a.download = filename;
-                document.body.appendChild(a); a.click();
-                window.URL.revokeObjectURL(url); a.remove();
-                showToast('加载器 + 阶段负载生成成功！', 'success');
-            } else {
-                const text = await response.text();
-                document.getElementById('stager-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + text + '</div>';
-            }
-        } catch (err) {
-            document.getElementById('stager-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + err.message + '</div>';
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-download"></i> 生成加载器 + 阶段负载';
-        }
-    }
-
-    async function generateStagerLinux() {
-        const listenerSel = document.getElementById('listener-stager-linux');
-        if (!listenerSel.value) { showToast('请先选择一个监听器', 'error'); return; }
-        const form = document.getElementById('stager-linux-form');
-        const formData = new FormData(form);
-        const shared = getSharedSettings();
-        formData.set('profile', shared.profile);
-        formData.set('interval', shared.interval);
-        formData.set('jitter', shared.jitter);
-        formData.set('user_agent', shared.user_agent);
-        formData.set('proxy', shared.proxy);
-        const skipEl = form.querySelector('input[name="skip_tls_verify"]');
-        if (skipEl) formData.set('skip_tls_verify', skipEl.checked ? 'true' : '');
-
-        const btn = form.querySelector('button');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在生成...';
-        document.getElementById('stager-linux-result').innerHTML = '';
-
-        try {
-            const response = await fetch('/generate/stager_linux', {
-                method: 'POST',
-                headers: { 'X-CSRF-Token': getCSRFToken() },
-                body: formData
-            });
-            if (response.ok) {
-                const blob = await response.blob();
-                const contentDisposition = response.headers.get('Content-Disposition');
-                let filename = 'stager';
-                if (contentDisposition) {
-                    const match = contentDisposition.match(/filename=(.+)/);
-                    if (match) filename = match[1].replace(/"/g, '');
-                }
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url; a.download = filename;
-                document.body.appendChild(a); a.click();
-                window.URL.revokeObjectURL(url); a.remove();
-                showToast('Linux 加载器 + 阶段负载生成成功！', 'success');
-            } else {
-                const text = await response.text();
-                document.getElementById('stager-linux-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + text + '</div>';
-            }
-        } catch (err) {
-            document.getElementById('stager-linux-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + err.message + '</div>';
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-download"></i> 生成加载器 + 阶段负载';
-        }
-    }
-
-    async function generateLinux() {
-        const listenerSel = document.getElementById('listener-linux');
-        if (!listenerSel.value) { showToast('请先选择一个监听器', 'error'); return; }
-        const formData = getFormData('linux-form');
-        const btn = document.querySelector('#linux-form button');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在生成...';
-
-        try {
-            const response = await fetch('/generate/linux', {
-                method: 'POST',
-                headers: { 'X-CSRF-Token': getCSRFToken() },
-                body: formData
-            });
-            if (response.ok) {
-                const blob = await response.blob();
-                const contentDisposition = response.headers.get('Content-Disposition');
-                let filename = 'forgec2_agent';
-                if (contentDisposition) {
-                    const match = contentDisposition.match(/filename=(.+)/);
-                    if (match) filename = match[1].replace(/"/g, '');
-                }
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url; a.download = filename;
-                document.body.appendChild(a); a.click();
-                window.URL.revokeObjectURL(url); a.remove();
-                showToast('Linux ELF 生成并下载成功！', 'success');
-            } else {
-                const text = await response.text();
-                document.getElementById('linux-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + text + '</div>';
-            }
-        } catch (err) {
-            document.getElementById('linux-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + err.message + '</div>';
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-download"></i> 生成 ELF';
-        }
-    }
-
-    async function generateMacOS() {
-        const listenerSel = document.getElementById('listener-macos');
-        if (!listenerSel.value) { showToast('请先选择一个监听器', 'error'); return; }
-        const formData = getFormData('macos-form');
-        const btn = document.querySelector('#macos-form button');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在生成...';
-        document.getElementById('macos-result').innerHTML = '';
-
-        try {
-            const response = await fetch('/generate/macos', {
-                method: 'POST',
-                headers: { 'X-CSRF-Token': getCSRFToken() },
-                body: formData
-            });
-            if (response.ok) {
-                const blob = await response.blob();
-                const contentDisposition = response.headers.get('Content-Disposition');
-                let filename = 'forgec2_agent';
-                if (contentDisposition) {
-                    const match = contentDisposition.match(/filename=(.+)/);
-                    if (match) filename = match[1].replace(/"/g, '');
-                }
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url; a.download = filename;
-                document.body.appendChild(a); a.click();
-                window.URL.revokeObjectURL(url); a.remove();
-                showToast('macOS Binary 生成并下载成功！', 'success');
-            } else {
-                const text = await response.text();
-                document.getElementById('macos-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + text + '</div>';
-            }
-        } catch (err) {
-            document.getElementById('macos-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + err.message + '</div>';
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-download"></i> 生成 macOS Binary';
-        }
-    }
-
-    async function generateOneLiner() {
-        const listenerSel = document.getElementById('listener-oneliner');
-        if (!listenerSel.value) { showToast('请先选择一个监听器', 'error'); return; }
-        const form = document.getElementById('oneliner-form');
-        const formData = new FormData(form);
-        const shared = getSharedSettings();
-        formData.set('profile', shared.profile);
-        formData.set('interval', shared.interval);
-        formData.set('jitter', shared.jitter);
-        formData.set('user_agent', shared.user_agent);
-        formData.set('proxy', shared.proxy);
-        const persistEl = form.querySelector('input[name="persist"]');
-        if (persistEl) formData.set('persist', persistEl.checked ? 'true' : '');
-        const skipEl = form.querySelector('input[name="skip_tls_verify"]');
-        if (skipEl) formData.set('skip_tls_verify', skipEl.checked ? 'true' : '');
-
-        const btn = form.querySelector('button');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在生成...';
-        document.getElementById('oneliner-result').innerHTML = '';
-
-        try {
-            const response = await fetch('/generate/one-liner', {
-                method: 'POST',
-                headers: { 'X-CSRF-Token': getCSRFToken() },
-                body: formData
-            });
-            const result = await response.json();
-            if (!result.success) {
-                document.getElementById('oneliner-result').innerHTML = '<div class="text-sm text-red-500">错误: ' + escapeHtml(result.error || '') + '</div>';
-                return;
-            }
-            let html = '<div class="text-xs text-emerald-600 mb-3 flex items-center gap-x-2"><i class="fa-solid fa-check-circle"></i>负载已托管: <code class="text-xs bg-slate-100 px-2 py-0.5 rounded">' + escapeHtml(result.download_url) + '</code>（1小时有效）</div>';
-            html += '<div class="space-y-2">';
-            for (const item of result.types) {
-                html += '<div class="border border-slate-200 rounded-2xl p-3 hover:border-rose-200 transition-colors">';
-                html += '<div class="flex items-center justify-between mb-1.5">';
-                html += '<div><span class="text-sm font-medium text-slate-800">' + escapeHtml(item.name) + '</span><span class="text-[10px] text-slate-400 ml-2">' + escapeHtml(item.desc) + '</span></div>';
-                html += '<button onclick="copyOneLiner(this)" class="text-xs px-2.5 py-1 bg-slate-100 hover:bg-rose-100 rounded-xl text-slate-600"><i class="fa-regular fa-copy mr-1"></i>复制</button>';
-                html += '</div>';
-                html += '<code class="block text-[11px] font-mono bg-slate-50 text-slate-700 p-2 rounded-xl whitespace-pre-wrap break-all leading-relaxed select-all">' + escapeHtml(item.command) + '</code>';
-                html += '</div>';
-            }
-            html += '</div>';
-            document.getElementById('oneliner-result').innerHTML = html;
-            showToast('生成 ' + result.types.length + ' 条 One-Liner 命令', 'success');
-        } catch (err) {
-            document.getElementById('oneliner-result').innerHTML = '<div class="text-sm text-red-500">请求失败: ' + escapeHtml(err.message) + '</div>';
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-bolt"></i> 生成 One-Liner 命令';
-        }
-    }
-
-    function copyOneLiner(btn) {
-        const code = btn.closest('.border').querySelector('code').textContent;
-        navigator.clipboard.writeText(code).then(() => {
-            showToast('命令已复制！', 'success');
-        }).catch(() => {
-            const ta = document.createElement('textarea');
-            ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
-            document.body.appendChild(ta); ta.select();
-            document.execCommand('copy'); ta.remove();
-            showToast('命令已复制！', 'success');
-        });
-    }
-
-    function copyToClipboard() {
-        const code = document.getElementById('ps1-code').value;
-        navigator.clipboard.writeText(code).then(() => {
-            showToast('代码已复制到剪贴板！', 'success');
-        }).catch(() => {
-            const textarea = document.getElementById('ps1-code');
-            textarea.select();
-            document.execCommand('copy');
-            showToast('代码已复制！', 'success');
-        });
-    }
-
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    function getCSRFToken() {
-        if (window.getCSRFToken) return window.getCSRFToken();
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; csrf_token=`);
-        if (parts.length === 2) return parts.pop().split(';').shift();
-        return '';
-    }
-
-    async function createListener() {
-        const name = prompt("监听器名称:", "My DNS Listener");
-        if (!name) return;
-        const ltype = prompt("类型 (http/tcp/dns):", "dns");
-        const host = prompt("Domain/IP:", "c2.example.com");
-        const port = ltype === 'dns' ? 53 : parseInt(prompt("Port:", "8080") || "8080");
-        const proto = ltype === 'dns' ? 'dns' : prompt("协议 (http/https/tcp/tls):", ltype);
-        const res = await fetch('/listeners', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCSRFToken() },
-            body: JSON.stringify({ name, type: ltype, host, port, protocol: proto, enabled: true })
-        });
-        const data = await res.json();
-        if (data.success) {
-            showToast('监听器创建成功，请刷新页面', 'success');
-            location.reload();
-        } else {
-            showToast('创建失败: ' + (data.error || ''), 'error');
-        }
-    }
-</script>
+<script src="/static/js/generate.js"></script>
 {{end}}

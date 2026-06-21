@@ -1,0 +1,176 @@
+{{define "infrastructure_content"}}
+<div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Header -->
+    <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 rounded-3xl shadow-sm p-6 text-white">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                <i class="fa-solid fa-cloud-upload-alt text-2xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold">基础设施自动化</h1>
+                <p class="text-sm text-indigo-200 mt-0.5">生成 Redirector 配置、自动 TLS 证书、导出 C2 Profile</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 1: Select Listener -->
+    <div class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden" id="section-listener">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+            <div class="w-8 h-8 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600"><i class="fa-solid fa-plug"></i></div>
+            <div><h2 class="text-sm font-semibold text-slate-800">Step 1: 选择监听器</h2><p class="text-[11px] text-slate-500">选择要生成 Redirector 指向的监听器</p></div>
+        </div>
+        <div class="p-6">
+            <select id="infra-listener" class="w-full max-w-md bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400" onchange="onInfraListenerChange()">
+                <option value="">-- 选择一个监听器 --</option>
+                {{range .Listeners}}
+                <option value="{{.ID}}" data-host="{{.Host}}" data-port="{{.Port}}" data-protocol="{{.Protocol}}">{{.Name}} ({{.Protocol}}://{{.Host}}:{{.Port}})</option>
+                {{end}}
+            </select>
+            <div id="infra-listener-info" class="mt-3 text-xs text-slate-400 hidden">
+                <i class="fa-solid fa-circle-info mr-1"></i>
+                <span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: Domain & Redirector Settings -->
+    <div class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden" id="section-domain">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+            <div class="w-8 h-8 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600"><i class="fa-solid fa-globe"></i></div>
+            <div><h2 class="text-sm font-semibold text-slate-800">Step 2: 域名 & Redirector 设置</h2><p class="text-[11px] text-slate-500">配置前端域名和重定向器参数</p></div>
+        </div>
+        <div class="p-6 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">域名 (Domain)</label>
+                    <input id="infra-domain" type="text" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400" placeholder="c2.example.com">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">监听端口</label>
+                    <input id="infra-port" type="number" value="443" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400">
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">SSL 证书路径</label>
+                    <input id="infra-cert" type="text" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 font-mono text-xs" placeholder="/etc/letsencrypt/live/c2.example.com/fullchain.pem">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">SSL 密钥路径</label>
+                    <input id="infra-key" type="text" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400 font-mono text-xs" placeholder="/etc/letsencrypt/live/c2.example.com/privkey.pem">
+                </div>
+            </div>
+            <div class="flex items-center gap-6">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input id="infra-ws" type="checkbox" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                    <span class="text-xs text-slate-700">WebSocket 支持</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input id="infra-extc2" type="checkbox" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                    <span class="text-xs text-slate-700">包含 External C2 路径</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 3: Generate Config -->
+    <div class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden" id="section-generate">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+            <div class="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600"><i class="fa-solid fa-file-export"></i></div>
+            <div><h2 class="text-sm font-semibold text-slate-800">Step 3: 生成配置</h2><p class="text-[11px] text-slate-500">选择目标 Redirector 类型并生成配置文件</p></div>
+        </div>
+        <div class="p-6">
+            <div class="flex flex-wrap gap-2 mb-4">
+                <button onclick="generateInfra('nginx')" class="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors">
+                    <i class="fa-brands fa-nginx"></i> Nginx
+                </button>
+                <button onclick="generateInfra('apache')" class="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors">
+                    <i class="fa-brands fa-apache"></i> Apache
+                </button>
+                <button onclick="generateInfra('haproxy')" class="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors">
+                    <i class="fa-solid fa-server"></i> HAProxy
+                </button>
+            </div>
+            <div id="infra-result" class="hidden">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs font-medium text-slate-700">生成的配置 (<span id="config-type-label">Nginx</span>)</label>
+                    <button onclick="copyInfraConfig()" class="text-xs px-3 py-1.5 bg-slate-100 hover:bg-indigo-100 rounded-lg flex items-center gap-1.5 text-slate-600">
+                        <i class="fa-regular fa-copy"></i> 复制
+                    </button>
+                </div>
+                <pre id="infra-config-output" class="bg-slate-900 text-emerald-400 p-4 rounded-2xl text-xs overflow-auto max-h-96 whitespace-pre-wrap font-mono leading-relaxed select-all"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- ACME TLS Auto-Provisioning -->
+    <div class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden" id="section-acme">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+            <div class="w-8 h-8 bg-cyan-100 rounded-xl flex items-center justify-center text-cyan-600"><i class="fa-solid fa-certificate"></i></div>
+            <div><h2 class="text-sm font-semibold text-slate-800">ACME TLS 自动续签</h2><p class="text-[11px] text-slate-500">通过 Let's Encrypt 自动签发 TLS 证书</p></div>
+        </div>
+        <div class="p-6 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">域名</label>
+                    <input id="acme-domain" type="text" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-cyan-400" placeholder="c2.example.com">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">邮箱 (用于 Let's Encrypt)</label>
+                    <input id="acme-email" type="email" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-cyan-400" placeholder="admin@example.com">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">监听端口 (HTTP-01)</label>
+                    <input id="acme-port" type="number" value="80" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-cyan-400">
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input id="acme-staging" type="checkbox" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
+                    <span class="text-xs text-slate-700">使用 Staging (测试) 环境</span>
+                </label>
+                <button onclick="provisionACME()" class="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors">
+                    <i class="fa-solid fa-certificate"></i> 自动签发证书
+                </button>
+            </div>
+            <div id="acme-result" class="hidden">
+                <pre id="acme-output" class="bg-slate-900 text-emerald-400 p-4 rounded-2xl text-xs overflow-auto max-h-48 whitespace-pre-wrap font-mono"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- C2 Profile Export -->
+    <div class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden" id="section-export">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+            <div class="w-8 h-8 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600"><i class="fa-solid fa-file-export"></i></div>
+            <div><h2 class="text-sm font-semibold text-slate-800">C2 Profile 导出</h2><p class="text-[11px] text-slate-500">导出当前 Malleable C2 Profile 配置</p></div>
+        </div>
+        <div class="p-6 space-y-4">
+            <div class="flex flex-wrap gap-2">
+                <button onclick="exportProfile('json')" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors">
+                    <i class="fa-solid fa-code"></i> JSON 格式
+                </button>
+                <button onclick="exportProfile('nginx')" class="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors">
+                    <i class="fa-brands fa-nginx"></i> Nginx 格式
+                </button>
+                <button onclick="exportProfile('env')" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors">
+                    <i class="fa-solid fa-terminal"></i> ENV 格式
+                </button>
+            </div>
+            <div id="export-result" class="hidden">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs font-medium text-slate-700">导出结果</label>
+                    <button onclick="copyExportConfig()" class="text-xs px-3 py-1.5 bg-slate-100 hover:bg-indigo-100 rounded-lg flex items-center gap-1.5 text-slate-600">
+                        <i class="fa-regular fa-copy"></i> 复制
+                    </button>
+                </div>
+                <pre id="export-output" class="bg-slate-900 text-emerald-400 p-4 rounded-2xl text-xs overflow-auto max-h-64 whitespace-pre-wrap font-mono leading-relaxed select-all"></pre>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="/static/js/infrastructure.js"></script>
+{{end}}

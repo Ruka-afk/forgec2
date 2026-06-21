@@ -1,9 +1,7 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"time"
@@ -24,21 +22,11 @@ func (s *Server) handleUsersPage(c *gin.Context) {
 		"ActiveNav": "settings",
 		"Users":     users,
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "users_content", data); err != nil {
-		slog.Error("Failed to render content", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "users_content", data)
 }
 
 // handleAddUser creates a new user (admin only)

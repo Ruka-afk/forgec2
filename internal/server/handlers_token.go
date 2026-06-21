@@ -21,7 +21,7 @@ import (
 func (s *Server) handleTokenPage(c *gin.Context) {
 	id := c.Param("id")
 
-	var agent db.Agent
+	var agent db.Implant
 	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
 		c.Redirect(http.StatusFound, "/agents")
 		return
@@ -48,7 +48,6 @@ func (s *Server) handleTokenPage(c *gin.Context) {
 		"ActiveToken": activeToken,
 		"ActiveNav":   "agents",
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}
@@ -66,7 +65,7 @@ func (s *Server) handleGlobalTokensPage(c *gin.Context) {
 	for _, t := range tokens {
 		agentIDs[t.AgentID] = true
 	}
-	var agentsInView []db.Agent
+	var agentsInView []db.Implant
 	if len(agentIDs) > 0 {
 		ids := make([]string, 0, len(agentIDs))
 		for id := range agentIDs {
@@ -74,7 +73,7 @@ func (s *Server) handleGlobalTokensPage(c *gin.Context) {
 		}
 		s.db.Where("id IN ?", ids).Find(&agentsInView)
 	}
-	agentMap := map[string]db.Agent{}
+	agentMap := map[string]db.Implant{}
 	for _, a := range agentsInView {
 		agentMap[a.ID] = a
 	}
@@ -86,7 +85,6 @@ func (s *Server) handleGlobalTokensPage(c *gin.Context) {
 		"AgentMap":  agentMap,
 		"ActiveNav": "tokens",
 	}
-	s.addUserToData(c, data)
 	for k, v := range stats {
 		data[k] = v
 	}

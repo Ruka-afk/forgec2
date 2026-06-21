@@ -13,7 +13,7 @@
         <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex items-center justify-between">
                 <div>
-                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">总 Agent 数</div>
+                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">总 Implant 数</div>
                     <div class="text-3xl font-bold mt-2 text-indigo-600">{{.TotalAgents}}</div>
                     <div class="text-xs text-emerald-600 mt-1 font-medium">{{.OnlineAgents}} 在线</div>
                 </div>
@@ -98,8 +98,8 @@
                     <label class="flex items-center gap-3 p-3 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors">
                         <input type="checkbox" id="include-agents" checked class="w-4 h-4 accent-indigo-600 rounded">
                         <div>
-                            <div class="text-sm font-medium text-slate-900">🤖 Agent 列表</div>
-                            <div class="text-xs text-slate-500">所有部署的 Agent 信息</div>
+                            <div class="text-sm font-medium text-slate-900">🤖 Implant 列表</div>
+                            <div class="text-xs text-slate-500">所有部署的 Implant 信息</div>
                         </div>
                     </label>
                     <label class="flex items-center gap-3 p-3 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors">
@@ -169,90 +169,5 @@
     </div>
 </div>
 
-<script>
-function generateReport() {
-    const data = {
-        start_date: document.getElementById('start-date').value,
-        end_date: document.getElementById('end-date').value,
-        include: {
-            agents: document.getElementById('include-agents').checked,
-            tasks: document.getElementById('include-tasks').checked,
-            creds: document.getElementById('include-creds').checked,
-            screenshots: document.getElementById('include-screenshots').checked,
-            audit: document.getElementById('include-audit').checked
-        },
-        format: document.querySelector('input[name="format"]:checked').value
-    };
-
-    showToast('正在生成报告...', 'success');
-
-    fetch('/api/report/generate', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data)
-    })
-    .then(r => {
-        if (data.format === 'json') {
-            return r.json().then(json => {
-                const blob = new Blob([JSON.stringify(json, null, 2)], {type: 'application/json'});
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'forgec2_report_' + new Date().toISOString().slice(0,10) + '.json';
-                a.click();
-                URL.revokeObjectURL(url);
-                showToast('报告已下载', 'success');
-            });
-        } else {
-            return r.text().then(html => {
-                const blob = new Blob([html], {type: 'text/html'});
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'forgec2_report_' + new Date().toISOString().slice(0,10) + '.html';
-                a.click();
-                URL.revokeObjectURL(url);
-                showToast('报告已下载', 'success');
-            });
-        }
-    })
-    .catch(err => {
-        console.error('Failed to generate report:', err);
-        showToast('生成报告失败', 'error');
-    });
-}
-
-function previewReport() {
-    const data = {
-        start_date: document.getElementById('start-date').value,
-        end_date: document.getElementById('end-date').value,
-        include: {
-            agents: document.getElementById('include-agents').checked,
-            tasks: document.getElementById('include-tasks').checked,
-            creds: document.getElementById('include-creds').checked,
-            screenshots: document.getElementById('include-screenshots').checked,
-            audit: document.getElementById('include-audit').checked
-        },
-        format: 'html'
-    };
-
-    showToast('正在生成预览...', 'success');
-
-    fetch('/api/report/generate', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data)
-    })
-    .then(r => r.text())
-    .then(html => {
-        const win = window.open('', '_blank');
-        win.document.write(html);
-        win.document.close();
-    })
-    .catch(err => {
-        console.error('Failed to preview report:', err);
-        showToast('预览失败', 'error');
-    });
-}
-</script>
+<script src="/static/js/report.js"></script>
 {{end}}

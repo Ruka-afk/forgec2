@@ -14,11 +14,11 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Server.Host != "0.0.0.0" {
 		t.Errorf("expected host 0.0.0.0, got %s", cfg.Server.Host)
 	}
-	if cfg.Agent.DefaultInterval != 10 {
-		t.Errorf("expected interval 10, got %d", cfg.Agent.DefaultInterval)
+	if cfg.Implant.DefaultInterval != 10 {
+		t.Errorf("expected interval 10, got %d", cfg.Implant.DefaultInterval)
 	}
-	if cfg.Agent.DefaultJitter != 20 {
-		t.Errorf("expected jitter 20, got %d", cfg.Agent.DefaultJitter)
+	if cfg.Implant.DefaultJitter != 20 {
+		t.Errorf("expected jitter 20, got %d", cfg.Implant.DefaultJitter)
 	}
 	if cfg.Logging.Level != "info" {
 		t.Errorf("expected level info, got %s", cfg.Logging.Level)
@@ -36,8 +36,8 @@ func TestLoadNonExistentFile(t *testing.T) {
 	if cfg == nil {
 		t.Fatal("Load() returned nil config")
 	}
-	if cfg.Server.JWTSecret == "" {
-		t.Error("JWTSecret should be auto-generated")
+	if cfg.Server.Port != 8080 {
+		t.Error("default port should be 8080")
 	}
 }
 

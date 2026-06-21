@@ -15,10 +15,10 @@ func (s *Server) handleReportPage(c *gin.Context) {
 
 	// Get summary data
 	var totalAgents int64
-	s.db.Model(&db.Agent{}).Count(&totalAgents)
+	s.db.Model(&db.Implant{}).Count(&totalAgents)
 
 	var onlineAgents int64
-	s.db.Model(&db.Agent{}).Where("status = ?", "online").Count(&onlineAgents)
+	s.db.Model(&db.Implant{}).Where("status = ?", "online").Count(&onlineAgents)
 
 	var totalTasks int64
 	s.db.Model(&db.Task{}).Count(&totalTasks)
@@ -33,7 +33,7 @@ func (s *Server) handleReportPage(c *gin.Context) {
 	s.db.Model(&db.AuditLog{}).Count(&totalAudits)
 
 	// Get date range
-	var firstAgent db.Agent
+	var firstAgent db.Implant
 	var startDate time.Time
 	if err := s.db.Order("created_at asc").First(&firstAgent).Error; err == nil {
 		startDate = firstAgent.CreatedAt
@@ -54,8 +54,6 @@ func (s *Server) handleReportPage(c *gin.Context) {
 		"StartDate":      startDate.Format("2006-01-02"),
 		"EndDate":        time.Now().Format("2006-01-02"),
 	}
-	s.addUserToData(c, data)
-
 	s.renderPage(c, "report_content", data)
 }
 
@@ -109,7 +107,7 @@ func (s *Server) handleGenerateReport(c *gin.Context) {
 	// Summary
 	var agentCount, taskCount, credCount, auditCount int64
 	if req.Include.Agents {
-		s.db.Model(&db.Agent{}).Where("created_at BETWEEN ? AND ?", startDate, endDate).Count(&agentCount)
+		s.db.Model(&db.Implant{}).Where("created_at BETWEEN ? AND ?", startDate, endDate).Count(&agentCount)
 	}
 	if req.Include.Tasks {
 		s.db.Model(&db.Task{}).Where("created_at BETWEEN ? AND ?", startDate, endDate).Count(&taskCount)
@@ -131,7 +129,7 @@ func (s *Server) handleGenerateReport(c *gin.Context) {
 
 	// Agents
 	if req.Include.Agents {
-		var agents []db.Agent
+		var agents []db.Implant
 		s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Find(&agents)
 		agentList := make([]gin.H, 0, len(agents))
 		for _, a := range agents {

@@ -5,15 +5,23 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/forgec2/forgec2/internal/malleable"
 	"github.com/gin-gonic/gin"
 )
 
-// applyMalleableProfile modifies the beacon response and HTTP context
-// according to the configured malleable C2 profile.
 func (s *Server) applyMalleableProfile(c *gin.Context, resp *beaconResponse) {
 	mp := s.cfg.Malleable
 	if !mp.Enabled {
 		return
+	}
+
+	// Apply named profile preset if set
+	if mp.ProfileName != "" {
+		presets := malleable.PredefinedProfiles()
+		if profile, ok := presets[mp.ProfileName]; ok {
+			s.applyProfilePreset(c, resp, profile)
+			return
+		}
 	}
 
 	statusCode := mp.StatusCode
@@ -34,29 +42,60 @@ func (s *Server) applyMalleableProfile(c *gin.Context, resp *beaconResponse) {
 		wrapped = wrapped + mp.Append
 	}
 
-	// Set custom headers
 	for k, v := range mp.Headers {
 		c.Header(k, v)
 	}
 
-	// Override Content-Type
 	ct := mp.ContentType
 	if ct == "" {
 		ct = "application/json"
 	}
 	c.Header("Content-Type", ct)
 
-	// Suppress default gin JSON content-type by writing raw bytes
 	c.Status(statusCode)
 	c.Writer.WriteString(wrapped)
 }
 
-// BuildMalleableInfo returns a human-readable summary of the active profile.
+func (s *Server) applyProfilePreset(c *gin.Context, resp *beaconResponse, profile *malleable.Profile) {
+	body, err := json.Marshal(resp)
+	if err != nil {
+		return
+	}
+
+	// Apply output transforms
+	if profile.HttpPost.Output != nil {
+		transformed, err := profile.HttpPost.Output.Apply(body, true)
+		if err == nil {
+			body = transformed
+		}
+	}
+
+	wrapped := string(body)
+
+	for k, v := range profile.HttpPost.Headers {
+		c.Header(k, v)
+	}
+
+	ct := profile.HttpPost.Headers["Content-Type"]
+	if ct == "" {
+		ct = "text/plain"
+	}
+	c.Header("Content-Type", ct)
+
+	c.Status(200)
+	c.Writer.WriteString(wrapped)
+}
+
 func (s *Server) MalleableInfo() string {
 	mp := s.cfg.Malleable
 	if !mp.Enabled {
 		return "Malleable C2 profile is disabled"
 	}
+
+	if mp.ProfileName != "" {
+		return fmt.Sprintf("Profile preset: %s\n", mp.ProfileName)
+	}
+
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("Status: %d | Content-Type: %s\n", mp.StatusCode, mp.ContentType))
 	if mp.Prepend != "" {

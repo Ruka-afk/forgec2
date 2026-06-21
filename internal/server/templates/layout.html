@@ -143,136 +143,136 @@
                            oninput="filterNav(this.value)">
                 </div>
             </div>
-            <nav class="space-y-0.5 text-[13px]" id="sidebar-nav">
-                <!-- 核心 -->
-                <div class="section-header px-3 pt-2 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
-                    <i class="fa-solid fa-chevron-down w-3 text-[10px] transition-transform"></i>
-                    <span>核心</span>
+            <nav class="space-y-0 text-[13px]" id="sidebar-nav">
+                <!-- Operations -->
+                <div class="section-header px-3 pt-2 pb-0.5 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
+                    <i class="fa-solid fa-chevron-down w-3 text-[9px] transition-transform"></i>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Operations</span>
                 </div>
                 <div class="nav-section">
-                    <a href="/dashboard" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "dashboard"}}nav-active{{end}}">
-                        <i class="fa-solid fa-chart-line w-4 text-center"></i>
-                        <span>控制台</span>
+                    <a href="/dashboard" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "dashboard"}}nav-active{{end}}">
+                        <i class="fa-solid fa-chart-line w-4 text-center text-xs"></i><span>Dashboard</span>
                     </a>
-                    <a href="/topology" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "topology"}}nav-active{{end}}">
-                        <i class="fa-solid fa-project-diagram w-4 text-center"></i>
-                        <span>网络拓扑</span>
+                    <a href="/topology" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "topology"}}nav-active{{end}}">
+                        <i class="fa-solid fa-project-diagram w-4 text-center text-xs"></i><span>拓扑</span>
                     </a>
-                    <a href="/agents" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "agents"}}nav-active{{end}}">
-                        <i class="fa-solid fa-users w-4 text-center"></i>
-                        <span class="flex-1">Agent 管理</span>
-                        {{if .OnlineCount}}<span class="ml-1 px-1.5 py-px text-[10px] leading-none rounded bg-emerald-100 text-emerald-700 font-mono">{{.OnlineCount}}</span>{{end}}
+                    <a href="/agents" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "agents"}}nav-active{{end}}">
+                        <i class="fa-solid fa-bug w-4 text-center text-xs"></i>
+                        <span class="flex-1">Implants</span>
+                        {{if .OnlineCount}}<span class="ml-1 px-1.5 py-px text-[9px] leading-none rounded bg-emerald-100 text-emerald-700 font-mono">{{.OnlineCount}}</span>{{end}}
                     </a>
                 </div>
 
-                <!-- 生成与接入 -->
-                <div class="section-header px-3 pt-2 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
-                    <i class="fa-solid fa-chevron-down w-3 text-[10px] transition-transform"></i>
-                    <span>生成与接入</span>
+                <!-- Build & Deploy -->
+                <div class="section-header px-3 pt-2 pb-0.5 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
+                    <i class="fa-solid fa-chevron-down w-3 text-[9px] transition-transform"></i>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Build & Deploy</span>
                 </div>
                 <div class="nav-section">
-                    <a href="/generate" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "generate"}}nav-active{{end}}">
-                        <i class="fa-solid fa-magic w-4 text-center"></i>
-                        <span>生成 Agent</span>
+                    <a href="/generate" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "generate"}}nav-active{{end}}">
+                        <i class="fa-solid fa-cubes w-4 text-center text-xs"></i><span>生成</span>
                     </a>
-                    <a href="/listeners" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "listeners"}}nav-active{{end}}">
-                        <i class="fa-solid fa-plug w-4 text-center"></i>
+                    <a href="/listeners" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "listeners"}}nav-active{{end}}">
+                        <i class="fa-solid fa-tower-broadcast w-4 text-center text-xs"></i>
                         <span class="flex-1">监听器</span>
-                        {{if .ListenerCount}}<span class="ml-1 px-1.5 py-px text-[10px] leading-none rounded bg-indigo-100 text-indigo-700 font-mono">{{.ListenerCount}}</span>{{end}}
+                        {{if .ListenerCount}}<span class="ml-1 px-1.5 py-px text-[9px] leading-none rounded bg-indigo-100 text-indigo-700 font-mono">{{.ListenerCount}}</span>{{end}}
                     </a>
-                    <a href="/builds" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "builds"}}nav-active{{end}}">
-                        <i class="fa-solid fa-hammer w-4 text-center"></i>
-                        <span>构建日志</span>
-                    </a>
-                </div>
-
-                <!-- 后渗透行动 -->
-                <div class="section-header px-3 pt-2 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
-                    <i class="fa-solid fa-chevron-down w-3 text-[10px] transition-transform"></i>
-                    <span>后渗透行动</span>
-                </div>
-                <div class="nav-section">
-                    <a href="/scanner" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "scanner"}}nav-active{{end}}">
-                        <i class="fa-solid fa-satellite-dish w-4 text-center"></i>
-                        <span>网络扫描</span>
-                    </a>
-                    <a href="/lateral" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "lateral"}}nav-active{{end}}">
-                        <i class="fa-solid fa-arrows-split-up-and-left w-4 text-center"></i>
-                        <span>横向移动</span>
-                    </a>
-                    <a href="/privesc" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "privesc"}}nav-active{{end}}">
-                        <i class="fa-solid fa-shield-virus w-4 text-center"></i>
-                        <span>提权侦查</span>
-                    </a>
-                    <a href="/tasks" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "tasks"}}nav-active{{end}}">
-                        <i class="fa-solid fa-history w-4 text-center"></i>
-                        <span>任务历史</span>
-                    </a>
-                    <a href="/traffic" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "traffic"}}nav-active{{end}}">
-                        <i class="fa-solid fa-network-wired w-4 text-center"></i>
-                        <span>流量监控</span>
-                    </a>
-                    <a href="/credentials" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "credentials"}}nav-active{{end}}">
-                        <i class="fa-solid fa-key w-4 text-center"></i>
-                        <span>凭据中心</span>
-                    </a>
-                    <a href="/tokens" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "tokens"}}nav-active{{end}}">
-                        <i class="fa-solid fa-id-badge w-4 text-center"></i>
-                        <span>Token 战利品库</span>
-                    </a>
-                    <a href="/pivoting" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "pivoting"}}nav-active{{end}}">
-                        <i class="fa-solid fa-exchange-alt w-4 text-center"></i>
-                        <span>隧道与代理</span>
-                    </a>
-                    <a href="/loot" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "loot"}}nav-active{{end}}">
-                        <i class="fa-solid fa-trophy w-4 text-center"></i>
-                        <span>战利品</span>
-                    </a>
-                    <a href="/timeline" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "timeline"}}nav-active{{end}}">
-                        <i class="fa-solid fa-clock-rotate-left w-4 text-center"></i>
-                        <span>行动时间线</span>
-                    </a>
-                    <a href="/report" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "report"}}nav-active{{end}}">
-                        <i class="fa-solid fa-file-lines w-4 text-center"></i>
-                        <span>报告生成器</span>
-                    </a>
-                    <a href="/chat" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "chat"}}nav-active{{end}}">
-                        <i class="fa-solid fa-comments w-4 text-center"></i>
-                        <span>操作员聊天</span>
-                    </a>
-                    <a href="/templates" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "templates"}}nav-active{{end}}">
-                        <i class="fa-solid fa-file-circle-check w-4 text-center"></i>
-                        <span>命令模板</span>
+                    <a href="/builds" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "builds"}}nav-active{{end}}">
+                        <i class="fa-solid fa-hammer w-4 text-center text-xs"></i><span>构建日志</span>
                     </a>
                 </div>
 
-                <!-- 系统与审计 -->
-                <div class="section-header px-3 pt-2 pb-1 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
-                    <i class="fa-solid fa-chevron-down w-3 text-[10px] transition-transform"></i>
-                    <span>系统与审计</span>
+                <!-- Post-Exploitation -->
+                <div class="section-header px-3 pt-2 pb-0.5 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
+                    <i class="fa-solid fa-chevron-down w-3 text-[9px] transition-transform"></i>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Post-Exploit</span>
                 </div>
                 <div class="nav-section">
-                    <a href="/audit" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "audit"}}nav-active{{end}}">
-                        <i class="fa-solid fa-shield w-4 text-center"></i>
-                        <span>安全审计</span>
+                    <a href="/ai" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "ai"}}nav-active{{end}}">
+                        <i class="fa-solid fa-robot w-4 text-center text-xs"></i><span>AI 助手</span>
                     </a>
-                    <a href="/users" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "users"}}nav-active{{end}}">
-                        <i class="fa-solid fa-users-gear w-4 text-center"></i>
-                        <span>用户管理</span>
+                    <a href="/toolkit" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "toolkit"}}nav-active{{end}}">
+                        <i class="fa-solid fa-kit-medical w-4 text-center text-xs"></i><span>工具箱</span>
                     </a>
-                    <a href="/settings" class="flex items-center gap-x-2.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "settings"}}nav-active{{end}}">
-                        <i class="fa-solid fa-cog w-4 text-center"></i>
-                        <span>设置</span>
+                    <a href="/scanner" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "scanner"}}nav-active{{end}}">
+                        <i class="fa-solid fa-satellite-dish w-4 text-center text-xs"></i><span>扫描</span>
+                    </a>
+                    <a href="/lateral" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "lateral"}}nav-active{{end}}">
+                        <i class="fa-solid fa-arrows-left-right w-4 text-center text-xs"></i><span>横向移动</span>
+                    </a>
+                    <a href="/credentials" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "credentials"}}nav-active{{end}}">
+                        <i class="fa-solid fa-key w-4 text-center text-xs"></i><span>凭据</span>
+                    </a>
+                    <a href="/pivoting" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "pivoting"}}nav-active{{end}}">
+                        <i class="fa-solid fa-arrows-turn-to-dots w-4 text-center text-xs"></i><span>隧道</span>
+                    </a>
+                    <a href="/tasks" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "tasks"}}nav-active{{end}}">
+                        <i class="fa-solid fa-history w-4 text-center text-xs"></i><span>任务历史</span>
+                    </a>
+                    <details class="group px-3">
+                        <summary class="text-[12px] text-slate-400 cursor-pointer hover:text-slate-600 py-1">更多</summary>
+                        <div class="pl-2 space-y-0">
+                            <a href="/privesc" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "privesc"}}nav-active{{end}}">
+                                <i class="fa-solid fa-shield-halved w-4 text-center text-xs"></i><span>提权</span>
+                            </a>
+                            <a href="/bof" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "bof"}}nav-active{{end}}">
+                                <i class="fa-solid fa-file-code w-4 text-center text-xs"></i><span>BOF</span>
+                            </a>
+                            <a href="/automation" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "automation"}}nav-active{{end}}">
+                                <i class="fa-solid fa-gears w-4 text-center text-xs"></i><span>自动化</span>
+                            </a>
+                            <a href="/tokens" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "tokens"}}nav-active{{end}}">
+                                <i class="fa-solid fa-id-badge w-4 text-center text-xs"></i><span>Token</span>
+                            </a>
+                            <a href="/loot" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "loot"}}nav-active{{end}}">
+                                <i class="fa-solid fa-box-archive w-4 text-center text-xs"></i><span>数据收集</span>
+                            </a>
+                            <a href="/timeline" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "timeline"}}nav-active{{end}}">
+                                <i class="fa-solid fa-timeline w-4 text-center text-xs"></i><span>时间线</span>
+                            </a>
+                            <a href="/templates" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "templates"}}nav-active{{end}}">
+                                <i class="fa-solid fa-file-lines w-4 text-center text-xs"></i><span>模板</span>
+                            </a>
+                            <a href="/traffic" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "traffic"}}nav-active{{end}}">
+                                <i class="fa-solid fa-network-wired w-4 text-center text-xs"></i><span>流量</span>
+                            </a>
+                            <a href="/report" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "report"}}nav-active{{end}}">
+                                <i class="fa-solid fa-clipboard-list w-4 text-center text-xs"></i><span>报告</span>
+                            </a>
+                            <a href="/chat" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "chat"}}nav-active{{end}}">
+                                <i class="fa-solid fa-comments w-4 text-center text-xs"></i><span>聊天</span>
+                            </a>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- System -->
+                <div class="section-header px-3 pt-2 pb-0.5 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
+                    <i class="fa-solid fa-chevron-down w-3 text-[9px] transition-transform"></i>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">System</span>
+                </div>
+                <div class="nav-section">
+                    <a href="/users" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "users"}}nav-active{{end}}">
+                        <i class="fa-solid fa-users-gear w-4 text-center text-xs"></i><span>用户</span>
+                    </a>
+                    <a href="/audit" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "audit"}}nav-active{{end}}">
+                        <i class="fa-solid fa-shield w-4 text-center text-xs"></i><span>审计</span>
+                    </a>
+                    <a href="/settings" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "settings"}}nav-active{{end}}">
+                        <i class="fa-solid fa-cog w-4 text-center text-xs"></i><span>设置</span>
+                    </a>
+                    <a href="/infrastructure" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "infrastructure"}}nav-active{{end}}">
+                        <i class="fa-solid fa-server w-4 text-center text-xs"></i><span>基础设施</span>
                     </a>
                 </div>
             </nav>
 
             <!-- Quick Actions -->
             <div class="mt-4 px-2">
-                <div class="text-[10px] uppercase tracking-widest text-slate-400 px-3 mb-1">快捷操作</div>
+                <div class="text-[10px] uppercase tracking-widest text-slate-400 px-3 mb-1">Quick Actions</div>
                 <div class="flex flex-wrap gap-1.5">
                     <a href="/generate" class="text-xs px-2.5 py-1 bg-slate-100 hover:bg-indigo-100 rounded-xl flex items-center gap-x-1 text-slate-700">
-                        <i class="fa-solid fa-plus text-[10px]"></i> <span class="text-[11px]">生成Agent</span>
+                        <i class="fa-solid fa-plus text-[10px]"></i> <span class="text-[11px]">生成 Implant</span>
                     </a>
                     <a href="/listeners" onclick="event.preventDefault(); showCreateListenerModal()" class="text-xs px-2.5 py-1 bg-slate-100 hover:bg-indigo-100 rounded-xl flex items-center gap-x-1 text-slate-700">
                         <i class="fa-solid fa-plug text-[10px]"></i> <span class="text-[11px]">新监听器</span>
@@ -295,15 +295,13 @@
             </div>
         </div>
 
-        <div class="p-4 border-t border-slate-200 text-xs text-slate-500">
+        <div class="p-3 border-t border-slate-200 text-[10px] text-slate-400">
             <div class="flex items-center justify-between">
                 <span>ForgeC2 v{{.ServerVersion}}</span>
-                <button onclick="toggleChat()" class="text-slate-400 hover:text-indigo-600 transition-colors relative" title="打开聊天">
+                <button onclick="toggleChat()" class="text-slate-400 hover:text-indigo-600 transition-colors" title="聊天">
                     <i class="fa-solid fa-comment-dots"></i>
-                    <span id="chat-badge" class="hidden absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
                 </button>
             </div>
-            <span class="text-[10px]">专业红队 C2 框架</span>
         </div>
     </div>
 
@@ -358,7 +356,7 @@
                 <!-- Global Search -->
                 <form action="/search" method="GET" class="flex-1 max-w-md ml-4">
                     <div class="relative">
-                        <input type="text" name="q" placeholder="全局搜索 Agent / 任务 / 监听器..." 
+                        <input type="text" name="q" placeholder="全局搜索 Implant / 任务 / 监听器..." 
                                value="{{.SearchQuery}}" 
                                class="w-full bg-slate-100 border border-slate-200 text-sm rounded-xl pl-9 pr-4 py-1.5 focus:outline-none focus:border-indigo-400">
                         <i class="fa-solid fa-search absolute left-3 top-2 text-slate-400 text-sm"></i>
@@ -408,365 +406,10 @@
 <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
 
 <script>
-    function showToast(message, type = 'success') {
-        const container = document.getElementById('toast-container');
-        const toast = document.createElement('div');
-        const colorMap = {
-            'success': 'bg-emerald-100 border-emerald-300 text-emerald-700',
-            'error': 'bg-red-100 border-red-300 text-red-700',
-            'info': 'bg-sky-100 border-sky-300 text-sky-700',
-        };
-        const iconMap = {
-            'success': 'fa-check-circle',
-            'error': 'fa-exclamation-circle',
-            'info': 'fa-circle-info',
-        };
-        toast.className = `px-4 py-3 rounded-2xl shadow-xl flex items-center gap-x-3 text-sm border ${colorMap[type] || colorMap.success}`;
-        toast.innerHTML = `
-                <i class="fa-solid ${iconMap[type] || iconMap.success}"></i>
-                <span>${message}</span>
-            `;
-        container.appendChild(toast);
-        setTimeout(() => {
-            toast.style.transition = 'all 0.3s ease';
-            toast.style.opacity = '0';
-            setTimeout(() => toast.remove(), 200);
-        }, 2800);
-    }
-
-    // ─── 多用户协作: 在线用户 / 聊天 / 锁定 ───
-
-    function updateOnlineUsers(users) {
-        const container = document.getElementById('online-users');
-        const count = document.getElementById('online-count');
-        if (!container) return;
-        if (count) count.textContent = (users && users.length) || 0;
-        if (!users || users.length === 0) {
-            container.innerHTML = '<div class="text-[11px] text-slate-400 italic">无其他在线用户</div>';
-            return;
-        }
-        const currentUser = '{{.UserDisplayName}}';
-        container.innerHTML = users.map(u => {
-            const isMe = u.username === currentUser;
-            const roleIcon = u.role === 'admin' ? 'fa-crown text-amber-500' :
-                           u.role === 'viewer' ? 'fa-eye text-slate-400' :
-                           'fa-user text-sky-500';
-            const badge = u.role === 'admin' ? '<span class="text-[8px] bg-indigo-100 text-indigo-700 px-1 rounded">ADMIN</span>' :
-                         u.role === 'viewer' ? '<span class="text-[8px] bg-slate-100 text-slate-500 px-1 rounded">VIEW</span>' :
-                         '<span class="text-[8px] bg-sky-100 text-sky-600 px-1 rounded">OP</span>';
-            const nameClass = isMe ? 'text-indigo-600 font-semibold' : 'text-slate-700';
-            const selfLabel = isMe ? '<span class="text-[8px] text-indigo-400 ml-0.5">(你)</span>' : '';
-            const pageInfo = u.current_page && !isMe
-                ? `<span class="text-[9px] text-slate-400 block truncate pl-4">${escapeHtml(u.current_page)}</span>`
-                : '';
-            return `<div class="flex items-center gap-x-1.5 text-[11px]"><span class="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0"></span><i class="fa-solid ${roleIcon} text-[10px] w-3 text-center shrink-0"></i><span class="${nameClass} truncate max-w-[80px]">${u.username}${selfLabel}</span>${badge}${pageInfo}</div>`;
-        }).join('');
-    }
-
-    function toggleChat() {
-        const w = document.getElementById('chat-window');
-        w.classList.toggle('hidden');
-        if (!w.classList.contains('hidden')) {
-            document.getElementById('chat-badge').classList.add('hidden');
-            if (document.getElementById('chat-messages').children.length <= 1) {
-                loadChatHistory();
-            }
-        }
-    }
-
-    function loadChatHistory() {
-        fetch('/api/collab/chat').then(r => r.json()).then(d => {
-            if (d.success && d.messages) {
-                const el = document.getElementById('chat-messages');
-                el.innerHTML = '';
-                d.messages.forEach(m => appendChatMessage(m, m.role || ''));
-                el.scrollTop = el.scrollHeight;
-            }
-        }).catch(() => showToast('聊天消息加载失败', 'error'));
-    }
-
-    function appendChatMessage(msg, role) {
-        const el = document.getElementById('chat-messages');
-        if (!el) return;
-        // Show badge when chat is closed and message is from someone else
-        const chatWin = document.getElementById('chat-window');
-        if (chatWin && chatWin.classList.contains('hidden') && msg.username !== '[系统]' && msg.username !== '{{.UserDisplayName}}') {
-            const badge = document.getElementById('chat-badge');
-            if (badge) badge.classList.remove('hidden');
-        }
-        if (el.children.length === 1 && el.children[0].textContent.includes('连接')) {
-            el.innerHTML = '';
-        }
-        const time = msg.created_at ? new Date(msg.created_at).toLocaleTimeString() : '';
-        const div = document.createElement('div');
-        const isSystem = msg.username === '[系统]';
-        if (isSystem) {
-            div.className = 'bg-slate-100 rounded-xl px-3 py-2 border border-slate-200';
-            div.innerHTML = `<div class="flex items-center gap-2 text-[10px] text-slate-500"><i class="fa-solid fa-circle-info text-slate-400"></i><span>${escapeHtml(msg.content)}</span><span class="ml-auto text-[9px] text-slate-400">${time}</span></div>`;
-        } else {
-            const roleColor = role === 'admin' ? 'text-amber-600' : role === 'viewer' ? 'text-slate-500' : 'text-indigo-600';
-            div.className = 'bg-white rounded-xl px-3 py-2 border border-slate-100';
-            div.innerHTML = `<div class="flex items-center justify-between"><span class="text-xs font-semibold ${roleColor}">${escapeHtml(msg.username)}</span><span class="text-[9px] text-slate-400">${time}</span></div><div class="text-xs text-slate-700 mt-0.5">${escapeHtml(msg.content)}</div>`;
-        }
-        el.appendChild(div);
-        el.scrollTop = el.scrollHeight;
-    }
-
-    function sendChat(e) {
-        e.preventDefault();
-        const input = document.getElementById('chat-input');
-        const content = input.value.trim();
-        if (!content) return;
-        input.value = '';
-        const fd = new FormData();
-        fd.append('content', content);
-        fetch('/api/collab/chat', { method: 'POST', headers: { 'X-CSRF-Token': getCSRFToken() }, body: fd }).catch(() => showToast('聊天发送失败', 'error'));
-    }
-
-    function updateAgentLockUI(agentId, username) {
-        const indicator = document.getElementById('lock-indicator-' + agentId);
-        if (!indicator) return;
-        if (username) {
-            indicator.innerHTML = `<span class="text-xs text-amber-600"><i class="fa-solid fa-lock mr-1"></i>${username}</span>`;
-        } else {
-            indicator.innerHTML = '';
-        }
-    }
-
-    function escapeHtml(str) {
-        if (!str) return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
-
-    var _ws = null;  // global WS reference
-
-    function wsSend(data) {
-        if (_ws && _ws.readyState === WebSocket.OPEN) {
-            _ws.send(JSON.stringify(data));
-        }
-    }
-
-    function sendWSPageUpdate() {
-        const path = window.location.pathname;
-        wsSend({ type: 'page_update', page: path });
-        // If on agent detail page, also send agent_view
-        const m = path.match(/^\/agents\/([a-fA-F0-9-]+)/);
-        if (m) {
-            wsSend({ type: 'agent_view', agent_id: m[1] });
-        }
-    }
-
-    function connectWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        _ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
-
-        _ws.onopen = function() {
-            sendWSPageUpdate();
-        };
-
-        _ws.onmessage = function(event) {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'agent_online') {
-                    showToast(`新 Agent 上线: ${data.hostname} (${data.ip})`, 'success');
-                    if (window.location.pathname === '/agents' || window.location.pathname === '/dashboard') {
-                        setTimeout(() => window.location.reload(), 1000);
-                    }
-                } else if (data.type === 'task_update') {
-                    const agentId = data.agent_id || '';
-                    const taskType = data.task_type || '';
-                    const status = data.status || '';
-                    const cmd = (data.command || '').substring(0, 50);
-
-                    if (taskType === 'ls') return;
-
-                    if (status === 'completed') {
-                        showToast(`任务完成 [${taskType}]: ${cmd}`, 'success');
-                        const path = window.location.pathname;
-                        if (path === '/tasks' || path.includes('/agents/' + agentId)) {
-                            setTimeout(() => {
-                                if (path === '/tasks') {
-                                    location.reload();
-                                } else if (typeof refreshTasks === 'function') {
-                                    refreshTasks(agentId);
-                                }
-                            }, 800);
-                        }
-                    } else if (status === 'failed') {
-                        showToast(`任务失败 [${taskType}]: ${cmd}`, 'error');
-                    }
-                } else if (data.type === 'update_available') {
-                    showToast(`新版本可用: ${data.latest} (当前: ${data.current})`, 'info');
-                    const banner = document.getElementById('update-banner');
-                    if (banner) {
-                        banner.classList.remove('hidden');
-                        banner.querySelector('.update-version').textContent = data.latest;
-                        banner.querySelector('.update-download').href = data.download_url || '#';
-                    }
-                } else if (data.type === 'user_online' || data.type === 'user_offline') {
-                    updateOnlineUsers(data.users);
-                    if (data.type === 'user_online') {
-                        data.users.forEach(u => {
-                            if (u.username !== '{{.UserDisplayName}}') {
-                                showToast(`${u.username} 上线`, 'info');
-                            }
-                        });
-                    } else if (data.users) {
-                        // no toast for offline to avoid spam
-                    }
-                } else if (data.type === 'chat') {
-                    appendChatMessage(data.message, data.message.role);
-                } else if (data.type === 'agent_locked') {
-                    showToast(`Agent ${data.agent_id.substring(0,8)} 已被 ${data.username} 锁定`, 'info');
-                    updateAgentLockUI(data.agent_id, data.username);
-                    // Update lock indicators on agent list
-                    const lockEl = document.querySelector('#lock-col-' + data.agent_id + ' .lock-text');
-                    if (lockEl) lockEl.textContent = '🔒 ' + data.username;
-                } else if (data.type === 'agent_unlocked') {
-                    showToast(`Agent ${data.agent_id.substring(0,8)} 已解锁`, 'info');
-                    updateAgentLockUI(data.agent_id, null);
-                    const lockEl = document.querySelector('#lock-col-' + data.agent_id + ' .lock-text');
-                    if (lockEl) lockEl.textContent = '';
-                } else if (data.type === 'user_viewing_agent') {
-                    // Dispatch a custom event so agent detail page can react
-                    window.dispatchEvent(new CustomEvent('collab:viewing_agent', { detail: data }));
-                }
-            } catch (e) {
-                console.error('Failed to parse WebSocket message:', e);
-            }
-        };
-
-        _ws.onerror = function(error) {
-            console.error('WebSocket error:', error);
-        };
-
-        _ws.onclose = function() {
-            _ws = null;
-            setTimeout(connectWebSocket, 5000);
-        };
-    }
-
-    // Include CSRF token in all HTMX requests
-    document.addEventListener('DOMContentLoaded', function() {
-        connectWebSocket();
-
-        const csrfToken = getCookie('csrf_token');
-        if (csrfToken && typeof htmx !== 'undefined' && htmx.config && htmx.config.headers) {
-            htmx.config.headers['X-CSRF-Token'] = csrfToken;
-        }
-    });
-
-    // Send WS page update on HTMX navigation
-    document.addEventListener('htmx:afterSettle', function() {
-        sendWSPageUpdate();
-    });
-    // Also on popstate (browser back/forward)
-    window.addEventListener('popstate', function() {
-        setTimeout(sendWSPageUpdate, 100);
-    });
-
-    function getCookie(name) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop().split(';').shift();
-        return '';
-    }
-
-    // Global helper for CSRF-protected fetch requests
-    window.getCSRFToken = function() {
-        return getCookie('csrf_token');
-    };
-
-    // Automatically inject X-CSRF-Token header into all non-GET fetch requests
-    (function patchFetchForCSRF() {
-        const originalFetch = window.fetch;
-        window.fetch = function (resource, init) {
-            init = init || {};
-            const method = (init.method || 'GET').toUpperCase();
-            if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
-                let headers = init.headers || {};
-                const hasCSRF = headers && (headers['X-CSRF-Token'] || headers['x-csrf-token'] ||
-                                (headers instanceof Headers && headers.has('X-CSRF-Token')));
-                if (!hasCSRF) {
-                    const token = window.getCSRFToken ? window.getCSRFToken() : '';
-                    if (token) {
-                        if (headers instanceof Headers) {
-                            headers.set('X-CSRF-Token', token);
-                        } else {
-                            headers = headers || {};
-                            headers['X-CSRF-Token'] = token;
-                        }
-                        init.headers = headers;
-                    }
-                }
-            }
-            return originalFetch(resource, init);
-        };
-    })();
-
-    // Collapsible sidebar sections + persistence
-    window.toggleNavSection = function(headerEl) {
-        headerEl.classList.toggle('collapsed');
-        const section = headerEl.nextElementSibling;
-        if (section) {
-            // already controlled by CSS
-        }
-        // persist
-        const key = 'forgec2_nav_collapsed';
-        let collapsed = JSON.parse(localStorage.getItem(key) || '{}');
-        const label = headerEl.textContent.trim();
-        collapsed[label] = headerEl.classList.contains('collapsed');
-        localStorage.setItem(key, JSON.stringify(collapsed));
-    };
-
-    // Restore collapsed state
-    document.addEventListener('DOMContentLoaded', function() {
-        try {
-            const key = 'forgec2_nav_collapsed';
-            const collapsed = JSON.parse(localStorage.getItem(key) || '{}');
-            const headers = document.querySelectorAll('#sidebar-nav .section-header');
-            headers.forEach(h => {
-                const label = h.textContent.trim();
-                if (collapsed[label]) {
-                    h.classList.add('collapsed');
-                }
-            });
-        } catch(e){}
-    });
-
-    // Live filter for sidebar nav (UX)
-    window.filterNav = function(query) {
-        const q = (query || '').toLowerCase().trim();
-        const nav = document.getElementById('sidebar-nav');
-        if (!nav) return;
-
-        const links = nav.querySelectorAll('a');
-        const sections = nav.querySelectorAll('.section-header');
-
-        links.forEach(link => {
-            const text = link.textContent.toLowerCase();
-            const match = !q || text.includes(q);
-            link.style.display = match ? '' : 'none';
-        });
-
-        // Show/hide section headers if they have visible children
-        sections.forEach(header => {
-            const next = header.nextElementSibling;
-            if (!next || !next.classList.contains('nav-section')) return;
-            const visible = Array.from(next.querySelectorAll('a')).some(a => a.style.display !== 'none');
-            header.style.display = (visible || !q) ? '' : 'none';
-            // also show the section container
-            next.style.display = (visible || !q) ? '' : 'none';
-        });
-    };
-
-    // Placeholder for quick listener modal (opens listeners page for now)
-    window.showCreateListenerModal = function() {
-        window.location.href = '/listeners';
-    };
+const currentUserDisplayName = '{{.UserDisplayName}}';
+window.csrfToken = '{{.CSRFToken}}';
 </script>
+<script src="/static/js/layout.js"></script>
 
 <!-- Global Task Detail Modal -->
 <div id="task-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick="if (event.target.id === 'task-modal') hideTaskModal()">
@@ -778,7 +421,7 @@
         <div class="p-6 space-y-4 text-sm">
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <div class="text-xs text-slate-500">Agent</div>
+                    <div class="text-xs text-slate-500">Implant</div>
                     <div id="modal-agent" class="font-medium"></div>
                 </div>
                 <div>
@@ -819,110 +462,6 @@
     </div>
 </div>
 
-<script>
-var _modalAgentId = '';
-var _modalTaskId = 0;
 
-// Mobile sidebar toggle
-function toggleMobileSidebar() {
-    const sidebar = document.getElementById('mobile-sidebar');
-    const overlay = document.getElementById('mobile-overlay');
-    sidebar.classList.toggle('open');
-    overlay.classList.toggle('active');
-    
-    // Clone nav from desktop if not already cloned
-    const mobileNav = document.getElementById('mobile-sidebar-nav');
-    if (mobileNav.children.length === 0) {
-        const desktopNav = document.getElementById('sidebar-nav');
-        if (desktopNav) {
-            mobileNav.innerHTML = desktopNav.innerHTML;
-        }
-    }
-}
-
-// Close mobile sidebar on link click
-document.addEventListener('click', function(e) {
-    if (e.target.closest('#mobile-sidebar-nav a')) {
-        toggleMobileSidebar();
-    }
-});
-
-function showRecentTaskModal(el) {
-    const taskId = el.getAttribute('data-task-id');
-    const agentId = el.getAttribute('data-agent-id');
-    if (!taskId) return;
-    _modalTaskId = taskId;
-    _modalAgentId = agentId || '';
-
-    // Hide result/error initially
-    const resultBox = document.getElementById('modal-result-box');
-    const errorBox = document.getElementById('modal-error-box');
-    resultBox.classList.add('hidden');
-    errorBox.classList.add('hidden');
-
-    // Fill initial from DOM text (fast & safe)
-    const hostnameEl = el.querySelector('.font-medium.text-slate-900');
-    document.getElementById('modal-agent').textContent = hostnameEl ? hostnameEl.textContent : '-';
-    const cmdEl = el.querySelector('.font-mono.truncate');
-    document.getElementById('modal-command').textContent = cmdEl ? cmdEl.textContent : '-';
-    const timeEl = el.querySelector('.font-mono.text-slate-400');
-    document.getElementById('modal-time').textContent = timeEl ? timeEl.textContent : '';
-
-    // Show modal immediately
-    document.getElementById('task-modal').classList.remove('hidden');
-    document.getElementById('task-modal').classList.add('flex');
-
-    // Then fetch full details
-    fetch(`/tasks/${taskId}`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.error) {
-                document.getElementById('modal-command').textContent = '(详情加载失败)';
-                return;
-            }
-            document.getElementById('modal-type').textContent = data.type || '-';
-            document.getElementById('modal-agent').textContent = data.agent || document.getElementById('modal-agent').textContent;
-            document.getElementById('modal-time').textContent = data.created || document.getElementById('modal-time').textContent;
-            document.getElementById('modal-command').textContent = data.command || '-';
-
-            if (data.result) {
-                document.getElementById('modal-result').textContent = data.result;
-                resultBox.classList.remove('hidden');
-            }
-            if (data.error) {
-                document.getElementById('modal-error').textContent = data.error;
-                errorBox.classList.remove('hidden');
-            }
-            document.getElementById('modal-status').innerHTML = data.status === 'completed' ? 
-                '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs">已完成</span>' : 
-                (data.status === 'failed' ? '<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">失败</span>' : '<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">' + (data.status || '') + '</span>');
-        })
-        .catch(err => {
-            console.error('fetch task detail error', err);
-        });
-}
-
-function hideTaskModal() {
-    const modal = document.getElementById('task-modal');
-    modal.classList.remove('flex');
-    modal.classList.add('hidden');
-}
-
-function rerunFromModal() {
-    if (!_modalAgentId || !_modalTaskId) return;
-    fetch(`/agents/${_modalAgentId}/task/${_modalTaskId}/rerun`, { method: 'POST' })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                showToast('任务已重新创建', 'success');
-                hideTaskModal();
-                setTimeout(() => location.reload(), 1200);
-            } else {
-                showToast('重跑失败: ' + (data.error || ''), 'error');
-            }
-        })
-        .catch(err => showToast('请求失败: ' + err, 'error'));
-}
-</script>
 </body>
 </html>

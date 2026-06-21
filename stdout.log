@@ -1,0 +1,108 @@
+time=2026-06-21T13:08:41.908+08:00 level=INFO msg="Starting ForgeC2 Professional C2 Framework"
+time=2026-06-21T13:08:41.930+08:00 level=INFO msg="Cleared force_logout_at flags for all users"
+time=2026-06-21T13:08:41.931+08:00 level=INFO msg="Database initialized" path=data/db/forgec2.db
+time=2026-06-21T13:08:41.935+08:00 level=INFO msg="ForgeC2 ready" web_ui=http://localhost:8080
+
+╔════════════════════════════════════════════════════════════╗
+║  ForgeC2 v1.0  •  Professional Red Team C2 Framework       ║
+║  Web UI: http://your-ip:8080    |   Login with your pass    ║
+╚════════════════════════════════════════════════════════════╝
+time=2026-06-21T13:08:41.937+08:00 level=INFO msg="Starting ForgeC2 server" addr=0.0.0.0:8080 tls=false
+time=2026-06-21T13:08:41.937+08:00 level=INFO msg="old data cleanup completed"
+time=2026-06-21T13:08:42.337+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:08:42.338+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:08:42.337+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:08:42.338+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:08:44.961+08:00 level=INFO msg="Request received" method=GET path=/login ip=::1
+time=2026-06-21T13:08:45.033+08:00 level=INFO msg="Request received" method=GET path=/login ip=::1
+time=2026-06-21T13:08:53.705+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:08:53.712+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:08:53.711+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:08:53.712+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:09:05.391+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:09:05.394+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:09:05.393+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:09:05.394+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:09:09.819+08:00 level=INFO msg="Request received" method=GET path=/login ip=::1
+time=2026-06-21T13:09:15.407+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:09:15.413+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:09:15.413+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:09:15.414+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:09:27.209+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:09:27.211+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:09:27.211+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:09:27.211+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:09:35.689+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:09:35.690+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:09:35.689+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:09:35.690+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:09:44.659+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:09:44.666+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:09:44.666+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:09:44.668+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:09:51.300+08:00 level=INFO msg="Request received" method=GET path=/toolkit ip=::1
+time=2026-06-21T13:09:51.301+08:00 level=INFO msg="Request received" method=GET path=/login ip=::1
+time=2026-06-21T13:09:52.955+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:09:52.956+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:09:52.955+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:09:52.957+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:10:01.939+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:10:01.946+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:10:01.945+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:10:01.946+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:10:13.344+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:10:13.345+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:10:13.344+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:10:13.345+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:10:22.491+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:10:22.497+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:10:22.497+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:10:22.498+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:10:25.393+08:00 level=INFO msg="Request received" method=GET path=/toolkit ip=::1
+time=2026-06-21T13:10:25.393+08:00 level=INFO msg="API access" method=GET path=/toolkit user=admin ip=::1
+time=2026-06-21T13:10:25.395+08:00 level=ERROR msg="Template render error" template=toolkit_content err="template: toolkit.html:443:114: executing \"toolkit_content\" at <40>: expected string; found 40"
+time=2026-06-21T13:10:26.599+08:00 level=INFO msg="Request received" method=GET path=/ai ip=::1
+time=2026-06-21T13:10:26.605+08:00 level=INFO msg="API access" method=GET path=/ai user=admin ip=::1
+time=2026-06-21T13:10:26.606+08:00 level=INFO msg="AI page rendered" enabled=true has_key=true provider=custom
+time=2026-06-21T13:10:26.633+08:00 level=INFO msg="Request received" method=GET path=/static/js/ai.js ip=::1
+time=2026-06-21T13:10:26.633+08:00 level=INFO msg="Request received" method=GET path=/static/js/layout.js ip=::1
+time=2026-06-21T13:10:26.785+08:00 level=INFO msg="Request received" method=GET path=/ws ip=::1
+time=2026-06-21T13:10:26.787+08:00 level=INFO msg="API access" method=GET path=/ws user=admin ip=::1
+time=2026-06-21T13:10:26.788+08:00 level=INFO msg="WS user connected" user=admin role=admin
+time=2026-06-21T13:10:26.788+08:00 level=INFO msg="WebSocket client connected" user=admin
+time=2026-06-21T13:10:27.076+08:00 level=INFO msg="Request received" method=GET path=/static/js/ai.js ip=::1
+time=2026-06-21T13:10:27.078+08:00 level=INFO msg="Request received" method=GET path=/static/js/layout.js ip=::1
+time=2026-06-21T13:10:27.169+08:00 level=INFO msg="Request received" method=GET path=/ai ip=::1
+time=2026-06-21T13:10:27.169+08:00 level=INFO msg="API access" method=GET path=/ai user=admin ip=::1
+time=2026-06-21T13:10:27.170+08:00 level=INFO msg="AI page rendered" enabled=true has_key=true provider=custom
+time=2026-06-21T13:10:27.176+08:00 level=INFO msg="WS user disconnected" user=admin
+time=2026-06-21T13:10:27.176+08:00 level=INFO msg="WebSocket client disconnected" user=admin
+time=2026-06-21T13:10:27.207+08:00 level=INFO msg="Request received" method=GET path=/static/js/ai.js ip=::1
+time=2026-06-21T13:10:27.207+08:00 level=INFO msg="Request received" method=GET path=/static/js/layout.js ip=::1
+time=2026-06-21T13:10:27.299+08:00 level=INFO msg="Request received" method=GET path=/ws ip=::1
+time=2026-06-21T13:10:27.326+08:00 level=INFO msg="API access" method=GET path=/ws user=admin ip=::1
+time=2026-06-21T13:10:27.326+08:00 level=INFO msg="WS user connected" user=admin role=admin
+time=2026-06-21T13:10:27.327+08:00 level=INFO msg="WebSocket client connected" user=admin
+time=2026-06-21T13:10:27.552+08:00 level=INFO msg="Request received" method=GET path=/static/js/ai.js ip=::1
+time=2026-06-21T13:10:27.552+08:00 level=INFO msg="Request received" method=GET path=/static/js/layout.js ip=::1
+time=2026-06-21T13:10:34.043+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:10:34.052+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:10:34.049+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:10:34.052+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:10:35.208+08:00 level=INFO msg="Request received" method=GET path=/toolkit ip=::1
+time=2026-06-21T13:10:35.209+08:00 level=INFO msg="API access" method=GET path=/toolkit user=admin ip=::1
+time=2026-06-21T13:10:35.210+08:00 level=ERROR msg="Template render error" template=toolkit_content err="template: toolkit.html:443:114: executing \"toolkit_content\" at <40>: expected string; found 40"
+time=2026-06-21T13:10:35.217+08:00 level=INFO msg="WS user disconnected" user=admin
+time=2026-06-21T13:10:35.218+08:00 level=INFO msg="WebSocket client disconnected" user=admin
+time=2026-06-21T13:10:37.292+08:00 level=INFO msg="Request received" method=GET path=/toolkit ip=::1
+time=2026-06-21T13:10:37.294+08:00 level=INFO msg="API access" method=GET path=/toolkit user=admin ip=::1
+time=2026-06-21T13:10:37.295+08:00 level=ERROR msg="Template render error" template=toolkit_content err="template: toolkit.html:443:114: executing \"toolkit_content\" at <40>: expected string; found 40"
+time=2026-06-21T13:10:45.442+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:10:45.447+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:10:45.444+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:10:45.448+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:10:55.021+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:10:55.028+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:10:55.025+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:10:55.028+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:11:04.058+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:11:04.061+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:11:04.059+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:11:04.062+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:11:15.073+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:11:15.081+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:11:15.080+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:11:15.082+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:11:23.287+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:11:23.392+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:11:23.370+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:11:23.392+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:11:32.121+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:11:32.173+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:11:32.171+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:11:32.174+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
+time=2026-06-21T13:11:42.321+08:00 level=INFO msg="Request received" method=POST path=/th ip=127.0.0.1
+time=2026-06-21T13:11:42.327+08:00 level=INFO msg="Beacon processed" agent=039cdd25-aa1b-4055-9953-222418d5d797 last_seen=2026-06-21T13:11:42.324+08:00 rows_affected=1 public_ip=127.0.0.1 status=online
+time=2026-06-21T13:11:42.327+08:00 level=INFO msg="Beacon fetching pending tasks" agent_uuid=039cdd25-aa1b-4055-9953-222418d5d797 pending_count=0
