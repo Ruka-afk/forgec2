@@ -17,6 +17,8 @@ go.work
 .idea/
 .vscode/
 .opencode/
+.qoder/
+opencode.json
 *.swp
 *.swo
 
