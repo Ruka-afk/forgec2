@@ -221,11 +221,17 @@ go run ./cmd/i18n-tool check --lang zh
 FORGEC2_DEV=1 go run ./cmd/server -config config.yaml
 ```
 
-### Agent Skills
+### Agent Skills (Grok / Cursor)
 
-**Grok / Cursor** (`.grok/skills/`): `rebuild-deploy`, `fix-ui-page`, `add-i18n`, `add-ai-tool`
+All skills live in `.grok/skills/` — invoke via slash command or auto-trigger:
 
-**OpenCode** (`.opencode/skills/`): `add-task-type`, `plugin-task`, `websocket-event`, `report-section`
+| Category | Skills |
+|----------|--------|
+| **Daily dev** | `rebuild-deploy`, `fix-ui-page`, `debug-forgec2`, `ci-fix`, `e2e-smoke-test` |
+| **Features** | `add-task-type`, `add-agent-feature`, `add-ui-page`, `add-api-endpoint`, `add-i18n` |
+| **AI & plugins** | `add-ai-tool`, `plugin-task`, `add-manifest-plugin` |
+| **C2 & implant** | `add-malleable-profile`, `implant-regenerate`, `edr-evasion`, `add-recon-p1` |
+| **Realtime & reports** | `websocket-event`, `report-section`, `remote-desktop` |
 
 ---
 

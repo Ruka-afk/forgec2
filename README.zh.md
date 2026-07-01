@@ -76,10 +76,17 @@ make dev            # 开发模式（不打包 JS）
 make i18n-check     # 翻译检查
 ```
 
-### Agent Skills
+### Agent Skills（Grok / Cursor）
 
-- **Grok / Cursor**（`.grok/skills/`）：`rebuild-deploy`、`fix-ui-page`、`add-i18n`、`add-ai-tool`
-- **OpenCode**（`.opencode/skills/`）：`add-task-type`、`plugin-task`、`websocket-event`、`report-section`
+全部位于 `.grok/skills/`，可用斜杠命令或自动触发：
+
+| 类别 | Skills |
+|------|--------|
+| **日常开发** | `rebuild-deploy`、`fix-ui-page`、`debug-forgec2`、`ci-fix`、`e2e-smoke-test` |
+| **功能扩展** | `add-task-type`、`add-agent-feature`、`add-ui-page`、`add-api-endpoint`、`add-i18n` |
+| **AI 与插件** | `add-ai-tool`、`plugin-task`、`add-manifest-plugin` |
+| **C2 与 Implant** | `add-malleable-profile`、`implant-regenerate`、`edr-evasion`、`add-recon-p1` |
+| **实时与报告** | `websocket-event`、`report-section`、`remote-desktop` |
 
 ---
 
