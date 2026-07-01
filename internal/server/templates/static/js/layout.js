@@ -553,39 +553,41 @@ if (document.readyState === 'loading') {
     initRealtimeNotifications();
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-
-    const themeToggle = document.getElementById('theme-toggle');
-    const themeMenu = document.getElementById('theme-menu');
-    if (themeToggle && themeMenu) {
-        themeToggle.addEventListener('click', function(e) {
-            e.stopPropagation();
-            themeMenu.classList.toggle('hidden');
-        });
-
-        document.addEventListener('click', function(e) {
-            if (!themeMenu.classList.contains('hidden') && !themeMenu.contains(e.target) && !themeToggle.contains(e.target)) {
-                themeMenu.classList.add('hidden');
-            }
-        });
+function closeTopBarMenus(exceptId) {
+    if (typeof window.closeTopBarMenus === 'function') {
+        window.closeTopBarMenus(exceptId);
+        return;
     }
+    ['theme-menu', 'language-menu'].forEach(function(id) {
+        if (id === exceptId) return;
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
+}
 
-    const languageToggle = document.getElementById('language-toggle');
-    const languageMenu = document.getElementById('language-menu');
-    if (languageToggle && languageMenu) {
-        languageToggle.addEventListener('click', function(e) {
-            e.stopPropagation();
-            languageMenu.classList.toggle('hidden');
-        });
-
-        document.addEventListener('click', function(e) {
-            if (!languageMenu.classList.contains('hidden') && !languageMenu.contains(e.target) && !languageToggle.contains(e.target)) {
-                languageMenu.classList.add('hidden');
-            }
-        });
+window.GlobalActionHandlers = window.GlobalActionHandlers || {};
+window.GlobalActionHandlers.set_theme = function(el, e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const theme = el.dataset.theme;
+    if (typeof window.handleThemeSelect === 'function' && theme) {
+        window.handleThemeSelect(theme);
+    } else if (typeof window.setTheme === 'function' && theme) {
+        window.setTheme(theme);
+        closeTopBarMenus();
     }
-
-});
+};
+window.GlobalActionHandlers.set_language = function(el, e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const lang = el.dataset.lang;
+    if (typeof window.handleLanguageSelect === 'function' && lang) {
+        window.handleLanguageSelect(lang);
+    } else if (typeof window.setLanguage === 'function' && lang) {
+        window.setLanguage(lang);
+        closeTopBarMenus();
+    }
+};
 
 document.addEventListener('htmx:afterSettle', function() {
     sendWSPageUpdate();

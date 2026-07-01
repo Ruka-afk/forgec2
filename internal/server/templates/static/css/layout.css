@@ -341,7 +341,72 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
     }
 }
 
-/* ── UI component classes (used across templates) ── */
+/* ── UI component classes (dashboard-aligned) ── */
+.ui-card {
+    background-color: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.dark .ui-card {
+    background-color: #1e293b;
+    border-color: #334155;
+}
+
+.ui-input,
+.ui-input[type="text"],
+.ui-input[type="password"],
+.ui-input[type="number"],
+.ui-input[type="email"],
+.ui-input[type="file"],
+textarea.ui-input {
+    display: block;
+    width: 100%;
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: #334155;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+}
+.ui-input:focus,
+textarea.ui-input:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+.dark .ui-input,
+.dark textarea.ui-input {
+    background-color: #334155;
+    border-color: #475569;
+    color: #e2e8f0;
+}
+.dark .ui-input:focus,
+.dark textarea.ui-input:focus {
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+.ui-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(4px);
+}
+.ui-modal {
+    background-color: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+}
+.dark .ui-modal {
+    background-color: #1e293b;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+
 .ui-btn {
     display: inline-flex;
     align-items: center;
@@ -373,18 +438,32 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
 .dark .ui-btn-ghost { color: #94a3b8; border-color: #475569; }
 .dark .ui-btn-ghost:hover:not(:disabled) { background: #334155; color: #e2e8f0; }
 .ui-select {
-    background: #f8fafc;
+    display: block;
+    width: 100%;
+    background-color: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 0.75rem;
-    padding: 0.5rem 0.75rem;
+    padding: 0.625rem 0.75rem;
     font-size: 0.875rem;
+    line-height: 1.25rem;
     color: #334155;
     cursor: pointer;
     outline: none;
-    transition: border-color 0.15s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
 }
-.ui-select:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.2); }
-.dark .ui-select { background: #334155; border-color: #475569; color: #e2e8f0; }
+.ui-select:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+.dark .ui-select {
+    background-color: #334155;
+    border-color: #475569;
+    color: #e2e8f0;
+}
+.dark .ui-select:focus {
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
 
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .max-w-\[40vw\] { max-width: 40vw; }

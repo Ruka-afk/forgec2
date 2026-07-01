@@ -142,6 +142,18 @@ window.getStoredTheme = getStoredTheme;
 window.getEffectiveTheme = getEffectiveTheme;
 window.setLanguage = setLanguage;
 
+if (typeof window.handleThemeSelect !== 'function') {
+    window.handleThemeSelect = function(theme) {
+        setTheme(theme);
+        if (typeof window.closeTopBarMenus === 'function') window.closeTopBarMenus();
+    };
+}
+if (typeof window.handleLanguageSelect !== 'function') {
+    window.handleLanguageSelect = function(lang) {
+        setLanguage(lang);
+    };
+}
+
 // ── i18n helpers ──
 function __(key) {
     if (window.__locales && window.__locales[key]) return window.__locales[key];
