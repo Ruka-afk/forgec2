@@ -14,63 +14,62 @@ import (
 	"strings"
 	"time"
 
+	"context"
+
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/plugin"
 	"github.com/forgec2/forgec2/internal/server/middleware"
+	"github.com/forgec2/forgec2/internal/server/totp"
 	"github.com/gin-gonic/gin"
 )
 
 func (s *Server) handleLoginPage(c *gin.Context) {
-	// Use token from CSRFProtection middleware if available, otherwise generate
-	csrfToken, exists := c.Get("csrf_token_value")
-	if !exists {
-		csrfToken = middleware.GenerateCSRFToken()
-	}
-	csrfTokenStr := csrfToken.(string)
-	c.SetCookie("csrf_token", csrfTokenStr, middleware.CookieMaxAge, "/", "", middleware.CookieSecure, true)
-
 	// Check if already logged in
 	if _, err := c.Cookie("forgec2_session"); err == nil {
 		c.Redirect(http.StatusFound, "/")
 		return
 	}
 
-	// Check for error from rate limiter redirect
-	var errMsg string
-	if c.Query("error") == "rate_limited" {
-		errMsg = "Too many login attempts. Please try again later."
-	}
-
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "login.html", gin.H{
-		"Title":     "ForgeC2 - Login",
-		"CSRFToken": csrfTokenStr,
-		"Error":     errMsg,
+	s.renderLoginPage(c, gin.H{
+		"Title": "ForgeC2 - Login",
+		"Error": "",
 	})
 }
 
-func (s *Server) renderLoginError(c *gin.Context, errMsg, lastUsername string, rememberMe bool) {
-	csrfToken := middleware.GenerateCSRFToken()
-	c.SetCookie("csrf_token", csrfToken, middleware.CookieMaxAge, "/", "", middleware.CookieSecure, true)
+func (s *Server) renderLoginPage(c *gin.Context, data gin.H) {
+	currentLang := detectLanguage(c)
+	langInfo, _ := GetLanguageInfo(currentLang)
+	data["CurrentLang"] = currentLang
+	data["CurrentLangInfo"] = langInfo
+	data["IsRTL"] = langInfo.RTL
+	data["LocalesJSON"] = GetTranslationsJSON(currentLang)
 	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "login.html", gin.H{
-		"Error":       errMsg,
+	s.tmpl.ExecuteTemplate(c.Writer, "login.html", data)
+}
+
+func (s *Server) renderLoginError(c *gin.Context, errMsg, lastUsername string, rememberMe bool) {
+	s.renderLoginPage(c, gin.H{
+		"Title":        "ForgeC2 - Login",
+		"Error":        errMsg,
 		"LastUsername": lastUsername,
-		"RememberMe":  rememberMe,
-		"CSRFToken":   csrfToken,
+		"RememberMe":   rememberMe,
 	})
 }
 
 func (s *Server) handleLogin(c *gin.Context) {
+
 	username := c.PostForm("username")
 	password := c.PostForm("password")
+	totpCode := c.PostForm("totp_code")
 	rememberMe := c.PostForm("remember_me") == "on"
+
+	slog.Info("Login attempt", "username", username, "ip", c.ClientIP(), "password_length", len(password))
 
 	if username == "" || password == "" {
 		s.renderLoginError(c, "Username and password required", username, rememberMe)
 		return
 	}
 
-	// Find user in DB
 	var user db.User
 	result := s.db.Where("username = ?", username).First(&user)
 	if result.Error != nil {
@@ -87,7 +86,6 @@ func (s *Server) handleLogin(c *gin.Context) {
 		return
 	}
 
-	// First login: set password
 	if user.PasswordHash == "" {
 		hash, err := middleware.HashPassword(password)
 		if err != nil {
@@ -99,13 +97,20 @@ func (s *Server) handleLogin(c *gin.Context) {
 			"last_login":    time.Now(),
 			"last_ip":       c.ClientIP(),
 		})
-		// Update local user object with the new hash
 		user.PasswordHash = hash
 		slog.Info("Password set for user", "username", username)
 	} else if !middleware.CheckPassword(user.PasswordHash, password) {
-		slog.Warn("Login failed: wrong password", "username", username, "ip", c.ClientIP())
+		hashPrefix := user.PasswordHash
+		if len(hashPrefix) > 10 {
+			hashPrefix = hashPrefix[:10]
+		}
+		slog.Warn("Login failed: wrong password",
+			"username", username,
+			"ip", c.ClientIP(),
+			"hash_prefix", hashPrefix,
+			"password_length", len(password),
+		)
 		s.LogAuditRecord(c, "login_failed", "auth", username, "Wrong password", false, nil)
-		// Progressive delay to slow brute-force attacks (cap at 10 attempts = 5 seconds)
 		delay := user.LoginAttempts
 		if delay > 10 {
 			delay = 10
@@ -115,12 +120,24 @@ func (s *Server) handleLogin(c *gin.Context) {
 		s.renderLoginError(c, "Invalid username or password", username, rememberMe)
 		return
 	} else {
-		// Update last login and reset attempts
 		s.db.Model(&user).Updates(map[string]interface{}{
 			"last_login":     time.Now(),
 			"last_ip":        c.ClientIP(),
 			"login_attempts": 0,
 		})
+	}
+
+	if user.TOTPSecret != "" {
+		if totpCode == "" {
+			s.renderLoginError(c, "Two-factor authentication required", username, rememberMe)
+			return
+		}
+		if !totp.VerifyCode(user.TOTPSecret, totpCode) {
+			slog.Warn("Login failed: invalid 2FA code", "username", username, "ip", c.ClientIP())
+			s.LogAuditRecord(c, "login_failed", "auth", username, "Invalid 2FA code", false, nil)
+			s.renderLoginError(c, "Invalid two-factor authentication code", username, rememberMe)
+			return
+		}
 	}
 
 	token, err := middleware.GenerateToken(user, rememberMe, s.cfg.Server.SessionMaxAgeHours)
@@ -139,13 +156,25 @@ func (s *Server) handleLogin(c *gin.Context) {
 	}
 	c.SetCookie("forgec2_session", token, maxAge, "/", "", middleware.CookieSecure, true)
 
-	// Clear force logout flag after successful login
 	s.db.Model(&db.User{}).Where("id = ?", user.ID).Update("force_logout_at", nil)
 
+	if s.pluginManager != nil {
+		go s.pluginManager.ExecuteHook(context.Background(), plugin.Event{
+			Type:      plugin.EventUserLogin,
+			Timestamp: time.Now(),
+			UserID:    user.ID,
+			Payload: map[string]interface{}{
+				"username": user.Username,
+				"role":     user.Role,
+				"ip":       c.ClientIP(),
+			},
+		})
+	}
+
 	s.LogAuditRecord(c, "login", "auth", username, "Login successful", true, nil)
-	slog.Info("Login successful, session cookie set", 
-		"username", username, 
-		"role", user.Role, 
+	slog.Info("Login successful, session cookie set",
+		"username", username,
+		"role", user.Role,
 		"ip", c.ClientIP(),
 		"max_age", maxAge,
 		"secure", middleware.CookieSecure)
@@ -161,6 +190,20 @@ func (s *Server) handleLogout(c *gin.Context) {
 			username = u
 		}
 	}
+	if s.pluginManager != nil {
+		uid, _ := c.Get("user_id")
+		userID, _ := uid.(uint)
+		go s.pluginManager.ExecuteHook(context.Background(), plugin.Event{
+			Type:      plugin.EventUserLogout,
+			Timestamp: time.Now(),
+			UserID:    userID,
+			Payload: map[string]interface{}{
+				"username": username,
+				"ip":       c.ClientIP(),
+			},
+		})
+	}
+
 	s.LogAuditRecord(c, "logout", "auth", username, "User logged out", true, nil)
 	slog.Info("User logged out", "username", username, "ip", c.ClientIP())
 	c.SetCookie("forgec2_session", "", -1, "/", "", middleware.CookieSecure, true)
@@ -174,13 +217,13 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 
 	// Database statistics
 	var (
-		pendingTasks  int64
+		pendingTasks   int64
 		completedTasks int64
-		failedTasks   int64
-		totalAudits   int64
-		totalCreds    int64
-		totalTokens   int64
-		totalSocks    int64
+		failedTasks    int64
+		totalAudits    int64
+		totalCreds     int64
+		totalTokens    int64
+		totalSocks     int64
 		totalListeners int64
 	)
 	s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks)
@@ -277,15 +320,15 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 		"NumCPU":           runtime.NumCPU(),
 		"GOOS":             runtime.GOOS,
 		"GOARCH":           runtime.GOARCH,
-		"OfflineThreshold":  s.cfg.Server.OfflineThreshold,
-		"SessionMaxAge":     s.cfg.Server.SessionMaxAgeHours,
-		"CleanupRetention":  s.cfg.Server.CleanupRetentionDays,
-		"MalleableEnabled":  s.cfg.Malleable.Enabled,
-		"MalleableStatus":   s.cfg.Malleable.StatusCode,
-		"MalleableCT":       s.cfg.Malleable.ContentType,
-		"MalleableHeaders":  s.cfg.Malleable.Headers,
-		"MalleablePrepend":  s.cfg.Malleable.Prepend,
-		"MalleableAppend":   s.cfg.Malleable.Append,
+		"OfflineThreshold": s.cfg.Server.OfflineThreshold,
+		"SessionMaxAge":    s.cfg.Server.SessionMaxAgeHours,
+		"CleanupRetention": s.cfg.Server.CleanupRetentionDays,
+		"MalleableEnabled": s.cfg.Malleable.Enabled,
+		"MalleableStatus":  s.cfg.Malleable.StatusCode,
+		"MalleableCT":      s.cfg.Malleable.ContentType,
+		"MalleableHeaders": s.cfg.Malleable.Headers,
+		"MalleablePrepend": s.cfg.Malleable.Prepend,
+		"MalleableAppend":  s.cfg.Malleable.Append,
 	}
 	for k, v := range stats {
 		data[k] = v
@@ -302,7 +345,7 @@ func (s *Server) handleSaveAgentConfig(c *gin.Context) {
 
 	if interval != "" {
 		var intInterval int
-		if _, err := fmt.Sscanf(interval, "%d", &intInterval); err == nil && intInterval > 0 {
+		if _, err := fmt.Sscanf(interval, "%d", &intInterval); err == nil && intInterval >= 0 {
 			s.cfg.Implant.DefaultInterval = intInterval
 		}
 	}
@@ -361,6 +404,99 @@ func (s *Server) handleChangePassword(c *gin.Context) {
 	s.db.Model(&user).Update("password_hash", hash)
 	s.LogAuditRecord(c, "password_change", "auth", user.Username, "Password changed", true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func (s *Server) handleTOTPStatus(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	var user db.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "User not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success":      true,
+		"totp_enabled": user.TOTPSecret != "",
+	})
+}
+
+func (s *Server) handleTOTPGenerate(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	var user db.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "User not found"})
+		return
+	}
+
+	secret, err := totp.GenerateSecret()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate secret"})
+		return
+	}
+
+	qrURL := totp.GenerateQRCodeURL(user.Username, secret)
+	backupCodes := totp.GenerateBackupCodes()
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":      true,
+		"secret":       secret,
+		"qr_url":       qrURL,
+		"backup_codes": backupCodes,
+	})
+}
+
+func (s *Server) handleTOTPEnable(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	secret := c.PostForm("secret")
+	code := c.PostForm("code")
+
+	if secret == "" || code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Secret and code are required"})
+		return
+	}
+
+	if !totp.VerifyCode(secret, code) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid verification code"})
+		return
+	}
+
+	var user db.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "User not found"})
+		return
+	}
+
+	s.db.Model(&user).Update("totp_secret", secret)
+	s.LogAuditRecord(c, "2fa_enable", "auth", user.Username, "2FA enabled", true, nil)
+	slog.Info("2FA enabled for user", "username", user.Username)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Two-factor authentication enabled"})
+}
+
+func (s *Server) handleTOTPDisable(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	password := c.PostForm("password")
+
+	if password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Password is required"})
+		return
+	}
+
+	var user db.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "User not found"})
+		return
+	}
+
+	if !middleware.CheckPassword(user.PasswordHash, password) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Incorrect password"})
+		return
+	}
+
+	s.db.Model(&user).Update("totp_secret", "")
+	s.LogAuditRecord(c, "2fa_disable", "auth", user.Username, "2FA disabled", true, nil)
+	slog.Info("2FA disabled for user", "username", user.Username)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Two-factor authentication disabled"})
 }
 
 func (s *Server) handleSaveServerConfig(c *gin.Context) {
@@ -623,5 +759,107 @@ func (s *Server) handleGetAuditLogs(c *gin.Context) {
 		"success": true,
 		"data":    logs,
 		"total":   total,
+	})
+}
+
+
+
+func (s *Server) handleSetLanguage(c *gin.Context) {
+	lang := c.PostForm("lang")
+	if lang == "" {
+		lang = c.Query("lang")
+	}
+	if lang == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Language code is required"})
+		return
+	}
+
+	if !IsLanguageSupported(lang) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported language"})
+		return
+	}
+
+	c.SetCookie("forgec2_lang", lang, 365*24*3600, "/", "", false, true)
+
+	referer := c.GetHeader("Referer")
+	if referer != "" {
+		c.Redirect(http.StatusFound, referer)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":  true,
+		"language": lang,
+		"message":  "Language updated",
+	})
+}
+
+func (s *Server) handleTranslationsPage(c *gin.Context) {
+	s.renderPage(c, "translations_content", gin.H{
+		"Title": "Translation Management",
+		"ActiveNav": "translations",
+	})
+}
+
+func (s *Server) handleDocsPage(c *gin.Context) {
+	c.Redirect(http.StatusFound, "/api/docs/")
+}
+
+func (s *Server) handleGetTranslations(c *gin.Context) {
+	lang := c.Query("lang")
+	if lang == "" {
+		lang = detectLanguage(c)
+	}
+
+	translations, err := ExportTranslations(lang)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":      true,
+		"language":     lang,
+		"translations": translations,
+		"count":        len(translations),
+	})
+}
+
+func (s *Server) handleTranslationStats(c *gin.Context) {
+	stats := GetTranslationStats()
+
+	missing := make(map[string][]string)
+	for lang := range SupportedLanguages {
+		missing[lang] = GetMissingTranslations(lang)
+	}
+
+	allKeys := GetAllTranslationKeys()
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":    true,
+		"languages":  SupportedLanguages,
+		"stats":      stats,
+		"total_keys": len(allKeys),
+		"missing":    missing,
+	})
+}
+
+func (s *Server) handleTranslationCheck(c *gin.Context) {
+	lang := c.Query("lang")
+	if lang == "" {
+		lang = detectLanguage(c)
+	}
+
+	missing := GetMissingTranslations(lang)
+	placeholderIssues := CheckPlaceholderConsistency(DefaultLanguage, lang)
+	htmlIssues := CheckHTMLTags(lang)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":              true,
+		"language":             lang,
+		"missing_translations": missing,
+		"missing_count":        len(missing),
+		"placeholder_issues":   placeholderIssues,
+		"html_tag_issues":      htmlIssues,
 	})
 }

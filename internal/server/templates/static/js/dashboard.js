@@ -1,0 +1,759 @@
+let currentTimeRange = '24h';
+let trafficChartType = 'line';
+let dashboardCharts = {};
+
+function isDashboardPage() {
+    return !!document.getElementById('dashboard-page');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (!isDashboardPage()) return;
+    waitForChartJSAndInit();
+});
+
+function waitForChartJSAndInit() {
+    if (!isDashboardPage()) return;
+    if (typeof Chart !== 'undefined' && typeof ForgeCharts !== 'undefined') {
+        updateMetrics();
+        updateAlerts();
+        initCharts();
+        loadAllChartData();
+        setInterval(updateMetrics, 10000);
+        setInterval(updateAlerts, 30000);
+        setInterval(refreshCharts, 30000);
+    } else {
+        setTimeout(waitForChartJSAndInit, 200);
+    }
+}
+
+function initCharts() {
+    console.log('Dashboard charts initialized');
+}
+
+function loadAllChartData() {
+    loadActivityHeatmap();
+    loadOSDistribution();
+    loadTaskStatus();
+    loadListenerTraffic();
+    loadCredentialTypes();
+    loadAgentGeoData();
+    loadTaskGantt();
+    loadAttackPath();
+}
+
+function refreshCharts() {
+    loadActivityHeatmap();
+    loadTaskStatus();
+    loadListenerTraffic();
+    loadSystemGauges();
+}
+
+function setTimeRange(range) {
+    currentTimeRange = range;
+    ['24h', '7d', '30d'].forEach(r => {
+        const btn = document.getElementById('range-' + r);
+        if (btn) {
+            if (r === range) {
+                btn.className = 'px-3 py-1 text-xs font-medium rounded-lg bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300';
+            } else {
+                btn.className = 'px-3 py-1 text-xs font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700';
+            }
+        }
+    });
+    loadAllChartData();
+}
+
+function setTrafficChartType(type) {
+    trafficChartType = type;
+    ['line', 'bar'].forEach(t => {
+        const btn = document.getElementById('traffic-' + t);
+        if (btn) {
+            if (t === type) {
+                btn.className = 'px-2 py-1 text-[10px] font-medium rounded-md bg-white dark:bg-slate-600 text-slate-700 dark:text-slate-200 shadow-sm';
+            } else {
+                btn.className = 'px-2 py-1 text-[10px] font-medium rounded-md text-slate-600 dark:text-slate-400';
+            }
+        }
+    });
+    loadListenerTraffic();
+}
+
+function exportChartPNG(canvasId, filename) {
+    if (typeof ForgeCharts !== 'undefined') {
+        ForgeCharts.exportPNG(canvasId, filename);
+    }
+}
+
+function loadActivityHeatmap() {
+    fetch('/api/dashboard/activity-heatmap?range=' + currentTimeRange)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Invalid response type: ' + contentType);
+            }
+            return response.json();
+        })
+        .then(data => {
+            renderActivityHeatmap(data);
+        })
+        .catch(error => {
+            console.error('Failed to load activity heatmap:', error);
+            renderActivityHeatmap(generateMockHeatmapData());
+        });
+}
+
+function renderActivityHeatmap(data) {
+    if (typeof ForgeCharts === 'undefined') return;
+    const container = document.getElementById('activity-heatmap');
+    if (!container) return;
+    
+    const days = currentTimeRange === '24h' ? 1 : (currentTimeRange === '7d' ? 7 : 30);
+    const hours = 24;
+    
+    const heatmapData = data.map(item => ({
+        day: item.day,
+        hour: item.hour,
+        value: item.count
+    }));
+    
+    ForgeCharts.createHeatmap('activity-heatmap', heatmapData, { days, hours });
+    
+    const cells = container.querySelectorAll('.heatmap-cell');
+    cells.forEach(cell => {
+        cell.style.cursor = 'pointer';
+        cell.addEventListener('click', function() {
+            const day = this.getAttribute('data-day');
+            const hour = this.getAttribute('data-hour');
+            const value = this.getAttribute('data-value');
+        });
+    });
+}
+
+function generateMockHeatmapData() {
+    const data = [];
+    const days = currentTimeRange === '24h' ? 1 : (currentTimeRange === '7d' ? 7 : 30);
+    for (let d = 0; d < days; d++) {
+        for (let h = 0; h < 24; h++) {
+            const isWorkHour = h >= 9 && h <= 18;
+            const isWeekday = d % 7 < 5;
+            const base = isWorkHour && isWeekday ? 15 : 3;
+            const variance = Math.floor(Math.random() * 10);
+            data.push({ day: d, hour: h, count: base + variance });
+        }
+    }
+    return data;
+}
+
+function loadOSDistribution() {
+    fetch('/api/dashboard/os-distribution')
+        .then(response => {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Invalid response type');
+            }
+            return response.json();
+        })
+        .then(data => {
+            renderOSDistribution(data);
+        })
+        .catch(error => {
+            console.error('Failed to load OS distribution:', error);
+            renderOSDistribution([
+                { name: 'Windows', count: 45 },
+                { name: 'Linux', count: 23 },
+                { name: 'macOS', count: 12 },
+                { name: __t('Other'), count: 5 }
+            ]);
+        });
+}
+
+function renderOSDistribution(data) {
+    if (typeof ForgeCharts === 'undefined') return;
+    const labels = data.map(item => item.name);
+    const values = data.map(item => item.count);
+    
+    ForgeCharts.createPieChart('os-distribution-chart', {
+        labels: labels,
+        datasets: [{
+            data: values,
+            label: __t('Operating System')
+        }]
+    }, {
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
+    });
+}
+
+function loadTaskStatus() {
+    fetch('/api/dashboard/task-status')
+        .then(response => {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Invalid response type');
+            }
+            return response.json();
+        })
+        .then(data => {
+            renderTaskStatus(data);
+        })
+        .catch(error => {
+            console.error('Failed to load task status:', error);
+            renderTaskStatus([
+                { name: __t('Completed'), count: 156, color: '#22c55e' },
+                { name: __t('Running'), count: 23, color: '#f59e0b' },
+                { name: __t('Pending'), count: 45, color: '#6366f1' },
+                { name: __t('Failed'), count: 12, color: '#ef4444' }
+            ]);
+        });
+}
+
+function renderTaskStatus(data) {
+    if (typeof ForgeCharts === 'undefined') return;
+    const labels = data.map(item => item.name);
+    const values = data.map(item => item.count);
+    const colors = data.map(item => item.color);
+    
+    ForgeCharts.createDoughnutChart('task-status-chart', {
+        labels: labels,
+        datasets: [{
+            data: values,
+            backgroundColor: colors,
+            label: __t('Task Count')
+        }]
+    }, {
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
+    });
+}
+
+function loadListenerTraffic() {
+    fetch('/api/dashboard/listener-traffic?range=' + currentTimeRange)
+        .then(response => {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Invalid response type');
+            }
+            return response.json();
+        })
+        .then(data => {
+            renderListenerTraffic(data);
+        })
+        .catch(error => {
+            console.error('Failed to load listener traffic:', error);
+            renderListenerTraffic(generateMockTrafficData());
+        });
+}
+
+function generateMockTrafficData() {
+    const labels = [];
+    const bytesIn = [];
+    const bytesOut = [];
+    const points = currentTimeRange === '24h' ? 24 : (currentTimeRange === '7d' ? 7 : 30);
+    const labelFormat = currentTimeRange === '24h' ? (i => i + ':00') : (i => __tf('Day {0}', i + 1));
+    
+    for (let i = 0; i < points; i++) {
+        labels.push(labelFormat(i));
+        bytesIn.push(Math.floor(Math.random() * 5000 + 1000));
+        bytesOut.push(Math.floor(Math.random() * 3000 + 500));
+    }
+    
+    return { labels, bytes_in: bytesIn, bytes_out: bytesOut };
+}
+
+function renderListenerTraffic(data) {
+    if (typeof ForgeCharts === 'undefined') return;
+    
+    const chartData = {
+        labels: data.labels,
+        datasets: [
+            {
+                label: __t('Inbound Traffic (KB)'),
+                data: data.bytes_in,
+                fill: true,
+                borderColor: '#06b6d4'
+            },
+            {
+                label: __t('Outbound Traffic (KB)'),
+                data: data.bytes_out,
+                fill: true,
+                borderColor: '#8b5cf6'
+            }
+        ]
+    };
+    
+    const options = {
+        plugins: {
+            legend: {
+                position: 'top'
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        },
+        onClick: function(event, elements) {
+            if (elements.length > 0) {
+                const index = elements[0].index;
+                console.log('Clicked:', data.labels[index]);
+            }
+        }
+    };
+    
+    if (trafficChartType === 'bar') {
+        ForgeCharts.createBarChart('listener-traffic-chart', chartData, options);
+    } else {
+        ForgeCharts.createLineChart('listener-traffic-chart', chartData, options);
+    }
+}
+
+function loadCredentialTypes() {
+    fetch('/api/dashboard/credential-types')
+        .then(response => response.json())
+        .then(data => {
+            renderCredentialTypes(data);
+        })
+        .catch(error => {
+            console.error('Failed to load credential types:', error);
+            renderCredentialTypes([
+                { name: __t('Plaintext Password'), count: 34, color: '#8b5cf6' },
+                { name: 'NTLM Hash', count: 56, color: '#ec4899' },
+                { name: 'AES Key', count: 12, color: '#06b6d4' },
+                { name: 'Kerberos', count: 23, color: '#f59e0b' },
+                { name: __t('Other'), count: 8, color: '#64748b' }
+            ]);
+        });
+}
+
+function renderCredentialTypes(data) {
+    if (typeof ForgeCharts === 'undefined') return;
+    const labels = data.map(item => item.name);
+    const values = data.map(item => item.count);
+    const colors = data.map(item => item.color);
+    
+    ForgeCharts.createBarChart('credential-types-chart', {
+        labels: labels,
+        datasets: [{
+            label: __t('Count'),
+            data: values,
+            backgroundColor: colors
+        }]
+    }, {
+        plugins: {
+            legend: {
+                display: false
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        },
+        indexAxis: 'y'
+    });
+}
+
+function loadSystemGauges() {
+    fetch('/api/monitor/metrics')
+        .then(response => {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Invalid response type');
+            }
+            return response.json();
+        })
+        .then(data => {
+            updateGauges(data);
+        })
+        .catch(error => console.error('Failed to load metrics:', error));
+}
+
+function updateMetrics() {
+    fetch('/api/monitor/metrics')
+        .then(response => {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Invalid response type');
+            }
+            return response.json();
+        })
+        .then(data => {
+            updateGauges(data);
+            updateTimeDisplay();
+        })
+        .catch(error => console.error('Failed to fetch metrics:', error));
+}
+
+function updateGauges(data) {
+    if (typeof ForgeCharts === 'undefined') return;
+    
+    const cpuPercent = data.cpu || 0;
+    const memPercent = data.memory ? (data.memory.percent || 0) : 0;
+    const diskPercent = data.disk ? (data.disk.percent || 0) : 0;
+    
+    let cpuColor = '#22c55e';
+    if (cpuPercent > 80) cpuColor = '#ef4444';
+    else if (cpuPercent > 60) cpuColor = '#f59e0b';
+    
+    let memColor = '#6366f1';
+    if (memPercent > 90) memColor = '#ef4444';
+    else if (memPercent > 70) memColor = '#f59e0b';
+    
+    let diskColor = '#22c55e';
+    if (diskPercent > 90) diskColor = '#ef4444';
+    else if (diskPercent > 70) diskColor = '#f59e0b';
+    
+    ForgeCharts.createGaugeChart('cpu-gauge-chart', cpuPercent, 100, cpuColor, 'CPU');
+    ForgeCharts.createGaugeChart('memory-gauge-chart', memPercent, 100, memColor, __t('Memory'));
+    ForgeCharts.createGaugeChart('disk-gauge-chart', diskPercent, 100, diskColor, __t('Disk'));
+}
+
+function updateTimeDisplay() {
+    const el = document.getElementById('resource-update-time');
+    if (el) {
+        const now = new Date();
+        el.textContent = now.toLocaleTimeString();
+    }
+}
+
+function loadAgentGeoData() {
+    fetch('/api/dashboard/agent-geo')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!Array.isArray(data)) {
+                throw new Error('Data is not an array');
+            }
+            renderAgentGeo(data);
+        })
+        .catch(error => {
+            console.error('Failed to load agent geo data:', error);
+            renderAgentGeo([
+                { country: __t('China'), count: 25, lat: 35.8617, lng: 104.1954 },
+                { country: __t('United States'), count: 18, lat: 37.0902, lng: -95.7129 },
+                { country: __t('Germany'), count: 12, lat: 51.1657, lng: 10.4515 },
+                { country: __t('Japan'), count: 8, lat: 36.2048, lng: 138.2529 },
+                { country: __t('United Kingdom'), count: 6, lat: 55.3781, lng: -3.4360 }
+            ]);
+        });
+}
+
+function renderAgentGeo(data) {
+    const placeholder = document.getElementById('geo-placeholder');
+    if (placeholder) placeholder.style.display = 'none';
+    
+    if (typeof ForgeCharts === 'undefined') return;
+    
+    const labels = data.map(item => item.country);
+    const values = data.map(item => item.count);
+    const colors = data.map((_, i) => ForgeCharts.getChartColors()[i % 10]);
+    
+    ForgeCharts.createPieChart('agent-geo-chart', {
+        labels: labels,
+        datasets: [{
+            data: values,
+            label: __t('Agent Count')
+        }]
+    }, {
+        plugins: {
+            legend: {
+                position: 'bottom'
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const item = data[context.dataIndex];
+                        return __tf('{0}: {1} unit(s)', item.country, item.count);
+                    }
+                }
+            }
+        }
+    });
+}
+
+function loadTaskGantt() {
+    fetch('/api/dashboard/task-gantt?range=' + currentTimeRange)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!Array.isArray(data)) {
+                throw new Error('Data is not an array');
+            }
+            renderTaskGantt(data);
+        })
+        .catch(error => {
+            console.error('Failed to load task gantt:', error);
+            renderTaskGantt(generateMockGanttData());
+        });
+}
+
+function generateMockGanttData() {
+    return [
+        { agent: 'WS-01', task: '凭据导出', start: 0, duration: 45, status: 'completed', color: '#22c55e' },
+        { agent: 'SRV-02', task: '横向移动', start: 30, duration: 60, status: 'completed', color: '#22c55e' },
+        { agent: 'WS-03', task: '权限提升', start: 20, duration: 30, status: 'running', color: '#f59e0b' },
+        { agent: 'SRV-01', task: '文件收集', start: 10, duration: 120, status: 'completed', color: '#22c55e' },
+        { agent: 'WS-05', task: '屏幕截图', start: 80, duration: 15, status: 'failed', color: '#ef4444' }
+    ];
+}
+
+function renderTaskGantt(data) {
+    if (typeof ForgeCharts === 'undefined') return;
+    
+    const labels = data.map(item => item.agent);
+    const maxDuration = Math.max(...data.map(item => item.start + item.duration), 100);
+    
+    const datasets = [{
+        label: '任务执行',
+        data: data.map(item => ({
+            x: item.duration,
+            y: item.agent
+        })),
+        backgroundColor: data.map(item => item.color),
+        borderWidth: 0,
+        borderRadius: 4
+    }];
+    
+    ForgeCharts.createBarChart('task-gantt-chart', {
+        labels: labels,
+        datasets: datasets
+    }, {
+        indexAxis: 'y',
+        plugins: {
+            legend: {
+                display: false
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const item = data[context.dataIndex];
+                        return [
+                            `任务: ${item.task}`,
+                            `时长: ${item.duration} 分钟`,
+                            `状态: ${getStatusText(item.status)}`
+                        ];
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                beginAtZero: true,
+                max: maxDuration,
+                title: {
+                    display: true,
+                    text: '时间 (分钟)'
+                }
+            }
+        }
+    });
+}
+
+function getStatusText(status) {
+    const map = {
+        'completed': '已完成',
+        'running': '进行中',
+        'pending': '等待中',
+        'failed': '失败'
+    };
+    return map[status] || status;
+}
+
+function loadAttackPath() {
+    fetch('/api/dashboard/attack-path')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data || typeof data !== 'object') {
+                throw new Error('Data is not an object');
+            }
+            renderAttackPath(data);
+        })
+        .catch(error => {
+            console.error('Failed to load attack path:', error);
+            renderAttackPath(generateMockAttackPathData());
+        });
+}
+
+function generateMockAttackPathData() {
+    return {
+        nodes: [
+            { id: 'entry', label: '入口点', type: 'entry', x: 50, y: 150 },
+            { id: 'ws01', label: 'WS-01', type: 'agent', x: 200, y: 80 },
+            { id: 'ws02', label: 'WS-02', type: 'agent', x: 200, y: 220 },
+            { id: 'srv01', label: 'SRV-01', type: 'server', x: 400, y: 80 },
+            { id: 'srv02', label: 'SRV-02', type: 'server', x: 400, y: 220 },
+            { id: 'dc', label: 'DC-01', type: 'dc', x: 600, y: 150 }
+        ],
+        edges: [
+            { from: 'entry', to: 'ws01', label: '初始访问', type: 'initial' },
+            { from: 'entry', to: 'ws02', label: '钓鱼邮件', type: 'phishing' },
+            { from: 'ws01', to: 'srv01', label: '哈希传递', type: 'lateral' },
+            { from: 'ws02', to: 'srv02', label: 'WMI', type: 'lateral' },
+            { from: 'srv01', to: 'dc', label: 'DCSync', type: 'privesc' },
+            { from: 'srv02', to: 'dc', label: '黄金票据', type: 'privesc' }
+        ]
+    };
+}
+
+function renderAttackPath(data) {
+    const container = document.getElementById('attack-path-svg');
+    if (!container) return;
+    
+    const width = container.clientWidth || 700;
+    const height = container.clientHeight || 250;
+    
+    let svg = `<svg width="100%" height="100%" viewBox="0 0 ${width} ${height}" style="overflow: visible;">`;
+    
+    const isDark = document.documentElement.classList.contains('dark');
+    const textColor = isDark ? '#f1f5f9' : '#1e293b';
+    const lineColor = isDark ? '#475569' : '#cbd5e1';
+    
+    const nodePositions = {};
+    const nodeCount = data.nodes.length;
+    const cols = Math.ceil(Math.sqrt(nodeCount));
+    const rows = Math.ceil(nodeCount / cols);
+    
+    data.nodes.forEach((node, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const x = (col + 0.5) * (width / cols);
+        const y = (row + 0.5) * (height / rows);
+        nodePositions[node.id] = { x, y };
+    });
+    
+    data.edges.forEach(edge => {
+        const from = nodePositions[edge.from];
+        const to = nodePositions[edge.to];
+        if (from && to) {
+            const midX = (from.x + to.x) / 2;
+            const midY = (from.y + to.y) / 2;
+            
+            let strokeColor = lineColor;
+            let dashArray = '';
+            if (edge.type === 'initial') strokeColor = '#22c55e';
+            else if (edge.type === 'lateral') strokeColor = '#f59e0b';
+            else if (edge.type === 'privesc') strokeColor = '#ef4444';
+            else if (edge.type === 'phishing') strokeColor = '#8b5cf6';
+            
+            svg += `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="${strokeColor}" stroke-width="2" stroke-dasharray="${dashArray}" />`;
+            
+            svg += `<text x="${midX}" y="${midY - 5}" text-anchor="middle" fill="${textColor}" font-size="10px" style="font-family: system-ui;">${edge.label}</text>`;
+        }
+    });
+    
+    data.nodes.forEach(node => {
+        const pos = nodePositions[node.id];
+        if (!pos) return;
+        
+        let fillColor = '#6366f1';
+        let icon = 'fa-server';
+        if (node.type === 'entry') { fillColor = '#22c55e'; icon = 'fa-door-open'; }
+        else if (node.type === 'agent') { fillColor = '#3b82f6'; icon = 'fa-desktop'; }
+        else if (node.type === 'server') { fillColor = '#f59e0b'; icon = 'fa-server'; }
+        else if (node.type === 'dc') { fillColor = '#ef4444'; icon = 'fa-building-columns'; }
+        
+        svg += `<g class="cursor-pointer transition-transform hover:scale-110" style="transform-origin: ${pos.x}px ${pos.y}px;">`;
+        svg += `<circle cx="${pos.x}" cy="${pos.y}" r="28" fill="${fillColor}" opacity="0.2" />`;
+        svg += `<circle cx="${pos.x}" cy="${pos.y}" r="20" fill="${fillColor}" />`;
+        svg += `<text x="${pos.x}" y="${pos.y + 4}" text-anchor="middle" fill="white" font-size="14px" style="font-family: system-ui; font-weight: bold;">${node.label.substring(0, 2)}</text>`;
+        svg += `<text x="${pos.x}" y="${pos.y + 42}" text-anchor="middle" fill="${textColor}" font-size="11px" style="font-family: system-ui;">${node.label}</text>`;
+        svg += `</g>`;
+    });
+    
+    svg += '</svg>';
+    container.innerHTML = svg;
+}
+
+function updateAlerts() {
+    fetch('/api/monitor/alerts?status=active')
+        .then(response => {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Invalid response type');
+            }
+            return response.json();
+        })
+        .then(data => {
+            renderAlerts(data.alerts);
+        })
+        .catch(error => console.error('Failed to fetch alerts:', error));
+}
+
+function renderAlerts(alerts) {
+    const list = document.getElementById('alert-list');
+    const count = document.getElementById('alert-count');
+    
+    if (!list || !count) return;
+    
+    count.textContent = alerts.length;
+    
+    if (alerts.length === 0) {
+        list.innerHTML = '<div class="text-center py-8 text-slate-400 text-sm">暂无告警</div>';
+        return;
+    }
+    
+    const items = alerts.slice(0, 5).map(alert => {
+        let severityClass = 'bg-amber-50 border-amber-200';
+        let severityBadge = 'bg-amber-100 text-amber-700';
+        let severityText = 'warning';
+        
+        if (alert.severity === 'critical') {
+            severityClass = 'bg-red-50 border-red-200';
+            severityBadge = 'bg-red-100 text-red-700';
+            severityText = 'critical';
+        } else if (alert.severity === 'info') {
+            severityClass = 'bg-blue-50 border-blue-200';
+            severityBadge = 'bg-blue-100 text-blue-700';
+            severityText = 'info';
+        }
+        
+        return `
+            <div class="p-3 rounded-xl border ${severityClass} dark:bg-transparent">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <div class="font-medium text-slate-900 dark:text-slate-100 text-sm">${escapeHtml(alert.title)}</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">${escapeHtml(alert.message)}</div>
+                        <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">${alert.source_name || alert.source}</div>
+                    </div>
+                    <span class="px-2 py-0.5 ${severityBadge} rounded text-[10px] font-medium flex-shrink-0">${severityText}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    list.innerHTML = items;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}

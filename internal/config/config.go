@@ -76,6 +76,24 @@ type Config struct {
 	Logging struct {
 		Level string `yaml:"level"` // debug, info, warn, error
 	} `yaml:"logging"`
+
+	RateLimit struct {
+		Login struct {
+			MaxAttempts int    `yaml:"max_attempts"` // max login attempts per window
+			Window      int    `yaml:"window"`       // window in seconds
+			LockoutTime int    `yaml:"lockout_time"` // lockout duration in seconds
+			Whitelist   []string `yaml:"whitelist"`   // whitelisted IPs
+		} `yaml:"login"`
+		API struct {
+			Capacity  float64  `yaml:"capacity"`   // token bucket capacity (max burst)
+			Rate      float64  `yaml:"rate"`       // tokens per second per user
+			Whitelist []string `yaml:"whitelist"`   // whitelisted IPs
+		} `yaml:"api"`
+		Beacon struct {
+			Limit  int `yaml:"limit"`  // requests per window
+			Window int `yaml:"window"` // window in seconds
+		} `yaml:"beacon"`
+	} `yaml:"rate_limit"`
 }
 
 // DefaultConfig returns sensible defaults
@@ -115,8 +133,21 @@ func DefaultConfig() *Config {
 	cfg.AI.Enabled = false
 	cfg.AI.Provider = "deepseek"
 	cfg.AI.Model = "deepseek-chat"
-	cfg.AI.SystemPrompt = "你是 ForgeC2 红队行动助手，运行在 C2 服务器上。你可以列出在线 Agent、查看目标详情、执行命令、查看凭据、管理监听器等。用中文回复。"
+	cfg.AI.SystemPrompt = "You are the ForgeC2 red team operations assistant, running on the C2 server. You can list online agents, view target details, execute commands, view credentials, manage listeners, and more."
 	cfg.Logging.Level = "info"
+
+	cfg.RateLimit.Login.MaxAttempts = 5
+	cfg.RateLimit.Login.Window = 60
+	cfg.RateLimit.Login.LockoutTime = 900
+	cfg.RateLimit.Login.Whitelist = []string{}
+
+	cfg.RateLimit.API.Capacity = 100
+	cfg.RateLimit.API.Rate = 50
+	cfg.RateLimit.API.Whitelist = []string{"127.0.0.1", "::1"}
+
+	cfg.RateLimit.Beacon.Limit = 100
+	cfg.RateLimit.Beacon.Window = 60
+
 	return cfg
 }
 
@@ -189,4 +220,11 @@ func (c *Config) Save(path string) error {
 		return err
 	}
 	return os.WriteFile(path, out, 0644)
+}
+
+// LoadFromData loads config from byte data
+func (c *Config) LoadFromData(data []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return yaml.Unmarshal(data, c)
 }

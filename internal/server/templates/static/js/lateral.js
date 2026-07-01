@@ -45,7 +45,11 @@ function executeLateral() {
     });
 }
 
-document.getElementById('credential').addEventListener('change', function() {
+(function initLateralPage() {
+    const credentialEl = document.getElementById('credential');
+    if (!credentialEl) return;
+
+    credentialEl.addEventListener('change', function() {
     const option = this.options[this.selectedIndex];
     if (option.value) {
         document.getElementById('username').value = option.dataset.username || '';
@@ -58,4 +62,5 @@ document.getElementById('credential').addEventListener('change', function() {
             })
             .catch(() => {});
     }
-});
+    });
+})();

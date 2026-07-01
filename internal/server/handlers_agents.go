@@ -290,10 +290,6 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 		"UnlinkedAgents":    unlinkedAgents,
 	}
 
-	// Read CSRF token from cookie
-	if csrf, err := c.Cookie("csrf_token"); err == nil {
-		data["CSRFToken"] = csrf
-	}
 
 	stats := s.getNavStats()
 	for k, v := range stats {
@@ -318,7 +314,7 @@ func (s *Server) handleKillAgent(c *gin.Context) {
 	user, _ := c.Get("user")
 	username := fmt.Sprintf("%v", user)
 	if holder, ok := s.checkAgentLock(id, username); !ok {
-		c.JSON(http.StatusLocked, gin.H{"error": fmt.Sprintf("agent已被 %s 锁定", holder), "locked_by": holder})
+		c.JSON(http.StatusLocked, gin.H{"error": fmt.Sprintf("agent locked by %s", holder), "locked_by": holder})
 		return
 	}
 
@@ -689,12 +685,41 @@ func (s *Server) renderPage(c *gin.Context, tmplName string, data gin.H) {
 		c.String(http.StatusInternalServerError, "Template error: " + err.Error())
 		return
 	}
-	data["Content"] = template.HTML(buf.String())
+	useBundles := !isDevMode()
+	data["Content"] = appendPageScripts(tmplName, template.HTML(buf.String()), useBundles)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
 }
 
-// addUserToData injects user display info and CSRF token into gin.H from context
+func detectLanguage(c *gin.Context) string {
+	if lang, err := c.Cookie("forgec2_lang"); err == nil && lang != "" {
+		if IsLanguageSupported(lang) {
+			return lang
+		}
+	}
+
+	acceptLang := c.GetHeader("Accept-Language")
+	if acceptLang != "" {
+		parts := strings.Split(acceptLang, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if idx := strings.Index(part, ";"); idx > 0 {
+				part = part[:idx]
+			}
+			part = strings.TrimSpace(part)
+			if len(part) >= 2 {
+				langCode := part[:2]
+				if IsLanguageSupported(langCode) {
+					return langCode
+				}
+			}
+		}
+	}
+
+	return DefaultLanguage
+}
+
+// addUserToData injects user display info into gin.H from context
 func (s *Server) addUserToData(c *gin.Context, data gin.H) {
 	if user, ok := c.Get("user"); ok {
 		data["UserDisplayName"] = user
@@ -706,10 +731,17 @@ func (s *Server) addUserToData(c *gin.Context, data gin.H) {
 	} else {
 		data["UserRole"] = "operator"
 	}
-	if csrf, err := c.Cookie("csrf_token"); err == nil {
-		data["CSRFToken"] = csrf
-	}
 	data["ServerVersion"] = ServerVersion
+
+	currentLang := detectLanguage(c)
+	data["CurrentLang"] = currentLang
+	langInfo, _ := GetLanguageInfo(currentLang)
+	data["CurrentLangInfo"] = langInfo
+	data["IsRTL"] = langInfo.RTL
+
+	data["UseBundles"] = !isDevMode()
+	data["LocalesJSON"] = GetTranslationsJSON(currentLang)
+	data["OnlineUsers"] = s.onlineUsersForRequest(c)
 	if _, ok := data["SearchQuery"]; !ok {
 		data["SearchQuery"] = ""
 	}
@@ -731,15 +763,7 @@ func (s *Server) handlePivoting(c *gin.Context) {
 		data[k] = v
 	}
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "pivoting_content", data); err != nil {
-		slog.Error("pivoting render fail", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
+	s.renderPage(c, "pivoting_content", data)
 }
 
 // handleTopologyPage renders the network topology visualization
@@ -896,87 +920,6 @@ func (s *Server) handleLootPage(c *gin.Context) {
 	s.renderPage(c, "loot_content", data)
 }
 
-func (s *Server) handleGlobalSearch(c *gin.Context) {
-	query := strings.TrimSpace(c.Query("q"))
-
-	type SearchResult struct {
-		Type  string
-		ID    string
-		Title string
-		Desc  string
-		URL   string
-	}
-
-	var results []SearchResult
-
-	if query != "" {
-		// Search agents
-		var agents []db.Implant
-		s.db.Where("hostname LIKE ? OR username LIKE ? OR ip LIKE ? OR id LIKE ?",
-			"%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%").Limit(20).Find(&agents)
-		for _, a := range agents {
-			results = append(results, SearchResult{
-				Type:  "Agent",
-				ID:    a.ID,
-				Title: a.Hostname + " / " + a.Username,
-				Desc:  a.IP + " | " + a.OS,
-				URL:   "/agents/" + a.ID,
-			})
-		}
-
-		// Search tasks
-		var tasks []db.Task
-		s.db.Where("command LIKE ? OR result LIKE ? OR agent_id LIKE ?",
-			"%"+query+"%", "%"+query+"%", "%"+query+"%").Limit(20).Find(&tasks)
-		for _, t := range tasks {
-			cmd := t.Command
-			if len(cmd) > 80 {
-				cmd = cmd[:80] + "..."
-			}
-			results = append(results, SearchResult{
-				Type:  "Task",
-				ID:    fmt.Sprintf("%d", t.ID),
-				Title: t.Type + ": " + cmd,
-				Desc:  "Agent: " + t.AgentID + " | Status: " + t.Status,
-				URL:   "/agents/" + t.AgentID,
-			})
-		}
-
-		// Search listeners
-		var listeners []db.Listener
-		s.db.Where("name LIKE ? OR host LIKE ?", "%"+query+"%", "%"+query+"%").Limit(10).Find(&listeners)
-		for _, l := range listeners {
-			results = append(results, SearchResult{
-				Type:  "Listener",
-				ID:    fmt.Sprintf("%d", l.ID),
-				Title: l.Name,
-				Desc:  fmt.Sprintf("%s:%d | %s", l.Host, l.Port, l.Protocol),
-				URL:   "/listeners/" + fmt.Sprintf("%d", l.ID),
-			})
-		}
-	}
-
-	data := gin.H{
-		"Title":       "Global Search",
-		"ActiveNav":   "search",
-		"SearchQuery": query,
-		"Results":     results,
-		"ResultCount": len(results),
-	}
-
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "search_content", data); err != nil {
-		// Fallback
-		data["Content"] = template.HTML(fmt.Sprintf(`<div class="p-8"><h2 class="text-xl font-bold mb-4">Search Results: %s</h2><p class="text-slate-500">%d results found</p></div>`, template.HTMLEscapeString(query), len(results)))
-		c.Header("Content-Type", "text/html; charset=utf-8")
-		s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
-		return
-	}
-	data["Content"] = template.HTML(contentBuf.String())
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
-}
-
 // handleLinkAgent links a child agent to a parent agent for P2P relay
 func (s *Server) handleLinkAgent(c *gin.Context) {
 	parentID := c.Param("id")
@@ -1048,7 +991,7 @@ func (s *Server) handleListAgents(c *gin.Context) {
 			ID:       a.ID,
 			Hostname: a.Hostname,
 			IP:       a.IP,
-			Status:   a.Status,
+			Status:   s.agentStatus(a).Status,
 			OS:       a.OS,
 		})
 	}

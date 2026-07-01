@@ -1,19 +1,19 @@
 {{define "users_content"}}
-<div class="max-w-6xl mx-auto">
-    <div class="flex items-center justify-between mb-6">
+<div class="max-w-6xl mx-auto mb-20 md:mb-0">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3">
         <div>
-            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">用户管理</h1>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">用户管理</h1>
             <p class="text-slate-500 text-sm">管理操作员账户、角色与权限</p>
         </div>
         {{if eq .UserRole "admin"}}
-        <button onclick="showAddUserModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 h-9 rounded-xl text-sm font-medium flex items-center gap-x-2">
+        <button data-action="show-add-user-modal" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 h-9 rounded-xl text-sm font-medium flex items-center gap-x-2">
             <i class="fa-solid fa-plus"></i> 添加用户
         </button>
         {{end}}
     </div>
 
     <!-- ═══ 角色权限说明卡片 ═══ -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div class="bg-indigo-50 border border-indigo-200 rounded-2xl p-4">
             <div class="flex items-center gap-2 mb-2">
                 <i class="fa-solid fa-crown text-indigo-600 text-sm"></i>
@@ -40,10 +40,10 @@
         </div>
         <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
             <div class="flex items-center gap-2 mb-2">
-                <i class="fa-solid fa-eye text-slate-500 text-sm"></i>
+                <i class="fa-solid fa-eye text-slate-500 dark:text-slate-400 text-sm"></i>
                 <span class="text-sm font-semibold text-slate-600">Viewer</span>
             </div>
-            <ul class="text-xs text-slate-500 space-y-1">
+            <ul class="text-xs text-slate-500 dark:text-slate-400 space-y-1">
                 <li>✓ 查看仪表盘、Implant 列表</li>
                 <li>✓ 查看任务历史与结果</li>
                 <li>✓ 查看凭据与审计日志</li>
@@ -51,16 +51,30 @@
                 <li>✗ 不能锁定 Agent</li>
             </ul>
         </div>
+        <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+            <div class="flex items-center gap-2 mb-2">
+                <i class="fa-solid fa-user-secret text-amber-600 text-sm"></i>
+                <span class="text-sm font-semibold text-amber-800">Guest</span>
+            </div>
+            <ul class="text-xs text-amber-700 space-y-1">
+                <li>✓ 查看 Agent 列表</li>
+                <li>✓ 查看监听器列表</li>
+                <li>✓ 查看任务列表</li>
+                <li>✗ 不能查看凭据</li>
+                <li>✗ 不能执行任何操作</li>
+            </ul>
+        </div>
     </div>
 
     <!-- ═══ 搜索 ═══ -->
     <div class="mb-4">
         <input id="user-search" type="text" placeholder="搜索用户名或角色..." oninput="filterUsers()"
-               class="w-full max-w-xs bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-10 text-sm">
+               class="w-full max-w-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-xl px-4 h-10 text-sm">
     </div>
 
     <!-- ═══ 用户表格 ═══ -->
-    <div class="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl overflow-hidden shadow-sm">
+        <div class="overflow-x-auto table-scroll-container">
         <table class="w-full text-sm">
             <thead class="bg-slate-50 border-b border-slate-200">
             <tr class="text-xs text-slate-500">
@@ -75,7 +89,7 @@
             </thead>
             <tbody class="divide-y divide-slate-100">
             {{range .Users}}
-            <tr class="hover:bg-slate-50 transition-colors user-row" data-username="{{.Username}}" data-role="{{.Role}}">
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors user-row" data-username="{{.Username}}" data-role="{{.Role}}">
                 <td class="py-4 px-6">
                     <div class="font-medium text-slate-900">{{.Username}}</div>
                 </td>
@@ -85,8 +99,12 @@
                         <i class="fa-solid fa-crown mr-1 text-[10px]"></i> Admin
                     </span>
                     {{else if eq .Role "viewer"}}
-                    <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-500 rounded-full">
+                    <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-500 dark:text-slate-400 rounded-full">
                         <i class="fa-solid fa-eye mr-1 text-[10px]"></i> Viewer
+                    </span>
+                    {{else if eq .Role "guest"}}
+                    <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-amber-100 text-amber-700 rounded-full">
+                        <i class="fa-solid fa-user-secret mr-1 text-[10px]"></i> Guest
                     </span>
                     {{else}}
                     <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium bg-sky-100 text-sky-700 rounded-full">
@@ -108,34 +126,34 @@
                 <td class="py-4 px-4">
                     <span class="inline-flex items-center gap-1.5 text-xs" data-online-user="{{.Username}}">
                         <span class="w-2 h-2 bg-slate-300 rounded-full"></span>
-                        <span class="text-slate-400">检查中</span>
+                        <span class="text-slate-400 dark:text-slate-500">检查中</span>
                     </span>
                 </td>
-                <td class="py-4 px-4 font-mono text-xs text-slate-500">
+                <td class="py-4 px-4 font-mono text-xs text-slate-500 dark:text-slate-400">
                     {{if not .LastActivity.IsZero}}{{.LastActivity | formatTime}}{{else if not .LastLogin.IsZero}}{{.LastLogin | formatTime}}{{else}}—{{end}}
                 </td>
-                <td class="py-4 px-4 font-mono text-xs text-slate-500">
+                <td class="py-4 px-4 font-mono text-xs text-slate-500 dark:text-slate-400">
                     {{if not .CreatedAt.IsZero}}{{.CreatedAt | formatTime}}{{else}}—{{end}}
                 </td>
                 {{if eq $.UserRole "admin"}}
                 <td class="py-4 px-4 text-center">
                     <div class="flex items-center justify-center gap-1">
-                        <button onclick="toggleUser({{.ID}})" class="px-2.5 py-1.5 text-xs rounded-xl transition-colors {{if .IsActive}}bg-amber-50 text-amber-700 hover:bg-amber-100{{else}}bg-emerald-50 text-emerald-700 hover:bg-emerald-100{{end}}" title="{{if .IsActive}}禁用{{else}}启用{{end}}">
+                        <button data-action="toggle-user" data-id="{{.ID}}" class="px-2.5 py-1.5 text-xs rounded-xl transition-colors {{if .IsActive}}bg-amber-50 text-amber-700 hover:bg-amber-100{{else}}bg-emerald-50 text-emerald-700 hover:bg-emerald-100{{end}}" title="{{if .IsActive}}禁用{{else}}启用{{end}}">
                             <i class="fa-solid {{if .IsActive}}fa-ban{{else}}fa-check{{end}}"></i>
                         </button>
-                        <button onclick="showEditUserModal({{.ID}}, '{{.Username}}', '{{.Role}}')" class="px-2.5 py-1.5 text-xs bg-sky-50 text-sky-600 hover:bg-sky-100 rounded-xl transition-colors" title="编辑">
+                        <button data-action="show-edit-user-modal" data-id="{{.ID}}" data-username="{{.Username}}" data-role="{{.Role}}" class="px-2.5 py-1.5 text-xs bg-sky-50 text-sky-600 hover:bg-sky-100 rounded-xl transition-colors" title="编辑">
                             <i class="fa-solid fa-pen"></i>
                         </button>
-                        <button onclick="setUserPassword({{.ID}})" class="px-2.5 py-1.5 text-xs bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors" title="重置密码">
+                        <button data-action="set-user-password" data-id="{{.ID}}" class="px-2.5 py-1.5 text-xs bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors" title="重置密码">
                             <i class="fa-solid fa-key"></i>
                         </button>
-                        <button onclick="forceLogoutUser({{.ID}})" class="px-2.5 py-1.5 text-xs bg-purple-50 text-purple-600 hover:bg-purple-100 rounded-xl transition-colors" title="强制登出">
+                        <button data-action="force-logout-user" data-id="{{.ID}}" class="px-2.5 py-1.5 text-xs bg-purple-50 text-purple-600 hover:bg-purple-100 rounded-xl transition-colors" title="强制登出">
                             <i class="fa-solid fa-right-from-bracket"></i>
                         </button>
-                        <button onclick="kickUser({{.ID}})" class="px-2.5 py-1.5 text-xs bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-xl transition-colors" title="踢出 (断开 WS)">
+                        <button data-action="kick-user" data-id="{{.ID}}" class="px-2.5 py-1.5 text-xs bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-xl transition-colors" title="踢出 (断开 WS)">
                             <i class="fa-solid fa-user-slash"></i>
                         </button>
-                        <button onclick="deleteUser({{.ID}})" class="px-2.5 py-1.5 text-xs bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition-colors" title="删除">
+                        <button data-action="delete-user" data-id="{{.ID}}" class="px-2.5 py-1.5 text-xs bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition-colors" title="删除">
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </div>
@@ -143,10 +161,14 @@
                 {{end}}
             </tr>
             {{else}}
-            <tr><td colspan="{{if eq $.UserRole "admin"}}7{{else}}6{{end}}" class="py-20 text-center text-slate-400">暂无用户</td></tr>
+            <tr><td colspan="{{if eq $.UserRole "admin"}}7{{else}}6{{end}}" class="py-20 text-center text-slate-400 dark:text-slate-500">暂无用户</td></tr>
             {{end}}
             </tbody>
         </table>
+        <div class="sm:hidden px-4 py-2 text-center text-xs text-slate-400 dark:text-slate-500 border-t border-slate-100 dark:border-slate-700">
+            <i class="fa-solid fa-arrows-left-right mr-1"></i> 左右滑动查看更多列
+        </div>
+        </div>
     </div>
 </div>
 
@@ -156,21 +178,22 @@
         <div class="text-lg font-semibold mb-4">添加用户</div>
         <form id="add-user-form" onsubmit="addUser(event)" class="space-y-4">
             <div>
-                <label class="block text-xs text-slate-500 mb-1">用户名</label>
+                <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">用户名</label>
                 <input type="text" name="username" required minlength="3"
                        class="w-full border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11">
             </div>
             <div>
-                <label class="block text-xs text-slate-500 mb-1">密码</label>
+                <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">密码</label>
                 <input type="password" name="password" required minlength="8"
                        class="w-full border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11">
             </div>
             <div>
-                <label class="block text-xs text-slate-500 mb-1">角色</label>
+                <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">角色</label>
                 <select name="role" class="w-full border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11">
                     <option value="operator">Operator</option>
                     <option value="admin">Admin</option>
                     <option value="viewer">Viewer (只读)</option>
+                    <option value="guest">Guest (访客)</option>
                 </select>
             </div>
             <button type="submit" class="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-medium">创建用户</button>
@@ -181,7 +204,7 @@
 
 <!-- ═══ 编辑用户 Modal ═══ -->
 <div id="edit-user-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick="if (event.target.id === 'edit-user-modal') this.classList.add('hidden')">
-    <div class="bg-white rounded-3xl shadow-xl w-full max-w-md mx-4 p-6" onclick="event.stopImmediatePropagation()">
+    <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-xl w-full max-w-md mx-4 p-6" onclick="event.stopImmediatePropagation()">
         <div class="text-lg font-semibold mb-4">编辑用户</div>
         <form id="edit-user-form" onsubmit="editUser(event)" class="space-y-4">
             <input type="hidden" id="edit-user-id" name="id">
@@ -192,22 +215,21 @@
                 <p class="text-[10px] text-slate-400 mt-1">留空则不修改</p>
             </div>
             <div>
-                <label class="block text-xs text-slate-500 mb-1">角色</label>
+                <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">角色</label>
                 <select id="edit-role" name="role" class="w-full border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11">
                     <option value="">不修改</option>
                     <option value="operator">Operator</option>
                     <option value="admin">Admin</option>
                     <option value="viewer">Viewer (只读)</option>
+                    <option value="guest">Guest (访客)</option>
                 </select>
             </div>
             <div class="flex gap-3">
-                <button type="button" onclick="document.getElementById('edit-user-modal').classList.add('hidden')" class="flex-1 h-11 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-medium text-sm">取消</button>
+                <button type="button" data-action="hide-edit-user-modal" class="flex-1 h-11 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-medium text-sm">取消</button>
                 <button type="submit" class="flex-1 h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-medium text-sm">保存</button>
             </div>
         </form>
         <div id="edit-user-result" class="mt-3"></div>
     </div>
 </div>
-
-<script src="/static/js/users.js"></script>
 {{end}}

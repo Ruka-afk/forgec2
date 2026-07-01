@@ -13,7 +13,7 @@ func (s *Server) handleChatPage(c *gin.Context) {
 	user, _ := c.Get("user")
 	data := gin.H{
 		"ActiveNav":       "chat",
-		"Title":           "操作员聊天",
+		"Title": "Operator Chat",
 		"CurrentUsername": user,
 	}
 	s.renderPage(c, "chat_content", data)

@@ -12,7 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"context"
+
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/plugin"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -45,10 +48,10 @@ type taskResult struct {
 }
 
 type beaconResponse struct {
-	Tasks         []task         `json:"tasks"`
-	SocksFrames   []socksFrame   `json:"socks_frames,omitempty"`
-	SocksFastMode bool           `json:"socks_fast,omitempty"`
-	Relayed       []relayedTask  `json:"relayed,omitempty"` // P2P: tasks for children
+	Tasks         []task        `json:"tasks"`
+	SocksFrames   []socksFrame  `json:"socks_frames,omitempty"`
+	SocksFastMode bool          `json:"socks_fast,omitempty"`
+	Relayed       []relayedTask `json:"relayed,omitempty"` // P2P: tasks for children
 }
 
 type relayedTask struct {
@@ -133,6 +136,27 @@ func (s *Server) handleBeacon(c *gin.Context) {
 	}
 }
 
+func decodeBeaconIdentity(info map[string]string) (hostname, username, ip string) {
+	if info == nil {
+		return "", "", ""
+	}
+	hostname = info["hostname"]
+	username = info["username"]
+	ip = info["ip"]
+	if info["encoding"] == "base64" {
+		if decoded, err := base64.StdEncoding.DecodeString(hostname); err == nil {
+			hostname = string(decoded)
+		}
+		if decoded, err := base64.StdEncoding.DecodeString(username); err == nil {
+			username = string(decoded)
+		}
+		if decoded, err := base64.StdEncoding.DecodeString(ip); err == nil {
+			ip = string(decoded)
+		}
+	}
+	return hostname, username, ip
+}
+
 // processBeacon contains the core beacon logic (registration, result processing,
 // task dispatch). It is shared between HTTP and TCP transports.
 func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconResponse {
@@ -153,20 +177,10 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 	result := s.db.Where("id = ?", req.UUID).First(&agent)
 
 	if result.Error == gorm.ErrRecordNotFound {
-		hostname := req.Info["hostname"]
-		username := req.Info["username"]
-		ip := req.Info["ip"]
-
-		if req.Info["encoding"] == "base64" {
-			if decoded, err := base64.StdEncoding.DecodeString(hostname); err == nil {
-				hostname = string(decoded)
-			}
-			if decoded, err := base64.StdEncoding.DecodeString(username); err == nil {
-				username = string(decoded)
-			}
-			if decoded, err := base64.StdEncoding.DecodeString(ip); err == nil {
-				ip = string(decoded)
-			}
+		hostname, username, ip := decodeBeaconIdentity(req.Info)
+		if strings.TrimSpace(hostname) == "" && strings.TrimSpace(ip) == "" {
+			slog.Warn("Rejected ghost agent registration", "uuid", req.UUID, "public_ip", publicIP)
+			return beaconResponse{}
 		}
 
 		agent = db.Implant{
@@ -187,6 +201,7 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 			Domain:          req.Info["domain"],
 			CurrentInterval: parseInt("interval"),
 			CurrentJitter:   parseInt("jitter"),
+			ActiveWindow:    req.Info["active_window"],
 		}
 		if lid := req.Info["listener_id"]; lid != "" {
 			if id, err := strconv.ParseUint(lid, 10, 32); err == nil {
@@ -195,10 +210,22 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 		}
 		s.db.Create(&agent)
 		slog.Info("New agent registered", "id", agent.ID, "hostname", agent.Hostname, "ip", agent.IP, "listener_id", agent.ListenerID)
-		go s.broadcastAgentNotification(agent)
+		go s.broadcastAgentOnline(agent, true)
+		s.eventManager.Emit(Event{
+			Type:      EventImplantCheckin,
+			AgentID:   agent.ID,
+			AgentHost: agent.Hostname,
+			Timestamp: now,
+			Data:      map[string]interface{}{"new": true, "ip": agent.IP},
+		})
 	} else {
+		prevComputed := s.agentStatus(agent).Status
+		prevStatus := prevComputed
+		if agent.Status == "offline" || agent.Status == "stale" {
+			prevStatus = agent.Status
+		}
 		agent.LastSeen = now
-		agent.Status = s.agentStatus(agent).Status
+		agent.Status = "online"
 		updates := map[string]interface{}{
 			"last_seen": now,
 			"status":    "online",
@@ -234,13 +261,19 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 			updates["pid"] = pid
 			agent.PID = pid
 		}
-		if interval := parseInt("interval"); interval > 0 {
+		if interval := parseInt("interval"); interval >= 0 {
 			updates["current_interval"] = interval
 			agent.CurrentInterval = interval
 		}
 		if jitter := parseInt("jitter"); jitter >= 0 {
 			updates["current_jitter"] = jitter
 			agent.CurrentJitter = jitter
+		}
+		if req.Info != nil {
+			if v, ok := req.Info["active_window"]; ok {
+				updates["active_window"] = v
+				agent.ActiveWindow = v
+			}
 		}
 		if lid := req.Info["listener_id"]; lid != "" {
 			if id, err := strconv.ParseUint(lid, 10, 32); err == nil && agent.ListenerID == 0 {
@@ -252,7 +285,32 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 		if result.Error != nil {
 			slog.Error("Failed to update agent", "id", agent.ID, "error", result.Error)
 		}
-		slog.Info("Beacon processed", "agent", req.UUID, "last_seen", now, "rows_affected", result.RowsAffected, "public_ip", publicIP, "status", "online")
+		if prevStatus != "online" {
+			go s.broadcastAgentOnline(agent, false)
+			s.eventManager.Emit(Event{
+				Type:      EventImplantCheckin,
+				AgentID:   agent.ID,
+				AgentHost: agent.Hostname,
+				Timestamp: now,
+				Data:      map[string]interface{}{"new": false, "reconnected": true, "prev_status": prevStatus, "ip": agent.IP},
+			})
+		}
+		slog.Info("Beacon processed", "agent", req.UUID, "last_seen", now, "rows_affected", result.RowsAffected, "public_ip", publicIP, "status", "online", "prev_status", prevStatus)
+	}
+
+	if s.pluginManager != nil {
+		go s.pluginManager.ExecuteHook(context.Background(), plugin.Event{
+			Type:      plugin.EventAgentConnect,
+			Timestamp: now,
+			AgentID:   req.UUID,
+			Payload: map[string]interface{}{
+				"hostname": agent.Hostname,
+				"ip":       agent.IP,
+				"os":       agent.OS,
+				"username": agent.Username,
+				"new":      result.Error == gorm.ErrRecordNotFound,
+			},
+		})
 	}
 
 	for _, r := range req.Results {
@@ -352,6 +410,20 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 			s.db.Save(&task)
 			if !isSilent {
 				s.broadcastTaskUpdate(req.UUID, task)
+			}
+
+			if s.pluginManager != nil {
+				go s.pluginManager.ExecuteHook(context.Background(), plugin.Event{
+					Type:      plugin.EventTaskCompleted,
+					Timestamp: now,
+					AgentID:   req.UUID,
+					Payload: map[string]interface{}{
+						"task_id":   task.ID,
+						"task_type": task.Type,
+						"status":    task.Status,
+						"error":     task.Error,
+					},
+				})
 			}
 
 			// ── Token vault: persist steal/make results ───────────────────────────

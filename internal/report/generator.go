@@ -151,55 +151,55 @@ func (g *Generator) GenerateHTML(data *ReportData, outputPath string) error {
         {{if .Logo}}<img src="data:image/png;base64,{{.Logo}}" alt="Logo" style="max-height: 80px;">{{end}}
         <h1>{{.Title}}</h1>
         <div class="subtitle">{{.Subtitle}}</div>
-        <div class="subtitle">生成时间: {{.GeneratedAt.Format "2006-01-02 15:04:05"}}</div>
-        <div class="subtitle">执行者: {{.ExecutedBy}}</div>
-        <div class="subtitle">日期范围: {{.DateRange.Start.Format "2006-01-02"}} - {{.DateRange.End.Format "2006-01-02"}}</div>
+        <div class="subtitle">Generated: {{.GeneratedAt.Format "2006-01-02 15:04:05"}}</div>
+        <div class="subtitle">Executed by: {{.ExecutedBy}}</div>
+        <div class="subtitle">Date range: {{.DateRange.Start.Format "2006-01-02"}} - {{.DateRange.End.Format "2006-01-02"}}</div>
     </div>
 
     <div class="section">
-        <h2>执行概览</h2>
+        <h2>Executive Summary</h2>
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="value">{{.TotalAgents}}</div>
-                <div class="label">总 Agent 数</div>
+                <div class="label">Total Agents</div>
             </div>
             <div class="stat-card">
                 <div class="value">{{.OnlineAgents}}</div>
-                <div class="label">在线 Agent</div>
+                <div class="label">Online Agents</div>
             </div>
             <div class="stat-card">
                 <div class="value">{{printf "%.1f" .SuccessRate}}%</div>
-                <div class="label">任务成功率</div>
+                <div class="label">Task Success Rate</div>
             </div>
         </div>
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="value">{{.TotalTasks}}</div>
-                <div class="label">总任务数</div>
+                <div class="label">Total Tasks</div>
             </div>
             <div class="stat-card">
                 <div class="value success">{{.CompletedTasks}}</div>
-                <div class="label">成功任务</div>
+                <div class="label">Completed Tasks</div>
             </div>
             <div class="stat-card">
                 <div class="value failed">{{.FailedTasks}}</div>
-                <div class="label">失败任务</div>
+                <div class="label">Failed Tasks</div>
             </div>
         </div>
     </div>
 
     {{if .Agents}}
     <div class="section">
-        <h2>Agent 列表</h2>
+        <h2>Agent List</h2>
         <table>
             <thead>
                 <tr>
                     <th>主机名</th>
-                    <th>IP 地址</th>
-                    <th>操作系统</th>
+                    <th>IP Address</th>
+                    <th>Operating System</th>
                     <th>用户</th>
                     <th>状态</th>
-                    <th>任务数</th>
+                    <th>Tasks</th>
                 </tr>
             </thead>
             <tbody>
@@ -220,14 +220,14 @@ func (g *Generator) GenerateHTML(data *ReportData, outputPath string) error {
 
     {{if .Credentials}}
     <div class="section">
-        <h2>凭据收集</h2>
+        <h2>Credentials</h2>
         <table>
             <thead>
                 <tr>
                     <th>来源</th>
                     <th>用户名</th>
-                    <th>密码/Hash</th>
-                    <th>收集时间</th>
+                    <th>Password/Hash</th>
+                    <th>Collected At</th>
                 </tr>
             </thead>
             <tbody>
@@ -246,13 +246,13 @@ func (g *Generator) GenerateHTML(data *ReportData, outputPath string) error {
 
     {{if .Vulnerabilities}}
     <div class="section">
-        <h2>发现的漏洞</h2>
+        <h2>Vulnerabilities</h2>
         <table>
             <thead>
                 <tr>
                     <th>Agent</th>
                     <th>类型</th>
-                    <th>严重程度</th>
+                    <th>Severity</th>
                     <th>描述</th>
                     <th>CVE</th>
                 </tr>

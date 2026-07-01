@@ -1,0 +1,4222 @@
+openapi: 3.0.3
+info:
+  title: ForgeC2 Command & Control API
+  description: |
+    ForgeC2 is a professional-grade command and control framework for red team operations.
+    
+    ## Authentication
+    All API endpoints require authentication unless otherwise noted.
+    Authentication is done via session cookie (`forgec2_session`) obtained from the login endpoint.
+    
+    ## Rate Limiting
+    - Login: Limited attempts with lockout
+    - API: Token bucket rate limiting per user
+    
+    ## Permissions
+    Role-based access control:
+    - **admin**: Full control
+    - **operator**: Can interact with agents, listeners, tasks, credentials
+    - **viewer**: Read-only access
+    - **guest**: Limited read access (agents, listeners, tasks only)
+    
+  version: 2.0.0
+  contact:
+    name: ForgeC2 Support
+    email: support@forgec2.io
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://c2.example.com
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Agents
+    description: Implant/Agent management and operations
+  - name: Listeners
+    description: C2 listener configuration and management
+  - name: Tasks
+    description: Task management and execution
+  - name: Credentials
+    description: Credential vault management
+  - name: Files
+    description: File operations on agents
+  - name: Users
+    description: User management (admin only)
+  - name: Settings
+    description: System configuration and settings
+  - name: Audit
+    description: Audit log access
+  - name: Automation
+    description: Automation rules and webhooks
+  - name: Monitor
+    description: System monitoring and alerts
+  - name: BOF
+    description: Beacon Object File management
+  - name: Plugins
+    description: Plugin management
+  - name: Chat
+    description: Operator chat system
+  - name: Tokens
+    description: Windows token impersonation
+  - name: SOCKS
+    description: SOCKS proxy relay
+  - name: Lateral Movement
+    description: Lateral movement operations
+  - name: Privilege Escalation
+    description: Privilege escalation operations
+  - name: Scanner
+    description: Network scanning
+  - name: Timeline
+    description: Event timeline
+  - name: Report
+    description: Report generation
+  - name: Infrastructure
+    description: Infrastructure management
+  - name: Generate
+    description: Payload generation
+  - name: Templates
+    description: Command templates
+  - name: Collaboration
+    description: Multi-user collaboration
+
+paths:
+  /login:
+    post:
+      tags: [Authentication]
+      summary: User login
+      description: Authenticate user and establish session cookie
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  format: password
+                  example: admin
+                totp_code:
+                  type: string
+                  description: Two-factor authentication code (if enabled)
+                remember_me:
+                  type: string
+                  enum: [on, ""]
+                  description: Remember me option
+      responses:
+        '302':
+          description: Login successful (redirect to dashboard)
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: forgec2_session cookie
+        '200':
+          description: Login failed (returns login page with error)
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /logout:
+    post:
+      tags: [Authentication]
+      summary: User logout
+      description: Terminate current session
+      operationId: logout
+      security:
+        - SessionCookie: []
+      responses:
+        '302':
+          description: Logout successful (redirect to login)
+
+  /health:
+    get:
+      tags: [Authentication]
+      summary: Health check
+      description: Check if server is healthy
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  version:
+                    type: string
+                  uptime:
+                    type: string
+                  goroutine:
+                    type: integer
+
+  /api/agents:
+    get:
+      tags: [Agents]
+      summary: List all agents
+      description: Retrieve a paginated list of all agents with optional filters
+      operationId: listAgents
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by hostname, username, or IP
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [online, stale, offline]
+          description: Filter by agent status
+        - name: os
+          in: query
+          schema:
+            type: string
+          description: Filter by operating system
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+          description: Items per page
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Agent'
+                  total:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/agents/unlinked:
+    get:
+      tags: [Agents]
+      summary: List unlinked agents
+      description: Retrieve agents that are not linked (direct connection only)
+      operationId: listUnlinkedAgents
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Agent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /agents/{id}:
+    get:
+      tags: [Agents]
+      summary: Get agent detail page
+      description: Render agent detail HTML page
+      operationId: getAgentDetailPage
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Agent detail page
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Agent not found
+
+    delete:
+      tags: [Agents]
+      summary: Delete agent
+      description: Remove an agent from the system
+      operationId: deleteAgent
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Agent deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /agents/{id}/kill:
+    post:
+      tags: [Agents]
+      summary: Kill agent
+      description: Send kill command to agent
+      operationId: killAgent
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Kill command sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/{id}/lock:
+    post:
+      tags: [Agents]
+      summary: Lock agent
+      description: Lock agent for exclusive use by current operator
+      operationId: lockAgent
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Agent locked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /agents/{id}/unlock:
+    post:
+      tags: [Agents]
+      summary: Unlock agent
+      description: Release agent lock
+      operationId: unlockAgent
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Agent unlocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /agents/{id}/note:
+    post:
+      tags: [Agents]
+      summary: Update agent note
+      description: Update notes for an agent
+      operationId: updateAgentNote
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+      responses:
+        '200':
+          description: Note updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /agents/{id}/tasks:
+    get:
+      tags: [Tasks, Agents]
+      summary: List agent tasks
+      description: Retrieve all tasks for a specific agent
+      operationId: listAgentTasks
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, completed, failed]
+          description: Filter by task status
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /agents/{id}/tasks/{taskId}:
+    get:
+      tags: [Tasks, Agents]
+      summary: Get task status
+      description: Retrieve detailed information about a specific task
+      operationId: getTaskStatus
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /agents/{id}/tasks/{taskId}/cancel:
+    post:
+      tags: [Tasks, Agents]
+      summary: Cancel task
+      description: Cancel a pending task
+      operationId: cancelTask
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Task cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /agents/{id}/task/{taskId}/rerun:
+    post:
+      tags: [Tasks, Agents]
+      summary: Rerun task
+      description: Re-execute a completed or failed task
+      operationId: rerunTask
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Task requeued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/batch:
+    post:
+      tags: [Agents]
+      summary: Batch command
+      description: Send command to multiple agents simultaneously
+      operationId: batchCommand
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_ids, command]
+              properties:
+                agent_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                command:
+                  type: string
+                type:
+                  type: string
+                  default: shell
+      responses:
+        '200':
+          description: Batch commands dispatched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        agent_id:
+                          type: string
+                        task_id:
+                          type: integer
+
+  /agents/{id}/command:
+    post:
+      tags: [Agents]
+      summary: Execute shell command
+      description: Execute a shell command on the agent
+      operationId: executeCommand
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [command]
+              properties:
+                command:
+                  type: string
+                  description: Command to execute
+                shell:
+                  type: string
+                  description: Shell to use (cmd.exe, powershell.exe, /bin/bash, etc.)
+      responses:
+        '200':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/{id}/screenshot:
+    post:
+      tags: [Agents]
+      summary: Take screenshot
+      description: Capture a screenshot from the agent
+      operationId: requestScreenshot
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Screenshot task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/{id}/ps:
+    post:
+      tags: [Agents]
+      summary: List processes
+      description: List running processes on the agent
+      operationId: requestPS
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Process list task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/{id}/upload:
+    post:
+      tags: [Files, Agents]
+      summary: Upload file to agent
+      description: Upload a file to the agent filesystem
+      operationId: uploadFile
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, path]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                path:
+                  type: string
+                  description: Destination path on agent
+      responses:
+        '200':
+          description: Upload task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/{id}/download:
+    post:
+      tags: [Files, Agents]
+      summary: Download file from agent
+      description: Download a file from the agent filesystem
+      operationId: downloadFile
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+                  description: File path to download
+      responses:
+        '200':
+          description: Download task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/{id}/files/ls:
+    post:
+      tags: [Files, Agents]
+      summary: List directory
+      description: List files in a directory on the agent
+      operationId: listDir
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                  description: Directory path (default: C:\)
+      responses:
+        '200':
+          description: Directory list task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/{id}/files/delete:
+    post:
+      tags: [Files, Agents]
+      summary: Delete file
+      description: Delete a file on the agent
+      operationId: deleteFile
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+                  description: File path to delete
+      responses:
+        '200':
+          description: Delete task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/{id}/files/read:
+    post:
+      tags: [Files, Agents]
+      summary: Read file
+      description: Read a file's contents from the agent
+      operationId: readFile
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+                  description: File path to read
+      responses:
+        '200':
+          description: Read task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/{id}/socks_relay/status:
+    get:
+      tags: [SOCKS, Agents]
+      summary: Get SOCKS relay status
+      description: Check SOCKS relay status for an agent
+      operationId: getSocksRelayStatus
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: SOCKS status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active:
+                    type: boolean
+                  port:
+                    type: integer
+
+  /agents/{id}/socks_relay/start:
+    post:
+      tags: [SOCKS, Agents]
+      summary: Start SOCKS relay
+      description: Start SOCKS5 proxy relay through agent
+      operationId: startSocksRelay
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: SOCKS relay started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  port:
+                    type: integer
+
+  /agents/{id}/socks_relay/stop:
+    post:
+      tags: [SOCKS, Agents]
+      summary: Stop SOCKS relay
+      description: Stop SOCKS5 proxy relay
+      operationId: stopSocksRelay
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: SOCKS relay stopped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /socks/sessions:
+    get:
+      tags: [SOCKS]
+      summary: List SOCKS sessions
+      description: List all active SOCKS relay sessions
+      operationId: listSocksSessions
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: SOCKS sessions list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SocksSession'
+
+  /api/listeners:
+    get:
+      tags: [Listeners]
+      summary: List all listeners
+      description: Retrieve all configured listeners
+      operationId: listListeners
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Listener'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Listeners]
+      summary: Create listener
+      description: Create a new listener configuration
+      operationId: createListener
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListenerCreate'
+      responses:
+        '201':
+          description: Listener created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Listener'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/listeners/{id}:
+    put:
+      tags: [Listeners]
+      summary: Update listener
+      description: Update an existing listener configuration
+      operationId: updateListener
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListenerUpdate'
+      responses:
+        '200':
+          description: Listener updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Listener'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Listeners]
+      summary: Delete listener
+      description: Delete a listener configuration
+      operationId: deleteListener
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Listener deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /credentials:
+    get:
+      tags: [Credentials]
+      summary: Credentials page
+      description: Render credentials vault HTML page
+      operationId: getCredentialsPage
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Credentials page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /credentials/export:
+    get:
+      tags: [Credentials]
+      summary: Export credentials
+      description: Export all credentials as CSV
+      operationId: exportCredentials
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /credentials/{cred_id}:
+    get:
+      tags: [Credentials]
+      summary: Get credential
+      description: Get a specific credential entry
+      operationId: getCredential
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: cred_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Credential entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Credential'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Credentials]
+      summary: Update credential
+      description: Update a credential entry
+      operationId: updateCredential
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: cred_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                hash:
+                  type: string
+                notes:
+                  type: string
+                tags:
+                  type: string
+      responses:
+        '200':
+          description: Credential updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+    delete:
+      tags: [Credentials]
+      summary: Delete credential
+      description: Delete a credential entry
+      operationId: deleteCredential
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: cred_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Credential deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /credentials/add:
+    post:
+      tags: [Credentials]
+      summary: Add credential
+      description: Manually add a credential entry
+      operationId: addCredential
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                domain:
+                  type: string
+                username:
+                  type: string
+                password:
+                  type: string
+                hash:
+                  type: string
+                source:
+                  type: string
+                type:
+                  type: string
+                notes:
+                  type: string
+                tags:
+                  type: string
+      responses:
+        '200':
+          description: Credential added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /credentials/batch/tags:
+    post:
+      tags: [Credentials]
+      summary: Batch add tags
+      description: Add tags to multiple credentials
+      operationId: batchAddTags
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, tags]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: integer
+                tags:
+                  type: string
+      responses:
+        '200':
+          description: Tags added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /credentials/{cred_id}/confirm:
+    post:
+      tags: [Credentials]
+      summary: Toggle confirmed status
+      description: Toggle credential confirmed/verified status
+      operationId: toggleConfirmed
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: cred_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Status toggled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /users:
+    get:
+      tags: [Users]
+      summary: Users page
+      description: Render user management HTML page
+      operationId: getUsersPage
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Users page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /users/add:
+    post:
+      tags: [Users]
+      summary: Add user
+      description: Create a new user account
+      operationId: addUser
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [username, password, role]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                  format: password
+                role:
+                  type: string
+                  enum: [admin, operator, viewer, guest]
+      responses:
+        '200':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /users/{id}:
+    delete:
+      tags: [Users]
+      summary: Delete user
+      description: Delete a user account
+      operationId: deleteUser
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /users/{id}/edit:
+    post:
+      tags: [Users]
+      summary: Edit user
+      description: Update user information
+      operationId: editUser
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                role:
+                  type: string
+                  enum: [admin, operator, viewer, guest]
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /users/{id}/toggle:
+    post:
+      tags: [Users]
+      summary: Toggle user status
+      description: Enable or disable a user account
+      operationId: toggleUser
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User status toggled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /users/{id}/password:
+    post:
+      tags: [Users]
+      summary: Set user password
+      description: Set password for a user (admin only)
+      operationId: setUserPassword
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Password set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /users/{id}/kick:
+    post:
+      tags: [Users]
+      summary: Kick user
+      description: Kick a user (invalidate sessions)
+      operationId: kickUser
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User kicked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /users/{id}/force-logout:
+    post:
+      tags: [Users]
+      summary: Force logout
+      description: Force user to logout
+      operationId: forceLogoutUser
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User forced to logout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /settings:
+    get:
+      tags: [Settings]
+      summary: Settings page
+      description: Render settings HTML page
+      operationId: getSettingsPage
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Settings page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /settings/password:
+    post:
+      tags: [Settings]
+      summary: Change password
+      description: Change current user's password
+      operationId: changePassword
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [current_password, new_password, confirm_password]
+              properties:
+                current_password:
+                  type: string
+                  format: password
+                new_password:
+                  type: string
+                  format: password
+                confirm_password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /settings/agent:
+    post:
+      tags: [Settings]
+      summary: Save agent config
+      description: Save default agent configuration
+      operationId: saveAgentConfig
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                interval:
+                  type: integer
+                  description: Default sleep interval in seconds
+                jitter:
+                  type: integer
+                  description: Default jitter percentage (0-100)
+                user_agent:
+                  type: string
+                skip_tls:
+                  type: boolean
+      responses:
+        '200':
+          description: Config saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /settings/server:
+    post:
+      tags: [Settings]
+      summary: Save server config
+      description: Save server configuration
+      operationId: saveServerConfig
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                log_level:
+                  type: string
+                  enum: [debug, info, warn, error]
+                tcp_enabled:
+                  type: boolean
+                tcp_addr:
+                  type: string
+                offline_threshold:
+                  type: integer
+                session_max_age:
+                  type: integer
+                cleanup_retention:
+                  type: integer
+      responses:
+        '200':
+          description: Config saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /settings/malleable:
+    post:
+      tags: [Settings]
+      summary: Save malleable profile
+      description: Save malleable C2 profile configuration
+      operationId: saveMalleableProfile
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                status_code:
+                  type: integer
+                content_type:
+                  type: string
+                prepend:
+                  type: string
+                append:
+                  type: string
+                headers_text:
+                  type: string
+      responses:
+        '200':
+          description: Profile saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /settings/purge/tasks:
+    post:
+      tags: [Settings]
+      summary: Purge old tasks
+      description: Delete completed/failed tasks older than specified days
+      operationId: purgeTasks
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                days:
+                  type: integer
+                  default: 30
+      responses:
+        '200':
+          description: Tasks purged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /settings/purge/audit:
+    post:
+      tags: [Settings]
+      summary: Purge audit logs
+      description: Delete audit logs older than specified days
+      operationId: purgeAuditLogs
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                days:
+                  type: integer
+                  default: 30
+      responses:
+        '200':
+          description: Audit logs purged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /settings/jwt/regenerate:
+    post:
+      tags: [Settings]
+      summary: Regenerate JWT secret
+      description: Regenerate the JWT signing secret (invalidates all sessions)
+      operationId: regenerateJWT
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: JWT secret regenerated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /settings/db/vacuum:
+    post:
+      tags: [Settings]
+      summary: Vacuum database
+      description: Run VACUUM on the database to reclaim space
+      operationId: dbVacuum
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Database vacuumed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  size:
+                    type: integer
+
+  /settings/db/backup:
+    post:
+      tags: [Settings]
+      summary: Backup database
+      description: Create a database backup
+      operationId: backupDatabase
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Backup created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /settings/config/download:
+    get:
+      tags: [Settings]
+      summary: Download config
+      description: Download configuration file (with secrets redacted)
+      operationId: downloadConfig
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Config file
+          content:
+            application/x-yaml:
+              schema:
+                type: string
+
+  /settings/rate-limit/status:
+    get:
+      tags: [Settings]
+      summary: Get rate limit status
+      description: Get current rate limiting status
+      operationId: getRateLimitStatus
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Rate limit status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  login:
+                    type: object
+                  api:
+                    type: object
+
+  /settings/rate-limit/unlock:
+    post:
+      tags: [Settings]
+      summary: Unlock IP
+      description: Unlock an IP from rate limiting
+      operationId: unlockIP
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [ip]
+              properties:
+                ip:
+                  type: string
+      responses:
+        '200':
+          description: IP unlocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /settings/rate-limit/reset:
+    post:
+      tags: [Settings]
+      summary: Reset IP rate limit
+      description: Reset rate limit counters for an IP
+      operationId: resetIPRateLimit
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [ip]
+              properties:
+                ip:
+                  type: string
+      responses:
+        '200':
+          description: Rate limit reset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /settings/rate-limit/config:
+    post:
+      tags: [Settings]
+      summary: Update rate limit config
+      description: Update rate limiting configuration
+      operationId: updateRateLimitConfig
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                login_max_attempts:
+                  type: integer
+                login_window:
+                  type: integer
+                login_lockout_time:
+                  type: integer
+                api_capacity:
+                  type: number
+                api_rate:
+                  type: number
+      responses:
+        '200':
+          description: Config updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /settings/rate-limit/whitelist/add:
+    post:
+      tags: [Settings]
+      summary: Add whitelist IP
+      description: Add an IP to the rate limit whitelist
+      operationId: addWhitelistIP
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [ip]
+              properties:
+                ip:
+                  type: string
+                type:
+                  type: string
+                  enum: [login, api, both]
+      responses:
+        '200':
+          description: IP added to whitelist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /settings/rate-limit/whitelist/remove:
+    post:
+      tags: [Settings]
+      summary: Remove whitelist IP
+      description: Remove an IP from the rate limit whitelist
+      operationId: removeWhitelistIP
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [ip]
+              properties:
+                ip:
+                  type: string
+                type:
+                  type: string
+                  enum: [login, api, both]
+      responses:
+        '200':
+          description: IP removed from whitelist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /settings/totp/status:
+    get:
+      tags: [Settings]
+      summary: TOTP status
+      description: Check if 2FA is enabled for current user
+      operationId: getTOTPStatus
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: TOTP status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  totp_enabled:
+                    type: boolean
+
+  /settings/totp/generate:
+    post:
+      tags: [Settings]
+      summary: Generate TOTP secret
+      description: Generate a new TOTP secret for 2FA setup
+      operationId: generateTOTP
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: TOTP secret generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  secret:
+                    type: string
+                  qr_url:
+                    type: string
+                  backup_codes:
+                    type: array
+                    items:
+                      type: string
+
+  /settings/totp/enable:
+    post:
+      tags: [Settings]
+      summary: Enable TOTP
+      description: Enable two-factor authentication
+      operationId: enableTOTP
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [secret, code]
+              properties:
+                secret:
+                  type: string
+                code:
+                  type: string
+      responses:
+        '200':
+          description: 2FA enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /settings/totp/disable:
+    post:
+      tags: [Settings]
+      summary: Disable TOTP
+      description: Disable two-factor authentication
+      operationId: disableTOTP
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: 2FA disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /audit:
+    get:
+      tags: [Audit]
+      summary: Audit log page
+      description: Render audit log HTML page
+      operationId: getAuditLogPage
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Audit log page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /audit/logs:
+    get:
+      tags: [Audit]
+      summary: Get audit logs
+      description: Retrieve paginated audit log entries
+      operationId: getAuditLogs
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: user
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLog'
+                  total:
+                    type: integer
+
+  /tasks:
+    get:
+      tags: [Tasks]
+      summary: Task history page
+      description: Render task history HTML page
+      operationId: getTaskHistory
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Task history page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /tasks/export:
+    get:
+      tags: [Tasks]
+      summary: Export tasks
+      description: Export task history as CSV
+      operationId: exportTasks
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /tasks/{taskId}:
+    get:
+      tags: [Tasks]
+      summary: Get task details
+      description: Get detailed information about a task
+      operationId: getTaskDetails
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/automation/rules:
+    get:
+      tags: [Automation]
+      summary: List automation rules
+      description: Get all automation rules
+      operationId: listAutomationRules
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Automation rules list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AutomationRule'
+
+    post:
+      tags: [Automation]
+      summary: Create automation rule
+      description: Create a new automation rule
+      operationId: createAutomationRule
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutomationRuleCreate'
+      responses:
+        '200':
+          description: Rule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutomationRule'
+
+  /api/automation/rules/{id}:
+    put:
+      tags: [Automation]
+      summary: Update automation rule
+      description: Update an existing automation rule
+      operationId: updateAutomationRule
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutomationRuleUpdate'
+      responses:
+        '200':
+          description: Rule updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutomationRule'
+
+    delete:
+      tags: [Automation]
+      summary: Delete automation rule
+      description: Delete an automation rule
+      operationId: deleteAutomationRule
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rule deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/automation/rules/{id}/toggle:
+    post:
+      tags: [Automation]
+      summary: Toggle automation rule
+      description: Enable or disable an automation rule
+      operationId: toggleAutomationRule
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rule toggled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/webhooks:
+    get:
+      tags: [Automation]
+      summary: List webhooks
+      description: Get all webhook configurations
+      operationId: listWebhooks
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Webhooks list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Webhook'
+
+    post:
+      tags: [Automation]
+      summary: Create webhook
+      description: Create a new webhook
+      operationId: createWebhook
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookCreate'
+      responses:
+        '200':
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+
+  /api/webhooks/{id}:
+    delete:
+      tags: [Automation]
+      summary: Delete webhook
+      description: Delete a webhook
+      operationId: deleteWebhook
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Webhook deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/webhooks/test:
+    post:
+      tags: [Automation]
+      summary: Test webhook
+      description: Send a test payload to a webhook
+      operationId: testWebhook
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                event_type:
+                  type: string
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  status_code:
+                    type: integer
+
+  /api/monitor/metrics:
+    get:
+      tags: [Monitor]
+      summary: Get system metrics
+      description: Get current system metrics (CPU, memory, disk, network)
+      operationId: getSystemMetrics
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: System metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemMetric'
+
+  /api/monitor/metrics/history:
+    get:
+      tags: [Monitor]
+      summary: Get metrics history
+      description: Get historical system metrics
+      operationId: getMetricsHistory
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: hours
+          in: query
+          schema:
+            type: integer
+            default: 24
+      responses:
+        '200':
+          description: Metrics history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SystemMetric'
+
+  /api/monitor/alerts:
+    get:
+      tags: [Monitor]
+      summary: Get alerts
+      description: Get all alerts
+      operationId: getAlerts
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, acknowledged, resolved]
+      responses:
+        '200':
+          description: Alerts list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Alert'
+
+  /api/monitor/alerts/stats:
+    get:
+      tags: [Monitor]
+      summary: Get alert stats
+      description: Get alert statistics
+      operationId: getAlertStats
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Alert stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active:
+                    type: integer
+                  acknowledged:
+                    type: integer
+                  resolved:
+                    type: integer
+
+  /api/monitor/alert-rules:
+    get:
+      tags: [Monitor]
+      summary: Get alert rules
+      description: Get all alert rules
+      operationId: getAlertRules
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Alert rules list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlertRule'
+
+    post:
+      tags: [Monitor]
+      summary: Create alert rule
+      description: Create a new alert rule
+      operationId: createAlertRule
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertRuleCreate'
+      responses:
+        '200':
+          description: Alert rule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+
+  /api/monitor/alert-rules/{id}:
+    put:
+      tags: [Monitor]
+      summary: Update alert rule
+      description: Update an existing alert rule
+      operationId: updateAlertRule
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertRuleUpdate'
+      responses:
+        '200':
+          description: Alert rule updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+
+    delete:
+      tags: [Monitor]
+      summary: Delete alert rule
+      description: Delete an alert rule
+      operationId: deleteAlertRule
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Alert rule deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/monitor/alerts/{id}/acknowledge:
+    post:
+      tags: [Monitor]
+      summary: Acknowledge alert
+      description: Acknowledge an alert
+      operationId: acknowledgeAlert
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Alert acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/monitor/alerts/{id}/resolve:
+    post:
+      tags: [Monitor]
+      summary: Resolve alert
+      description: Mark an alert as resolved
+      operationId: resolveAlert
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Alert resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/monitor/agent-status:
+    get:
+      tags: [Monitor]
+      summary: Get agent status
+      description: Get real-time agent status summary
+      operationId: getAgentStatus
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Agent status summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  online:
+                    type: integer
+                  offline:
+                    type: integer
+
+  /api/bof/list:
+    get:
+      tags: [BOF]
+      summary: List BOF files
+      description: List all uploaded Beacon Object Files
+      operationId: listBOF
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: BOF files list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BOFFile'
+
+  /api/bof/upload:
+    post:
+      tags: [BOF]
+      summary: Upload BOF
+      description: Upload a new Beacon Object File
+      operationId: uploadBOF
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                description:
+                  type: string
+      responses:
+        '200':
+          description: BOF uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/bof/{id}/download:
+    get:
+      tags: [BOF]
+      summary: Download BOF
+      description: Download a BOF file
+      operationId: downloadBOF
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: BOF file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /api/bof/{id}/run:
+    post:
+      tags: [BOF]
+      summary: Run BOF
+      description: Execute a BOF on a specific agent
+      operationId: runBOF
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id]
+              properties:
+                agent_id:
+                  type: string
+                  format: uuid
+                args:
+                  type: string
+      responses:
+        '200':
+          description: BOF execution started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /api/bof/{id}/edit:
+    post:
+      tags: [BOF]
+      summary: Edit BOF
+      description: Edit BOF metadata
+      operationId: editBOF
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '200':
+          description: BOF updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/bof/{id}:
+    delete:
+      tags: [BOF]
+      summary: Delete BOF
+      description: Delete a BOF file
+      operationId: deleteBOF
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: BOF deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/bof/results:
+    get:
+      tags: [BOF]
+      summary: Recent BOF results
+      description: Get recent BOF execution results
+      operationId: getBOFRecentResults
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: BOF results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+
+  /api/plugins:
+    get:
+      tags: [Plugins]
+      summary: List plugins
+      description: Get all installed plugins
+      operationId: listPlugins
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Plugins list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Plugin'
+
+    post:
+      tags: [Plugins]
+      summary: Create plugin
+      description: Register a new plugin
+      operationId: createPlugin
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PluginCreate'
+      responses:
+        '200':
+          description: Plugin created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plugin'
+
+  /api/plugins/{id}/toggle:
+    post:
+      tags: [Plugins]
+      summary: Toggle plugin
+      description: Enable or disable a plugin
+      operationId: togglePlugin
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Plugin toggled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/plugins/{id}:
+    delete:
+      tags: [Plugins]
+      summary: Delete plugin
+      description: Delete a plugin
+      operationId: deletePlugin
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Plugin deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/chat/messages:
+    get:
+      tags: [Chat]
+      summary: Get chat messages
+      description: Get operator chat messages
+      operationId: getChatMessages
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Chat messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatMessage'
+
+  /api/chat/send:
+    post:
+      tags: [Chat]
+      summary: Send chat message
+      description: Send a message to the operator chat
+      operationId: sendChatMessage
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+      responses:
+        '200':
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessage'
+
+  /api/chat/{id}:
+    delete:
+      tags: [Chat]
+      summary: Delete chat message
+      description: Delete a chat message
+      operationId: deleteChatMessage
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Message deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /agents/{id}/token/list:
+    get:
+      tags: [Tokens, Agents]
+      summary: List tokens
+      description: List stolen/created tokens for an agent
+      operationId: getTokens
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Token list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TokenEntry'
+
+  /agents/{id}/token/list_procs:
+    post:
+      tags: [Tokens, Agents]
+      summary: List token processes
+      description: List processes with stealable tokens
+      operationId: tokenListProcs
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Process list task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/{id}/token/steal:
+    post:
+      tags: [Tokens, Agents]
+      summary: Steal token
+      description: Steal a token from a process
+      operationId: tokenSteal
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [pid]
+              properties:
+                pid:
+                  type: integer
+      responses:
+        '200':
+          description: Token steal task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/{id}/token/make:
+    post:
+      tags: [Tokens, Agents]
+      summary: Make token
+      description: Create a new token with credentials
+      operationId: tokenMake
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [domain, username, password]
+              properties:
+                domain:
+                  type: string
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Make token task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/{id}/token/revert:
+    post:
+      tags: [Tokens, Agents]
+      summary: Revert token
+      description: Revert to original token
+      operationId: tokenRevert
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Revert token task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/{id}/token/whoami:
+    post:
+      tags: [Tokens, Agents]
+      summary: Token whoami
+      description: Get current token identity
+      operationId: tokenWhoami
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Whoami task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /agents/{id}/token/{token_id}:
+    delete:
+      tags: [Tokens, Agents]
+      summary: Drop token
+      description: Drop a stored token
+      operationId: tokenDrop
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: token_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Token dropped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /agents/{id}/token/{token_id}/impersonate:
+    post:
+      tags: [Tokens, Agents]
+      summary: Impersonate token
+      description: Impersonate a stored token
+      operationId: tokenImpersonate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: token_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Impersonation task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /api/templates:
+    post:
+      tags: [Templates]
+      summary: Create template
+      description: Create a new command template
+      operationId: createTemplate
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandTemplateCreate'
+      responses:
+        '200':
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandTemplate'
+
+  /api/templates/{id}:
+    delete:
+      tags: [Templates]
+      summary: Delete template
+      description: Delete a command template
+      operationId: deleteTemplate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Template deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/templates/category/{category}:
+    get:
+      tags: [Templates]
+      summary: Get templates by category
+      description: Get command templates for a category
+      operationId: getTemplatesByCategory
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: category
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [recon, privesc, lateral, exfil]
+      responses:
+        '200':
+          description: Templates list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CommandTemplate'
+
+  /api/timeline/data:
+    get:
+      tags: [Timeline]
+      summary: Get timeline data
+      description: Get event timeline data
+      operationId: getTimelineData
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: start
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Timeline events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /api/timeline/export:
+    get:
+      tags: [Timeline]
+      summary: Export timeline
+      description: Export timeline data
+      operationId: exportTimeline
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Timeline export
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/report/generate:
+    post:
+      tags: [Report]
+      summary: Generate report
+      description: Generate an operation report
+      operationId: generateReport
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                format:
+                  type: string
+                  enum: [html, pdf, markdown]
+                sections:
+                  type: array
+                  items:
+                    type: string
+                date_range:
+                  type: object
+                  properties:
+                    start:
+                      type: string
+                      format: date
+                    end:
+                      type: string
+                      format: date
+      responses:
+        '200':
+          description: Report generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  download_url:
+                    type: string
+
+  /api/scan:
+    post:
+      tags: [Scanner]
+      summary: Start scan
+      description: Start a network port scan
+      operationId: scanTask
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id, target]
+              properties:
+                agent_id:
+                  type: string
+                  format: uuid
+                target:
+                  type: string
+                ports:
+                  type: string
+                protocol:
+                  type: string
+                  enum: [tcp, udp]
+      responses:
+        '200':
+          description: Scan started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /api/scan/results/{taskId}:
+    get:
+      tags: [Scanner]
+      summary: Get scan results
+      description: Get scan results by task ID
+      operationId: getScanResults
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Scan results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScanResult'
+
+  /api/scan/agent/{agentId}:
+    get:
+      tags: [Scanner]
+      summary: Get scan results by agent
+      description: Get all scan results for an agent
+      operationId: getScanResultsByAgent
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Scan results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScanResult'
+
+  /api/lateral/history/{id}:
+    get:
+      tags: [Lateral Movement]
+      summary: Lateral movement history
+      description: Get lateral movement history for an agent
+      operationId: getLateralHistory
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lateral movement history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+
+  /api/privesc/history/{id}:
+    get:
+      tags: [Privilege Escalation]
+      summary: Privilege escalation history
+      description: Get privilege escalation history for an agent
+      operationId: getPrivescHistory
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Privilege escalation history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+
+  /api/collab/locks:
+    get:
+      tags: [Collaboration]
+      summary: Get agent locks
+      description: Get all agent lock statuses
+      operationId: getLocks
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Agent locks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentLock'
+
+  /api/collab/online:
+    get:
+      tags: [Collaboration]
+      summary: Online users
+      description: Get list of currently online users
+      operationId: getOnlineUsers
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Online users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    username:
+                      type: string
+                    role:
+                      type: string
+
+  /api/collab/pages:
+    get:
+      tags: [Collaboration]
+      summary: Page presence
+      description: Get which users are on which pages
+      operationId: getPagePresence
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Page presence data
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/collab/agent-viewers/{id}:
+    get:
+      tags: [Collaboration]
+      summary: Agent viewers
+      description: Get users currently viewing an agent
+      operationId: getAgentViewers
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Agent viewers list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /api/topology/data:
+    get:
+      tags: [Agents]
+      summary: Get topology data
+      description: Get network topology graph data
+      operationId: getTopologyData
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Topology data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nodes:
+                    type: array
+                    items:
+                      type: object
+                  edges:
+                    type: array
+                    items:
+                      type: object
+
+  /ws:
+    get:
+      tags: [WebSocket]
+      summary: Main WebSocket
+      description: WebSocket for real-time notifications and updates
+      operationId: webSocketMain
+      security:
+        - SessionCookie: []
+      responses:
+        '101':
+          description: Switching protocols
+
+  /ws/beacon:
+    get:
+      tags: [WebSocket]
+      summary: Beacon WebSocket
+      description: WebSocket for agent beacon communication
+      operationId: webSocketBeacon
+      security:
+        - SessionCookie: []
+      responses:
+        '101':
+          description: Switching protocols
+
+  /ws/chat:
+    get:
+      tags: [WebSocket]
+      summary: Chat WebSocket
+      description: WebSocket for real-time operator chat
+      operationId: webSocketChat
+      security:
+        - SessionCookie: []
+      responses:
+        '101':
+          description: Switching protocols
+
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: forgec2_session
+      description: Session cookie obtained from login endpoint
+
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+
+    TaskResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        task_id:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        details:
+          type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        role:
+          type: string
+          enum: [admin, operator, viewer, guest]
+        is_active:
+          type: boolean
+        last_login:
+          type: string
+          format: date-time
+        last_ip:
+          type: string
+        last_activity:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    Agent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique agent identifier
+        hostname:
+          type: string
+        username:
+          type: string
+        os:
+          type: string
+          example: Windows 10 Pro
+        arch:
+          type: string
+          example: amd64
+        ip:
+          type: string
+        public_ip:
+          type: string
+        country:
+          type: string
+        city:
+          type: string
+        last_seen:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [online, stale, offline]
+        notes:
+          type: string
+        tags:
+          type: string
+        listener_id:
+          type: integer
+        parent_id:
+          type: string
+          description: Parent agent ID for P2P chaining
+        p2p_mode:
+          type: string
+          enum: [smb, tcp, ""]
+        p2p_listen_addr:
+          type: string
+        version:
+          type: string
+        pid:
+          type: integer
+        process_name:
+          type: string
+        integrity:
+          type: string
+          enum: [Low, Medium, High, System]
+        elevated:
+          type: boolean
+        domain:
+          type: string
+        current_interval:
+          type: integer
+          description: Sleep interval in seconds
+        current_jitter:
+          type: integer
+          description: Jitter percentage
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+        agent_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          description: Task type
+        command:
+          type: string
+          description: Primary command or path
+        shell:
+          type: string
+          description: Shell choice or secondary data
+        path:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        result:
+          type: string
+        error:
+          type: string
+        progress:
+          type: integer
+          description: 0-100 percentage
+        total_bytes:
+          type: integer
+          format: int64
+        transferred:
+          type: integer
+          format: int64
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Listener:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        scheme:
+          type: string
+          enum: [http, https, tcp, tls]
+        type:
+          type: string
+          enum: [http, tcp]
+        host:
+          type: string
+        port:
+          type: integer
+        protocol:
+          type: string
+        notes:
+          type: string
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ListenerCreate:
+      type: object
+      required: [name, scheme, host, port]
+      properties:
+        name:
+          type: string
+        scheme:
+          type: string
+          enum: [http, https, tcp, tls]
+        host:
+          type: string
+        port:
+          type: integer
+        notes:
+          type: string
+
+    ListenerUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        scheme:
+          type: string
+        host:
+          type: string
+        port:
+          type: integer
+        notes:
+          type: string
+        enabled:
+          type: boolean
+
+    Credential:
+      type: object
+      properties:
+        id:
+          type: integer
+        agent_id:
+          type: string
+          format: uuid
+        domain:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+        hash:
+          type: string
+        source:
+          type: string
+          example: mimikatz
+        type:
+          type: string
+          enum: [cleartext, ntlm, aes, kerberos]
+        notes:
+          type: string
+        tags:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        confirmed:
+          type: boolean
+        task_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        user:
+          type: string
+        action:
+          type: string
+        resource:
+          type: string
+        agent_id:
+          type: string
+        ip:
+          type: string
+        success:
+          type: boolean
+        error:
+          type: string
+        details:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    TokenEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        agent_id:
+          type: string
+          format: uuid
+        pid:
+          type: integer
+        process_name:
+          type: string
+        domain:
+          type: string
+        username:
+          type: string
+        logon_type:
+          type: string
+        integrity:
+          type: string
+          enum: [Low, Medium, High, System]
+        token_type:
+          type: string
+          enum: [Primary, Impersonation]
+        source:
+          type: string
+          enum: [steal, make_token, duplicate]
+        active:
+          type: boolean
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    SocksSession:
+      type: object
+      properties:
+        id:
+          type: integer
+        agent_id:
+          type: string
+          format: uuid
+        listen_port:
+          type: integer
+        status:
+          type: string
+          enum: [active, stopped]
+        bytes_in:
+          type: integer
+          format: int64
+        bytes_out:
+          type: integer
+          format: int64
+        conn_count:
+          type: integer
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    AutomationRule:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        enabled:
+          type: boolean
+        event_type:
+          type: string
+        conditions:
+          type: string
+        actions:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AutomationRuleCreate:
+      type: object
+      required: [name, event_type]
+      properties:
+        name:
+          type: string
+        event_type:
+          type: string
+        conditions:
+          type: string
+        actions:
+          type: string
+
+    AutomationRuleUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        enabled:
+          type: boolean
+        conditions:
+          type: string
+        actions:
+          type: string
+
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        url:
+          type: string
+        event_type:
+          type: string
+        method:
+          type: string
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    WebhookCreate:
+      type: object
+      required: [name, url, event_type]
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+        event_type:
+          type: string
+        method:
+          type: string
+          default: POST
+        headers:
+          type: string
+
+    SystemMetric:
+      type: object
+      properties:
+        id:
+          type: integer
+        cpu_load:
+          type: number
+        memory_used:
+          type: number
+        memory_total:
+          type: number
+        disk_used:
+          type: number
+        disk_total:
+          type: number
+        net_in:
+          type: number
+        net_out:
+          type: number
+        hostname:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Alert:
+      type: object
+      properties:
+        id:
+          type: integer
+        rule_id:
+          type: integer
+        type:
+          type: string
+        severity:
+          type: string
+          enum: [critical, warning, info]
+        title:
+          type: string
+        message:
+          type: string
+        source:
+          type: string
+        source_name:
+          type: string
+        status:
+          type: string
+          enum: [active, acknowledged, resolved]
+        details:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    AlertRule:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+        threshold:
+          type: number
+        enabled:
+          type: boolean
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    AlertRuleCreate:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        threshold:
+          type: number
+        description:
+          type: string
+
+    AlertRuleUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        threshold:
+          type: number
+        enabled:
+          type: boolean
+        description:
+          type: string
+
+    BOFFile:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        size:
+          type: integer
+          format: int64
+        description:
+          type: string
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Plugin:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        author:
+          type: string
+        type:
+          type: string
+        enabled:
+          type: boolean
+        category:
+          type: string
+        homepage:
+          type: string
+        license:
+          type: string
+        tags:
+          type: string
+        rating_overall:
+          type: number
+        rating_count:
+          type: integer
+        update_available:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    PluginCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        author:
+          type: string
+        type:
+          type: string
+        category:
+          type: string
+
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        user:
+          type: string
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CommandTemplate:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+          enum: [recon, privesc, lateral, exfil]
+        command:
+          type: string
+        description:
+          type: string
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CommandTemplateCreate:
+      type: object
+      required: [name, category, command]
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        command:
+          type: string
+        description:
+          type: string
+
+    ScanResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        agent_id:
+          type: string
+          format: uuid
+        task_id:
+          type: integer
+        target_ip:
+          type: string
+        port:
+          type: integer
+        protocol:
+          type: string
+        state:
+          type: string
+          enum: [open, closed, filtered]
+        service:
+          type: string
+        version:
+          type: string
+        banner:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    AgentLock:
+      type: object
+      properties:
+        agent_id:
+          type: string
+          format: uuid
+        user_id:
+          type: integer
+        username:
+          type: string
+        locked_at:
+          type: string
+          format: date-time
+        note:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized - not authenticated
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

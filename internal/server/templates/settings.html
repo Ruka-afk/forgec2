@@ -1,28 +1,44 @@
 {{define "settings_content"}}
-<div class="max-w-6xl mx-auto flex gap-6">
+<div class="max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 mb-20 md:mb-0">
     <!-- Side Nav -->
     <div class="w-48 shrink-0 hidden lg:block">
         <div class="sticky top-6 space-y-1">
             <div class="text-[10px] uppercase tracking-wider text-slate-400 px-3 mb-2 font-semibold">设置</div>
-            <a href="#section-profile" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 hover:text-indigo-700 text-slate-600" data-section="profile"><i class="fa-solid fa-user mr-2 w-4 text-center"></i>个人资料</a>
-            <a href="#section-security" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 hover:text-indigo-700 text-slate-600" data-section="security"><i class="fa-solid fa-lock mr-2 w-4 text-center"></i>安全</a>
-            <a href="#section-server" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 hover:text-indigo-700 text-slate-600" data-section="server"><i class="fa-solid fa-server mr-2 w-4 text-center"></i>服务器</a>
-            <a href="#section-agent" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 hover:text-indigo-700 text-slate-600" data-section="agent"><i class="fa-solid fa-robot mr-2 w-4 text-center"></i>Agent</a>
-            <a href="#section-jwt" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 hover:text-indigo-700 text-slate-600" data-section="jwt"><i class="fa-solid fa-key mr-2 w-4 text-center"></i>JWT 密钥</a>
-            <a href="#section-malleable" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 hover:text-indigo-700 text-slate-600" data-section="malleable"><i class="fa-solid fa-shield mr-2 w-4 text-center"></i>Malleable C2</a>
-            <a href="#section-database" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 hover:text-indigo-700 text-slate-600" data-section="database"><i class="fa-solid fa-database mr-2 w-4 text-center"></i>数据库</a>
-            <a href="#section-maintenance" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 hover:text-indigo-700 text-slate-600" data-section="maintenance"><i class="fa-solid fa-broom mr-2 w-4 text-center"></i>维护</a>
-            <a href="#section-config" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 hover:text-indigo-700 text-slate-600" data-section="config"><i class="fa-solid fa-file-export mr-2 w-4 text-center"></i>配置</a>
-            <div class="border-t border-slate-200 my-3"></div>
-            <a href="#section-about" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 hover:text-indigo-700 text-slate-600" data-section="about"><i class="fa-solid fa-info-circle mr-2 w-4 text-center"></i>系统信息</a>
+            <a href="#section-profile" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-400" data-section="profile"><i class="fa-solid fa-user mr-2 w-4 text-center"></i>个人资料</a>
+            <a href="#section-theme" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-400" data-section="theme"><i class="fa-solid fa-palette mr-2 w-4 text-center"></i>外观主题</a>
+            <a href="#section-language" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-400" data-section="language"><i class="fa-solid fa-language mr-2 w-4 text-center"></i>语言</a>
+            <a href="#section-security" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-400" data-section="security"><i class="fa-solid fa-lock mr-2 w-4 text-center"></i>安全</a>
+            <a href="#section-shortcuts" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-400" data-section="shortcuts"><i class="fa-solid fa-keyboard mr-2 w-4 text-center"></i>快捷键</a>
+            <a href="#section-notifications" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-400" data-section="notifications"><i class="fa-solid fa-bell mr-2 w-4 text-center"></i>通知设置</a>
+            <a href="#section-server" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-400" data-section="server"><i class="fa-solid fa-server mr-2 w-4 text-center"></i>服务器</a>
+            <a href="#section-agent" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-400" data-section="agent"><i class="fa-solid fa-robot mr-2 w-4 text-center"></i>Agent</a>
+            <a href="#section-jwt" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-400" data-section="jwt"><i class="fa-solid fa-key mr-2 w-4 text-center"></i>JWT 密钥</a>
+            <a href="#section-malleable" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-400" data-section="malleable"><i class="fa-solid fa-shield mr-2 w-4 text-center"></i>Malleable C2</a>
+            <a href="#section-database" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-400" data-section="database"><i class="fa-solid fa-database mr-2 w-4 text-center"></i>数据库</a>
+            <a href="#section-maintenance" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-400" data-section="maintenance"><i class="fa-solid fa-broom mr-2 w-4 text-center"></i>维护</a>
+            <a href="#section-config" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-400" data-section="config"><i class="fa-solid fa-file-export mr-2 w-4 text-center"></i>配置</a>
+            <div class="border-t border-slate-200 dark:border-slate-700 my-3"></div>
+            <a href="#section-about" class="settings-nav block px-3 py-2 text-xs rounded-xl transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-400" data-section="about"><i class="fa-solid fa-info-circle mr-2 w-4 text-center"></i>系统信息</a>
         </div>
     </div>
 
     <!-- Main -->
-    <div class="flex-1 min-w-0 space-y-6">
+    <div class="flex-1 min-w-0">
+        <nav class="settings-mobile-nav lg:hidden mb-4" aria-label="Settings sections">
+            <a href="#section-profile" data-section="profile">个人资料</a>
+            <a href="#section-theme" data-section="theme">外观</a>
+            <a href="#section-language" data-section="language">语言</a>
+            <a href="#section-security" data-section="security">安全</a>
+            <a href="#section-shortcuts" data-section="shortcuts">快捷键</a>
+            <a href="#section-notifications" data-section="notifications">通知</a>
+            <a href="#section-server" data-section="server">服务器</a>
+            <a href="#section-agent" data-section="agent">Agent</a>
+            <a href="#section-about" data-section="about">关于</a>
+        </nav>
+        <div class="space-y-6">
 
         <!-- My Profile -->
-        <section id="section-profile" class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+        <section id="section-profile" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
             <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 px-6 py-4">
                 <div class="flex items-center gap-3">
                     <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-user text-white"></i></div>
@@ -51,16 +67,16 @@
                         <div class="text-xs text-slate-400"><i class="fa-regular fa-calendar mr-1"></i>创建时间: {{.ProfileInfo.created_at | formatTime}}</div>
                     </div>
                 </div>
-                <div class="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
-                    <div class="bg-slate-50 rounded-xl p-4 text-center">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-700">
+                    <div class="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4 text-center">
                         <div class="text-xs text-slate-500">用户总数</div>
                         <div class="text-xl font-bold text-slate-800 mt-1">{{.TotalUsers}}</div>
                     </div>
-                    <div class="bg-slate-50 rounded-xl p-4 text-center">
-                        <div class="text-xs text-slate-500">我的角色</div>
-                        <div class="text-xl font-bold text-slate-800 mt-1">{{ upper .CurrentUserRole }}</div>
+                    <div class="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4 text-center">
+                        <div class="text-xs text-slate-500 dark:text-slate-400">我的角色</div>
+                        <div class="text-xl font-bold text-slate-800 dark:text-slate-100 mt-1">{{ upper .CurrentUserRole }}</div>
                     </div>
-                    <div class="bg-slate-50 rounded-xl p-4 text-center">
+                    <div class="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4 text-center">
                         <div class="text-xs text-slate-500">用户 ID</div>
                         <div class="text-xl font-bold text-slate-800 mt-1 font-mono text-sm">{{.CurrentUserId}}</div>
                     </div>
@@ -68,29 +84,271 @@
             </div>
         </section>
 
-        <!-- Security -->
-        <section id="section-security" class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-            <div class="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-4">
+        <!-- Theme Settings -->
+        <section id="section-theme" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
+            <div class="bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-4">
                 <div class="flex items-center gap-3">
-                    <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-lock text-white"></i></div>
-                    <div><h2 class="text-lg font-semibold text-white">安全设置</h2><p class="text-xs text-slate-400">修改登录密码</p></div>
+                    <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-palette text-white"></i></div>
+                    <div><h2 class="text-lg font-semibold text-white">外观主题</h2><p class="text-xs text-violet-200">自定义界面外观与配色方案</p></div>
                 </div>
             </div>
             <div class="p-6">
-                <form hx-post="/settings/password" hx-target="#password-result" hx-target-error="#password-result" hx-swap="innerHTML" class="max-w-md space-y-4">
-                    <div><label class="block text-xs section-header mb-1.5">当前密码</label><input type="password" name="current_password" required class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div><label class="block text-xs section-header mb-1.5">新密码</label><input type="password" name="new_password" required minlength="8" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
-                        <div><label class="block text-xs section-header mb-1.5">确认新密码</label><input type="password" name="confirm_password" required minlength="8" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
+                <div class="mb-6">
+                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2"><i class="fa-solid fa-moon text-slate-400"></i>主题模式</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <button data-theme-action="light" onclick="setTheme('light')" class="p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors group">
+                            <div class="text-2xl mb-2 text-amber-500"><i class="fa-solid fa-sun"></i></div>
+                            <div class="text-sm font-medium text-slate-700 dark:text-slate-300">亮色模式</div>
+                            <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">清爽明亮的界面</div>
+                        </button>
+                        <button data-theme-action="dark" onclick="setTheme('dark')" class="p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors group">
+                            <div class="text-2xl mb-2 text-indigo-400"><i class="fa-solid fa-moon"></i></div>
+                            <div class="text-sm font-medium text-slate-700 dark:text-slate-300">暗色模式</div>
+                            <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">护眼的深色界面</div>
+                        </button>
+                        <button data-theme-action="system" onclick="setTheme('system')" class="p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors group">
+                            <div class="text-2xl mb-2 text-slate-500"><i class="fa-solid fa-desktop"></i></div>
+                            <div class="text-sm font-medium text-slate-700 dark:text-slate-300">跟随系统</div>
+                            <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">使用系统主题设置</div>
+                        </button>
                     </div>
-                    <button type="submit" class="h-11 px-6 bg-slate-900 hover:bg-black text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50" hx-indicator="#pass-spinner"><i class="fa-solid fa-save mr-2"></i>修改密码<span id="pass-spinner" class="htmx-indicator ml-2"><i class="fa-solid fa-spinner fa-spin"></i></span></button>
-                </form>
-                <div id="password-result" class="mt-3"></div>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-700 rounded-xl p-4">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-info-circle text-slate-400"></i>
+                        <div class="text-xs text-slate-500 dark:text-slate-400">
+                            主题设置会自动保存到浏览器本地存储中，下次访问时会自动应用您的偏好设置。
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Language Settings -->
+        <section id="section-language" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
+            <div class="bg-gradient-to-r from-sky-500 to-cyan-600 px-6 py-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-language text-white"></i></div>
+                    <div><h2 class="text-lg font-semibold text-white">{{T .CurrentLang "settings.language"}}</h2><p class="text-xs text-sky-200">{{T .CurrentLang "settings.language_desc"}}</p></div>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                    {{range $code, $info := supportedLangs}}
+                    <button onclick="setLanguage('{{$code}}')" class="p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl hover:border-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/30 transition-colors group {{if eq $.CurrentLang $code}}border-sky-500 bg-sky-50 dark:bg-sky-900/40{{end}}">
+                        <div class="text-2xl mb-2">{{$info.Flag}}</div>
+                        <div class="text-sm font-medium text-slate-700 dark:text-slate-300">{{$info.NativeName}}</div>
+                        <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{$info.Name}}</div>
+                        {{if $info.RTL}}<div class="text-[10px] text-amber-600 dark:text-amber-400 mt-1">RTL</div>{{end}}
+                    </button>
+                    {{end}}
+                </div>
+                <div class="mt-6 bg-slate-50 dark:bg-slate-700 rounded-xl p-4">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-info-circle text-slate-400"></i>
+                        <div class="text-xs text-slate-500 dark:text-slate-400">
+                            语言设置会保存到浏览器 Cookie 中，有效期为 365 天。日语、韩语和阿拉伯语为框架版本，部分翻译可能不完整。
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Security -->
+        <section id="section-security" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
+            <div class="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-lock text-white"></i></div>
+                    <div><h2 class="text-lg font-semibold text-white">安全设置</h2><p class="text-xs text-slate-400">修改登录密码与双因素认证</p></div>
+                </div>
+            </div>
+            <div class="p-6 space-y-6">
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2"><i class="fa-solid fa-key text-slate-400"></i>修改密码</h3>
+                    <form hx-post="/settings/password" hx-target="#password-result" hx-target-error="#password-result" hx-swap="innerHTML" class="max-w-md space-y-4">
+                        <div><label class="block text-xs section-header mb-1.5">当前密码</label><input type="password" name="current_password" required class="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="block text-xs section-header mb-1.5">新密码</label><input type="password" name="new_password" required minlength="8" class="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
+                            <div><label class="block text-xs section-header mb-1.5">确认新密码</label><input type="password" name="confirm_password" required minlength="8" class="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
+                        </div>
+                        <button type="submit" class="h-11 px-6 bg-slate-900 hover:bg-black text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50" hx-indicator="#pass-spinner"><i class="fa-solid fa-save mr-2"></i>修改密码<span id="pass-spinner" class="htmx-indicator ml-2"><i class="fa-solid fa-spinner fa-spin"></i></span></button>
+                    </form>
+                    <div id="password-result" class="mt-3"></div>
+                </div>
+
+                <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2"><i class="fa-solid fa-shield-halved text-slate-400"></i>双因素认证 (2FA)</h3>
+                    
+                    <div id="totp-status-container">
+                        <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600">
+                            <div>
+                                <div class="text-sm font-medium text-slate-700 dark:text-slate-300">双因素认证</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">使用 TOTP 应用进行二次验证</div>
+                            </div>
+                            <span class="inline-flex items-center px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-600 text-slate-500 dark:text-slate-400 rounded-xl" id="totp-status-badge"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i>加载中...</span>
+                        </div>
+                    </div>
+
+                    <div id="totp-enable-form" class="hidden mt-4 space-y-4">
+                        <div class="bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-xl p-4">
+                            <div class="text-xs font-medium text-indigo-700 dark:text-indigo-400 mb-2">扫描二维码或手动输入密钥</div>
+                            <div class="flex items-center gap-4">
+                                <div class="w-32 h-32 bg-white dark:bg-slate-700 rounded-xl border border-indigo-200 dark:border-indigo-800 flex items-center justify-center" id="totp-qr-container">
+                                    <img id="totp-qr-img" class="max-w-full max-h-full p-2" alt="QR Code">
+                                </div>
+                                <div>
+                                    <div class="text-xs text-indigo-600 dark:text-indigo-400 mb-1">手动密钥</div>
+                                    <code id="totp-secret" class="text-sm font-mono text-indigo-800 dark:text-indigo-300 break-all"></code>
+                                    <button onclick="copyTotpSecret()" class="mt-2 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 flex items-center gap-1"><i class="fa-solid fa-copy"></i>复制密钥</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs section-header mb-1.5">验证码</label>
+                            <input type="text" id="totp-code" placeholder="123 456" maxlength="8" class="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm font-mono">
+                        </div>
+
+                        <div class="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400">
+                            <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+                            请保存以下备份码，用于在无法访问认证器应用时恢复访问：
+                            <div id="totp-backup-codes" class="mt-2 font-mono font-semibold"></div>
+                        </div>
+
+                        <button onclick="enableTOTP()" class="h-11 px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors" id="totp-enable-btn"><i class="fa-solid fa-check mr-2"></i>启用双因素认证</button>
+                    </div>
+
+                    <div id="totp-disable-form" class="hidden mt-4 space-y-4">
+                        <div class="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-check-circle text-emerald-500"></i>
+                                <span class="text-sm font-medium text-emerald-700 dark:text-emerald-400">双因素认证已启用</span>
+                            </div>
+                            <div class="text-xs text-emerald-600 dark:text-emerald-400 mt-1">登录时需要输入验证码</div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs section-header mb-1.5">输入密码以禁用</label>
+                            <input type="password" id="totp-disable-password" placeholder="当前密码" class="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm">
+                        </div>
+
+                        <button onclick="disableTOTP()" class="h-11 px-6 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-800 text-red-700 dark:text-red-400 rounded-xl text-sm font-medium transition-colors" id="totp-disable-btn"><i class="fa-solid fa-xmark mr-2"></i>禁用双因素认证</button>
+                    </div>
+
+                    <div id="totp-result" class="mt-3"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Shortcuts -->
+        <section id="section-shortcuts" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
+            <div class="bg-gradient-to-r from-amber-600 to-orange-600 px-6 py-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-keyboard text-white"></i></div>
+                    <div><h2 class="text-lg font-semibold text-white">快捷键设置</h2><p class="text-xs text-amber-200">自定义全局快捷键，设置保存在本地</p></div>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="shortcuts-settings-container">
+                </div>
+                <div class="mt-6 flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <div class="text-xs text-slate-400 dark:text-slate-500">
+                        <i class="fa-solid fa-info-circle mr-1"></i>
+                        修改后立即生效，使用 <kbd class="px-1.5 py-0.5 text-xs bg-slate-100 dark:bg-slate-700 rounded">Ctrl+/</kbd> 查看所有快捷键
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="resetAllShortcuts()" class="h-10 px-4 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-medium transition-colors">
+                            <i class="fa-solid fa-rotate-left mr-1"></i>恢复默认
+                        </button>
+                        <button onclick="saveShortcutsSettings()" class="h-10 px-4 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-medium transition-colors">
+                            <i class="fa-solid fa-save mr-1"></i>保存设置
+                        </button>
+                    </div>
+                </div>
+                <div id="shortcuts-result" class="mt-3"></div>
+            </div>
+        </section>
+
+        <!-- Notifications -->
+        <section id="section-notifications" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
+            <div class="bg-gradient-to-r from-sky-500 to-indigo-600 px-6 py-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-bell text-white"></i></div>
+                    <div><h2 class="text-lg font-semibold text-white">通知设置</h2><p class="text-xs text-sky-200">自定义通知偏好，设置保存在本地</p></div>
+                </div>
+            </div>
+            <div class="p-6 space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4 border border-slate-200 dark:border-slate-600">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-sm font-medium text-slate-700 dark:text-slate-300">通知总开关</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">开启/关闭所有通知</div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="notif-enabled" class="sr-only peer" checked onchange="toggleNotificationMaster()">
+                                <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4 border border-slate-200 dark:border-slate-600">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-sm font-medium text-slate-700 dark:text-slate-300">桌面通知</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">浏览器桌面弹窗通知</div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="notif-desktop" class="sr-only peer" onchange="toggleDesktopNotifications()">
+                                <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+                        <div id="desktop-permission-status" class="text-[10px] mt-2 text-slate-400"></div>
+                    </div>
+
+                    <div class="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4 border border-slate-200 dark:border-slate-600">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-sm font-medium text-slate-700 dark:text-slate-300">提示音</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">重要通知时播放提示音</div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="notif-sound" class="sr-only peer" onchange="toggleSoundNotifications()">
+                                <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-slate-400"></i>
+                        通知事件配置
+                    </h3>
+                    <div class="space-y-3" id="notification-sources-container">
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <div class="text-xs text-slate-400 dark:text-slate-500">
+                        <i class="fa-solid fa-info-circle mr-1"></i>
+                        通知数据保存在浏览器本地存储中
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="resetNotificationSettings()" class="h-10 px-4 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-medium transition-colors">
+                            <i class="fa-solid fa-rotate-left mr-1"></i>恢复默认
+                        </button>
+                        <button onclick="saveNotificationSettings()" class="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-medium transition-colors">
+                            <i class="fa-solid fa-save mr-1"></i>保存设置
+                        </button>
+                    </div>
+                </div>
+                <div id="notifications-result" class="mt-3"></div>
             </div>
         </section>
 
         <!-- Server Config -->
-        <section id="section-server" class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+        <section id="section-server" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
             <div class="bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 py-4">
                 <div class="flex items-center gap-3">
                     <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-server text-white"></i></div>
@@ -100,10 +358,10 @@
             <div class="p-6">
                 <form hx-post="/settings/server" hx-target="#server-result" hx-target-error="#server-result" hx-swap="innerHTML" class="space-y-4">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div><label class="block text-xs section-header mb-1.5">HTTP 端口</label><input type="number" value="{{.ServerPort}}" readonly class="w-full bg-slate-100 border border-slate-200 text-slate-500 rounded-xl px-4 h-11 text-sm cursor-not-allowed"></div>
-                        <div><label class="block text-xs section-header mb-1.5">监听地址</label><input type="text" value="{{.ServerAddress}}" readonly class="w-full bg-slate-100 border border-slate-200 text-slate-500 rounded-xl px-4 h-11 text-sm cursor-not-allowed font-mono"></div>
+                        <div><label class="block text-xs section-header mb-1.5">HTTP 端口</label><input type="number" value="{{.ServerPort}}" readonly class="w-full bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-500 rounded-xl px-4 h-11 text-sm cursor-not-allowed"></div>
+                        <div><label class="block text-xs section-header mb-1.5">监听地址</label><input type="text" value="{{.ServerAddress}}" readonly class="w-full bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-500 rounded-xl px-4 h-11 text-sm cursor-not-allowed font-mono"></div>
                         <div><label class="block text-xs section-header mb-1.5">日志级别</label>
-                            <select name="log_level" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm">
+                            <select name="log_level" class="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm">
                                 <option value="debug" {{if eq .LogLevel "debug"}}selected{{end}}>Debug</option>
                                 <option value="info" {{if eq .LogLevel "info"}}selected{{end}}>Info</option>
                                 <option value="warn" {{if eq .LogLevel "warn"}}selected{{end}}>Warning</option>
@@ -111,7 +369,7 @@
                             </select>
                         </div>
                         <div><label class="block text-xs section-header mb-1.5">TLS</label>
-                            <div class="h-11 flex items-center"><span class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-xl {{if .TLSEnabled}}bg-emerald-100 text-emerald-700{{else}}bg-slate-100 text-slate-500{{end}}"><i class="fa-solid {{if .TLSEnabled}}fa-lock{{else}}fa-unlock{{end}} mr-1"></i>{{if .TLSEnabled}}已启用{{else}}未启用{{end}}</span></div>
+                            <div class="h-11 flex items-center"><span class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-xl {{if .TLSEnabled}}bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400{{else}}bg-slate-100 dark:bg-slate-600 text-slate-500 dark:text-slate-400{{end}}"><i class="fa-solid {{if .TLSEnabled}}fa-lock{{else}}fa-unlock{{end}} mr-1"></i>{{if .TLSEnabled}}已启用{{else}}未启用{{end}}</span></div>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
@@ -119,21 +377,21 @@
                             <label class="relative inline-flex items-center cursor-pointer mt-1">
                                 <input type="checkbox" name="tcp_enabled" value="true" class="sr-only peer" {{if .TCPEnabled}}checked{{end}} onchange="this.closest('label').querySelector('.toggle-label').textContent = this.checked ? '已启用' : '已禁用'">
                                 <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                                <span class="ml-3 text-sm text-slate-600 toggle-label">{{if .TCPEnabled}}已启用{{else}}已禁用{{end}}</span>
+                                <span class="ml-3 text-sm text-slate-600 dark:text-slate-400 toggle-label">{{if .TCPEnabled}}已启用{{else}}已禁用{{end}}</span>
                             </label>
                         </div>
-                        <div><label class="block text-xs section-header mb-1.5">TCP 地址</label><input type="text" name="tcp_addr" value="{{.TCPAddr}}" placeholder="0.0.0.0:4444" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm font-mono"></div>
+                        <div><label class="block text-xs section-header mb-1.5">TCP 地址</label><input type="text" name="tcp_addr" value="{{.TCPAddr}}" placeholder="0.0.0.0:4444" class="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm font-mono"></div>
                     </div>
-                    <div class="border-t border-slate-200 pt-4 mt-2">
-                        <div class="grid grid-cols-3 gap-4">
-                            <div><label class="block text-xs section-header mb-1.5">离线阈值 (秒)</label><input type="number" name="offline_threshold" value="{{.OfflineThreshold}}" min="5" max="3600" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"><p class="text-[10px] text-slate-400 mt-1">Agent 多久无心跳视为离线</p></div>
-                            <div><label class="block text-xs section-header mb-1.5">会话超时 (小时)</label><input type="number" name="session_max_age" value="{{.SessionMaxAge}}" min="1" max="720" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"><p class="text-[10px] text-slate-400 mt-1">Web 登录 session 有效期</p></div>
-                            <div><label class="block text-xs section-header mb-1.5">自动清理 (天)</label><input type="number" name="cleanup_retention" value="{{.CleanupRetention}}" min="1" max="365" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"><p class="text-[10px] text-slate-400 mt-1">自动清理的保留天数</p></div>
+                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4 mt-2">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div><label class="block text-xs section-header mb-1.5">离线阈值 (秒)</label><input type="number" name="offline_threshold" value="{{.OfflineThreshold}}" min="5" max="3600" class="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"><p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Agent 多久无心跳视为离线</p></div>
+                            <div><label class="block text-xs section-header mb-1.5">会话超时 (小时)</label><input type="number" name="session_max_age" value="{{.SessionMaxAge}}" min="1" max="720" class="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"><p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Web 登录 session 有效期</p></div>
+                            <div><label class="block text-xs section-header mb-1.5">自动清理 (天)</label><input type="number" name="cleanup_retention" value="{{.CleanupRetention}}" min="1" max="365" class="w-full bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"><p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">自动清理的保留天数</p></div>
                         </div>
                     </div>
                     <div class="flex items-center gap-3">
                         <button type="submit" class="h-11 px-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50" hx-indicator="#srv-spinner"><i class="fa-solid fa-save mr-2"></i>保存服务器配置<span id="srv-spinner" class="htmx-indicator ml-2"><i class="fa-solid fa-spinner fa-spin"></i></span></button>
-                        <span class="text-xs text-slate-400"><i class="fa-solid fa-info-circle mr-1"></i>部分修改需要重启服务器生效</span>
+                        <span class="text-xs text-slate-400 dark:text-slate-500"><i class="fa-solid fa-info-circle mr-1"></i>部分修改需要重启服务器生效</span>
                     </div>
                 </form>
                 <div id="server-result" class="mt-3"></div>
@@ -141,7 +399,7 @@
         </section>
 
         <!-- Agent Default Config -->
-        <section id="section-agent" class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+        <section id="section-agent" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
             <div class="bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-4">
                 <div class="flex items-center gap-3">
                     <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-robot text-white"></i></div>
@@ -151,8 +409,8 @@
             <div class="p-6">
                 <form hx-post="/settings/agent" hx-target="#agent-result" hx-target-error="#agent-result" hx-swap="innerHTML" class="space-y-4">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div><label class="block text-xs section-header mb-1.5">心跳间隔 (秒)</label><input type="number" name="interval" value="{{.DefaultInterval}}" min="1" max="300" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
-                        <div><label class="block text-xs section-header mb-1.5">抖动值 (%)</label><input type="number" name="jitter" value="{{.DefaultJitter}}" min="0" max="100" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
+                        <div><label class="block text-xs section-header mb-1.5">心跳间隔 (秒)</label><input type="number" name="interval" value="{{.DefaultInterval}}" min="0" max="300" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"><p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">0 = 实时模式（Shell 快速回连）</p></div>
+                        <div><label class="block text-xs section-header mb-1.5">抖动值 (%)</label><input type="number" name="jitter" value="{{.DefaultJitter}}" min="0" max="100" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
                         <div><label class="block text-xs section-header mb-1.5">跳过 TLS 验证</label>
                             <label class="relative inline-flex items-center cursor-pointer mt-1">
                                 <input type="checkbox" name="skip_tls" value="true" class="sr-only peer" {{if .DefaultSkipTLS}}checked{{end}}>
@@ -161,7 +419,7 @@
                             </label>
                         </div>
                     </div>
-                    <div><label class="block text-xs section-header mb-1.5">默认 User-Agent</label><input type="text" name="user_agent" value="{{.DefaultUA}}" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm font-mono"></div>
+                    <div><label class="block text-xs section-header mb-1.5">默认 User-Agent</label><input type="text" name="user_agent" value="{{.DefaultUA}}" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm font-mono"></div>
                     <button type="submit" class="h-11 px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50" hx-indicator="#agent-spinner"><i class="fa-solid fa-save mr-2"></i>保存 Agent 配置<span id="agent-spinner" class="htmx-indicator ml-2"><i class="fa-solid fa-spinner fa-spin"></i></span></button>
                 </form>
                 <div id="agent-result" class="mt-3"></div>
@@ -169,7 +427,7 @@
         </section>
 
         <!-- JWT -->
-        <section id="section-jwt" class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+        <section id="section-jwt" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
             <div class="bg-gradient-to-r from-amber-600 to-amber-700 px-6 py-4">
                 <div class="flex items-center gap-3">
                     <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-key text-white"></i></div>
@@ -189,7 +447,7 @@
         </section>
 
         <!-- Malleable C2 Profile -->
-        <section id="section-malleable" class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+        <section id="section-malleable" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
             <div class="bg-gradient-to-r from-violet-600 to-violet-800 px-6 py-4">
                 <div class="flex items-center gap-3">
                     <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-shield text-white"></i></div>
@@ -207,15 +465,15 @@
                         <span class="text-xs text-slate-400">启用后将覆盖默认的 JSON 响应格式</span>
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div><label class="block text-xs section-header mb-1.5">HTTP 状态码</label><input type="number" name="status_code" value="{{.MalleableStatus}}" min="100" max="599" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
-                        <div><label class="block text-xs section-header mb-1.5">Content-Type</label><input type="text" name="content_type" value="{{.MalleableCT}}" placeholder="application/json" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm font-mono"></div>
+                        <div><label class="block text-xs section-header mb-1.5">HTTP 状态码</label><input type="number" name="status_code" value="{{.MalleableStatus}}" min="100" max="599" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm"></div>
+                        <div><label class="block text-xs section-header mb-1.5">Content-Type</label><input type="text" name="content_type" value="{{.MalleableCT}}" placeholder="application/json" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-xl px-4 h-11 text-sm font-mono"></div>
                     </div>
                     <div><label class="block text-xs section-header mb-1.5">自定义响应头 (每行一个, Header:Value)</label>
-                        <textarea name="headers_text" rows="3" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm font-mono" placeholder="Server: nginx/1.24.0&#10;X-Powered-By: ASP.NET">{{range $k, $v := .MalleableHeaders}}{{$k}}: {{$v}}{{"\n"}}{{end}}</textarea>
+                        <textarea name="headers_text" rows="3" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm font-mono" placeholder="Server: nginx/1.24.0&#10;X-Powered-By: ASP.NET">{{range $k, $v := .MalleableHeaders}}{{$k}}: {{$v}}{{"\n"}}{{end}}</textarea>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
-                        <div><label class="block text-xs section-header mb-1.5">前置内容</label><textarea name="prepend" rows="2" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm font-mono" placeholder="&lt;html&gt;&lt;body&gt;&lt;!--">{{.MalleablePrepend}}</textarea></div>
-                        <div><label class="block text-xs section-header mb-1.5">后置内容</label><textarea name="append" rows="2" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm font-mono" placeholder="--&gt;&lt;/body&gt;&lt;/html&gt;">{{.MalleableAppend}}</textarea></div>
+                        <div><label class="block text-xs section-header mb-1.5">前置内容</label><textarea name="prepend" rows="2" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm font-mono" placeholder="&lt;html&gt;&lt;body&gt;&lt;!--">{{.MalleablePrepend}}</textarea></div>
+                        <div><label class="block text-xs section-header mb-1.5">后置内容</label><textarea name="append" rows="2" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm font-mono" placeholder="--&gt;&lt;/body&gt;&lt;/html&gt;">{{.MalleableAppend}}</textarea></div>
                     </div>
                     <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-700"><i class="fa-solid fa-triangle-exclamation mr-1"></i>启用轮廓后，Agent 必须使用支持该响应格式的通信方式（默认 JSON 兼容）。前置/后置内容仅用于流量伪装，Agent 会从 JSON 部分解析任务。</div>
                     <button type="submit" class="h-11 px-6 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-medium transition-colors" hx-indicator="#mal-spinner"><i class="fa-solid fa-save mr-2"></i>保存轮廓<span id="mal-spinner" class="htmx-indicator ml-2"><i class="fa-solid fa-spinner fa-spin"></i></span></button>
@@ -225,7 +483,7 @@
         </section>
 
         <!-- Database Stats -->
-        <section id="section-database" class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+        <section id="section-database" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
             <div class="bg-gradient-to-r from-cyan-600 to-cyan-700 px-6 py-4">
                 <div class="flex items-center gap-3">
                     <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-database text-white"></i></div>
@@ -250,7 +508,7 @@
         </section>
 
         <!-- Maintenance -->
-        <section id="section-maintenance" class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+        <section id="section-maintenance" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
             <div class="bg-gradient-to-r from-orange-600 to-orange-700 px-6 py-4">
                 <div class="flex items-center gap-3">
                     <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-broom text-white"></i></div>
@@ -262,7 +520,7 @@
                     <div class="flex items-center justify-between">
                         <div><div class="text-sm font-medium text-slate-700">清理旧任务</div><div class="text-xs text-slate-500 mt-0.5">删除超过指定天数的已完成/失败任务</div></div>
                         <div class="flex items-center gap-2">
-                            <select id="purge-task-days" class="bg-white border border-slate-300 text-xs rounded-xl px-3 h-8">
+                            <select id="purge-task-days" class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-xs rounded-xl px-3 h-8">
                                 <option value="7">7 天</option><option value="14">14 天</option><option value="30" selected>30 天</option><option value="60">60 天</option><option value="90">90 天</option>
                             </select>
                             <button onclick="purgeOld('tasks')" class="px-4 h-8 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl text-xs font-medium transition-colors" id="purge-tasks-btn"><i class="fa-solid fa-trash mr-1"></i>清理</button>
@@ -273,7 +531,7 @@
                     <div class="flex items-center justify-between">
                         <div><div class="text-sm font-medium text-slate-700">清理审计日志</div><div class="text-xs text-slate-500 mt-0.5">删除超过指定天数的操作记录</div></div>
                         <div class="flex items-center gap-2">
-                            <select id="purge-audit-days" class="bg-white border border-slate-300 text-xs rounded-xl px-3 h-8">
+                            <select id="purge-audit-days" class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-xs rounded-xl px-3 h-8">
                                 <option value="7">7 天</option><option value="14">14 天</option><option value="30" selected>30 天</option><option value="60">60 天</option><option value="90">90 天</option>
                             </select>
                             <button onclick="purgeOld('audit')" class="px-4 h-8 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl text-xs font-medium transition-colors" id="purge-audit-btn"><i class="fa-solid fa-trash mr-1"></i>清理</button>
@@ -286,7 +544,7 @@
                         <button onclick="vacuumDB()" class="px-4 h-8 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-xl text-xs font-medium transition-colors" id="vacuum-btn"><i class="fa-solid fa-compress mr-1"></i>VACUUM</button>
                     </div>
                 </div>
-                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 hover:bg-slate-100/50 transition-colors">
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors">
                     <div class="flex items-center justify-between">
                         <div><div class="text-sm font-medium text-slate-700">备份数据库</div><div class="text-xs text-slate-500 mt-0.5">创建当前数据库的快照备份</div></div>
                         <button onclick="backupDB()" class="px-4 h-8 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-xl text-xs font-medium transition-colors" id="backup-btn"><i class="fa-solid fa-copy mr-1"></i>立即备份</button>
@@ -297,7 +555,7 @@
         </section>
 
         <!-- Config Export/Import -->
-        <section id="section-config" class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+        <section id="section-config" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
             <div class="bg-gradient-to-r from-violet-600 to-violet-700 px-6 py-4">
                 <div class="flex items-center gap-3">
                     <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-file-export text-white"></i></div>
@@ -314,7 +572,7 @@
         </section>
 
         <!-- About / System Info -->
-        <section id="section-about" class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+        <section id="section-about" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
             <div class="bg-gradient-to-r from-slate-700 to-slate-900 px-6 py-4">
                 <div class="flex items-center gap-3">
                     <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i class="fa-solid fa-microchip text-white"></i></div>
@@ -338,8 +596,7 @@
             </div>
         </section>
 
+        </div>
     </div>
 </div>
-
-<script src="/static/js/settings.js"></script>
 {{end}}

@@ -20,9 +20,12 @@ import (
 func (s *Server) handleAIPage(c *gin.Context) {
 	stats := s.getNavStats()
 	data := gin.H{
-		"Title":      "ForgeC2 - AI Assistant",
-		"ActiveNav":  "ai",
-		"AIConfig":   s.cfg.AI,
+		"Title":         "ForgeC2 - AI Assistant",
+		"ActiveNav":     "ai",
+		"IsFullPage":    true,
+		"AIConfig":      s.cfg.AI,
+		"AIConfigured":  s.cfg.AI.Enabled && s.cfg.AI.APIKey != "",
+		"AIHasAPIKey":   s.cfg.AI.APIKey != "",
 	}
 	s.addUserToData(c, data)
 	for k, v := range stats {
@@ -55,11 +58,17 @@ func (s *Server) handleAIConfig(c *gin.Context) {
 	slog.Info("AI config save request", "enabled", req.Enabled, "provider", req.Provider, "model", req.Model, "has_key", req.APIKey != "")
 	s.cfg.AI.Enabled = req.Enabled
 	s.cfg.AI.Provider = req.Provider
-	s.cfg.AI.APIKey = req.APIKey
+	if strings.TrimSpace(req.APIKey) != "" {
+		s.cfg.AI.APIKey = req.APIKey
+	}
 	s.cfg.AI.Model = req.Model
 	s.cfg.AI.Endpoint = req.Endpoint
 	s.cfg.AI.SystemPrompt = req.SystemPrompt
-	if err := s.cfg.Save("config.yaml"); err != nil {
+	configPath := s.configPath
+	if configPath == "" {
+		configPath = "config.yaml"
+	}
+	if err := s.cfg.Save(configPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Save failed: " + err.Error()})
 		return
 	}
@@ -88,7 +97,11 @@ func (s *Server) handleAIChat(c *gin.Context) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
 	c.Status(http.StatusOK)
+	if rc := http.NewResponseController(c.Writer); rc != nil {
+		_ = rc.SetWriteDeadline(time.Time{})
+	}
 	flusher, _ := c.Writer.(http.Flusher)
 
 	model := s.cfg.AI.Model
@@ -156,7 +169,7 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 
 			// Safety: cap content length
 			if len(content) > 8000 {
-				content = content[:8000] + "\n\n[响应被截断]"
+				content = content[:8000] + "\n\n[Response truncated]"
 			}
 
 			if finishReason == "tool_calls" && len(toolCalls) > 0 {
@@ -171,18 +184,19 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 					newCalls = append(newCalls, tc)
 				}
 				if len(newCalls) == 0 {
-					ch <- sseEvent{"text", "检测到重复工具调用，已终止循环。"}
+					ch <- sseEvent{"text", "Duplicate tool calls detected, loop terminated."}
 					return
 				}
 				consecutiveTools++
 				if consecutiveTools > 2 {
-					ch <- sseEvent{"text", content + "\n\n[已达到最大工具调用次数]"}
+					ch <- sseEvent{"text", content + "\n\n[Max tool calls reached]"}
 					return
 				}
 
 				assistMsg := chatMessage{Role: "assistant", Content: content, ToolCalls: newCalls}
 				messages = append(messages, assistMsg)
 				for _, tc := range newCalls {
+					ch <- sseEvent{"tool_start", tc.Function.Name}
 					result := s.executeTool(tc.Function.Name, tc.Function.Arguments)
 					ch <- sseEvent{"tool", fmt.Sprintf(`{"id":"%s","name":"%s","result":%s}`,
 						tc.ID, tc.Function.Name, result)}
@@ -275,7 +289,7 @@ func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent) (too
 				if delta.Content != "" {
 					content += delta.Content
 					if len(content) > 8000 {
-						content = content[:8000] + "\n\n[响应被截断]"
+			content = content[:8000] + "\n\n[Response truncated]"
 						return
 					}
 					ch <- sseEvent{"text", content}
@@ -469,7 +483,7 @@ func buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "list_agents",
-				Description: "列出所有 Implant，返回 ID、主机名、IP、操作系统、在线状态",
+				Description: "List all agents, returns ID, hostname, IP, OS, online status",
 				Parameters: map[string]interface{}{
 					"type":       "object",
 					"properties": map[string]interface{}{},
@@ -480,13 +494,13 @@ func buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "get_agent_detail",
-				Description: "获取指定 Implant 的详细信息，包括系统信息、权限、任务统计等",
+				Description: "Get agent details including system info, privileges, and task stats",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"agent_id": map[string]string{
 							"type":        "string",
-							"description": "Implant ID 或主机名",
+							"description": "Agent ID or hostname",
 						},
 					},
 					"required": []string{"agent_id"},
@@ -497,21 +511,21 @@ func buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "execute_command",
-				Description: "在指定 Implant 上执行系统命令并等待返回结果",
+				Description: "Queue a command on the specified agent (returns immediately; does not wait for agent beacon). Use get_agent_tasks to read results later.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"agent_id": map[string]string{
 							"type":        "string",
-							"description": "目标 Implant ID 或主机名",
+							"description": "Target agent ID or hostname",
 						},
 						"command": map[string]string{
 							"type":        "string",
-							"description": "要执行的命令 (cmd.exe 或 PowerShell)",
+							"description": "Command to execute (cmd.exe or PowerShell)",
 						},
 						"shell": map[string]string{
 							"type":        "string",
-							"description": "Shell 类型: cmd.exe 或 powershell.exe",
+							"description": "Shell type: cmd.exe or powershell.exe",
 						},
 					},
 					"required": []string{"agent_id", "command"},
@@ -522,13 +536,13 @@ func buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "get_agent_tasks",
-				Description: "获取指定 Implant 的最近任务列表及结果",
+				Description: "Get recent task list and results for a specified agent (use after execute_command to fetch output)",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
 						"agent_id": map[string]string{
 							"type":        "string",
-							"description": "Implant ID 或主机名",
+							"description": "Agent ID or hostname",
 						},
 					},
 					"required": []string{"agent_id"},
@@ -539,7 +553,7 @@ func buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "list_listeners",
-				Description: "列出所有已配置的监听器及其状态",
+				Description: "List all configured listeners and their status",
 				Parameters: map[string]interface{}{
 					"type":       "object",
 					"properties": map[string]interface{}{},
@@ -550,7 +564,7 @@ func buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "list_credentials",
-				Description: "查看凭据保险库摘要（不含明文密码）",
+				Description: "View credential vault summary (without plaintext passwords)",
 				Parameters: map[string]interface{}{
 					"type":       "object",
 					"properties": map[string]interface{}{},
@@ -561,7 +575,7 @@ func buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "get_online_operators",
-				Description: "查看当前在线操作员",
+				Description: "View currently online operators",
 				Parameters: map[string]interface{}{
 					"type":       "object",
 					"properties": map[string]interface{}{},
@@ -631,22 +645,12 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 		if err := s.db.Create(&task).Error; err != nil {
 			return `{"error":"failed to create task"}`
 		}
-		// Wait up to 30s for result
-		for i := 0; i < 30; i++ {
-			time.Sleep(1 * time.Second)
-			var t db.Task
-			if err := s.db.First(&t, task.ID).Error; err != nil {
-				continue
-			}
-			if t.Status == "completed" || t.Status == "failed" {
-				b, _ := json.Marshal(map[string]interface{}{
-					"task_id": t.ID, "status": t.Status,
-					"result": t.Result, "error": t.Error,
-				})
-				return string(b)
-			}
-		}
-		return fmt.Sprintf(`{"task_id":%d,"status":"pending","message":"task sent, waiting for agent callback"}`, task.ID)
+		b, _ := json.Marshal(map[string]interface{}{
+			"task_id": task.ID,
+			"status":  "pending",
+			"message": "Command queued. Use get_agent_tasks to fetch the result when ready.",
+		})
+		return string(b)
 
 	case "get_agent_tasks":
 		aid := s.resolveAgentID(args["agent_id"])
@@ -804,6 +808,13 @@ func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent) (too
 	buf := make([]byte, 4096)
 	var leftover string
 
+	type buildingClaudeTool struct {
+		ID        string
+		Name      string
+		Arguments strings.Builder
+	}
+	var buildingTools []*buildingClaudeTool
+
 	for {
 		n, err := reader.Read(buf)
 		if n > 0 {
@@ -821,18 +832,18 @@ func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent) (too
 
 				var event struct {
 					Type  string `json:"type"`
+					Index int    `json:"index"`
 					Delta struct {
-						Type string `json:"type"`
-						Text string `json:"text"`
+						Type         string `json:"type"`
+						Text         string `json:"text"`
+						PartialJSON  string `json:"partial_json"`
+						StopReason   string `json:"stop_reason"`
 					} `json:"delta"`
 					ContentBlock struct {
 						Type string `json:"type"`
 						ID   string `json:"id"`
 						Name string `json:"name"`
 					} `json:"content_block"`
-					Message struct {
-						StopReason string `json:"stop_reason"`
-					} `json:"message"`
 				}
 				if err := json.Unmarshal([]byte(jsonStr), &event); err != nil {
 					continue
@@ -840,21 +851,32 @@ func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent) (too
 
 				switch event.Type {
 				case "content_block_delta":
-					if event.Delta.Type == "text_delta" {
+					if event.Delta.Type == "text_delta" && event.Delta.Text != "" {
 						content += event.Delta.Text
+						if len(content) > 8000 {
+							content = content[:8000] + "\n\n[Response truncated]"
+							ch <- sseEvent{"text", content}
+							return
+						}
 						ch <- sseEvent{"text", content}
+					} else if event.Delta.Type == "input_json_delta" && event.Delta.PartialJSON != "" {
+						for len(buildingTools) <= event.Index {
+							buildingTools = append(buildingTools, &buildingClaudeTool{})
+						}
+						buildingTools[event.Index].Arguments.WriteString(event.Delta.PartialJSON)
 					}
 				case "content_block_start":
-					// Tool use started
 					if event.ContentBlock.Type == "tool_use" {
-						// Collect tool call info later from content_block_stop or message_stop
+						for len(buildingTools) <= event.Index {
+							buildingTools = append(buildingTools, &buildingClaudeTool{})
+						}
+						buildingTools[event.Index].ID = event.ContentBlock.ID
+						buildingTools[event.Index].Name = event.ContentBlock.Name
 					}
 				case "message_delta":
-					if event.Delta.Type == "stop_reason" {
-						finishReason = event.Message.StopReason
+					if event.Delta.StopReason != "" {
+						finishReason = event.Delta.StopReason
 					}
-				case "message_stop":
-					// Check for tool_use in accumulated content
 				}
 			}
 		}
@@ -865,7 +887,24 @@ func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent) (too
 			return
 		}
 	}
-	finishReason = "stop"
+
+	for _, bt := range buildingTools {
+		if bt.Name != "" {
+			toolCalls = append(toolCalls, toolCall{
+				ID:   bt.ID,
+				Type: "function",
+				Function: toolCallFunc{
+					Name:      bt.Name,
+					Arguments: bt.Arguments.String(),
+				},
+			})
+		}
+	}
+	if len(toolCalls) > 0 {
+		finishReason = "tool_calls"
+	} else if finishReason == "" {
+		finishReason = "stop"
+	}
 	return
 }
 

@@ -1,246 +1,228 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{.CurrentLang}}" {{if .IsRTL}}dir="rtl"{{end}}>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <title>{{.Title}}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
-    <!-- Critical layout fallback (when Tailwind CDN is blocked) -->
-    <style>
-        /* fallback: ensure basic flex layout works even without Tailwind */
-        .flex { display: flex; }
-        .flex-col { flex-direction: column; }
-        .flex-1 { flex: 1 1 0%; }
-        .h-screen { height: 100vh; }
-        .overflow-hidden { overflow: hidden; }
-        .overflow-auto { overflow: auto; }
-        .hidden { display: none; }
-        .w-56 { width: 14rem; }
-        .fixed { position: fixed; }
-        .bg-white { background-color: #ffffff; }
-        .bg-slate-100 { background-color: #f1f5f9; }
-        .border-r { border-right: 1px solid #e2e8f0; }
-        .border-b { border-bottom: 1px solid #e2e8f0; }
-        .border-t { border-top: 1px solid #e2e8f0; }
-        .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-        .text-slate-800 { color: #1e293b; }
-        .text-slate-600 { color: #475569; }
-        .text-slate-500 { color: #64748b; }
-        .text-sm { font-size: 0.875rem; }
-        .p-4 { padding: 1rem; }
-        .px-4 { padding-left: 1rem; padding-right: 1rem; }
-        .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
-        .h-12 { height: 3rem; }
-        .items-center { align-items: center; }
-        .justify-between { justify-content: space-between; }
-        .gap-x-4 { column-gap: 1rem; }
-        .max-w-7xl { max-width: 80rem; }
-        .mx-auto { margin-left: auto; margin-right: auto; }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/font-awesome.min.css">
+    <script>
+    (function(){
+        try {
+            var t = localStorage.getItem('forgec2_theme');
+            var dark = t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+    })();
+    </script>
+    <script src="/static/js/tailwind.min.js"></script>
+    <script>tailwind.config = { darkMode: 'class' };</script>
+    <script src="/static/js/htmx.min.js"></script>
+    {{if .UseBundles}}
+    <link rel="stylesheet" href="/static/css/app.bundle.css">
+    {{else}}
+    <link rel="stylesheet" href="/static/css/layout.css">
+    <link rel="stylesheet" href="/static/css/skeleton.css">
+    <link rel="stylesheet" href="/static/css/lazyload.css">
+    {{end}}
     <style>
         body { font-family: 'Inter', system-ui, sans-serif; font-size: 14px; }
         .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
-
-        .nav-active {
-            background-color: #e0e7ff;
-            color: #4338ca;
-            border-left: 2px solid #6366f1;
-        }
-
-        .metric-card {
-            transition: all 0.15s ease;
-        }
-        .metric-card:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-        }
-
-        .section-header {
-            font-size: 0.7rem;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            font-weight: 600;
-            color: #64748b;
-        }
-
-        .nav-section {
-            margin-bottom: 1px;
-        }
-
-        .section-header.collapsed + .nav-section {
-            display: none;
-        }
-
-        .section-header .fa-chevron-down {
-            transition: transform 0.15s ease;
-        }
-
-        .section-header.collapsed .fa-chevron-down {
-            transform: rotate(-90deg);
-        }
-
-        /* Mobile sidebar */
-        .mobile-sidebar {
-            transform: translateX(-100%);
-            transition: transform 0.3s ease;
-        }
-        .mobile-sidebar.open {
-            transform: translateX(0);
-        }
-        .mobile-overlay {
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-        }
-        .mobile-overlay.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
-        @media (max-width: 768px) {
-            .desktop-sidebar {
-                display: none;
-            }
-            .main-content {
-                margin-left: 0 !important;
-            }
-        }
+        .nav-active { background-color: #e0e7ff; color: #4338ca; border-left: 2px solid #6366f1; }
+        .dark .nav-active { background-color: #4338ca; color: #e0e7ff; border-left: 2px solid #818cf8; }
+        .metric-card { transition: all 0.15s ease; }
+        .metric-card:hover { transform: translateY(-1px); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        .section-header { font-size: 0.7rem; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 600; color: #64748b; }
+        .section-header.collapsed .fa-chevron-down { transform: rotate(-90deg); }
+        .dark .section-header { color: #94a3b8; }
+        .nav-section { margin-bottom: 1px; }
+        .field-error { border-color: #ef4444 !important; }
+        .field-error:focus { border-color: #ef4444 !important; box-shadow: 0 0 0 2px rgba(239,68,68,0.2) !important; }
+        .dark .field-error { border-color: #f87171 !important; }
+        .dark .field-error:focus { box-shadow: 0 0 0 2px rgba(248,113,113,0.2) !important; }
+        /*
+         * Z-Index Scale:
+         *   z-10: base content
+         *   z-20: desktop sidebar
+         *   z-30: FAB overlay
+         *   z-40: mobile overlay, bottom nav
+         *   z-50: dropdowns (theme/lang menu, notification panel, chat window, FAB menu)
+         *   z-[55]: toast container, batch bar
+         *   z-[60]: task modal
+         *   z-[70]: shortcuts panel
+         *   z-[80]: listener modal
+         *   z-[85]: map modal
+         *   z-[90]: global loading
+         */
     </style>
+    {{if .IsRTL}}
+    <style>
+        .rtl .desktop-sidebar { border-right: none; border-left: 1px solid rgb(226 232 240); }
+        .rtl.dark .desktop-sidebar { border-left-color: rgb(51 65 85); }
+        .rtl .mobile-menu-btn { left: auto; right: 1rem; }
+        .rtl .mobile-sidebar { left: auto; right: 0; }
+        .rtl .nav-active, .rtl .nav-highlight { border-left: none; border-right: 2px solid #6366f1; }
+        .rtl.dark .nav-active, .rtl.dark .nav-highlight { border-right-color: #818cf8; }
+        .rtl .nav-section a { flex-direction: row-reverse; }
+        .rtl .section-header { flex-direction: row-reverse; }
+        .rtl .quick-actions a { flex-direction: row-reverse; }
+        .rtl .top-bar-title { text-align: right; }
+        .rtl .ml-12 { margin-left: 0; margin-right: 3rem; }
+        .rtl .md\:ml-0 { margin-right: 0; }
+        .rtl .mr-2 { margin-right: 0; margin-left: 0.5rem; }
+        .rtl .ml-1 { margin-left: 0; margin-right: 0.25rem; }
+        .rtl .ml-2 { margin-left: 0; margin-right: 0.5rem; }
+        .rtl .mr-1 { margin-right: 0; margin-left: 0.25rem; }
+        .rtl .gap-x-1 { column-gap: 0.25rem; }
+        .rtl .gap-x-2 { column-gap: 0.5rem; }
+        .rtl .gap-x-2\.5 { column-gap: 0.625rem; }
+        .rtl .gap-x-3 { column-gap: 0.75rem; }
+        .rtl .pl-1 { padding-left: 0; padding-right: 0.25rem; }
+        .rtl .pl-3 { padding-left: 0; padding-right: 0.75rem; }
+        .rtl .pl-4 { padding-left: 0; padding-right: 1rem; }
+        .rtl .pl-8 { padding-left: 0; padding-right: 2rem; }
+        .rtl .pr-3 { padding-right: 0; padding-left: 0.75rem; }
+        .rtl .pr-4 { padding-right: 0; padding-left: 1rem; }
+        .rtl .text-left { text-align: right; }
+        .rtl .text-right { text-align: left; }
+        .rtl #bottom-nav { right: 0; left: 0; }
+        .rtl #chat-window { right: auto; left: 1rem; }
+        .rtl #toast-container { right: auto; left: 1rem; }
+        .rtl #notification-panel { right: auto; left: 0; }
+        .rtl #theme-menu { right: auto; left: 0; }
+        .rtl .justify-between { justify-content: space-between; }
+        .rtl .items-start { align-items: flex-start; }
+        .rtl .items-end { align-items: flex-end; }
+    </style>
+    {{end}}
 </head>
-<body class="bg-slate-100 text-slate-800">
+<body class="bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-100 {{if .IsRTL}}rtl{{end}}">
 <!-- Mobile overlay -->
 <div id="mobile-overlay" class="mobile-overlay fixed inset-0 bg-black/50 z-40 md:hidden" onclick="toggleMobileSidebar()"></div>
 
 <!-- Mobile menu button -->
-<button id="mobile-menu-btn" class="md:hidden fixed top-4 left-4 z-50 w-10 h-10 bg-white rounded-xl shadow-lg flex items-center justify-center" onclick="toggleMobileSidebar()">
-    <i class="fa-solid fa-bars text-slate-700"></i>
+<button id="mobile-menu-btn" class="mobile-menu-btn md:hidden fixed top-4 left-4 z-50 w-11 h-11 bg-white dark:bg-slate-800 rounded-xl shadow-lg flex items-center justify-center transition-colors touch-target" onclick="toggleMobileSidebar()" aria-label="Open navigation menu">
+    <i class="fa-solid fa-bars text-slate-700 dark:text-slate-300 text-lg"></i>
 </button>
 
 <div class="flex h-screen overflow-hidden">
     <!-- 左侧边栏（浅色）- Desktop -->
-    <div class="desktop-sidebar w-56 bg-white border-r border-slate-200 flex flex-col shadow-sm">
-        <div class="px-4 py-3 border-b border-slate-200">
+    <div class="desktop-sidebar w-56 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col shadow-sm transition-colors">
+        <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
             <div class="flex items-center gap-x-2">
                 <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
                     <i class="fa-solid fa-shield-halved text-white text-lg"></i>
                 </div>
                 <div>
-                    <span class="font-bold text-lg tracking-tight text-slate-900">Forge</span>
+                    <span class="font-bold text-lg tracking-tight text-slate-900 dark:text-slate-100">Forge</span>
                     <span class="font-bold text-lg tracking-tight text-indigo-600">C2</span>
                 </div>
             </div>
-            <div class="text-[10px] text-slate-500 mt-0.5 pl-1">PROFESSIONAL RED TEAM FRAMEWORK</div>
+            <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 pl-1">PROFESSIONAL RED TEAM FRAMEWORK</div>
         </div>
 
         <div class="p-3 flex-1 overflow-auto">
-            <!-- Sidebar search / filter (UX refinement) -->
-            <div class="px-2 pb-2">
-                <div class="relative">
-                    <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                    <input id="nav-search" type="text" placeholder="搜索菜单..." 
-                           class="w-full bg-slate-100 border border-slate-200 text-xs rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all"
-                           oninput="filterNav(this.value)">
-                </div>
-            </div>
             <nav class="space-y-0 text-[13px]" id="sidebar-nav">
                 <!-- Operations -->
                 <div class="section-header px-3 pt-2 pb-0.5 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
                     <i class="fa-solid fa-chevron-down w-3 text-[9px] transition-transform"></i>
-                    <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Operations</span>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{{T .CurrentLang "nav.operations"}}</span>
                 </div>
                 <div class="nav-section">
-                    <a href="/dashboard" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "dashboard"}}nav-active{{end}}">
-                        <i class="fa-solid fa-chart-line w-4 text-center text-xs"></i><span>Dashboard</span>
+                    <a href="/dashboard" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "dashboard"}}nav-active{{end}}">
+                        <i class="fa-solid fa-chart-line w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.dashboard"}}</span>
                     </a>
-                    <a href="/topology" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "topology"}}nav-active{{end}}">
-                        <i class="fa-solid fa-project-diagram w-4 text-center text-xs"></i><span>拓扑</span>
+                    <a href="/topology" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "topology"}}nav-active{{end}}">
+                        <i class="fa-solid fa-project-diagram w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.topology"}}</span>
                     </a>
-                    <a href="/agents" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "agents"}}nav-active{{end}}">
+                    <a href="/agents" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "agents"}}nav-active{{end}}">
                         <i class="fa-solid fa-bug w-4 text-center text-xs"></i>
-                        <span class="flex-1">Implants</span>
-                        {{if .OnlineCount}}<span class="ml-1 px-1.5 py-px text-[9px] leading-none rounded bg-emerald-100 text-emerald-700 font-mono">{{.OnlineCount}}</span>{{end}}
+                        <span class="flex-1">{{T .CurrentLang "nav.implants"}}</span>
+                        {{if .OnlineCount}}<span class="ml-1 px-1.5 py-px text-[9px] leading-none rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-mono">{{.OnlineCount}}</span>{{end}}
                     </a>
                 </div>
 
                 <!-- Build & Deploy -->
                 <div class="section-header px-3 pt-2 pb-0.5 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
                     <i class="fa-solid fa-chevron-down w-3 text-[9px] transition-transform"></i>
-                    <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Build & Deploy</span>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{{T .CurrentLang "nav.build_deploy"}}</span>
                 </div>
                 <div class="nav-section">
-                    <a href="/generate" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "generate"}}nav-active{{end}}">
-                        <i class="fa-solid fa-cubes w-4 text-center text-xs"></i><span>生成</span>
+                    <a href="/generate" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "generate"}}nav-active{{end}}">
+                        <i class="fa-solid fa-cubes w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.generate"}}</span>
                     </a>
-                    <a href="/listeners" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "listeners"}}nav-active{{end}}">
+                    <a href="/listeners" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "listeners"}}nav-active{{end}}">
                         <i class="fa-solid fa-tower-broadcast w-4 text-center text-xs"></i>
-                        <span class="flex-1">监听器</span>
-                        {{if .ListenerCount}}<span class="ml-1 px-1.5 py-px text-[9px] leading-none rounded bg-indigo-100 text-indigo-700 font-mono">{{.ListenerCount}}</span>{{end}}
+                        <span class="flex-1">{{T .CurrentLang "nav.listeners"}}</span>
+                        {{if .ListenerCount}}<span class="ml-1 px-1.5 py-px text-[9px] leading-none rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 font-mono">{{.ListenerCount}}</span>{{end}}
                     </a>
-                    <a href="/builds" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "builds"}}nav-active{{end}}">
-                        <i class="fa-solid fa-hammer w-4 text-center text-xs"></i><span>构建日志</span>
+                    <a href="/builds" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "builds"}}nav-active{{end}}">
+                        <i class="fa-solid fa-hammer w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.builds"}}</span>
                     </a>
                 </div>
 
                 <!-- Post-Exploitation -->
                 <div class="section-header px-3 pt-2 pb-0.5 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
                     <i class="fa-solid fa-chevron-down w-3 text-[9px] transition-transform"></i>
-                    <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Post-Exploit</span>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{{T .CurrentLang "nav.post_exploit"}}</span>
                 </div>
                 <div class="nav-section">
-                    <a href="/ai" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "ai"}}nav-active{{end}}">
-                        <i class="fa-solid fa-robot w-4 text-center text-xs"></i><span>AI 助手</span>
+                    <a href="/ai" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "ai"}}nav-active{{end}}">
+                        <i class="fa-solid fa-robot w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.ai_assistant"}}</span>
                     </a>
-                    <a href="/toolkit" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "toolkit"}}nav-active{{end}}">
-                        <i class="fa-solid fa-kit-medical w-4 text-center text-xs"></i><span>工具箱</span>
+                    <a href="/toolkit" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "toolkit"}}nav-active{{end}}">
+                        <i class="fa-solid fa-kit-medical w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.toolkit"}}</span>
                     </a>
-                    <a href="/scanner" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "scanner"}}nav-active{{end}}">
-                        <i class="fa-solid fa-satellite-dish w-4 text-center text-xs"></i><span>扫描</span>
+                    <a href="/scanner" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "scanner"}}nav-active{{end}}">
+                        <i class="fa-solid fa-satellite-dish w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.scanner"}}</span>
                     </a>
-                    <a href="/lateral" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "lateral"}}nav-active{{end}}">
-                        <i class="fa-solid fa-arrows-left-right w-4 text-center text-xs"></i><span>横向移动</span>
+                    <a href="/lateral" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "lateral"}}nav-active{{end}}">
+                        <i class="fa-solid fa-arrows-left-right w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.lateral_movement"}}</span>
                     </a>
-                    <a href="/credentials" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "credentials"}}nav-active{{end}}">
-                        <i class="fa-solid fa-key w-4 text-center text-xs"></i><span>凭据</span>
+                    <a href="/credentials" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "credentials"}}nav-active{{end}}">
+                        <i class="fa-solid fa-key w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.credentials"}}</span>
                     </a>
-                    <a href="/pivoting" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "pivoting"}}nav-active{{end}}">
-                        <i class="fa-solid fa-arrows-turn-to-dots w-4 text-center text-xs"></i><span>隧道</span>
+                    <a href="/pivoting" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "pivoting"}}nav-active{{end}}">
+                        <i class="fa-solid fa-arrows-turn-to-dots w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.tunneling"}}</span>
                     </a>
-                    <a href="/tasks" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "tasks"}}nav-active{{end}}">
-                        <i class="fa-solid fa-history w-4 text-center text-xs"></i><span>任务历史</span>
+                    <a href="/tasks" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "tasks"}}nav-active{{end}}">
+                        <i class="fa-solid fa-history w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.task_history"}}</span>
                     </a>
                     <details class="group px-3">
-                        <summary class="text-[12px] text-slate-400 cursor-pointer hover:text-slate-600 py-1">更多</summary>
+                        <summary class="text-[12px] text-slate-400 dark:text-slate-500 cursor-pointer hover:text-slate-600 dark:hover:text-slate-300 py-1">{{T .CurrentLang "nav.more"}}</summary>
                         <div class="pl-2 space-y-0">
-                            <a href="/privesc" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "privesc"}}nav-active{{end}}">
-                                <i class="fa-solid fa-shield-halved w-4 text-center text-xs"></i><span>提权</span>
+                            <a href="/privesc" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "privesc"}}nav-active{{end}}">
+                                <i class="fa-solid fa-shield-halved w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.privilege_escalation"}}</span>
                             </a>
-                            <a href="/bof" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "bof"}}nav-active{{end}}">
-                                <i class="fa-solid fa-file-code w-4 text-center text-xs"></i><span>BOF</span>
+                            <a href="/bof" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "bof"}}nav-active{{end}}">
+                                <i class="fa-solid fa-file-code w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.bof"}}</span>
                             </a>
-                            <a href="/automation" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "automation"}}nav-active{{end}}">
-                                <i class="fa-solid fa-gears w-4 text-center text-xs"></i><span>自动化</span>
+                            <a href="/automation" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "automation"}}nav-active{{end}}">
+                                <i class="fa-solid fa-gears w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.automation"}}</span>
                             </a>
-                            <a href="/tokens" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "tokens"}}nav-active{{end}}">
-                                <i class="fa-solid fa-id-badge w-4 text-center text-xs"></i><span>Token</span>
+                            <a href="/tokens" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "tokens"}}nav-active{{end}}">
+                                <i class="fa-solid fa-id-badge w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.tokens"}}</span>
                             </a>
-                            <a href="/loot" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "loot"}}nav-active{{end}}">
-                                <i class="fa-solid fa-box-archive w-4 text-center text-xs"></i><span>数据收集</span>
+                            <a href="/loot" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "loot"}}nav-active{{end}}">
+                                <i class="fa-solid fa-box-archive w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.loot"}}</span>
                             </a>
-                            <a href="/timeline" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "timeline"}}nav-active{{end}}">
-                                <i class="fa-solid fa-timeline w-4 text-center text-xs"></i><span>时间线</span>
+                            <a href="/timeline" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "timeline"}}nav-active{{end}}">
+                                <i class="fa-solid fa-timeline w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.timeline"}}</span>
                             </a>
-                            <a href="/templates" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "templates"}}nav-active{{end}}">
-                                <i class="fa-solid fa-file-lines w-4 text-center text-xs"></i><span>模板</span>
+                            <a href="/templates" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "templates"}}nav-active{{end}}">
+                                <i class="fa-solid fa-file-lines w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.templates"}}</span>
                             </a>
-                            <a href="/traffic" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "traffic"}}nav-active{{end}}">
-                                <i class="fa-solid fa-network-wired w-4 text-center text-xs"></i><span>流量</span>
+                            <a href="/traffic" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "traffic"}}nav-active{{end}}">
+                                <i class="fa-solid fa-network-wired w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.traffic"}}</span>
                             </a>
-                            <a href="/report" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "report"}}nav-active{{end}}">
-                                <i class="fa-solid fa-clipboard-list w-4 text-center text-xs"></i><span>报告</span>
+                            <a href="/report" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "report"}}nav-active{{end}}">
+                                <i class="fa-solid fa-clipboard-list w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.report"}}</span>
                             </a>
-                            <a href="/chat" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "chat"}}nav-active{{end}}">
-                                <i class="fa-solid fa-comments w-4 text-center text-xs"></i><span>聊天</span>
+                            <a href="/chat" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "chat"}}nav-active{{end}}">
+                                <i class="fa-solid fa-comments w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.chat"}}</span>
                             </a>
                         </div>
                     </details>
@@ -249,80 +231,190 @@
                 <!-- System -->
                 <div class="section-header px-3 pt-2 pb-0.5 cursor-pointer flex items-center gap-x-1 select-none" onclick="toggleNavSection(this)">
                     <i class="fa-solid fa-chevron-down w-3 text-[9px] transition-transform"></i>
-                    <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">System</span>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{{T .CurrentLang "nav.system"}}</span>
                 </div>
                 <div class="nav-section">
-                    <a href="/users" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "users"}}nav-active{{end}}">
-                        <i class="fa-solid fa-users-gear w-4 text-center text-xs"></i><span>用户</span>
+                    <a href="/users" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "users"}}nav-active{{end}}">
+                        <i class="fa-solid fa-users-gear w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.users"}}</span>
                     </a>
-                    <a href="/audit" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "audit"}}nav-active{{end}}">
-                        <i class="fa-solid fa-shield w-4 text-center text-xs"></i><span>审计</span>
+                    <a href="/audit" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "audit"}}nav-active{{end}}">
+                        <i class="fa-solid fa-shield w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.audit"}}</span>
                     </a>
-                    <a href="/settings" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "settings"}}nav-active{{end}}">
-                        <i class="fa-solid fa-cog w-4 text-center text-xs"></i><span>设置</span>
+                    <a href="/settings" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "settings"}}nav-active{{end}}">
+                        <i class="fa-solid fa-cog w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.settings"}}</span>
                     </a>
-                    <a href="/infrastructure" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 transition-colors {{if eq .ActiveNav "infrastructure"}}nav-active{{end}}">
-                        <i class="fa-solid fa-server w-4 text-center text-xs"></i><span>基础设施</span>
+                    <a href="/infrastructure" class="flex items-center gap-x-2.5 px-3 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors {{if eq .ActiveNav "infrastructure"}}nav-active{{end}}">
+                        <i class="fa-solid fa-server w-4 text-center text-xs"></i><span>{{T .CurrentLang "nav.infrastructure"}}</span>
                     </a>
                 </div>
             </nav>
 
             <!-- Quick Actions -->
             <div class="mt-4 px-2">
-                <div class="text-[10px] uppercase tracking-widest text-slate-400 px-3 mb-1">Quick Actions</div>
+                <div class="text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 px-3 mb-1">{{T .CurrentLang "nav.quick_actions"}}</div>
                 <div class="flex flex-wrap gap-1.5">
-                    <a href="/generate" class="text-xs px-2.5 py-1 bg-slate-100 hover:bg-indigo-100 rounded-xl flex items-center gap-x-1 text-slate-700">
-                        <i class="fa-solid fa-plus text-[10px]"></i> <span class="text-[11px]">生成 Implant</span>
+                    <a href="/generate" class="text-xs px-2.5 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-xl flex items-center gap-x-1 text-slate-700 dark:text-slate-300 transition-colors">
+                        <i class="fa-solid fa-plus text-[10px]"></i> <span class="text-[11px]">{{T .CurrentLang "nav.generate_implant"}}</span>
                     </a>
-                    <a href="/listeners" onclick="event.preventDefault(); showCreateListenerModal()" class="text-xs px-2.5 py-1 bg-slate-100 hover:bg-indigo-100 rounded-xl flex items-center gap-x-1 text-slate-700">
-                        <i class="fa-solid fa-plug text-[10px]"></i> <span class="text-[11px]">新监听器</span>
+                    <a href="/listeners" onclick="event.preventDefault(); showCreateListenerModal()" class="text-xs px-2.5 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-xl flex items-center gap-x-1 text-slate-700 dark:text-slate-300 transition-colors">
+                        <i class="fa-solid fa-plug text-[10px]"></i> <span class="text-[11px]">{{T .CurrentLang "nav.new_listener"}}</span>
                     </a>
-                    <a href="/agents" class="text-xs px-2.5 py-1 bg-slate-100 hover:bg-indigo-100 rounded-xl flex items-center gap-x-1 text-slate-700">
-                        <i class="fa-solid fa-sync text-[10px]"></i> <span class="text-[11px]">刷新</span>
+                    <a href="/agents" class="text-xs px-2.5 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-xl flex items-center gap-x-1 text-slate-700 dark:text-slate-300 transition-colors">
+                        <i class="fa-solid fa-sync text-[10px]"></i> <span class="text-[11px]">{{T .CurrentLang "nav.refresh"}}</span>
                     </a>
                 </div>
             </div>
         </div>
 
         <!-- ═══════ 协作: 在线用户 ═══════ -->
-        <div class="px-4 py-3 border-t border-slate-200">
+        <div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700">
             <div class="flex items-center justify-between mb-2">
-                <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">在线用户</span>
-                <span id="online-count" class="text-[10px] bg-slate-200 text-slate-500 px-1.5 rounded-full">0</span>
+                <span class="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{{T .CurrentLang "nav.online_users"}}</span>
+                <span id="online-count" class="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 rounded-full">{{if .OnlineUsers}}{{len .OnlineUsers}}{{else}}1{{end}}</span>
             </div>
             <div id="online-users" class="space-y-1 max-h-[200px] overflow-y-auto">
-                <div class="text-[11px] text-slate-400 italic">加载中...</div>
+                {{if .OnlineUsers}}
+                {{range .OnlineUsers}}
+                <div class="flex items-center gap-x-1.5 text-[11px]">
+                    <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0"></span>
+                    {{if eq .role "admin"}}
+                    <i class="fa-solid fa-crown text-[10px] w-3 text-center shrink-0 text-amber-500"></i>
+                    {{else if eq .role "viewer"}}
+                    <i class="fa-solid fa-eye text-[10px] w-3 text-center shrink-0 text-slate-400"></i>
+                    {{else}}
+                    <i class="fa-solid fa-user text-[10px] w-3 text-center shrink-0 text-sky-500"></i>
+                    {{end}}
+                    <span class="truncate max-w-[80px] {{if eq .username $.UserDisplayName}}text-indigo-600 font-semibold{{else}}text-slate-700 dark:text-slate-300{{end}}">{{.username}}{{if eq .username $.UserDisplayName}}<span class="text-[8px] text-indigo-400 dark:text-indigo-500 ml-0.5">({{T $.CurrentLang "collab.you"}})</span>{{end}}</span>
+                    {{if eq .role "admin"}}<span class="text-[8px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 px-1 rounded">ADMIN</span>
+                    {{else if eq .role "viewer"}}<span class="text-[8px] bg-slate-100 dark:bg-slate-600 text-slate-500 dark:text-slate-400 px-1 rounded">VIEW</span>
+                    {{else}}<span class="text-[8px] bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400 px-1 rounded">OP</span>{{end}}
+                    {{if and .current_page (ne .username $.UserDisplayName)}}<span class="text-[9px] text-slate-400 dark:text-slate-500 block truncate pl-4">{{.current_page}}</span>{{end}}
+                </div>
+                {{end}}
+                {{else}}
+                <div class="flex items-center gap-x-1.5 text-[11px]">
+                    <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0"></span>
+                    {{if eq .UserRole "admin"}}
+                    <i class="fa-solid fa-crown text-[10px] w-3 text-center shrink-0 text-amber-500"></i>
+                    {{else if eq .UserRole "viewer"}}
+                    <i class="fa-solid fa-eye text-[10px] w-3 text-center shrink-0 text-slate-400"></i>
+                    {{else}}
+                    <i class="fa-solid fa-user text-[10px] w-3 text-center shrink-0 text-sky-500"></i>
+                    {{end}}
+                    <span class="truncate max-w-[80px] text-indigo-600 font-semibold">{{.UserDisplayName}}<span class="text-[8px] text-indigo-400 dark:text-indigo-500 ml-0.5">({{T .CurrentLang "collab.you"}})</span></span>
+                    {{if eq .UserRole "admin"}}<span class="text-[8px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 px-1 rounded">ADMIN</span>
+                    {{else if eq .UserRole "viewer"}}<span class="text-[8px] bg-slate-100 dark:bg-slate-600 text-slate-500 dark:text-slate-400 px-1 rounded">VIEW</span>
+                    {{else}}<span class="text-[8px] bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400 px-1 rounded">OP</span>{{end}}
+                </div>
+                {{end}}
             </div>
+            <script>
+            (function() {
+                var currentUser = '{{.UserDisplayName}}';
+                var currentRole = '{{.UserRole}}';
+                var failText = '{{T .CurrentLang "collab.load_failed"}}';
+                var youText = '{{T .CurrentLang "collab.you"}}';
+
+                function ensureSelf(users) {
+                    users = Array.isArray(users) ? users : [];
+                    if (!currentUser) return users;
+                    if (users.some(function(u) { return u.username === currentUser; })) return users;
+                    return users.concat([{
+                        username: currentUser,
+                        role: currentRole || 'operator',
+                        current_page: window.location.pathname || ''
+                    }]);
+                }
+
+                function esc(s) {
+                    if (!s) return '';
+                    var d = document.createElement('div');
+                    d.textContent = s;
+                    return d.innerHTML;
+                }
+
+                function renderOnlineUsers(users) {
+                    var container = document.getElementById('online-users');
+                    var count = document.getElementById('online-count');
+                    if (!container) return;
+                    users = ensureSelf(users);
+                    if (count) count.textContent = users.length;
+                    if (!users.length) return;
+                    container.innerHTML = users.map(function(u) {
+                        var isMe = u.username === currentUser;
+                        var roleIcon = u.role === 'admin' ? 'fa-crown text-amber-500' :
+                            (u.role === 'viewer' ? 'fa-eye text-slate-400' : 'fa-user text-sky-500');
+                        var badge = u.role === 'admin'
+                            ? '<span class="text-[8px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 px-1 rounded">ADMIN</span>'
+                            : (u.role === 'viewer'
+                                ? '<span class="text-[8px] bg-slate-100 dark:bg-slate-600 text-slate-500 dark:text-slate-400 px-1 rounded">VIEW</span>'
+                                : '<span class="text-[8px] bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400 px-1 rounded">OP</span>');
+                        var nameClass = isMe ? 'text-indigo-600 font-semibold' : 'text-slate-700 dark:text-slate-300';
+                        var selfLabel = isMe ? '<span class="text-[8px] text-indigo-400 dark:text-indigo-500 ml-0.5">(' + esc(youText) + ')</span>' : '';
+                        var pageInfo = (u.current_page && !isMe)
+                            ? '<span class="text-[9px] text-slate-400 dark:text-slate-500 block truncate pl-4">' + esc(u.current_page) + '</span>'
+                            : '';
+                        return '<div class="flex items-center gap-x-1.5 text-[11px]">' +
+                            '<span class="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0"></span>' +
+                            '<i class="fa-solid ' + roleIcon + ' text-[10px] w-3 text-center shrink-0"></i>' +
+                            '<span class="' + nameClass + ' truncate max-w-[80px]">' + esc(u.username) + selfLabel + '</span>' +
+                            badge + pageInfo + '</div>';
+                    }).join('');
+                }
+
+                function bootstrapOnlineUsers() {
+                    if (typeof window.fetchOnlineUsers === 'function') {
+                        window.fetchOnlineUsers();
+                        return;
+                    }
+                    fetch('/api/collab/online', { credentials: 'same-origin' })
+                        .then(function(r) { return r.json(); })
+                        .then(function(d) {
+                            if (d.success) renderOnlineUsers(d.users);
+                            else {
+                                var el = document.getElementById('online-users');
+                                if (el) el.innerHTML = '<div class="text-[11px] text-slate-400 dark:text-slate-500 italic">' + esc(failText) + '</div>';
+                            }
+                        })
+                        .catch(function() {
+                            var el = document.getElementById('online-users');
+                            if (el) el.innerHTML = '<div class="text-[11px] text-slate-400 dark:text-slate-500 italic">' + esc(failText) + '</div>';
+                        });
+                }
+
+                bootstrapOnlineUsers();
+            })();
+            </script>
         </div>
 
-        <div class="p-3 border-t border-slate-200 text-[10px] text-slate-400">
+        <div class="p-3 border-t border-slate-200 dark:border-slate-700 text-[10px] text-slate-400 dark:text-slate-500">
             <div class="flex items-center justify-between">
                 <span>ForgeC2 v{{.ServerVersion}}</span>
-                <button onclick="toggleChat()" class="text-slate-400 hover:text-indigo-600 transition-colors" title="聊天">
+                <button onclick="toggleChat()" class="relative text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" aria-label="Toggle chat window">
                     <i class="fa-solid fa-comment-dots"></i>
+                    <span id="chat-badge" class="hidden absolute -top-1.5 -right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
                 </button>
             </div>
         </div>
     </div>
 
     <!-- Mobile Sidebar -->
-    <div id="mobile-sidebar" class="mobile-sidebar fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-2xl md:hidden">
-        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+    <div id="mobile-sidebar" class="mobile-sidebar fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 shadow-2xl md:hidden flex flex-col">
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
             <div class="flex items-center gap-x-3">
                 <div class="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center">
                     <i class="fa-solid fa-shield-halved text-white text-2xl"></i>
                 </div>
                 <div>
-                    <span class="font-semibold text-2xl tracking-tighter text-slate-900">Forge</span>
+                    <span class="font-semibold text-2xl tracking-tighter text-slate-900 dark:text-slate-100">Forge</span>
                     <span class="font-semibold text-2xl tracking-tighter text-indigo-600">C2</span>
                 </div>
             </div>
-            <button onclick="toggleMobileSidebar()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100">
-                <i class="fa-solid fa-xmark text-slate-600"></i>
+            <button onclick="toggleMobileSidebar()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700" aria-label="Close navigation menu">
+                <i class="fa-solid fa-xmark text-slate-600 dark:text-slate-400"></i>
             </button>
         </div>
-        <div class="p-3 flex-1 overflow-auto" style="height: calc(100vh - 180px);">
-            <!-- Same nav content as desktop -->
+        <div class="p-3 flex-1 overflow-auto min-h-0">
             <nav class="space-y-1 text-sm" id="mobile-sidebar-nav">
                 <!-- Will be cloned from desktop nav -->
             </nav>
@@ -330,17 +422,17 @@
     </div>
 
     <!-- ═══════ 浮动聊天窗口 ═══════ -->
-    <div id="chat-window" class="hidden fixed bottom-4 right-4 z-50 w-80 h-96 bg-white border border-slate-200 rounded-3xl shadow-2xl flex flex-col overflow-hidden" style="box-shadow: 0 20px 60px rgba(0,0,0,0.2);">
+    <div id="chat-window" class="hidden fixed bottom-20 md:bottom-4 right-4 left-4 md:left-auto z-50 w-auto md:w-80 max-w-sm md:max-w-none ml-auto h-80 md:h-96 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl flex flex-col overflow-hidden" style="box-shadow: 0 20px 60px rgba(0,0,0,0.2);">
         <div class="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 flex items-center justify-between">
-            <span class="text-sm font-semibold text-white"><i class="fa-solid fa-comments mr-2"></i>作战聊天</span>
-            <button onclick="toggleChat()" class="text-white/70 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            <span class="text-sm font-semibold text-white"><i class="fa-solid fa-comments mr-2"></i>{{T .CurrentLang "chat.operations"}}</span>
+            <button onclick="toggleChat()" class="text-white/70 hover:text-white" aria-label="Close chat window"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <div id="chat-messages" class="flex-1 overflow-y-auto p-3 space-y-2 text-sm bg-slate-50">
-            <div class="text-center text-xs text-slate-400 py-4">正在连接...</div>
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-3 space-y-2 text-sm bg-slate-50 dark:bg-slate-900">
+            <div class="text-center text-xs text-slate-400 dark:text-slate-500 py-4">{{T .CurrentLang "chat.connecting"}}</div>
         </div>
-        <div class="p-3 border-t border-slate-200 bg-white">
+        <div class="p-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
             <form onsubmit="sendChat(event)" class="flex gap-x-2">
-                <input id="chat-input" type="text" placeholder="输入消息..." class="flex-1 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
+                <input id="chat-input" type="text" placeholder="{{T .CurrentLang "chat.type_message"}}" class="flex-1 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
                 <button type="submit" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm"><i class="fa-solid fa-paper-plane"></i></button>
             </form>
         </div>
@@ -349,34 +441,124 @@
     <!-- 主内容区 -->
     <div class="flex-1 flex flex-col overflow-hidden">
         <!-- 顶部栏 -->
-        <div class="h-12 border-b border-slate-200 bg-white flex items-center justify-between px-4 shadow-sm">
-            <div class="flex items-center gap-x-3 flex-1">
-                <div class="text-sm font-medium text-slate-600">{{.Title}}</div>
-
-                <!-- Global Search -->
-                <form action="/search" method="GET" class="flex-1 max-w-md ml-4">
-                    <div class="relative">
-                        <input type="text" name="q" placeholder="全局搜索 Implant / 任务 / 监听器..." 
-                               value="{{.SearchQuery}}" 
-                               class="w-full bg-slate-100 border border-slate-200 text-sm rounded-xl pl-9 pr-4 py-1.5 focus:outline-none focus:border-indigo-400">
-                        <i class="fa-solid fa-search absolute left-3 top-2 text-slate-400 text-sm"></i>
+        <div class="h-12 md:h-12 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center justify-between px-4 md:px-4 shadow-sm">
+            <div class="flex items-center gap-x-3 flex-1 md:gap-x-3 min-w-0">
+                <div class="ml-12 md:ml-0 text-sm font-medium text-slate-600 dark:text-slate-300 top-bar-title truncate max-w-[30vw] sm:max-w-[20vw] md:max-w-none shrink-0">{{.Title}}</div>
+                <div class="hidden md:flex flex-1 max-w-md mx-2">
+                    <div class="relative w-full">
+                        <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-xs"></i>
+                        <input type="search" id="global-search-input" value="{{.SearchQuery}}"
+                               placeholder="{{T .CurrentLang "search.placeholder"}}"
+                               class="w-full bg-slate-100 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-200 rounded-xl pl-9 pr-16 h-8 text-xs focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                               autocomplete="off"
+                               onkeydown="if(event.key==='Enter'){event.preventDefault();runSearch(this.value);}">
+                        <kbd class="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] px-1.5 py-0.5 bg-white dark:bg-slate-600 text-slate-400 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-500 font-mono pointer-events-none">Ctrl+K</kbd>
                     </div>
-                </form>
+                </div>
             </div>
 
-            <div class="flex items-center gap-x-4">
-                <div class="flex items-center bg-slate-100 rounded-full px-3 py-1 text-xs gap-x-1.5">
-                    <i class="fa-solid fa-user-shield text-indigo-600"></i>
-                    <span class="text-slate-700">{{.UserDisplayName}}</span>
-                    {{if eq .UserRole "admin"}}<span class="bg-indigo-200 text-indigo-800 px-1.5 py-0.5 rounded text-[9px] font-medium">ADMIN</span>
-                    {{else if eq .UserRole "viewer"}}<span class="bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded text-[9px] font-medium">VIEW</span>
-                    {{else}}<span class="bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded text-[9px] font-medium">OP</span>{{end}}
+            <div class="flex items-center gap-x-2 md:gap-x-4">
+                <!-- Notification Bell -->
+                <div class="relative">
+                    <button id="notification-bell-btn" class="w-11 h-11 md:w-8 md:h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors touch-target relative" aria-label="Toggle notifications">
+                        <i class="fa-regular fa-bell text-lg"></i>
+                        <span id="notification-badge" class="hidden absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">0</span>
+                    </button>
+
+                    <!-- Notification Panel -->
+                    <div id="notification-panel" class="hidden absolute right-0 top-full mt-2 w-80 md:w-96 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 overflow-hidden" style="max-height: 70vh;">
+                        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-bell text-white"></i>
+                                    <span class="text-white font-semibold text-sm">{{T .CurrentLang "notifications.title"}}</span>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <button onclick="NotificationCenter.markAllAsRead()" class="text-white/70 hover:text-white text-xs px-2 py-1 rounded-lg hover:bg-white/10 transition-colors" aria-label="Mark all as read">
+                                        <i class="fa-solid fa-check-double"></i>
+                                    </button>
+                                    <button onclick="NotificationCenter.clearAll()" class="text-white/70 hover:text-white text-xs px-2 py-1 rounded-lg hover:bg-white/10 transition-colors" aria-label="Clear all notifications">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex border-b border-slate-200 dark:border-slate-700 px-2 py-1.5 gap-1">
+                            <button data-filter="all" onclick="NotificationCenter.setFilter('all')" class="flex-1 px-2.5 py-1.5 text-xs rounded-lg transition-colors bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">{{T .CurrentLang "notifications.all"}}</button>
+                            <button data-filter="agent" onclick="NotificationCenter.setFilter('agent')" class="flex-1 px-2.5 py-1.5 text-xs rounded-lg transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700">{{T .CurrentLang "notifications.agent"}}</button>
+                            <button data-filter="user" onclick="NotificationCenter.setFilter('user')" class="flex-1 px-2.5 py-1.5 text-xs rounded-lg transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700">{{T .CurrentLang "notifications.user"}}</button>
+                            <button data-filter="task" onclick="NotificationCenter.setFilter('task')" class="flex-1 px-2.5 py-1.5 text-xs rounded-lg transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700">{{T .CurrentLang "notifications.task"}}</button>
+                            <button data-filter="system" onclick="NotificationCenter.setFilter('system')" class="flex-1 px-2.5 py-1.5 text-xs rounded-lg transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700">{{T .CurrentLang "notifications.system"}}</button>
+                        </div>
+
+                        <div id="notification-list" class="overflow-y-auto" style="max-height: calc(70vh - 100px);">
+                        </div>
+
+                        <div class="border-t border-slate-200 dark:border-slate-700 px-3 py-2 bg-slate-50 dark:bg-slate-800/50">
+                            <a href="/settings#section-notifications" class="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 flex items-center justify-center gap-1">
+                                <i class="fa-solid fa-gear"></i>
+                                <span>{{T .CurrentLang "notifications.settings"}}</span>
+                            </a>
+                        </div>
+                    </div>
                 </div>
-                <form method="POST" action="/logout" class="inline">
-                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                    <button type="submit" class="text-xs px-3 py-1.5 hover:bg-slate-100 rounded-lg flex items-center gap-x-1.5 text-slate-500 hover:text-slate-700 cursor-pointer">
+
+                <div class="relative">
+                    <button id="theme-toggle" class="w-11 h-11 md:w-8 md:h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors touch-target" title="Switch Theme">
+                        <i class="theme-icon fa-solid fa-desktop"></i>
+                    </button>
+                    <div id="theme-menu" class="hidden absolute right-0 top-full mt-2 w-36 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg py-1 z-50">
+                        <button data-theme-action="light" onclick="setTheme('light'); document.getElementById('theme-menu').classList.add('hidden')" class="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-x-2 touch-target">
+                            <i class="fa-solid fa-sun w-4"></i> {{T .CurrentLang "theme.light"}}
+                        </button>
+                        <button data-theme-action="dark" onclick="setTheme('dark'); document.getElementById('theme-menu').classList.add('hidden')" class="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-x-2 touch-target">
+                            <i class="fa-solid fa-moon w-4"></i> {{T .CurrentLang "theme.dark"}}
+                        </button>
+                        <button data-theme-action="system" onclick="setTheme('system'); document.getElementById('theme-menu').classList.add('hidden')" class="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-x-2 touch-target">
+                            <i class="fa-solid fa-desktop w-4"></i> {{T .CurrentLang "theme.system"}}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Language Toggle -->
+                <div class="relative">
+                    <button id="language-toggle" class="w-11 h-11 md:w-8 md:h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors touch-target" title="Switch Language">
+                        <i class="fa-solid fa-language"></i>
+                    </button>
+                    <div id="language-menu" class="hidden absolute right-0 top-full mt-2 w-36 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg py-1 z-50">
+                        <button onclick="setLanguage('zh'); document.getElementById('language-menu').classList.add('hidden')" class="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-x-2 touch-target">
+                            <span class="w-4 h-4 rounded bg-red-500 flex items-center justify-center text-[10px] text-white">CN</span> 简体中文
+                        </button>
+                        <button onclick="setLanguage('en'); document.getElementById('language-menu').classList.add('hidden')" class="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-x-2 touch-target">
+                            <span class="w-4 h-4 rounded bg-blue-500 flex items-center justify-center text-[10px] text-white">EN</span> English
+                        </button>
+                        <button onclick="setLanguage('ja'); document.getElementById('language-menu').classList.add('hidden')" class="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center gap-x-2 touch-target">
+                            <span class="w-4 h-4 rounded bg-red-600 flex items-center justify-center text-[10px] text-white">JP</span> 日本語
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Shortcuts button - desktop only -->
+                <button onclick="toggleShortcutsHelp()" class="hidden md:flex text-xs px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg items-center gap-x-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer transition-colors" aria-label="Keyboard shortcuts">
+                    <i class="fa-solid fa-keyboard"></i>
+                    {{T .CurrentLang "shortcuts.title"}}
+                </button>
+
+                <!-- User badge - desktop only -->
+                <div class="hidden md:flex items-center bg-slate-100 dark:bg-slate-700 rounded-full px-3 py-1 text-xs gap-x-1.5">
+                    <i class="fa-solid fa-user-shield text-indigo-600"></i>
+                    <span class="text-slate-700 dark:text-slate-300">{{.UserDisplayName}}</span>
+                    {{if eq .UserRole "admin"}}<span class="bg-indigo-200 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-400 px-1.5 py-0.5 rounded text-[9px] font-medium">ADMIN</span>
+                    {{else if eq .UserRole "viewer"}}<span class="bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded text-[9px] font-medium">VIEW</span>
+                    {{else}}<span class="bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400 px-1.5 py-0.5 rounded text-[9px] font-medium">OP</span>{{end}}
+                </div>
+
+                <!-- Logout button - desktop only -->
+                <form method="POST" action="/logout" class="hidden md:inline">
+                    <button type="submit" class="text-xs px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg flex items-center gap-x-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer transition-colors" aria-label="{{T .CurrentLang "common.logout"}}">
                         <i class="fa-solid fa-sign-out-alt"></i>
-                        <span>Logout</span>
+                        <span>{{T .CurrentLang "common.logout"}}</span>
                     </button>
                 </form>
             </div>
@@ -386,81 +568,199 @@
         <div id="update-banner" class="hidden bg-gradient-to-r from-sky-500 to-indigo-600 text-white text-xs flex items-center justify-between px-6 py-2">
             <div class="flex items-center gap-x-2">
                 <i class="fa-solid fa-circle-up text-sm"></i>
-                <span>新版本 <strong class="update-version"></strong> 已可用 (当前: {{.ServerVersion}})</span>
+                <span>{{T .CurrentLang "update.available"}} <strong class="update-version"></strong> ({{.ServerVersion}})</span>
             </div>
             <div class="flex items-center gap-x-3">
-                <a class="update-download text-white/90 hover:text-white underline" href="#" target="_blank">下载更新</a>
-                <button onclick="this.closest('#update-banner').classList.add('hidden')" class="text-white/70 hover:text-white">
+                <a class="update-download text-white/90 hover:text-white underline" href="#" target="_blank">{{T .CurrentLang "update.download"}}</a>
+                <button onclick="this.closest('#update-banner').classList.add('hidden')" class="text-white/70 hover:text-white" aria-label="Dismiss update notification">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
         </div>
 
+        <!-- Core scripts must load before page bundles (page bundles use __, apiFetch, etc.) -->
+        <script>
+        window.currentUserDisplayName = '{{.UserDisplayName}}';
+        window.currentUserRole = '{{.UserRole}}';
+        window.__locales = {{.LocalesJSON}};
+        window.showFieldError = function(input, msg) {
+            input.classList.add('field-error');
+            let err = input.parentNode.querySelector('.field-error-msg');
+            if (!err) { err = document.createElement('div'); err.className = 'field-error-msg text-xs text-red-500 mt-1'; input.parentNode.appendChild(err); }
+            err.textContent = msg;
+        };
+        window.clearFieldError = function(input) {
+            input.classList.remove('field-error');
+            const err = input.parentNode.querySelector('.field-error-msg');
+            if (err) err.remove();
+        };
+        document.addEventListener('input', function(e) {
+            if (e.target.classList.contains('field-error')) clearFieldError(e.target);
+        });
+        </script>
+        {{if .UseBundles}}
+        <script src="/static/js/core.bundle.js"></script>
+        {{else}}
+        <script src="/static/js/core.js"></script>
+        <script src="/static/js/shortcuts.js"></script>
+        <script src="/static/js/command-history.js"></script>
+        <script src="/static/js/notifications.js"></script>
+        <script src="/static/js/layout.js"></script>
+        <script src="/static/js/lazyload.js"></script>
+        <script src="/static/js/svg-icons.js"></script>
+        {{end}}
+
         <!-- 页面内容 -->
-        <div class="flex-1 overflow-auto p-4 bg-slate-100">
+        <div class="flex-1 {{if .IsFullPage}}min-h-0 h-full overflow-hidden p-0{{else}}overflow-auto p-3 sm:p-4 md:p-4{{end}} bg-slate-100 dark:bg-slate-900 page-content">
             {{.Content}}
         </div>
     </div>
 </div>
 
-<div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+<!-- Mobile Bottom Navigation -->
+<nav id="bottom-nav" class="bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 shadow-lg md:hidden">
+    <div class="flex items-center justify-around px-2 py-1">
+        <a href="/dashboard" class="flex flex-col items-center justify-center w-16 h-14 rounded-xl transition-colors touch-target {{if eq .ActiveNav "dashboard"}}text-indigo-600 dark:text-indigo-400{{else}}text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300{{end}}">
+            <i class="fa-solid fa-chart-line text-lg"></i>
+            <span class="text-[10px] mt-1">{{T .CurrentLang "nav.overview"}}</span>
+        </a>
+        <a href="/agents" class="flex flex-col items-center justify-center w-16 h-14 rounded-xl transition-colors touch-target {{if eq .ActiveNav "agents"}}text-indigo-600 dark:text-indigo-400{{else}}text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300{{end}}">
+            <i class="fa-solid fa-bug text-lg"></i>
+            <span class="text-[10px] mt-1">{{T .CurrentLang "nav.implants"}}</span>
+        </a>
+        <div class="relative -mt-6">
+            <button onclick="toggleFabMenu()" class="fab w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-2xl shadow-lg flex items-center justify-center touch-target" aria-label="Quick actions">
+                <i class="fa-solid fa-plus text-xl" id="fab-main-icon"></i>
+            </button>
+            <!-- FAB Menu (hidden by default) -->
+            <div id="fab-menu" class="hidden absolute bottom-16 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-2 w-48 z-50">
+                <a href="/generate" class="flex items-center gap-x-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors touch-target">
+                    <div class="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center">
+                        <i class="fa-solid fa-cubes text-indigo-600 dark:text-indigo-400"></i>
+                    </div>
+                    <span class="text-sm text-slate-700 dark:text-slate-300">{{T .CurrentLang "nav.generate_implant"}}</span>
+                </a>
+                <a href="/listeners" onclick="event.preventDefault(); showCreateListenerModal()" class="flex items-center gap-x-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors touch-target">
+                    <div class="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/40 rounded-xl flex items-center justify-center">
+                        <i class="fa-solid fa-tower-broadcast text-emerald-600 dark:text-emerald-400"></i>
+                    </div>
+                    <span class="text-sm text-slate-700 dark:text-slate-300">{{T .CurrentLang "nav.new_listener"}}</span>
+                </a>
+                <a href="/ai" class="flex items-center gap-x-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors touch-target">
+                    <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/40 rounded-xl flex items-center justify-center">
+                        <i class="fa-solid fa-robot text-purple-600 dark:text-purple-400"></i>
+                    </div>
+                    <span class="text-sm text-slate-700 dark:text-slate-300">{{T .CurrentLang "nav.ai_assistant"}}</span>
+                </a>
+            </div>
+        </div>
+        <a href="/listeners" class="flex flex-col items-center justify-center w-16 h-14 rounded-xl transition-colors touch-target {{if eq .ActiveNav "listeners"}}text-indigo-600 dark:text-indigo-400{{else}}text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300{{end}}">
+            <i class="fa-solid fa-tower-broadcast text-lg"></i>
+            <span class="text-[10px] mt-1">{{T .CurrentLang "nav.listen_short"}}</span>
+        </a>
+        <a href="/settings" class="flex flex-col items-center justify-center w-16 h-14 rounded-xl transition-colors touch-target {{if eq .ActiveNav "settings"}}text-indigo-600 dark:text-indigo-400{{else}}text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300{{end}}">
+            <i class="fa-solid fa-cog text-lg"></i>
+            <span class="text-[10px] mt-1">{{T .CurrentLang "nav.settings"}}</span>
+        </a>
+    </div>
+</nav>
 
-<script>
-const currentUserDisplayName = '{{.UserDisplayName}}';
-window.csrfToken = '{{.CSRFToken}}';
-</script>
-<script src="/static/js/layout.js"></script>
+<!-- FAB Overlay -->
+<div id="fab-overlay" class="hidden fixed inset-0 bg-black/30 z-40 md:hidden" onclick="toggleFabMenu()"></div>
+
+<div id="toast-container" class="fixed bottom-20 md:bottom-4 right-4 z-[55] space-y-2"></div>
+
+<!-- Global Loading Indicator -->
+<div id="global-loading" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[60]">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 flex flex-col items-center animate-scale-in">
+        <div class="w-10 h-10 border-4 border-indigo-200 dark:border-indigo-700 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin mb-4"></div>
+        <div class="text-sm font-medium text-slate-700 dark:text-slate-300">{{T .CurrentLang "common.loading"}}</div>
+    </div>
+</div>
 
 <!-- Global Task Detail Modal -->
-<div id="task-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick="if (event.target.id === 'task-modal') hideTaskModal()">
-    <div class="bg-white rounded-3xl shadow-xl w-full max-w-2xl mx-4 overflow-hidden" onclick="event.stopImmediatePropagation()">
-        <div class="flex items-center justify-between px-6 py-4 border-b">
-            <div class="font-semibold text-lg">任务详情</div>
-            <button onclick="hideTaskModal()" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+<div id="task-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60]" role="presentation" onclick="if (event.target.id === 'task-modal') hideTaskModal()">
+    <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden modal-content" role="dialog" aria-modal="true" aria-labelledby="task-modal-title" onclick="event.stopImmediatePropagation()">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <div id="task-modal-title" class="font-semibold text-lg text-slate-900 dark:text-slate-100">{{T .CurrentLang "task.details"}}</div>
+            <button onclick="hideTaskModal()" class="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-xl leading-none transition-colors" aria-label="Close task detail">&times;</button>
         </div>
         <div class="p-6 space-y-4 text-sm">
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <div class="text-xs text-slate-500">Implant</div>
-                    <div id="modal-agent" class="font-medium"></div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">{{T .CurrentLang "notifications.agent"}}</div>
+                    <div id="modal-agent" class="font-medium text-slate-900 dark:text-slate-100"></div>
                 </div>
                 <div>
-                    <div class="text-xs text-slate-500">类型</div>
-                    <div id="modal-type" class="font-mono"></div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">{{T .CurrentLang "common.type"}}</div>
+                    <div id="modal-type" class="font-mono text-slate-900 dark:text-slate-100"></div>
                 </div>
                 <div>
-                    <div class="text-xs text-slate-500">状态</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">{{T .CurrentLang "common.status"}}</div>
                     <div id="modal-status"></div>
                 </div>
                 <div>
-                    <div class="text-xs text-slate-500">时间</div>
-                    <div id="modal-time" class="font-mono text-xs"></div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">{{T .CurrentLang "common.time"}}</div>
+                    <div id="modal-time" class="font-mono text-xs text-slate-400 dark:text-slate-500"></div>
                 </div>
             </div>
 
             <div>
-                <div class="text-xs text-slate-500 mb-1">命令</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">{{T .CurrentLang "task.command"}}</div>
                 <pre id="modal-command" class="bg-slate-900 text-emerald-400 p-3 rounded-2xl text-xs overflow-auto max-h-24 whitespace-pre-wrap"></pre>
             </div>
 
             <div id="modal-result-box" class="hidden">
-                <div class="text-xs text-slate-500 mb-1">结果</div>
-                <pre id="modal-result" class="bg-slate-100 p-3 rounded-2xl text-xs overflow-auto max-h-48 whitespace-pre-wrap"></pre>
+                <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">{{T .CurrentLang "task.result"}}</div>
+                <pre id="modal-result" class="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-3 rounded-2xl text-xs overflow-auto max-h-48 whitespace-pre-wrap"></pre>
             </div>
 
             <div id="modal-error-box" class="hidden">
-                <div class="text-xs text-red-500 mb-1">错误</div>
-                <pre id="modal-error" class="bg-red-100 text-red-700 p-3 rounded-2xl text-xs overflow-auto max-h-32 whitespace-pre-wrap"></pre>
+                <div class="text-xs text-red-500 mb-1">{{T .CurrentLang "task.error"}}</div>
+                <pre id="modal-error" class="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 p-3 rounded-2xl text-xs overflow-auto max-h-32 whitespace-pre-wrap"></pre>
             </div>
         </div>
-        <div class="px-6 py-4 border-t bg-slate-50 flex justify-between">
-            <button id="modal-rerun-btn" onclick="rerunFromModal()" class="px-4 py-2 text-sm rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-x-1.5">
-                <i class="fa-solid fa-redo"></i> 重跑
+        <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex justify-between">
+            <button id="modal-rerun-btn" onclick="rerunFromModal()" class="px-4 py-2 text-sm rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-x-1.5 transition-colors">
+                <i class="fa-solid fa-redo"></i> {{T .CurrentLang "task.rerun"}}
             </button>
-            <button onclick="hideTaskModal()" class="px-4 py-2 text-sm rounded-xl bg-white border hover:bg-slate-100">关闭</button>
+            <button onclick="hideTaskModal()" class="px-4 py-2 text-sm rounded-xl bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 transition-colors">{{T .CurrentLang "task.close"}}</button>
         </div>
     </div>
 </div>
+
+<!-- Shortcuts Help Panel -->
+<div id="shortcuts-help-panel" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70]" role="presentation" onclick="if (event.target.id === 'shortcuts-help-panel') toggleShortcutsHelp()">
+    <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-md mx-4 overflow-hidden modal-content" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title" onclick="event.stopImmediatePropagation()">
+        <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center">
+                        <i class="fa-solid fa-keyboard text-white"></i>
+                    </div>
+                    <div>
+                        <h2 id="shortcuts-modal-title" class="text-lg font-semibold text-white">{{T .CurrentLang "shortcuts.title"}}</h2>
+                        <p class="text-xs text-indigo-200">{{T .CurrentLang "common.close"}} ESC</p>
+                    </div>
+                </div>
+                <button onclick="toggleShortcutsHelp()" class="text-white/70 hover:text-white transition-colors" aria-label="Close shortcuts help">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+        <div class="p-6" id="shortcuts-list">
+        </div>
+        <div class="px-6 py-3 border-t bg-slate-50 dark:bg-slate-800">
+            <div class="text-xs text-slate-400 dark:text-slate-500 text-center">
+                <span class="inline-flex items-center gap-x-1">
+                    <i class="fa-solid fa-gear"></i>
+                    <a href="/settings#section-shortcuts" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300">Customize Shortcuts</a>
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
 
 
 </body>

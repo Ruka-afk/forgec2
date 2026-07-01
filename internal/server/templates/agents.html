@@ -1,198 +1,308 @@
 {{define "agents_content"}}
-<div class="max-w-7xl mx-auto">
-    <div class="flex items-center justify-between mb-6">
+<div class="max-w-7xl mx-auto mb-20 md:mb-0">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-3">
         <div>
-            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">Implant 管理</h1>
-            <p class="text-slate-500 text-sm flex items-center gap-3">
-                <span>共 {{len .Agents}} 个</span>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Agents</h1>
+            <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
+                <span>{{len .Agents}} total</span>
                 <span class="inline-flex items-center gap-1 text-emerald-600">
                     <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                    <span class="font-mono">{{.OnlineCount}}</span> 在线
+                    <span class="font-mono">{{.OnlineCount}}</span> online
                 </span>
                 {{if .StaleCount}}
                 <span class="inline-flex items-center gap-1 text-amber-600">
                     <span class="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
-                    <span class="font-mono">{{.StaleCount}}</span> 超时
+                    <span class="font-mono">{{.StaleCount}}</span> stale
                 </span>
                 {{end}}
                 {{if .OfflineCount}}
                 <span class="inline-flex items-center gap-1 text-red-500">
                     <span class="w-1.5 h-1.5 bg-red-500 rounded-full"></span>
-                    <span class="font-mono">{{.OfflineCount}}</span> 离线
+                    <span class="font-mono">{{.OfflineCount}}</span> offline
                 </span>
                 {{end}}
             </p>
         </div>
         <div class="flex items-center gap-2">
-            <button onclick="location.reload()" class="px-4 h-10 bg-white border border-slate-200 hover:bg-slate-50 rounded-2xl text-sm flex items-center gap-2">
-                <i class="fa-solid fa-sync text-slate-500"></i>
-                <span class="text-slate-600">刷新</span>
+            <button data-action="reload-page" class="w-11 h-11 sm:px-4 sm:h-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 touch-target">
+                <i class="fa-solid fa-sync text-slate-500 dark:text-slate-400"></i>
+                <span class="hidden sm:inline text-slate-600 dark:text-slate-300 text-sm">Refresh</span>
             </button>
-            <a href="/generate" class="inline-flex items-center gap-x-2 bg-indigo-600 hover:bg-indigo-700 transition-colors px-5 h-10 rounded-2xl text-sm font-medium text-white">
+            <a href="/generate" class="inline-flex items-center justify-center gap-x-2 bg-indigo-600 hover:bg-indigo-700 transition-colors px-4 sm:px-5 h-11 sm:h-10 rounded-xl sm:rounded-2xl text-sm font-medium text-white touch-target">
                 <i class="fa-solid fa-plus"></i>
-                <span>生成新 Implant</span>
+                <span class="hidden sm:inline">Generate Implant</span>
+                <span class="sm:hidden">New</span>
             </a>
         </div>
     </div>
 
     <!-- 搜索和筛选 -->
-    <div class="bg-white border border-slate-200 rounded-2xl p-4 mb-4 shadow-sm">
-        <form class="flex gap-3 items-center" id="agent-filter-form">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 sm:p-4 mb-4 shadow-sm">
+        <form class="flex flex-col sm:flex-row gap-3" id="agent-filter-form">
             <div class="flex-1 relative">
-                <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-                <input type="text" name="search" value="{{.Search}}" placeholder="搜索主机名、用户、IP..."
-                       class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all text-sm rounded-xl pl-9 pr-4 h-10">
+                <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm"></i>
+                <input type="text" name="search" value="{{.Search}}" placeholder="Search hostname, user, IP..."
+                       class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 transition-all text-sm rounded-xl pl-9 pr-4 h-11">
             </div>
-            <select name="status" class="bg-slate-50 border border-slate-200 focus:border-indigo-500 text-sm rounded-xl px-3 h-10 cursor-pointer" onchange="this.form.submit()">
-                <option value="">全部状态</option>
-                <option value="online" {{if eq .Status "online"}}selected{{end}}>在线</option>
-                <option value="stale" {{if eq .Status "stale"}}selected{{end}}>超时</option>
-                <option value="offline" {{if eq .Status "offline"}}selected{{end}}>离线</option>
-            </select>
-            <select name="os" class="bg-slate-50 border border-slate-200 focus:border-indigo-500 text-sm rounded-xl px-3 h-10 cursor-pointer" onchange="this.form.submit()">
-                <option value="">全部系统</option>
-                <option value="windows" {{if eq .FilterOS "windows"}}selected{{end}}>Windows</option>
-                <option value="linux" {{if eq .FilterOS "linux"}}selected{{end}}>Linux</option>
-                <option value="darwin" {{if eq .FilterOS "darwin"}}selected{{end}}>macOS</option>
-            </select>
-            <button type="submit" class="px-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors">
-                <i class="fa-solid fa-filter mr-1.5"></i>筛选
-            </button>
+            <div class="flex gap-2 flex-wrap">
+                <select name="status" class="flex-1 sm:flex-none bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-500 text-sm rounded-xl px-3 h-11 cursor-pointer touch-target" data-action="submit-form-on-change">
+                    <option value="">All Status</option>
+                    <option value="online" {{if eq .Status "online"}}selected{{end}}>Online</option>
+                    <option value="stale" {{if eq .Status "stale"}}selected{{end}}>Stale</option>
+                    <option value="offline" {{if eq .Status "offline"}}selected{{end}}>Offline</option>
+                </select>
+                <select name="os" class="flex-1 sm:flex-none bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-500 text-sm rounded-xl px-3 h-11 cursor-pointer touch-target" data-action="submit-form-on-change">
+                    <option value="">All OS</option>
+                    <option value="windows" {{if eq .FilterOS "windows"}}selected{{end}}>Windows</option>
+                    <option value="linux" {{if eq .FilterOS "linux"}}selected{{end}}>Linux</option>
+                    <option value="darwin" {{if eq .FilterOS "darwin"}}selected{{end}}>macOS</option>
+                </select>
+                <button type="submit" class="flex-1 sm:flex-none px-5 h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors touch-target">
+                    <i class="fa-solid fa-filter mr-1.5"></i><span class="hidden sm:inline">Filter</span>
+                </button>
+            </div>
         </form>
     </div>
 
-    <div id="agents-table" class="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="sticky top-0 bg-gradient-to-b from-slate-50 to-white z-10 border-b border-slate-200">
-                <tr class="text-xs text-slate-600 font-semibold uppercase tracking-wider">
-                    <th class="text-left py-3.5 px-5 w-12">
-                        <input type="checkbox" id="select-all" class="w-4 h-4 accent-indigo-600 rounded cursor-pointer">
+    <div id="agents-table" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm">
+        <div class="overflow-x-auto table-scroll-container" id="agents-table-container">
+            <div class="skeleton-wrapper" id="agents-skeleton">
+                <table class="w-full text-sm">
+                    <thead class="sticky top-0 bg-gradient-to-b from-slate-50 to-white dark:from-slate-800 dark:to-slate-800 z-10 border-b border-slate-200 dark:border-slate-700">
+                    <tr class="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase tracking-wider">
+                        <th class="text-left py-3 px-4 sm:py-3.5 sm:px-5 w-12">
+                            <div class="skeleton w-5 h-5 rounded"></div>
+                        </th>
+                        <th class="text-left py-3 px-3 sm:py-3.5 sm:px-4 min-w-[140px]"><div class="skeleton skeleton-text-sm w-16"></div></th>
+                        <th class="text-left py-3 px-3 sm:py-3.5 sm:px-4 min-w-[100px]"><div class="skeleton skeleton-text-sm w-12"></div></th>
+                        <th class="text-left py-3 px-3 sm:py-3.5 sm:px-4 min-w-[140px]"><div class="skeleton skeleton-text-sm w-12"></div></th>
+                        <th class="text-left py-3 px-3 sm:py-3.5 sm:px-4 min-w-[120px]"><div class="skeleton skeleton-text-sm w-8"></div></th>
+                        <th class="text-left py-3 px-3 sm:py-3.5 sm:px-4 min-w-[100px]"><div class="skeleton skeleton-text-sm w-20"></div></th>
+                        <th class="text-left py-3 px-3 sm:py-3.5 sm:px-4 min-w-[140px]"><div class="skeleton skeleton-text-sm w-16"></div></th>
+                        <th class="text-center py-3 px-3 sm:py-3.5 sm:px-4 min-w-[80px]"><div class="skeleton skeleton-text-sm w-12 mx-auto"></div></th>
+                        <th class="text-right py-3 px-4 sm:py-3.5 sm:px-5 min-w-[180px]"><div class="skeleton skeleton-text-sm w-16 ml-auto"></div></th>
+                    </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                    <tr class="skeleton-table-row">
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5"><div class="skeleton w-5 h-5 rounded"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-32"></div><div class="skeleton skeleton-text-sm w-20 mt-2"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-badge w-16"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-28"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text-sm w-20"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4 text-center"><div class="skeleton skeleton-badge w-14 mx-auto"></div></td>
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5 text-right"><div class="flex items-center justify-end gap-1 sm:gap-2"><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div></div></td>
+                    </tr>
+                    <tr class="skeleton-table-row">
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5"><div class="skeleton w-5 h-5 rounded"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-28"></div><div class="skeleton skeleton-text-sm w-24 mt-2"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-20"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-badge w-20"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text-sm w-16"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4 text-center"><div class="skeleton skeleton-badge w-16 mx-auto"></div></td>
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5 text-right"><div class="flex items-center justify-end gap-1 sm:gap-2"><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div></div></td>
+                    </tr>
+                    <tr class="skeleton-table-row">
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5"><div class="skeleton w-5 h-5 rounded"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-36"></div><div class="skeleton skeleton-text-sm w-16 mt-2"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-28"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-badge w-14"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-32"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text-sm w-24"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4 text-center"><div class="skeleton skeleton-badge w-12 mx-auto"></div></td>
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5 text-right"><div class="flex items-center justify-end gap-1 sm:gap-2"><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div></div></td>
+                    </tr>
+                    <tr class="skeleton-table-row">
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5"><div class="skeleton w-5 h-5 rounded"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-24"></div><div class="skeleton skeleton-text-sm w-28 mt-2"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-32"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-badge w-18"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-20"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text-sm w-28"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4 text-center"><div class="skeleton skeleton-badge w-18 mx-auto"></div></td>
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5 text-right"><div class="flex items-center justify-end gap-1 sm:gap-2"><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div></div></td>
+                    </tr>
+                    <tr class="skeleton-table-row">
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5"><div class="skeleton w-5 h-5 rounded"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-32"></div><div class="skeleton skeleton-text-sm w-20 mt-2"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-badge w-16"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-28"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text-sm w-20"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4 text-center"><div class="skeleton skeleton-badge w-14 mx-auto"></div></td>
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5 text-right"><div class="flex items-center justify-end gap-1 sm:gap-2"><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div></div></td>
+                    </tr>
+                    <tr class="skeleton-table-row">
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5"><div class="skeleton w-5 h-5 rounded"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-28"></div><div class="skeleton skeleton-text-sm w-24 mt-2"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-20"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-badge w-20"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text-sm w-16"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4 text-center"><div class="skeleton skeleton-badge w-16 mx-auto"></div></td>
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5 text-right"><div class="flex items-center justify-end gap-1 sm:gap-2"><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div></div></td>
+                    </tr>
+                    <tr class="skeleton-table-row">
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5"><div class="skeleton w-5 h-5 rounded"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-36"></div><div class="skeleton skeleton-text-sm w-16 mt-2"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-28"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-badge w-14"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-32"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text-sm w-24"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4 text-center"><div class="skeleton skeleton-badge w-12 mx-auto"></div></td>
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5 text-right"><div class="flex items-center justify-end gap-1 sm:gap-2"><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div></div></td>
+                    </tr>
+                    <tr class="skeleton-table-row">
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5"><div class="skeleton w-5 h-5 rounded"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-24"></div><div class="skeleton skeleton-text-sm w-28 mt-2"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-32"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-badge w-18"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-20"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text-sm w-28"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                        <td class="py-3 px-3 sm:py-3.5 sm:px-4 text-center"><div class="skeleton skeleton-badge w-18 mx-auto"></div></td>
+                        <td class="py-3 px-4 sm:py-3.5 sm:px-5 text-right"><div class="flex items-center justify-end gap-1 sm:gap-2"><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div><div class="skeleton w-9 h-9 sm:w-8 sm:h-8 rounded-lg"></div></div></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="skeleton-content">
+            <table class="w-full text-sm" id="agents-list-table">
+                <thead class="sticky top-0 bg-gradient-to-b from-slate-50 to-white dark:from-slate-800 dark:to-slate-800 z-10 border-b border-slate-200 dark:border-slate-700">
+                <tr class="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase tracking-wider">
+                    <th class="text-left py-3 px-4 sm:py-3.5 sm:px-5 w-12">
+                        <input type="checkbox" id="select-all" class="w-5 h-5 accent-indigo-600 rounded cursor-pointer">
                     </th>
-                    <th class="text-left py-3.5 px-4 min-w-[160px]">主机名</th>
-                    <th class="text-left py-3.5 px-4 w-28">锁定</th>
-                    <th class="text-left py-3.5 px-4 w-32">用户</th>
-                    <th class="text-left py-3.5 px-4 w-36">系统 / 完整性</th>
-                    <th class="text-left py-3.5 px-4 w-32">公网IP</th>
-                    <th class="text-left py-3.5 px-4 w-36">IP / 域</th>
-                    <th class="text-left py-3.5 px-4 w-32">最后上线</th>
-                    <th class="text-center py-3.5 px-4 w-24">状态</th>
-                    <th class="text-right py-3.5 px-5 w-48">操作</th>
+                    <th class="text-left py-3 px-3 sm:py-3.5 sm:px-4 min-w-[140px]">Hostname</th>
+                    <th class="text-left py-3 px-3 sm:py-3.5 sm:px-4 min-w-[100px]">User</th>
+                    <th class="text-left py-3 px-3 sm:py-3.5 sm:px-4 min-w-[140px]">OS</th>
+                    <th class="text-left py-3 px-3 sm:py-3.5 sm:px-4 min-w-[120px]">IP</th>
+                    <th class="text-left py-3 px-3 sm:py-3.5 sm:px-4 min-w-[100px]">Last Seen</th>
+                    <th class="text-left py-3 px-3 sm:py-3.5 sm:px-4 min-w-[140px]">当前窗口</th>
+                    <th class="text-center py-3 px-3 sm:py-3.5 sm:px-4 min-w-[80px]">Status</th>
+                    <th class="text-right py-3 px-4 sm:py-3.5 sm:px-5 min-w-[180px]">Actions</th>
                 </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                 {{range .Agents}}
-                <tr class="hover:bg-indigo-50/50 transition-colors agent-row {{if eq .Status "online"}}border-l-2 border-l-emerald-500{{else if eq .Status "stale"}}border-l-2 border-l-amber-500{{else}}border-l-2 border-l-red-500{{end}}" data-agent-id="{{.ID}}">
-                    <td class="py-3.5 px-5">
-                        <input type="checkbox" class="agent-checkbox w-4 h-4 accent-indigo-600 rounded cursor-pointer">
+                <tr class="hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors agent-row {{if eq .Status "online"}}border-l-2 border-l-emerald-500{{else if eq .Status "stale"}}border-l-2 border-l-amber-500{{else}}border-l-2 border-l-red-500{{end}}" data-agent-id="{{.ID}}">
+                    <td class="py-3 px-4 sm:py-3.5 sm:px-5">
+                        <input type="checkbox" class="agent-checkbox w-5 h-5 accent-indigo-600 rounded cursor-pointer">
                     </td>
-                    <td class="py-3.5 px-4">
+                    <td class="py-3 px-3 sm:py-3.5 sm:px-4">
                         <a href="/agents/{{.ID}}" class="font-semibold text-indigo-600 hover:text-indigo-800 transition-colors hover:underline">{{.Hostname}}</a>
                         {{if .Notes}}<span class="ml-1.5 text-xs" title="{{.Notes}}">📝</span>{{end}}
                     </td>
-                    <td class="py-3.5 px-4">
-                        <span class="agent-lock inline-flex items-center gap-1.5 text-xs text-slate-500" data-agent-id="{{.ID}}" id="lock-col-{{.ID}}">
-                            <i class="fa-solid fa-unlock text-slate-400 text-[10px]"></i>未锁定
-                        </span>
-                    </td>
-                    <td class="py-3.5 px-4 text-slate-700 text-xs font-mono font-medium">{{.Username}}</td>
-                    <td class="py-3.5 px-4">
-                        <div class="flex items-center gap-2">
-                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-slate-100 rounded-lg">
-                                <i class="fa-brands fa-{{if eq .OS "windows"}}windows{{else if eq .OS "linux"}}linux{{else}}apple{{end}} text-slate-600"></i>
-                                {{.OS}}/{{.Arch}}
+                    <td class="py-3 px-3 sm:py-3.5 sm:px-4 text-slate-700 dark:text-slate-300 text-xs font-mono font-medium">{{.Username}}</td>
+                    <td class="py-3 px-3 sm:py-3.5 sm:px-4">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium bg-slate-100 dark:bg-slate-700 rounded-lg">
+                                <i class="fa-brands fa-{{if eq .OS "windows"}}windows{{else if eq .OS "linux"}}linux{{else}}apple{{end}} text-slate-600 dark:text-slate-400 text-[10px]"></i>
+                                {{.OS}}
                             </span>
                             {{if .Integrity}}
-                            <span class="text-[10px] px-2 py-0.5 rounded-md font-semibold
-                                {{if eq .Integrity "High"}}bg-emerald-100 text-emerald-700
-                                {{else if eq .Integrity "System"}}bg-red-100 text-red-700
-                                {{else if eq .Integrity "Low"}}bg-orange-100 text-orange-700
-                                {{else}}bg-blue-100 text-blue-700{{end}}">{{.Integrity}}</span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded-md font-semibold
+                                {{if eq .Integrity "High"}}bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400
+                                {{else if eq .Integrity "System"}}bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400
+                                {{else if eq .Integrity "Low"}}bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400
+                                {{else}}bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400{{end}}">{{.Integrity}}</span>
                             {{end}}
-                            {{if .Elevated}}<span class="text-xs px-1.5 py-0.5 bg-red-100 text-red-600 rounded-md font-bold" title="管理员权限"><i class="fa-solid fa-shield-halved"></i></span>{{end}}
+                            {{if .Elevated}}<span class="text-[10px] px-1.5 py-0.5 bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 rounded-md font-bold" title="Administrator"><i class="fa-solid fa-shield-halved"></i></span>{{end}}
                         </div>
                     </td>
-                    <td class="py-3.5 px-4">
-                        <span class="font-mono text-xs text-slate-700">{{.PublicIP | default "—"}}</span>
+                    <td class="py-3 px-3 sm:py-3.5 sm:px-4">
+                        <span class="font-mono text-xs text-slate-700 dark:text-slate-300">{{.IP}}</span>
                     </td>
-                    <td class="py-3.5 px-4">
-                        <div class="flex items-center gap-2">
-                            <span class="font-mono text-xs text-slate-700 font-medium">{{.IP}}</span>
-                            {{if .Domain}}<span class="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md font-medium">{{.Domain}}</span>{{end}}
-                        </div>
+                    <td class="py-3 px-3 sm:py-3.5 sm:px-4 text-xs text-slate-600 dark:text-slate-400 font-mono" title="{{.LastSeen | formatTime}}">
+                        <span class="time-ago" data-time="{{.LastSeen.Unix}}">{{.LastSeen | relativeTime}}</span>
                     </td>
-                    <td class="py-3.5 px-4 text-xs text-slate-600 font-mono" title="{{.LastSeen | formatTime}}">
-                        <span class="time-ago" data-time="{{.LastSeen.Unix}}">{{.LastSeen | formatTime}}</span>
-                    </td>
-                    <td class="py-3.5 px-4 text-center">
-                        {{if eq .Status "online"}}
-                        <span class="inline-flex items-center gap-2 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-semibold">
-                            <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>在线
-                        </span>
-                        {{else if eq .Status "stale"}}
-                        <span class="inline-flex items-center gap-2 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-semibold">
-                            <span class="w-2 h-2 bg-amber-500 rounded-full"></span>超时
+                    <td class="py-3 px-3 sm:py-3.5 sm:px-4 text-xs text-slate-600 dark:text-slate-300 max-w-[200px]">
+                        {{if .ActiveWindow}}
+                        <span class="inline-flex items-center gap-1 truncate max-w-full" title="{{.ActiveWindow}}">
+                            <i class="fa-solid fa-window-maximize text-slate-400 text-[10px] shrink-0"></i>
+                            <span class="truncate">{{.ActiveWindow}}</span>
                         </span>
                         {{else}}
-                        <span class="inline-flex items-center gap-2 px-2.5 py-1 bg-red-50 text-red-700 rounded-lg text-xs font-semibold">
-                            <span class="w-2 h-2 bg-red-500 rounded-full"></span>离线
+                        <span class="text-slate-400 dark:text-slate-500">—</span>
+                        {{end}}
+                    </td>
+                    <td class="py-3 px-3 sm:py-3.5 sm:px-4 text-center">
+                        {{if eq .Status "online"}}
+                        <span class="inline-flex items-center gap-1.5 px-2 py-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg text-[11px] font-semibold">
+                            <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>Online
+                        </span>
+                        {{else if eq .Status "stale"}}
+                        <span class="inline-flex items-center gap-1.5 px-2 py-1 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg text-[11px] font-semibold">
+                            <span class="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>Stale
+                        </span>
+                        {{else}}
+                        <span class="inline-flex items-center gap-1.5 px-2 py-1 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg text-[11px] font-semibold">
+                            <span class="w-1.5 h-1.5 bg-red-500 rounded-full"></span>Offline
                         </span>
                         {{end}}
                     </td>
-                    <td class="py-3.5 px-5 text-right">
-                        <div class="flex items-center justify-end gap-2">
-                            <a href="/agents/{{.ID}}" class="group relative px-2.5 py-2 text-xs bg-slate-100 hover:bg-indigo-100 hover:text-indigo-700 rounded-lg transition-all text-slate-600" title="详情">
-                                <i class="fa-solid fa-eye"></i>
-                                <span class="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">详情</span>
+                    <td class="py-3 px-4 sm:py-3.5 sm:px-5 text-right">
+                        <div class="flex items-center justify-end gap-1 sm:gap-2">
+                            <a href="/agents/{{.ID}}" class="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 hover:text-indigo-700 dark:hover:text-indigo-400 rounded-lg transition-all text-slate-600 dark:text-slate-400 touch-target" title="Details">
+                                <i class="fa-solid fa-eye text-sm"></i>
                             </a>
-                            <a href="/agents/{{.ID}}/files" class="group relative px-2.5 py-2 text-xs bg-slate-100 hover:bg-blue-100 hover:text-blue-700 rounded-lg transition-all text-slate-600" title="文件">
-                                <i class="fa-solid fa-folder-open"></i>
-                                <span class="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">文件</span>
+                            <a href="/agents/{{.ID}}/files" class="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:text-blue-700 dark:hover:text-blue-400 rounded-lg transition-all text-slate-600 dark:text-slate-400 touch-target" title="Files">
+                                <i class="fa-solid fa-folder-open text-sm"></i>
                             </a>
-                            <a href="/agents/{{.ID}}/shell" class="group relative px-2.5 py-2 text-xs bg-slate-100 hover:bg-emerald-100 hover:text-emerald-700 rounded-lg transition-all text-slate-600" title="Shell">
-                                <i class="fa-solid fa-terminal"></i>
-                                <span class="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Shell</span>
+                            <a href="/agents/{{.ID}}/shell" class="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 hover:text-emerald-700 dark:hover:text-emerald-400 rounded-lg transition-all text-slate-600 dark:text-slate-400 touch-target" title="Shell">
+                                <i class="fa-solid fa-terminal text-sm"></i>
                             </a>
-                            <button onclick="showOfflineModal('{{.ID}}', '{{.Hostname}}')" class="group relative px-2.5 py-2 text-xs bg-slate-100 hover:bg-orange-100 hover:text-orange-700 rounded-lg transition-all text-slate-600" title="下线">
-                                <i class="fa-solid fa-power-off"></i>
-                                <span class="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">下线</span>
+                            <button type="button" data-action="show-offline-modal" data-agent-id="{{.ID}}" data-hostname="{{.Hostname}}" onclick="showOfflineModal('{{.ID}}', '{{.Hostname}}')" class="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-orange-100 dark:hover:bg-orange-900/40 hover:text-orange-700 dark:hover:text-orange-400 rounded-lg transition-all text-slate-600 dark:text-slate-400 touch-target" title="Take Offline">
+                                <i class="fa-solid fa-power-off text-sm"></i>
                             </button>
-                            <button onclick="showDeleteModal('{{.ID}}', '{{.Hostname}}')" class="group relative px-2.5 py-2 text-xs bg-slate-100 hover:bg-red-100 hover:text-red-700 rounded-lg transition-all text-slate-600" title="删除">
-                                <i class="fa-solid fa-trash"></i>
-                                <span class="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">删除</span>
+                            <button type="button" data-action="show-delete-modal" data-agent-id="{{.ID}}" data-hostname="{{.Hostname}}" onclick="showDeleteModal('{{.ID}}', '{{.Hostname}}')" class="w-9 h-9 sm:w-8 sm:h-8 flex items-center justify-center bg-slate-100 dark:bg-slate-700 hover:bg-red-100 dark:hover:bg-red-900/40 hover:text-red-700 dark:hover:text-red-400 rounded-lg transition-all text-slate-600 dark:text-slate-400 touch-target" title="Delete">
+                                <i class="fa-solid fa-trash text-sm"></i>
                             </button>
                         </div>
                     </td>
                 </tr>
                 {{else}}
-                <tr><td colspan="10" class="py-20">
+                <tr><td colspan="9" class="py-16 sm:py-20">
                     <div class="text-center">
-                        <i class="fa-solid fa-users-slash text-6xl text-slate-300 mb-4"></i>
-                        <h3 class="text-lg font-medium text-slate-700 mb-2">暂无已连接的 Implant</h3>
-                        <p class="text-slate-500 mb-4">部署第一个 Implant 开始红队行动</p>
-                        <a href="/generate" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors">
+                        <i class="fa-solid fa-users-slash text-5xl sm:text-6xl text-slate-300 dark:text-slate-600 mb-4"></i>
+                        <h3 class="text-base sm:text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">No agents connected</h3>
+                        <p class="text-slate-500 dark:text-slate-400 mb-4 text-sm">Deploy your first agent to begin operations</p>
+                        <a href="/generate" class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors touch-target">
                             <i class="fa-solid fa-plus"></i>
-                            <span>生成 Implant</span>
+                            <span>Generate Implant</span>
                         </a>
                     </div>
                 </td></tr>
                 {{end}}
                 </tbody>
             </table>
+            </div>
+        </div>
+        <div class="sm:hidden px-4 py-2 text-center text-xs text-slate-400 dark:text-slate-500 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            <i class="fa-solid fa-arrows-left-right mr-1"></i> Swipe to see more
         </div>
     </div>
 
     {{if gt .TotalPages 1}}
-    <div class="flex items-center justify-between mt-4 px-1">
-        <span class="text-xs text-slate-500">共 {{.Total}} 条，第 {{.Page}}/{{.TotalPages}} 页</span>
+    <div class="flex flex-col sm:flex-row items-center justify-between mt-4 gap-3 px-1">
+        <span class="text-xs text-slate-500 dark:text-slate-400">{{.Total}} total, page {{.Page}}/{{.TotalPages}}</span>
         <div class="flex gap-2">
             {{if gt .Page 1}}
             <a href="?page={{.PrevPage}}&pageSize={{.PageSize}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .FilterOS}}&os={{.FilterOS}}{{end}}"
-               class="px-3 py-1.5 text-xs bg-white border border-slate-200 hover:bg-slate-50 rounded-xl">上一页</a>
+               class="px-4 py-2 h-11 text-xs sm:text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-xl transition-colors touch-target flex items-center">Previous</a>
             {{end}}
             {{if lt .Page .TotalPages}}
             <a href="?page={{.NextPage}}&pageSize={{.PageSize}}{{if .Search}}&search={{.Search}}{{end}}{{if .Status}}&status={{.Status}}{{end}}{{if .FilterOS}}&os={{.FilterOS}}{{end}}"
-               class="px-3 py-1.5 text-xs bg-white border border-slate-200 hover:bg-slate-50 rounded-xl">下一页</a>
+               class="px-4 py-2 h-11 text-xs sm:text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-xl transition-colors touch-target flex items-center">Next</a>
             {{end}}
         </div>
     </div>
@@ -200,109 +310,116 @@
 </div>
 
 <!-- 批量操作栏 -->
-<div id="batch-bar" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white rounded-2xl shadow-2xl px-5 py-3 hidden items-center gap-4 z-50">
-    <span class="text-sm font-medium" id="batch-count">已选择 0 个</span>
-    <div class="w-px h-6 bg-slate-600"></div>
-    <div class="relative group">
-        <button class="text-xs px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 rounded-xl transition-colors">
-            <i class="fa-solid fa-terminal mr-1"></i>批量操作
+<div id="batch-bar" class="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 dark:bg-slate-700 text-white rounded-2xl shadow-2xl px-4 sm:px-5 py-3 hidden flex-wrap items-center justify-center gap-2 sm:gap-4 z-[55] w-[95%] sm:w-auto">
+    <span class="text-sm font-medium" id="batch-count">0 selected</span>
+    <div class="hidden sm:block w-px h-6 bg-slate-600"></div>
+    <div class="relative w-full sm:w-auto">
+        <button onclick="document.getElementById('batch-dropdown').classList.toggle('hidden')" class="w-full sm:w-auto text-xs px-3 py-2 h-10 bg-indigo-500 hover:bg-indigo-400 rounded-xl transition-colors touch-target flex items-center justify-center gap-1" aria-label="Batch Actions" aria-expanded="false">
+            <i class="fa-solid fa-terminal"></i><span class="hidden sm:inline">Batch Actions</span>
         </button>
-        <div class="absolute bottom-full left-0 mb-2 w-48 bg-white rounded-xl shadow-2xl border border-slate-200 hidden group-hover:block">
+        <div id="batch-dropdown" class="absolute bottom-full left-0 right-0 sm:right-auto sm:w-48 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 hidden mb-2 z-[56]">
             <div class="py-1">
-                <button onclick="batchShell()" class="w-full text-left px-4 py-2 text-xs hover:bg-slate-100 text-slate-700">
-                    <i class="fa-solid fa-terminal mr-2 text-indigo-500"></i>执行命令
+                <button data-action="batch-shell" class="w-full text-left px-4 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 touch-target">
+                    <i class="fa-solid fa-terminal mr-2 text-indigo-500"></i>Execute Command
                 </button>
-                <button onclick="batchScreenshot()" class="w-full text-left px-4 py-2 text-xs hover:bg-slate-100 text-slate-700">
-                    <i class="fa-solid fa-camera mr-2 text-purple-500"></i>截图
+                <button data-action="batch-screenshot" class="w-full text-left px-4 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 touch-target">
+                    <i class="fa-solid fa-camera mr-2 text-purple-500"></i>Screenshot
                 </button>
-                <button onclick="batchKeylogger('start')" class="w-full text-left px-4 py-2 text-xs hover:bg-slate-100 text-slate-700">
-                    <i class="fa-solid fa-keyboard mr-2 text-emerald-500"></i>启动键盘记录
+                <button data-action="batch-clipboard" class="w-full text-left px-4 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 touch-target">
+                    <i class="fa-solid fa-paste mr-2 text-blue-500"></i>Get Clipboard
                 </button>
-                <button onclick="batchKeylogger('dump')" class="w-full text-left px-4 py-2 text-xs hover:bg-slate-100 text-slate-700">
-                    <i class="fa-solid fa-file-export mr-2 text-amber-500"></i>导出键盘记录
+                <button data-action="batch-creds-dump" class="w-full text-left px-4 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 touch-target">
+                    <i class="fa-solid fa-key mr-2 text-red-500"></i>Dump Credentials
                 </button>
-                <button onclick="batchClipboard()" class="w-full text-left px-4 py-2 text-xs hover:bg-slate-100 text-slate-700">
-                    <i class="fa-solid fa-paste mr-2 text-blue-500"></i>获取剪贴板
-                </button>
-                <button onclick="batchCredsDump()" class="w-full text-left px-4 py-2 text-xs hover:bg-slate-100 text-slate-700">
-                    <i class="fa-solid fa-key mr-2 text-red-500"></i>提取凭据
-                </button>
-                <button onclick="batchPrivescCheck()" class="w-full text-left px-4 py-2 text-xs hover:bg-slate-100 text-slate-700">
-                    <i class="fa-solid fa-shield-halved mr-2 text-orange-500"></i>提权侦查
-                </button>
-                <button onclick="batchSleep()" class="w-full text-left px-4 py-2 text-xs hover:bg-slate-100 text-slate-700">
-                    <i class="fa-solid fa-clock mr-2 text-cyan-500"></i>更改睡眠间隔
+                <button data-action="batch-delete" class="w-full text-left px-4 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 touch-target">
+                    <i class="fa-solid fa-trash mr-2 text-red-500"></i>Delete
                 </button>
             </div>
         </div>
     </div>
-    <button onclick="batchDelete()" class="text-xs px-3 py-1.5 bg-red-500 hover:bg-red-400 rounded-xl transition-colors"><i class="fa-solid fa-trash mr-1"></i>批量删除</button>
-    <button onclick="deselectAll()" class="text-xs px-3 py-1.5 bg-slate-600 hover:bg-slate-500 rounded-xl transition-colors">取消</button>
+    <button data-action="deselect-all" class="text-xs px-4 py-2 h-10 bg-slate-600 hover:bg-slate-500 rounded-xl transition-colors touch-target flex items-center">Cancel</button>
 </div>
 
-<!-- 下线确认弹窗 -->
-<div id="offline-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
-    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="hideOfflineModal()"></div>
-    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+<!-- Offline Confirmation Modal -->
+<div id="offline-modal" class="fixed inset-0 z-[60] flex items-center justify-center hidden">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" data-action="hide-offline-modal" onclick="hideOfflineModal()"></div>
+    <div class="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
         <div class="bg-gradient-to-r from-orange-500 to-red-500 px-6 py-5">
             <div class="flex items-center gap-3">
                 <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
                     <i class="fa-solid fa-power-off text-white text-xl"></i>
                 </div>
                 <div>
-                    <h3 class="text-lg font-semibold text-white">下线 Implant</h3>
-                    <p class="text-white/80 text-sm">确认操作</p>
+                    <h3 class="text-lg font-semibold text-white">Take Agent Offline</h3>
+                    <p class="text-white/80 text-sm">Confirm Action</p>
                 </div>
             </div>
         </div>
         <div class="px-6 py-5">
-            <div class="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-4">
+            <div class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-xl p-4 mb-4">
                 <div class="flex items-start gap-3">
                     <i class="fa-solid fa-exclamation-triangle text-orange-500 mt-0.5"></i>
-                    <p class="text-sm text-slate-700">
-                        确定要让 <span class="font-semibold text-orange-600" id="modal-hostname"></span> 下线？
+                    <p class="text-sm text-slate-700 dark:text-slate-300">
+                        Take <span class="font-semibold text-orange-600 dark:text-orange-400" id="modal-hostname"></span> offline?
                     </p>
                 </div>
             </div>
             <div class="flex gap-3">
-                <button onclick="hideOfflineModal()" class="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium">取消</button>
-                <button onclick="confirmOffline()" class="flex-1 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-medium">确认下线</button>
+                <button type="button" data-action="hide-offline-modal" onclick="hideOfflineModal()" class="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium transition-colors">Cancel</button>
+                <button type="button" data-action="confirm-offline" onclick="confirmOffline()" class="flex-1 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-sm font-medium transition-colors">Confirm</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- 删除确认弹窗 -->
-<div id="delete-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
-    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="hideDeleteModal()"></div>
-    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="fixed inset-0 z-[60] flex items-center justify-center hidden">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" data-action="hide-delete-modal" onclick="hideDeleteModal()"></div>
+    <div class="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
         <div class="bg-gradient-to-r from-red-500 to-red-700 px-6 py-5">
             <div class="flex items-center gap-3">
                 <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
                     <i class="fa-solid fa-trash text-white text-xl"></i>
                 </div>
                 <div>
-                    <h3 class="text-lg font-semibold text-white">删除 Implant</h3>
-                    <p class="text-white/80 text-sm">确认操作</p>
+                    <h3 class="text-lg font-semibold text-white">Delete Agent</h3>
+                    <p class="text-white/80 text-sm">Confirm Action</p>
                 </div>
             </div>
         </div>
         <div class="px-6 py-5">
-            <div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl p-4 mb-4">
                 <div class="flex items-start gap-3">
                     <i class="fa-solid fa-exclamation-triangle text-red-500 mt-0.5"></i>
-                    <p class="text-sm text-slate-700">
-                        确定删除 <span class="font-semibold text-red-600" id="delete-hostname"></span>？
+                    <p class="text-sm text-slate-700 dark:text-slate-300">
+                        Delete <span class="font-semibold text-red-600 dark:text-red-400" id="delete-hostname"></span>?
                     </p>
                 </div>
             </div>
             <div class="flex gap-3">
-                <button onclick="hideDeleteModal()" class="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium">取消</button>
-                <button onclick="confirmDelete()" class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium">确认删除</button>
+                <button type="button" data-action="hide-delete-modal" onclick="hideDeleteModal()" class="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium transition-colors">Cancel</button>
+                <button type="button" data-action="confirm-delete" onclick="confirmAgentDelete()" class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors">Confirm</button>
             </div>
         </div>
     </div>
 </div>
 
-<script src="/static/js/agents.js"></script>
+<script>
+document.addEventListener('click', function(e) {
+    const dd = document.getElementById('batch-dropdown');
+    const btn = dd?.previousElementSibling;
+    if (!dd || dd.classList.contains('hidden')) return;
+    if (!e.target.closest('.relative') || e.target === btn) {
+        dd.classList.add('hidden');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+});
+document.addEventListener('click', function(e) {
+    const btn = e.target.closest('[onclick*="batch-dropdown"]');
+    if (btn) {
+        const expanded = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', String(!expanded));
+    }
+}, true);
+</script>
 {{end}}

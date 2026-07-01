@@ -1,11 +1,11 @@
 {{define "agent_detail_content"}}
-<div class="max-w-7xl mx-auto">
-    <!-- Header -->
-    <div class="flex items-center gap-x-4 mb-6">
-        <a href="/agents" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left text-xl"></i></a>
-        <div class="flex-1">
-            <div class="flex items-center gap-3">
-                <h1 class="text-3xl font-semibold tracking-tight text-slate-900">{{.Agent.Hostname}}</h1>
+<div class="max-w-7xl mx-auto mb-20 md:mb-0">
+    <div class="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-x-4 mb-4 sm:mb-6">
+        <div class="flex items-start gap-x-3 flex-1 min-w-0">
+        <a href="/agents" class="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 shrink-0 mt-1"><i class="fa-solid fa-arrow-left text-xl"></i></a>
+        <div class="flex-1 min-w-0">
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 truncate">{{.Agent.Hostname}}</h1>
                 {{if eq .Agent.Status "online"}}
                 <span class="inline-flex items-center gap-x-1.5 px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">
                     <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> 在线
@@ -20,15 +20,16 @@
                 </span>
                 {{end}}
             </div>
-            <div class="flex items-center gap-x-4 text-sm text-slate-500 mt-1">
+            <div class="flex flex-wrap items-center gap-x-3 sm:gap-x-4 text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
                 <span class="flex items-center gap-1"><i class="fa-solid fa-user"></i> {{.Agent.Username}}</span>
                 <span class="flex items-center gap-1"><i class="fa-solid fa-network-wired"></i> {{.Agent.IP}}</span>
                 <span class="flex items-center gap-1"><i class="fa-solid fa-desktop"></i> {{.Agent.OS}} {{.Agent.Arch}}</span>
             </div>
         </div>
-        <div class="flex items-center gap-2">
+        </div>
+        <div class="flex items-center gap-2 flex-wrap shrink-0">
             <div id="lock-indicator-{{.Agent.ID}}"></div>
-            <button onclick="toggleLock('{{.Agent.ID}}')" class="px-3 py-2 border border-slate-200 hover:border-amber-300 text-slate-500 hover:text-amber-600 text-sm font-medium rounded-xl transition-colors" title="锁定/解锁 Implant 独占操作">
+            <button data-action="toggle-lock" data-agent-id="{{.Agent.ID}}" class="px-3 py-2 border border-slate-200 hover:border-amber-300 text-slate-500 hover:text-amber-600 text-sm font-medium rounded-xl transition-colors" title="锁定/解锁 Implant 独占操作">
                 <i class="fa-solid fa-lock-open"></i>
             </button>
             <div id="agent-viewers-{{.Agent.ID}}" class="hidden px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center gap-1.5 text-xs text-indigo-600">
@@ -42,14 +43,14 @@
     </div>
 
     <!-- Tabs -->
-    <div class="flex gap-1 mb-6 bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
-        <button onclick="switchTab('overview')" class="tab-btn flex-1 px-4 h-9 text-sm font-medium rounded-xl transition-all" data-tab="overview">
+    <div class="flex gap-1 mb-4 sm:mb-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-1 shadow-sm overflow-x-auto">
+        <button type="button" data-action="switch-tab" data-tab="overview" onclick="switchTab('overview')" class="tab-btn flex-1 px-4 h-9 text-sm font-medium rounded-xl transition-all">
             <i class="fa-solid fa-info-circle mr-1.5"></i>概览
         </button>
-        <button onclick="switchTab('command')" class="tab-btn flex-1 px-4 h-9 text-sm font-medium rounded-xl transition-all" data-tab="command">
+        <button type="button" data-action="switch-tab" data-tab="command" onclick="switchTab('command')" class="tab-btn flex-1 px-4 h-9 text-sm font-medium rounded-xl transition-all">
             <i class="fa-solid fa-terminal mr-1.5"></i>命令
         </button>
-        <button onclick="switchTab('tasks')" class="tab-btn flex-1 px-4 h-9 text-sm font-medium rounded-xl transition-all" data-tab="tasks">
+        <button type="button" data-action="switch-tab" data-tab="tasks" onclick="switchTab('tasks')" class="tab-btn flex-1 px-4 h-9 text-sm font-medium rounded-xl transition-all">
             <i class="fa-solid fa-history mr-1.5"></i>任务
             <span class="ml-1 px-1.5 py-0.5 text-[10px] bg-indigo-100 text-indigo-700 rounded-full">{{.TotalTasks}}</span>
         </button>
@@ -62,7 +63,7 @@
             <div class="lg:col-span-2 space-y-6">
                 <!-- Quick Stats -->
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
                         <div class="text-xs text-slate-500 mb-1">状态</div>
                         <div class="flex items-center gap-2">
                             {{if eq .Agent.Status "online"}}
@@ -77,15 +78,15 @@
                             {{end}}
                         </div>
                     </div>
-                    <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
                         <div class="text-xs text-slate-500 mb-1">在线时长</div>
                         <div class="font-semibold text-slate-900">{{.Uptime}}</div>
                     </div>
-                    <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
                         <div class="text-xs text-slate-500 mb-1">任务总数</div>
                         <div class="font-semibold text-slate-900">{{.TotalTasks}}</div>
                     </div>
-                    <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
                         <div class="text-xs text-slate-500 mb-1">成功率</div>
                         <div class="font-semibold text-slate-900">{{.SuccessRate}}%</div>
                     </div>
@@ -120,7 +121,7 @@
                 </div>
 
                 <!-- Agent Info -->
-                <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 shadow-sm">
                     <div class="flex items-center gap-2 mb-4">
                         <i class="fa-solid fa-info-circle text-slate-400"></i>
                         <h2 class="text-lg font-semibold text-slate-900">Implant 信息</h2>
@@ -130,42 +131,42 @@
                             <div class="text-xs text-slate-500 mb-1">Implant ID</div>
                             <code class="text-xs font-mono text-indigo-600 break-all">{{.Agent.ID}}</code>
                         </div>
-                        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border border-slate-200">
                             <div class="text-xs text-slate-500 mb-1">主机名</div>
                             <div class="text-sm font-medium text-slate-900">{{.Agent.Hostname}}</div>
                         </div>
-                        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border border-slate-200">
                             <div class="text-xs text-slate-500 mb-1">用户名</div>
                             <div class="text-sm font-medium text-slate-900">{{.Agent.Username}}</div>
                         </div>
-                        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border border-slate-200">
                             <div class="text-xs text-slate-500 mb-1">IP 地址</div>
                             <div class="text-sm font-mono text-slate-900">{{.Agent.IP}}</div>
                         </div>
-                        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border border-slate-200">
                             <div class="text-xs text-slate-500 mb-1">公网IP</div>
                             <div class="text-sm font-mono text-slate-900 flex items-center gap-2">
                                 <span>{{.Agent.PublicIP | default "—"}}</span>
                                 {{if and .Agent.PublicIP .Agent.Latitude .Agent.Longitude}}
-                                <button onclick="showMap({{.Agent.Latitude}}, {{.Agent.Longitude}})" class="text-[10px] px-2 py-0.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg transition-colors inline-flex items-center gap-1">📍 查看位置</button>
+                                <button data-action="show-map" data-lat="{{.Agent.Latitude}}" data-lon="{{.Agent.Longitude}}" class="text-[10px] px-2 py-0.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg transition-colors inline-flex items-center gap-1">📍 查看位置</button>
                                 {{end}}
                             </div>
                         </div>
-                        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border border-slate-200">
                             <div class="text-xs text-slate-500 mb-1">操作系统</div>
                             <div class="text-sm font-medium text-slate-900">{{.Agent.OS}}</div>
                         </div>
-                        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border border-slate-200">
                             <div class="text-xs text-slate-500 mb-1">架构</div>
                             <div class="text-sm font-medium text-slate-900">{{.Agent.Arch}}</div>
                         </div>
-                        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border border-slate-200">
                             <div class="text-xs text-slate-500 mb-1">首次上线</div>
                             <div class="text-xs font-mono text-slate-600">{{.Agent.CreatedAt | formatTime}}</div>
                         </div>
-                        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border border-slate-200">
                             <div class="text-xs text-slate-500 mb-1">最后上线</div>
-                            <div class="text-xs font-mono text-slate-600">{{.Agent.LastSeen | formatTime}}</div>
+                            <div class="text-xs font-mono text-slate-600 dark:text-slate-300">{{.Agent.LastSeen | formatTime}}</div>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
@@ -174,20 +175,20 @@
                             <div><span class="text-sm font-semibold {{if eq .Agent.Integrity "High"}}text-emerald-700{{else if eq .Agent.Integrity "System"}}text-red-700{{else if eq .Agent.Integrity "Low"}}text-orange-700{{else}}text-blue-700{{end}}">{{.Agent.Integrity | default "—"}}</span>
                             {{if .Agent.Elevated}}<span class="ml-1 text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded font-medium">ELEVATED</span>{{end}}</div>
                         </div>
-                        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border border-slate-200">
                             <div class="text-xs text-slate-500 mb-1">域 / 工作组</div>
                             <div class="text-sm font-medium text-slate-900">{{.Agent.Domain | default "—"}}</div>
                         </div>
-                        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border border-slate-200">
                             <div class="text-xs text-slate-500 mb-1">PID</div>
                             <div class="text-sm font-mono text-slate-900">{{if .Agent.PID}}{{.Agent.PID}}{{else}}—{{end}}</div>
                             {{if .Agent.ProcessName}}<div class="text-xs text-slate-500">{{.Agent.ProcessName}}</div>{{end}}
                         </div>
-                        <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                        <div class="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border border-slate-200">
                             <div class="text-xs text-slate-500 mb-1">睡眠配置</div>
-                            <div class="text-sm font-semibold text-slate-900">{{if .Agent.CurrentInterval}}{{.Agent.CurrentInterval}}s{{else}}—{{end}}
+                            <div class="text-sm font-semibold text-slate-900">{{if eq .Agent.CurrentInterval 0}}实时{{else if gt .Agent.CurrentInterval 0}}{{.Agent.CurrentInterval}}s{{else}}—{{end}}
                             {{if .Agent.CurrentJitter}}<span class="text-xs text-slate-500 ml-1">±{{.Agent.CurrentJitter}}%</span>{{end}}
-                            {{if .Agent.Version}}<span class="ml-2 text-[10px] px-1.5 py-0.5 bg-slate-200 text-slate-600 rounded font-mono">v{{.Agent.Version}}</span>{{end}}</div>
+                            {{if .Agent.Version}}<span class="ml-2 text-[10px] px-1.5 py-0.5 bg-slate-200 text-slate-600 dark:text-slate-300 rounded font-mono">v{{.Agent.Version}}</span>{{end}}</div>
                         </div>
                     </div>
                 </div>
@@ -196,46 +197,47 @@
             <!-- Right Column -->
             <div class="space-y-4">
                 <!-- Actions + Quick Nav -->
-                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                    <div class="grid grid-cols-4 gap-2">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
+                    <div class="grid grid-cols-3 sm:grid-cols-5 gap-2">
                         <a href="/agents/{{.Agent.ID}}/shell" class="flex flex-col items-center gap-1 bg-emerald-50 hover:bg-emerald-100 rounded-xl py-3 transition-colors"><i class="fa-solid fa-terminal text-emerald-600"></i><span class="text-[10px] text-emerald-700 font-medium">Shell</span></a>
                         <a href="/agents/{{.Agent.ID}}/files" class="flex flex-col items-center gap-1 bg-indigo-50 hover:bg-indigo-100 rounded-xl py-3 transition-colors"><i class="fa-solid fa-folder-open text-indigo-600"></i><span class="text-[10px] text-indigo-700 font-medium">文件</span></a>
                         <a href="/agents/{{.Agent.ID}}/token" class="flex flex-col items-center gap-1 bg-amber-50 hover:bg-amber-100 rounded-xl py-3 transition-colors"><i class="fa-solid fa-id-badge text-amber-600"></i><span class="text-[10px] text-amber-700 font-medium">Token</span></a>
                         <a href="/agents/{{.Agent.ID}}/screen" class="flex flex-col items-center gap-1 bg-cyan-50 hover:bg-cyan-100 rounded-xl py-3 transition-colors"><i class="fa-solid fa-desktop text-cyan-600"></i><span class="text-[10px] text-cyan-700 font-medium">屏幕</span></a>
-                        <button onclick="requestPS('{{.Agent.ID}}')" class="flex flex-col items-center gap-1 bg-slate-50 hover:bg-slate-100 rounded-xl py-3 transition-colors"><i class="fa-solid fa-list text-slate-500"></i><span class="text-[10px] text-slate-600 font-medium">进程</span></button>
-                        <button onclick="requestScreenshot('{{.Agent.ID}}')" class="flex flex-col items-center gap-1 bg-slate-50 hover:bg-slate-100 rounded-xl py-3 transition-colors"><i class="fa-solid fa-camera text-slate-500"></i><span class="text-[10px] text-slate-600 font-medium">截图</span></button>
-                        <button onclick="addNote()" class="flex flex-col items-center gap-1 bg-slate-50 hover:bg-slate-100 rounded-xl py-3 transition-colors"><i class="fa-solid fa-sticky-note text-slate-500"></i><span class="text-[10px] text-slate-600 font-medium">备注</span></button>
-                        <button onclick="confirmAction('确定删除此 Implant？', () => deleteAgent('{{.Agent.ID}}'))" class="flex flex-col items-center gap-1 bg-red-50 hover:bg-red-100 rounded-xl py-3 transition-colors"><i class="fa-solid fa-trash text-red-500"></i><span class="text-[10px] text-red-600 font-medium">删除</span></button>
+                        <button data-action="request-ps" data-agent-id="{{.Agent.ID}}" class="flex flex-col items-center gap-1 bg-slate-50 hover:bg-slate-100 rounded-xl py-3 transition-colors"><i class="fa-solid fa-list text-slate-500"></i><span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">进程</span></button>
+                        <button data-action="request-screenshot" data-agent-id="{{.Agent.ID}}" class="flex flex-col items-center gap-1 bg-slate-50 hover:bg-slate-100 rounded-xl py-3 transition-colors"><i class="fa-solid fa-camera text-slate-500"></i><span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">截图</span></button>
+                        <button data-action="request-screenshot-window" data-agent-id="{{.Agent.ID}}" class="flex flex-col items-center gap-1 bg-slate-50 hover:bg-slate-100 rounded-xl py-3 transition-colors"><i class="fa-solid fa-window-maximize text-slate-500"></i><span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">当前窗口</span></button>
+                        <button data-action="add-note" class="flex flex-col items-center gap-1 bg-slate-50 hover:bg-slate-100 rounded-xl py-3 transition-colors"><i class="fa-solid fa-sticky-note text-slate-500"></i><span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">备注</span></button>
+                        <button type="button" data-action="delete-agent" data-agent-id="{{.Agent.ID}}" onclick="confirmAction('确定删除此 Implant？', function(){ deleteAgent('{{.Agent.ID}}'); })" class="flex flex-col items-center gap-1 bg-red-50 hover:bg-red-100 rounded-xl py-3 transition-colors"><i class="fa-solid fa-trash text-red-500"></i><span class="text-[10px] text-red-600 font-medium">删除</span></button>
                     </div>
                 </div>
 
                 <!-- Notes -->
-                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                    <div class="flex items-center justify-between mb-2"><span class="text-xs text-slate-500 font-medium">备注</span><button onclick="addNote()" class="text-[10px] text-indigo-600 hover:text-indigo-700"><i class="fa-solid fa-pencil"></i></button></div>
-                    <div id="notes-display" class="text-xs text-slate-600 p-3 bg-slate-50 rounded-xl cursor-pointer min-h-[40px]" onclick="addNote()">{{if .Agent.Notes}}{{.Agent.Notes}}{{else}}<span class="text-slate-400 italic">点击添加备注</span>{{end}}</div>
-                    <textarea id="notes-input" class="hidden w-full bg-white border border-slate-300 text-sm rounded-xl p-3 mt-2 focus:border-indigo-500" placeholder="输入备注..."></textarea>
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
+                    <div class="flex items-center justify-between mb-2"><span class="text-xs text-slate-500 font-medium">备注</span><button data-action="add-note" class="text-[10px] text-indigo-600 hover:text-indigo-700"><i class="fa-solid fa-pencil"></i></button></div>
+                    <div id="notes-display" class="text-xs text-slate-600 dark:text-slate-300 p-3 bg-slate-50 rounded-xl cursor-pointer min-h-[40px]" data-action="add-note">{{if .Agent.Notes}}{{.Agent.Notes}}{{else}}<span class="text-slate-400 italic">点击添加备注</span>{{end}}</div>
+                    <textarea id="notes-input" class="hidden w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-sm rounded-xl p-3 mt-2 focus:border-indigo-500" placeholder="输入备注..."></textarea>
                 </div>
 
                 <!-- Connection + rportfwd -->
-                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
                     <div class="text-xs text-slate-500 font-medium mb-3">连接</div>
-                    <div class="flex items-center justify-between mb-3 p-3 bg-slate-50 rounded-xl">
+                    <div class="flex items-center justify-between mb-3 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
                         <span class="text-xs text-slate-500">当前</span>
                         {{if eq .Agent.Status "online"}}<span class="text-emerald-600 font-semibold text-xs">✅ 已连接</span>
                         {{else if eq .Agent.Status "stale"}}<span class="text-amber-600 font-semibold text-xs">🟡 超时</span>
                         {{else}}<span class="text-red-600 font-semibold text-xs">❌ 已断开</span>{{end}}
                     </div>
                     <div class="space-y-1.5 text-xs">
-                        <div class="flex justify-between p-2 bg-slate-50 rounded-lg"><span class="text-slate-500">签到</span><span class="font-mono text-slate-600">{{.Agent.LastSeen | formatTime}}</span></div>
+                        <div class="flex justify-between p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><span class="text-slate-500">签到</span><span class="font-mono text-slate-600 dark:text-slate-300">{{.Agent.LastSeen | formatTime}}</span></div>
                         <div class="flex justify-between p-2 bg-slate-50 rounded-lg"><span class="text-slate-500">距上线</span><span class="text-slate-700">{{.TimeSinceLastSeen}}</span></div>
-                        <div class="flex justify-between p-2 bg-slate-50 rounded-lg"><span class="text-slate-500">运行</span><span class="text-slate-700">{{.AgentAge}}</span></div>
+                        <div class="flex justify-between p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg"><span class="text-slate-500">运行</span><span class="text-slate-700 dark:text-slate-300">{{.AgentAge}}</span></div>
                         <div class="flex justify-between p-2 bg-slate-50 rounded-lg"><span class="text-slate-500">成功率</span><span class="text-indigo-600 font-medium">{{.SuccessRate}}%</span></div>
                     </div>
                     <div id="rportfwd-status" class="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">rportfwd: 加载中...</div>
                 </div>
 
                 <!-- P2P Beacon Chaining -->
-                <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 shadow-sm">
                     <div class="flex items-center justify-between mb-4">
                         <div class="flex items-center gap-2"><i class="fa-solid fa-link text-slate-400"></i><span class="text-sm font-semibold text-slate-900">P2P 信标链</span></div>
                     </div>
@@ -247,7 +249,7 @@
                             <span class="text-xs px-2 py-0.5 bg-slate-200 rounded text-slate-600">{{if .Agent.P2PMode}}{{.Agent.P2PMode | upper}}{{else}}TCP{{end}}</span>
                             {{if .Agent.P2PListenAddr}}<span class="text-xs font-mono text-slate-500">{{.Agent.P2PListenAddr}}</span>{{end}}
                             <form method="POST" action="/agents/{{.Agent.ID}}/unlink" style="display:inline">
-                                <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+
                                 <button class="text-xs px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded-xl">解除链接</button>
                             </form>
                         </div>
@@ -258,7 +260,7 @@
                         <div class="text-xs text-slate-500 font-medium mb-2"><i class="fa-solid fa-arrow-down mr-1"></i>子节点 ({{len .Children}})</div>
                         <div class="space-y-2">
                             {{range .Children}}
-                            <div class="flex items-center justify-between p-2 bg-slate-50 rounded-xl">
+                            <div class="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
                                 <div class="flex items-center gap-2">
                                     <span class="w-2 h-2 {{if eq .Status "online"}}bg-emerald-500{{else if eq .Status "stale"}}bg-amber-500{{else}}bg-red-500{{end}} rounded-full"></span>
                                     <a href="/agents/{{.ID}}" class="text-xs font-mono text-indigo-600 hover:text-indigo-800">{{.Hostname}}</a>
@@ -270,22 +272,22 @@
                     </div>
                     {{end}}
                     {{if not .Agent.ParentID}}
-                    <div class="p-4 bg-slate-50 rounded-2xl">
+                    <div class="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-2xl">
                         <form method="POST" action="/agents/{{.Agent.ID}}/link">
-                            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
                             <div class="text-xs text-slate-500 mb-2">链接子 Implant</div>
-                            <select name="child_id" class="w-full bg-white border border-slate-300 text-sm rounded-2xl px-4 h-11 mb-2" required>
+                            <select name="child_id" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-sm rounded-2xl px-4 h-11 mb-2" required>
                                 <option value="" disabled selected>选择子 Implant...</option>
                                 {{range .UnlinkedAgents}}
                                 <option value="{{.ID}}">{{.Hostname}} ({{.IP}})</option>
                                 {{end}}
                             </select>
                             <div class="flex gap-2 mb-2">
-                                <select name="p2p_mode" class="flex-1 bg-white border border-slate-300 text-sm rounded-2xl px-4 h-11">
+                                <select name="p2p_mode" class="flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-sm rounded-2xl px-4 h-11">
                                     <option value="tcp">TCP</option>
                                     <option value="smb">SMB (Named Pipe)</option>
                                 </select>
-                                <input type="text" name="p2p_listen_addr" placeholder=":4444 或 pipe_name" class="flex-1 bg-white border border-slate-300 text-sm rounded-2xl px-4 h-11 font-mono text-xs">
+                                <input type="text" name="p2p_listen_addr" placeholder=":4444 或 pipe_name" class="flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-sm rounded-2xl px-4 h-11 font-mono text-xs">
                             </div>
                             <button type="submit" class="w-full h-10 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-2xl">
                                 <i class="fa-solid fa-link mr-2"></i>链接
@@ -296,16 +298,19 @@
                 </div>
 
                 <!-- Screenshots -->
-                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
                     <div class="flex items-center justify-between mb-4">
                         <div class="flex items-center gap-2"><i class="fa-solid fa-images text-slate-400"></i><span class="text-sm font-semibold text-slate-900">截图</span></div>
-                        <button onclick="requestScreenshot('{{.Agent.ID}}')" class="text-xs px-3 h-7 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-700"><i class="fa-solid fa-plus"></i> 请求</button>
+                        <div class="flex items-center gap-1.5">
+                            <button data-action="request-screenshot" data-agent-id="{{.Agent.ID}}" class="text-xs px-3 h-7 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-700"><i class="fa-solid fa-camera"></i> 全屏</button>
+                            <button data-action="request-screenshot-window" data-agent-id="{{.Agent.ID}}" class="text-xs px-3 h-7 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-700"><i class="fa-solid fa-window-maximize"></i> 当前窗口</button>
+                        </div>
                     </div>
                     {{if .Screenshots}}
                     <div class="grid grid-cols-2 gap-2">
                         {{range .Screenshots}}
-                        <div class="group relative rounded-xl overflow-hidden border border-slate-200 cursor-pointer" onclick="showScreenshotModal('{{$.Agent.ID}}', '{{.}}')">
-                            <img src="/screenshots/{{$.Agent.ID}}/{{.}}" class="w-full h-28 object-contain bg-slate-100" alt="Screenshot">
+                        <div class="group relative rounded-xl overflow-hidden border border-slate-200 cursor-pointer" data-action="show-screenshot-modal" data-agent-id="{{$.Agent.ID}}" data-filename="{{.}}">
+                            <img data-src="/screenshots/{{$.Agent.ID}}/{{.}}" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E" class="w-full h-28 object-contain bg-slate-100 lazy-image" alt="Screenshot" loading="lazy">
                             <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
                                 <i class="fa-solid fa-search-plus text-white opacity-0 group-hover:opacity-100 transition"></i>
                             </div>
@@ -322,29 +327,29 @@
 
     <!-- Tab: Command -->
     <div id="tab-command" class="tab-content hidden">
-        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 shadow-sm">
             <div class="flex items-center gap-2 mb-4"><i class="fa-solid fa-terminal text-slate-400"></i><h2 class="text-lg font-semibold text-slate-900">快速命令</h2></div>
 
             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                <button onclick="sendQuickCommand('{{.Agent.ID}}', 'whoami')" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 border">whoami</button>
-                <button onclick="sendQuickCommand('{{.Agent.ID}}', 'hostname')" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 border">hostname</button>
-                <button onclick="sendQuickCommand('{{.Agent.ID}}', 'tasklist')" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 border">tasklist</button>
-                <button onclick="sendQuickCommand('{{.Agent.ID}}', 'netstat -ano')" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 border">netstat</button>
-                <button onclick="sendQuickCommand('{{.Agent.ID}}', 'ipconfig /all')" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 border">ipconfig</button>
-                <button onclick="sendQuickCommand('{{.Agent.ID}}', 'net user')" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 border">net user</button>
-                <button onclick="sendQuickCommand('{{.Agent.ID}}', 'net localgroup Administrators')" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 border">localgroup</button>
-                <button onclick="sendQuickCommand('{{.Agent.ID}}', 'systeminfo')" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 border">systeminfo</button>
-                <button onclick="sendQuickCommandPS('{{.Agent.ID}}', 'Get-Process')" class="text-xs px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-xl text-blue-700 border border-blue-200">Get-Process</button>
-                <button onclick="sendQuickCommandPS('{{.Agent.ID}}', 'Get-ChildItem C:\\')" class="text-xs px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-xl text-blue-700 border border-blue-200">List C:\</button>
+                <button data-action="send-quick-command" data-agent-id="{{.Agent.ID}}" data-command="whoami" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 dark:text-slate-300 border">whoami</button>
+                <button data-action="send-quick-command" data-agent-id="{{.Agent.ID}}" data-command="hostname" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 dark:text-slate-300 border">hostname</button>
+                <button data-action="send-quick-command" data-agent-id="{{.Agent.ID}}" data-command="tasklist" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 dark:text-slate-300 border">tasklist</button>
+                <button data-action="send-quick-command" data-agent-id="{{.Agent.ID}}" data-command="netstat -ano" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 dark:text-slate-300 border">netstat</button>
+                <button data-action="send-quick-command" data-agent-id="{{.Agent.ID}}" data-command="ipconfig /all" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 dark:text-slate-300 border">ipconfig</button>
+                <button data-action="send-quick-command" data-agent-id="{{.Agent.ID}}" data-command="net user" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 dark:text-slate-300 border">net user</button>
+                <button data-action="send-quick-command" data-agent-id="{{.Agent.ID}}" data-command="net localgroup Administrators" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 dark:text-slate-300 border">localgroup</button>
+                <button data-action="send-quick-command" data-agent-id="{{.Agent.ID}}" data-command="systeminfo" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 dark:text-slate-300 border">systeminfo</button>
+                <button data-action="send-quick-command-ps" data-agent-id="{{.Agent.ID}}" data-command="Get-Process" class="text-xs px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-xl text-blue-700 border border-blue-200">Get-Process</button>
+                <button data-action="send-quick-command-ps" data-agent-id="{{.Agent.ID}}" data-command="Get-ChildItem C:\\List C:\" class="text-xs px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-xl text-blue-700 border border-blue-200">List C:\</button>
             </div>
 
             <div class="mt-4"><form hx-post="/agents/{{.Agent.ID}}/command" hx-target="#cmd-result" hx-target-error="#cmd-result" hx-swap="innerHTML" hx-on::after-request="this.reset()">
                 <div class="flex gap-2">
-                    <select name="shell" class="bg-white border border-slate-300 text-sm rounded-xl px-3 h-10 w-36">
+                    <select name="shell" class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-sm rounded-xl px-3 h-10 w-36">
                         <option value="cmd.exe">cmd.exe</option>
                         <option value="powershell.exe">powershell.exe</option>
                     </select>
-                    <input type="text" name="command" placeholder="输入自定义命令..." required class="flex-1 bg-white border border-slate-300 focus:border-indigo-500 font-mono text-sm rounded-xl px-3 h-10">
+                    <input type="text" name="command" placeholder="输入自定义命令..." required class="flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 font-mono text-sm rounded-xl px-3 h-10">
                     <button type="submit" class="px-6 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl">执行</button>
                 </div>
             </form></div>
@@ -356,18 +361,18 @@
             <details class="mt-4">
                 <summary class="text-sm font-semibold text-slate-600 cursor-pointer hover:text-indigo-600">⚡ 攻击与提权</summary>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
-                    <button onclick="credsQuick('{{.Agent.ID}}')" class="text-xs px-3 py-2 bg-amber-50 hover:bg-amber-100 rounded-xl text-amber-700 border border-amber-200"><i class="fa-solid fa-key mr-1"></i>Creds</button>
-                    <button onclick="elevateQuick('{{.Agent.ID}}')" class="text-xs px-3 py-2 bg-purple-50 hover:bg-purple-100 rounded-xl text-purple-700 border border-purple-200"><i class="fa-solid fa-shield mr-1"></i>Elevate</button>
-                    <button onclick="mimikatzQuick('{{.Agent.ID}}')" class="text-xs px-3 py-2 bg-amber-50 hover:bg-amber-100 rounded-xl text-amber-700 border"><i class="fa-solid fa-hat-wizard mr-1"></i>Mimikatz</button>
-                    <button onclick="killAVQuick('{{.Agent.ID}}')" class="text-xs px-3 py-2 bg-red-50 hover:bg-red-100 rounded-xl text-red-700 border border-red-200">Terminate AV</button>
-                    <button onclick="injectQuick('{{.Agent.ID}}')" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 border">Inject</button>
-                    <button onclick="lateralQuick('{{.Agent.ID}}')" class="text-xs px-3 py-2 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-indigo-700 border">Lateral</button>
-                    <button onclick="socksQuick('{{.Agent.ID}}')" class="text-xs px-3 py-2 bg-teal-50 hover:bg-teal-100 rounded-xl text-teal-700 border">SOCKS</button>
-                    <button onclick="spawnQuick('{{.Agent.ID}}')" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 border">Spawn</button>
-                    <button onclick="kerberoastQuick('{{.Agent.ID}}')" class="text-xs px-3 py-2 bg-purple-50 hover:bg-purple-100 rounded-xl text-purple-700 border">Kerberoast</button>
-                    <button onclick="dcsyncQuick('{{.Agent.ID}}')" class="text-xs px-3 py-2 bg-fuchsia-50 hover:bg-fuchsia-100 rounded-xl text-fuchsia-700 border">DCSync</button>
-                    <button onclick="passTheHashQuick('{{.Agent.ID}}')" class="text-xs px-3 py-2 bg-red-50 hover:bg-red-100 rounded-xl text-red-700 border">PTH</button>
-                    <button onclick="persistenceQuick('{{.Agent.ID}}')" class="text-xs px-3 py-2 bg-rose-50 hover:bg-rose-100 rounded-xl text-rose-700 border">Persistence</button>
+                    <button data-action="creds-quick" data-agent-id="{{.Agent.ID}}" class="text-xs px-3 py-2 bg-amber-50 hover:bg-amber-100 rounded-xl text-amber-700 border border-amber-200"><i class="fa-solid fa-key mr-1"></i>Creds</button>
+                    <button data-action="elevate-quick" data-agent-id="{{.Agent.ID}}" class="text-xs px-3 py-2 bg-purple-50 hover:bg-purple-100 rounded-xl text-purple-700 border border-purple-200"><i class="fa-solid fa-shield mr-1"></i>Elevate</button>
+                    <button data-action="mimikatz-quick" data-agent-id="{{.Agent.ID}}" class="text-xs px-3 py-2 bg-amber-50 hover:bg-amber-100 rounded-xl text-amber-700 border"><i class="fa-solid fa-hat-wizard mr-1"></i>Mimikatz</button>
+                    <button data-action="kill-av-quick" data-agent-id="{{.Agent.ID}}" class="text-xs px-3 py-2 bg-red-50 hover:bg-red-100 rounded-xl text-red-700 border border-red-200">Terminate AV</button>
+                    <button data-action="inject-quick" data-agent-id="{{.Agent.ID}}" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-slate-700 border">Inject</button>
+                    <button data-action="lateral-quick" data-agent-id="{{.Agent.ID}}" class="text-xs px-3 py-2 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-indigo-700 border">Lateral</button>
+                    <button data-action="socks-quick" data-agent-id="{{.Agent.ID}}" class="text-xs px-3 py-2 bg-teal-50 hover:bg-teal-100 rounded-xl text-teal-700 border">SOCKS</button>
+                    <button data-action="spawn-quick" data-agent-id="{{.Agent.ID}}" class="text-xs px-3 py-2 bg-slate-50 hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-700 rounded-xl text-slate-700 dark:text-slate-300 border">Spawn</button>
+                    <button data-action="kerberoast-quick" data-agent-id="{{.Agent.ID}}" class="text-xs px-3 py-2 bg-purple-50 hover:bg-purple-100 rounded-xl text-purple-700 border">Kerberoast</button>
+                    <button data-action="dcsync-quick" data-agent-id="{{.Agent.ID}}" class="text-xs px-3 py-2 bg-fuchsia-50 hover:bg-fuchsia-100 rounded-xl text-fuchsia-700 border">DCSync</button>
+                    <button data-action="pass-the-hash-quick" data-agent-id="{{.Agent.ID}}" class="text-xs px-3 py-2 bg-red-50 hover:bg-red-100 rounded-xl text-red-700 border">PTH</button>
+                    <button data-action="persistence-quick" data-agent-id="{{.Agent.ID}}" class="text-xs px-3 py-2 bg-rose-50 hover:bg-rose-100 rounded-xl text-rose-700 border">Persistence</button>
                 </div>
             </details>
         </div>
@@ -375,7 +380,7 @@
 
     <!-- Tab: Tasks -->
     <div id="tab-tasks" class="tab-content hidden">
-        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6 shadow-sm">
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-2"><i class="fa-solid fa-history text-slate-400"></i><h2 class="text-lg font-semibold text-slate-900">最近任务</h2></div>
                 <div class="flex items-center gap-2">
@@ -385,7 +390,7 @@
             </div>
             <div id="tasks-list" class="space-y-3 text-sm max-h-[600px] overflow-auto pr-2">
                 {{range .Tasks}}
-                <div class="bg-white border border-slate-200 rounded-2xl p-4 hover:shadow-md transition-shadow task-card" data-task-id="{{.ID}}" data-status="{{.Status}}">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 hover:shadow-md transition-shadow task-card" data-task-id="{{.ID}}" data-status="{{.Status}}">
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center gap-2">
                             <span class="px-2.5 py-0.5 text-[10px] font-semibold font-mono rounded-full
@@ -395,14 +400,14 @@
                                 {{else if eq .Type "upload"}}bg-blue-100 text-blue-700
                                 {{else if eq .Type "download"}}bg-teal-100 text-teal-700
                                 {{else if eq .Type "ps"}}bg-cyan-100 text-cyan-700
-                                {{else}}bg-slate-100 text-slate-700{{end}}">{{.Type | upper}}</span>
+                                {{else}}bg-slate-100 text-slate-700 dark:text-slate-300{{end}}">{{.Type | upper}}</span>
                             {{if .Shell}}<span class="text-xs text-slate-400 px-2 py-0.5 bg-slate-100 rounded-lg">{{.Shell}}</span>{{end}}
                             {{if eq .Status "pending"}}<span class="animate-pulse"><i class="fa-solid fa-spinner fa-spin text-amber-500"></i></span>{{end}}
                         </div>
                         <span class="text-[10px] text-slate-400 font-mono">{{.CreatedAt | formatTime}}</span>
                     </div>
                     {{if .CreatedBy}}<div class="text-[10px] text-slate-400 mb-1"><i class="fa-solid fa-user mr-0.5"></i>{{.CreatedBy}}</div>{{end}}
-                    <div class="font-mono text-xs text-slate-700 bg-slate-50 rounded-xl p-3 mb-2 break-all">{{.Command}}</div>
+                    <div class="font-mono text-xs text-slate-700 dark:text-slate-300 bg-slate-50 rounded-xl p-3 mb-2 break-all">{{.Command}}</div>
                     {{if .Result}}
                     <div class="bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200 rounded-xl p-3 max-h-32 overflow-auto">
                         <pre class="text-xs text-emerald-800 whitespace-pre-wrap font-mono leading-relaxed">{{.Result}}</pre>
@@ -423,9 +428,9 @@
                         </span>
                         <div class="flex items-center gap-2">
                             {{if or (eq .Status "pending") (eq .Status "running")}}
-                            <button onclick="cancelTask('{{$.Agent.ID}}', {{.ID}})" class="text-[10px] px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-full font-medium transition-colors" title="取消任务"><i class="fa-solid fa-ban mr-0.5"></i>取消</button>
+                            <button data-action="cancel-task" data-agent-id="{{$.Agent.ID}}" data-task-id="{{.ID}}" class="text-[10px] px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-full font-medium transition-colors" title="取消任务"><i class="fa-solid fa-ban mr-0.5"></i>取消</button>
                             {{end}}
-                            <button onclick="rerunTaskFromDetail('{{$.Agent.ID}}', {{.ID}})" class="text-[10px] px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-full font-medium transition-colors" title="重新执行"><i class="fa-solid fa-redo mr-0.5"></i>重跑</button>
+                            <button data-action="rerun-task-from-detail" data-agent-id="{{$.Agent.ID}}" data-task-id="{{.ID}}" class="text-[10px] px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-full font-medium transition-colors" title="重新执行"><i class="fa-solid fa-redo mr-0.5"></i>重跑</button>
                             {{if .UpdatedAt.After .CreatedAt}}
                             <span class="text-[10px] text-slate-400"><i class="fa-solid fa-clock mr-1"></i>{{.UpdatedAt.Sub .CreatedAt}}</span>
                             {{end}}
@@ -441,8 +446,8 @@
 </div>
 
 <!-- Map Modal -->
-<div id="map-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4" onclick="if(event.target===this)this.classList.add('hidden')">
-    <div class="bg-white rounded-2xl p-4 w-full max-w-2xl">
+<div id="map-modal" class="hidden fixed inset-0 bg-black/80 dark:bg-black/90 flex items-center justify-center z-[200] p-4" onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 w-full max-w-2xl shadow-xl dark:shadow-2xl">
         <iframe id="map-iframe" width="100%" height="400" style="border:0;border-radius:12px" allowfullscreen></iframe>
     </div>
 </div>
@@ -455,5 +460,4 @@ function showMap(lat, lon) {
     document.getElementById('map-modal').classList.remove('hidden');
 }
 </script>
-<script src="/static/js/agent-detail.js"></script>
 {{end}}

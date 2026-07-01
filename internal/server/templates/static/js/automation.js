@@ -3,13 +3,13 @@ function closeRuleModal() { document.getElementById('rule-modal').classList.add(
 function showNewWebhookModal() { document.getElementById('webhook-modal').classList.remove('hidden'); }
 function closeWebhookModal() { document.getElementById('webhook-modal').classList.add('hidden'); }
 
-function saveRule() {
+function saveRule(btn) {
     const name = document.getElementById('rule-name').value;
     const eventType = document.getElementById('rule-event').value;
     const condition = document.getElementById('rule-condition').value;
     const command = document.getElementById('rule-command').value;
     const webhook = document.getElementById('rule-webhook').value;
-    if (!name) return showToast('请输入规则名称', 'error');
+    if (!name) return showToast(__('Please enter a rule name'), 'error');
     const rule = {
         id: 'rule_' + Date.now(),
         name: name,
@@ -20,39 +20,46 @@ function saveRule() {
     };
     if (command) rule.actions.push({type: 'command', params: JSON.stringify({command: command})});
     if (webhook) rule.actions.push({type: 'webhook', params: JSON.stringify({url: webhook, method: 'POST'})});
-    fetch('/api/automation/rules', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(rule)})
-    .then(r=>r.json()).then(d=>{if(d.success){showToast('规则已保存','success');location.reload()}else showToast(d.error,'error')});
+    withLoading(btn, apiFetch('/api/automation/rules', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(rule)})
+        .then(d => { if (d.success) { showToast(__('Rule saved'), 'success'); location.reload(); } else showToast(d.error, 'error'); })
+        .catch(e => showToast(__tf('Failed to save rule: {0}', e.message), 'error')));
 }
 
 function deleteRule(id) {
-    if (!confirm('确定删除此规则?')) return;
-    fetch('/api/automation/rules/' + id, {method: 'DELETE'})
-    .then(r=>r.json()).then(d=>{if(d.success){showToast('已删除','success');location.reload()}});
+    if (!confirm(__('Delete this rule?'))) return;
+    apiFetch('/api/automation/rules/' + id, {method: 'DELETE'})
+        .then(d => { if (d.success) { showToast(__('Deleted'), 'success'); location.reload(); } })
+        .catch(e => showToast(__tf('Failed to delete: {0}', e.message), 'error'));
 }
 
 function toggleRule(id) {
-    fetch('/api/automation/rules/' + id + '/toggle', {method: 'POST'})
-    .then(r=>r.json()).then(d=>{if(d.success)location.reload()});
+    apiFetch('/api/automation/rules/' + id + '/toggle', {method: 'POST'})
+        .then(d => { if (d.success) location.reload(); })
+        .catch(e => showToast(__tf('Failed to toggle: {0}', e.message), 'error'));
 }
 
-function saveWebhook() {
+function saveWebhook(btn) {
     const name = document.getElementById('wh-name').value;
     const url = document.getElementById('wh-url').value;
     const eventType = document.getElementById('wh-event').value;
     const method = document.getElementById('wh-method').value;
-    if (!name || !url) return showToast('请填写名称和URL', 'error');
-    fetch('/api/webhooks', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, url, event_type: eventType, method})})
-    .then(r=>r.json()).then(d=>{if(d.success){showToast('Webhook已保存','success');location.reload()}else showToast(d.error,'error')});
+    if (!name || !url) return showToast(__('Please enter name and URL'), 'error');
+    withLoading(btn, apiFetch('/api/webhooks', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, url, event_type: eventType, method})})
+        .then(d => { if (d.success) { showToast(__('Webhook saved'), 'success'); location.reload(); } else showToast(d.error, 'error'); })
+        .catch(e => showToast(__tf('Failed to save webhook: {0}', e.message), 'error')));
 }
 
 function deleteWebhook(id) {
-    if (!confirm('确定删除?')) return;
-    fetch('/api/webhooks/' + id, {method: 'DELETE'}).then(r=>r.json()).then(d=>{if(d.success)location.reload()});
+    if (!confirm(__('Delete?'))) return;
+    apiFetch('/api/webhooks/' + id, {method: 'DELETE'})
+        .then(d => { if (d.success) location.reload(); })
+        .catch(e => showToast(__tf('Failed to delete: {0}', e.message), 'error'));
 }
 
-function testWebhook() {
+function testWebhook(btn) {
     const url = document.getElementById('wh-url').value;
-    if (!url) return showToast('请先填写URL', 'error');
-    fetch('/api/webhooks/test', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url, method: document.getElementById('wh-method').value})})
-    .then(r=>r.json()).then(d=>{showToast(d.success?'测试已发送':'失败: '+d.error, d.success?'success':'error')});
+    if (!url) return showToast(__('Please enter a URL first'), 'error');
+    withLoading(btn, apiFetch('/api/webhooks/test', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url, method: document.getElementById('wh-method').value})})
+        .then(d => { showToast(d.success ? __('Test sent') : __('Failed: {0}', d.error), d.success ? 'success' : 'error'); })
+        .catch(e => showToast(__tf('Failed: {0}', e.message), 'error')));
 }

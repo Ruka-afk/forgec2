@@ -1,0 +1,24 @@
+.lazy-image {
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.lazy-image.loaded {
+    opacity: 1;
+}
+
+.lazy-image-placeholder {
+    background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+    animation: lazy-placeholder-shimmer 1.5s infinite;
+}
+
+.dark .lazy-image-placeholder {
+    background: linear-gradient(90deg, #334155 25%, #475569 50%, #334155 75%);
+    background-size: 200% 100%;
+}
+
+@keyframes lazy-placeholder-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}

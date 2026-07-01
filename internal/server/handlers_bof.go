@@ -19,7 +19,7 @@ func (s *Server) handleBOFPage(c *gin.Context) {
 	s.db.Order("created_at desc").Find(&bofs)
 
 	data := gin.H{
-		"Title":     "ForgeC2 - BOF 管理",
+		"Title": "ForgeC2 - BOF Manager",
 		"ActiveNav": "bof",
 		"BOFFiles":  bofs,
 	}

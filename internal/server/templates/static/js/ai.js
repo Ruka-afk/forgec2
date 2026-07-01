@@ -1,132 +1,399 @@
 const STORAGE_KEY = 'forgec2_ai_messages';
-const MAX_CONTEXT = 20; // max user+assistant pairs
+const PENDING_KEY = 'forgec2_ai_pending';
+const MAX_CONTEXT = 20;
 let messages = [];
 let isGenerating = false;
 let abortController = null;
-let _lastRenderTime = 0;
+let _renderPending = false;
+let _pendingContent = '';
+let _autoScroll = true;
+let _codeBlockId = 0;
+let _activeGeneration = null;
+let _draftSaveTimer = null;
+let _pageHideBound = false;
 
-// Trim oldest messages to stay within context window
+function isAIPage() {
+    return !!document.getElementById('ai-page');
+}
+
+function aiT(key) {
+    return typeof __ === 'function' ? __(key) : key;
+}
+
 function trimContext() {
     while (messages.length > MAX_CONTEXT * 2) {
-        messages.shift(); // remove oldest user message
-        if (messages[0] && messages[0].role === 'assistant') messages.shift(); // remove its response too
+        messages.shift();
+        if (messages[0] && messages[0].role === 'assistant') messages.shift();
     }
     updateMessageCount();
 }
 
 function updateMessageCount() {
     const el = document.getElementById('msg-count');
-    if (el) el.textContent = `${messages.length}/${MAX_CONTEXT * 2}`;
+    if (el) el.textContent = messages.length + '/' + (MAX_CONTEXT * 2);
 }
 
-// Load saved messages on startup
-(function loadMessages() {
-    function restore() {
-        try {
-            const saved = localStorage.getItem(STORAGE_KEY);
-            if (saved) {
-                messages = JSON.parse(saved);
-                const welcome = document.getElementById('ai-welcome');
-                if (welcome) welcome.classList.add('hidden');
+function isAIEnabled() {
+    const page = document.getElementById('ai-page');
+    return page && page.dataset.aiEnabled === '1';
+}
 
-                messages.forEach(m => {
-                    if (m.role === 'user') appendMessage('user', m.content);
-                    else if (m.role === 'assistant') {
-                        const div = appendMessage('assistant', m.content);
-                        const contentEl = div.querySelector('.ai-content');
-                        if (contentEl) contentEl.innerHTML = renderMarkdown(m.content);
-                        if (m.reasoning) {
-                            const reasoningDiv = document.createElement('div');
-                            reasoningDiv.className = 'ai-reasoning bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mt-2 text-xs text-amber-800';
-                            reasoningDiv.innerHTML = '<details open><summary class="cursor-pointer font-medium">思考过程 <i class="fa-solid fa-chevron-down ml-1 text-[10px]"></i></summary><div class="mt-1 whitespace-pre-wrap">' + escapeHtml(m.reasoning) + '</div></details>';
-                            div.querySelector('.bg-white').appendChild(reasoningDiv);
-                        }
-                    }
-                });
-                scrollToBottom();
-                trimContext();
-                updateMessageCount();
-                setTimeout(() => document.getElementById('ai-input').focus(), 200);
+function setInputEnabled(enabled) {
+    const input = document.getElementById('ai-input');
+    const btn = document.getElementById('ai-send-btn');
+    if (input) {
+        input.disabled = !enabled;
+        input.classList.toggle('opacity-50', !enabled);
+        input.classList.toggle('cursor-not-allowed', !enabled);
+        if (!enabled) input.placeholder = aiT('ai.disabled_hint');
+    }
+    if (btn) {
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+}
+
+function bindAIButton(id, handler) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        handler(e);
+    });
+}
+
+function bindAIActions() {
+    bindAIButton('ai-toggle-settings-btn', toggleSettings);
+    bindAIButton('ai-close-settings-btn', toggleSettings);
+    bindAIButton('ai-open-settings-btn', toggleSettings);
+    bindAIButton('ai-clear-chat-btn', clearChat);
+    bindAIButton('ai-export-chat-btn', exportChat);
+    bindAIButton('ai-send-btn', function() { sendAIMessage(); });
+    bindAIButton('scroll-bottom-btn', function() {
+        scrollToBottom(true);
+        scrollToBottomFloat();
+    });
+
+    document.querySelectorAll('#ai-page .ai-quick-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            sendQuick(btn.getAttribute('data-query') || '');
+        });
+    });
+
+    const form = document.getElementById('ai-config-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            saveAIConfig(e);
+        });
+    }
+
+    const provider = document.getElementById('cfg-provider');
+    if (provider) provider.addEventListener('change', onProviderChange);
+
+    const promptTpl = document.getElementById('prompt-template');
+    if (promptTpl) promptTpl.addEventListener('change', onPromptTemplateChange);
+}
+
+function initAIPage() {
+    if (!isAIPage()) return;
+
+    setInputEnabled(isAIEnabled());
+    bindAIActions();
+
+    const container = document.getElementById('ai-messages');
+    if (container) {
+        container.addEventListener('scroll', function() {
+            const dist = container.scrollHeight - container.scrollTop - container.clientHeight;
+            _autoScroll = dist < 80;
+            scrollToBottomFloat();
+        }, { passive: true });
+    }
+
+    const input = document.getElementById('ai-input');
+    if (input) {
+        input.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 128) + 'px';
+            const counter = document.getElementById('ai-char-count');
+            if (counter) counter.textContent = this.value.length > 0 ? this.value.length + ' chars' : '';
+        });
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.repeat) {
+                e.preventDefault();
+                sendAIMessage();
             }
-        } catch(e) { messages = []; }
+        });
     }
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', restore);
-    } else {
-        restore();
+
+    restoreMessages();
+    updateMessageCount();
+    onProviderChange();
+    bindAIPageLifecycle();
+}
+
+function clearPendingDraft() {
+    try { localStorage.removeItem(PENDING_KEY); } catch (e) {}
+}
+
+function persistDraftDebounced() {
+    if (!_activeGeneration) return;
+    clearTimeout(_draftSaveTimer);
+    _draftSaveTimer = setTimeout(function() {
+        if (!_activeGeneration) return;
+        try {
+            localStorage.setItem(PENDING_KEY, JSON.stringify({
+                userText: _activeGeneration.userText,
+                content: _activeGeneration.fullContent || '',
+                reasoning: _activeGeneration.reasoningContent || '',
+                status: 'generating',
+                updatedAt: Date.now()
+            }));
+        } catch (e) {}
+    }, 200);
+}
+
+function commitInterruptedAssistant() {
+    if (!_activeGeneration) return;
+    const gen = _activeGeneration;
+    const last = messages.length > 0 ? messages[messages.length - 1] : null;
+    const pendingAssistant = last && last.role === 'assistant' &&
+        (last.status === 'interrupted' || last.status === 'generating');
+
+    if (last && last.role === 'user' && last.content === gen.userText && !pendingAssistant &&
+        (gen.fullContent || gen.reasoningContent)) {
+        messages.push({
+            role: 'assistant',
+            content: gen.fullContent || ('*[' + aiT('ai.interrupted') + ']*'),
+            reasoning: gen.reasoningContent || undefined,
+            status: 'interrupted'
+        });
+        saveMessages();
     }
-})();
+    clearPendingDraft();
+    _activeGeneration = null;
+}
+
+function handleAIPageHide() {
+    if (isGenerating && _activeGeneration) {
+        commitInterruptedAssistant();
+    }
+}
+
+function bindAIPageLifecycle() {
+    if (_pageHideBound) return;
+    _pageHideBound = true;
+    window.addEventListener('pagehide', handleAIPageHide);
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'hidden') handleAIPageHide();
+    });
+}
+
+function addInterruptedBanner(msgDiv) {
+    const bubble = msgDiv.querySelector('.ai-bubble');
+    if (!bubble || bubble.querySelector('.ai-interrupted-banner')) return;
+    const banner = document.createElement('div');
+    banner.className = 'ai-interrupted-banner mt-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 flex items-center justify-between gap-2';
+    banner.innerHTML =
+        '<span><i class="fa-solid fa-circle-exclamation mr-1"></i>' + aiT('ai.interrupted') + '</span>' +
+        '<button type="button" class="ui-btn ui-btn-ghost text-[11px] h-7 px-2 ai-retry-btn">' + aiT('ai.retry') + '</button>';
+    bubble.appendChild(banner);
+    const retryBtn = banner.querySelector('.ai-retry-btn');
+    if (retryBtn) {
+        retryBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            retryLast();
+        });
+    }
+}
+
+function renderAssistantFromStore(m) {
+    const div = appendMessage('assistant', '');
+    const contentEl = div.querySelector('.ai-content');
+    if (contentEl && m.content) {
+        contentEl.innerHTML = renderMarkdown(m.content);
+    }
+    if (m.reasoning) attachReasoning(div, m.reasoning, m.status === 'interrupted');
+    if (m.status === 'interrupted') addInterruptedBanner(div);
+    return div;
+}
+
+function restorePendingDraft() {
+    let draft;
+    try {
+        const raw = localStorage.getItem(PENDING_KEY);
+        if (!raw) return;
+        draft = JSON.parse(raw);
+    } catch (e) {
+        clearPendingDraft();
+        return;
+    }
+
+    const last = messages.length > 0 ? messages[messages.length - 1] : null;
+
+    if (last && last.role === 'assistant' &&
+        (last.status === 'interrupted' || last.status === 'generating')) {
+        clearPendingDraft();
+        return;
+    }
+
+    if (!last || last.role !== 'user') {
+        clearPendingDraft();
+        return;
+    }
+
+    if (draft.userText && last.content !== draft.userText) {
+        clearPendingDraft();
+        return;
+    }
+
+    messages.push({
+        role: 'assistant',
+        content: draft.content || ('*[' + aiT('ai.interrupted') + ']*'),
+        reasoning: draft.reasoning || undefined,
+        status: 'interrupted'
+    });
+    renderAssistantFromStore(messages[messages.length - 1]);
+    saveMessages();
+    clearPendingDraft();
+}
+
+function restoreMessages() {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (!saved) {
+            restorePendingDraft();
+            return;
+        }
+        const parsed = JSON.parse(saved);
+        if (!Array.isArray(parsed)) {
+            messages = [];
+            return;
+        }
+        messages = parsed;
+        const welcome = document.getElementById('ai-welcome');
+        if (messages.length > 0 && welcome) welcome.classList.add('hidden');
+
+        document.querySelectorAll('#ai-messages .ai-msg-row').forEach(function(el) { el.remove(); });
+
+        messages.forEach(function(m) {
+            if (m.role === 'user') {
+                appendMessage('user', m.content);
+            } else if (m.role === 'assistant') {
+                renderAssistantFromStore(m);
+            }
+        });
+
+        restorePendingDraft();
+        scrollToBottom(true);
+        trimContext();
+        setTimeout(function() {
+            const input = document.getElementById('ai-input');
+            if (input) input.focus();
+        }, 200);
+    } catch (e) {
+        messages = [];
+    }
+}
 
 function saveMessages() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); } catch(e) {}
+    try {
+        const toSave = messages.map(function(m) {
+            const copy = { role: m.role, content: m.content };
+            if (m.reasoning) copy.reasoning = m.reasoning;
+            if (m.status) copy.status = m.status;
+            return copy;
+        });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+    } catch (e) {}
 }
 
 function clearChat() {
-    if (!confirm('清除所有聊天记录？')) return;
+    if (!confirm(aiT('ai.clear_confirm'))) return;
     messages = [];
+    _activeGeneration = null;
     localStorage.removeItem(STORAGE_KEY);
-    document.getElementById('ai-messages').querySelectorAll('.flex.gap-3').forEach(el => el.remove());
-    document.getElementById('ai-welcome').classList.remove('hidden');
+    clearPendingDraft();
+    document.querySelectorAll('#ai-messages .ai-msg-row').forEach(el => el.remove());
+    const welcome = document.getElementById('ai-welcome');
+    if (welcome) welcome.classList.remove('hidden');
     updateMessageCount();
 }
 
 function toggleSettings() {
-    document.getElementById('ai-settings').classList.toggle('hidden');
+    const panel = document.getElementById('ai-settings');
+    if (panel) panel.classList.toggle('hidden');
 }
 
 function onProviderChange() {
     const provider = document.getElementById('cfg-provider').value;
     const epGroup = document.getElementById('cfg-endpoint-group');
-    epGroup.classList.toggle('hidden', provider !== 'custom');
-
-    const modelMap = { deepseek: 'deepseek-chat', openai: 'gpt-4o', claude: 'claude-3-5-sonnet-20241022', qianwen: 'qwen-plus', custom: '' };
-    document.getElementById('cfg-model').value = modelMap[provider] || '';
+    if (epGroup) epGroup.classList.toggle('hidden', provider !== 'custom');
+    const modelMap = {
+        deepseek: 'deepseek-chat',
+        openai: 'gpt-4o',
+        claude: 'claude-3-5-sonnet-20241022',
+        qianwen: 'qwen-plus',
+        custom: ''
+    };
+    const modelEl = document.getElementById('cfg-model');
+    if (modelEl) modelEl.value = modelMap[provider] || '';
 }
 
-const promptTemplates = {
-    redteam: `你是 ForgeC2 红队行动助手，运行在 C2 服务器上。你可以列出在线 Implant、查看目标详情、执行命令、查看凭据、管理监听器等。用中文回复。`,
-    concise: `你是安全分析助手。回答要简洁准确，用要点列表。避免长篇解释。优先给出可执行的操作步骤。`,
-    verbose: `你是资深渗透测试专家。回答要详尽专业，包含技术细节。使用 MITRE ATT&CK 术语。输出结构化的操作报告。`,
-    social: `你是社会工程学专家。帮助设计钓鱼邮件、社工话术。输出格式：场景设定→话术脚本→注意事项。用中文回复。`
-};
+function getPromptTemplates() {
+    return {
+        redteam: aiT('ai.prompt_redteam'),
+        concise: aiT('ai.prompt_concise'),
+        verbose: aiT('ai.prompt_verbose'),
+        social: aiT('ai.prompt_social')
+    };
+}
 
 function onPromptTemplateChange() {
     const sel = document.getElementById('prompt-template');
     const ta = document.querySelector('[name="system_prompt"]');
-    if (sel.value && promptTemplates[sel.value]) ta.value = promptTemplates[sel.value];
+    const templates = getPromptTemplates();
+    if (sel && ta && sel.value && templates[sel.value]) ta.value = templates[sel.value];
 }
 
 async function saveAIConfig(e) {
     e.preventDefault();
     const form = document.getElementById('ai-config-form');
+    const apiKey = form.querySelector('[name="api_key"]').value.trim();
     const data = {
         enabled: form.querySelector('[name="enabled"]').checked,
         provider: form.querySelector('[name="provider"]').value,
-        api_key: form.querySelector('[name="api_key"]').value,
         model: form.querySelector('[name="model"]').value,
         endpoint: form.querySelector('[name="endpoint"]').value,
         system_prompt: form.querySelector('[name="system_prompt"]').value
     };
+    if (apiKey) data.api_key = apiKey;
     try {
-        const resp = await fetch('/ai/config', {
+        const result = await apiFetch('/ai/config', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
-        const result = await resp.json();
         const el = document.getElementById('ai-config-result');
-        el.innerHTML = result.success
-            ? '<div class="text-emerald-600 text-xs mt-1">配置已保存，刷新页面生效</div>'
-            : '<div class="text-red-600 text-xs mt-1">' + escapeHtml(result.error || 'Error') + '</div>';
+        if (el) {
+            el.innerHTML = result.success
+                ? '<div class="text-emerald-600 dark:text-emerald-400 text-xs mt-1">' + aiT('ai.config_saved') + '</div>'
+                : '<div class="text-red-600 dark:text-red-400 text-xs mt-1">' + escapeHtml(result.error || 'Error') + '</div>';
+        }
         if (result.success) setTimeout(() => location.reload(), 1500);
     } catch (err) {
-        showToast('Save failed: ' + err.message, 'error');
+        showToast(__tf('Save failed: {0}', err.message), 'error');
     }
 }
 
 function sendQuick(text) {
-    document.getElementById('ai-input').value = text;
-    sendMessage();
+    const input = document.getElementById('ai-input');
+    if (!input) return;
+    input.value = text;
+    sendAIMessage();
 }
 
 function stopGeneration() {
@@ -137,20 +404,29 @@ function stopGeneration() {
 }
 
 function retryLast() {
-    if (messages.length === 0) return;
-    const last = messages[messages.length - 1];
-    if (last.role !== 'user') return;
+    if (!isAIPage() || messages.length === 0) return;
+    let last = messages[messages.length - 1];
+    if (last.role === 'assistant' && last.status === 'interrupted') {
+        messages.pop();
+        last = messages.length > 0 ? messages[messages.length - 1] : null;
+    }
+    if (!last || last.role !== 'user') return;
+    const userText = last.content;
     messages.pop();
     saveMessages();
-    const msgs = document.getElementById('ai-messages');
-    const children = msgs.querySelectorAll('.flex.gap-3');
-    if (children.length >= 2) {
-        children[children.length - 1].remove();
-        children[children.length - 2].remove();
+    const rows = document.querySelectorAll('#ai-messages .ai-msg-row');
+    if (rows.length >= 2) {
+        rows[rows.length - 1].remove();
+        rows[rows.length - 2].remove();
+    } else if (rows.length === 1) {
+        rows[rows.length - 1].remove();
     }
-    document.getElementById('ai-input').value = last.content;
-    document.getElementById('ai-input').focus();
-    sendMessage();
+    const input = document.getElementById('ai-input');
+    if (input) {
+        input.value = userText;
+        input.focus();
+    }
+    sendAIMessage();
 }
 
 function scrollToBottomFloat() {
@@ -158,99 +434,144 @@ function scrollToBottomFloat() {
     const btn = document.getElementById('scroll-bottom-btn');
     if (!container || !btn) return;
     const dist = container.scrollHeight - container.scrollTop - container.clientHeight;
-    btn.classList.toggle('hidden', dist < 200);
+    btn.classList.toggle('hidden', dist < 120 || _autoScroll);
 }
 
 function exportChat() {
-    let md = '# ForgeC2 AI 对话记录\n\n';
+    let md = '# ForgeC2 AI Chat Log\n\n';
     messages.forEach(m => {
-        if (m.role === 'user') md += `**You:** ${m.content}\n\n`;
+        if (m.role === 'user') md += '**' + aiT('ai.you') + ':** ' + m.content + '\n\n';
         else {
-            md += `**AI:** ${m.content}\n\n`;
-            if (m.reasoning) md += `<details><summary>思考过程</summary>\n\n${m.reasoning}\n\n</details>\n\n`;
+            md += '**AI:** ' + m.content + '\n\n';
+            if (m.reasoning) md += '> ' + aiT('ai.reasoning') + '\n\n' + m.reasoning + '\n\n';
         }
     });
     const blob = new Blob([md], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `forgec2-chat-${new Date().toISOString().slice(0,10)}.md`;
-    a.click(); URL.revokeObjectURL(url);
-    showToast('对话已导出', 'success');
+    a.href = url;
+    a.download = 'forgec2-chat-' + new Date().toISOString().slice(0, 10) + '.md';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(aiT('ai.chat_exported'), 'success');
 }
 
 function resetSendButton() {
     const btn = document.getElementById('ai-send-btn');
+    if (!btn) return;
     btn.innerHTML = '<i class="fa-solid fa-paper-plane text-sm"></i>';
     btn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
     btn.classList.remove('bg-red-500', 'hover:bg-red-600');
+    setInputEnabled(isAIEnabled());
 }
 
-async function sendMessage() {
-    if (isGenerating) {
-        stopGeneration();
+function scheduleRender(contentDiv, text) {
+    _pendingContent = text;
+    if (_renderPending) return;
+    _renderPending = true;
+    requestAnimationFrame(() => {
+        _renderPending = false;
+        if (contentDiv) contentDiv.innerHTML = renderMarkdown(_pendingContent);
+        scrollToBottom();
+    });
+}
+
+async function sendAIMessage() {
+    if (!isAIPage()) return;
+    if (!isAIEnabled()) {
+        showToast(aiT('ai.disabled_hint'), 'warning');
+        toggleSettings();
         return;
     }
+    if (isGenerating) { stopGeneration(); return; }
+
     const input = document.getElementById('ai-input');
+    if (!input) return;
     const text = input.value.trim();
-    if (!text) return;
+    if (!text) {
+        input.focus();
+        return;
+    }
+
     input.value = '';
     input.style.height = 'auto';
+    const counter = document.getElementById('ai-char-count');
+    if (counter) counter.textContent = '';
     input.focus();
-    isGenerating = true; // set BEFORE append to prevent re-entry
+    isGenerating = true;
+
+    const welcome = document.getElementById('ai-welcome');
+    if (welcome) welcome.classList.add('hidden');
 
     appendMessage('user', text);
     messages.push({ role: 'user', content: text });
-    trimContext(); // keep context window manageable
+    trimContext();
     saveMessages();
 
+    _activeGeneration = {
+        userText: text,
+        fullContent: '',
+        reasoningContent: ''
+    };
+
     const msgDiv = appendMessage('assistant', '');
+    const bubble = msgDiv.querySelector('.ai-bubble');
     const contentDiv = msgDiv.querySelector('.ai-content');
+    const toolsDiv = document.createElement('div');
+    toolsDiv.className = 'ai-tools space-y-2 mt-2';
+    if (bubble) bubble.appendChild(toolsDiv);
 
-    // Add thinking indicator
     const thinkingDiv = document.createElement('div');
-    thinkingDiv.className = 'ai-thinking flex items-center gap-2 text-slate-400 text-xs mt-1';
-    thinkingDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i><span>AI 正在思考...</span>';
-    msgDiv.querySelector('.bg-white').appendChild(thinkingDiv);
+    thinkingDiv.className = 'ai-thinking flex items-center gap-2 text-slate-400 dark:text-slate-500 text-xs mt-1';
+    thinkingDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>' + aiT('ai.thinking') + '</span>';
+    if (bubble) bubble.appendChild(thinkingDiv);
 
-    // Add reasoning box (hidden initially)
     const reasoningDiv = document.createElement('div');
-    reasoningDiv.className = 'ai-reasoning hidden bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mt-2 text-xs text-amber-800';
-    reasoningDiv.innerHTML = '<details><summary class="cursor-pointer font-medium">思考过程 <i class="fa-solid fa-chevron-down ml-1 text-[10px]"></i></summary><div class="mt-1 whitespace-pre-wrap"></div></details>';
-    msgDiv.querySelector('.bg-white').appendChild(reasoningDiv);
+    reasoningDiv.className = 'ai-reasoning hidden';
+    if (bubble) bubble.appendChild(reasoningDiv);
 
     let reasoningContent = '';
+    let fullContent = '';
+    let streamError = '';
 
-    // Helper functions (closure to access reasoningContent)
     function showThinking(show) {
         thinkingDiv.style.display = show ? '' : 'none';
     }
+
     function showReasoning(text) {
         reasoningContent += text;
-        reasoningDiv.classList.remove('hidden');
-        const detailDiv = reasoningDiv.querySelector('div');
-        if (detailDiv) detailDiv.textContent = reasoningContent;
+        if (_activeGeneration) _activeGeneration.reasoningContent = reasoningContent;
+        attachReasoning(msgDiv, reasoningContent, true);
+        persistDraftDebounced();
         scrollToBottom();
     }
 
-    document.getElementById('ai-send-btn').innerHTML = '<i class="fa-solid fa-stop text-sm"></i>';
-    document.getElementById('ai-send-btn').classList.add('bg-red-500', 'hover:bg-red-600');
-    document.getElementById('ai-send-btn').classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+    const sendBtn = document.getElementById('ai-send-btn');
+    if (sendBtn) {
+        sendBtn.innerHTML = '<i class="fa-solid fa-stop text-sm"></i>';
+        sendBtn.classList.add('bg-red-500', 'hover:bg-red-600');
+        sendBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+        sendBtn.disabled = false;
+    }
 
     abortController = new AbortController();
+    _autoScroll = true;
 
     try {
         const resp = await fetch('/ai/chat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ messages: messages }),
             signal: abortController.signal
         });
 
         if (!resp.ok) {
             let errMsg = 'HTTP ' + resp.status;
-            try { const err = await resp.json(); errMsg = err.error || errMsg; } catch(e) {}
-            contentDiv.innerHTML = `<div class="text-red-500 text-sm">${escapeHtml(errMsg)}</div>
-                <button onclick="retryLast()" class="mt-2 text-xs px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg">🔄 重试</button>`;
+            try {
+                const err = await resp.json();
+                errMsg = err.error || errMsg;
+            } catch (e) {}
+            contentDiv.innerHTML = errorHtml(errMsg);
             showThinking(false);
             resetSendButton();
             isGenerating = false;
@@ -260,20 +581,17 @@ async function sendMessage() {
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-        let fullContent = '';
 
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
 
-            // Process complete SSE events (delimited by \n\n or \r\n\r\n)
             const delim = buffer.includes('\r\n\r\n') ? '\r\n\r\n' : '\n\n';
             while (buffer.includes(delim)) {
                 const idx = buffer.indexOf(delim);
                 const raw = buffer.slice(0, idx).replace(/\r/g, '');
                 buffer = buffer.slice(idx + delim.length);
-
                 const evt = {};
                 for (const line of raw.split('\n')) {
                     if (line.startsWith('event: ')) evt.event = line.slice(7);
@@ -282,76 +600,117 @@ async function sendMessage() {
                 if (!evt.event) continue;
                 if (evt.event !== 'thinking' && evt.event !== 'clear' && !evt.data) continue;
 
-                if (evt.event === 'thinking') {
+                if (evt.event === 'thinking') showThinking(true);
+                else if (evt.event === 'tool_start') {
                     showThinking(true);
-                } else if (evt.event === 'clear') {
-                    showThinking(false);
-                } else if (evt.event === 'text') {
+                    const label = thinkingDiv.querySelector('span');
+                    if (label) label.textContent = aiT('ai.tool_running') + ': ' + (evt.data || '');
+                } else if (evt.event === 'clear') showThinking(false);
+                else if (evt.event === 'text') {
                     fullContent = evt.data;
-                    if (Date.now() - _lastRenderTime > 50) {
-                        contentDiv.innerHTML = renderMarkdown(fullContent);
-                        _lastRenderTime = Date.now();
-                    }
-                    scrollToBottom();
+                    if (_activeGeneration) _activeGeneration.fullContent = fullContent;
+                    scheduleRender(contentDiv, fullContent);
+                    persistDraftDebounced();
                 } else if (evt.event === 'reasoning') {
                     showReasoning(evt.data);
                 } else if (evt.event === 'tool') {
                     try {
                         const td = JSON.parse(evt.data);
-                        showToolCall(td.name, td.result);
-                    } catch(e) {}
+                        showToolCallInline(toolsDiv, td.name, td.result);
+                    } catch (e) {}
                 } else if (evt.event === 'error') {
-                    contentDiv.innerHTML += '<span class="text-red-500">' + escapeHtml(evt.data) + '</span>';
+                    streamError = evt.data || streamError;
+                    contentDiv.innerHTML = errorHtml(streamError);
+                    showThinking(false);
                 }
             }
         }
 
-        // Final render to ensure complete display (bypass throttle)
-        if (fullContent) {
+        if (streamError && !fullContent) {
+            contentDiv.innerHTML = errorHtml(streamError);
+            clearPendingDraft();
+            _activeGeneration = null;
+        } else if (fullContent) {
             contentDiv.innerHTML = renderMarkdown(fullContent);
-            messages.push({ role: 'assistant', content: fullContent, reasoning: reasoningContent });
+            messages.push({
+                role: 'assistant',
+                content: fullContent,
+                reasoning: reasoningContent || undefined
+            });
             saveMessages();
+            clearPendingDraft();
+            _activeGeneration = null;
+        } else if (!streamError) {
+            contentDiv.innerHTML = errorHtml(aiT('common.error') + ': empty response');
+            clearPendingDraft();
+            _activeGeneration = null;
         }
     } catch (err) {
         if (err.name === 'AbortError') {
-            if (fullContent) {
-                fullContent += '\n\n*[已停止]*';
-                contentDiv.innerHTML = renderMarkdown(fullContent);
-                messages.push({ role: 'assistant', content: fullContent, reasoning: reasoningContent });
-                saveMessages();
+            if (_activeGeneration) {
+                _activeGeneration.fullContent = fullContent;
+                _activeGeneration.reasoningContent = reasoningContent;
             }
+            const interrupted = fullContent || reasoningContent;
+            if (interrupted) {
+                const savedContent = fullContent || ('*[' + aiT('ai.interrupted') + ']*');
+                contentDiv.innerHTML = renderMarkdown(savedContent);
+                if (reasoningContent) attachReasoning(msgDiv, reasoningContent, true);
+                const last = messages[messages.length - 1];
+                if (last && last.role === 'user' && last.content === text) {
+                    messages.push({
+                        role: 'assistant',
+                        content: savedContent,
+                        reasoning: reasoningContent || undefined,
+                        status: 'interrupted'
+                    });
+                    addInterruptedBanner(msgDiv);
+                    saveMessages();
+                }
+            }
+            clearPendingDraft();
+            _activeGeneration = null;
         } else {
-            contentDiv.innerHTML = `<div class="text-red-500 text-sm">${escapeHtml(err.message)}</div>
-                <button onclick="retryLast()" class="mt-2 text-xs px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg">🔄 重试</button>`;
+            contentDiv.innerHTML = errorHtml(err.message);
+            clearPendingDraft();
+            _activeGeneration = null;
         }
     } finally {
         isGenerating = false;
         abortController = null;
         showThinking(false);
         resetSendButton();
-        scrollToBottom();
+        scrollToBottom(true);
     }
+}
+
+function errorHtml(msg) {
+    return '<div class="text-red-500 dark:text-red-400 text-sm">' + escapeHtml(msg) +
+        '</div><button onclick="retryLast()" class="mt-2 text-xs px-3 py-1 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-lg">' +
+        aiT('ai.retry') + '</button>';
 }
 
 function appendMessage(role, content) {
     const container = document.getElementById('ai-messages');
     const div = document.createElement('div');
-    div.className = 'flex gap-3' + (role === 'user' ? ' flex-row-reverse' : '');
+    div.className = 'ai-msg-row flex gap-3' + (role === 'user' ? ' flex-row-reverse' : '');
 
     if (role === 'user') {
-        div.innerHTML = `<div class="w-8 h-8 bg-slate-200 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">
-            <i class="fa-solid fa-user text-slate-500 text-sm"></i></div>
-            <div class="bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3 max-w-[85%]">
-                <p class="text-sm text-slate-800 whitespace-pre-wrap">${escapeHtml(content)}</p>
-            </div>`;
+        div.innerHTML =
+            '<div class="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">' +
+            '<i class="fa-solid fa-user text-slate-500 dark:text-slate-400 text-sm"></i></div>' +
+            '<div class="bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-2xl px-4 py-3 max-w-[85%]">' +
+            '<p class="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap">' + escapeHtml(content) + '</p></div>';
     } else {
-        div.innerHTML = `<div class="w-8 h-8 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">
-            <i class="fa-solid fa-robot text-indigo-500 text-sm"></i></div>
-            <div class="bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-sm max-w-[85%] relative group">
-                <div class="ai-content text-sm text-slate-700 prose prose-sm max-w-none"></div>
-                <button class="copy-msg absolute top-2 right-2 p-1.5 rounded-lg bg-white/80 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity text-xs" title="复制" onclick="copyMessage(this)"><i class="fa-solid fa-copy"></i></button>
-                <button class="copy-msg absolute top-2 right-10 p-1.5 rounded-lg bg-white/80 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity text-xs" title="重新生成" onclick="retryLast()"><i class="fa-solid fa-rotate-right"></i></button>
-            </div>`;
+        div.innerHTML =
+            '<div class="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">' +
+            '<i class="fa-solid fa-robot text-indigo-500 dark:text-indigo-400 text-sm"></i></div>' +
+            '<div class="ai-bubble bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 shadow-sm max-w-[85%] relative group">' +
+            '<div class="ai-content text-sm text-slate-700 dark:text-slate-300 prose prose-sm max-w-none"></div>' +
+            '<button class="copy-msg absolute top-2 right-2 p-1.5 rounded-lg bg-white/80 dark:bg-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs" title="' + aiT('ai.copy') + '" onclick="copyMessage(this)">' +
+            '<i class="fa-solid fa-copy"></i></button>' +
+            '<button class="copy-msg absolute top-2 right-10 p-1.5 rounded-lg bg-white/80 dark:bg-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs" title="' + aiT('ai.regenerate') + '" onclick="retryLast()">' +
+            '<i class="fa-solid fa-rotate-right"></i></button></div>';
     }
 
     container.appendChild(div);
@@ -359,122 +718,151 @@ function appendMessage(role, content) {
     return div;
 }
 
-function showToolCall(name, resultJSON) {
-    const container = document.getElementById('ai-tool-calls');
-    const div = document.createElement('div');
-    div.className = 'bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs';
+function attachReasoning(msgDiv, text, open) {
+    let reasoningDiv = msgDiv.querySelector('.ai-reasoning');
+    if (!reasoningDiv) {
+        reasoningDiv = document.createElement('div');
+        reasoningDiv.className = 'ai-reasoning';
+        const bubble = msgDiv.querySelector('.ai-bubble');
+        if (bubble) bubble.appendChild(reasoningDiv);
+    }
+    reasoningDiv.classList.remove('hidden');
+    reasoningDiv.innerHTML =
+        '<details' + (open ? ' open' : '') + ' class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2 mt-2 text-xs text-amber-800 dark:text-amber-300">' +
+        '<summary class="cursor-pointer font-medium">' + aiT('ai.reasoning') + ' <i class="fa-solid fa-chevron-down ml-1 text-[10px]"></i></summary>' +
+        '<div class="mt-1 whitespace-pre-wrap">' + escapeHtml(text) + '</div></details>';
+}
 
+function showToolCallInline(container, name, resultJSON) {
+    const div = document.createElement('div');
+    div.className = 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2 text-xs animate-fade-in';
     let resultPreview = '';
     try {
         const r = JSON.parse(resultJSON);
-        if (typeof r === 'string') {
-            resultPreview = r.substring(0, 300);
-        } else if (Array.isArray(r)) {
-            resultPreview = JSON.stringify(r.slice(0, 5), null, 1).substring(0, 500);
-        } else {
-            resultPreview = JSON.stringify(r, null, 1).substring(0, 500);
-        }
-    } catch(e) {
-        resultPreview = resultJSON.substring(0, 300);
+        if (typeof r === 'string') resultPreview = r.substring(0, 400);
+        else if (Array.isArray(r)) resultPreview = JSON.stringify(r.slice(0, 5), null, 1).substring(0, 600);
+        else resultPreview = JSON.stringify(r, null, 1).substring(0, 600);
+    } catch (e) {
+        resultPreview = String(resultJSON).substring(0, 400);
     }
-
-    div.innerHTML = `<div class="flex items-center gap-2 mb-1">
-        <i class="fa-solid fa-wrench text-amber-500"></i>
-        <span class="font-semibold text-amber-800">${escapeHtml(name)}</span>
-        <span class="text-slate-400">调用工具</span></div>
-        <pre class="text-amber-700 mt-1 whitespace-pre-wrap font-mono text-[11px] leading-relaxed">${escapeHtml(resultPreview)}</pre>`;
+    div.innerHTML =
+        '<div class="flex items-center gap-2 mb-1">' +
+        '<i class="fa-solid fa-wrench text-amber-500 dark:text-amber-400"></i>' +
+        '<span class="font-semibold text-amber-800 dark:text-amber-300">' + escapeHtml(name) + '</span>' +
+        '<span class="text-slate-400 dark:text-slate-500">' + aiT('ai.tool_call') + '</span></div>' +
+        '<pre class="text-amber-700 dark:text-amber-300 mt-1 whitespace-pre-wrap font-mono text-[11px] leading-relaxed max-h-32 overflow-y-auto">' +
+        escapeHtml(resultPreview) + '</pre>';
     container.appendChild(div);
-    setTimeout(() => div.style.opacity = '0' && setTimeout(() => div.remove(), 500), 15000);
     scrollToBottom();
 }
 
 function renderMarkdown(text) {
     let html = escapeHtml(text);
-
-    // Extract and protect code blocks before any other processing
     const codeBlocks = [];
     html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
         codeBlocks.push({ lang, code });
         return '%%CODEBLOCK_' + (codeBlocks.length - 1) + '%%';
     });
-
-    // Inline code
-    html = html.replace(/`([^`]+)`/g, '<code class="bg-slate-100 text-indigo-600 px-1.5 py-0.5 rounded text-xs font-mono">$1</code>');
-
-    // Tables: | col1 | col2 |\n|---|---|\n| v1 | v2 |
+    html = html.replace(/`([^`]+)`/g, '<code class="bg-slate-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded text-xs font-mono">$1</code>');
     html = html.replace(/((?:^\|.+\|\n?)+)/gm, (match) => {
         const lines = match.trim().split('\n');
         if (lines.length < 2) return match;
-        // Must have header row and separator row
         const hasSep = lines[1] && /^\|[\s\-:|]+\|$/.test(lines[1]);
         if (!hasSep) return match;
         let table = '<table class="w-full text-xs border-collapse my-2"><thead><tr>';
-        const headers = lines[0].split('|').filter(s => s.trim());
-        headers.forEach(h => { table += '<th class="border border-slate-300 bg-slate-50 px-2 py-1 text-left font-medium">' + h.trim() + '</th>'; });
+        lines[0].split('|').filter(s => s.trim()).forEach(h => {
+            table += '<th class="border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-2 py-1 text-left font-medium">' + h.trim() + '</th>';
+        });
         table += '</tr></thead><tbody>';
         for (let i = 2; i < lines.length; i++) {
             const cells = lines[i].split('|').filter(s => s.trim());
             if (cells.length === 0) continue;
             table += '<tr>';
-            cells.forEach(c => { table += '<td class="border border-slate-200 px-2 py-1">' + c.trim() + '</td>'; });
+            cells.forEach(c => {
+                table += '<td class="border border-slate-200 dark:border-slate-600 px-2 py-1">' + c.trim() + '</td>';
+            });
             table += '</tr>';
         }
         table += '</tbody></table>';
         return table;
     });
-
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold">$1</strong>');
     html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    html = html.replace(/^### (.+)$/gm, '<h4 class="text-sm font-semibold text-slate-800 mt-2 mb-1">$1</h4>');
-    html = html.replace(/^## (.+)$/gm, '<h3 class="text-base font-semibold text-slate-800 mt-3 mb-1">$1</h3>');
-    html = html.replace(/^# (.+)$/gm, '<h2 class="text-lg font-semibold text-slate-800 mt-3 mb-2">$1</h2>');
+    html = html.replace(/^### (.+)$/gm, '<h4 class="text-sm font-semibold text-slate-800 dark:text-slate-200 mt-2 mb-1">$1</h4>');
+    html = html.replace(/^## (.+)$/gm, '<h3 class="text-base font-semibold text-slate-800 dark:text-slate-200 mt-3 mb-1">$1</h3>');
+    html = html.replace(/^# (.+)$/gm, '<h2 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mt-3 mb-2">$1</h2>');
     html = html.replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>');
-    html = html.replace(/^(\d+)\. (.+)$/gm, '<li class="ml-4 list-decimal">$1. $2</li>');
-    html = html.replace(/^>(.+)$/gm, '<blockquote class="border-l-2 border-indigo-300 pl-3 italic text-slate-500">$1</blockquote>');
+    html = html.replace(/^(\d+)\. (.+)$/gm, '<li class="ml-4 list-decimal">$2</li>');
+    html = html.replace(/^>(.+)$/gm, '<blockquote class="border-l-2 border-indigo-300 dark:border-indigo-600 pl-3 italic text-slate-500 dark:text-slate-400">$1</blockquote>');
     html = html.replace(/\n/g, '<br>');
-
-    // Restore code blocks
     html = html.replace(/%%CODEBLOCK_(\d+)%%/g, (_, i) => {
         const cb = codeBlocks[i];
-        const codeHtml = (cb.lang ? '<span class="text-slate-500 text-[10px]">' + cb.lang + '\n</span>' : '') + cb.code;
-        return '<pre class="bg-slate-900 text-emerald-400 p-3 rounded-xl my-2 overflow-x-auto text-xs"><code>' + codeHtml + '</code></pre>';
+        const id = 'ai-code-' + (++_codeBlockId);
+        const langLabel = cb.lang ? '<span class="text-slate-400 text-[10px] uppercase">' + escapeHtml(cb.lang) + '</span>' : '';
+        return '<div class="relative group/code my-2">' +
+            '<button onclick="copyCodeById(\'' + id + '\')" class="absolute top-2 right-2 p-1 rounded bg-slate-700/80 hover:bg-slate-600 text-slate-300 text-[10px] opacity-0 group-hover/code:opacity-100 transition-opacity" title="' + aiT('ai.copy') + '">' +
+            '<i class="fa-solid fa-copy"></i></button>' +
+            '<pre class="bg-slate-900 text-emerald-400 p-3 rounded-xl overflow-x-auto text-xs"><code id="' + id + '">' +
+            langLabel + (langLabel ? '\n' : '') + cb.code + '</code></pre></div>';
     });
-
     return html;
 }
 
-function scrollToBottom() {
+function scrollToBottom(force) {
     const container = document.getElementById('ai-messages');
-    setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
+    if (!container || (!force && !_autoScroll)) return;
+    requestAnimationFrame(() => {
+        container.scrollTop = container.scrollHeight;
+        scrollToBottomFloat();
+    });
 }
 
 function copyMessage(btn) {
-    const contentDiv = btn.parentElement.querySelector('.ai-content');
+    const contentDiv = btn.closest('.ai-bubble').querySelector('.ai-content');
     if (contentDiv) {
-        navigator.clipboard.writeText(contentDiv.textContent).then(() => showToast('已复制', 'success'));
+        navigator.clipboard.writeText(contentDiv.textContent).then(() => showToast(aiT('ai.copied'), 'success'));
+    }
+}
+
+function copyCodeById(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        navigator.clipboard.writeText(el.textContent).then(() => showToast(aiT('ai.code_copied'), 'success'));
     }
 }
 
 function copyCode(id) {
-    const el = document.getElementById(id);
-    if (el) {
-        navigator.clipboard.writeText(el.textContent).then(() => showToast('代码已复制', 'success'));
-    }
+    copyCodeById(id);
 }
 
-// Auto-resize textarea
-document.getElementById('ai-input').addEventListener('input', function() {
-    this.style.height = 'auto';
-    this.style.height = Math.min(this.scrollHeight, 128) + 'px';
-});
+window.sendAIMessage = sendAIMessage;
+window.sendQuick = sendQuick;
+window.clearChat = clearChat;
+window.toggleSettings = toggleSettings;
+window.exportChat = exportChat;
+window.saveAIConfig = saveAIConfig;
+window.onProviderChange = onProviderChange;
+window.onPromptTemplateChange = onPromptTemplateChange;
+window.retryLast = retryLast;
+window.copyMessage = copyMessage;
+window.copyCodeById = copyCodeById;
+window.copyCode = copyCode;
+window.scrollToBottomFloat = scrollToBottomFloat;
 
-// Keyboard shortcuts
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAIPage);
+} else {
+    initAIPage();
+}
+
 document.addEventListener('keydown', function(e) {
+    if (!isAIPage()) return;
     if (e.key === 'Escape') {
         const panel = document.getElementById('ai-settings');
         if (panel && !panel.classList.contains('hidden')) {
             panel.classList.add('hidden');
-            document.getElementById('ai-input').focus();
+            const input = document.getElementById('ai-input');
+            if (input) input.focus();
         }
     }
 });

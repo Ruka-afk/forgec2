@@ -1,10 +1,10 @@
 {{define "agent_tasks_list"}}
 {{range .Tasks}}
-<div class="bg-slate-50 rounded-2xl p-4 flex justify-between items-start">
+<div class="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 flex justify-between items-start">
     <div class="flex-1 min-w-0">
         <div class="flex items-center gap-x-2 text-xs">
             <span class="font-mono text-amber-600">{{.Type}}</span>
-            {{if .Command}}<span class="font-mono text-slate-600 truncate">{{.Command}}</span>{{end}}
+            {{if .Command}}<span class="font-mono text-slate-600 dark:text-slate-300 truncate">{{.Command}}</span>{{end}}
         </div>
         {{if .Result}}
         <pre class="mt-2 text-emerald-700 text-xs whitespace-pre-wrap break-all font-mono bg-white p-3 rounded-xl border border-slate-200 max-h-24 overflow-auto">{{.Result}}</pre>
@@ -16,6 +16,6 @@
     </div>
 </div>
 {{else}}
-<div class="text-slate-400 text-sm py-4">No tasks executed yet.</div>
+<div class="text-slate-400 dark:text-slate-500 text-sm py-4">No tasks executed yet.</div>
 {{end}}
 {{end}}

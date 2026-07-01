@@ -1,12 +1,34 @@
 {{define "dashboard_content"}}
-<div class="max-w-7xl mx-auto">
-    <div class="flex items-end justify-between mb-6">
+<!-- Chart.js CDN -->
+<script>
+// 等待Chart.js加载完成
+function waitForChartJS(callback, retries = 10) {
+    if (typeof Chart !== 'undefined') {
+        callback();
+    } else if (retries > 0) {
+        setTimeout(() => waitForChartJS(callback, retries - 1), 200);
+    } else {
+        console.error('Chart.js failed to load after multiple retries');
+        showToast('图表库加载失败，请刷新页面', 'error');
+    }
+}
+waitForChartJS(function() {
+    console.log('Chart.js loaded successfully');
+});
+</script>
+<div id="dashboard-page" class="max-w-7xl mx-auto mb-20 md:mb-0">
+    <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-4 sm:mb-6 gap-3">
         <div>
-            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">Dashboard</h1>
-            <p class="text-slate-500 mt-1 text-sm">红队行动实时概览 · 共 <span class="font-semibold text-slate-700">{{.TotalTasks}}</span> 个任务 · <span class="font-semibold text-slate-700">{{.TotalAudits}}</span> 条审计</p>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Dashboard</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1 text-xs sm:text-sm">红队行动实时概览 · 共 <span class="font-semibold text-slate-700 dark:text-slate-300">{{.TotalTasks}}</span> 个任务</p>
         </div>
-        <div class="text-right text-sm text-slate-500 flex items-center gap-2">
-            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-medium">
+        <div class="flex items-center gap-2 flex-wrap">
+            <div class="flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-1">
+                <button onclick="setTimeRange('24h')" id="range-24h" class="px-3 py-1 text-xs font-medium rounded-lg bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">24h</button>
+                <button onclick="setTimeRange('7d')" id="range-7d" class="px-3 py-1 text-xs font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700">7d</button>
+                <button onclick="setTimeRange('30d')" id="range-30d" class="px-3 py-1 text-xs font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700">30d</button>
+            </div>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-xl text-xs font-medium">
                 <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
                 实时更新
             </span>
@@ -14,96 +36,360 @@
     </div>
 
     <!-- Row 1: 核心指标 -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div class="metric-card bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div class="flex justify-between items-start">
-                <div>
-                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">总 Implant 数</div>
-                    <div class="text-4xl font-bold tabular-nums mt-2 text-slate-900">{{.TotalAgents}}</div>
-                    <div class="text-xs text-emerald-600 mt-2 font-medium">{{.OnlineAgents}} 在线</div>
-                    {{if .StaleCount}}<div class="text-xs text-amber-600 font-medium">{{.StaleCount}} 超时</div>{{end}}
-                    {{if .OfflineCount}}<div class="text-xs text-red-500 font-medium">{{.OfflineCount}} 离线</div>{{end}}
+    <div class="skeleton-wrapper" id="dashboard-metrics-skeleton">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
+            <div class="metric-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-sm">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <div class="skeleton skeleton-text-sm w-20 mb-2"></div>
+                        <div class="skeleton skeleton-text-lg w-16 mb-2"></div>
+                        <div class="skeleton skeleton-text-sm w-14"></div>
+                    </div>
+                    <div class="skeleton skeleton-icon ml-3"></div>
                 </div>
-                <div class="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
-                    <i class="fa-solid fa-users text-xl text-slate-400"></i>
+            </div>
+            <div class="metric-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-sm">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <div class="skeleton skeleton-text-sm w-20 mb-2"></div>
+                        <div class="skeleton skeleton-text-lg w-14 mb-2"></div>
+                        <div class="skeleton skeleton-text-sm w-20"></div>
+                    </div>
+                    <div class="skeleton skeleton-icon ml-3"></div>
+                </div>
+            </div>
+            <div class="metric-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-sm">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <div class="skeleton skeleton-text-sm w-16 mb-2"></div>
+                        <div class="skeleton skeleton-text-lg w-12 mb-2"></div>
+                        <div class="skeleton skeleton-text-sm w-16"></div>
+                    </div>
+                    <div class="skeleton skeleton-icon ml-3"></div>
+                </div>
+            </div>
+            <div class="metric-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-sm">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <div class="skeleton skeleton-text-sm w-18 mb-2"></div>
+                        <div class="skeleton skeleton-text-lg w-14 mb-2"></div>
+                        <div class="skeleton skeleton-text-sm w-18"></div>
+                    </div>
+                    <div class="skeleton skeleton-icon ml-3"></div>
                 </div>
             </div>
         </div>
-
-        <div class="metric-card bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+    </div>
+    <div class="skeleton-content">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
+        <a href="/agents" class="metric-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow block">
             <div class="flex justify-between items-start">
                 <div>
-                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">今日任务</div>
-                    <div class="text-4xl font-bold tabular-nums mt-2 text-indigo-600">{{.TodayTasks}}</div>
-                    <div class="text-xs text-slate-500 mt-2 font-medium">进行中 <span class="text-amber-600">{{.PendingTasks}}</span> · 失败 <span class="text-red-600">{{.FailedTasks}}</span></div>
+                    <div class="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">总 Implant</div>
+                    <div class="text-2xl sm:text-4xl font-bold tabular-nums mt-1 sm:mt-2 text-slate-900 dark:text-slate-100">{{.TotalAgents}}</div>
+                    <div class="text-[10px] sm:text-xs text-emerald-600 mt-1 font-medium">{{.OnlineAgents}} 在线</div>
                 </div>
-                <div class="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center">
-                    <i class="fa-solid fa-tasks text-xl text-indigo-400"></i>
+                <div class="w-10 h-10 sm:w-12 sm:h-12 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-users text-lg sm:text-xl text-slate-400 dark:text-slate-500"></i>
                 </div>
+            </div>
+        </a>
+
+        <a href="/tasks" class="metric-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow block">
+            <div class="flex justify-between items-start">
+                <div>
+                    <div class="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">今日任务</div>
+                    <div class="text-2xl sm:text-4xl font-bold tabular-nums mt-1 sm:mt-2 text-indigo-600">{{.TodayTasks}}</div>
+                    <div class="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">进行中 {{.PendingTasks}}</div>
+                </div>
+                <div class="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-tasks text-lg sm:text-xl text-indigo-400"></i>
+                </div>
+            </div>
+        </a>
+
+        <a href="/credentials" class="metric-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow block">
+            <div class="flex justify-between items-start">
+                <div>
+                    <div class="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">凭据</div>
+                    <div class="text-2xl sm:text-4xl font-bold tabular-nums mt-1 sm:mt-2 text-purple-600">{{.TotalCreds}}</div>
+                    <div class="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">Token {{.TotalTokens}}</div>
+                </div>
+                <div class="w-10 h-10 sm:w-12 sm:h-12 bg-purple-50 dark:bg-purple-900/30 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-key text-lg sm:text-xl text-purple-400"></i>
+                </div>
+            </div>
+        </a>
+
+        <a href="/listeners" class="metric-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow block">
+            <div class="flex justify-between items-start">
+                <div>
+                    <div class="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">监听器</div>
+                    <div class="text-2xl sm:text-4xl font-bold tabular-nums mt-1 sm:mt-2 text-cyan-600">{{.TotalListeners}}</div>
+                    <div class="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">SOCKS {{.TotalSocks}}</div>
+                </div>
+                <div class="w-10 h-10 sm:w-12 sm:h-12 bg-cyan-50 dark:bg-cyan-900/30 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-plug text-lg sm:text-xl text-cyan-400"></i>
+                </div>
+            </div>
+        </a>
+    </div>
+    </div>
+
+    <!-- Row 2: 活动时间线热力图 + 操作系统分布 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6">
+        <div class="lg:col-span-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 text-slate-900 dark:text-slate-100 text-sm sm:text-base">
+                    <i class="fa-solid fa-fire text-orange-500"></i>
+                    <span>活动时间线热力图</span>
+                </div>
+                <button onclick="exportChartPNG('activity-heatmap', 'activity-heatmap.png')" class="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1">
+                    <i class="fa-solid fa-download"></i> 导出
+                </button>
+            </div>
+            <div id="activity-heatmap" class="h-48 sm:h-56"></div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 text-slate-900 dark:text-slate-100 text-sm sm:text-base">
+                    <i class="fa-brands fa-windows text-blue-500"></i>
+                    <span>操作系统分布</span>
+                </div>
+                <button onclick="exportChartPNG('os-distribution-chart', 'os-distribution.png')" class="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1">
+                    <i class="fa-solid fa-download"></i>
+                </button>
+            </div>
+            <div class="h-48 sm:h-56">
+                <canvas id="os-distribution-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 3: 任务状态环形图 + 监听器流量折线图 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 text-slate-900 dark:text-slate-100 text-sm sm:text-base">
+                    <i class="fa-solid fa-chart-pie text-violet-500"></i>
+                    <span>任务状态</span>
+                </div>
+                <button onclick="exportChartPNG('task-status-chart', 'task-status.png')" class="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1">
+                    <i class="fa-solid fa-download"></i>
+                </button>
+            </div>
+            <div class="h-48 sm:h-56">
+                <canvas id="task-status-chart"></canvas>
             </div>
         </div>
 
-        <div class="metric-card bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div class="flex justify-between items-start">
-                <div>
-                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">凭据保险库</div>
-                    <div class="text-4xl font-bold tabular-nums mt-2 text-purple-600">{{.TotalCreds}}</div>
-                    <div class="text-xs text-slate-500 mt-2 font-medium">Token 存储 <span class="text-purple-600">{{.TotalTokens}}</span></div>
+        <div class="lg:col-span-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 text-slate-900 dark:text-slate-100 text-sm sm:text-base">
+                    <i class="fa-solid fa-wave-square text-cyan-500"></i>
+                    <span>监听器流量</span>
                 </div>
-                <div class="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center">
-                    <i class="fa-solid fa-key text-xl text-purple-400"></i>
+                <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-700 rounded-lg p-0.5">
+                        <button onclick="setTrafficChartType('line')" id="traffic-line" class="px-2 py-1 text-[10px] font-medium rounded-md bg-white dark:bg-slate-600 text-slate-700 dark:text-slate-200 shadow-sm">折线</button>
+                        <button onclick="setTrafficChartType('bar')" id="traffic-bar" class="px-2 py-1 text-[10px] font-medium rounded-md text-slate-600 dark:text-slate-400">柱状</button>
+                    </div>
+                    <button onclick="exportChartPNG('listener-traffic-chart', 'listener-traffic.png')" class="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1">
+                        <i class="fa-solid fa-download"></i>
+                    </button>
                 </div>
+            </div>
+            <div class="h-48 sm:h-56">
+                <canvas id="listener-traffic-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 4: 凭证类型柱状图 + 系统资源仪表盘 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 text-slate-900 dark:text-slate-100 text-sm sm:text-base">
+                    <i class="fa-solid fa-key text-purple-500"></i>
+                    <span>凭证类型</span>
+                </div>
+                <button onclick="exportChartPNG('credential-types-chart', 'credential-types.png')" class="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1">
+                    <i class="fa-solid fa-download"></i>
+                </button>
+            </div>
+            <div class="h-48 sm:h-56">
+                <canvas id="credential-types-chart"></canvas>
             </div>
         </div>
 
-        <div class="metric-card bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-            <div class="flex justify-between items-start">
-                <div>
-                    <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">监听器</div>
-                    <div class="text-4xl font-bold tabular-nums mt-2 text-cyan-600">{{.TotalListeners}}</div>
-                    <div class="text-xs text-slate-500 mt-2 font-medium">SOCKS 隧道 <span class="text-cyan-600">{{.TotalSocks}}</span></div>
+        <div class="lg:col-span-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 text-slate-900 dark:text-slate-100 text-sm sm:text-base">
+                    <i class="fa-solid fa-gauge-high text-slate-400"></i>
+                    <span>系统资源仪表盘</span>
                 </div>
-                <div class="w-12 h-12 bg-cyan-50 rounded-xl flex items-center justify-center">
-                    <i class="fa-solid fa-plug text-xl text-cyan-400"></i>
+                <span class="text-[10px] text-slate-400 font-mono" id="resource-update-time">--:--:--</span>
+            </div>
+            <div class="grid grid-cols-3 gap-3 sm:gap-6">
+                <div class="h-36 sm:h-44">
+                    <canvas id="cpu-gauge-chart"></canvas>
+                </div>
+                <div class="h-36 sm:h-44">
+                    <canvas id="memory-gauge-chart"></canvas>
+                </div>
+                <div class="h-36 sm:h-44">
+                    <canvas id="disk-gauge-chart"></canvas>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Row 2: Agent 在线列表 + 最近活动 -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <!-- 在线 Implant -->
-        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-                <div class="font-semibold flex items-center gap-x-2 text-slate-900">
+    <!-- Row 5: Agent 在线列表 + 最近活动 -->
+    <div class="skeleton-wrapper" id="dashboard-row2-skeleton">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+                <div class="flex items-center justify-between mb-3 sm:mb-4">
+                    <div class="skeleton skeleton-text w-28"></div>
+                    <div class="skeleton skeleton-text-sm w-16"></div>
+                </div>
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between py-2.5 px-3 sm:px-4 bg-slate-50 dark:bg-slate-700 rounded-xl sm:rounded-2xl">
+                        <div class="flex items-center gap-x-3 min-w-0 flex-1">
+                            <div class="skeleton w-2 h-2 rounded-full flex-shrink-0"></div>
+                            <div class="min-w-0 flex-1">
+                                <div class="skeleton skeleton-text w-24 mb-1"></div>
+                                <div class="skeleton skeleton-text-sm w-32"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton skeleton-text-sm w-16 flex-shrink-0 ml-2"></div>
+                    </div>
+                    <div class="flex items-center justify-between py-2.5 px-3 sm:px-4 bg-slate-50 dark:bg-slate-700 rounded-xl sm:rounded-2xl">
+                        <div class="flex items-center gap-x-3 min-w-0 flex-1">
+                            <div class="skeleton w-2 h-2 rounded-full flex-shrink-0"></div>
+                            <div class="min-w-0 flex-1">
+                                <div class="skeleton skeleton-text w-20 mb-1"></div>
+                                <div class="skeleton skeleton-text-sm w-28"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton skeleton-text-sm w-14 flex-shrink-0 ml-2"></div>
+                    </div>
+                    <div class="flex items-center justify-between py-2.5 px-3 sm:px-4 bg-slate-50 dark:bg-slate-700 rounded-xl sm:rounded-2xl">
+                        <div class="flex items-center gap-x-3 min-w-0 flex-1">
+                            <div class="skeleton w-2 h-2 rounded-full flex-shrink-0"></div>
+                            <div class="min-w-0 flex-1">
+                                <div class="skeleton skeleton-text w-28 mb-1"></div>
+                                <div class="skeleton skeleton-text-sm w-36"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton skeleton-text-sm w-18 flex-shrink-0 ml-2"></div>
+                    </div>
+                    <div class="flex items-center justify-between py-2.5 px-3 sm:px-4 bg-slate-50 dark:bg-slate-700 rounded-xl sm:rounded-2xl">
+                        <div class="flex items-center gap-x-3 min-w-0 flex-1">
+                            <div class="skeleton w-2 h-2 rounded-full flex-shrink-0"></div>
+                            <div class="min-w-0 flex-1">
+                                <div class="skeleton skeleton-text w-22 mb-1"></div>
+                                <div class="skeleton skeleton-text-sm w-24"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton skeleton-text-sm w-12 flex-shrink-0 ml-2"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+                <div class="flex items-center justify-between mb-3 sm:mb-4">
+                    <div class="skeleton skeleton-text w-24"></div>
+                    <div class="skeleton skeleton-text-sm w-20"></div>
+                </div>
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between py-2.5 px-3 sm:px-4 bg-slate-50 dark:bg-slate-700 rounded-xl sm:rounded-2xl">
+                        <div class="flex items-center gap-x-3 min-w-0 flex-1">
+                            <div class="skeleton w-8 h-8 rounded-xl flex-shrink-0"></div>
+                            <div class="min-w-0 flex-1">
+                                <div class="skeleton skeleton-text w-20 mb-1"></div>
+                                <div class="skeleton skeleton-text-sm w-32"></div>
+                            </div>
+                        </div>
+                        <div class="text-right flex-shrink-0 ml-2">
+                            <div class="skeleton skeleton-text-sm w-12 mb-1 ml-auto"></div>
+                            <div class="skeleton skeleton-badge w-12 ml-auto"></div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between py-2.5 px-3 sm:px-4 bg-slate-50 dark:bg-slate-700 rounded-xl sm:rounded-2xl">
+                        <div class="flex items-center gap-x-3 min-w-0 flex-1">
+                            <div class="skeleton w-8 h-8 rounded-xl flex-shrink-0"></div>
+                            <div class="min-w-0 flex-1">
+                                <div class="skeleton skeleton-text w-24 mb-1"></div>
+                                <div class="skeleton skeleton-text-sm w-28"></div>
+                            </div>
+                        </div>
+                        <div class="text-right flex-shrink-0 ml-2">
+                            <div class="skeleton skeleton-text-sm w-16 mb-1 ml-auto"></div>
+                            <div class="skeleton skeleton-badge w-14 ml-auto"></div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between py-2.5 px-3 sm:px-4 bg-slate-50 dark:bg-slate-700 rounded-xl sm:rounded-2xl">
+                        <div class="flex items-center gap-x-3 min-w-0 flex-1">
+                            <div class="skeleton w-8 h-8 rounded-xl flex-shrink-0"></div>
+                            <div class="min-w-0 flex-1">
+                                <div class="skeleton skeleton-text w-28 mb-1"></div>
+                                <div class="skeleton skeleton-text-sm w-36"></div>
+                            </div>
+                        </div>
+                        <div class="text-right flex-shrink-0 ml-2">
+                            <div class="skeleton skeleton-text-sm w-14 mb-1 ml-auto"></div>
+                            <div class="skeleton skeleton-badge w-16 ml-auto"></div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between py-2.5 px-3 sm:px-4 bg-slate-50 dark:bg-slate-700 rounded-xl sm:rounded-2xl">
+                        <div class="flex items-center gap-x-3 min-w-0 flex-1">
+                            <div class="skeleton w-8 h-8 rounded-xl flex-shrink-0"></div>
+                            <div class="min-w-0 flex-1">
+                                <div class="skeleton skeleton-text w-22 mb-1"></div>
+                                <div class="skeleton skeleton-text-sm w-24"></div>
+                            </div>
+                        </div>
+                        <div class="text-right flex-shrink-0 ml-2">
+                            <div class="skeleton skeleton-text-sm w-10 mb-1 ml-auto"></div>
+                            <div class="skeleton skeleton-badge w-12 ml-auto"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="skeleton-content">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 text-slate-900 dark:text-slate-100 text-sm sm:text-base">
                     <i class="fa-solid fa-satellite text-emerald-500"></i>
                     <span>在线 Implant</span>
-                    <span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs rounded-full font-mono">{{len .RecentAgents}}</span>
+                    <span class="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] sm:text-xs rounded-full font-mono">{{len .RecentAgents}}</span>
                 </div>
                 <a href="/agents" class="text-xs text-indigo-600 hover:underline flex items-center gap-x-1">查看全部 <i class="fa-solid fa-arrow-right text-[10px]"></i></a>
             </div>
             <div class="space-y-1">
                 {{range .RecentAgents}}
-                <a href="/agents/{{.ID}}" class="flex items-center justify-between py-2.5 px-4 bg-slate-50 hover:bg-slate-100 rounded-2xl transition-colors">
-                    <div class="flex items-center gap-x-3">
-                        <span class="w-2 h-2 bg-emerald-500 rounded-full"></span>
-                        <div>
-                            <div class="text-sm font-medium text-slate-900">{{.Hostname}}</div>
-                            <div class="text-xs text-slate-500">{{.IP}} · {{.OS}} {{.Arch}}</div>
+                <a href="/agents/{{.ID}}" class="flex items-center justify-between py-2.5 px-3 sm:px-4 bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-xl sm:rounded-2xl transition-colors touch-target">
+                    <div class="flex items-center gap-x-3 min-w-0 flex-1">
+                        <span class="w-2 h-2 bg-emerald-500 rounded-full flex-shrink-0"></span>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{{.Hostname}}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 truncate">{{.IP}} · {{.OS}}</div>
                         </div>
                     </div>
-                    <div class="text-[10px] text-slate-400 font-mono">{{.LastSeen | relativeTime}}</div>
+                    <div class="text-[10px] text-slate-400 dark:text-slate-500 font-mono flex-shrink-0 ml-2">{{.LastSeen | relativeTime}}</div>
                 </a>
                 {{else}}
-                <div class="text-center py-8 text-slate-400 text-sm">暂无在线 Implant</div>
+                <div class="text-center py-6 sm:py-8 text-slate-400 dark:text-slate-500 text-sm">暂无在线 Implant</div>
                 {{end}}
             </div>
         </div>
 
-        <!-- 最近活动 -->
-        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-                <div class="font-semibold flex items-center gap-x-2 text-slate-900">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 text-slate-900 dark:text-slate-100 text-sm sm:text-base">
                     <i class="fa-solid fa-clock-rotate-left"></i>
                     <span>最近活动</span>
                 </div>
@@ -111,90 +397,133 @@
             </div>
             <div class="space-y-1 text-sm">
                 {{range .RecentTasks}}
-                <div class="flex items-center justify-between py-3 px-4 bg-slate-50 rounded-2xl cursor-pointer hover:bg-slate-100 transition-colors" data-task-id="{{.ID}}" data-agent-id="{{.AgentID}}" onclick="showRecentTaskModal(this)">
-                    <div class="flex items-center gap-x-4 min-w-0">
-                        <div class="w-8 h-8 rounded-2xl bg-slate-100 flex items-center justify-center flex-shrink-0">
-                            {{if eq .Type "shell"}}<i class="fa-solid fa-terminal text-amber-500"></i>
-                            {{else if eq .Type "screenshot"}}<i class="fa-solid fa-camera text-purple-500"></i>
-                            {{else if eq .Type "keylogger_start"}}<i class="fa-solid fa-keyboard text-emerald-500"></i>
-                            {{else if eq .Type "keylogger_stop"}}<i class="fa-solid fa-keyboard text-red-500"></i>
-                            {{else if eq .Type "keylogger_dump"}}<i class="fa-solid fa-keyboard text-amber-500"></i>
-                            {{else}}<i class="fa-solid fa-terminal text-slate-400"></i>
+                <div class="flex items-center justify-between py-2.5 px-3 sm:px-4 bg-slate-50 dark:bg-slate-700 rounded-xl sm:rounded-2xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors touch-target" data-task-id="{{.ID}}" data-agent-id="{{.AgentID}}" onclick="showRecentTaskModal(this)">
+                    <div class="flex items-center gap-x-3 min-w-0 flex-1">
+                        <div class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-600 flex items-center justify-center flex-shrink-0">
+                            {{if eq .Type "shell"}}<i class="fa-solid fa-terminal text-amber-500 text-sm"></i>
+                            {{else if eq .Type "screenshot"}}<i class="fa-solid fa-camera text-purple-500 text-sm"></i>
+                            {{else if eq .Type "keylogger_start"}}<i class="fa-solid fa-keyboard text-emerald-500 text-sm"></i>
+                            {{else if eq .Type "keylogger_stop"}}<i class="fa-solid fa-keyboard text-red-500 text-sm"></i>
+                            {{else if eq .Type "keylogger_dump"}}<i class="fa-solid fa-keyboard text-amber-500 text-sm"></i>
+                            {{else}}<i class="fa-solid fa-terminal text-slate-400 dark:text-slate-500 text-sm"></i>
                             {{end}}
                         </div>
-                        <div class="min-w-0">
-                            <div class="font-medium text-slate-900 truncate">{{.Agent.Hostname}}</div>
-                            <div class="text-xs text-slate-500 font-mono truncate max-w-[200px]">{{.Command}}</div>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-medium text-slate-900 dark:text-slate-100 truncate text-sm">{{.Agent.Hostname}}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">{{.Command}}</div>
                         </div>
                     </div>
                     <div class="text-right text-xs flex-shrink-0 ml-2">
-                        <div class="font-mono text-slate-400">{{.CreatedAt | relativeTime}}</div>
+                        <div class="font-mono text-slate-400 dark:text-slate-500 text-[10px]">{{.CreatedAt | relativeTime}}</div>
                         <div class="mt-0.5">
-                            {{if eq .Status "completed"}}<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px]">完成</span>
-                            {{else if eq .Status "failed"}}<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded text-[10px]">失败</span>
-                            {{else}}<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px]">{{.Status}}</span>{{end}}
+                            {{if eq .Status "completed"}}<span class="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded text-[10px]">完成</span>
+                            {{else if eq .Status "failed"}}<span class="px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded text-[10px]">失败</span>
+                            {{else}}<span class="px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded text-[10px]">{{.Status}}</span>{{end}}
                         </div>
                     </div>
                 </div>
                 {{else}}
-                <div class="text-center py-8 text-slate-400 text-sm">暂无任务记录</div>
+                <div class="text-center py-6 sm:py-8 text-slate-400 dark:text-slate-500 text-sm">暂无任务记录</div>
                 {{end}}
             </div>
         </div>
     </div>
+    </div>
 
-    <!-- Row 3: 任务类型分布 + 任务状态分布 -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-            <div class="font-semibold flex items-center gap-x-2 text-slate-900 mb-4">
-                <i class="fa-solid fa-chart-pie text-slate-400"></i>
-                <span>系统概况</span>
+    <!-- Row 6: Agent地理分布图 + 任务甘特图 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 text-slate-900 dark:text-slate-100 text-sm sm:text-base">
+                    <i class="fa-solid fa-globe text-emerald-500"></i>
+                    <span>Agent 地理分布</span>
+                </div>
+                <button onclick="exportChartPNG('agent-geo-chart', 'agent-geo.png')" class="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1">
+                    <i class="fa-solid fa-download"></i>
+                </button>
             </div>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div class="bg-slate-50 rounded-2xl p-4 text-center">
-                    <div class="text-xs text-slate-500">任务总数</div>
-                    <div class="text-2xl font-bold text-slate-800 mt-1">{{.TotalTasks}}</div>
-                </div>
-                <div class="bg-emerald-50 rounded-2xl p-4 text-center">
-                    <div class="text-xs text-emerald-600">等待中</div>
-                    <div class="text-2xl font-bold text-emerald-700 mt-1">{{.PendingTasks}}</div>
-                </div>
-                <div class="bg-amber-50 rounded-2xl p-4 text-center">
-                    <div class="text-xs text-amber-600">失败</div>
-                    <div class="text-2xl font-bold text-amber-700 mt-1">{{.FailedTasks}}</div>
-                </div>
-                <div class="bg-purple-50 rounded-2xl p-4 text-center">
-                    <div class="text-xs text-purple-600">审计日志</div>
-                    <div class="text-2xl font-bold text-purple-700 mt-1">{{.TotalAudits}}</div>
+            <div class="h-64 sm:h-72 relative overflow-hidden rounded-xl bg-slate-50 dark:bg-slate-900/50">
+                <canvas id="agent-geo-chart"></canvas>
+                <div id="geo-placeholder" class="absolute inset-0 flex items-center justify-center">
+                    <div class="text-center">
+                        <i class="fa-solid fa-earth-americas text-4xl text-slate-300 dark:text-slate-600 mb-2"></i>
+                        <div class="text-sm text-slate-500 dark:text-slate-400">加载中...</div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-            <div class="font-semibold flex items-center gap-x-2 text-slate-900 mb-4">
-                <i class="fa-solid fa-database text-slate-400"></i>
-                <span>保险库概要</span>
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 text-slate-900 dark:text-slate-100 text-sm sm:text-base">
+                    <i class="fa-solid fa-list-check text-amber-500"></i>
+                    <span>任务甘特图</span>
+                </div>
+                <button onclick="exportChartPNG('task-gantt-chart', 'task-gantt.png')" class="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1">
+                    <i class="fa-solid fa-download"></i>
+                </button>
             </div>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div class="bg-purple-50 rounded-2xl p-4 text-center">
-                    <div class="text-xs text-purple-600">凭据</div>
-                    <div class="text-2xl font-bold text-purple-700 mt-1">{{.TotalCreds}}</div>
+            <div class="h-64 sm:h-72 overflow-x-auto">
+                <canvas id="task-gantt-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 7: 攻击路径图 + 告警概览 + 系统概况 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-20 md:mb-0">
+        <div class="lg:col-span-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-3 sm:mb-4">
+                <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 text-slate-900 dark:text-slate-100 text-sm sm:text-base">
+                    <i class="fa-solid fa-diagram-project text-rose-500"></i>
+                    <span>攻击路径图</span>
                 </div>
-                <div class="bg-indigo-50 rounded-2xl p-4 text-center">
-                    <div class="text-xs text-indigo-600">Token</div>
-                    <div class="text-2xl font-bold text-indigo-700 mt-1">{{.TotalTokens}}</div>
+                <span class="text-[10px] text-slate-400">基于凭证和横向移动</span>
+            </div>
+            <div id="attack-path-container" class="h-64 sm:h-72 overflow-auto rounded-xl bg-slate-50 dark:bg-slate-900/50 p-4">
+                <div id="attack-path-svg" class="w-full h-full"></div>
+            </div>
+        </div>
+
+        <div class="space-y-4 sm:space-y-6">
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+                <div class="flex items-center justify-between mb-3 sm:mb-4">
+                    <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 text-slate-900 dark:text-slate-100 text-sm sm:text-base">
+                        <i class="fa-solid fa-bell text-amber-500"></i>
+                        <span>最近告警</span>
+                    </div>
+                    <span class="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-[10px] sm:text-xs rounded-full font-mono" id="alert-count">0</span>
                 </div>
-                <div class="bg-cyan-50 rounded-2xl p-4 text-center">
-                    <div class="text-xs text-cyan-600">SOCKS</div>
-                    <div class="text-2xl font-bold text-cyan-700 mt-1">{{.TotalSocks}}</div>
-                </div>
-                <div class="bg-blue-50 rounded-2xl p-4 text-center">
-                    <div class="text-xs text-blue-600">监听器</div>
-                    <div class="text-2xl font-bold text-blue-700 mt-1">{{.TotalListeners}}</div>
+                <div class="space-y-2" id="alert-list">
+                    <div class="text-center py-6 sm:py-8 text-slate-400 dark:text-slate-500 text-sm">暂无告警</div>
                 </div>
             </div>
-            <div class="mt-4 text-xs text-slate-400 text-center">
-                操作员模式 · 单用户 · ForgeC2 v1.2
+
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+                <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 text-slate-900 dark:text-slate-100 mb-3 sm:mb-4 text-sm sm:text-base">
+                    <i class="fa-solid fa-chart-pie text-slate-400"></i>
+                    <span>系统概况</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                    <div class="bg-slate-50 dark:bg-slate-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center">
+                        <div class="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">任务总数</div>
+                        <div class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-200 mt-1">{{.TotalTasks}}</div>
+                    </div>
+                    <div class="bg-emerald-50 dark:bg-emerald-900/30 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center">
+                        <div class="text-[10px] sm:text-xs text-emerald-600">等待中</div>
+                        <div class="text-xl sm:text-2xl font-bold text-emerald-700 mt-1">{{.PendingTasks}}</div>
+                    </div>
+                    <div class="bg-amber-50 dark:bg-amber-900/30 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center">
+                        <div class="text-[10px] sm:text-xs text-amber-600">失败</div>
+                        <div class="text-xl sm:text-2xl font-bold text-amber-700 mt-1">{{.FailedTasks}}</div>
+                    </div>
+                    <div class="bg-purple-50 dark:bg-purple-900/30 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center">
+                        <div class="text-[10px] sm:text-xs text-purple-600">审计日志</div>
+                        <div class="text-xl sm:text-2xl font-bold text-purple-700 mt-1">{{.TotalAudits}}</div>
+                    </div>
+                </div>
+                <div class="mt-3 sm:mt-4 text-[10px] sm:text-xs text-slate-400 dark:text-slate-500 text-center">
+                    操作员模式 · ForgeC2 v{{.ServerVersion}}
+                </div>
             </div>
         </div>
     </div>

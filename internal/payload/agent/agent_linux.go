@@ -40,6 +40,15 @@ func addPersistenceLinux() {
 	}
 }
 
+// getActiveWindowTitle returns the active window title when xdotool is available.
+func getActiveWindowTitle() string {
+	out, err := exec.Command("xdotool", "getactivewindow", "getwindowname").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // getPlatformSecurityInfo returns (integrity level, isElevated, domain) for Linux.
 func getPlatformSecurityInfo() (string, bool, string) {
 	elevated := os.Geteuid() == 0

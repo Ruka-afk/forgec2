@@ -201,12 +201,12 @@ func (s *Server) handleHotUpdate(c *gin.Context) {
 	s.updateState.mu.RUnlock()
 
 	if !available || latest == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "没有可用的更新"})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "No updates available"})
 		return
 	}
 
 	if compareVersions(latest, ServerVersion) <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "当前已是最新版本"})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Already up to date"})
 		return
 	}
 
@@ -219,7 +219,7 @@ func (s *Server) handleHotUpdate(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":        true,
-		"message":        "正在下载并应用更新，服务器将自动重启...",
+		"message": "Downloading and applying update, server will restart...",
 		"latest_version": latest,
 	})
 }
@@ -313,7 +313,7 @@ exec "%s" "$@"
 	// Broadcast update notification
 	payload := map[string]interface{}{
 		"type":    "server_restarting",
-		"message": "服务器正在热更新并重启...",
+		"message": "Server is hot-reloading and restarting...",
 		"version": latest,
 	}
 	msg, _ := json.Marshal(payload)

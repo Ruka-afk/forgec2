@@ -323,6 +323,30 @@ func (s *Server) handleRPortFwdRelayStart(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("rportfwd relay :%d -> %s via %s", lport, forwardTarget, id)})
 }
 
+func (s *Server) handleRPortFwdStatus(c *gin.Context) {
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+
+	s.rportfwdMu.Lock()
+	defer s.rportfwdMu.Unlock()
+
+	for _, relay := range s.rportfwdListeners {
+		if relay.agentID != id {
+			continue
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"active": true,
+			"port":   relay.localPort,
+			"target": relay.forwardTarget,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"active": false})
+}
+
 func (s *Server) handleRPortFwdRelayStop(c *gin.Context) {
 	id := c.Param("id")
 	localPortStr := c.PostForm("lport")

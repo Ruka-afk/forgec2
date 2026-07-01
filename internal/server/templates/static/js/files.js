@@ -5,6 +5,7 @@ let deleteTargetPath = '';
 let uploadTargetPath = '';
 
 document.addEventListener('DOMContentLoaded', function() {
+    if (!document.getElementById('current-path') || typeof agentId === 'undefined') return;
     listDir(currentPath);
 });
 
@@ -24,10 +25,10 @@ function listDir(path) {
         if (data.success) {
             setTimeout(() => fetchListResult(data.task_id), 2000);
         } else {
-            showError(data.error || '请求失败');
+            showError(data.error || __t('Request failed'));
         }
     }).catch(err => {
-        showError('网络错误: ' + err);
+        showError(__t('Network error:') + ' ' + err);
     });
 }
 
@@ -38,12 +39,12 @@ function fetchListResult(taskId) {
             if (data.status === 'completed') {
                 renderFileList(data.result);
             } else if (data.status === 'failed') {
-                showError(data.error || '获取文件列表失败');
+                showError(data.error || __t('Failed to get file list'));
             } else {
                 setTimeout(() => fetchListResult(taskId), 2000);
             }
         }).catch(err => {
-            showError('网络错误: ' + err);
+            showError(__t('Network error:') + ' ' + err);
         });
 }
 
@@ -120,20 +121,20 @@ function renderFileList(rawResult) {
                         </button>
                     ` : `
                         <button onclick="readFile('${escapeJs(fullPath)}', '${escapeJs(file.name)}')"
-                                class="text-slate-600 hover:text-slate-800 text-xs px-2 py-1 rounded hover:bg-slate-100" title="查看内容">
+                                class="text-slate-600 hover:text-slate-800 text-xs px-2 py-1 rounded hover:bg-slate-100" title="${__t('View content')}">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                         <button onclick="uploadFile('${escapeJs(fullPath)}', '${escapeJs(file.name)}')"
-                                class="text-emerald-600 hover:text-emerald-800 text-xs px-2 py-1 rounded hover:bg-emerald-50" title="上传到服务器">
+                                class="text-emerald-600 hover:text-emerald-800 text-xs px-2 py-1 rounded hover:bg-emerald-50" title="${__t('Upload to server')}">
                             <i class="fa-solid fa-upload"></i>
                         </button>
                         <button onclick="downloadToLocal('${escapeJs(fullPath)}')"
-                                class="text-blue-600 hover:text-blue-800 text-xs px-2 py-1 rounded hover:bg-blue-50" title="下载到本地">
+                                class="text-blue-600 hover:text-blue-800 text-xs px-2 py-1 rounded hover:bg-blue-50" title="${__t('Download to local')}">
                             <i class="fa-solid fa-download"></i>
                         </button>
                     `}
                     <button onclick="deleteFile('${escapeJs(fullPath)}', '${escapeJs(file.name)}')"
-                            class="text-red-600 hover:text-red-800 text-xs px-2 py-1 rounded hover:bg-red-50" title="删除">
+                            class="text-red-600 hover:text-red-800 text-xs px-2 py-1 rounded hover:bg-red-50" title="${__t('Delete')}">
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </div>
@@ -165,10 +166,10 @@ function readFile(path, name) {
         body: `path=${encodeURIComponent(path)}`
     }).then(r => r.json()).then(data => {
         if (data.success) {
-            showToast('正在读取文件...');
+            showToast(__t('Reading file...'));
             setTimeout(() => fetchReadResult(data.task_id, name), 2000);
         } else {
-            showError(data.error || '请求失败');
+            showError(data.error || __t('Request failed'));
         }
     });
 }
@@ -180,7 +181,7 @@ function fetchReadResult(taskId, name) {
             if (data.status === 'completed') {
                 showPreview(name, data.result);
             } else if (data.status === 'failed') {
-                showError(data.error || '读取文件失败');
+                showError(data.error || __t('Failed to read file'));
             } else {
                 setTimeout(() => fetchReadResult(taskId, name), 2000);
             }
@@ -210,7 +211,7 @@ function closeDeleteModal() {
     deleteTargetPath = '';
 }
 
-function confirmDelete() {
+function confirmFileDelete() {
     if (!deleteTargetPath) return;
     fetch(`/agents/${agentId}/files/delete`, {
         method: 'POST',
@@ -219,10 +220,10 @@ function confirmDelete() {
     }).then(r => r.json()).then(data => {
         closeDeleteModal();
         if (data.success) {
-            showToast('删除请求已发送');
+            showToast(__t('Delete request sent'));
             setTimeout(() => refreshList(), 3000);
         } else {
-            showError(data.error || '请求失败');
+            showError(data.error || __t('Request failed'));
         }
     });
 }
@@ -247,9 +248,9 @@ function confirmUpload() {
     }).then(r => r.json()).then(data => {
         closeUploadModal();
         if (data.success) {
-            showToast('上传请求已发送，请稍后查看任务结果');
+            showToast(__t('Upload request sent, check task results later'));
         } else {
-            showError(data.error || '请求失败');
+            showError(data.error || __t('Request failed'));
         }
     });
 }
@@ -284,7 +285,7 @@ function uploadLocalFileToAgent() {
         const file = e.target.files[0];
         if (!file) return;
         const targetPath = currentPath.endsWith('\\') ? currentPath + file.name : currentPath + '\\' + file.name;
-        if (!confirm(`上传本地文件 ${file.name} (${formatSize(file.size)}) 到 ${targetPath} ?`)) return;
+        if (!confirm(__tf('Upload local file {0} ({1}) to {2}?', file.name, formatSize(file.size), targetPath))) return;
         await chunkedUploadToAgent(file, targetPath);
     };
     input.click();
@@ -311,18 +312,18 @@ async function chunkedUploadToAgent(file, targetPath) {
             });
             const data = await response.json();
             if (!data.success) {
-                showError(data.error || '上传块失败');
+                showError(data.error || __t('Upload chunk failed'));
                 return;
             }
             uploaded += chunk.size;
             const percent = Math.round((uploaded / file.size) * 100);
-            showToast(`上传进度: ${percent}%`);
+            showToast(__tf('Upload progress: {0}%', percent));
         } catch (err) {
-            showError('上传错误: ' + err.message);
+            showError(__t('Upload error:') + ' ' + err.message);
             return;
         }
     }
-    showToast('文件上传完成！');
+    showToast(__t('File upload complete!'));
     setTimeout(() => refreshList(), 1500);
 }
 
@@ -332,7 +333,7 @@ async function downloadToLocal(path) {
     const chunks = [];
     const fileName = path.split('\\').pop() || 'downloaded_file';
 
-    showToast('开始分块下载...');
+    showToast(__t('Starting chunked download...'));
 
     while (true) {
         const resp = await fetch(`/agents/${agentId}/files/download`, {
@@ -342,7 +343,7 @@ async function downloadToLocal(path) {
         });
         const data = await resp.json();
         if (!data.success) {
-            showError(data.error || '下载块请求失败');
+            showError(data.error || __t('Download chunk request failed'));
             return;
         }
         const taskResult = await pollDownloadChunk(data.task_id);
@@ -357,10 +358,10 @@ async function downloadToLocal(path) {
             }
             chunks.push(bytes);
             offset += chunkSize;
-            showToast(`已下载 ${Math.floor(offset / 1024 / 1024)} MB`);
+            showToast(__tf('Downloaded {0} MB', Math.floor(offset / 1024 / 1024)));
             if (bytes.length < chunkSize) break;
         } catch (e) {
-            showError('解码块失败');
+            showError(__t('Decode chunk failed'));
             return;
         }
     }
@@ -382,7 +383,7 @@ async function downloadToLocal(path) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('下载完成');
+    showToast(__t('Download complete'));
 }
 
 async function pollDownloadChunk(taskId) {

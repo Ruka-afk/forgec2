@@ -1,13 +1,13 @@
 {{define "timeline_content"}}
-<div class="max-w-7xl mx-auto">
+<div class="max-w-7xl mx-auto mb-20 md:mb-0">
     <!-- 页面标题 -->
-    <div class="flex items-end justify-between mb-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3">
         <div>
-            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">行动时间线</h1>
-            <p class="text-slate-500 text-sm mt-1">按时间顺序查看所有审计日志、任务执行和操作记录</p>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">行动时间线</h1>
+            <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1">按时间顺序查看所有审计日志、任务执行和操作记录</p>
         </div>
         <div class="flex items-center gap-3">
-            <button onclick="exportTimeline()" class="px-4 h-10 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl text-sm flex items-center gap-2 transition-colors">
+            <button onclick="exportTimeline()" class="px-4 h-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 rounded-xl text-sm flex items-center gap-2 transition-colors">
                 <i class="fa-solid fa-download text-slate-600"></i>
                 <span class="text-slate-700">导出 CSV</span>
             </button>
@@ -19,14 +19,14 @@
     </div>
 
     <!-- 筛选栏 -->
-    <div class="bg-white border border-slate-200 rounded-2xl p-4 mb-4 shadow-sm">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 mb-4 shadow-sm">
         <form id="timeline-filter" class="flex flex-wrap items-center gap-3">
             <div class="flex items-center gap-2">
                 <i class="fa-solid fa-filter text-indigo-500 text-sm"></i>
                 <span class="text-sm font-semibold text-slate-700">筛选</span>
             </div>
 
-            <select id="filter-type" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-10 focus:outline-none focus:border-indigo-500 cursor-pointer">
+            <select id="filter-type" class="bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-sm rounded-xl px-3 h-10 focus:outline-none focus:border-indigo-500 cursor-pointer">
                 <option value="">全部类型</option>
                 <option value="audit">审计日志</option>
                 <option value="task">任务执行</option>
@@ -35,20 +35,20 @@
             <div class="flex-1 min-w-[200px] relative">
                 <i class="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
                 <input type="text" id="filter-user" placeholder="筛选用户..."
-                       class="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl pl-9 pr-3 h-10 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all">
+                       class="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 text-sm rounded-xl pl-9 pr-3 h-10 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all">
             </div>
 
             <div class="flex-1 min-w-[200px] relative">
-                <i class="fa-solid fa-robot absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                <i class="fa-solid fa-robot absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm"></i>
                 <input type="text" id="filter-agent" placeholder="筛选 Implant ID 或名称..."
-                       class="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl pl-9 pr-3 h-10 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all">
+                       class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-sm rounded-xl pl-9 pr-3 h-10 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all">
             </div>
 
             <button type="button" onclick="applyFilters()" class="px-5 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors">
                 <i class="fa-solid fa-check mr-1.5"></i>应用
             </button>
 
-            <button type="button" onclick="clearFilters()" class="px-4 h-10 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl text-sm transition-colors">
+            <button type="button" onclick="clearFilters()" class="px-4 h-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 rounded-xl text-sm transition-colors">
                 <i class="fa-solid fa-times text-slate-600"></i>
             </button>
         </form>
@@ -56,36 +56,36 @@
 
     <!-- 统计信息 -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex items-center justify-between">
                 <div>
                     <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">总事件数</div>
                     <div class="text-3xl font-bold mt-2 text-slate-900" id="total-events">0</div>
-                    <div class="text-xs text-slate-500 mt-1">最近 200 条</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">最近 200 条</div>
                 </div>
                 <div class="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
-                    <i class="fa-solid fa-clock-rotate-left text-xl text-slate-400"></i>
+                    <i class="fa-solid fa-clock-rotate-left text-xl text-slate-400 dark:text-slate-500"></i>
                 </div>
             </div>
         </div>
-        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex items-center justify-between">
                 <div>
                     <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">审计日志</div>
                     <div class="text-3xl font-bold mt-2 text-blue-600" id="audit-count">0</div>
-                    <div class="text-xs text-slate-500 mt-1">用户操作记录</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">用户操作记录</div>
                 </div>
                 <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
                     <i class="fa-solid fa-shield-halved text-xl text-blue-400"></i>
                 </div>
             </div>
         </div>
-        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex items-center justify-between">
                 <div>
                     <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">任务执行</div>
                     <div class="text-3xl font-bold mt-2 text-emerald-600" id="task-count">0</div>
-                    <div class="text-xs text-slate-500 mt-1">Agent 任务</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Agent 任务</div>
                 </div>
                 <div class="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center">
                     <i class="fa-solid fa-list-check text-xl text-emerald-400"></i>
@@ -95,7 +95,8 @@
     </div>
 
     <!-- 时间线 -->
-    <div id="timeline-container" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+    <div id="timeline-container" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm max-h-[70vh] overflow-y-auto">
+        <p class="text-[10px] text-slate-400 dark:text-slate-500 mb-3 flex items-center gap-1"><i class="fa-solid fa-arrows-up-down text-[9px]"></i> 可滚动查看完整时间线</p>
         <div id="timeline-loading" class="text-center py-12">
             <i class="fa-solid fa-circle-notch fa-spin text-4xl text-indigo-500 mb-3"></i>
             <p class="text-slate-500 text-sm">加载时间线...</p>
@@ -106,10 +107,8 @@
         <div id="timeline-empty" class="hidden text-center py-12">
             <i class="fa-solid fa-timeline text-6xl text-slate-300 mb-4"></i>
             <h3 class="text-lg font-medium text-slate-700 mb-2">暂无时间线事件</h3>
-            <p class="text-slate-500">开始执行任务或进行操作后，时间线将在这里显示</p>
+            <p class="text-slate-500 dark:text-slate-400">开始执行任务或进行操作后，时间线将在这里显示</p>
         </div>
     </div>
 </div>
-
-<script src="/static/js/timeline.js"></script>
 {{end}}

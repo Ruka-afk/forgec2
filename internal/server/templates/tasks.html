@@ -1,85 +1,161 @@
 {{define "tasks_content"}}
-<div class="max-w-7xl mx-auto">
-    <div class="flex items-center justify-between mb-6">
+<div class="max-w-7xl mx-auto mb-20 md:mb-0">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-3">
         <div>
-            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">任务历史</h1>
-            <p class="text-slate-500 text-sm mt-1">所有 Agent 执行过的任务记录 · 共 <span class="font-semibold text-slate-700">{{.Total}}</span> 个任务</p>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">任务历史</h1>
+            <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1">所有任务记录 · 共 <span class="font-semibold text-slate-700 dark:text-slate-300">{{.Total}}</span> 个任务</p>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
             <span id="live-status" class="text-xs text-slate-400 font-mono hidden">
                 <i class="fa-solid fa-circle text-emerald-500 fa-beat mr-1" style="font-size:6px"></i> 实时
             </span>
-            <button onclick="exportTasks()" class="px-4 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium flex items-center gap-x-2 transition-colors">
+            <button data-action="export-tasks" class="px-3 sm:px-4 h-11 sm:h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium flex items-center gap-x-2 transition-colors touch-target">
                 <i class="fa-solid fa-download"></i>
-                <span>导出 CSV</span>
+                <span class="hidden sm:inline">导出 CSV</span>
+                <span class="sm:hidden">导出</span>
             </button>
         </div>
     </div>
 
     <!-- Filter Bar -->
-    <div class="bg-white border border-slate-200 rounded-2xl p-4 mb-4 shadow-sm">
-        <form method="GET" action="/tasks" class="flex flex-wrap items-center gap-3">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 sm:p-4 mb-4 shadow-sm">
+        <form method="GET" action="/tasks" class="flex flex-col gap-3">
             <div class="flex items-center gap-2">
                 <i class="fa-solid fa-filter text-indigo-500 text-sm"></i>
-                <span class="text-sm font-semibold text-slate-700">筛选</span>
+                <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">筛选</span>
             </div>
 
-            <div class="flex-1 min-w-[200px] relative">
-                <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+            <div class="relative">
+                <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm"></i>
                 <input type="text" name="q" placeholder="搜索命令..." value="{{.FilterQuery}}"
-                       class="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl pl-9 pr-3 h-10 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all font-mono">
+                       class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-sm rounded-xl pl-9 pr-3 h-11 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 transition-all font-mono">
             </div>
 
-            <select name="type" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-10 focus:outline-none focus:border-indigo-500 cursor-pointer">
-                <option value="">全部类型</option>
-                {{range .TaskTypes}}
-                <option value="{{.}}" {{if eq . $.FilterType}}selected{{end}}>{{.}}</option>
-                {{end}}
-            </select>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <select name="type" class="bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-sm rounded-xl px-3 h-11 focus:outline-none focus:border-indigo-500 cursor-pointer touch-target">
+                    <option value="">全部类型</option>
+                    {{range .TaskTypes}}
+                    <option value="{{.}}" {{if eq . $.FilterType}}selected{{end}}>{{.}}</option>
+                    {{end}}
+                </select>
 
-            <select name="status" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-10 focus:outline-none focus:border-indigo-500 cursor-pointer">
-                <option value="">全部状态</option>
-                <option value="completed" {{if eq "completed" $.FilterStatus}}selected{{end}}>已完成</option>
-                <option value="pending" {{if eq "pending" $.FilterStatus}}selected{{end}}>等待中</option>
-                <option value="failed" {{if eq "failed" $.FilterStatus}}selected{{end}}>失败</option>
-            </select>
+                <select name="status" class="bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-sm rounded-xl px-3 h-11 focus:outline-none focus:border-indigo-500 cursor-pointer touch-target">
+                    <option value="">全部状态</option>
+                    <option value="completed" {{if eq "completed" $.FilterStatus}}selected{{end}}>已完成</option>
+                    <option value="pending" {{if eq "pending" $.FilterStatus}}selected{{end}}>等待中</option>
+                    <option value="failed" {{if eq "failed" $.FilterStatus}}selected{{end}}>失败</option>
+                </select>
 
-            <select name="agent" class="bg-slate-50 border border-slate-200 text-sm rounded-xl px-3 h-10 focus:outline-none focus:border-indigo-500 max-w-[200px] cursor-pointer">
-                <option value="">全部 Agent</option>
-                {{range .Agents}}
-                <option value="{{.ID}}" {{if eq .ID $.FilterAgent}}selected{{end}}>{{.Hostname}} ({{.IP}})</option>
-                {{end}}
-            </select>
+                <select name="agent" class="bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-sm rounded-xl px-3 h-11 focus:outline-none focus:border-indigo-500 cursor-pointer col-span-2 sm:col-span-1 touch-target">
+                    <option value="">全部 Agent</option>
+                    {{range .Agents}}
+                    <option value="{{.ID}}" {{if eq .ID $.FilterAgent}}selected{{end}}>{{.Hostname}} ({{.IP}})</option>
+                    {{end}}
+                </select>
 
-            <button type="submit" class="px-4 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors">
-                <i class="fa-solid fa-search mr-1"></i> 筛选
-            </button>
-            {{if or .FilterQuery .FilterType .FilterStatus .FilterAgent}}
-            <a href="/tasks" class="px-4 h-10 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-medium flex items-center gap-x-1 transition-colors">
-                <i class="fa-solid fa-times"></i> 清除
-            </a>
-            {{end}}
+                <div class="flex gap-2 col-span-2 sm:col-span-1">
+                    <button type="submit" class="flex-1 px-4 h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors touch-target">
+                        <i class="fa-solid fa-search mr-1"></i> 筛选
+                    </button>
+                    {{if or .FilterQuery .FilterType .FilterStatus .FilterAgent}}
+                    <a href="/tasks" class="flex-1 px-4 h-11 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl text-sm font-medium flex items-center justify-center gap-x-1 transition-colors touch-target">
+                        <i class="fa-solid fa-times"></i> 清除
+                    </a>
+                    {{end}}
+                </div>
+            </div>
         </form>
     </div>
 
-    <div class="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="bg-slate-50 border-b border-slate-200">
-                <tr class="text-xs text-slate-500">
-                    <th class="text-left py-3 px-4 font-normal">时间</th>
-                    <th class="text-left py-3 px-4 font-normal">Agent</th>
-                    <th class="text-left py-3 px-4 font-normal">操作员</th>
-                    <th class="text-left py-3 px-4 font-normal">类型</th>
-                    <th class="text-left py-3 px-4 font-normal">命令</th>
-                    <th class="text-left py-3 px-4 font-normal">结果</th>
-                    <th class="text-center py-3 px-4 font-normal">状态</th>
-                    <th class="text-center py-3 px-4 font-normal">操作</th>
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm">
+        <div class="overflow-x-auto table-scroll-container" id="tasks-table-container">
+            <div class="skeleton-wrapper" id="tasks-skeleton">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
+                    <tr class="text-xs text-slate-500 dark:text-slate-400">
+                        <th class="text-left py-3 px-3 sm:py-3 sm:px-4 font-normal min-w-[140px]"><div class="skeleton skeleton-text-sm w-12"></div></th>
+                        <th class="text-left py-3 px-3 sm:py-3 sm:px-4 font-normal min-w-[120px]"><div class="skeleton skeleton-text-sm w-14"></div></th>
+                        <th class="text-left py-3 px-3 sm:py-3 sm:px-4 font-normal min-w-[100px]"><div class="skeleton skeleton-text-sm w-10"></div></th>
+                        <th class="text-left py-3 px-3 sm:py-3 sm:px-4 font-normal min-w-[150px]"><div class="skeleton skeleton-text-sm w-12"></div></th>
+                        <th class="text-left py-3 px-3 sm:py-3 sm:px-4 font-normal min-w-[120px]"><div class="skeleton skeleton-text-sm w-12"></div></th>
+                        <th class="text-center py-3 px-3 sm:py-3 sm:px-4 font-normal min-w-[80px]"><div class="skeleton skeleton-text-sm w-10 mx-auto"></div></th>
+                        <th class="text-center py-3 px-4 sm:py-3 sm:px-4 font-normal min-w-[80px]"><div class="skeleton skeleton-text-sm w-10 mx-auto"></div></th>
+                    </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        <tr class="skeleton-table-row">
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-24"></div><div class="skeleton skeleton-text-sm w-16 mt-1"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text w-20"></div><div class="skeleton skeleton-text-sm w-16 mt-1"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-16"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-badge w-14"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text w-32"></div></td>
+                            <td class="py-3 px-4 text-center"><div class="skeleton skeleton-badge w-14 mx-auto"></div></td>
+                            <td class="py-3 px-4 text-center"><div class="skeleton w-16 h-8 rounded-lg mx-auto"></div></td>
+                        </tr>
+                        <tr class="skeleton-table-row">
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-28"></div><div class="skeleton skeleton-text-sm w-20 mt-1"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text w-24"></div><div class="skeleton skeleton-text-sm w-20 mt-1"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-20"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-badge w-16"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text w-28"></div></td>
+                            <td class="py-3 px-4 text-center"><div class="skeleton skeleton-badge w-16 mx-auto"></div></td>
+                            <td class="py-3 px-4 text-center"><div class="skeleton w-16 h-8 rounded-lg mx-auto"></div></td>
+                        </tr>
+                        <tr class="skeleton-table-row">
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-20"></div><div class="skeleton skeleton-text-sm w-24 mt-1"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text w-16"></div><div class="skeleton skeleton-text-sm w-12 mt-1"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-14"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-badge w-12"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text w-36"></div></td>
+                            <td class="py-3 px-4 text-center"><div class="skeleton skeleton-badge w-12 mx-auto"></div></td>
+                            <td class="py-3 px-4 text-center"><div class="skeleton w-16 h-8 rounded-lg mx-auto"></div></td>
+                        </tr>
+                        <tr class="skeleton-table-row">
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-32"></div><div class="skeleton skeleton-text-sm w-18 mt-1"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text w-28"></div><div class="skeleton skeleton-text-sm w-24 mt-1"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-22"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-badge w-18"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                            <td class="py-3 px-4 text-center"><div class="skeleton skeleton-badge w-18 mx-auto"></div></td>
+                            <td class="py-3 px-4 text-center"><div class="skeleton w-16 h-8 rounded-lg mx-auto"></div></td>
+                        </tr>
+                        <tr class="skeleton-table-row">
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-26"></div><div class="skeleton skeleton-text-sm w-22 mt-1"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text w-22"></div><div class="skeleton skeleton-text-sm w-18 mt-1"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-18"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-badge w-20"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text w-30"></div></td>
+                            <td class="py-3 px-4 text-center"><div class="skeleton skeleton-badge w-20 mx-auto"></div></td>
+                            <td class="py-3 px-4 text-center"><div class="skeleton w-16 h-8 rounded-lg mx-auto"></div></td>
+                        </tr>
+                        <tr class="skeleton-table-row">
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-24"></div><div class="skeleton skeleton-text-sm w-16 mt-1"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text w-32"></div><div class="skeleton skeleton-text-sm w-26 mt-1"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-24"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-badge w-16"></div></td>
+                            <td class="py-3 px-4"><div class="skeleton skeleton-text w-20"></div></td>
+                            <td class="py-3 px-4 text-center"><div class="skeleton skeleton-badge w-16 mx-auto"></div></td>
+                            <td class="py-3 px-4 text-center"><div class="skeleton w-16 h-8 rounded-lg mx-auto"></div></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="skeleton-content">
+            <table class="w-full text-sm" id="tasks-list-table">
+                <thead class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
+                <tr class="text-xs text-slate-500 dark:text-slate-400">
+                    <th class="text-left py-3 px-3 sm:py-3 sm:px-4 font-normal min-w-[140px]">时间</th>
+                    <th class="text-left py-3 px-3 sm:py-3 sm:px-4 font-normal min-w-[120px]">Agent</th>
+                    <th class="text-left py-3 px-3 sm:py-3 sm:px-4 font-normal min-w-[100px]">类型</th>
+                    <th class="text-left py-3 px-3 sm:py-3 sm:px-4 font-normal min-w-[150px]">命令</th>
+                    <th class="text-left py-3 px-3 sm:py-3 sm:px-4 font-normal min-w-[120px]">结果</th>
+                    <th class="text-center py-3 px-3 sm:py-3 sm:px-4 font-normal min-w-[80px]">状态</th>
+                    <th class="text-center py-3 px-4 sm:py-3 sm:px-4 font-normal min-w-[80px]">操作</th>
                 </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100" id="tasks-tbody">
                 {{range .Tasks}}
-                <tr class="hover:bg-slate-50 transition-colors task-row {{if eq .Status "pending"}}bg-amber-50/50{{end}}" data-task-id="{{.ID}}" data-agent-id="{{.AgentID}}" data-status="{{.Status}}">
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors task-row {{if eq .Status "pending"}}bg-amber-50/50{{end}}" data-task-id="{{.ID}}" data-agent-id="{{.AgentID}}" data-status="{{.Status}}">
                     <td class="py-3 px-4 font-mono text-xs text-slate-500 whitespace-nowrap">
                         {{.CreatedAt | formatTime}}
                         {{if .UpdatedAt.After .CreatedAt}}
@@ -134,7 +210,7 @@
                         {{end}}
                     </td>
                     <td class="py-3 px-4 text-center">
-                        <button onclick="rerunTask('{{.AgentID}}', {{.ID}})"
+                        <button data-action="rerun-task" data-agent-id="{{.AgentID}}" data-task-id="{{.ID}}"
                                 class="inline-flex items-center gap-x-1 px-2.5 py-1.5 text-xs font-medium bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl transition-colors">
                             <i class="fa-solid fa-redo text-[10px]"></i> 重跑
                         </button>
@@ -153,39 +229,45 @@
                 {{end}}
                 </tbody>
             </table>
+            </div>
+        </div>
+        <div class="sm:hidden px-4 py-2 text-center text-xs text-slate-400 dark:text-slate-500 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            <i class="fa-solid fa-arrows-left-right mr-1"></i> 左右滑动查看更多
         </div>
     </div>
 
     {{if gt .Total (int64 .PageSize)}}
-    <div class="flex items-center justify-center gap-2 mt-6">
-        {{if gt .Page 1}}
-        <a href="?page={{subtract .Page 1}}&pageSize={{.PageSize}}{{if .FilterQuery}}&q={{.FilterQuery}}{{end}}{{if .FilterType}}&type={{.FilterType}}{{end}}{{if .FilterStatus}}&status={{.FilterStatus}}{{end}}{{if .FilterAgent}}&agent={{.FilterAgent}}{{end}}"
-           class="px-4 h-9 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl text-sm flex items-center gap-x-1">
-            <i class="fa-solid fa-chevron-left text-xs"></i> 上一页
-        </a>
-        {{end}}
-        <span class="px-4 h-9 bg-indigo-600 text-white rounded-xl text-sm font-medium flex items-center">
-            第 {{.Page}} / {{.TotalPages}} 页
-        </span>
-        <span class="text-xs text-slate-400 font-mono">(共 {{.Total}} 条)</span>
-        {{if lt .Page .TotalPages}}
-        <a href="?page={{add .Page 1}}&pageSize={{.PageSize}}{{if .FilterQuery}}&q={{.FilterQuery}}{{end}}{{if .FilterType}}&type={{.FilterType}}{{end}}{{if .FilterStatus}}&status={{.FilterStatus}}{{end}}{{if .FilterAgent}}&agent={{.FilterAgent}}{{end}}"
-           class="px-4 h-9 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl text-sm flex items-center gap-x-1">
-            下一页 <i class="fa-solid fa-chevron-right text-xs"></i>
-        </a>
-        {{end}}
+    <div class="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-2 mt-4 sm:mt-6">
+        <div class="flex gap-2 order-2 sm:order-1">
+            {{if gt .Page 1}}
+            <a href="?page={{subtract .Page 1}}&pageSize={{.PageSize}}{{if .FilterQuery}}&q={{.FilterQuery}}{{end}}{{if .FilterType}}&type={{.FilterType}}{{end}}{{if .FilterStatus}}&status={{.FilterStatus}}{{end}}{{if .FilterAgent}}&agent={{.FilterAgent}}{{end}}"
+               class="px-4 py-2 h-11 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-xl text-sm flex items-center gap-x-1 touch-target">
+                <i class="fa-solid fa-chevron-left text-xs"></i> 上一页
+            </a>
+            {{end}}
+            {{if lt .Page .TotalPages}}
+            <a href="?page={{add .Page 1}}&pageSize={{.PageSize}}{{if .FilterQuery}}&q={{.FilterQuery}}{{end}}{{if .FilterType}}&type={{.FilterType}}{{end}}{{if .FilterStatus}}&status={{.FilterStatus}}{{end}}{{if .FilterAgent}}&agent={{.FilterAgent}}{{end}}"
+               class="px-4 py-2 h-11 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-xl text-sm flex items-center gap-x-1 touch-target">
+                下一页 <i class="fa-solid fa-chevron-right text-xs"></i>
+            </a>
+            {{end}}
+        </div>
+        <div class="flex items-center gap-2 order-1 sm:order-2">
+            <span class="px-4 py-2 h-11 bg-indigo-600 text-white rounded-xl text-sm font-medium flex items-center">
+                第 {{.Page}} / {{.TotalPages}} 页
+            </span>
+        </div>
+        <span class="text-xs text-slate-400 font-mono order-3 hidden sm:inline">(共 {{.Total}} 条)</span>
     </div>
     {{end}}
 
     <!-- Failed tasks retry all -->
     {{if .HasFailedTasks}}
     <div class="mt-4 text-center">
-        <button onclick="retryAllFailed()" class="px-4 h-9 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl text-sm font-medium">
+        <button data-action="retry-all-failed" class="px-4 h-9 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl text-sm font-medium">
             <i class="fa-solid fa-redo mr-1"></i> 重试所有失败任务
         </button>
     </div>
     {{end}}
 </div>
-
-<script src="/static/js/tasks.js"></script>
 {{end}}

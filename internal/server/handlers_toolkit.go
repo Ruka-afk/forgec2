@@ -27,7 +27,7 @@ func (s *Server) handleToolkitPage(c *gin.Context) {
 		Order("created_at desc").Limit(10).Find(&agentTasks)
 
 	data := gin.H{
-		"Title":       "ForgeC2 - 后渗透工具包",
+		"Title": "ForgeC2 - Post-Exploitation Toolkit",
 		"ActiveNav":   "toolkit",
 		"Stats":       stats,
 		"Agents":      agents,

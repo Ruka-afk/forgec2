@@ -1,9 +1,9 @@
 {{define "listener_detail_content"}}
-<div class="max-w-7xl mx-auto">
+<div class="max-w-7xl mx-auto mb-20 md:mb-0">
     <div class="flex items-center gap-x-4 mb-6">
-        <a href="/listeners" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-arrow-left text-xl"></i></a>
+        <a href="/listeners" class="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:text-slate-300"><i class="fa-solid fa-arrow-left text-xl"></i></a>
         <div>
-            <h1 class="text-3xl font-semibold tracking-tight text-slate-900">{{.Listener.Name}}</h1>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{{.Listener.Name}}</h1>
             <div class="text-slate-500 text-sm">{{if .Listener.Scheme}}{{.Listener.Scheme}}{{else}}{{.Listener.Type}}{{end}}://{{.Listener.Host}}:{{.Listener.Port}}</div>
         </div>
         <div class="ml-auto">
@@ -18,14 +18,14 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Info -->
         <div class="lg:col-span-1">
-            <div class="bg-white border border-slate-200 rounded-3xl p-6">
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-6">
                 <h3 class="font-semibold mb-4">监听器信息</h3>
                 <div class="space-y-3 text-sm">
                     <div><span class="text-slate-500">方案:</span> {{if .Listener.Scheme}}{{.Listener.Scheme}}{{else}}{{.Listener.Protocol}}{{end}}</div>
-                    <div><span class="text-slate-500">地址:</span> {{.Listener.Host}}:{{.Listener.Port}}</div>
-                    <div><span class="text-slate-500">传输类型:</span> {{.Listener.Type}}</div>
-                    <div><span class="text-slate-500">备注:</span> {{.Listener.Notes}}</div>
-                    <div><span class="text-slate-500">创建:</span> {{.Listener.CreatedAt | formatTime}}</div>
+                    <div><span class="text-slate-500 dark:text-slate-400">地址:</span> {{.Listener.Host}}:{{.Listener.Port}}</div>
+                    <div><span class="text-slate-500 dark:text-slate-400">传输类型:</span> {{.Listener.Type}}</div>
+                    <div><span class="text-slate-500 dark:text-slate-400">备注:</span> {{.Listener.Notes}}</div>
+                    <div><span class="text-slate-500 dark:text-slate-400">创建:</span> {{.Listener.CreatedAt | formatTime}}</div>
                 </div>
                 <div class="mt-6 flex gap-2">
                     <a href="/generate?listener_id={{.Listener.ID}}" class="flex-1 text-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm">为此监听器生成 Implant</a>
@@ -36,15 +36,15 @@
         <!-- Stats -->
         <div class="lg:col-span-2">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="bg-white border border-slate-200 rounded-3xl p-5">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-5">
                     <div class="text-xs text-slate-500">关联 Agent 总数</div>
                     <div class="text-4xl font-semibold mt-2">{{.TotalAgents}}</div>
                 </div>
-                <div class="bg-white border border-slate-200 rounded-3xl p-5">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-5">
                     <div class="text-xs text-slate-500">当前活跃</div>
                     <div class="text-4xl font-semibold mt-2 text-emerald-600">{{.ActiveAgents}}</div>
                 </div>
-                <div class="bg-white border border-slate-200 rounded-3xl p-5">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-5">
                     <div class="text-xs text-slate-500">负载均衡提示</div>
                     <div class="text-sm mt-2 text-slate-600">可将多个监听器指向不同服务器或端口实现多播/负载均衡。Agent 可随机或按策略连接不同监听器。</div>
                 </div>
@@ -59,7 +59,7 @@
             <a href="/agents" class="text-sm text-indigo-600">查看全部 Agent →</a>
         </div>
 
-        <div class="bg-white border border-slate-200 rounded-3xl overflow-hidden">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl overflow-hidden">
             <table class="w-full text-sm">
                 <thead class="bg-slate-50">
                     <tr>

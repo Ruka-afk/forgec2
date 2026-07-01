@@ -80,7 +80,7 @@ func Parse(name, profileText string) (*Profile, error) {
 		case strings.HasPrefix(lower, "http-config {"):
 			current = "http-config"
 
-		case lower == "}" || lower == "}":
+		case lower == "}":
 			current = ""
 
 		case current == "http-get":

@@ -1,27 +1,39 @@
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+if (typeof window.escapeHtml !== 'function') window.escapeHtml = escapeHtml;
+
 let ws = null;
 let reconnectAttempts = 0;
 const maxReconnectAttempts = 5;
 
 document.addEventListener('DOMContentLoaded', function() {
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message-input');
+    if (!chatForm || !messageInput) return;
+
     loadMessages();
     connectWebSocket();
 
-    document.getElementById('chat-form').addEventListener('submit', function(e) {
+    chatForm.addEventListener('submit', function(e) {
         e.preventDefault();
-        sendMessage();
+        sendChatMessage();
     });
 
-    document.getElementById('message-input').addEventListener('keydown', function(e) {
+    messageInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
-            sendMessage();
+            sendChatMessage();
         }
     });
 });
 
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/chat?user_id=${encodeURIComponent(currentUsername)}`;
+    const wsUrl = protocol + '//' + window.location.host + '/ws/chat?user_id=' + encodeURIComponent(currentUsername);
 
     ws = new WebSocket(wsUrl);
 
@@ -64,7 +76,7 @@ function loadMessages() {
                 container.innerHTML = `
                     <div class="text-center text-slate-400 text-sm py-8">
                         <i class="fa-solid fa-comments text-4xl mb-2"></i>
-                        <p>暂无消息，开始聊天吧！</p>
+                        <p>${__t('No messages, start chatting!')}</p>
                     </div>
                 `;
             }
@@ -82,7 +94,7 @@ function appendMessage(msg) {
     const msgEl = document.createElement('div');
     msgEl.className = `flex ${isMe ? 'justify-end' : 'justify-start'}`;
 
-    const time = new Date(msg.timestamp || msg.created_at).toLocaleTimeString('zh-CN', {
+    const time = new Date(msg.timestamp || msg.created_at).toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit'
     });
@@ -102,7 +114,7 @@ function appendMessage(msg) {
     container.appendChild(msgEl);
 }
 
-function sendMessage() {
+function sendChatMessage() {
     const input = document.getElementById('message-input');
     const message = input.value.trim();
 

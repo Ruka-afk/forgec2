@@ -1,32 +1,29 @@
 {{define "audit_content"}}
-<div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-    <!-- Header -->
-    <div class="bg-white border-b border-slate-200 px-6 py-4 shadow-sm">
-        <div class="flex items-center justify-between">
+<div class="max-w-7xl mx-auto mb-20 md:mb-0">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3">
             <div>
-                <h1 class="text-2xl font-semibold text-slate-900">安全审计日志</h1>
-                <div class="text-sm text-slate-500 mt-1">记录所有系统操作和访问行为</div>
+                <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">安全审计日志</h1>
+                <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">记录所有系统操作和访问行为</p>
             </div>
-            <button onclick="exportLogs()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 h-11 rounded-xl text-sm font-medium flex items-center gap-x-2">
+            <button onclick="exportLogs()" class="ui-btn ui-btn-primary h-11 shrink-0">
                 <i class="fa-solid fa-download"></i>
                 <span>导出日志</span>
             </button>
-        </div>
     </div>
 
     <!-- Filters -->
     <div class="bg-white border-b border-slate-200 px-6 py-4">
         <div class="flex items-center gap-x-4 flex-wrap">
             <div class="relative flex-1 max-w-md">
-                <i class="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <i class="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"></i>
                 <input type="text" id="search-input" placeholder="搜索用户、资源或详情..." 
-                       class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 h-11 text-sm">
+                       class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl pl-11 pr-4 h-11 text-sm">
             </div>
-            <select id="user-filter" class="bg-slate-50 border border-slate-200 rounded-xl px-4 h-11 text-sm min-w-[140px]">
+            <select id="user-filter" class="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl px-4 h-11 text-sm min-w-[140px]">
                 <option value="">所有操作员</option>
                 {{range .UserList}}<option value="{{.Username}}">{{.Username}} ({{.Role}})</option>{{end}}
             </select>
-            <select id="action-filter" class="bg-slate-50 border border-slate-200 rounded-xl px-4 h-11 text-sm">
+            <select id="action-filter" class="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl px-4 h-11 text-sm">
                 <option value="">所有操作</option>
                 <option value="login">登录</option>
                 <option value="logout">退出</option>
@@ -51,7 +48,7 @@
                 <i class="fa-solid fa-filter"></i>
                 <span>筛选</span>
             </button>
-            <button onclick="resetFilters()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 h-11 rounded-xl text-sm">
+            <button onclick="resetFilters()" class="bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-5 h-11 rounded-xl text-sm">
                 重置
             </button>
         </div>
@@ -59,18 +56,97 @@
 
     <!-- Main Content -->
     <div class="p-6">
-        <div class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
             <div class="bg-slate-50 border-b border-slate-200 px-6 py-3">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-x-3">
                         <i class="fa-solid fa-file-text text-indigo-500"></i>
-                        <span class="text-sm font-medium text-slate-700">审计记录</span>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">审计记录</span>
                     </div>
                     <span class="text-xs text-slate-500" id="total-count">共 0 条记录</span>
                 </div>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full">
+            <div class="overflow-x-auto table-scroll-container" id="audit-table-container">
+                <div class="skeleton-wrapper" id="audit-skeleton">
+                    <table class="w-full">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-slate-500"><div class="skeleton skeleton-text-sm w-10"></div></th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-slate-500"><div class="skeleton skeleton-text-sm w-8"></div></th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-slate-500"><div class="skeleton skeleton-text-sm w-6"></div></th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-slate-500"><div class="skeleton skeleton-text-sm w-8"></div></th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-slate-500"><div class="skeleton skeleton-text-sm w-10"></div></th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-slate-500"><div class="skeleton skeleton-text-sm w-14"></div></th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-slate-500"><div class="skeleton skeleton-text-sm w-10"></div></th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-slate-500"><div class="skeleton skeleton-text-sm w-10"></div></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr class="skeleton-table-row">
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-24 mb-1"></div><div class="skeleton skeleton-text-sm w-20"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-16"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-20"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-badge w-24"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-20"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-16"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-badge w-16"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-32"></div></td>
+                            </tr>
+                            <tr class="skeleton-table-row">
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-28 mb-1"></div><div class="skeleton skeleton-text-sm w-24"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-20"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-16"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-badge w-20"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-20"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-badge w-14"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-28"></div></td>
+                            </tr>
+                            <tr class="skeleton-table-row">
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-20 mb-1"></div><div class="skeleton skeleton-text-sm w-28"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-24"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-badge w-16"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-28"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-24"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-badge w-20"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-36"></div></td>
+                            </tr>
+                            <tr class="skeleton-table-row">
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-32 mb-1"></div><div class="skeleton skeleton-text-sm w-16"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-18"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-20"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-badge w-28"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-18"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-28"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-badge w-18"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-24"></div></td>
+                            </tr>
+                            <tr class="skeleton-table-row">
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-26 mb-1"></div><div class="skeleton skeleton-text-sm w-22"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-22"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-28"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-badge w-22"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-32"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-22"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-badge w-12"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-30"></div></td>
+                            </tr>
+                            <tr class="skeleton-table-row">
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-24 mb-1"></div><div class="skeleton skeleton-text-sm w-26"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-28"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-22"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-badge w-18"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-22"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text-sm w-32"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-badge w-16"></div></td>
+                                <td class="py-3 px-4"><div class="skeleton skeleton-text w-20"></div></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="skeleton-content">
+                <table class="w-full" id="audit-list-table">
                     <thead class="bg-slate-50 border-b border-slate-200">
                         <tr>
                             <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">时间</th>
@@ -83,7 +159,7 @@
                             <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">详情</th>
                         </tr>
                     </thead>
-                    <tbody id="log-table-body" class="divide-y divide-slate-100">
+                    <tbody id="log-table-body" class="divide-y divide-slate-100 dark:divide-slate-700">
                         <tr>
                             <td colspan="8" class="py-16 text-center text-slate-400">
                                 <i class="fa-solid fa-spinner fa-spin text-xl mb-2"></i>
@@ -92,6 +168,7 @@
                         </tr>
                     </tbody>
                 </table>
+                </div>
             </div>
             <!-- Pagination -->
             <div class="bg-slate-50 border-t border-slate-200 px-6 py-4 flex items-center justify-between">
@@ -100,12 +177,12 @@
                 </div>
                 <div class="flex items-center gap-x-2">
                     <button id="prev-page" onclick="prevPage()" 
-                            class="px-3 h-8 bg-white border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                            class="px-3 h-8 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">
                         上一页
                     </button>
-                    <span id="current-page" class="text-xs text-slate-600 px-2">1</span>
+                    <span id="current-page" class="text-xs text-slate-600 dark:text-slate-300 px-2">1</span>
                     <button id="next-page" onclick="nextPage()" 
-                            class="px-3 h-8 bg-white border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                            class="px-3 h-8 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">
                         下一页
                     </button>
                 </div>
@@ -113,6 +190,4 @@
         </div>
     </div>
 </div>
-
-<script src="/static/js/audit.js"></script>
 {{end}}

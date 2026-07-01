@@ -1,0 +1,28 @@
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-1 { flex: 1 1 0%; }
+.h-screen { height: 100vh; }
+.overflow-hidden { overflow: hidden; }
+.overflow-auto { overflow: auto; }
+.hidden { display: none; }
+.w-56 { width: 14rem; }
+.fixed { position: fixed; }
+.bg-white { background-color: #ffffff; }
+.bg-slate-100 { background-color: #f1f5f9; }
+.border-r { border-right: 1px solid #e2e8f0; }
+.border-b { border-bottom: 1px solid #e2e8f0; }
+.border-t { border-top: 1px solid #e2e8f0; }
+.shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.text-slate-800 { color: #1e293b; }
+.text-slate-600 { color: #475569; }
+.text-slate-500 { color: #64748b; }
+.text-sm { font-size: 0.875rem; }
+.p-4 { padding: 1rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.h-12 { height: 3rem; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-x-4 { column-gap: 1rem; }
+.max-w-7xl { max-width: 80rem; }
+.mx-auto { margin-left: auto; margin-right: auto; }

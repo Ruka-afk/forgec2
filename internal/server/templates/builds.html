@@ -1,94 +1,182 @@
 {{define "builds_content"}}
-<div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-    <div class="bg-white border-b border-slate-200 px-6 py-4 shadow-sm">
-        <div class="flex items-center justify-between">
-            <div>
-                <h1 class="text-2xl font-semibold text-slate-900">构建日志</h1>
-                <div class="text-sm text-slate-500 mt-1">Implant 编译历史记录</div>
+<div class="max-w-7xl mx-auto mb-20 md:mb-0" id="builds-page">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                <i class="fa-solid fa-hammer text-indigo-500 mr-2"></i>{{T .CurrentLang "builds.title"}}
+            </h1>
+            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+                {{T .CurrentLang "builds.subtitle"}} · {{T .CurrentLang "builds.total"}} <span class="font-semibold text-slate-700 dark:text-slate-300">{{.Total}}</span>
+            </p>
+        </div>
+        <button type="button" data-action="reload-page" class="ui-btn ui-btn-primary h-11 shrink-0">
+            <i class="fa-solid fa-sync"></i>
+            <span>{{T .CurrentLang "builds.refresh"}}</span>
+        </button>
+    </div>
+
+    <!-- Summary -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{{T .CurrentLang "builds.total"}}</div>
+                    <div class="text-3xl font-bold mt-2 text-indigo-600 dark:text-indigo-400 tabular-nums">{{.Total}}</div>
+                </div>
+                <div class="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
+                    <i class="fa-solid fa-hammer text-xl text-indigo-400"></i>
+                </div>
             </div>
-            <button onclick="location.reload()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 h-11 rounded-xl text-sm font-medium flex items-center gap-x-2">
-                <i class="fa-solid fa-sync"></i>
-                <span>刷新</span>
-            </button>
+        </div>
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{{T .CurrentLang "builds.success"}}</div>
+                    <div class="text-3xl font-bold mt-2 text-emerald-600 dark:text-emerald-400 tabular-nums">{{.SuccessCount}}</div>
+                </div>
+                <div class="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
+                    <i class="fa-solid fa-check-circle text-xl text-emerald-400"></i>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{{T .CurrentLang "builds.failed"}}</div>
+                    <div class="text-3xl font-bold mt-2 text-red-600 dark:text-red-400 tabular-nums">{{.FailedCount}}</div>
+                </div>
+                <div class="w-12 h-12 bg-red-50 dark:bg-red-900/30 rounded-xl flex items-center justify-center">
+                    <i class="fa-solid fa-exclamation-circle text-xl text-red-400"></i>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="p-6">
-        <div class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-            <div class="bg-slate-50 border-b border-slate-200 px-6 py-3">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-x-3">
-                        <i class="fa-solid fa-hammer text-indigo-500"></i>
-                        <span class="text-sm font-medium text-slate-700">构建记录</span>
-                    </div>
-                    <span class="text-xs text-slate-500">共 {{.Total}} 条</span>
+    <!-- Filters -->
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 sm:p-4 mb-4 shadow-sm">
+        <form method="GET" action="/builds" class="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div class="flex items-center gap-2 shrink-0">
+                <i class="fa-solid fa-filter text-indigo-500 text-sm"></i>
+                <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{T .CurrentLang "builds.filter"}}</span>
+            </div>
+            <select name="status" class="bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-sm rounded-xl px-3 h-11 focus:outline-none focus:border-indigo-500 cursor-pointer">
+                <option value="">{{T .CurrentLang "builds.all_status"}}</option>
+                <option value="success" {{if eq .FilterStatus "success"}}selected{{end}}>{{T .CurrentLang "builds.success"}}</option>
+                <option value="failed" {{if eq .FilterStatus "failed"}}selected{{end}}>{{T .CurrentLang "builds.failed"}}</option>
+            </select>
+            <select name="platform" class="bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-sm rounded-xl px-3 h-11 focus:outline-none focus:border-indigo-500 cursor-pointer">
+                <option value="">{{T .CurrentLang "builds.all_platform"}}</option>
+                <option value="windows" {{if eq .FilterPlatform "windows"}}selected{{end}}>Windows</option>
+                <option value="linux" {{if eq .FilterPlatform "linux"}}selected{{end}}>Linux</option>
+                <option value="macos" {{if eq .FilterPlatform "macos"}}selected{{end}}>macOS</option>
+            </select>
+            <input type="hidden" name="pageSize" value="{{.PageSize}}">
+            <div class="flex gap-2 sm:ml-auto">
+                <button type="submit" class="px-4 h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors">
+                    <i class="fa-solid fa-search mr-1"></i> {{T .CurrentLang "common.search"}}
+                </button>
+                {{if or .FilterStatus .FilterPlatform}}
+                <a href="/builds?pageSize={{.PageSize}}" class="px-4 h-11 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl text-sm font-medium flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-times mr-1"></i> {{T .CurrentLang "common.cancel"}}
+                </a>
+                {{end}}
+            </div>
+        </form>
+    </div>
+
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl shadow-sm overflow-hidden">
+        <div class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 px-4 sm:px-6 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-x-3">
+                    <i class="fa-solid fa-list text-indigo-500"></i>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{T .CurrentLang "builds.records"}}</span>
                 </div>
+                <span class="text-xs text-slate-500 dark:text-slate-400">{{T .CurrentLang "builds.total"}} {{.Total}}</span>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-slate-50 border-b border-slate-200">
-                        <tr>
-                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">时间</th>
-                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">平台</th>
-                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">格式</th>
-                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">C2 URL</th>
-                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">文件名</th>
-                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">操作人</th>
-                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">状态</th>
-                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">详情</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        {{range .Logs}}
-                        <tr class="hover:bg-slate-50 transition-colors">
-                            <td class="py-3 px-4 text-sm text-slate-600 font-mono">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
-                            <td class="py-3 px-4 text-sm">
-                                <span class="px-2 py-1 text-xs rounded-lg {{if eq .Platform "windows"}}bg-blue-100 text-blue-700{{else}}bg-emerald-100 text-emerald-700{{end}}">{{.Platform}}</span>
-                            </td>
-                            <td class="py-3 px-4 text-sm font-mono text-slate-600">{{.Format}}</td>
-                            <td class="py-3 px-4 text-sm text-slate-600 font-mono max-w-xs truncate" title="{{.C2URL}}">{{.C2URL}}</td>
-                            <td class="py-3 px-4 text-sm text-slate-600">{{.Filename}}</td>
-                            <td class="py-3 px-4 text-sm text-slate-600">{{.User}}</td>
-                            <td class="py-3 px-4 text-sm">
-                                {{if eq .Status "success"}}
-                                <span class="inline-flex items-center gap-1 text-emerald-600"><i class="fa-solid fa-check-circle"></i> 成功</span>
-                                {{else}}
-                                <span class="inline-flex items-center gap-1 text-red-600"><i class="fa-solid fa-exclamation-circle"></i> 失败</span>
-                                {{end}}
-                            </td>
-                            <td class="py-3 px-4 text-sm text-slate-500 max-w-xs truncate" title="{{.Error}}">{{if .Error}}{{.Error}}{{else}}<span class="text-slate-300">-</span>{{end}}</td>
-                        </tr>
-                        {{else}}
-                        <tr><td colspan="8" class="py-20 text-center text-slate-400">
-                            <i class="fa-solid fa-hammer text-3xl mb-3"></i><br>暂无构建记录
-                        </td></tr>
-                        {{end}}
-                    </tbody>
-                </table>
-            </div>
-            {{if gt .TotalPages 1}}
-            <div class="bg-slate-50 border-t border-slate-200 px-6 py-4 flex items-center justify-between">
-                <div class="text-xs text-slate-500">共 {{.Total}} 条</div>
-                <div class="flex items-center gap-x-2">
-                    {{if gt .Page 1}}
-                    <a href="/builds?page={{.PrevPage}}&pageSize=20" class="px-3 h-8 bg-white border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-slate-50">上一页</a>
-                    {{end}}
-                    <span class="text-xs text-slate-600 px-2">{{.Page}}/{{.TotalPages}}</span>
-                    {{if lt .Page .TotalPages}}
-                    <a href="/builds?page={{.NextPage}}&pageSize=20" class="px-3 h-8 bg-white border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-slate-50">下一页</a>
-                    {{end}}
-                </div>
-            </div>
-            {{end}}
         </div>
+        <div class="overflow-x-auto table-scroll-container">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
+                    <tr class="text-xs text-slate-500 dark:text-slate-400">
+                        <th class="text-left py-3 px-4 font-medium min-w-[140px]">{{T .CurrentLang "builds.time"}}</th>
+                        <th class="text-left py-3 px-4 font-medium min-w-[90px]">{{T .CurrentLang "builds.platform"}}</th>
+                        <th class="text-left py-3 px-4 font-medium min-w-[80px]">{{T .CurrentLang "builds.format"}}</th>
+                        <th class="text-left py-3 px-4 font-medium min-w-[160px]">{{T .CurrentLang "builds.c2_url"}}</th>
+                        <th class="text-left py-3 px-4 font-medium min-w-[120px]">{{T .CurrentLang "builds.filename"}}</th>
+                        <th class="text-left py-3 px-4 font-medium min-w-[90px]">{{T .CurrentLang "builds.operator"}}</th>
+                        <th class="text-left py-3 px-4 font-medium min-w-[90px]">{{T .CurrentLang "builds.status"}}</th>
+                        <th class="text-left py-3 px-4 font-medium min-w-[140px]">{{T .CurrentLang "builds.details"}}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                    {{range .Logs}}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                        <td class="py-3 px-4 text-slate-600 dark:text-slate-300 font-mono text-xs whitespace-nowrap">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+                        <td class="py-3 px-4">
+                            {{if eq .Platform "windows"}}
+                            <span class="px-2 py-1 text-xs rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium">Windows</span>
+                            {{else if eq .Platform "linux"}}
+                            <span class="px-2 py-1 text-xs rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-medium">Linux</span>
+                            {{else if eq .Platform "macos"}}
+                            <span class="px-2 py-1 text-xs rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium">macOS</span>
+                            {{else}}
+                            <span class="px-2 py-1 text-xs rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium">{{.Platform}}</span>
+                            {{end}}
+                        </td>
+                        <td class="py-3 px-4 font-mono text-xs text-slate-600 dark:text-slate-300">{{.Format}}</td>
+                        <td class="py-3 px-4 text-slate-600 dark:text-slate-300 font-mono text-xs max-w-[200px] truncate" title="{{.C2URL}}">{{.C2URL}}</td>
+                        <td class="py-3 px-4 text-slate-600 dark:text-slate-300 text-xs max-w-[160px] truncate" title="{{.Filename}}">{{.Filename}}</td>
+                        <td class="py-3 px-4 text-slate-600 dark:text-slate-300 text-xs">{{.User}}</td>
+                        <td class="py-3 px-4">
+                            {{if eq .Status "success"}}
+                            <span class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
+                                <i class="fa-solid fa-check-circle"></i> {{T $.CurrentLang "builds.success"}}
+                            </span>
+                            {{else}}
+                            <span class="inline-flex items-center gap-1 text-red-600 dark:text-red-400 text-xs font-medium">
+                                <i class="fa-solid fa-exclamation-circle"></i> {{T $.CurrentLang "builds.failed"}}
+                            </span>
+                            {{end}}
+                        </td>
+                        <td class="py-3 px-4 text-slate-500 dark:text-slate-400 text-xs max-w-[200px] truncate" title="{{.Error}}">
+                            {{if .Error}}{{.Error}}{{else}}<span class="text-slate-300 dark:text-slate-600">-</span>{{end}}
+                        </td>
+                    </tr>
+                    {{else}}
+                    <tr>
+                        <td colspan="8" class="py-20 text-center text-slate-400 dark:text-slate-500">
+                            <i class="fa-solid fa-hammer text-4xl mb-4 text-slate-300 dark:text-slate-600"></i>
+                            <p class="text-sm font-medium">{{T .CurrentLang "builds.empty"}}</p>
+                            <p class="text-xs mt-2 text-slate-400 dark:text-slate-500">{{T .CurrentLang "builds.empty_hint"}}</p>
+                            <a href="/generate" class="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors">
+                                <i class="fa-solid fa-plus"></i> {{T .CurrentLang "builds.go_generate"}}
+                            </a>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{if gt .TotalPages 1}}
+        <div class="bg-slate-50 dark:bg-slate-700/50 border-t border-slate-200 dark:border-slate-700 px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div class="text-xs text-slate-500 dark:text-slate-400">{{T .CurrentLang "builds.total"}} {{.Total}}</div>
+            <div class="flex items-center gap-x-2">
+                {{if gt .Page 1}}
+                <a href="/builds?page={{.PrevPage}}&pageSize={{.PageSize}}{{if .FilterStatus}}&status={{.FilterStatus}}{{end}}{{if .FilterPlatform}}&platform={{.FilterPlatform}}{{end}}"
+                   class="px-3 h-8 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center transition-colors">
+                    {{T .CurrentLang "builds.previous"}}
+                </a>
+                {{end}}
+                <span class="text-xs text-slate-600 dark:text-slate-300 px-2 tabular-nums">{{.Page}} / {{.TotalPages}}</span>
+                {{if lt .Page .TotalPages}}
+                <a href="/builds?page={{.NextPage}}&pageSize={{.PageSize}}{{if .FilterStatus}}&status={{.FilterStatus}}{{end}}{{if .FilterPlatform}}&platform={{.FilterPlatform}}{{end}}"
+                   class="px-3 h-8 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center transition-colors">
+                    {{T .CurrentLang "builds.next"}}
+                </a>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
     </div>
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (typeof refreshTasks !== 'function') {
-        window.refreshTasks = function() {};
-    }
-});
-</script>
 {{end}}

@@ -1,6 +1,8 @@
 package server
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -14,6 +16,22 @@ import (
 	"gorm.io/gorm"
 )
 
+func gzipCompress(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	writer := gzip.NewWriter(&buf)
+	if _, err := writer.Write(data); err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+type batchedMessage struct {
+	Messages []json.RawMessage `json:"messages"`
+}
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
@@ -24,11 +42,15 @@ var upgrader = websocket.Upgrader{
 
 // WebSocketBeacon represents an active WebSocket beacon connection
 type WebSocketBeacon struct {
-	Conn      *websocket.Conn
-	AgentID   string
-	LastSeen  time.Time
-	Send      chan []byte
-	closeOnce sync.Once
+	Conn         *websocket.Conn
+	AgentID      string
+	LastSeen     time.Time
+	Send         chan []byte
+	BatchQueue   [][]byte
+	BatchMutex   sync.Mutex
+	BatchTimer   *time.Timer
+	closeOnce    sync.Once
+	compress     bool
 }
 
 // WebSocketHub manages all active WebSocket beacon connections
@@ -98,6 +120,8 @@ func (s *Server) handleWebSocketBeacon(c *gin.Context) {
 		AgentID:  agentID,
 		LastSeen: time.Now(),
 		Send:     make(chan []byte, 256),
+		BatchQueue: make([][]byte, 0, 16),
+		compress:   true,
 	}
 
 	// Initialize WebSocket hub if not exists
@@ -113,11 +137,13 @@ func (s *Server) handleWebSocketBeacon(c *gin.Context) {
 
 func (s *Server) wsWritePump(beacon *WebSocketBeacon) {
 	defer func() {
+		if beacon.BatchTimer != nil {
+			beacon.BatchTimer.Stop()
+		}
 		beacon.Conn.Close()
 		s.wsHub.Unregister(beacon.AgentID)
 	}()
 
-	// Heartbeat ticker (30 seconds)
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -125,31 +151,105 @@ func (s *Server) wsWritePump(beacon *WebSocketBeacon) {
 		select {
 		case message, ok := <-beacon.Send:
 			if !ok {
-				// Channel closed
 				beacon.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-
-			beacon.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			w, err := beacon.Conn.NextWriter(websocket.TextMessage)
-			if err != nil {
-				slog.Error("WebSocket write error", "agent_id", beacon.AgentID, "error", err)
-				return
-			}
-			w.Write(message)
-			if err := w.Close(); err != nil {
-				slog.Error("WebSocket close writer error", "agent_id", beacon.AgentID, "error", err)
-				return
-			}
+			s.enqueueBatchMessage(beacon, message)
 
 		case <-ticker.C:
-			// Send ping
 			beacon.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := beacon.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				slog.Error("WebSocket ping error", "agent_id", beacon.AgentID, "error", err)
 				return
 			}
 		}
+	}
+}
+
+func (s *Server) enqueueBatchMessage(beacon *WebSocketBeacon, message []byte) {
+	beacon.BatchMutex.Lock()
+	beacon.BatchQueue = append(beacon.BatchQueue, message)
+	currentLen := len(beacon.BatchQueue)
+	beacon.BatchMutex.Unlock()
+
+	if currentLen == 1 {
+		beacon.BatchTimer = time.AfterFunc(1*time.Second, func() {
+			s.flushBatchQueue(beacon)
+		})
+	} else if currentLen >= 16 {
+		if beacon.BatchTimer != nil {
+			beacon.BatchTimer.Stop()
+		}
+		s.flushBatchQueue(beacon)
+	}
+}
+
+func (s *Server) flushBatchQueue(beacon *WebSocketBeacon) {
+	beacon.BatchMutex.Lock()
+	if len(beacon.BatchQueue) == 0 {
+		beacon.BatchMutex.Unlock()
+		return
+	}
+
+	var data []byte
+	if len(beacon.BatchQueue) == 1 {
+		data = beacon.BatchQueue[0]
+	} else {
+		batched := batchedMessage{
+			Messages: make([]json.RawMessage, len(beacon.BatchQueue)),
+		}
+		for i, msg := range beacon.BatchQueue {
+			batched.Messages[i] = json.RawMessage(msg)
+		}
+		var err error
+		data, err = json.Marshal(batched)
+		if err != nil {
+			slog.Error("WebSocket batch marshal error", "agent_id", beacon.AgentID, "error", err)
+			beacon.BatchQueue = beacon.BatchQueue[:0]
+			beacon.BatchMutex.Unlock()
+			return
+		}
+	}
+
+	beacon.BatchQueue = beacon.BatchQueue[:0]
+	beacon.BatchMutex.Unlock()
+
+	if beacon.compress && len(data) > 256 {
+		var err error
+		data, err = gzipCompress(data)
+		if err != nil {
+			slog.Error("WebSocket gzip compress error", "agent_id", beacon.AgentID, "error", err)
+			return
+		}
+		s.sendCompressedMessage(beacon, data)
+	} else {
+		s.sendTextMessage(beacon, data)
+	}
+}
+
+func (s *Server) sendTextMessage(beacon *WebSocketBeacon, data []byte) {
+	beacon.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	w, err := beacon.Conn.NextWriter(websocket.TextMessage)
+	if err != nil {
+		slog.Error("WebSocket write error", "agent_id", beacon.AgentID, "error", err)
+		return
+	}
+	w.Write(data)
+	if err := w.Close(); err != nil {
+		slog.Error("WebSocket close writer error", "agent_id", beacon.AgentID, "error", err)
+	}
+}
+
+func (s *Server) sendCompressedMessage(beacon *WebSocketBeacon, data []byte) {
+	beacon.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	w, err := beacon.Conn.NextWriter(websocket.BinaryMessage)
+	if err != nil {
+		slog.Error("WebSocket compressed write error", "agent_id", beacon.AgentID, "error", err)
+		return
+	}
+	w.Write(data)
+	if err := w.Close(); err != nil {
+		slog.Error("WebSocket compressed close writer error", "agent_id", beacon.AgentID, "error", err)
 	}
 }
 

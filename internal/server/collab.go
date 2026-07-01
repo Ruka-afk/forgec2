@@ -83,11 +83,11 @@ func (s *Server) onlineUserListLocked() []gin.H {
 	for _, wc := range s.collab.wsConns {
 		seen[wc.username] = wc
 	}
-	var list []gin.H
+	list := make([]gin.H, 0, len(seen))
 	for _, wc := range seen {
 		pageLabel := wc.currentPage
 		if pageLabel == "" {
-			pageLabel = "空闲"
+			pageLabel = "Idle"
 		}
 		list = append(list, gin.H{
 			"username":     wc.username,
@@ -136,6 +136,45 @@ func (s *Server) getOnlineUsers() []gin.H {
 	return s.onlineUserListLocked()
 }
 
+// onlineUsersForRequest returns WS-connected users, always including the current session user.
+func (s *Server) onlineUsersForRequest(c *gin.Context) []gin.H {
+	users := s.getOnlineUsers()
+	if users == nil {
+		users = []gin.H{}
+	}
+
+	username := ""
+	if u, ok := c.Get("user"); ok {
+		username = fmt.Sprintf("%v", u)
+	}
+	if username == "" {
+		return users
+	}
+
+	for _, u := range users {
+		if un, ok := u["username"].(string); ok && un == username {
+			return users
+		}
+	}
+
+	role := "operator"
+	if r, ok := c.Get("user_role"); ok {
+		role = fmt.Sprintf("%v", r)
+	}
+
+	page := c.Request.URL.Path
+	if page == "/api/collab/online" {
+		page = ""
+	}
+
+	users = append(users, gin.H{
+		"username":     username,
+		"role":         role,
+		"current_page": page,
+	})
+	return users
+}
+
 // ── Broadcast ─────────────────────────────────────────────────────────────────
 
 func (s *Server) broadcastCollab(payload gin.H) {
@@ -177,7 +216,7 @@ func (s *Server) handleLockAgent(c *gin.Context) {
 	if existing, ok := s.collab.agentLocks[agentID]; ok {
 		s.collab.mu.Unlock()
 		c.JSON(http.StatusConflict, gin.H{
-			"error":    fmt.Sprintf("agent已被 %s 锁定", existing.Username),
+			"error":    fmt.Sprintf("agent locked by %s", existing.Username),
 			"locked_by": existing.Username,
 		})
 		return
@@ -198,7 +237,7 @@ func (s *Server) handleLockAgent(c *gin.Context) {
 	s.LogAuditRecord(c, "agent_lock", "agent", agentID, fmt.Sprintf("locked by %s", username), true, nil)
 	s.broadcastCollab(gin.H{"type": "agent_locked", "agent_id": agentID, "username": username})
 	// System chat message for lock event
-	s.addSystemChatMessage("[系统]", fmt.Sprintf("%s 锁定了 Agent %s", username, agentID[:8]))
+	s.addSystemChatMessage("[System]", fmt.Sprintf("%s locked agent %s", username, agentID[:8]))
 	slog.Info("Agent locked", "agent", agentID, "by", username)
 	c.JSON(http.StatusOK, gin.H{"success": true, "lock": lock})
 }
@@ -217,7 +256,7 @@ func (s *Server) handleUnlockAgent(c *gin.Context) {
 	s.LogAuditRecord(c, "agent_unlock", "agent", agentID, fmt.Sprintf("unlocked by %s", username), true, nil)
 	s.broadcastCollab(gin.H{"type": "agent_unlocked", "agent_id": agentID, "username": username})
 	// System chat message for unlock event
-	s.addSystemChatMessage("[系统]", fmt.Sprintf("%s 解锁了 Agent %s", username, agentID[:8]))
+	s.addSystemChatMessage("[System]", fmt.Sprintf("%s unlocked agent %s", username, agentID[:8]))
 	slog.Info("Agent unlocked", "agent", agentID, "by", username)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
@@ -252,7 +291,7 @@ func (s *Server) agentCommandMiddleware() gin.HandlerFunc {
 		lockHolder, available := s.checkAgentLock(agentID, username)
 		if !available {
 			c.JSON(http.StatusLocked, gin.H{
-				"error":    fmt.Sprintf("agent已被 %s 锁定", lockHolder),
+				"error":    fmt.Sprintf("agent locked by %s", lockHolder),
 				"locked_by": lockHolder,
 			})
 			c.Abort()
@@ -306,8 +345,7 @@ func (s *Server) addSystemChatMessage(username, content string) {
 // ── Online Users ──────────────────────────────────────────────────────────────
 
 func (s *Server) handleOnlineUsers(c *gin.Context) {
-	users := s.getOnlineUsers()
-	c.JSON(http.StatusOK, gin.H{"success": true, "users": users})
+	c.JSON(http.StatusOK, gin.H{"success": true, "users": s.onlineUsersForRequest(c)})
 }
 
 // ── Page Presence ──────────────────────────────────────────────────────────────
@@ -327,7 +365,7 @@ func (s *Server) handlePagePresence(c *gin.Context) {
 	for _, wc := range seen {
 		page := wc.currentPage
 		if page == "" {
-			page = "空闲"
+			page = "Idle"
 		}
 		pages = append(pages, pageInfo{Username: wc.username, Role: wc.role, Page: page})
 	}

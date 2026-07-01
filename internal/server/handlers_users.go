@@ -18,9 +18,12 @@ func (s *Server) handleUsersPage(c *gin.Context) {
 
 	stats := s.getNavStats()
 	data := gin.H{
-		"Title":     "ForgeC2 - User Management",
-		"ActiveNav": "settings",
-		"Users":     users,
+		"Title":          "ForgeC2 - User Management",
+		"ActiveNav":      "settings",
+		"Users":          users,
+		"AllRoles":       db.GetAllRoles(),
+		"AllPermissions": db.GetAllPermissions(),
+		"RolePermissions": db.RolePermissionsMap,
 	}
 	for k, v := range stats {
 		data[k] = v
@@ -51,7 +54,13 @@ func (s *Server) handleAddUser(c *gin.Context) {
 	if role == "" {
 		role = "operator"
 	}
-	if role != "admin" && role != "operator" && role != "viewer" {
+	validRoles := map[string]bool{
+		db.RoleAdmin:    true,
+		db.RoleOperator: true,
+		db.RoleViewer:   true,
+		db.RoleGuest:    true,
+	}
+	if !validRoles[role] {
 		role = "operator"
 	}
 
@@ -183,7 +192,13 @@ func (s *Server) handleEditUser(c *gin.Context) {
 		updates["username"] = username
 	}
 	if role != "" && role != user.Role {
-		if role != "admin" && role != "operator" && role != "viewer" {
+		validRoles := map[string]bool{
+			db.RoleAdmin:    true,
+			db.RoleOperator: true,
+			db.RoleViewer:   true,
+			db.RoleGuest:    true,
+		}
+		if !validRoles[role] {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role"})
 			return
 		}

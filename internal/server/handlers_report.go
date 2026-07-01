@@ -254,19 +254,19 @@ func generateHTMLReport(report gin.H) string {
         <h2>📊 Summary</h2>
         <div class="stats">
             <div class="stat-card">
-                <div class="stat-value">%.0f</div>
+                <div class="stat-value">%d</div>
                 <div class="stat-label">Total Agents</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">%.0f</div>
+                <div class="stat-value">%d</div>
                 <div class="stat-label">Tasks Executed</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">%.0f</div>
+                <div class="stat-value">%d</div>
                 <div class="stat-label">Credentials Found</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">%.0f</div>
+                <div class="stat-value">%d</div>
                 <div class="stat-label">Audit Events</div>
             </div>
         </div>

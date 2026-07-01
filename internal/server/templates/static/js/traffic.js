@@ -11,7 +11,9 @@ function loadTraffic() {
 
 function renderTraffic(logs) {
     const tbody = document.getElementById('traffic-body');
-    document.getElementById('traffic-count').textContent = '最近 ' + logs.length + ' 条';
+    const countEl = document.getElementById('traffic-count');
+    if (!tbody || !countEl) return;
+    countEl.textContent = '最近 ' + logs.length + ' 条';
 
     if (logs.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" class="py-16 text-center text-slate-400">暂无流量记录</td></tr>';
@@ -46,6 +48,7 @@ function toggleAutoRefresh() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    if (!document.getElementById('traffic-body')) return;
     loadTraffic();
     refreshTimer = setInterval(loadTraffic, 3000);
 });

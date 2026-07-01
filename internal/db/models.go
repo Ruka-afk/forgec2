@@ -7,6 +7,74 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	RoleAdmin    = "admin"
+	RoleOperator = "operator"
+	RoleViewer   = "viewer"
+	RoleGuest    = "guest"
+)
+
+const (
+	PermAgentsRead      = "agents.read"
+	PermAgentsWrite     = "agents.write"
+	PermAgentsDelete    = "agents.delete"
+	PermListenersRead   = "listeners.read"
+	PermListenersWrite  = "listeners.write"
+	PermListenersDelete = "listeners.delete"
+	PermTasksRead       = "tasks.read"
+	PermTasksWrite      = "tasks.write"
+	PermTasksDelete     = "tasks.delete"
+	PermCredsRead       = "credentials.read"
+	PermCredsWrite      = "credentials.write"
+	PermCredsDelete     = "credentials.delete"
+	PermFilesRead       = "files.read"
+	PermFilesWrite      = "files.write"
+	PermUsersRead       = "users.read"
+	PermUsersWrite      = "users.write"
+	PermUsersDelete     = "users.delete"
+	PermSettingsRead    = "settings.read"
+	PermSettingsWrite   = "settings.write"
+	PermAuditRead       = "audit.read"
+)
+
+var RolePermissionsMap = map[string][]string{
+	RoleAdmin: {
+		PermAgentsRead, PermAgentsWrite, PermAgentsDelete,
+		PermListenersRead, PermListenersWrite, PermListenersDelete,
+		PermTasksRead, PermTasksWrite, PermTasksDelete,
+		PermCredsRead, PermCredsWrite, PermCredsDelete,
+		PermFilesRead, PermFilesWrite,
+		PermUsersRead, PermUsersWrite, PermUsersDelete,
+		PermSettingsRead, PermSettingsWrite,
+		PermAuditRead,
+	},
+	RoleOperator: {
+		PermAgentsRead, PermAgentsWrite, PermAgentsDelete,
+		PermListenersRead, PermListenersWrite, PermListenersDelete,
+		PermTasksRead, PermTasksWrite, PermTasksDelete,
+		PermCredsRead, PermCredsWrite, PermCredsDelete,
+		PermFilesRead, PermFilesWrite,
+		PermUsersRead,
+		PermSettingsRead,
+		PermAuditRead,
+	},
+	RoleViewer: {
+		PermAgentsRead,
+		PermListenersRead,
+		PermTasksRead,
+		PermCredsRead,
+		PermFilesRead,
+		PermUsersRead,
+		PermSettingsRead,
+		PermAuditRead,
+	},
+	RoleGuest: {
+		PermAgentsRead,
+		PermListenersRead,
+		PermTasksRead,
+	},
+}
+
 // Implant represents a connected implant (agent)
 type Implant struct {
 	ID         string    `gorm:"primaryKey" json:"id"`
@@ -39,6 +107,7 @@ type Implant struct {
 	// Per-agent sleep config (server-side tracking)
 	CurrentInterval int       `json:"current_interval"` // current sleep interval (seconds)
 	CurrentJitter   int       `json:"current_jitter"`   // current jitter percentage
+	ActiveWindow    string    `json:"active_window"`    // foreground window title (reported each beacon)
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
@@ -157,6 +226,7 @@ type User struct {
 	LastActivity  time.Time `json:"last_activity"`   // last page request or API call
 	ForceLogoutAt time.Time `json:"force_logout_at"` // set by admin to invalidate all sessions
 	LoginAttempts int       `json:"-"`
+	TOTPSecret    string    `json:"-"` // TOTP secret for 2FA, empty means 2FA disabled
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
@@ -173,6 +243,9 @@ type CredentialEntry struct {
 	Source    string    `json:"source"` // lsass, sam, mimikatz, manual
 	Type      string    `json:"type"`   // cleartext, ntlm, aes, kerberos
 	Notes     string    `json:"notes"`
+	Tags      string    `json:"tags"`   // comma separated tags
+	ExpiresAt time.Time `json:"expires_at"`
+	Confirmed bool      `json:"confirmed"` // whether credential has been verified
 	TaskID    uint      `json:"task_id"` // originating task (0 = manual)
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -311,21 +384,169 @@ func (WebhookConfig) TableName() string { return "webhook_configs" }
 
 // Plugin stores registered plugin metadata
 type Plugin struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Name        string    `gorm:"size:255;not null;uniqueIndex" json:"name"`
-	Version     string    `gorm:"size:64" json:"version"`
-	Description string    `gorm:"size:1024" json:"description"`
-	Author      string    `gorm:"size:255" json:"author"`
-	Type        string    `gorm:"size:64" json:"type"` // "hook", "command", "report"
-	Enabled     bool      `gorm:"default:true" json:"enabled"`
-	Config      string    `gorm:"type:text" json:"config"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID              uint      `gorm:"primaryKey" json:"id"`
+	Name            string    `gorm:"size:255;not null;uniqueIndex" json:"name"`
+	Version         string    `gorm:"size:64" json:"version"`
+	Description     string    `gorm:"size:1024" json:"description"`
+	Author          string    `gorm:"size:255" json:"author"`
+	Type            string    `gorm:"size:64" json:"type"` // "hook", "command", "report"
+	Enabled         bool      `gorm:"default:true" json:"enabled"`
+	Config          string    `gorm:"type:text" json:"config"`
+	Category        string    `gorm:"size:64" json:"category"` // "recon", "privesc", "lateral", "report", "automation", "utility"
+	Homepage        string    `gorm:"size:512" json:"homepage"`
+	License         string    `gorm:"size:64" json:"license"`
+	Dependencies    string    `gorm:"type:text" json:"dependencies"` // JSON array of dependency names
+	Tags            string    `gorm:"size:512" json:"tags"` // comma separated
+	RatingOverall   float64   `gorm:"-" json:"rating_overall"`
+	RatingCount     int       `gorm:"-" json:"rating_count"`
+	UpdateAvailable bool      `gorm:"-" json:"update_available"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 func (Plugin) TableName() string { return "plugins" }
+
+// PluginReview stores plugin ratings and comments
+type PluginReview struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	PluginID  uint      `gorm:"index" json:"plugin_id"`
+	UserID    uint      `json:"user_id"`
+	Username  string    `gorm:"size:64" json:"username"`
+	Rating    int       `gorm:"not null" json:"rating"` // 1-5
+	Comment   string    `gorm:"type:text" json:"comment"`
+	CreatedAt time.Time `json:"created_at"`
+}
+func (PluginReview) TableName() string { return "plugin_reviews" }
+
+// PluginDependency stores plugin dependency relationships
+type PluginDependency struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	PluginID       uint      `gorm:"index" json:"plugin_id"`
+	DependencyID   uint      `gorm:"index" json:"dependency_id"`
+	Dependency     Plugin    `gorm:"foreignKey:DependencyID" json:"-"`
+	RequiredVersion string   `gorm:"size:64" json:"required_version"`
+	Optional       bool      `gorm:"default:false" json:"optional"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+func (PluginDependency) TableName() string { return "plugin_dependencies" }
+
+// PluginUpdateStatus tracks plugin update information
+type PluginUpdateStatus struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	PluginID      uint      `gorm:"uniqueIndex" json:"plugin_id"`
+	LatestVersion string    `gorm:"size:64" json:"latest_version"`
+	UpdateAvailable bool    `json:"update_available"`
+	UpdateURL     string    `gorm:"size:512" json:"update_url"`
+	ReleaseNotes  string    `gorm:"type:text" json:"release_notes"`
+	LastCheckedAt time.Time `json:"last_checked_at"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+func (PluginUpdateStatus) TableName() string { return "plugin_update_status" }
 
 func (ScanResult) TableName() string      { return "scan_results" }
 func (ChatMessage) TableName() string     { return "chat_messages" }
 func (OperatorNote) TableName() string    { return "operator_notes" }
 func (NetworkHost) TableName() string     { return "network_hosts" }
 func (CommandTemplate) TableName() string { return "command_templates" }
+
+type AutomationRule struct {
+	ID          string    `gorm:"primaryKey;size:255" json:"id"`
+	Name        string    `gorm:"size:255;not null" json:"name"`
+	Enabled     bool      `gorm:"default:true" json:"enabled"`
+	EventType   string    `gorm:"size:255;not null" json:"event_type"`
+	Conditions  string    `gorm:"type:text" json:"conditions"`
+	Actions     string    `gorm:"type:text" json:"actions"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (AutomationRule) TableName() string { return "automation_rules" }
+
+type AlertRule struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"size:255;not null" json:"name"`
+	Type        string    `gorm:"size:100;not null" json:"type"` // agent_offline, cpu_high, memory_high, disk_high, credential_found, agent_online
+	Threshold   float64   `json:"threshold"`                     // Threshold (percentage or seconds)
+	Enabled     bool      `gorm:"default:true" json:"enabled"`
+	Description string    `gorm:"type:text" json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (AlertRule) TableName() string { return "alert_rules" }
+
+type Alert struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	RuleID    uint      `json:"rule_id"`
+	Rule      AlertRule `gorm:"foreignKey:RuleID" json:"rule"`
+	Type      string    `gorm:"size:100;not null" json:"type"`
+	Severity  string    `gorm:"size:20;default:'warning'" json:"severity"` // critical, warning, info
+	Title     string    `gorm:"size:255;not null" json:"title"`
+	Message   string    `gorm:"type:text" json:"message"`
+	Source    string    `json:"source"`      // agent_id, system, etc.
+	SourceName string   `json:"source_name"` // hostname, etc.
+	Status    string    `gorm:"size:20;default:'active'" json:"status"` // active, acknowledged, resolved
+	Details   string    `gorm:"type:text" json:"details"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (Alert) TableName() string { return "alerts" }
+
+type SystemMetric struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	CPULoad   float64   `json:"cpu_load"`
+	MemoryUsed float64  `json:"memory_used"`
+	MemoryTotal float64 `json:"memory_total"`
+	DiskUsed  float64   `json:"disk_used"`
+	DiskTotal float64   `json:"disk_total"`
+	NetIn     float64   `json:"net_in"`
+	NetOut    float64   `json:"net_out"`
+	Hostname  string    `json:"hostname"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (SystemMetric) TableName() string { return "system_metrics" }
+
+type RolePermission struct {
+	ID           uint   `gorm:"primaryKey" json:"id"`
+	Role         string `gorm:"size:32;index:idx_role_perm_role" json:"role"`
+	Permission   string `gorm:"size:64;index:idx_role_perm_perm" json:"permission"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+func (RolePermission) TableName() string { return "role_permissions" }
+
+func GetPermissionsForRole(role string) []string {
+	if perms, ok := RolePermissionsMap[role]; ok {
+		return perms
+	}
+	return []string{}
+}
+
+func RoleHasPermission(role, permission string) bool {
+	perms := GetPermissionsForRole(role)
+	for _, p := range perms {
+		if p == permission {
+			return true
+		}
+	}
+	return false
+}
+
+func GetAllRoles() []string {
+	return []string{RoleAdmin, RoleOperator, RoleViewer, RoleGuest}
+}
+
+func GetAllPermissions() []string {
+	return []string{
+		PermAgentsRead, PermAgentsWrite, PermAgentsDelete,
+		PermListenersRead, PermListenersWrite, PermListenersDelete,
+		PermTasksRead, PermTasksWrite, PermTasksDelete,
+		PermCredsRead, PermCredsWrite, PermCredsDelete,
+		PermFilesRead, PermFilesWrite,
+		PermUsersRead, PermUsersWrite, PermUsersDelete,
+		PermSettingsRead, PermSettingsWrite,
+		PermAuditRead,
+	}
+}

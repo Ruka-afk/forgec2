@@ -33,3 +33,10 @@ Thumbs.db
 tmp/
 *.exe~
 
+# Local dev artifacts
+.workbuddy/
+agent-tools/
+cookies.txt
+server.err
+terminals/
+

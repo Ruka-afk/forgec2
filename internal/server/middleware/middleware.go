@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -78,12 +76,6 @@ func (rl *RateLimiter) Limit() gin.HandlerFunc {
 
 		// Check limit
 		if v.count >= rl.limit {
-			// For form submissions, redirect back with error instead of JSON
-			if c.Request.Method == "POST" && c.Request.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
-				c.Redirect(http.StatusFound, "/login?error=rate_limited")
-				c.Abort()
-				return
-			}
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error":       "rate_limit_exceeded",
 				"message":     "Too many requests, please try again later",
@@ -140,50 +132,6 @@ func Recovery() gin.HandlerFunc {
 	}
 }
 
-// GenerateCSRFToken creates a random CSRF token
-func GenerateCSRFToken() string {
-	b := make([]byte, 32)
-	rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-// CSRFProtection middleware using double-submit cookie pattern
-func CSRFProtection() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if c.Request.Method == "GET" || c.Request.Method == "HEAD" {
-			// Only generate CSRF token if not already present
-			_, err := c.Cookie("csrf_token")
-			if err != nil {
-				// No CSRF cookie, generate one
-				token := GenerateCSRFToken()
-				c.SetCookie("csrf_token", token, CookieMaxAge, "/", "", CookieSecure, true)
-				c.Set("csrf_token_value", token)
-			} else {
-				// CSRF cookie exists, use it
-				token, _ := c.Cookie("csrf_token")
-				c.Set("csrf_token_value", token)
-			}
-			c.Next()
-			return
-		}
-		cookie, err := c.Cookie("csrf_token")
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "CSRF cookie not found"})
-			return
-		}
-		// Check X-CSRF-Token header first (for AJAX/HTMX), then form field (for regular forms)
-		token := c.GetHeader("X-CSRF-Token")
-		if token == "" {
-			token = c.PostForm("csrf_token")
-		}
-		if token == "" || token != cookie {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "CSRF token mismatch or missing"})
-			return
-		}
-		c.Next()
-	}
-}
-
 // SecurityHeaders adds security headers to responses
 func SecurityHeaders() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -191,14 +139,6 @@ func SecurityHeaders() gin.HandlerFunc {
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("X-XSS-Protection", "1; mode=block")
 		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-		c.Header("Content-Security-Policy",
-			"default-src 'self'; "+
-				"script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com; "+
-				"style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "+
-				"img-src 'self' data:; "+
-				"font-src 'self' https://cdnjs.cloudflare.com; "+
-				"connect-src 'self' ws: wss:; "+
-				"form-action 'self'")
 		c.Next()
 	}
 }
@@ -219,4 +159,43 @@ func NoCache() gin.HandlerFunc {
 		c.Header("Expires", "0")
 		c.Next()
 	}
+}
+
+// StaticCache adds long-term cache headers for static assets
+func StaticCache() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+
+		if isStaticAsset(path) {
+			c.Header("Cache-Control", "public, max-age=31536000, immutable")
+			c.Header("X-Content-Type-Options", "nosniff")
+		}
+
+		c.Next()
+	}
+}
+
+func isStaticAsset(path string) bool {
+	staticExtensions := map[string]bool{
+		".css":   true,
+		".js":    true,
+		".png":   true,
+		".jpg":   true,
+		".jpeg":  true,
+		".gif":   true,
+		".svg":   true,
+		".ico":   true,
+		".woff":  true,
+		".woff2": true,
+		".ttf":   true,
+		".eot":   true,
+		".webp":  true,
+	}
+
+	for ext := range staticExtensions {
+		if len(path) > len(ext) && path[len(path)-len(ext):] == ext {
+			return true
+		}
+	}
+	return false
 }

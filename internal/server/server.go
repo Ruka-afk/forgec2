@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"embed"
 	"encoding/binary"
@@ -8,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"io"
 	"log/slog"
 	"net"
@@ -23,6 +25,7 @@ import (
 	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/plugin"
 	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -33,22 +36,22 @@ import (
 var templateFS embed.FS
 
 type Server struct {
-	cfg          *config.Config
-	db           *gorm.DB
-	router       *gin.Engine
-	tmpl         *template.Template
-	wsClients    map[*websocket.Conn]bool
-	wsMutex      sync.Mutex
-	wsUpgrader   websocket.Upgrader
-	rateLimiter  *middleware.RateLimiter
-	loginLimiter *middleware.RateLimiter
-	socksEngine  *socksRelayEngine
-	startTime    time.Time
+	cfg            *config.Config
+	db             *gorm.DB
+	router         *gin.Engine
+	tmpl           *template.Template
+	wsClients      map[*websocket.Conn]bool
+	wsMutex        sync.Mutex
+	wsUpgrader     websocket.Upgrader
+	rateLimiter    *middleware.RateLimiter
+	apiRateLimiter *middleware.APIRateLimiter
+	socksEngine    *socksRelayEngine
+	startTime      time.Time
 
-	dnsListener         *DNSBeaconListener
-	icmpListener        *ICMPBeaconListener
+	dnsListener           *DNSBeaconListener
+	icmpListener          *ICMPBeaconListener
 	screenMonitorImplants map[string]time.Time
-	screenMonitorMu     sync.Mutex
+	screenMonitorMu       sync.Mutex
 
 	// P0-3: rportfwd (reverse port forward)
 	rportfwdListeners map[string]*rportfwdRelay
@@ -67,6 +70,19 @@ type Server struct {
 
 	// Beacon payload cipher (nil = disabled)
 	beaconCipher *crypto.StreamCipher
+
+	monitorCollector *MonitorCollector
+
+	// Plugin marketplace
+	marketplace *plugin.Marketplace
+
+	// Plugin execution manager
+	pluginManager *plugin.Manager
+
+	// Optimizations
+	configReloader *ConfigReloader
+	backupManager  *BackupManager
+	configPath     string
 }
 
 func New(cfg *config.Config, database *gorm.DB) *Server {
@@ -81,19 +97,19 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	r.Use(middleware.ErrorHandler())
 
 	s := &Server{
-		cfg:                 cfg,
-		db:                  database,
-		router:              r,
-		wsClients:           make(map[*websocket.Conn]bool),
-		rateLimiter:         middleware.NewRateLimiter(BeaconRateLimit, BeaconRateWindow),
-		loginLimiter:        middleware.NewRateLimiter(LoginRateLimit, LoginRateWindow),
-		socksEngine:         newSocksRelayEngine(),
-		startTime:           time.Now(),
+		cfg:                   cfg,
+		db:                    database,
+		router:                r,
+		wsClients:             make(map[*websocket.Conn]bool),
+		rateLimiter:           middleware.NewRateLimiter(cfg.RateLimit.Beacon.Limit, time.Duration(cfg.RateLimit.Beacon.Window)*time.Second),
+		apiRateLimiter:        middleware.NewAPIRateLimiter(cfg.RateLimit.API.Capacity, cfg.RateLimit.API.Rate),
+		socksEngine:           newSocksRelayEngine(),
+		startTime:             time.Now(),
 		screenMonitorImplants: make(map[string]time.Time),
-		rportfwdListeners:   make(map[string]*rportfwdRelay),
-		trafficLog:          newTrafficRing(),
-		collab:              newCollabState(),
-		eventManager:        NewEventManager(database),
+		rportfwdListeners:     make(map[string]*rportfwdRelay),
+		trafficLog:            newTrafficRing(),
+		collab:                newCollabState(),
+		eventManager:          NewEventManager(database),
 		wsUpgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -122,13 +138,34 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		}
 	}
 
+	s.apiRateLimiter.SetWhitelist(cfg.RateLimit.API.Whitelist)
+
 	s.setupTemplates()
 	s.setupRoutes()
 	s.loadAgentLocks()
 
+	// Initialize plugin marketplace
+	s.marketplace = plugin.NewMarketplace(database)
+	s.marketplace.StartUpdateChecker(6 * time.Hour)
+
+	// Initialize plugin execution manager
+	s.pluginManager = plugin.NewManager(database)
+	s.pluginManager.SetMarketplace(s.marketplace)
+	pluginDir := filepath.Join(s.cfg.Server.DataDir, "plugins")
+	if err := os.MkdirAll(pluginDir, 0750); err != nil {
+		slog.Warn("Failed to create plugin data directory", "dir", pluginDir, "err", err)
+	}
+	if err := s.pluginManager.LoadFromDisk(pluginDir); err != nil {
+		slog.Warn("Failed to load plugins from data directory", "dir", pluginDir, "err", err)
+	}
+	if err := s.pluginManager.LoadFromDisk("plugins"); err != nil {
+		slog.Warn("Failed to load bundled plugins", "dir", "plugins", "err", err)
+	}
+
 	// Register event handlers
 	s.eventManager.On(EventImplantCheckin, func(evt Event) {
 		s.triggerWebhooks(evt)
+		s.TriggerAlertForEvent(evt)
 		rules := s.loadAutomationRules()
 		for _, rule := range rules {
 			if rule.Enabled && rule.EventType == string(evt.Type) {
@@ -138,6 +175,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	})
 	s.eventManager.On(EventImplantDisconnect, func(evt Event) {
 		s.triggerWebhooks(evt)
+		s.TriggerAlertForEvent(evt)
 		rules := s.loadAutomationRules()
 		for _, rule := range rules {
 			if rule.Enabled && rule.EventType == string(evt.Type) {
@@ -165,6 +203,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	})
 	s.eventManager.On(EventCredentialFound, func(evt Event) {
 		s.triggerWebhooks(evt)
+		s.TriggerAlertForEvent(evt)
 		rules := s.loadAutomationRules()
 		for _, rule := range rules {
 			if rule.Enabled && rule.EventType == string(evt.Type) {
@@ -172,13 +211,57 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 			}
 		}
 	})
+	s.migrateAutomationRules()
 	s.registerBuiltinAutomations()
+
+	s.monitorCollector = NewMonitorCollector(s)
+	s.monitorCollector.Start()
 
 	return s
 }
 
+func (s *Server) InitOptimizations(configPath string) {
+	s.configPath = configPath
+	s.configReloader = NewConfigReloader(s.cfg, configPath, func(cfg *config.Config) {
+		slog.Info("Config reloaded, applying changes")
+	})
+	if err := s.configReloader.Start(); err != nil {
+		slog.Warn("Failed to start config reloader", "error", err)
+	}
+
+	backupDir := filepath.Join(s.cfg.Server.DataDir, "backups")
+	var backupKey string
+	if s.cfg.Crypto.Key != "" {
+		backupKey = s.cfg.Crypto.Key
+	}
+
+	var err error
+	s.backupManager, err = NewBackupManager(s.db, s.cfg.Database.Path, backupDir, backupKey)
+	if err != nil {
+		slog.Warn("Failed to initialize backup manager", "error", err)
+		return
+	}
+
+	if err := s.backupManager.Start("daily"); err != nil {
+		slog.Warn("Failed to start backup manager", "error", err)
+	}
+}
+
 func (s *Server) setupTemplates() {
 	funcMap := template.FuncMap{
+		"T": func(lang, key string) string {
+			return GetTranslation(lang, key)
+		},
+		"Tf": func(lang, key string, args ...interface{}) string {
+			return Translatef(lang, key, args...)
+		},
+		"langInfo": func(lang string) LanguageInfo {
+			info, _ := GetLanguageInfo(lang)
+			return info
+		},
+		"supportedLangs": func() map[string]LanguageInfo {
+			return GetSupportedLanguages()
+		},
 		"formatTime": func(t time.Time) string {
 			return t.Format("2006-01-02 15:04:05")
 		},
@@ -255,8 +338,32 @@ func (s *Server) setupTemplates() {
 		"subtract": func(a, b int64) int64 { return a - b },
 		"multiply": func(a, b int64) int64 { return a * b },
 		"int64":    func(v int) int64 { return int64(v) },
-		"shortID":  func(id string) string { if len(id) > 8 { return id[:8] }; return id },
-		"truncate": func(s string, n int) string { if len(s) > n { return s[:n] + "..." }; return s },
+		"shortID": func(id string) string {
+			if len(id) > 8 {
+				return id[:8]
+			}
+			return id
+		},
+		"truncate": func(s string, n int) string {
+			if len(s) > n {
+				return s[:n] + "..."
+			}
+			return s
+		},
+		"split":  strings.Split,
+		"substr": func(s string, start, length int) string { return s[start:length] },
+		"formatDate": func(t time.Time) string {
+			return t.Format("2006-01-02")
+		},
+		"isExpired": func(t time.Time) bool {
+			return !t.IsZero() && t.Before(time.Now())
+		},
+		"isExpiring": func(t time.Time) bool {
+			if t.IsZero() {
+				return false
+			}
+			return t.Before(time.Now().Add(7*24*time.Hour)) && t.After(time.Now())
+		},
 	}
 
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html")
@@ -271,53 +378,76 @@ func (s *Server) setupRoutes() {
 	// Request logging middleware
 	s.router.Use(middleware.RequestLogger())
 
-	// Static files (no auth required)
-	s.router.Static("/static", "./internal/server/templates/static")
+	// Static files (no auth required, with long-term caching) - served from embedded FS
+	if subFS, err := fs.Sub(templateFS, "templates/static"); err == nil {
+		s.router.StaticFS("/static", http.FS(subFS))
+	}
 
-	// Auth with CSRF and login rate limiting
-	s.router.GET("/login", middleware.CSRFProtection(), s.handleLoginPage)
-	s.router.POST("/login", s.loginLimiter.Limit(), middleware.CSRFProtection(), s.handleLogin)
+	// Login routes (no auth required)
+	s.router.GET("/login", s.handleLoginPage)
+	s.router.POST("/login", s.handleLogin)
 
 	// Health check endpoints (no auth required)
 	s.router.GET("/health", s.handleHealthCheck)
 	s.router.GET("/ready", s.handleHealthCheck)
 
+	// Language switch endpoint (no auth required)
+	s.router.GET("/lang/set", s.handleSetLanguage)
+	s.router.POST("/lang/set", s.handleSetLanguage)
+
 	// Protected routes
 	auth := s.router.Group("/")
 	auth.Use(middleware.AuthRequired(s.db))
+	auth.Use(s.apiRateLimiter.LimitByUser())
 	auth.Use(s.AuditMiddleware())
 	auth.Use(s.ActivityMiddleware())
-	auth.Use(middleware.CSRFProtection())
 	{
 		auth.GET("/", s.handleDashboard)
 		auth.GET("/dashboard", s.handleDashboard)
+		auth.GET("/search", s.handleSearchPage)
+		auth.GET("/api/search", s.handleAPISearch)
 
 		// ── Agent pages (read-only, no lock check) ──────────────────────
-		auth.GET("/agents", s.handleAgents)
-		auth.GET("/agents/:id", s.handleAgentDetail)
-		auth.GET("/agents/:id/shell", s.handleShellPage)
-		auth.GET("/agents/:id/files", s.handleFileBrowserPage)
-		auth.GET("/agents/:id/screen", s.handleScreenMonitorPage)
-		auth.GET("/agents/:id/tasks", s.handleGetAgentTasks)
-		auth.GET("/agents/:id/tasks/:taskId", s.handleGetTaskStatus)
-		auth.GET("/api/agents", s.handleListAgents)
-		auth.GET("/api/agents/unlinked", s.handleListUnlinkedAgents)
-		auth.GET("/agents/:id/token", s.handleTokenPage)
-		auth.GET("/agents/:id/token/list", s.handleGetTokens)
+		agentsRead := auth.Group("/")
+		agentsRead.Use(middleware.RequirePermission(db.PermAgentsRead))
+		{
+			agentsRead.GET("/agents", s.handleAgents)
+			agentsRead.GET("/agents/:id", s.handleAgentDetail)
+			agentsRead.GET("/agents/:id/shell", s.handleShellPage)
+			agentsRead.GET("/agents/:id/files", s.handleFileBrowserPage)
+			agentsRead.GET("/agents/:id/screen", s.handleScreenMonitorPage)
+			agentsRead.GET("/agents/:id/tasks", s.handleGetAgentTasks)
+			agentsRead.GET("/agents/:id/tasks/:taskId", s.handleGetTaskStatus)
+			agentsRead.GET("/api/agents", s.handleListAgents)
+			agentsRead.GET("/api/agents/unlinked", s.handleListUnlinkedAgents)
+			agentsRead.GET("/agents/:id/token", s.handleTokenPage)
+			agentsRead.GET("/agents/:id/token/list", s.handleGetTokens)
+			agentsRead.GET("/api/agents/:id/processes", s.handleGetProcesses)
+			agentsRead.GET("/api/agents/:id/process-tree", s.handleGetProcessTree)
+		}
 
 		// Agent operations (note, collab, cancel/rerun, delete -- no lock)
-		auth.POST("/agents/:id/kill", s.handleKillAgent)
-		auth.POST("/agents/:id/lock", s.handleLockAgent)
-		auth.POST("/agents/:id/unlock", s.handleUnlockAgent)
-		auth.POST("/agents/:id/note", s.handleUpdateNote)
-		auth.POST("/agents/:id/tasks/:taskId/cancel", s.handleCancelTask)
-		auth.POST("/agents/:id/task/:taskId/rerun", s.handleRerunTask)
-		auth.DELETE("/agents/:id", s.handleDeleteAgent)
-		auth.POST("/agents/batch", s.handleBatchCommand)
-		auth.GET("/agents/:id/socks_relay/status", s.handleSocksRelayStatus)
+		agentsWrite := auth.Group("/")
+		agentsWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
+		{
+			agentsWrite.POST("/agents/:id/kill", s.handleKillAgent)
+			agentsWrite.POST("/agents/:id/lock", s.handleLockAgent)
+			agentsWrite.POST("/agents/:id/unlock", s.handleUnlockAgent)
+			agentsWrite.POST("/agents/:id/note", s.handleUpdateNote)
+			agentsWrite.POST("/agents/:id/tasks/:taskId/cancel", s.handleCancelTask)
+			agentsWrite.POST("/agents/:id/task/:taskId/rerun", s.handleRerunTask)
+			agentsWrite.POST("/agents/batch", s.handleBatchCommand)
+			agentsWrite.GET("/agents/:id/socks_relay/status", s.handleSocksRelayStatus)
+		}
+		agentsDelete := auth.Group("/")
+		agentsDelete.Use(middleware.RequirePermission(db.PermAgentsDelete))
+		{
+			agentsDelete.DELETE("/agents/:id", s.handleDeleteAgent)
+		}
 
 		// ── Agent commands (lock check + viewer check) ──────────────────
 		agentCmd := auth.Group("/agents/:id")
+		agentCmd.Use(middleware.RequirePermission(db.PermAgentsWrite))
 		agentCmd.Use(s.agentCommandMiddleware())
 		{
 			agentCmd.POST("/command", s.handleSendCommand)
@@ -378,6 +508,7 @@ func (s *Server) setupRoutes() {
 			agentCmd.POST("/execute_assembly_forkrun", s.handleExecuteAssemblyForkRun)
 
 			// ── P0-3: Reverse Port Forward ─────────────────
+			agentCmd.GET("/rportfwd/status", s.handleRPortFwdStatus)
 			agentCmd.POST("/rportfwd/start", s.handleRPortFwdRelayStart)
 			agentCmd.POST("/rportfwd/stop", s.handleRPortFwdRelayStop)
 
@@ -420,6 +551,8 @@ func (s *Server) setupRoutes() {
 
 		// ── Generate ────────────────────────────────────────────────────
 		auth.GET("/generate", s.handleGeneratePage)
+		auth.GET("/api/generate/profiles", s.handleListProfiles)
+		auth.POST("/api/generate/profile/import", s.handleImportProfile)
 		auth.POST("/generate/exe", s.handleGenerateEXE)
 		auth.POST("/generate/ps1", s.handleGeneratePS1)
 		auth.POST("/generate/linux", s.handleGenerateLinux)
@@ -432,12 +565,24 @@ func (s *Server) setupRoutes() {
 		auth.POST("/generate/shellcode", s.handleGenerateShellcode)
 
 		// ── Listeners ───────────────────────────────────────────────────
-		auth.GET("/listeners", s.handleListenersPage)
-		auth.GET("/listeners/:id", s.handleListenerDetail)
-		auth.GET("/api/listeners", s.handleListListeners)
-		auth.POST("/api/listeners", s.handleCreateListener)
-		auth.PUT("/api/listeners/:id", s.handleUpdateListener)
-		auth.DELETE("/api/listeners/:id", s.handleDeleteListener)
+		listenersRead := auth.Group("/")
+		listenersRead.Use(middleware.RequirePermission(db.PermListenersRead))
+		{
+			listenersRead.GET("/listeners", s.handleListenersPage)
+			listenersRead.GET("/listeners/:id", s.handleListenerDetail)
+			listenersRead.GET("/api/listeners", s.handleListListeners)
+		}
+		listenersWrite := auth.Group("/")
+		listenersWrite.Use(middleware.RequirePermission(db.PermListenersWrite))
+		{
+			listenersWrite.POST("/api/listeners", s.handleCreateListener)
+			listenersWrite.PUT("/api/listeners/:id", s.handleUpdateListener)
+		}
+		listenersDelete := auth.Group("/")
+		listenersDelete.Use(middleware.RequirePermission(db.PermListenersDelete))
+		{
+			listenersDelete.DELETE("/api/listeners/:id", s.handleDeleteListener)
+		}
 
 		// ── Infrastructure ──────────────────────────────────────────────
 		auth.GET("/infrastructure", s.handleInfrastructurePage)
@@ -451,6 +596,7 @@ func (s *Server) setupRoutes() {
 		auth.GET("/automation", s.handleAutomationPage)
 		auth.GET("/api/automation/rules", s.handleListAutomationRules)
 		auth.POST("/api/automation/rules", s.handleSaveAutomationRule)
+		auth.PUT("/api/automation/rules/:id", s.handleUpdateAutomationRule)
 		auth.DELETE("/api/automation/rules/:id", s.handleDeleteAutomationRule)
 		auth.POST("/api/automation/rules/:id/toggle", s.handleToggleAutomationRule)
 		auth.GET("/api/webhooks", s.handleListWebhooks)
@@ -460,38 +606,76 @@ func (s *Server) setupRoutes() {
 
 		// ── BOF Repository ─────────────────────────────────────────────
 		auth.GET("/bof_repo", func(c *gin.Context) {
-			s.renderPage(c, "bof_repo_content", gin.H{"Title": "BOF 仓库", "ActiveNav": "bof_repo"})
+			s.renderPage(c, "bof_repo_content", gin.H{"Title": "BOF Repository", "ActiveNav": "bof_repo"})
 		})
 		auth.GET("/api/bof/repos", s.handleBOFRepoIndex)
 		auth.POST("/api/bof/repos/import", s.handleBOFRepoImport)
 
 		// ── Plugin Management ──────────────────────────────────────────
+		auth.GET("/plugins", s.handlePluginsPage)
 		auth.GET("/api/plugins", s.handlePluginList)
 		auth.POST("/api/plugins", s.handlePluginCreate)
+		auth.GET("/api/plugins/update-summary", s.handlePluginUpdateSummary)
+		auth.POST("/api/plugins/check-updates", s.handlePluginCheckUpdates)
+		auth.POST("/api/plugins/import", s.handlePluginImport)
+		auth.GET("/api/plugins/:id", s.handlePluginGet)
+		auth.GET("/api/plugins/:id/rating", s.handlePluginRating)
+		auth.GET("/api/plugins/:id/reviews", s.handlePluginReviews)
+		auth.POST("/api/plugins/:id/reviews", s.handlePluginAddReview)
+		auth.GET("/api/plugins/:id/dependencies", s.handlePluginDependencies)
+		auth.GET("/api/plugins/:id/update-status", s.handlePluginUpdateStatus)
+		auth.POST("/api/plugins/:id/update", s.handlePluginUpdate)
+		auth.GET("/api/plugins/:id/export", s.handlePluginExport)
 		auth.POST("/api/plugins/:id/toggle", s.handlePluginToggle)
 		auth.DELETE("/api/plugins/:id", s.handlePluginDelete)
 
+		// ── Plugin Execution ───────────────────────────────────────────
+		auth.GET("/api/plugins/:id/execute", s.handlePluginExecuteInfo)
+		auth.POST("/api/plugins/:id/execute", s.handlePluginExecute)
+		auth.POST("/api/plugins/:id/report", s.handlePluginReport)
+		auth.POST("/api/plugins/install", s.handlePluginInstall)
+		auth.POST("/api/plugins/:id/enable", s.handlePluginEnable)
+		auth.POST("/api/plugins/:id/disable", s.handlePluginDisable)
+
 		// ── Tasks ───────────────────────────────────────────────────────
-		auth.GET("/tasks", s.handleTaskHistory)
-		auth.GET("/tasks/export", s.handleExportTasks)
-		auth.GET("/tasks/:taskId", s.handleGetTaskStatus)
+		tasksRead := auth.Group("/")
+		tasksRead.Use(middleware.RequirePermission(db.PermTasksRead))
+		{
+			tasksRead.GET("/tasks", s.handleTaskHistory)
+			tasksRead.GET("/tasks/export", s.handleExportTasks)
+			tasksRead.GET("/tasks/:taskId", s.handleGetTaskStatus)
+		}
 
 		// ── Auth ────────────────────────────────────────────────────────
 		auth.POST("/logout", s.handleLogout)
 
 		// ── Credentials ─────────────────────────────────────────────────
-		auth.GET("/credentials", s.handleCredentialsPage)
-		auth.GET("/credentials/export", s.handleExportCredentials)
-		auth.GET("/credentials/:cred_id", s.handleGetCredential)
-		auth.POST("/credentials/add", s.handleAddCredential)
-		auth.DELETE("/credentials/:cred_id", s.handleDeleteCredential)
+		credsRead := auth.Group("/")
+		credsRead.Use(middleware.RequirePermission(db.PermCredsRead))
+		{
+			credsRead.GET("/credentials", s.handleCredentialsPage)
+			credsRead.GET("/credentials/export", s.handleExportCredentials)
+			credsRead.GET("/credentials/:cred_id", s.handleGetCredential)
+		}
+		credsWrite := auth.Group("/")
+		credsWrite.Use(middleware.RequirePermission(db.PermCredsWrite))
+		{
+			credsWrite.POST("/credentials/add", s.handleAddCredential)
+			credsWrite.PUT("/credentials/:cred_id", s.handleUpdateCredential)
+			credsWrite.POST("/credentials/batch/tags", s.handleBatchAddTags)
+			credsWrite.POST("/credentials/:cred_id/confirm", s.handleToggleConfirmed)
+		}
+		credsDelete := auth.Group("/")
+		credsDelete.Use(middleware.RequirePermission(db.PermCredsDelete))
+		{
+			credsDelete.DELETE("/credentials/:cred_id", s.handleDeleteCredential)
+		}
 
-		// ── Pivoting / Topology / Loot / Search / Scanner ────────────────
+		// ── Pivoting / Topology / Loot / Scanner ────────────────
 		auth.GET("/pivoting", s.handlePivoting)
 		auth.GET("/topology", s.handleTopologyPage)
 		auth.GET("/api/topology/data", s.handleTopologyData)
 		auth.GET("/loot", s.handleLootPage)
-		auth.GET("/search", s.handleGlobalSearch)
 		auth.GET("/scanner", s.handleScannerPage)
 		auth.POST("/api/scan", s.handleScanTask)
 		auth.GET("/api/scan/results/:taskId", s.handleScanResults)
@@ -532,21 +716,53 @@ func (s *Server) setupRoutes() {
 		auth.GET("/api/templates/category/:category", s.handleGetTemplatesByCategory)
 
 		// ── Audit ───────────────────────────────────────────────────────
-		auth.GET("/audit", s.handleAuditLogPage)
-		auth.GET("/audit/logs", s.handleGetAuditLogs)
+		auditRead := auth.Group("/")
+		auditRead.Use(middleware.RequirePermission(db.PermAuditRead))
+		{
+			auditRead.GET("/audit", s.handleAuditLogPage)
+			auditRead.GET("/audit/logs", s.handleGetAuditLogs)
+		}
 
 		// ── Settings ────────────────────────────────────────────────────
-		auth.GET("/settings", s.handleSettingsPage)
-		auth.POST("/settings/password", s.handleChangePassword)
-		auth.POST("/settings/agent", s.handleSaveAgentConfig)
-		auth.POST("/settings/server", s.handleSaveServerConfig)
-		auth.POST("/settings/malleable", s.handleSaveMalleableProfile)
-		auth.POST("/settings/purge/tasks", s.handlePurgeTasks)
-		auth.POST("/settings/purge/audit", s.handlePurgeAuditLogs)
-		auth.POST("/settings/jwt/regenerate", s.handleRegenerateJWT)
-		auth.POST("/settings/db/vacuum", s.handleDBVacuum)
-		auth.POST("/settings/db/backup", s.handleBackupDatabase)
-		auth.GET("/settings/config/download", s.handleDownloadConfig)
+		settingsRead := auth.Group("/")
+		settingsRead.Use(middleware.RequirePermission(db.PermSettingsRead))
+		{
+			settingsRead.GET("/settings", s.handleSettingsPage)
+		}
+		settingsWrite := auth.Group("/")
+		settingsWrite.Use(middleware.RequirePermission(db.PermSettingsWrite))
+		{
+			settingsWrite.POST("/settings/password", s.handleChangePassword)
+			settingsWrite.POST("/settings/agent", s.handleSaveAgentConfig)
+			settingsWrite.POST("/settings/server", s.handleSaveServerConfig)
+			settingsWrite.POST("/settings/malleable", s.handleSaveMalleableProfile)
+			settingsWrite.POST("/settings/purge/tasks", s.handlePurgeTasks)
+			settingsWrite.POST("/settings/purge/audit", s.handlePurgeAuditLogs)
+			settingsWrite.POST("/settings/jwt/regenerate", s.handleRegenerateJWT)
+			settingsWrite.POST("/settings/db/vacuum", s.handleDBVacuum)
+			settingsWrite.POST("/settings/db/backup", s.handleBackupDatabase)
+			settingsWrite.GET("/settings/config/download", s.handleDownloadConfig)
+
+
+		}
+
+		// ── 2FA / TOTP ──────────────────────────────────────────────────
+		auth.GET("/settings/totp/status", s.handleTOTPStatus)
+		auth.POST("/settings/totp/generate", s.handleTOTPGenerate)
+		auth.POST("/settings/totp/enable", s.handleTOTPEnable)
+		auth.POST("/settings/totp/disable", s.handleTOTPDisable)
+
+		// ── i18n / Translations ────────────────────────────────────────
+		auth.GET("/translations", s.handleTranslationsPage)
+		auth.GET("/api/translations", s.handleGetTranslations)
+		auth.GET("/api/translations/stats", s.handleTranslationStats)
+		auth.GET("/api/translations/check", s.handleTranslationCheck)
+
+		// ── API Documentation ──────────────────────────────────────────
+		auth.GET("/docs", s.handleDocsPage)
+		auth.GET("/api/docs", s.handleAPIDocsRedirect)
+		auth.GET("/api/docs/", s.handleAPIDocs)
+		auth.GET("/api/docs/openapi.yaml", s.handleAPIDocsYAML)
 
 		// ── AI Assistant ────────────────────────────────────────────────
 		auth.GET("/ai", s.handleAIPage)
@@ -568,14 +784,26 @@ func (s *Server) setupRoutes() {
 		auth.GET("/tokens", s.handleGlobalTokensPage)
 
 		// ── User Management ─────────────────────────────────────────────
-		auth.GET("/users", s.handleUsersPage)
-		auth.POST("/users/add", s.handleAddUser)
-		auth.POST("/users/:id/edit", s.handleEditUser)
-		auth.POST("/users/:id/toggle", s.handleToggleUser)
-		auth.POST("/users/:id/password", s.handleSetUserPassword)
-		auth.POST("/users/:id/kick", s.handleKickUser)
-		auth.POST("/users/:id/force-logout", s.handleForceLogoutUser)
-		auth.DELETE("/users/:id", s.handleDeleteUser)
+		usersRead := auth.Group("/")
+		usersRead.Use(middleware.RequirePermission(db.PermUsersRead))
+		{
+			usersRead.GET("/users", s.handleUsersPage)
+		}
+		usersWrite := auth.Group("/")
+		usersWrite.Use(middleware.RequirePermission(db.PermUsersWrite))
+		{
+			usersWrite.POST("/users/add", s.handleAddUser)
+			usersWrite.POST("/users/:id/edit", s.handleEditUser)
+			usersWrite.POST("/users/:id/toggle", s.handleToggleUser)
+			usersWrite.POST("/users/:id/password", s.handleSetUserPassword)
+			usersWrite.POST("/users/:id/kick", s.handleKickUser)
+			usersWrite.POST("/users/:id/force-logout", s.handleForceLogoutUser)
+		}
+		usersDelete := auth.Group("/")
+		usersDelete.Use(middleware.RequirePermission(db.PermUsersDelete))
+		{
+			usersDelete.DELETE("/users/:id", s.handleDeleteUser)
+		}
 
 		// ── SOCKS Sessions ──────────────────────────────────────────────
 		auth.GET("/socks/sessions", s.handleGetSocksSessions)
@@ -612,12 +840,12 @@ func (s *Server) setupRoutes() {
 		c.JSON(404, gin.H{"error": "not found"})
 	})
 
-// External C2 (redirector-facing, no auth)
-extc2 := s.router.Group("/extc2/v1")
-{
-	extc2.POST("/receive", s.handleExtC2Receive)
-	extc2.POST("/send", s.handleExtC2Send)
-}
+	// External C2 (redirector-facing, no auth)
+	extc2 := s.router.Group("/extc2/v1")
+	{
+		extc2.POST("/receive", s.handleExtC2Receive)
+		extc2.POST("/send", s.handleExtC2Send)
+	}
 
 	// Build logs
 	auth.GET("/builds", s.handleBuildLogs)
@@ -625,6 +853,29 @@ extc2 := s.router.Group("/extc2/v1")
 	// Traffic monitor
 	auth.GET("/traffic", s.handleTrafficPage)
 	auth.GET("/api/traffic", s.handleTrafficData)
+
+	// Monitor / Alert API
+	auth.GET("/api/monitor/metrics", s.handleGetSystemMetrics)
+	auth.GET("/api/monitor/metrics/history", s.handleGetMetricsHistory)
+	auth.GET("/api/monitor/alerts", s.handleGetAlerts)
+	auth.GET("/api/monitor/alerts/stats", s.handleGetAlertStats)
+	auth.GET("/api/monitor/alert-rules", s.handleGetAlertRules)
+	auth.POST("/api/monitor/alert-rules", s.handleCreateAlertRule)
+	auth.PUT("/api/monitor/alert-rules/:id", s.handleUpdateAlertRule)
+	auth.DELETE("/api/monitor/alert-rules/:id", s.handleDeleteAlertRule)
+	auth.POST("/api/monitor/alerts/:id/acknowledge", s.handleAcknowledgeAlert)
+	auth.POST("/api/monitor/alerts/:id/resolve", s.handleResolveAlert)
+	auth.GET("/api/monitor/agent-status", s.handleGetAgentStatus)
+
+	// Dashboard charts API
+	auth.GET("/api/dashboard/activity-heatmap", s.handleDashboardActivityHeatmap)
+	auth.GET("/api/dashboard/os-distribution", s.handleDashboardOSDistribution)
+	auth.GET("/api/dashboard/task-status", s.handleDashboardTaskStatus)
+	auth.GET("/api/dashboard/listener-traffic", s.handleDashboardListenerTraffic)
+	auth.GET("/api/dashboard/credential-types", s.handleDashboardCredentialTypes)
+	auth.GET("/api/dashboard/agent-geo", s.handleDashboardAgentGeo)
+	auth.GET("/api/dashboard/task-gantt", s.handleDashboardTaskGantt)
+	auth.GET("/api/dashboard/attack-path", s.handleDashboardAttackPath)
 
 	// Multi-User Collaboration
 	auth.GET("/api/collab/locks", s.handleGetLocks)
@@ -688,6 +939,14 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 	s.wsClients[conn] = true
 	s.wsMutex.Unlock()
 
+	// Send current online users directly to this client (avoids missing the broadcast race)
+	if initMsg, err := json.Marshal(gin.H{"type": "user_online", "users": s.getOnlineUsers()}); err == nil {
+		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		if writeErr := conn.WriteMessage(websocket.TextMessage, initMsg); writeErr != nil {
+			slog.Warn("Failed to send initial online users", "user", username, "err", writeErr)
+		}
+	}
+
 	slog.Info("WebSocket client connected", "user", username)
 
 	go func() {
@@ -749,18 +1008,35 @@ func (s *Server) broadcastToClients(message []byte) {
 	}
 }
 
-// broadcastAgentNotification sends a notification to all WebSocket clients
-func (s *Server) broadcastAgentNotification(agent db.Implant) {
-	payload := map[string]string{
+// broadcastAgentOnline pushes agent online events to all WebSocket clients.
+func (s *Server) broadcastAgentOnline(agent db.Implant, isNew bool) {
+	payload := map[string]interface{}{
 		"type":     "agent_online",
 		"agent_id": agent.ID,
 		"hostname": agent.Hostname,
 		"username": agent.Username,
 		"ip":       agent.IP,
+		"new":      isNew,
 	}
 	notification, err := json.Marshal(payload)
 	if err != nil {
-		slog.Error("Failed to marshal agent notification", "err", err)
+		slog.Error("Failed to marshal agent online notification", "err", err)
+		return
+	}
+	s.broadcastToClients(notification)
+}
+
+// broadcastAgentOffline pushes agent offline events to all WebSocket clients.
+func (s *Server) broadcastAgentOffline(agent db.Implant) {
+	payload := map[string]string{
+		"type":     "agent_offline",
+		"agent_id": agent.ID,
+		"hostname": agent.Hostname,
+		"ip":       agent.IP,
+	}
+	notification, err := json.Marshal(payload)
+	if err != nil {
+		slog.Error("Failed to marshal agent offline notification", "err", err)
 		return
 	}
 	s.broadcastToClients(notification)
@@ -811,6 +1087,8 @@ func (s *Server) cleanupOldData() {
 		slog.Error("cleanup tasks failed", "err", err)
 	}
 
+	s.cleanupGhostAgents()
+
 	dataDir := s.cfg.Server.DataDir
 	if dataDir == "" {
 		dataDir = "data"
@@ -835,12 +1113,12 @@ func (s *Server) offlineThreshold() time.Duration {
 
 // AgentStatusInfo holds display info for an agent's status
 type AgentStatusInfo struct {
-	Status   string // "online", "stale", "offline"
-	Label    string // "在线", "超时", "离线"
-	DotColor string // tailwind bg class
-	BgColor  string // tailwind bg class
+	Status    string // "online", "stale", "offline"
+	Label     string // "Online", "Timeout", "Offline"
+	DotColor  string // tailwind bg class
+	BgColor   string // tailwind bg class
 	TextColor string // tailwind text class
-	Anim     string // animate-pulse or empty
+	Anim      string // animate-pulse or empty
 }
 
 func (s *Server) agentStatus(a db.Implant) AgentStatusInfo {
@@ -848,11 +1126,38 @@ func (s *Server) agentStatus(a db.Implant) AgentStatusInfo {
 	threshold := s.offlineThreshold()
 	switch {
 	case since < threshold:
-		return AgentStatusInfo{"online", "在线", "bg-emerald-500", "bg-emerald-50", "text-emerald-700", "animate-pulse"}
+		return AgentStatusInfo{"online", "Online", "bg-emerald-500", "bg-emerald-50", "text-emerald-700", "animate-pulse"}
 	case since < 30*time.Minute:
-		return AgentStatusInfo{"stale", "超时", "bg-amber-500", "bg-amber-50", "text-amber-700", ""}
+		return AgentStatusInfo{"stale", "Timeout", "bg-amber-500", "bg-amber-50", "text-amber-700", ""}
 	default:
-		return AgentStatusInfo{"offline", "离线", "bg-red-500", "bg-red-50", "text-red-700", ""}
+		return AgentStatusInfo{"offline", "Offline", "bg-red-500", "bg-red-50", "text-red-700", ""}
+	}
+}
+
+// cleanupGhostAgents removes invalid or long-dead implant records.
+func (s *Server) cleanupGhostAgents() {
+	ghostCutoff := time.Now().Add(-1 * time.Hour)
+	var ghosts []db.Implant
+	if err := s.db.Where("(hostname = '' OR hostname IS NULL) AND (ip = '' OR ip IS NULL) AND last_seen < ?", ghostCutoff).Find(&ghosts).Error; err != nil {
+		return
+	}
+	for _, agent := range ghosts {
+		s.db.Where("agent_id = ?", agent.ID).Delete(&db.Task{})
+		if err := s.db.Delete(&agent).Error; err == nil {
+			slog.Info("Removed ghost agent", "id", agent.ID, "last_seen", agent.LastSeen)
+		}
+	}
+
+	offlineCutoff := time.Now().AddDate(0, 0, -30)
+	var stale []db.Implant
+	if err := s.db.Where("last_seen < ?", offlineCutoff).Find(&stale).Error; err != nil {
+		return
+	}
+	for _, agent := range stale {
+		s.db.Where("agent_id = ?", agent.ID).Delete(&db.Task{})
+		if err := s.db.Delete(&agent).Error; err == nil {
+			slog.Info("Removed stale offline agent", "id", agent.ID, "hostname", agent.Hostname, "last_seen", agent.LastSeen)
+		}
 	}
 }
 
@@ -1111,6 +1416,18 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 	if err := s.db.Create(&task).Error; err != nil {
 		return nil, err
 	}
+	if s.pluginManager != nil {
+		go s.pluginManager.ExecuteHook(context.Background(), plugin.Event{
+			Type:      plugin.EventTaskCreated,
+			Timestamp: time.Now(),
+			AgentID:   agentID,
+			Payload: map[string]interface{}{
+				"task_id":   task.ID,
+				"task_type": taskType,
+				"command":   command,
+			},
+		})
+	}
 	return &task, nil
 }
 
@@ -1137,4 +1454,3 @@ func (s *Server) handleHealthCheck(c *gin.Context) {
 		"goroutine": runtime.NumGoroutine(),
 	})
 }
-

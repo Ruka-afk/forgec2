@@ -1,0 +1,294 @@
+{{define "plugins_content"}}
+<div class="max-w-7xl mx-auto mb-20 md:mb-0">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">插件市场</h1>
+            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">管理 ForgeC2 插件、查看评分评论、检查更新</p>
+        </div>
+        <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <button data-action="show-import-modal" class="ui-btn ui-btn-primary">
+            <i class="fa-solid fa-file-import"></i> 导入插件
+        </button>
+        <button data-action="show-create-plugin-modal" class="ui-btn ui-btn-success">
+            <i class="fa-solid fa-plus"></i> 新建插件
+        </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
+        <div class="xl:col-span-3 space-y-6">
+            <div class="ui-card p-4 shadow-sm">
+                <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
+                    <div class="relative flex-1 min-w-[200px]">
+                        <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm"></i>
+                        <input type="text" id="plugin-search" placeholder="搜索插件..." class="w-full pl-9 pr-4 py-2 ui-input focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                    <select id="plugin-category" class="ui-select">
+                        <option value="">所有分类</option>
+                        <option value="recon">侦察 (Recon)</option>
+                        <option value="privesc">提权 (PrivEsc)</option>
+                        <option value="lateral">横向移动 (Lateral)</option>
+                        <option value="report">报告 (Report)</option>
+                        <option value="automation">自动化 (Automation)</option>
+                        <option value="utility">工具 (Utility)</option>
+                    </select>
+                    <select id="plugin-type" class="ui-select">
+                        <option value="">所有类型</option>
+                        <option value="hook">Hook</option>
+                        <option value="command">Command</option>
+                        <option value="report">Report</option>
+                    </select>
+                    <button data-action="refresh-plugins" class="px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 border border-slate-200 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ui-btn ui-btn-secondary">
+                        <i class="fa-solid fa-refresh mr-1"></i>刷新
+                    </button>
+                </div>
+            </div>
+
+            <div id="plugins-list" class="space-y-4">
+                <div class="text-center py-12 text-slate-400 dark:text-slate-500">
+                    <i class="fa-solid fa-plug text-4xl mb-3"></i>
+                    <div>加载中...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <div class="ui-card shadow-sm overflow-hidden">
+                <div class="flex items-center justify-between px-4 py-3.5 border-b border-slate-100">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-slate-400 dark:text-slate-500 text-xs"></i>
+                        <span class="text-sm font-semibold text-slate-700">分类统计</span>
+                    </div>
+                </div>
+                <div class="p-4 space-y-3">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-slate-500">侦察</span>
+                        <span class="font-medium text-slate-700 dark:text-slate-300"><span id="stat-recon" class="text-cyan-600">0</span> 个</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-slate-500">提权</span>
+                        <span class="font-medium text-slate-700 dark:text-slate-300"><span id="stat-privesc" class="text-amber-600">0</span> 个</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-slate-500">横向移动</span>
+                        <span class="font-medium text-slate-700 dark:text-slate-300"><span id="stat-lateral" class="text-emerald-600">0</span> 个</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-slate-500">报告</span>
+                        <span class="font-medium text-slate-700 dark:text-slate-300"><span id="stat-report" class="text-purple-600">0</span> 个</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-slate-500">自动化</span>
+                        <span class="font-medium text-slate-700 dark:text-slate-300"><span id="stat-automation" class="text-indigo-600">0</span> 个</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-slate-500">工具</span>
+                        <span class="font-medium text-slate-700 dark:text-slate-300"><span id="stat-utility" class="text-slate-600">0</span> 个</span>
+                    </div>
+                    <div class="border-t border-slate-100 pt-3 mt-3 flex items-center justify-between text-xs">
+                        <span class="text-slate-500 font-medium">总计</span>
+                        <span class="font-semibold text-slate-900" id="stat-total">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ui-card shadow-sm overflow-hidden">
+                <div class="flex items-center justify-between px-4 py-3.5 border-b border-slate-100">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-slate-400 text-xs"></i>
+                        <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">更新检查</span>
+                    </div>
+                    <button data-action="check-all-updates" class="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1 ui-btn ui-btn-secondary">
+                        <i class="fa-solid fa-refresh"></i> 检查更新
+                    </button>
+                </div>
+                <div class="p-4">
+                    <div id="update-status" class="text-xs text-slate-500">
+                        <i class="fa-solid fa-circle-info mr-1"></i>上次检查: 从未
+                    </div>
+                    <div id="update-summary" class="mt-3 space-y-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="plugin-detail-modal" class="hidden ui-modal-backdrop z-50 flex items-center justify-center">
+    <div class="ui-modal shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center"><i class="fa-solid fa-plug text-indigo-600"></i></div>
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-900" id="modal-plugin-name">插件详情</h3>
+                    <p class="text-xs text-slate-500" id="modal-plugin-version">v1.0.0</p>
+                </div>
+            </div>
+            <button data-action="close-modal" data-target="plugin-detail-modal" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div><label class="block text-xs section-header mb-1.5">作者</label><div id="modal-plugin-author" class="text-sm font-medium text-slate-700 dark:text-slate-300">—</div></div>
+                <div><label class="block text-xs section-header mb-1.5">类型</label><div id="modal-plugin-type" class="text-sm font-medium text-slate-700 dark:text-slate-300">—</div></div>
+                <div><label class="block text-xs section-header mb-1.5">分类</label><div id="modal-plugin-category" class="text-sm font-medium text-slate-700 dark:text-slate-300">—</div></div>
+                <div><label class="block text-xs section-header mb-1.5">许可证</label><div id="modal-plugin-license" class="text-sm font-medium text-slate-700 dark:text-slate-300">—</div></div>
+            </div>
+            <div><label class="block text-xs section-header mb-1.5">描述</label><div id="modal-plugin-desc" class="text-sm text-slate-600">—</div></div>
+
+            <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <i class="fa-solid fa-star text-amber-500 text-xs"></i>
+                    <span class="text-sm font-semibold text-amber-800">评分 & 评论</span>
+                </div>
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="text-3xl font-bold text-amber-600" id="modal-rating-overall">0.0</div>
+                    <div class="flex gap-1">
+                        <i class="fa-solid fa-star text-amber-400" id="star-1"></i>
+                        <i class="fa-solid fa-star text-amber-400" id="star-2"></i>
+                        <i class="fa-solid fa-star text-amber-400" id="star-3"></i>
+                        <i class="fa-solid fa-star text-amber-400" id="star-4"></i>
+                        <i class="fa-solid fa-star text-amber-400" id="star-5"></i>
+                    </div>
+                    <span class="text-xs text-slate-500" id="modal-rating-count">(0 条评论)</span>
+                </div>
+                <div class="space-y-2 mb-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] text-slate-500 w-8">5星</span>
+                        <div class="flex-1 h-2 bg-amber-200 rounded-full overflow-hidden">
+                            <div class="h-full bg-amber-500 rounded-full" id="star-bar-5" style="width: 0%"></div>
+                        </div>
+                        <span class="text-[10px] text-slate-400 w-6" id="star-count-5">0</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] text-slate-500 w-8">4星</span>
+                        <div class="flex-1 h-2 bg-amber-200 rounded-full overflow-hidden">
+                            <div class="h-full bg-amber-500 rounded-full" id="star-bar-4" style="width: 0%"></div>
+                        </div>
+                        <span class="text-[10px] text-slate-400 dark:text-slate-500 w-6" id="star-count-4">0</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] text-slate-500 w-8">3星</span>
+                        <div class="flex-1 h-2 bg-amber-200 rounded-full overflow-hidden">
+                            <div class="h-full bg-amber-500 rounded-full" id="star-bar-3" style="width: 0%"></div>
+                        </div>
+                        <span class="text-[10px] text-slate-400 dark:text-slate-500 w-6" id="star-count-3">0</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] text-slate-500 w-8">2星</span>
+                        <div class="flex-1 h-2 bg-amber-200 rounded-full overflow-hidden">
+                            <div class="h-full bg-amber-500 rounded-full" id="star-bar-2" style="width: 0%"></div>
+                        </div>
+                        <span class="text-[10px] text-slate-400 dark:text-slate-500 w-6" id="star-count-2">0</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] text-slate-500 w-8">1星</span>
+                        <div class="flex-1 h-2 bg-amber-200 rounded-full overflow-hidden">
+                            <div class="h-full bg-amber-500 rounded-full" id="star-bar-1" style="width: 0%"></div>
+                        </div>
+                        <span class="text-[10px] text-slate-400 dark:text-slate-500 w-6" id="star-count-1">0</span>
+                    </div>
+                </div>
+                <div class="border-t border-amber-200 pt-4">
+                    <div class="flex gap-1 mb-3">
+                        <button data-action="set-review-rating" data-rating="1" class="star-btn text-2xl hover:text-amber-400"><i class="fa-regular fa-star"></i></button>
+                        <button data-action="set-review-rating" data-rating="2" class="star-btn text-2xl hover:text-amber-400"><i class="fa-regular fa-star"></i></button>
+                        <button data-action="set-review-rating" data-rating="3" class="star-btn text-2xl hover:text-amber-400"><i class="fa-regular fa-star"></i></button>
+                        <button data-action="set-review-rating" data-rating="4" class="star-btn text-2xl hover:text-amber-400"><i class="fa-regular fa-star"></i></button>
+                        <button data-action="set-review-rating" data-rating="5" class="star-btn text-2xl hover:text-amber-400"><i class="fa-regular fa-star"></i></button>
+                    </div>
+                    <textarea id="review-comment" class="w-full px-3 py-2 border border-amber-300 rounded-xl text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 min-h-[60px]" placeholder="写下您的评价..."></textarea>
+                    <button data-action="submit-review" class="mt-3 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-medium transition-colors">
+                        <i class="fa-solid fa-paper-plane mr-1"></i>提交评价
+                    </button>
+                </div>
+                <div id="review-list" class="mt-4 space-y-3"></div>
+            </div>
+
+            <div class="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <i class="fa-solid fa-link text-emerald-600 text-xs"></i>
+                    <span class="text-sm font-semibold text-emerald-800">依赖关系</span>
+                </div>
+                <div id="dependency-list" class="space-y-2">
+                    <div class="text-xs text-slate-500">无依赖</div>
+                </div>
+            </div>
+
+            <div class="bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200 rounded-xl p-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <i class="fa-solid fa-circle-up text-sky-600 text-xs"></i>
+                    <span class="text-sm font-semibold text-sky-800">更新状态</span>
+                </div>
+                <div id="update-status-detail" class="space-y-2">
+                    <div class="text-xs text-slate-500">检查中...</div>
+                </div>
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t bg-slate-50 flex justify-between">
+            <div class="flex items-center gap-2">
+                <button data-action="export-plugin" class="px-4 py-2 text-sm ui-btn ui-btn-secondary flex items-center gap-x-1.5">
+                    <i class="fa-solid fa-file-export"></i> 导出
+                </button>
+                <button data-action="delete-plugin" class="px-4 py-2 text-sm ui-btn ui-btn-danger flex items-center gap-x-1.5">
+                    <i class="fa-solid fa-trash"></i> 删除
+                </button>
+            </div>
+            <button id="modal-toggle-btn" data-action="toggle-plugin" class="px-4 py-2 text-sm ui-btn ui-btn-primary flex items-center gap-x-1.5">
+                <i class="fa-solid fa-power-off"></i> 禁用
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="create-plugin-modal" class="hidden ui-modal-backdrop z-50 flex items-center justify-center">
+    <div class="ui-modal p-6 w-full max-w-lg shadow-2xl mx-4" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-900">新建插件</h3>
+            <button data-action="close-modal" data-target="create-plugin-modal" class="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:text-slate-300"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="space-y-4">
+            <div><label class="block text-xs section-header mb-1.5">名称</label><input type="text" id="create-name" class="ui-input"></div>
+            <div><label class="block text-xs section-header mb-1.5">版本</label><input type="text" id="create-version" value="1.0.0" class="ui-input"></div>
+            <div><label class="block text-xs section-header mb-1.5">描述</label><textarea id="create-desc" rows="2" class="ui-input"></textarea></div>
+            <div><label class="block text-xs section-header mb-1.5">作者</label><input type="text" id="create-author" class="ui-input"></div>
+            <div class="grid grid-cols-2 gap-4">
+                <div><label class="block text-xs section-header mb-1.5">类型</label><select id="create-type" class="ui-select"><option value="hook">Hook</option><option value="command">Command</option><option value="report">Report</option></select></div>
+                <div><label class="block text-xs section-header mb-1.5">分类</label><select id="create-category" class="ui-select"><option value="recon">侦察</option><option value="privesc">提权</option><option value="lateral">横向移动</option><option value="report">报告</option><option value="automation">自动化</option><option value="utility">工具</option></select></div>
+            </div>
+            <div><label class="block text-xs section-header mb-1.5">许可证</label><input type="text" id="create-license" value="MIT" class="ui-input"></div>
+            <div><label class="block text-xs section-header mb-1.5">主页</label><input type="text" id="create-homepage" class="ui-input" placeholder="https://github.com/..."></div>
+            <div class="flex justify-end gap-2">
+                <button data-action="close-modal" data-target="create-plugin-modal" class="px-4 py-2 text-sm ui-btn ui-btn-secondary">取消</button>
+                <button data-action="create-plugin" class="px-4 py-2 text-sm ui-btn ui-btn-primary"><i class="fa-solid fa-save mr-1"></i>保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="import-modal" class="hidden ui-modal-backdrop z-50 flex items-center justify-center">
+    <div class="ui-modal p-6 w-full max-w-lg shadow-2xl mx-4" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-slate-900">导入插件</h3>
+            <button data-action="close-modal" data-target="import-modal" class="text-slate-400 hover:text-slate-600 dark:text-slate-300"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        <div class="space-y-4">
+            <div class="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-6 text-center">
+                <i class="fa-solid fa-file-import text-slate-400 text-3xl mb-2"></i>
+                <div class="text-sm text-slate-600 dark:text-slate-300">拖拽 JSON 文件到此处</div>
+                <div class="text-xs text-slate-400 mt-1">或点击选择文件</div>
+                <input type="file" id="import-file" accept=".json" class="hidden" data-action="handle-import-file">
+                <button data-action="trigger-file-import" class="mt-3 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100">
+                    <i class="fa-solid fa-folder-open mr-1"></i>选择文件
+                </button>
+            </div>
+            <div id="import-preview" class="hidden">
+                <div class="text-xs section-header mb-2">预览</div>
+                <div class="bg-slate-50 rounded-xl p-3 text-xs text-slate-600 font-mono"></div>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button data-action="close-modal" data-target="import-modal" class="px-4 py-2 text-sm ui-btn ui-btn-secondary">取消</button>
+                <button data-action="import-plugin" class="px-4 py-2 text-sm ui-btn ui-btn-primary"><i class="fa-solid fa-download mr-1"></i>导入</button>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}

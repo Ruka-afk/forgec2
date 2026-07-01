@@ -2,7 +2,12 @@
 
 let selectedAgentId = '';
 
-document.getElementById('toolkit-agent-select').addEventListener('change', function() {
+(function initToolkitPage() {
+    const agentSelect = document.getElementById('toolkit-agent-select');
+    const toolkitSearch = document.getElementById('toolkit-search');
+    if (!agentSelect || !toolkitSearch) return;
+
+    agentSelect.addEventListener('change', function() {
     selectedAgentId = this.value;
     const badge = document.getElementById('selected-agent-badge');
     const name = document.getElementById('selected-agent-name');
@@ -24,25 +29,39 @@ document.getElementById('toolkit-agent-select').addEventListener('change', funct
             btn.classList.add('opacity-50', 'cursor-not-allowed');
         });
     }
-});
-
-document.querySelectorAll('.cmd-btn, .quick-action-btn').forEach(btn => {
-    btn.disabled = true;
-    btn.classList.add('opacity-50', 'cursor-not-allowed');
-});
-
-document.getElementById('toolkit-search').addEventListener('input', function() {
-    const q = this.value.toLowerCase();
-    document.querySelectorAll('.cmd-btn').forEach(btn => {
-        const text = btn.textContent.toLowerCase();
-        btn.closest('.category-body')?.classList.remove('hidden');
-        if (q === '') {
-            btn.style.display = '';
-        } else {
-            btn.style.display = text.includes(q) ? '' : 'none';
-        }
     });
-});
+
+    document.querySelectorAll('.cmd-btn, .quick-action-btn').forEach(btn => {
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+    });
+
+    toolkitSearch.addEventListener('input', function() {
+        const q = this.value.toLowerCase();
+        document.querySelectorAll('.cmd-btn').forEach(btn => {
+            const text = btn.textContent.toLowerCase();
+            btn.closest('.category-body')?.classList.remove('hidden');
+            if (q === '') {
+                btn.style.display = '';
+            } else {
+                btn.style.display = text.includes(q) ? '' : 'none';
+            }
+        });
+    });
+
+    document.querySelectorAll('.quick-action-btn, .cmd-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!selectedAgentId) {
+                showToast('请先选择目标 Implant', 'warning');
+                return;
+            }
+            const action = this.dataset.action;
+            if (action) {
+                executeQuickAction(action, '');
+            }
+        });
+    });
+})();
 
 function toggleCategory(header) {
     const body = header.nextElementSibling;
@@ -64,19 +83,6 @@ function collapseAllCategories() {
         body.closest('.bg-white')?.querySelector('.fa-chevron-down')?.classList.remove('rotate-180');
     });
 }
-
-document.querySelectorAll('.quick-action-btn, .cmd-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-        if (!selectedAgentId) {
-            showToast('请先选择目标 Implant', 'warning');
-            return;
-        }
-        const action = this.dataset.action;
-        if (action) {
-            executeQuickAction(action, '');
-        }
-    });
-});
 
 function executeQuickAction(action, param) {
     const formData = new FormData();

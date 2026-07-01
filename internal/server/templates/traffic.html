@@ -1,62 +1,56 @@
 {{define "traffic_content"}}
-<div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-    <div class="bg-white border-b border-slate-200 px-6 py-4 shadow-sm">
-        <div class="flex items-center justify-between">
-            <div>
-                <h1 class="text-2xl font-semibold text-slate-900">流量监控</h1>
-                <div class="text-sm text-slate-500 mt-1">实时查看 Agent Beacon HTTP 请求</div>
-            </div>
-            <div class="flex items-center gap-x-3">
-                <label class="flex items-center gap-x-2 text-sm text-slate-600">
-                    <input type="checkbox" id="auto-refresh" checked onchange="toggleAutoRefresh()">
-                    自动刷新
-                </label>
-                <button onclick="loadTraffic()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 h-11 rounded-xl text-sm font-medium flex items-center gap-x-2">
-                    <i class="fa-solid fa-sync"></i>
-                    <span>刷新</span>
-                </button>
-            </div>
+<div class="max-w-7xl mx-auto mb-20 md:mb-0">
+    <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-4 sm:mb-6 gap-3">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{{T .CurrentLang "traffic.title"}}</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1 text-xs sm:text-sm">{{T .CurrentLang "traffic.subtitle"}}</p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+            <label class="flex items-center gap-x-2 text-sm text-slate-600 dark:text-slate-400">
+                <input type="checkbox" id="auto-refresh" checked data-action="toggle-auto-refresh" class="rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500">
+                {{T .CurrentLang "traffic.auto_refresh"}}
+            </label>
+            <button data-action="load-traffic" class="ui-btn ui-btn-primary px-5 h-11 text-sm">
+                <i class="fa-solid fa-sync"></i>
+                <span>{{T .CurrentLang "common.refresh"}}</span>
+            </button>
         </div>
     </div>
 
-    <div class="p-6">
-        <div class="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-            <div class="bg-slate-50 border-b border-slate-200 px-6 py-3">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-x-3">
-                        <i class="fa-solid fa-network-wired text-indigo-500"></i>
-                        <span class="text-sm font-medium text-slate-700">Beacon 请求</span>
-                    </div>
-                    <span class="text-xs text-slate-500" id="traffic-count">最近 0 条</span>
+    <div class="ui-card shadow-sm overflow-hidden">
+        <div class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 px-6 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-x-3">
+                    <i class="fa-solid fa-network-wired text-indigo-500 dark:text-indigo-400"></i>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{T .CurrentLang "traffic.beacon_requests"}}</span>
                 </div>
+                <span class="text-xs text-slate-500 dark:text-slate-400" id="traffic-count">{{T .CurrentLang "traffic.latest"}} 0</span>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-slate-50 border-b border-slate-200">
-                        <tr>
-                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">时间</th>
-                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">方法</th>
-                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">路径</th>
-                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">源 IP</th>
-                            <th class="text-left py-3 px-4 text-xs font-medium text-slate-500">Agent</th>
-                            <th class="text-center py-3 px-4 text-xs font-medium text-slate-500">状态</th>
-                            <th class="text-right py-3 px-4 text-xs font-medium text-slate-500">大小</th>
-                            <th class="text-right py-3 px-4 text-xs font-medium text-slate-500">延迟</th>
-                        </tr>
-                    </thead>
-                    <tbody id="traffic-body" class="divide-y divide-slate-100">
-                        <tr>
-                            <td colspan="8" class="py-16 text-center text-slate-400">
-                                <i class="fa-solid fa-spinner fa-spin text-xl mb-2"></i>
-                                <p>加载中...</p>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                    <tr>
+                        <th class="text-left py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">{{T .CurrentLang "common.time"}}</th>
+                        <th class="text-left py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">Method</th>
+                        <th class="text-left py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">Path</th>
+                        <th class="text-left py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">Source IP</th>
+                        <th class="text-left py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">Agent</th>
+                        <th class="text-center py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">{{T .CurrentLang "common.status"}}</th>
+                        <th class="text-right py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">Size</th>
+                        <th class="text-right py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">Latency</th>
+                    </tr>
+                </thead>
+                <tbody id="traffic-body" class="divide-y divide-slate-100 dark:divide-slate-700">
+                    <tr>
+                        <td colspan="8" class="py-16 text-center text-slate-400 dark:text-slate-500">
+                            <i class="fa-solid fa-spinner fa-spin text-xl mb-2"></i>
+                            <p>{{T .CurrentLang "common.loading"}}</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
-
-<script src="/static/js/traffic.js"></script>
 {{end}}

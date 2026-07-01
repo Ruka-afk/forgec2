@@ -36,7 +36,7 @@ type acmeProvisionRequest struct {
 func (s *Server) handleInfrastructurePage(c *gin.Context) {
 	listeners := s.getListeners()
 	s.renderPage(c, "infrastructure_content", gin.H{
-		"Title":     "基础设施自动化",
+		"Title": "Infrastructure Automation",
 		"ActiveNav": "infrastructure",
 		"Listeners": listeners,
 	})
@@ -110,11 +110,17 @@ func (s *Server) handleACMECertProvision(c *gin.Context) {
 		return
 	}
 
-	_ = certPEM
-	_ = keyPEM
-
 	certFile := filepath.Join(dataDir, "fullchain.pem")
 	keyFile := filepath.Join(dataDir, "privkey.pem")
+
+	if err := os.WriteFile(certFile, certPEM, 0644); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "write cert: " + err.Error()})
+		return
+	}
+	if err := os.WriteFile(keyFile, keyPEM, 0600); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "write key: " + err.Error()})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":   true,

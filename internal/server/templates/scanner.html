@@ -1,19 +1,19 @@
 {{define "scanner_content"}}
-<div class="max-w-7xl mx-auto">
+<div class="max-w-7xl mx-auto mb-20 md:mb-0">
     <!-- 页面标题 -->
     <div class="mb-6">
-        <h1 class="text-3xl font-semibold tracking-tight text-slate-900">网络扫描器</h1>
-        <p class="text-slate-500 text-sm mt-1">端口扫描、服务识别与漏洞探测</p>
+        <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">网络扫描器</h1>
+        <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1">端口扫描、服务识别与漏洞探测</p>
     </div>
 
     <!-- 扫描配置 -->
-    <div class="bg-white border border-slate-200 rounded-2xl p-6 mb-6 shadow-sm hover:shadow-md transition-shadow">
+    <div class="ui-card p-6 mb-6 shadow-sm hover:shadow-md transition-shadow">
         <div class="flex items-center gap-x-3 mb-5">
             <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
                 <i class="fa-solid fa-radar text-blue-600"></i>
             </div>
             <div>
-                <div class="text-sm font-semibold text-slate-900">新建扫描任务</div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-slate-100">新建扫描任务</div>
                 <div class="text-xs text-slate-500">选择 Agent 并配置扫描参数</div>
             </div>
         </div>
@@ -23,7 +23,7 @@
                 <!-- Agent 选择 -->
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">目标 Agent</label>
-                    <select id="scan-agent" class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm cursor-pointer transition-all" required>
+                    <select id="scan-agent" class="ui-select" required>
                         <option value="">-- 选择 Agent --</option>
                         {{range .Agents}}
                         <option value="{{.ID}}">{{.Hostname}} ({{.IP}})</option>
@@ -33,15 +33,15 @@
 
                 <!-- 目标地址 -->
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">目标地址</label>
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">目标地址</label>
                     <input type="text" id="scan-target" placeholder="192.168.1.1 或 10.0.0.0/24"
-                           class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm font-mono transition-all" required>
+                           class="ui-input font-mono" required>
                 </div>
 
                 <!-- 扫描类型 -->
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">扫描类型</label>
-                    <select id="scan-type" class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm cursor-pointer transition-all">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">扫描类型</label>
+                    <select id="scan-type" class="ui-select">
                         <option value="tcp_connect">TCP Connect</option>
                         <option value="tcp_syn">TCP SYN (Stealth)</option>
                         <option value="udp">UDP</option>
@@ -50,8 +50,8 @@
 
                 <!-- 端口配置 -->
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">端口配置</label>
-                    <select id="scan-port-mode" class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm cursor-pointer transition-all">
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">端口配置</label>
+                    <select id="scan-port-mode" class="ui-select">
                         <option value="top">Top 1000 端口</option>
                         <option value="top100">Top 100 端口</option>
                         <option value="custom">自定义范围</option>
@@ -61,19 +61,19 @@
 
             <!-- 自定义端口范围（条件显示） -->
             <div id="custom-port-range" class="hidden">
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">端口范围</label>
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">端口范围</label>
                 <input type="text" id="scan-ports" placeholder="1-1000,8080,8443"
-                       class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm font-mono transition-all">
+                       class="ui-input font-mono">
                 <p class="text-xs text-slate-500 mt-1">支持格式：1-1000,8080,8443</p>
             </div>
 
             <!-- 操作按钮 -->
             <div class="flex items-center gap-3 pt-2">
-                <button type="submit" class="px-4 h-10 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-xl font-medium flex items-center gap-x-2 transition-colors">
+                <button type="submit" class="px-4 h-10 ui-btn ui-btn-primary text-sm">
                     <i class="fa-solid fa-play"></i>
                     <span>开始扫描</span>
                 </button>
-                <span class="text-xs text-slate-500">
+                <span class="text-xs text-slate-500 dark:text-slate-400">
                     <i class="fa-solid fa-circle-info mr-1"></i>
                     扫描将在后台执行，结果将实时更新
                 </span>
@@ -82,18 +82,18 @@
     </div>
 
     <!-- 扫描结果 -->
-    <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+    <div class="ui-card p-6 shadow-sm hover:shadow-md transition-shadow">
         <div class="flex items-center justify-between mb-5">
             <div class="flex items-center gap-x-3">
                 <div class="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
                     <i class="fa-solid fa-list-check text-emerald-600"></i>
                 </div>
                 <div>
-                    <div class="text-sm font-semibold text-slate-900">扫描结果</div>
+                    <div class="text-sm font-semibold text-slate-900 dark:text-slate-100">扫描结果</div>
                     <div class="text-xs text-slate-500" id="result-count">共 0 个开放端口</div>
                 </div>
             </div>
-            <button onclick="exportResults()" class="px-4 h-10 bg-slate-600 hover:bg-slate-700 text-white text-sm rounded-xl font-medium flex items-center gap-x-2 transition-colors">
+            <button data-action="export-results" class="px-4 h-10 ui-btn ui-btn-secondary text-sm">
                 <i class="fa-solid fa-download"></i>
                 <span>导出 CSV</span>
             </button>
@@ -105,11 +105,11 @@
                 <thead>
                     <tr class="border-b border-slate-200">
                         <th class="text-left py-3 px-4 font-semibold text-slate-600">端口</th>
-                        <th class="text-left py-3 px-4 font-semibold text-slate-600">协议</th>
-                        <th class="text-left py-3 px-4 font-semibold text-slate-600">状态</th>
-                        <th class="text-left py-3 px-4 font-semibold text-slate-600">服务</th>
-                        <th class="text-left py-3 px-4 font-semibold text-slate-600">版本</th>
-                        <th class="text-left py-3 px-4 font-semibold text-slate-600">Banner</th>
+                        <th class="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">协议</th>
+                        <th class="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">状态</th>
+                        <th class="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">服务</th>
+                        <th class="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">版本</th>
+                        <th class="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">Banner</th>
                     </tr>
                 </thead>
                 <tbody id="scan-results-body">
@@ -124,6 +124,4 @@
         </div>
     </div>
 </div>
-
-<script src="/static/js/scanner.js"></script>
 {{end}}

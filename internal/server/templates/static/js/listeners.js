@@ -4,25 +4,22 @@ function filterListeners() {
     const search = document.getElementById('search-input').value.toLowerCase();
     const type = document.getElementById('type-filter').value;
     const status = document.getElementById('status-filter').value;
-
     const rows = document.querySelectorAll('.listener-row');
     rows.forEach(row => {
         const name = row.dataset.name.toLowerCase();
         const t = row.dataset.type;
         const enabled = row.dataset.enabled === 'true';
-
         let show = true;
         if (search && !name.includes(search)) show = false;
         if (type && t !== type) show = false;
         if (status === 'enabled' && !enabled) show = false;
         if (status === 'disabled' && enabled) show = false;
-
         row.style.display = show ? '' : 'none';
     });
 }
 
 function showCreateModal() {
-    document.getElementById('modal-title').textContent = '创建监听器';
+    document.getElementById('modal-title').textContent = __('Create Listener');
     document.getElementById('listener-id').value = '';
     document.getElementById('listener-name').value = '';
     document.getElementById('listener-scheme').value = 'http';
@@ -35,7 +32,7 @@ function showCreateModal() {
 }
 
 function editListener(id, name, scheme, host, port, notes, enabled) {
-    document.getElementById('modal-title').textContent = '编辑监听器';
+    document.getElementById('modal-title').textContent = __('Edit Listener');
     document.getElementById('listener-id').value = id;
     document.getElementById('listener-name').value = name;
     document.getElementById('listener-scheme').value = scheme || 'http';
@@ -53,10 +50,9 @@ function hideListenerModal() {
     modal.classList.add('hidden');
 }
 
-async function saveListener() {
+async function saveListener(btn) {
     const id = document.getElementById('listener-id').value;
     const scheme = document.getElementById('listener-scheme').value;
-
     const payload = {
         name: document.getElementById('listener-name').value,
         scheme: scheme,
@@ -65,7 +61,6 @@ async function saveListener() {
         notes: document.getElementById('listener-notes').value,
         enabled: document.getElementById('listener-enabled').checked
     };
-
     if (scheme === 'http' || scheme === 'https') {
         payload.type = 'http';
         payload.protocol = scheme;
@@ -73,47 +68,41 @@ async function saveListener() {
         payload.type = 'tcp';
         payload.protocol = scheme;
     }
-
     const url = id ? `/api/listeners/${id}` : '/api/listeners';
     const method = id ? 'PUT' : 'POST';
-
-    const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCSRFToken() },
-        body: JSON.stringify(payload)
-    });
-
-    const data = await res.json();
-    if (data.success) {
-        hideListenerModal();
-        location.reload();
-    } else {
-        showToast('保存失败: ' + (data.error || '未知错误'), 'error');
+    try {
+        btn.disabled = true;
+        const data = await apiFetch(url, {method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)});
+        if (data.success) { hideListenerModal(); location.reload(); }
+        else showToast(__tf('Save failed: {0}', data.error || __('Unknown error')), 'error');
+    } catch (e) {
+        showToast(__tf('Save failed: {0}', e.message), 'error');
+    } finally {
+        btn.disabled = false;
     }
 }
 
 function toggleListener(id, currentEnabled) {
-    fetch(`/api/listeners/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCSRFToken() },
-        body: JSON.stringify({ enabled: !currentEnabled })
-    }).then(() => location.reload());
+    apiFetch(`/api/listeners/${id}`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enabled: !currentEnabled })})
+        .then(() => location.reload())
+        .catch(e => showToast(__tf('Toggle failed: {0}', e.message), 'error'));
 }
 
 function deleteListener(id, name) {
-    if (!confirm(`确定删除监听器 "${name}" 吗？`)) return;
-    fetch(`/api/listeners/${id}`, {
-        method: 'DELETE',
-        headers: { 'X-CSRF-Token': getCSRFToken() }
-    }).then(() => location.reload());
+    if (!confirm(__tf('Delete listener "{0}"?', name))) return;
+    apiFetch(`/api/listeners/${id}`, {method: 'DELETE'})
+        .then(() => location.reload())
+        .catch(e => showToast(__tf('Delete failed: {0}', e.message), 'error'));
 }
 
 function copyConnect(url, name) {
     navigator.clipboard.writeText(url).then(() => {
-        const toast = document.createElement('div');
-        toast.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-6 py-2 rounded-3xl text-sm shadow-lg';
-        toast.textContent = `已复制 ${name} 的连接地址`;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 1800);
+        showToast(__tf('Copied {0} connection address', name), 'success');
     });
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (new URLSearchParams(window.location.search).get('create') === '1') {
+        showCreateModal();
+    }
+});

@@ -1,41 +1,41 @@
-﻿{{define "pivoting_content"}}
-<div class="max-w-7xl mx-auto space-y-6">
+{{define "pivoting_content"}}
+<div class="max-w-7xl mx-auto space-y-6 mb-20 md:mb-0">
     <!-- Header -->
-    <div class="flex items-center justify-between">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-            <h1 class="text-3xl font-semibold tracking-tight">隧道与代理 (Pivoting)</h1>
-             <p class="text-slate-500 mt-1">通过 C2 中继的 SOCKS5 反向代理 — 服务端开口，Implant 端拨号</p>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">隧道与代理 (Pivoting)</h1>
+             <p class="text-slate-500 dark:text-slate-400 mt-1">通过 C2 中继的 SOCKS5 反向代理 — 服务端开口，Implant 端拨号</p>
         </div>
-        <button onclick="refreshSessions()" class="flex items-center gap-x-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-sm transition-colors">
+        <button data-action="refresh-sessions" class="flex items-center gap-x-2 px-4 py-2 ui-btn ui-btn-secondary text-sm">
             <i class="fa-solid fa-rotate"></i> 刷新
         </button>
     </div>
 
     <!-- Active Relays -->
-    <div class="bg-white border border-slate-200 rounded-3xl p-6">
+    <div class="ui-card p-6">
         <div class="flex items-center justify-between mb-4">
-            <div class="font-semibold flex items-center gap-x-2">
+            <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2">
                 <i class="fa-solid fa-tower-broadcast text-emerald-500"></i> C2 SOCKS 中继（服务端转发）
             </div>
-             <div class="text-xs text-slate-400">操作员代理工具 → C2 服务器 → Beacon 隧道 → Implant → 目标</div>
+             <div class="text-xs text-slate-400 dark:text-slate-500">操作员代理工具 → C2 服务器 → Beacon 隧道 → Implant → 目标</div>
         </div>
 
         <div id="sessions-container">
-            <div class="text-slate-400 text-sm py-8 text-center" id="no-sessions">加载中...</div>
+            <div class="text-slate-400 dark:text-slate-500 text-sm py-8 text-center" id="no-sessions">加载中...</div>
         </div>
     </div>
 
     <!-- Start New Relay -->
-    <div class="bg-white border border-slate-200 rounded-3xl p-6">
-        <div class="font-semibold flex items-center gap-x-2 mb-4">
+    <div class="ui-card p-6">
+        <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 mb-4">
             <i class="fa-solid fa-plus text-indigo-500"></i> 启动新 SOCKS 中继
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Agent selector -->
             <div>
-                <label class="text-xs font-medium text-slate-500 mb-1 block">选择在线 Implant</label>
-                <select id="relay-agent" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400">
+                <label class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">选择在线 Implant</label>
+                <select id="relay-agent" class="ui-select">
                     <option value="">-- 选择 Implant --</option>
                     {{range .Agents}}
                     <option value="{{.ID}}" data-hostname="{{.Hostname}}">{{.Hostname}} ({{.IP}}) - {{.ID}}</option>
@@ -46,11 +46,11 @@
             <!-- Port + Start -->
             <div class="flex items-end gap-x-3">
                 <div class="flex-1">
-                    <label class="text-xs font-medium text-slate-500 mb-1 block">本地监听端口 (C2 服务端)</label>
+                    <label class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">本地监听端口 (C2 服务端)</label>
                     <input id="relay-port" type="number" value="1080" min="1" max="65535"
-                           class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-400">
+                           class="ui-input">
                 </div>
-                <button onclick="startRelay()" class="h-[42px] px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors whitespace-nowrap">
+                <button data-action="start-relay" class="h-[42px] px-6 ui-btn ui-btn-success text-sm whitespace-nowrap">
                     <i class="fa-solid fa-play mr-1"></i> 启动中继
                 </button>
             </div>
@@ -64,11 +64,11 @@
     </div>
 
     <!-- Agent-Local SOCKS (Legacy) -->
-    <div class="bg-white border border-slate-200 rounded-3xl p-6">
-        <div class="font-semibold flex items-center gap-x-2 mb-3">
+    <div class="ui-card p-6">
+        <div class="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2 mb-3">
             <i class="fa-solid fa-network-wired text-amber-500"></i> Implant 本地 SOCKS5（传统模式）
         </div>
-        <p class="text-sm text-slate-500 mb-3">
+        <p class="text-sm text-slate-500 dark:text-slate-400 mb-3">
             在 Implant 主机上直接监听 SOCKS5 端口。适用于 Implant IP 可直达的场景（如同一内网）。
             如需通过 C2 中继，请使用上方的「C2 SOCKS 中继」。
         </p>
@@ -79,10 +79,10 @@
             <div class="border rounded-2xl p-3 hover:bg-slate-50">
                 <div class="flex justify-between items-center">
                     <div class="font-medium">{{.Hostname}}</div>
-                    <span class="text-xs text-slate-400">{{.IP}}</span>
+                    <span class="text-xs text-slate-400 dark:text-slate-500">{{.IP}}</span>
                 </div>
                 <div class="mt-2">
-                    <button onclick="startSocksLocal('{{.ID}}')" class="text-xs px-3 py-1 bg-amber-100 hover:bg-amber-200 rounded-xl transition-colors">
+                    <button data-action="start-socks-local" data-agent-id="{{.ID}}" class="text-xs px-3 py-1 bg-amber-100 hover:bg-amber-200 rounded-xl transition-colors">
                         本地 SOCKS (1080)
                     </button>
                 </div>
@@ -90,7 +90,7 @@
             {{end}}
         </div>
         {{else}}
-        <div class="text-slate-400 text-sm py-4 text-center">暂无在线 Implant</div>
+        <div class="text-slate-400 dark:text-slate-500 text-sm py-4 text-center">暂无在线 Implant</div>
         {{end}}
     </div>
 </div>
@@ -116,7 +116,7 @@ function renderSessions() {
     const noSessions = document.getElementById('no-sessions');
 
     if (sessions.length === 0) {
-        container.innerHTML = '<div class="text-slate-400 text-sm py-8 text-center">暂无活跃的 SOCKS 中继会话</div>';
+        container.innerHTML = '<div class="text-slate-400 dark:text-slate-500 text-sm py-8 text-center">暂无活跃的 SOCKS 中继会话</div>';
         return;
     }
 
@@ -133,19 +133,19 @@ function renderSessions() {
                     <span class="w-2.5 h-2.5 rounded-full ${statusColor}"></span>
                     <div>
                         <div class="font-medium text-sm">${s.agent_id.substring(0, 12)}...</div>
-                        <div class="text-xs text-slate-500">端口 <b>${s.listen_port}</b> · ${statusText} · 创建于 ${created}</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400">端口 <b>${s.listen_port}</b> · ${statusText} · 创建于 ${created}</div>
                     </div>
                 </div>
                 <div class="flex items-center gap-x-4">
-                    <div class="text-xs text-slate-500 text-right">
+                    <div class="text-xs text-slate-500 dark:text-slate-400 text-right">
                         <div><i class="fa-solid fa-arrow-down mr-1"></i>${formatBytes(s.bytes_in || 0)} 入</div>
                         <div><i class="fa-solid fa-arrow-up mr-1"></i>${formatBytes(s.bytes_out || 0)} 出</div>
                     </div>
-                    <div class="text-xs text-slate-500">
+                    <div class="text-xs text-slate-500 dark:text-slate-400">
                         <i class="fa-solid fa-plug mr-1"></i>${s.active_conn || 0}/${s.conn_count || 0} 连接
                     </div>
                     ${s.active ? `
-                        <button onclick="stopRelay('${s.agent_id}')" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl text-xs transition-colors">
+                        <button data-action="stop-relay" data-agent-id="${s.agent_id}" class="px-3 py-1.5 ui-btn ui-btn-danger text-xs">
                             <i class="fa-solid fa-stop mr-1"></i>停止
                         </button>
                     ` : ''}

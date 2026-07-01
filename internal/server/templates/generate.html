@@ -1,8 +1,8 @@
 {{define "generate_content"}}
-<div class="max-w-7xl mx-auto">
-    <div class="mb-6">
-        <h1 class="text-3xl font-semibold tracking-tight text-slate-900">生成 Implant</h1>
-        <p class="text-slate-500 text-sm mt-1">创建植入程序 (Windows EXE / PS1 / Linux ELF / macOS Binary) — 跨平台支持</p>
+<div class="max-w-7xl mx-auto mb-20 md:mb-0">
+    <div class="mb-4 sm:mb-6">
+        <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">生成 Implant</h1>
+        <p class="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1">创建植入程序 (Windows EXE / PS1 / Linux ELF / macOS Binary) — 跨平台支持</p>
         <div class="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl">
             <i class="fa-solid fa-circle-info text-amber-600 text-sm"></i>
             <span class="text-xs text-amber-700">生成原生 EXE / ELF / macOS Binary 需要本机安装 Go 工具链（<a href="https://go.dev/dl/" target="_blank" class="underline hover:text-amber-800">下载</a>）。PowerShell 脚本不需要。</span>
@@ -10,25 +10,25 @@
     </div>
 
     <!-- 共享设置 -->
-    <div class="bg-white border border-slate-200 rounded-2xl p-6 mb-6 shadow-sm">
-        <div class="flex items-center justify-between mb-5">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 mb-6 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
             <div class="flex items-center gap-x-3">
-                <div class="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-                    <i class="fa-solid fa-sliders text-indigo-600"></i>
+                <div class="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-sliders text-indigo-600 dark:text-indigo-400"></i>
                 </div>
                 <div>
-                    <div class="text-sm font-semibold text-slate-900">公共设置</div>
-                    <div class="text-xs text-slate-500">选择监听器，其余自动填充</div>
+                    <div class="text-sm font-semibold text-slate-900 dark:text-slate-100">公共设置</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">选择监听器，其余自动填充</div>
                 </div>
             </div>
-            <button type="button" onclick="createListener()" class="px-4 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-xl font-medium flex items-center gap-x-1.5">
+            <button type="button" onclick="createListener()" class="px-4 h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-xl font-medium flex items-center justify-center gap-x-1.5 shrink-0">
                 <i class="fa-solid fa-plus"></i> 创建监听器
             </button>
         </div>
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">监听器 *</label>
-                <select id="shared-listener" onchange="onSharedListenerChange()" class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm cursor-pointer transition-all">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">监听器 *</label>
+                <select id="shared-listener" onchange="onSharedListenerChange()" class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm cursor-pointer transition-all">
                     <option value="" disabled selected>-- 选择监听器 --</option>
                     {{range .Listeners}}
                     <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}" data-host="{{.Host}}" data-port="{{.Port}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
@@ -40,8 +40,8 @@
                 <input type="text" id="shared-c2url" readonly class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 h-10 text-xs font-mono text-slate-500">
             </div>
             <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">Malleable Profile</label>
-                <select id="shared-profile" class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm cursor-pointer transition-all">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Malleable Profile</label>
+                <select id="shared-profile" onchange="onSharedProfileChange()" class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm cursor-pointer transition-all">
                     <option value="default">Default - 默认配置</option>
                     <option value="google">Google - 搜索服务</option>
                     <option value="bing">Bing - 微软搜索</option>
@@ -57,37 +57,43 @@
                     <option value="firefox_update">Firefox - 浏览器更新</option>
                     <option value="apple">Apple - 苹果服务</option>
                     <option value="adobe">Adobe - Creative Cloud</option>
+                    <option value="__import__">导入自定义 Profile...</option>
                 </select>
+                <input type="file" id="shared-profile-import" accept=".json,application/json" class="hidden" onchange="onProfileFileSelected(this)">
+                <p id="profile-lock-hint" class="hidden mt-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+                    <i class="fa-solid fa-lock mr-1"></i>已跟随 Profile 配置，心跳与 User-Agent 不可手动修改
+                </p>
             </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">心跳间隔（秒）</label>
-                <input type="number" id="shared-interval" value="{{.DefaultInt}}"
-                       class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm transition-all">
+            <div id="shared-interval-wrap">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">心跳间隔（秒）</label>
+                <input type="number" id="shared-interval" value="{{.DefaultInt}}" min="0" max="300"
+                       class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm transition-all">
+                <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">0 = 实时模式</p>
             </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">抖动值 (%)</label>
+            <div id="shared-jitter-wrap">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">抖动值 (%)</label>
                 <input type="number" id="shared-jitter" value="{{.DefaultJitter}}"
-                       class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm transition-all">
+                       class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm transition-all">
             </div>
-            <div class="col-span-2 lg:col-span-1">
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">User-Agent</label>
+            <div class="col-span-2 lg:col-span-1" id="shared-ua-wrap">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">User-Agent</label>
                 <input type="text" id="shared-ua" value="{{.DefaultUA}}"
-                       class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-xs font-mono transition-all">
+                       class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-xs font-mono transition-all">
             </div>
             <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">HTTP 代理</label>
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">HTTP 代理</label>
                 <input type="text" id="shared-proxy" placeholder="http://proxy:8080"
-                       class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-xs font-mono transition-all">
+                       class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-xs font-mono transition-all">
             </div>
             <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">备用 C2 (逗号分隔)</label>
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">备用 C2 (逗号分隔)</label>
                 <input type="text" id="shared-failover" placeholder="http://backup1:8080, http://backup2:8080"
-                       class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-xs font-mono transition-all">
+                       class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-xs font-mono transition-all">
             </div>
             <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1.5">加密密钥 (32字节 Hex，可选)</label>
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">加密密钥 (32字节 Hex，可选)</label>
                 <input type="text" id="shared-crypto-key" placeholder="例如: a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890"
-                       class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-xs font-mono transition-all">
+                       class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-xs font-mono transition-all">
             </div>
         </div>
     </div>
@@ -97,7 +103,7 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
         <!-- EXE 生成器 -->
-        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
                 <div class="w-11 h-11 bg-orange-100 rounded-xl flex items-center justify-center text-2xl">🪟</div>
                 <div>
@@ -112,9 +118,9 @@
                 <input type="hidden" name="protocol" id="protocol-exe" value="http">
 
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">文件名</label>
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">文件名</label>
                     <input type="text" name="filename" value="forge_agent.exe"
-                           class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm transition-all">
+                           class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 rounded-xl px-3 h-10 text-sm transition-all">
                 </div>
 
                 <div class="mt-2 pt-2 border-t border-slate-100">
@@ -123,7 +129,7 @@
                         <div class="mt-2 space-y-2">
                             <div>
                                 <label class="block text-xs section-header mb-1.5">传输协议</label>
-                                <select name="p2p_mode" class="p2p-mode w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                                <select name="p2p_mode" class="p2p-mode w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
                                     <option value="">直接连接（HTTP/TCP）</option>
                                     <option value="parent">P2P 父节点（接受子节点）</option>
                                     <option value="child">P2P 子节点（通过父节点回连）</option>
@@ -132,20 +138,20 @@
                             </div>
                             <div class="p2p-parent-field hidden">
                                 <label class="block text-xs section-header mb-1.5">父节点地址（子节点模式）</label>
-                                <input type="text" name="p2p_parent" placeholder="tcp://192.168.1.100:4444 或 pipe://agent_pipe" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                                <input type="text" name="p2p_parent" placeholder="tcp://192.168.1.100:4444 或 pipe://agent_pipe" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
                             </div>
                             <div class="p2p-listen-field hidden">
                                 <label class="block text-xs section-header mb-1.5">监听地址（父节点模式）</label>
-                                <input type="text" name="p2p_listen_addr" placeholder="TCP: :4444 / SMB: agent_pipe" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                                <input type="text" name="p2p_listen_addr" placeholder="TCP: :4444 / SMB: agent_pipe" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
                             </div>
                             <div class="dns-fields hidden">
                                 <div class="mb-2">
                                     <label class="block text-xs section-header mb-1.5">DNS 域名</label>
-                                    <input type="text" name="dns_domain" placeholder="c2.example.com" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                                    <input type="text" name="dns_domain" placeholder="c2.example.com" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
                                 </div>
                                 <div>
                                     <label class="block text-xs section-header mb-1.5">DNS 服务器 IP</label>
-                                    <input type="text" name="dns_server" placeholder="192.168.1.100" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                                    <input type="text" name="dns_server" placeholder="192.168.1.100" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
                                 </div>
                             </div>
                         </div>
@@ -159,7 +165,7 @@
 
                 <div class="flex items-center gap-x-2">
                     <input type="checkbox" name="skip_tls_verify" id="skip-tls-exe" class="w-4 h-4 accent-indigo-600" {{if .DefaultSkipTLS}}checked{{end}}>
-                    <label for="skip-tls-exe" class="text-sm text-slate-700">跳过 TLS 验证</label>
+                    <label for="skip-tls-exe" class="text-sm text-slate-700 dark:text-slate-300">跳过 TLS 验证</label>
                 </div>
 
                 <button type="button" onclick="generateEXE()"
@@ -172,7 +178,7 @@
         </div>
 
         <!-- PS1 生成器 -->
-        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
                 <div class="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center text-2xl">🐚</div>
                 <div>
@@ -193,7 +199,7 @@
 
                 <div class="flex items-center gap-x-2">
                     <input type="checkbox" name="skip_tls_verify" id="skip-tls-ps1" class="w-4 h-4 accent-indigo-600" {{if .DefaultSkipTLS}}checked{{end}}>
-                    <label for="skip-tls-ps1" class="text-sm text-slate-700">跳过 TLS 验证</label>
+                    <label for="skip-tls-ps1" class="text-sm text-slate-700 dark:text-slate-300">跳过 TLS 验证</label>
                 </div>
 
                 <button type="button" onclick="generatePS1()"
@@ -205,7 +211,7 @@
         </div>
 
         <!-- Linux ELF 生成器 -->
-        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
                 <div class="w-11 h-11 bg-emerald-100 rounded-xl flex items-center justify-center text-2xl">🐧</div>
                 <div>
@@ -222,14 +228,14 @@
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">文件名</label>
                     <input type="text" name="filename" value="forge_implant"
-                           class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 h-10 text-sm">
+                           class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-500 rounded-xl px-3 h-10 text-sm">
                 </div>
 
                 <div class="flex items-center gap-x-2">
                     <input type="checkbox" name="persist" id="persist-linux" class="w-4 h-4 accent-indigo-600">
                     <label for="persist-linux" class="text-sm text-slate-700">持久化</label>
                     <input type="checkbox" name="skip_tls_verify" id="skip-tls-linux" class="w-4 h-4 accent-indigo-600 ml-3" {{if .DefaultSkipTLS}}checked{{end}}>
-                    <label for="skip-tls-linux" class="text-sm text-slate-700">跳过 TLS</label>
+                    <label for="skip-tls-linux" class="text-sm text-slate-700 dark:text-slate-300">跳过 TLS</label>
                 </div>
 
                 <button type="button" onclick="generateLinux()"
@@ -241,7 +247,7 @@
         </div>
 
         <!-- macOS 生成器 -->
-        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
             <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
                 <div class="w-11 h-11 bg-purple-100 rounded-xl flex items-center justify-center text-2xl">🍎</div>
                 <div>
@@ -258,14 +264,14 @@
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">文件名</label>
                     <input type="text" name="filename" value="forge_implant"
-                           class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 h-10 text-sm">
+                           class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-500 rounded-xl px-3 h-10 text-sm">
                 </div>
 
                 <div class="flex items-center gap-x-2">
                     <input type="checkbox" name="persist" id="persist-macos" class="w-4 h-4 accent-indigo-600">
                     <label for="persist-macos" class="text-sm text-slate-700">持久化</label>
                     <input type="checkbox" name="skip_tls_verify" id="skip-tls-macos" class="w-4 h-4 accent-indigo-600 ml-3" {{if .DefaultSkipTLS}}checked{{end}}>
-                    <label for="skip-tls-macos" class="text-sm text-slate-700">跳过 TLS</label>
+                    <label for="skip-tls-macos" class="text-sm text-slate-700 dark:text-slate-300">跳过 TLS</label>
                 </div>
 
                 <button type="button" onclick="generateMacOS()"
@@ -290,7 +296,7 @@
         </div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <!-- Windows Stager -->
-            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
                 <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
                     <div class="w-11 h-11 bg-purple-100 rounded-xl flex items-center justify-center text-2xl">📦</div>
                     <div>
@@ -307,7 +313,7 @@
                     <div>
                         <label class="block text-xs section-header mb-1.5">加载器文件名</label>
                         <input type="text" name="filename" value="stager.exe"
-                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                               class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
                     </div>
 
                     <div class="flex items-center gap-x-2">
@@ -325,7 +331,7 @@
             </div>
 
             <!-- Linux Stager -->
-            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
                 <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
                     <div class="w-11 h-11 bg-teal-100 rounded-xl flex items-center justify-center text-2xl">📦</div>
                     <div>
@@ -342,7 +348,7 @@
                     <div>
                         <label class="block text-xs section-header mb-1.5">加载器文件名</label>
                         <input type="text" name="filename" value="stager"
-                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                               class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
                     </div>
 
                     <div class="flex items-center gap-x-2">
@@ -374,7 +380,7 @@
         </div>
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
             <!-- Basic Shellcode -->
-            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
                 <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
                     <div class="w-11 h-11 bg-amber-100 rounded-xl flex items-center justify-center text-2xl">💾</div>
                     <div>
@@ -386,12 +392,12 @@
                     <div>
                         <label class="block text-xs section-header mb-1.5">执行命令</label>
                         <input type="text" name="command" id="shellcode-cmd" value="powershell -NoP -EP Bypass -Enc ..."
-                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                               class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
                     </div>
                     <div>
                         <label class="block text-xs section-header mb-1.5">文件名</label>
                         <input type="text" name="filename" value="shellcode.bin"
-                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                               class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
                     </div>
                     <button type="button" onclick="generateShellcode()"
                             class="w-full h-10 bg-amber-600 hover:bg-amber-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
@@ -402,7 +408,7 @@
             </div>
 
             <!-- Donut (.NET → Shellcode) -->
-            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
                 <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
                     <div class="w-11 h-11 bg-orange-100 rounded-xl flex items-center justify-center text-2xl">🍩</div>
                     <div>
@@ -418,7 +424,7 @@
                     </div>
                     <div>
                         <label class="block text-xs section-header mb-1.5">架构</label>
-                        <select name="arch" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                        <select name="arch" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
                             <option value="amd64">x64 (amd64)</option>
                             <option value="x86">x86</option>
                         </select>
@@ -426,22 +432,22 @@
                     <div>
                         <label class="block text-xs section-header mb-1.5">类名（可选）</label>
                         <input type="text" name="class" placeholder="Leave blank for Main"
-                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                               class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
                     </div>
                     <div>
                         <label class="block text-xs section-header mb-1.5">方法名（可选）</label>
                         <input type="text" name="method" placeholder="Main"
-                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                               class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
                     </div>
                     <div>
                         <label class="block text-xs section-header mb-1.5">参数（可选）</label>
                         <input type="text" name="args" placeholder="程序参数"
-                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                               class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
                     </div>
                     <div>
                         <label class="block text-xs section-header mb-1.5">文件名</label>
                         <input type="text" name="filename" value="donut_loader.bin"
-                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                               class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
                     </div>
                     <button type="button" onclick="generateDonut()"
                             class="w-full h-10 bg-orange-600 hover:bg-orange-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
@@ -452,7 +458,7 @@
             </div>
 
             <!-- sRDI (DLL → Shellcode) -->
-            <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
                 <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-slate-100">
                     <div class="w-11 h-11 bg-red-100 rounded-xl flex items-center justify-center text-2xl">📦</div>
                     <div>
@@ -469,11 +475,11 @@
                     <div>
                         <label class="block text-xs section-header mb-1.5">导出函数（可选）</label>
                         <input type="text" name="export" placeholder="DllMain 或自定义函数"
-                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
+                               class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm font-mono text-xs">
                     </div>
                     <div>
                         <label class="block text-xs section-header mb-1.5">架构</label>
-                        <select name="arch" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                        <select name="arch" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
                             <option value="amd64">x64 (amd64)</option>
                             <option value="x86">x86</option>
                         </select>
@@ -481,7 +487,7 @@
                     <div>
                         <label class="block text-xs section-header mb-1.5">文件名</label>
                         <input type="text" name="filename" value="rdi_loader.bin"
-                               class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                               class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
                     </div>
                     <button type="button" onclick="generateSRDI()"
                             class="w-full h-10 bg-red-600 hover:bg-red-700 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
@@ -504,12 +510,12 @@
                 <div class="text-xs text-slate-500">生成 10+ 种一键执行命令（自动托管负载）</div>
             </div>
         </div>
-        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
             <form id="oneliner-form" class="space-y-4">
                 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
                         <label class="block text-xs section-header mb-1.5">负载类型</label>
-                        <select name="payload_type" id="payload-type" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                        <select name="payload_type" id="payload-type" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
                             <option value="exe">Windows EXE</option>
                             <option value="ps1">PowerShell 脚本</option>
                             <option value="linux">Linux ELF</option>
@@ -517,7 +523,7 @@
                     </div>
                     <div>
                         <label class="block text-xs section-header mb-1.5">监听器</label>
-                        <select name="listener_id" id="listener-oneliner" onchange="onListenerChange('oneliner')" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                        <select name="listener_id" id="listener-oneliner" onchange="onListenerChange('oneliner')" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
                             <option value="" disabled selected>-- 请选择 --</option>
                             {{range .Listeners}}
                             <option value="{{.ID}}" data-scheme="{{if .Scheme}}{{.Scheme}}{{else if eq .Type "tcp"}}tcp{{else}}http{{end}}" data-host="{{.Host}}" data-port="{{.Port}}" data-type="{{.Type}}">{{.Name}} ({{if .Scheme}}{{.Scheme}}{{else}}{{.Type}}{{end}}://{{.Host}}:{{.Port}})</option>
@@ -526,11 +532,11 @@
                     </div>
                     <div>
                         <label class="block text-xs section-header mb-1.5">心跳间隔（秒）</label>
-                        <input type="number" name="beacon_time" value="{{.DefaultInt}}" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                        <input type="number" name="beacon_time" value="{{.DefaultInt}}" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
                     </div>
                     <div>
                         <label class="block text-xs section-header mb-1.5">抖动 (%)</label>
-                        <input type="number" name="jitter" value="{{.DefaultJitter}}" class="w-full bg-white border border-slate-300 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
+                        <input type="number" name="jitter" value="{{.DefaultJitter}}" class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm">
                     </div>
                 </div>
 
@@ -544,7 +550,7 @@
                     </div>
                     <div class="flex items-center gap-x-2">
                         <input type="checkbox" name="persist" id="persist-oneliner" class="w-4 h-4 accent-indigo-600">
-                        <label for="persist-oneliner" class="text-sm text-slate-700">持久化</label>
+                        <label for="persist-oneliner" class="text-sm text-slate-700 dark:text-slate-300">持久化</label>
                     </div>
                 </div>
 
@@ -563,6 +569,5 @@
         <span class="text-amber-600">⚠️ 仅限授权的渗透测试使用</span>
     </div>
 </div>
-
-<script src="/static/js/generate.js"></script>
+<script>window.PROFILE_PRESETS = {{.ProfilePresetsJSON}};</script>
 {{end}}

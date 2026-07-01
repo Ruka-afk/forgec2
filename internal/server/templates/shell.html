@@ -1,17 +1,23 @@
 {{define "shell_content"}}
-<div class="h-screen flex flex-col bg-slate-900">
+<div id="shell-page" class="h-full min-h-0 flex flex-col bg-slate-950 text-slate-100">
     <!-- Header -->
-    <div class="bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-x-4">
-            <a href="/agents" class="text-slate-400 hover:text-slate-200">
-                <i class="fa-solid fa-arrow-left text-lg"></i>
+    <div class="shrink-0 bg-slate-900 border-b border-slate-700/80 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+            <a href="/agents/{{.Agent.ID}}" class="text-slate-400 hover:text-slate-200 transition-colors shrink-0" title="Back">
+                <i class="fa-solid fa-arrow-left"></i>
             </a>
-            <div>
-                <h1 class="text-xl font-semibold text-white">{{.Agent.Hostname}}</h1>
-                <div class="flex items-center gap-x-2 text-xs text-slate-400">
-                    <span>{{.Agent.Username}}@{{.Agent.IP}}</span>
+            <div class="min-w-0">
+                <h1 class="text-base sm:text-lg font-semibold text-white truncate">{{.Agent.Hostname}}</h1>
+                <div class="flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
+                    <span class="font-mono truncate">{{.Agent.Username}}@{{.Agent.IP}}</span>
+                    <span class="text-slate-600">·</span>
+                    <span class="font-mono">{{.Agent.OS}}</span>
+                    <span class="text-slate-500">·</span>
+                    <span id="shell-beacon-hint" class="font-mono text-slate-500" title="Agent 心跳间隔">
+                        {{if eq .Agent.CurrentInterval 0}}实时{{else if gt .Agent.CurrentInterval 0}}{{.Agent.CurrentInterval}}s{{else}}—{{end}}{{if ge .Agent.CurrentJitter 0}} ±{{.Agent.CurrentJitter}}%{{end}}
+                    </span>
                     {{if eq .Agent.Status "online"}}
-                    <span class="flex items-center text-emerald-400"><i class="fa-solid fa-circle fa-beat mr-1 text-[6px]"></i> LIVE</span>
+                    <span class="inline-flex items-center text-emerald-400"><i class="fa-solid fa-circle fa-beat mr-1 text-[6px]"></i>LIVE</span>
                     {{else if eq .Agent.Status "stale"}}
                     <span class="text-amber-400">STALE</span>
                     {{else}}
@@ -20,111 +26,75 @@
                 </div>
             </div>
         </div>
-        <div class="flex items-center gap-x-1.5">
-            <select id="shell-select" class="bg-slate-700 border border-slate-600 text-white text-xs rounded-lg px-2 h-8">
+        <div class="flex items-center gap-1.5 shrink-0">
+            <select id="shell-select" class="bg-slate-800 border border-slate-600 text-white text-xs rounded-lg px-2 h-8 max-w-[140px]">
+                {{if eq .Agent.OS "Linux"}}
+                <option value="/bin/bash">bash</option>
+                <option value="/bin/sh">sh</option>
+                {{else}}
                 <option value="cmd.exe">cmd.exe</option>
                 <option value="powershell.exe">powershell.exe</option>
+                {{end}}
             </select>
-            <button onclick="executeCommand()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 h-8 rounded-lg">
-                <i class="fa-solid fa-play mr-1"></i>执行
+            <button type="button" id="shell-exec-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 h-8 rounded-lg transition-colors">
+                <i class="fa-solid fa-play mr-1"></i><span class="hidden sm:inline">执行</span>
             </button>
-            <button onclick="clearTerminal()" class="bg-slate-600 hover:bg-slate-500 text-white text-xs px-2 h-8 rounded-lg" title="清屏">
+            <button type="button" id="shell-clear-btn" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-2.5 h-8 rounded-lg transition-colors" title="清屏">
                 <i class="fa-solid fa-eraser"></i>
             </button>
-            <!-- Quick commands dropdown -->
-            <div class="relative group">
-                <button class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-3 h-8 rounded-lg">
-                    <i class="fa-solid fa-bolt mr-1"></i>快捷
-                </button>
-                <div class="hidden group-hover:block absolute top-full left-0 mt-1 bg-slate-700 border border-slate-600 rounded-xl shadow-xl z-50 min-w-[140px] py-2">
-                    <button onclick="quickCmd('whoami')" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">whoami</button>
-                    <button onclick="quickCmd('systeminfo | findstr /B /C:OS')" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">sysinfo</button>
-                    <button onclick="quickCmd('net user')" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">net user</button>
-                    <button onclick="quickCmd('ipconfig /all')" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">ipconfig</button>
-                    <hr class="border-slate-600 my-1">
-                    <button onclick="listDrives()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Drives</button>
-                    <button onclick="doNetstat()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Netstat</button>
-                    <button onclick="doUsers()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Users</button>
-                    <button onclick="listServices()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Services</button>
-                    <button onclick="doAV()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">AV</button>
-                    <hr class="border-slate-600 my-1">
-                    <button onclick="findFiles()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Find Files</button>
-                    <button onclick="clipGet()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Clip Get</button>
-                    <button onclick="clipSet()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Clip Set</button>
-                    <button onclick="doUninstall()" class="block w-full text-left text-xs text-red-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Uninstall</button>
-                </div>
-            </div>
-            <!-- Recon dropdown -->
-            <div class="relative group">
-                <button class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-3 h-8 rounded-lg">
-                    <i class="fa-solid fa-magnifying-glass mr-1"></i>侦察
-                </button>
-                <div class="hidden group-hover:block absolute top-full left-0 mt-1 bg-slate-700 border border-slate-600 rounded-xl shadow-xl z-50 min-w-[120px] py-2">
-                    <button onclick="requestPS()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5"><i class="fa-solid fa-list mr-2 w-3"></i>进程列表</button>
-                    <button onclick="requestScreenshot()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5"><i class="fa-solid fa-camera mr-2 w-3"></i>截图</button>
-                    <button onclick="doCreds()" class="block w-full text-left text-xs text-amber-300 hover:bg-slate-600 hover:text-white px-4 py-1.5"><i class="fa-solid fa-key mr-2 w-3"></i>Creds</button>
-                    <button onclick="doPortScan()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5"><i class="fa-solid fa-satellite-dish mr-2 w-3"></i>PortScan</button>
-                    <hr class="border-slate-600 my-1">
-                    <button onclick="startKeylogger()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">KL Start</button>
-                    <button onclick="dumpKeylogger()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">KL Dump</button>
-                    <button onclick="stopKeylogger()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">KL Stop</button>
-                </div>
-            </div>
-            <!-- Actions dropdown -->
-            <div class="relative group">
-                <button class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-3 h-8 rounded-lg">
-                    <i class="fa-solid fa-wrench mr-1"></i>操作
-                </button>
-                <div class="hidden group-hover:block absolute top-full left-0 mt-1 bg-slate-700 border border-slate-600 rounded-xl shadow-xl z-50 min-w-[130px] py-2">
-                    <button onclick="doInject()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Inject</button>
-                    <button onclick="doLateral()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Lateral</button>
-                    <button onclick="doSocks()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">SOCKS</button>
-                    <button onclick="doElevate()" class="block w-full text-left text-xs text-purple-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Elevate</button>
-                    <button onclick="killAV()" class="block w-full text-left text-xs text-red-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Terminate AV</button>
-                    <hr class="border-slate-600 my-1">
-                    <button onclick="doDownloadURL()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">DL URL</button>
-                    <button onclick="doSetSleep()" class="block w-full text-left text-xs text-slate-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Set Sleep</button>
-                    <button onclick="forceBeacon()" class="block w-full text-left text-xs text-emerald-300 hover:bg-slate-600 hover:text-white px-4 py-1.5">Force Check-in</button>
-                </div>
-            </div>
-            <!-- Utility buttons row -->
-            <span class="text-slate-600 mx-0.5">|</span>
-            <input id="proc-target" type="text" placeholder="PID" class="bg-slate-700 border border-slate-600 text-white text-xs px-2 h-8 rounded-lg w-16" />
-            <button onclick="suspendProc()" class="bg-red-700 hover:bg-red-600 text-white text-xs px-2 h-8 rounded-lg" title="Suspend">⏸</button>
-            <button onclick="resumeProc()" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-2 h-8 rounded-lg" title="Resume">▶</button>
-            <button onclick="killProc()" class="bg-red-700 hover:bg-red-600 text-white text-xs px-2 h-8 rounded-lg" title="Kill process">☠</button>
-            <span class="text-slate-600 mx-0.5">|</span>
-            <button onclick="doReboot()" class="bg-slate-700 hover:bg-orange-600 text-slate-300 text-xs px-2 h-8 rounded-lg" title="Reboot">⟳</button>
-            <button onclick="doShutdown()" class="bg-slate-700 hover:bg-red-600 text-slate-300 text-xs px-2 h-8 rounded-lg" title="Shutdown">⏻</button>
         </div>
+    </div>
+
+    <!-- Quick commands -->
+    <div class="shrink-0 bg-slate-900/80 border-b border-slate-800 px-4 sm:px-6 py-2 flex items-center gap-2 overflow-x-auto">
+        <span class="text-[10px] text-slate-500 uppercase tracking-wider shrink-0">Quick</span>
+        {{if eq .Agent.OS "Linux"}}
+        <button type="button" class="shell-quick-cmd ui-btn ui-btn-ghost text-[11px] h-7 px-2.5" data-cmd="whoami">whoami</button>
+        <button type="button" class="shell-quick-cmd ui-btn ui-btn-ghost text-[11px] h-7 px-2.5" data-cmd="id">id</button>
+        <button type="button" class="shell-quick-cmd ui-btn ui-btn-ghost text-[11px] h-7 px-2.5" data-cmd="uname -a">uname -a</button>
+        <button type="button" class="shell-quick-cmd ui-btn ui-btn-ghost text-[11px] h-7 px-2.5" data-cmd="ip addr">ip addr</button>
+        <button type="button" class="shell-quick-cmd ui-btn ui-btn-ghost text-[11px] h-7 px-2.5" data-cmd="ps aux">ps aux</button>
+        {{else}}
+        <button type="button" class="shell-quick-cmd ui-btn ui-btn-ghost text-[11px] h-7 px-2.5" data-cmd="whoami">whoami</button>
+        <button type="button" class="shell-quick-cmd ui-btn ui-btn-ghost text-[11px] h-7 px-2.5" data-cmd="hostname">hostname</button>
+        <button type="button" class="shell-quick-cmd ui-btn ui-btn-ghost text-[11px] h-7 px-2.5" data-cmd="ipconfig">ipconfig</button>
+        <button type="button" class="shell-quick-cmd ui-btn ui-btn-ghost text-[11px] h-7 px-2.5" data-cmd="systeminfo">systeminfo</button>
+        <button type="button" class="shell-quick-cmd ui-btn ui-btn-ghost text-[11px] h-7 px-2.5" data-cmd="netstat -ano">netstat</button>
+        {{end}}
     </div>
 
     <!-- Terminal Output -->
-    <div id="terminal-output" class="flex-1 overflow-auto p-4 font-mono text-sm text-emerald-300 bg-slate-900">
-        <div class="text-slate-500">ForgeC2 Shell Terminal - Agent: {{.Agent.Hostname}}</div>
-        <div class="text-slate-500">Type commands and press Enter to execute...</div>
-        <div class="text-slate-500 mb-4">---</div>
+    <div id="terminal-output" class="flex-1 min-h-0 overflow-y-auto p-4 font-mono text-[13px] leading-relaxed text-emerald-300 bg-slate-950 shell-output">
+        <div class="text-slate-500 shell-line">ForgeC2 Shell — {{.Agent.Hostname}}</div>
+        <div class="text-slate-500 shell-line">Enter 执行命令，↑↓ 浏览历史，Tab 自动补全</div>
+        <div class="text-slate-600 shell-line mb-2">────────────────────────────────────────</div>
     </div>
 
     <!-- Command Input -->
-    <div class="bg-slate-800 border-t border-slate-700 px-6 py-3">
+    <div class="shrink-0 bg-slate-900 border-t border-slate-700/80 px-4 sm:px-6 py-3 pb-4 md:pb-3">
         <div class="flex gap-2">
             <div class="flex-1 relative">
-                <span id="prompt" class="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-mono">CMD></span>
-                <input type="text" id="cmd-input" placeholder="" 
-                       class="w-full bg-slate-700 border border-slate-600 text-white font-mono text-sm rounded-lg pl-12 pr-4 h-10 focus:border-emerald-500 focus:outline-none"
-                       onkeydown="handleKeyDown(event)" autocomplete="off">
+                <span id="prompt" class="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-mono text-sm pointer-events-none">{{if eq .Agent.OS "Linux"}}${{else}}CMD&gt;{{end}}</span>
+                <input type="text" id="cmd-input"
+                       class="w-full bg-slate-800 border border-slate-600 text-white font-mono text-sm rounded-xl pl-11 pr-4 h-11 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none"
+                       autocomplete="off" spellcheck="false">
+                <div id="autocomplete-container" class="hidden absolute bottom-full left-0 w-full mb-1 bg-slate-800 border border-slate-600 rounded-xl shadow-xl z-20 max-h-40 overflow-auto"></div>
             </div>
         </div>
-        <div class="mt-1 text-[10px] text-slate-500 flex gap-3">
-            <span><kbd class="px-1.5 py-0.5 bg-slate-700 rounded">↑↓</kbd> 历史</span>
-            <span><kbd class="px-1.5 py-0.5 bg-slate-700 rounded">Tab</kbd> 补全</span>
-            <span><kbd class="px-1.5 py-0.5 bg-slate-700 rounded">Enter</kbd> 执行</span>
+        <div class="mt-1.5 text-[10px] text-slate-500 flex flex-wrap gap-x-3 gap-y-1">
+            <span><kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700">↑↓</kbd> 历史</span>
+            <span><kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700">Tab</kbd> 补全</span>
+            <span><kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700">Enter</kbd> 执行</span>
+            <span><kbd class="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700">Ctrl+L</kbd> 清屏</span>
         </div>
     </div>
 </div>
 
-<script src="/static/js/command-history.js"></script>
-<script>const agentId = '{{.Agent.ID}}'; const osType = '{{.Agent.OS}}' === 'Linux' ? 'linux' : 'windows'; const agentHostname = '{{.Agent.Hostname}}';</script>
-<script src="/static/js/shell.js"></script>
+<script>
+const agentId = '{{.Agent.ID}}';
+const osType = '{{.Agent.OS}}' === 'Linux' ? 'linux' : 'windows';
+const agentHostname = '{{.Agent.Hostname}}';
+var agentInterval = {{.Agent.CurrentInterval}};
+var agentJitter = {{.Agent.CurrentJitter}};
+</script>
 {{end}}

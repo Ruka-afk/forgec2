@@ -5,7 +5,7 @@ import "time"
 const (
 	BeaconRateLimit      = 100
 	BeaconRateWindow     = 1 * time.Minute
-	LoginRateLimit       = 5
+
 	LoginRateWindow      = 1 * time.Minute
 	RateLimiterCleanup   = 5 * time.Minute
 	DefaultPageSize      = 20

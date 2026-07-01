@@ -1,0 +1,23 @@
+{{define "search_content"}}
+<div class="max-w-4xl mx-auto mb-20 md:mb-0">
+    <div class="mb-4 sm:mb-6">
+        <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{{T .CurrentLang "search.title"}}</h1>
+        <p class="text-slate-500 dark:text-slate-400 mt-1 text-xs sm:text-sm">{{T .CurrentLang "search.subtitle"}}</p>
+    </div>
+
+    <div class="relative mb-6">
+        <i class="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500"></i>
+        <input type="search" id="search-page-input" value="{{.SearchQuery}}"
+               placeholder="{{T .CurrentLang "search.placeholder"}}"
+               class="w-full ui-input pl-11 pr-4 h-12 text-sm"
+               autocomplete="off">
+    </div>
+
+    <div id="search-results" class="space-y-2">
+        <div class="text-center py-12 text-slate-400 dark:text-slate-500 text-sm" id="search-hint">
+            <i class="fa-solid fa-magnifying-glass text-2xl mb-2"></i>
+            <p>{{T .CurrentLang "search.hint"}}</p>
+        </div>
+    </div>
+</div>
+{{end}}

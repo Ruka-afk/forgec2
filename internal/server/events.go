@@ -13,9 +13,10 @@ type EventType string
 const (
 	EventImplantCheckin    EventType = "implant.checkin"
 	EventImplantDisconnect EventType = "implant.disconnect"
-	EventTaskComplete    EventType = "task.complete"
-	EventTaskFail        EventType = "task.fail"
-	EventCredentialFound EventType = "credential.found"
+	EventTaskComplete      EventType = "task.complete"
+	EventTaskFail          EventType = "task.fail"
+	EventCredentialFound   EventType = "credential.found"
+	EventAlertTriggered    EventType = "alert.triggered"
 )
 
 type Event struct {

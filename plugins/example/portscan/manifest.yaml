@@ -1,0 +1,26 @@
+name: portscan
+version: 1.0.0
+type: command
+description: Simple TCP port scanner plugin for ForgeC2
+author: ForgeC2
+category: recon
+entry: scan.py
+interpreter: python
+timeout: 120
+params:
+    - name: target
+      type: string
+      required: true
+      description: Target host or IP address
+    - name: ports
+      type: string
+      required: false
+      default: 80,443,445,3389
+      description: Comma-separated list of ports to scan
+    - name: timeout
+      type: number
+      required: false
+      default: "1"
+      description: Connection timeout in seconds
+config:
+    max_ports: 100

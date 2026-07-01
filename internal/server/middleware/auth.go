@@ -3,6 +3,7 @@ package middleware
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/config"
@@ -21,7 +22,6 @@ var CookieSecure bool
 const (
 	JWTExpiry     = 24 * time.Hour
 	JWTLongExpiry = 7 * 24 * time.Hour // "remember me"
-	CookieMaxAge  = 86400
 )
 
 // Claims for JWT
@@ -42,14 +42,31 @@ func InitJWTSecret(cfg *config.Config) {
 	CookieSecure = cfg.Server.TLSEnabled
 }
 
+func isWebSocketUpgrade(c *gin.Context) bool {
+	return strings.EqualFold(c.GetHeader("Upgrade"), "websocket") ||
+		strings.Contains(strings.ToLower(c.GetHeader("Connection")), "upgrade")
+}
+
+func authFail(c *gin.Context, logMsg string, args ...any) {
+	if len(args) > 0 {
+		slog.Warn(logMsg, args...)
+	} else {
+		slog.Debug(logMsg)
+	}
+	if isWebSocketUpgrade(c) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+	} else {
+		c.Redirect(http.StatusFound, "/login")
+	}
+	c.Abort()
+}
+
 // AuthRequired middleware for web UI - validates JWT + DB user active
 func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr, err := c.Cookie("forgec2_session")
 		if err != nil {
-			slog.Debug("Auth failed: no session cookie", "path", c.Request.URL.Path, "ip", c.ClientIP())
-			c.Redirect(http.StatusFound, "/login")
-			c.Abort()
+			authFail(c, "Auth failed: no session cookie", "path", c.Request.URL.Path, "ip", c.ClientIP())
 			return
 		}
 
@@ -57,42 +74,35 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 			return jwtSecret, nil
 		})
 		if err != nil || !token.Valid {
-			slog.Warn("Auth failed: invalid token", "path", c.Request.URL.Path, "ip", c.ClientIP(), "err", err)
 			c.SetCookie("forgec2_session", "", -1, "/", "", CookieSecure, true)
-			c.Redirect(http.StatusFound, "/login")
-			c.Abort()
+			authFail(c, "Auth failed: invalid token", "path", c.Request.URL.Path, "ip", c.ClientIP(), "err", err)
 			return
 		}
 
 		claims, ok := token.Claims.(*Claims)
 		if !ok {
-			slog.Warn("Auth failed: invalid claims", "path", c.Request.URL.Path)
 			c.SetCookie("forgec2_session", "", -1, "/", "", CookieSecure, true)
-			c.Redirect(http.StatusFound, "/login")
-			c.Abort()
+			authFail(c, "Auth failed: invalid claims", "path", c.Request.URL.Path)
 			return
 		}
 
 		// Verify user still exists and is active
 		var user db.User
 		if database.Where("id = ? AND is_active = ?", claims.UserID, true).First(&user).Error != nil {
-			slog.Warn("Auth failed: user not found or inactive", "user_id", claims.UserID, "username", claims.Username)
 			c.SetCookie("forgec2_session", "", -1, "/", "", CookieSecure, true)
-			c.Redirect(http.StatusFound, "/login")
-			c.Abort()
+			authFail(c, "Auth failed: user not found or inactive", "user_id", claims.UserID, "username", claims.Username)
 			return
 		}
 
 		// Force-logout check: if user's ForceLogoutAt > token IssuedAt, session was invalidated
 		if !user.ForceLogoutAt.IsZero() && claims.IssuedAt != nil {
 			if user.ForceLogoutAt.After(claims.IssuedAt.Time) {
-				slog.Warn("Auth failed: force logout",
-					"username", user.Username,
-					"force_logout_at", user.ForceLogoutAt,
-					"token_issued_at", claims.IssuedAt.Time,
-					"path", c.Request.URL.Path)
 				c.SetCookie("forgec2_session", "", -1, "/", "", CookieSecure, true)
-				c.Redirect(http.StatusFound, "/login?error=session_expired")
+				if isWebSocketUpgrade(c) {
+					c.JSON(http.StatusUnauthorized, gin.H{"error": "session_expired"})
+				} else {
+					c.Redirect(http.StatusFound, "/login?error=session_expired")
+				}
 				c.Abort()
 				return
 			}
@@ -170,5 +180,63 @@ func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 		}
 		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
 		c.Abort()
+	}
+}
+
+func RequirePermission(permissions ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get("user_role")
+		if !exists {
+			c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+			c.Abort()
+			return
+		}
+		roleStr, ok := role.(string)
+		if !ok {
+			c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+			c.Abort()
+			return
+		}
+		if roleStr == "admin" {
+			c.Next()
+			return
+		}
+		for _, perm := range permissions {
+			if db.RoleHasPermission(roleStr, perm) {
+				c.Next()
+				return
+			}
+		}
+		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+		c.Abort()
+	}
+}
+
+func RequireAllPermissions(permissions ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get("user_role")
+		if !exists {
+			c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+			c.Abort()
+			return
+		}
+		roleStr, ok := role.(string)
+		if !ok {
+			c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+			c.Abort()
+			return
+		}
+		if roleStr == "admin" {
+			c.Next()
+			return
+		}
+		for _, perm := range permissions {
+			if !db.RoleHasPermission(roleStr, perm) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+				c.Abort()
+				return
+			}
+		}
+		c.Next()
 	}
 }

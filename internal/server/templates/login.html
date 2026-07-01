@@ -1,103 +1,129 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{.CurrentLang}}" {{if .IsRTL}}dir="rtl"{{end}}>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ForgeC2 - Login</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <title>ForgeC2 - {{T .CurrentLang "login.title"}}</title>
+    <script>
+    (function(){
+        try {
+            var t = localStorage.getItem('forgec2_theme');
+            var dark = t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+    })();
+    </script>
+    <script src="/static/js/tailwind.min.js"></script>
+    <script>tailwind.config = { darkMode: 'class' };</script>
+    <link rel="stylesheet" href="/static/css/layout.css">
+    <link rel="stylesheet" href="/static/css/font-awesome.min.css">
+    <link rel="stylesheet" href="/static/css/login.css">
     <style>
-        body { font-family: 'Inter', system-ui, sans-serif; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .login-card { animation: fadeIn 0.4s ease-out; }
         .bg-grid { background-image: radial-gradient(circle at 1px 1px, rgba(99,102,241,0.08) 1px, transparent 0); background-size: 40px 40px; }
     </style>
 </head>
-<body class="bg-slate-100 bg-grid min-h-screen flex items-center justify-center p-4">
+<body class="bg-slate-100 dark:bg-slate-900 bg-grid min-h-screen flex items-center justify-center p-4">
     <div class="login-card w-full max-w-md">
         <!-- Logo -->
         <div class="text-center mb-8">
-            <div class="inline-flex items-center gap-x-3 bg-white/80 backdrop-blur px-6 py-3 rounded-2xl shadow-sm border border-slate-200">
+            <div class="inline-flex items-center gap-x-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur px-6 py-3 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
                 <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
                     <i class="fa-solid fa-shield-halved text-white text-2xl"></i>
                 </div>
                 <div class="text-left">
-                    <span class="font-bold text-2xl tracking-tighter text-slate-900">Forge</span>
+                    <span class="font-bold text-2xl tracking-tighter text-slate-900 dark:text-slate-100">Forge</span>
                     <span class="font-bold text-2xl tracking-tighter text-indigo-600">C2</span>
-                    <div class="text-[10px] text-slate-400 -mt-0.5">PROFESSIONAL RED TEAM FRAMEWORK</div>
+                    <div class="text-[10px] text-slate-400 dark:text-slate-500 -mt-0.5">PROFESSIONAL RED TEAM FRAMEWORK</div>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white border border-slate-200 rounded-3xl shadow-lg p-8">
-            <h2 class="text-xl font-semibold text-slate-900 text-center mb-1">Operator Login</h2>
-            <p class="text-slate-400 text-xs text-center mb-8">Sign in to your command & control console</p>
+        <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-lg p-8">
+            <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100 text-center mb-1">{{T .CurrentLang "login.operator_login"}}</h2>
+            <p class="text-slate-400 dark:text-slate-500 text-xs text-center mb-8">{{T .CurrentLang "login.subtitle"}}</p>
 
             {{if .Error}}
-            <div class="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 text-sm p-4 rounded-2xl mb-6">
+            <div class="flex items-center gap-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm p-4 rounded-2xl mb-6">
                 <i class="fa-solid fa-circle-exclamation text-red-400"></i>
                 <span>{{.Error}}</span>
             </div>
             {{end}}
 
             <form method="POST" action="/login" class="space-y-5">
-                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-
                 <div>
-                    <label class="block text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
-                        <i class="fa-solid fa-user mr-1"></i> Username
+                    <label class="block text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">
+                        <i class="fa-solid fa-user mr-1"></i> {{T .CurrentLang "common.username"}}
                     </label>
                     <div class="relative">
-                        <i class="fa-solid fa-user absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                        <i class="fa-solid fa-user absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm"></i>
                         <input type="text" name="username" value="{{.LastUsername}}" required autofocus autocomplete="username"
-                               class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 rounded-2xl pl-10 pr-4 h-12 text-base outline-none transition-all"
-                               placeholder="admin">
+                               class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 rounded-2xl pl-10 pr-4 h-12 text-base outline-none transition-all text-slate-900 dark:text-slate-100 placeholder-slate-400"
+                               placeholder="{{T .CurrentLang "login.username_placeholder"}}">
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
-                        <i class="fa-solid fa-lock mr-1"></i> Password
+                    <label class="block text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">
+                        <i class="fa-solid fa-lock mr-1"></i> {{T .CurrentLang "common.password"}}
                     </label>
                     <div class="relative">
-                        <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                        <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm"></i>
                         <input type="password" name="password" required autocomplete="current-password"
-                               class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 rounded-2xl pl-10 pr-10 h-12 text-base outline-none transition-all"
-                               placeholder="••••••••">
-                        <button type="button" onclick="togglePassword()" class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                               class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 rounded-2xl pl-10 pr-10 h-12 text-base outline-none transition-all text-slate-900 dark:text-slate-100 placeholder-slate-400"
+                               placeholder="{{T .CurrentLang "login.password_placeholder"}}">
+                        <button type="button" data-action="toggle-password" class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400">
                             <i id="pw-toggle" class="fa-solid fa-eye"></i>
                         </button>
                     </div>
                 </div>
 
+                <div>
+                    <label class="block text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">
+                        <i class="fa-solid fa-shield-halved mr-1"></i> {{T .CurrentLang "login.totp_label"}}
+                    </label>
+                    <div class="relative">
+                        <i class="fa-solid fa-shield-halved absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm"></i>
+                        <input type="text" name="totp_code" autocomplete="off"
+                               class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 rounded-2xl pl-10 pr-4 h-12 text-base outline-none transition-all font-mono text-slate-900 dark:text-slate-100 placeholder-slate-400"
+                               placeholder="{{T .CurrentLang "login.totp_placeholder"}}" maxlength="8">
+                    </div>
+                </div>
+
                 <div class="flex items-center justify-between">
                     <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" name="remember_me" id="remember_me" {{if .RememberMe}}checked{{end}} class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
-                        <span class="text-xs text-slate-500">Remember me for 7 days</span>
+                        <input type="checkbox" name="remember_me" id="remember_me" {{if .RememberMe}}checked{{end}} class="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500">
+                        <span class="text-xs text-slate-500 dark:text-slate-400">{{T .CurrentLang "login.remember_me"}}</span>
                     </label>
                     
                 </div>
 
                 <button type="submit"
-                        class="w-full h-12 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 transition-all text-white font-semibold rounded-2xl text-sm shadow-lg shadow-indigo-200 flex items-center justify-center gap-2">
+                        class="w-full h-12 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 transition-all text-white font-semibold rounded-2xl text-sm shadow-lg shadow-indigo-200 dark:shadow-indigo-900/30 flex items-center justify-center gap-2">
                     <i class="fa-solid fa-shield-halved"></i>
-                    <span>Access Console</span>
+                    <span>{{T .CurrentLang "login.access_console"}}</span>
                 </button>
             </form>
 
-            <div class="mt-6 pt-4 border-t border-slate-100 text-center">
-                <div class="text-[10px] text-slate-400">
+            <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-700 text-center">
+                <div class="text-[10px] text-slate-400 dark:text-slate-500">
                     <i class="fa-solid fa-terminal mr-1"></i>
-                    Authorized operators only. All access is audited.
+                    {{T .CurrentLang "login.authorized_only"}}
                 </div>
             </div>
         </div>
 
-        <div class="text-center mt-6 text-[10px] text-slate-400">
+        <div class="text-center mt-6 text-[10px] text-slate-400 dark:text-slate-500">
             ForgeC2 v1.2 &middot; Professional Red Team Framework
         </div>
     </div>
 
+    <script>
+    window.__locales = {{.LocalesJSON}};
+    </script>
+    <script src="/static/js/core.js"></script>
     <script src="/static/js/login.js"></script>
+    <script>initTheme();</script>
 </body>
 </html>

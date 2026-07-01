@@ -105,18 +105,80 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 }
 
 func (s *Server) loadAutomationRules() []AutomationRule {
-	raw := s.getConfigJSON("automation_rules")
-	if raw == "" {
-		return nil
-	}
+	var dbRules []db.AutomationRule
+	s.db.Find(&dbRules)
+	
 	var rules []AutomationRule
-	json.Unmarshal([]byte(raw), &rules)
+	for _, dr := range dbRules {
+		var conditions []RuleCondition
+		if dr.Conditions != "" {
+			json.Unmarshal([]byte(dr.Conditions), &conditions)
+		}
+		var actions []RuleAction
+		if dr.Actions != "" {
+			json.Unmarshal([]byte(dr.Actions), &actions)
+		}
+		rules = append(rules, AutomationRule{
+			ID:         dr.ID,
+			Name:       dr.Name,
+			Enabled:    dr.Enabled,
+			EventType:  dr.EventType,
+			Conditions: conditions,
+			Actions:    actions,
+			CreatedAt:  dr.CreatedAt.Format(time.RFC3339),
+		})
+	}
 	return rules
 }
 
-func (s *Server) saveAutomationRules(rules []AutomationRule) {
-	data, _ := json.Marshal(rules)
-	s.setConfigJSON("automation_rules", string(data))
+func (s *Server) saveAutomationRule(rule AutomationRule) error {
+	conditionsData, _ := json.Marshal(rule.Conditions)
+	actionsData, _ := json.Marshal(rule.Actions)
+	
+	dbRule := db.AutomationRule{
+		ID:         rule.ID,
+		Name:       rule.Name,
+		Enabled:    rule.Enabled,
+		EventType:  rule.EventType,
+		Conditions: string(conditionsData),
+		Actions:    string(actionsData),
+	}
+	
+	if rule.CreatedAt != "" {
+		if t, err := time.Parse(time.RFC3339, rule.CreatedAt); err == nil {
+			dbRule.CreatedAt = t
+		}
+	}
+	
+	return s.db.Save(&dbRule).Error
+}
+
+func (s *Server) deleteAutomationRule(id string) error {
+	return s.db.Delete(&db.AutomationRule{}, "id = ?", id).Error
+}
+
+func (s *Server) migrateAutomationRules() {
+	var count int64
+	s.db.Model(&db.AutomationRule{}).Count(&count)
+	if count > 0 {
+		return
+	}
+	
+	raw := s.getConfigJSON("automation_rules")
+	if raw == "" {
+		return
+	}
+	
+	var rules []AutomationRule
+	if err := json.Unmarshal([]byte(raw), &rules); err != nil {
+		return
+	}
+	
+	for _, rule := range rules {
+		s.saveAutomationRule(rule)
+	}
+	
+	s.db.Where("key = ?", "automation_rules").Delete(&db.ServerConfig{})
 }
 
 func (s *Server) getConfigJSON(key string) string {
@@ -159,7 +221,6 @@ func (s *Server) registerBuiltinAutomations() {
 		}
 	}
 	if !exists {
-		rules = append(rules, rule)
-		s.saveAutomationRules(rules)
+		s.saveAutomationRule(rule)
 	}
 }

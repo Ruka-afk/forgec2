@@ -40,6 +40,9 @@ func main() {
 	// Create and start server
 	srv := server.New(cfg, database)
 
+	// Initialize optimizations
+	srv.InitOptimizations(*configPath)
+
 	slog.Info("ForgeC2 ready", "web_ui", fmt.Sprintf("http://localhost:%d", cfg.Server.Port))
 	fmt.Println("\n" + `╔════════════════════════════════════════════════════════════╗
 ║  ForgeC2 v1.0  •  Professional Red Team C2 Framework       ║

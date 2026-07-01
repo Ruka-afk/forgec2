@@ -1,5 +1,31 @@
 // Auto-refresh: poll for pending tasks
 let refreshTimer = null;
+let tasksVirtualList = null;
+
+function initTasksVirtualList() {
+    const container = document.getElementById('tasks-table-container');
+    if (!container) return;
+    
+    const tbody = container.querySelector('tbody');
+    if (!tbody) return;
+    
+    const rows = tbody.querySelectorAll('tr');
+    if (rows.length > 200) {
+        tasksVirtualList = new VirtualList({
+            container: container,
+            threshold: 200,
+            buffer: 10,
+            itemHeight: 65
+        });
+        tasksVirtualList.enable();
+        
+        setTimeout(() => {
+            if (tasksVirtualList) {
+                tasksVirtualList.recalcHeights();
+            }
+        }, 100);
+    }
+}
 
 function autoRefresh() {
     const pending = document.querySelectorAll('.task-row[data-status="pending"]');
@@ -14,8 +40,12 @@ function autoRefresh() {
                 const oldTbody = document.getElementById('tasks-tbody');
                 if (newTbody && oldTbody) {
                     oldTbody.innerHTML = newTbody.innerHTML;
+                    if (tasksVirtualList && tasksVirtualList.enabled) {
+                        tasksVirtualList.disable();
+                        tasksVirtualList = null;
+                        initTasksVirtualList();
+                    }
                 }
-                // re-check pending count
                 const stillPending = document.querySelectorAll('.task-row[data-status="pending"]');
                 if (stillPending.length === 0) {
                     document.getElementById('live-status').classList.add('hidden');
@@ -35,6 +65,7 @@ function autoRefresh() {
 
 // Start auto-refresh on load
 document.addEventListener('DOMContentLoaded', function() {
+    initTasksVirtualList();
     const pending = document.querySelectorAll('.task-row[data-status="pending"]');
     if (pending.length > 0) {
         refreshTimer = setTimeout(autoRefresh, 5000);

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
@@ -212,9 +213,62 @@ func parseCredentialsFromText(raw string, agentID string, taskID uint) []db.Cred
 // handleCredentialsPage renders the credentials vault page (DB-backed)
 func (s *Server) handleCredentialsPage(c *gin.Context) {
 	var creds []db.CredentialEntry
-	s.db.Order("created_at desc").Limit(500).Find(&creds)
+	query := s.db.Order("created_at desc").Limit(500)
 
-	// Raw creds tasks for backward compat
+	tagFilter := c.Query("tag")
+	searchQuery := c.Query("search")
+	expiryFilter := c.Query("expiry")
+	confirmedFilter := c.Query("confirmed")
+
+	if tagFilter != "" {
+		query = query.Where("tags LIKE ?", "%"+tagFilter+"%")
+	}
+
+	if searchQuery != "" {
+		query = query.Where("domain LIKE ? OR username LIKE ? OR notes LIKE ?",
+			"%"+searchQuery+"%", "%"+searchQuery+"%", "%"+searchQuery+"%")
+	}
+
+	if expiryFilter != "" {
+		switch expiryFilter {
+		case "expired":
+			query = query.Where("expires_at IS NOT NULL AND expires_at < NOW()")
+		case "expiring":
+			query = query.Where("expires_at IS NOT NULL AND expires_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 7 DAY)")
+		case "valid":
+			query = query.Where("expires_at IS NULL OR expires_at > NOW()")
+		}
+	}
+
+	if confirmedFilter != "" {
+		switch confirmedFilter {
+		case "true":
+			query = query.Where("confirmed = ?", true)
+		case "false":
+			query = query.Where("confirmed = ?", false)
+		}
+	}
+
+	query.Find(&creds)
+
+	var allTags []string
+	var allCreds []db.CredentialEntry
+	s.db.Find(&allCreds)
+	tagSet := make(map[string]int)
+	for _, cred := range allCreds {
+		if cred.Tags != "" {
+			for _, tag := range strings.Split(cred.Tags, ",") {
+				tag = strings.TrimSpace(tag)
+				if tag != "" {
+					tagSet[tag]++
+				}
+			}
+		}
+	}
+	for tag := range tagSet {
+		allTags = append(allTags, tag)
+	}
+
 	var credsTasks []db.Task
 	s.db.Preload("Agent").
 		Where("type = ?", "creds").
@@ -233,6 +287,10 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 		"CredsTasks":   credsTasks,
 		"RelatedTasks": related,
 		"VaultCount":   len(creds),
+		"AllTags":      allTags,
+		"TagFilter":    tagFilter,
+		"SearchQuery":  searchQuery,
+		"ExpiryFilter": expiryFilter,
 	}
 	for k, v := range stats {
 		data[k] = v
@@ -243,18 +301,41 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 
 func (s *Server) handleExportCredentials(c *gin.Context) {
 	var creds []db.CredentialEntry
-	s.db.Order("created_at desc").Find(&creds)
+	query := s.db.Order("created_at desc")
+
+	tagFilter := c.Query("tag")
+	expiryFilter := c.Query("expiry")
+
+	if tagFilter != "" {
+		query = query.Where("tags LIKE ?", "%"+tagFilter+"%")
+	}
+
+	if expiryFilter != "" {
+		switch expiryFilter {
+		case "expired":
+			query = query.Where("expires_at IS NOT NULL AND expires_at < NOW()")
+		case "expiring":
+			query = query.Where("expires_at IS NOT NULL AND expires_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 7 DAY)")
+		case "valid":
+			query = query.Where("expires_at IS NULL OR expires_at > NOW()")
+		}
+	}
+
+	query.Find(&creds)
 
 	c.Header("Content-Type", "text/csv")
 	c.Header("Content-Disposition", "attachment; filename=credentials.csv")
 
 	w := csv.NewWriter(c.Writer)
-	w.Write([]string{"ID", "AgentID", "Domain", "Username", "Password", "Hash", "Source", "Type", "Created"})
+	w.Write([]string{"ID", "AgentID", "Domain", "Username", "Password", "Hash", "Source", "Type", "Tags", "ExpiresAt", "Confirmed", "Created"})
 	for _, e := range creds {
 		w.Write([]string{
 			strconv.FormatUint(uint64(e.ID), 10),
 			e.AgentID, e.Domain, e.Username, e.Password, e.Hash,
-			e.Source, e.Type, e.CreatedAt.Format("2006-01-02 15:04:05"),
+			e.Source, e.Type, e.Tags,
+			e.ExpiresAt.Format("2006-01-02 15:04:05"),
+			strconv.FormatBool(e.Confirmed),
+			e.CreatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
 	w.Flush()
@@ -312,6 +393,98 @@ func (s *Server) handleDeleteCredential(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func (s *Server) handleUpdateCredential(c *gin.Context) {
+	idStr := c.Param("cred_id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	var cred db.CredentialEntry
+	if err := s.db.First(&cred, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "credential not found"})
+		return
+	}
+
+	if tags := c.PostForm("tags"); tags != "" {
+		cred.Tags = tags
+	}
+	if expiresAt := c.PostForm("expires_at"); expiresAt != "" {
+		t, err := time.Parse("2006-01-02", expiresAt)
+		if err == nil {
+			cred.ExpiresAt = t
+		}
+	}
+	if confirmed := c.PostForm("confirmed"); confirmed != "" {
+		cred.Confirmed = confirmed == "true"
+	}
+
+	if err := s.db.Save(&cred).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func (s *Server) handleBatchAddTags(c *gin.Context) {
+	var req struct {
+		IDs  []uint   `json:"ids"`
+		Tags []string `json:"tags"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if len(req.IDs) == 0 || len(req.Tags) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no ids or tags provided"})
+		return
+	}
+
+	newTags := strings.Join(req.Tags, ",")
+
+	for _, id := range req.IDs {
+		var cred db.CredentialEntry
+		if err := s.db.First(&cred, id).Error; err != nil {
+			continue
+		}
+
+		if cred.Tags == "" {
+			cred.Tags = newTags
+		} else {
+			cred.Tags = cred.Tags + "," + newTags
+		}
+
+		s.db.Save(&cred)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "count": len(req.IDs)})
+}
+
+func (s *Server) handleToggleConfirmed(c *gin.Context) {
+	idStr := c.Param("cred_id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	var cred db.CredentialEntry
+	if err := s.db.First(&cred, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "credential not found"})
+		return
+	}
+
+	cred.Confirmed = !cred.Confirmed
+
+	if err := s.db.Save(&cred).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "confirmed": cred.Confirmed})
 }
 
 

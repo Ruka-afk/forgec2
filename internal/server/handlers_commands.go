@@ -24,9 +24,10 @@ func (s *Server) handleShellPage(c *gin.Context) {
 
 	stats := s.getNavStats()
 	data := gin.H{
-		"Title":     fmt.Sprintf("ForgeC2 - Shell %s", agent.Hostname),
-		"ActiveNav": "agents",
-		"Agent":     agent,
+		"Title":      fmt.Sprintf("ForgeC2 - Shell %s", agent.Hostname),
+		"ActiveNav":  "agents",
+		"Agent":      agent,
+		"IsFullPage": true,
 	}
 	for k, v := range stats {
 		data[k] = v
@@ -595,7 +596,7 @@ func (s *Server) handleRerunTask(c *gin.Context) {
 	user, _ := c.Get("user")
 	username := fmt.Sprintf("%v", user)
 	if holder, ok := s.checkAgentLock(agentID, username); !ok {
-		c.JSON(http.StatusLocked, gin.H{"error": fmt.Sprintf("agent已被 %s 锁定", holder), "locked_by": holder})
+		c.JSON(http.StatusLocked, gin.H{"error": fmt.Sprintf("agent locked by %s", holder), "locked_by": holder})
 		return
 	}
 
