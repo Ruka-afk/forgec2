@@ -1,5 +1,11 @@
 {{define "shell_content"}}
-<div id="shell-page" class="h-full min-h-0 flex flex-col bg-slate-950 text-slate-100">
+<div id="shell-page" class="h-full min-h-0 flex flex-col bg-slate-950 text-slate-100"
+     data-expected-interval="{{.ExpectedInterval}}"
+     data-agent-interval="{{.Agent.CurrentInterval}}">
+    <div id="shell-regen-banner" class="hidden shrink-0 bg-amber-900/90 border-b border-amber-600/60 px-4 sm:px-6 py-2.5 flex items-start gap-2 text-xs text-amber-100">
+        <i class="fa-solid fa-triangle-exclamation text-amber-400 mt-0.5 shrink-0"></i>
+        <span id="shell-regen-banner-text" data-i18n="shell.regen_hint"></span>
+    </div>
     <!-- Header -->
     <div class="shrink-0 bg-slate-900 border-b border-slate-700/80 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0">

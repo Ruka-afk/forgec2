@@ -326,6 +326,13 @@ function isAIPagePath() {
     return window.location.pathname === '/ai' || !!document.getElementById('ai-page');
 }
 
+function stopAgentStatusPolling() {
+    if (window._agentStatusPoll) {
+        clearInterval(window._agentStatusPoll);
+        window._agentStatusPoll = null;
+    }
+}
+
 function startAgentStatusPolling() {
     if (isAIPagePath()) return;
     if (window._agentStatusPoll) return;
@@ -349,7 +356,22 @@ function sendWSPageUpdate() {
 }
 
 let _wsReconnectAttempts = 0;
-const MAX_WS_RECONNECT_ATTEMPTS = 5;
+const MAX_WS_RECONNECT_ATTEMPTS = 20;
+let _wsPingInterval = null;
+
+function startWSPing() {
+    stopWSPing();
+    _wsPingInterval = setInterval(function() {
+        wsSend({ type: 'ping' });
+    }, 25000);
+}
+
+function stopWSPing() {
+    if (_wsPingInterval) {
+        clearInterval(_wsPingInterval);
+        _wsPingInterval = null;
+    }
+}
 
 function connectWebSocket() {
     if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) {
@@ -361,6 +383,8 @@ function connectWebSocket() {
 
     _ws.onopen = function() {
         _wsReconnectAttempts = 0;
+        stopAgentStatusPolling();
+        startWSPing();
         sendWSPageUpdate();
         fetchOnlineUsers();
     };
@@ -478,6 +502,8 @@ function connectWebSocket() {
                 if (lockEl) lockEl.textContent = '';
             } else if (data.type === 'user_viewing_agent') {
                 window.dispatchEvent(new CustomEvent('collab:viewing_agent', { detail: data }));
+            } else if (data.type === 'pong') {
+                // heartbeat ack
             }
         } catch (e) {
             console.warn('Failed to parse WebSocket message:', e);
@@ -492,12 +518,15 @@ function connectWebSocket() {
     };
 
     _ws.onclose = function(event) {
+        stopWSPing();
         _ws = null;
         if (event.code !== 1000 && event.code !== 1001) {
             _wsReconnectAttempts++;
             if (_wsReconnectAttempts <= MAX_WS_RECONNECT_ATTEMPTS) {
                 const delay = Math.min(5000 * _wsReconnectAttempts, 30000);
                 setTimeout(connectWebSocket, delay);
+            } else {
+                startAgentStatusPolling();
             }
         }
     };

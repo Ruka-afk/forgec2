@@ -320,6 +320,20 @@ type EvasionReport struct {
 	Recommendations []string
 }
 
+// FormatEvasionBuildNote summarizes GenerateEvasionReport for build logs / UI hints.
+func FormatEvasionBuildNote(payload string) string {
+	pg := NewPayloadGenerator()
+	report := pg.GenerateEvasionReport(payload)
+	if report == nil {
+		return ""
+	}
+	return fmt.Sprintf(
+		"EDR evasion enabled (%s obfuscation). Techniques: %s. Runtime override: FORGEC2_EVASION=1",
+		report.Obfuscation,
+		strings.Join(report.Techniques, ", "),
+	)
+}
+
 // GenerateEvasionReport creates an evasion analysis report
 func (pg *PayloadGenerator) GenerateEvasionReport(payload string) *EvasionReport {
 	techniques := []string{

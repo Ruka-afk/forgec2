@@ -129,6 +129,7 @@ func (s *Server) handleGenerateEXE(c *gin.Context) {
 		DNSServer     string `form:"dns_server"`
 		Proxy         string `form:"proxy"`
 		CryptoKey     string `form:"crypto_key"`
+		Evasion       bool   `form:"evasion"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -218,6 +219,11 @@ func (s *Server) handleGenerateEXE(c *gin.Context) {
 		DNSServer:     form.DNSServer,
 		Proxy:         form.Proxy,
 		CryptoKey:     form.CryptoKey,
+		Evasion:       form.Evasion,
+	}
+
+	if cfg.Evasion {
+		slog.Info("implant evasion build", "note", payload.FormatEvasionBuildNote("windows-exe"))
 	}
 
 	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")

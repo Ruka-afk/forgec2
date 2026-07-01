@@ -383,24 +383,63 @@ func (s *Server) handleUpdateNote(c *gin.Context) {
 
 func (s *Server) handleDeleteAgent(c *gin.Context) {
 	id := c.Param("id")
+	if !s.deleteAgentRecord(id) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete agent"})
+		return
+	}
+	s.LogAuditRecord(c, "delete_agent", "agent", id, "", true, nil)
+	slog.Warn("Agent deleted", "id", id)
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func (s *Server) deleteAgentRecord(id string) bool {
 	tx := s.db.Begin()
 	if err := tx.Where("agent_id = ?", id).Delete(&db.Task{}).Error; err != nil {
 		tx.Rollback()
 		slog.Error("Failed to delete tasks", "agent_id", id, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete tasks"})
-		return
+		return false
 	}
 	if err := tx.Delete(&db.Implant{}, "id = ?", id).Error; err != nil {
 		tx.Rollback()
 		slog.Error("Failed to delete agent", "agent_id", id, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete agent"})
-		return
+		return false
 	}
 	tx.Commit()
 	os.RemoveAll(filepath.Join(s.cfg.Server.DataDir, "screenshots", id))
-	s.LogAuditRecord(c, "delete_agent", "agent", id, "", true, nil)
-	slog.Warn("Agent deleted", "id", id)
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	return true
+}
+
+func (s *Server) handleBulkDeleteAgents(c *gin.Context) {
+	var req struct {
+		AgentIDs []string `json:"agent_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.AgentIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "agent_ids required"})
+		return
+	}
+
+	deleted := 0
+	failed := 0
+	for _, id := range req.AgentIDs {
+		if s.deleteAgentRecord(id) {
+			deleted++
+			s.LogAuditRecord(c, "delete_agent", "agent", id, "bulk delete", true, nil)
+		} else {
+			failed++
+		}
+	}
+
+	user, _ := c.Get("user")
+	operator := fmt.Sprintf("%v", user)
+	s.broadcastBulkAgentDeleteAlert(operator, deleted)
+	s.LogAuditRecord(c, "batch_delete_agents", "agent", "", fmt.Sprintf("deleted %d agents (%d failed)", deleted, failed), true, nil)
+	slog.Warn("Bulk agent delete", "deleted", deleted, "failed", failed, "operator", operator)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"deleted": deleted,
+		"failed":  failed,
+	})
 }
 
 func (s *Server) handleBatchCommand(c *gin.Context) {

@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const ServerVersion = "2.0.0"
+const ServerVersion = "2.1.0"
 
 func (s *Server) handleHealth(c *gin.Context) {
 	uptime := time.Since(s.startTime)

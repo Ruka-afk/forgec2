@@ -1,26 +1,29 @@
 # ForgeC2
 
+[![CI](https://github.com/Ruka-afk/forgec2/actions/workflows/ci.yml/badge.svg)](https://github.com/Ruka-afk/forgec2/actions/workflows/ci.yml)
+
 [English](./README.md) | [中文](./README.zh.md)
 
 **Professional C2 Framework for Authorized Red Team Operations**
 
 ForgeC2 is a modern, single-binary command-and-control framework written in pure Go. It ships with a full web console, multi-transport beaconing, an AI assistant, plugin system, and 50+ implant task types — built for authorized red team engagements and security research.
 
-**v2.0.0** — i18n · Plugin System · AI Persistence · Real-time Shell · JS Bundles · OpenAPI · TOTP · Encrypted Backups
+**v2.1.0** — CI/CD · macOS Agent · Smart AI Wait · WebSocket Ping · EDR Basics · P1 Recon Tasks
 
 ---
 
-## Highlights (v2.0.0)
+## Highlights (v2.1.0)
 
 | Area | What's New |
 |------|------------|
-| **AI Assistant** | Full-page UI, SSE streaming, reasoning panel, localStorage persistence across page navigation, async implant commands (no beacon wait) |
-| **Shell** | Real-time mode for 0s heartbeat, UTF-8 output fix, compact toolbar |
-| **Web UI** | 13 JS bundles, dark mode, global search, notification center, agent online toasts, virtual lists |
-| **i18n** | English, 中文, 日本語, 한국어, العربية (RTL) |
-| **Plugins** | Manifest-based Python/Go plugins with UI management |
-| **Security** | TOTP 2FA, rate limiting, encrypted DB backups, config hot-reload |
-| **API** | OpenAPI 3.0 spec at `/api/docs` |
+| **AI Assistant** | Smart task wait (`wait_for_result`, polls by implant interval), chat persistence, optional fire-and-forget |
+| **Shell** | Real-time 0s mode, UTF-8 fix, regen hint when DB interval differs from build |
+| **Web UI** | WebSocket ping/pong (25s), 20× reconnect, stops HTTP poll when WS healthy |
+| **Implant** | macOS `agent_darwin.go`, Linux autostart persistence, `cookie_export`, `vpn_creds`, enhanced keylog |
+| **EDR** | Chunked sleep obfuscation (`evasion: true` / `FORGEC2_EVASION=1`) |
+| **Ops** | GitHub Actions CI, Makefile, audit alerts (login lockout, bulk delete) |
+| **Plugins** | 3 JSON samples in `plugins/samples/`, manifest plugins in `plugins/` |
+| **DevEx** | 4 Grok skills in `.grok/skills/` (rebuild-deploy, fix-ui-page, add-i18n, add-ai-tool) |
 
 ---
 
@@ -29,6 +32,7 @@ ForgeC2 is a modern, single-binary command-and-control framework written in pure
 ### AI Assistant
 - **Models**: DeepSeek, OpenAI, Claude, Qianwen, custom OpenAI-compatible endpoints
 - **Function calling**: list agents, run commands, query tasks, credentials, listeners, operators
+- **Smart wait**: `execute_command` polls task result using implant `current_interval` (max 60s); set `wait_for_result: false` to queue-only
 - **Streaming**: SSE with markdown rendering, reasoning display, tool-call visibility
 - **Persistence**: chat history + in-progress drafts survive page switches
 - **Safety**: response length cap, tool deduplication, consecutive call limits
@@ -50,8 +54,10 @@ ForgeC2 is a modern, single-binary command-and-control framework written in pure
 | Token Ops | steal, make, revert, whoami |
 | Execution | execute-assembly, BOF, PowerPick, PE Loader |
 | Persistence | Registry, schtasks, Startup, WMI, Service, COM hijack |
-| Surveillance | screenshot, keylogger, live screen stream |
+| Surveillance | screenshot, keylogger (window-titled), live screen stream |
+| Recon (P1) | `cookie_export` (Chrome/Edge SQLite), `vpn_creds` (OpenVPN/cmdkey/WinSCP) |
 | Network | SOCKS5 relay, portscan, reverse port forward |
+| Remote (stub) | `remote_input` task + `POST /api/agents/:id/input` |
 
 ### Web Console
 - Dashboard with charts, heatmaps, geo map, attack-path view
@@ -197,25 +203,29 @@ graph TD
 
 ## Development
 
+Common tasks are available via the project `Makefile`:
+
 ```bash
-# Run tests
+make build          # build server binary
+make test           # run all Go tests
+make i18n-check     # validate translations
+make bundle         # rebuild embedded JS/CSS bundles
+make dev            # dev mode (FORGEC2_DEV=1, unbundled JS)
+```
+
+Equivalent manual commands:
+
+```bash
 go test ./...
-
-# Translation check
 go run ./cmd/i18n-tool check --lang zh
-
-# Dev mode (unbundled JS, set FORGEC2_DEV=1)
 FORGEC2_DEV=1 go run ./cmd/server -config config.yaml
 ```
 
-### Agent Skills (OpenCode)
+### Agent Skills
 
-Workflow skills live in `.opencode/skills/`:
+**Grok / Cursor** (`.grok/skills/`): `rebuild-deploy`, `fix-ui-page`, `add-i18n`, `add-ai-tool`
 
-- `add-task-type` — new implant task type end-to-end
-- `plugin-task` — JSON custom task plugins
-- `websocket-event` — real-time WebSocket events
-- `report-section` — report generator sections
+**OpenCode** (`.opencode/skills/`): `add-task-type`, `plugin-task`, `websocket-event`, `report-section`
 
 ---
 
@@ -226,8 +236,11 @@ Workflow skills live in `.opencode/skills/`:
 - [x] Multi-user RBAC · Collaboration · AI Assistant
 - [x] i18n · Plugins · OpenAPI · TOTP · Backups
 - [x] JS bundling · Global search · Notification center
-- [x] Real-time shell · AI chat persistence
-- [ ] macOS implant · EDR evasion
+- [x] Real-time shell · AI chat persistence · smart task wait
+- [x] macOS implant (basic: persistence, screencapture, osascript)
+- [x] EDR evasion basics (chunked sleep, `evasion: true` / `FORGEC2_EVASION=1`)
+- [x] P1 recon: cookie export, VPN creds, enhanced keylog
+- [ ] Interactive remote desktop · IM steal · form grabber
 
 ---
 

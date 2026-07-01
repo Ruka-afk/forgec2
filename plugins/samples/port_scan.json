@@ -1,0 +1,36 @@
+{
+  "name": "Port Scanner",
+  "description": "Scan TCP ports on a target host and report open/closed status",
+  "version": "1.0.0",
+  "author": "ForgeC2",
+  "task_type": "port_scan",
+  "script": "function Invoke-PortScan {\n    param(\n        [string]$Target,\n        [string]$Ports,\n        [int]$Timeout = 1000\n    )\n    $portList = $Ports -split '[,\\s]+' | Where-Object { $_ -match '^\\d+$' }\n    $results = @()\n    foreach ($port in $portList) {\n        $tcp = New-Object System.Net.Sockets.TcpClient\n        try {\n            $async = $tcp.BeginConnect($Target, [int]$port, $null, $null)\n            $wait = $async.AsyncWaitHandle.WaitOne($Timeout, $false)\n            if ($wait -and $tcp.Connected) {\n                $results += @{ port = [int]$port; status = 'open' }\n            } else {\n                $results += @{ port = [int]$port; status = 'closed' }\n            }\n        } catch {\n            $results += @{ port = [int]$port; status = 'error'; error = $_.Exception.Message }\n        } finally {\n            $tcp.Close()\n        }\n    }\n    return @{ target = $Target; scanned = $results.Count; ports = $results } | ConvertTo-Json -Depth 3\n}\n\nInvoke-PortScan -Target '{{target}}' -Ports '{{ports}}' -Timeout {{timeout}}",
+  "category": "recon",
+  "icon": "fa-solid fa-network-wired",
+  "color": "sky",
+  "requires_elevated": false,
+  "parameters": [
+    {
+      "name": "target",
+      "type": "string",
+      "description": "Target hostname or IP address",
+      "required": true,
+      "placeholder": "192.168.1.1"
+    },
+    {
+      "name": "ports",
+      "type": "string",
+      "description": "Comma-separated port list",
+      "required": true,
+      "placeholder": "22,80,443,3389",
+      "default": "22,80,443,8080"
+    },
+    {
+      "name": "timeout",
+      "type": "number",
+      "description": "TCP connect timeout in milliseconds",
+      "required": false,
+      "default": "1000"
+    }
+  ]
+}

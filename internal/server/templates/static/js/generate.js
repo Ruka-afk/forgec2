@@ -241,6 +241,8 @@ function getFormData(formId) {
     if (persistEl) formData.set('persist', persistEl.checked ? 'true' : '');
     const skipEl = form.querySelector('input[name="skip_tls_verify"]');
     if (skipEl) formData.set('skip_tls_verify', skipEl.checked ? 'true' : '');
+    const evasionEl = form.querySelector('input[name="evasion"]');
+    if (evasionEl) formData.set('evasion', evasionEl.checked ? 'true' : '');
     return formData;
 }
 

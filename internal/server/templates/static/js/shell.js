@@ -64,6 +64,31 @@ function formatBeaconHint(interval, jitter) {
     return '—';
 }
 
+function updateShellRegenBanner(expectedInterval, agentIntervalValue) {
+    const page = document.getElementById('shell-page');
+    const banner = document.getElementById('shell-regen-banner');
+    const bannerText = document.getElementById('shell-regen-banner-text');
+    if (!page || !banner) return;
+
+    const expected = (typeof expectedInterval === 'number')
+        ? expectedInterval
+        : Number(page.dataset.expectedInterval);
+    const actual = (typeof agentIntervalValue === 'number')
+        ? agentIntervalValue
+        : Number(page.dataset.agentInterval);
+
+    if (page.dataset) {
+        if (!isNaN(expected)) page.dataset.expectedInterval = String(expected);
+        if (!isNaN(actual)) page.dataset.agentInterval = String(actual);
+    }
+
+    const mismatch = !isNaN(expected) && !isNaN(actual) && expected !== actual;
+    banner.classList.toggle('hidden', !mismatch);
+    if (mismatch && bannerText) {
+        bannerText.textContent = __t('shell.regen_hint');
+    }
+}
+
 function refreshShellBeaconTiming() {
     if (!isShellPage() || typeof agentId === 'undefined') return;
     fetch('/toolkit/agents/' + agentId + '/info')
@@ -82,6 +107,10 @@ function refreshShellBeaconTiming() {
             }
             const hint = document.getElementById('shell-beacon-hint');
             if (hint) hint.textContent = formatBeaconHint(iv, jt);
+
+            const page = document.getElementById('shell-page');
+            const expected = page ? Number(page.dataset.expectedInterval) : NaN;
+            updateShellRegenBanner(expected, iv);
         })
         .catch(function() {});
 }
@@ -591,6 +620,14 @@ function initShellPage() {
             if (cmd) quickCmd(cmd);
         });
     });
+
+    const page = document.getElementById('shell-page');
+    if (page) {
+        updateShellRegenBanner(
+            Number(page.dataset.expectedInterval),
+            Number(page.dataset.agentInterval)
+        );
+    }
 
     refreshShellBeaconTiming();
     setInterval(refreshShellBeaconTiming, 15000);

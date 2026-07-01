@@ -24,10 +24,11 @@ func (s *Server) handleShellPage(c *gin.Context) {
 
 	stats := s.getNavStats()
 	data := gin.H{
-		"Title":      fmt.Sprintf("ForgeC2 - Shell %s", agent.Hostname),
-		"ActiveNav":  "agents",
-		"Agent":      agent,
-		"IsFullPage": true,
+		"Title":            fmt.Sprintf("ForgeC2 - Shell %s", agent.Hostname),
+		"ActiveNav":        "agents",
+		"Agent":            agent,
+		"IsFullPage":       true,
+		"ExpectedInterval": s.cfg.Implant.DefaultInterval,
 	}
 	for k, v := range stats {
 		data[k] = v

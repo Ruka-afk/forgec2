@@ -62,8 +62,15 @@ func (s *Server) handleLogin(c *gin.Context) {
 	password := c.PostForm("password")
 	totpCode := c.PostForm("totp_code")
 	rememberMe := c.PostForm("remember_me") == "on"
+	clientIP := c.ClientIP()
 
-	slog.Info("Login attempt", "username", username, "ip", c.ClientIP(), "password_length", len(password))
+	slog.Info("Login attempt", "username", username, "ip", clientIP, "password_length", len(password))
+
+	if locked, retryAfter := s.checkLoginLockout(clientIP); locked {
+		s.LogAuditRecord(c, "login_failed", "auth", username, fmt.Sprintf("Rate limit lockout (%ds)", retryAfter), false, nil)
+		s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
+		return
+	}
 
 	if username == "" || password == "" {
 		s.renderLoginError(c, "Username and password required", username, rememberMe)
@@ -117,6 +124,10 @@ func (s *Server) handleLogin(c *gin.Context) {
 		}
 		time.Sleep(time.Duration(delay) * 500 * time.Millisecond)
 		s.db.Model(&user).UpdateColumn("login_attempts", user.LoginAttempts+1)
+		if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
+			s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
+			return
+		}
 		s.renderLoginError(c, "Invalid username or password", username, rememberMe)
 		return
 	} else {
@@ -156,6 +167,7 @@ func (s *Server) handleLogin(c *gin.Context) {
 	}
 	c.SetCookie("forgec2_session", token, maxAge, "/", "", middleware.CookieSecure, true)
 
+	s.clearLoginLockout(clientIP)
 	s.db.Model(&db.User{}).Where("id = ?", user.ID).Update("force_logout_at", nil)
 
 	if s.pluginManager != nil {

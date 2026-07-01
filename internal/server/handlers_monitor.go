@@ -579,6 +579,42 @@ func (s *Server) BroadcastScreenshot(agentID string, base64Data string) {
 	s.broadcastToClients(message)
 }
 
+// handleAgentRemoteInput accepts remote desktop input events and queues a remote_input task.
+// Payload JSON: {"type":"click|move|key","x":0,"y":0,"key":""}
+// Note: agent-side injection is stub-only (log); full SendInput relay is future work.
+func (s *Server) handleAgentRemoteInput(c *gin.Context) {
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+
+	var req struct {
+		Type string `json:"type"`
+		X    int    `json:"x"`
+		Y    int    `json:"y"`
+		Key  string `json:"key"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json: expected {type, x, y, key}"})
+		return
+	}
+	if req.Type == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "type is required (click, move, key)"})
+		return
+	}
+
+	payload, _ := json.Marshal(req)
+	task, err := s.createTask(id, "remote_input", string(payload), "", "", "", 0, 0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
+	}
+
+	s.LogAuditRecord(c, "remote_input", "agent", id, fmt.Sprintf("Remote input: %s", req.Type), true, nil)
+	s.broadcastTaskUpdate(id, *task)
+	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "message": "remote input queued (agent stub)"})
+}
+
 func (s *Server) handleScreenFrame(c *gin.Context) {
 	var req struct {
 		UUID string `json:"uuid"`

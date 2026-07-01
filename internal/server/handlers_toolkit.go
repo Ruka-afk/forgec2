@@ -155,6 +155,10 @@ func buildQuickActionCommand(action, param, shell string) (string, string) {
 		return "creds_dump", ""
 	case "browser_steal":
 		return "browser_steal", ""
+	case "cookie_export":
+		return "cookie_export", "all"
+	case "vpn_creds":
+		return "vpn_creds", ""
 	case "wifi_creds":
 		return "wifi_creds", ""
 	case "kerberoast":

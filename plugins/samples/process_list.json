@@ -1,0 +1,29 @@
+{
+  "name": "Process List",
+  "description": "List running processes sorted by CPU usage with optional name filter",
+  "version": "1.0.0",
+  "author": "ForgeC2",
+  "task_type": "process_list",
+  "script": "function Get-ProcessList {\n    param(\n        [string]$Filter = '',\n        [int]$Top = 50\n    )\n    $procs = Get-Process | Select-Object Id, ProcessName, CPU, WorkingSet, StartTime\n    if ($Filter) {\n        $procs = $procs | Where-Object { $_.ProcessName -like \"*$Filter*\" }\n    }\n    $procs = $procs | Sort-Object CPU -Descending | Select-Object -First $Top\n    $out = @($procs | ForEach-Object {\n        @{\n            pid = $_.Id\n            name = $_.ProcessName\n            cpu = $_.CPU\n            memory_mb = [math]::Round($_.WorkingSet / 1MB, 2)\n            started = if ($_.StartTime) { $_.StartTime.ToString('o') } else { $null }\n        }\n    })\n    return @{ count = $out.Count; processes = $out } | ConvertTo-Json -Depth 3\n}\n\nGet-ProcessList -Filter '{{filter}}' -Top {{top}}",
+  "category": "discovery",
+  "icon": "fa-solid fa-list",
+  "color": "indigo",
+  "requires_elevated": false,
+  "parameters": [
+    {
+      "name": "filter",
+      "type": "string",
+      "description": "Filter by process name (wildcard match, empty = all)",
+      "required": false,
+      "placeholder": "chrome",
+      "default": ""
+    },
+    {
+      "name": "top",
+      "type": "number",
+      "description": "Maximum number of processes to return",
+      "required": false,
+      "default": "50"
+    }
+  ]
+}

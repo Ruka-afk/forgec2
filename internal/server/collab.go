@@ -404,5 +404,10 @@ func (s *Server) handleWSMessage(conn *websocket.Conn, data map[string]interface
 		if agentID, ok := data["agent_id"].(string); ok {
 			s.updateUserPage(conn, agentID)
 		}
+	case "ping":
+		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"pong"}`)); err != nil {
+			slog.Error("WS pong write error", "err", err)
+		}
 	}
 }
