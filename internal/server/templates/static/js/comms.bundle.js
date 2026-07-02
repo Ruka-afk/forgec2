@@ -1,5 +1,5 @@
 // ForgeC2 Bundle: comms.bundle.js
-// Generated: 2026-07-02 00:03:15
+// Generated: 2026-07-02 08:11:09
 // Mode: production
 
 // -------------------------------

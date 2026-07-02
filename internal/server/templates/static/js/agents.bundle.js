@@ -1,5 +1,5 @@
 // ForgeC2 Bundle: agents.bundle.js
-// Generated: 2026-07-02 00:03:13
+// Generated: 2026-07-02 08:11:07
 // Mode: production
 
 // -------------------------------

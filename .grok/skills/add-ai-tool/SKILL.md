@@ -73,6 +73,18 @@ Add a `default` branch if missing — unknown tools should return `{"error":"unk
 | `list_credentials` | Credential summary (no plaintext) |
 | `get_online_operators` | Active operators |
 
+## Tool call limits
+
+Configured in `config.yaml` under `ai:` (see `configure-ai` skill):
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `max_conversation_turns` | `0` | LLM↔tool dialogue turns (`0` = unlimited) |
+| `max_tool_rounds` | `0` | Consecutive tool-call rounds (`0` = unlimited) |
+| `max_duplicate_tool_calls` | `0` | Identical tool+args repeats before skip |
+
+`[Max tool calls reached]` is emitted by `converse()` in `handlers_ai.go`, not the IDE.
+
 ## Verify
 
 ```bash
@@ -82,3 +94,4 @@ go build ./internal/server/...
 - AI chat invokes the new tool when prompted
 - Tool returns valid JSON (no panic)
 - SSE stream completes with a user-visible answer
+- Multi-step tool chains complete when limits are `0`

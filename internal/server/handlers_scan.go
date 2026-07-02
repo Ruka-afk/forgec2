@@ -33,7 +33,7 @@ func (s *Server) handleScanTask(c *gin.Context) {
 	agentID := c.PostForm("agent_id")
 	target := c.PostForm("target")
 	portRange := c.PostForm("port_range")
-	scanType := c.PostForm("scan_type") // tcp_connect, tcp_syn, udp
+	_ = c.PostForm("scan_type") // tcp_connect, tcp_syn, udp (reserved)
 	topPorts := c.PostForm("top_ports") // number of top ports to scan
 
 	// Validation
@@ -73,12 +73,12 @@ func (s *Server) handleScanTask(c *gin.Context) {
 		portList[i] = strconv.Itoa(p)
 	}
 
-	command := fmt.Sprintf("scan:%s:%s:%s", scanType, target, strings.Join(portList, ","))
+	command := fmt.Sprintf("%s:%s", target, strings.Join(portList, ","))
 
 	// Create task
 	task := db.Task{
 		AgentID:   agentID,
-		Type:      "port_scan",
+		Type:      "portscan",
 		Command:   command,
 		Status:    "pending",
 		CreatedBy: user,

@@ -28,7 +28,9 @@ make build-all
 | 6 | Implant beacon | `server.log` shows beacon processed |
 | 7 | `GET /ai` | AI page, settings work if key set |
 | 8 | WebSocket | DevTools WS to `/ws` connects, pong on ping |
-| 9 | `go test ./...` | All pass |
+| 9 | `GET /lateral` | Cards styled (`ui-card` visible, not plain HTML) |
+| 10 | Theme toggle | Top-right theme menu switches light/dark |
+| 11 | `go test ./...` | All pass |
 
 ## PowerShell quick script
 

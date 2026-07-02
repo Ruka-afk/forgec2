@@ -8,7 +8,7 @@
 
 ForgeC2 is a modern, single-binary command-and-control framework written in pure Go. It ships with a full web console, multi-transport beaconing, an AI assistant, plugin system, and 50+ implant task types — built for authorized red team engagements and security research.
 
-**v2.1.0** — CI/CD · macOS Agent · Smart AI Wait · WebSocket Ping · EDR Basics · P1 Recon Tasks
+**v2.1.2** — Dead-feature fixes · privesc/wifi/SOCKS/remote_input · Windows + Linux release binaries
 
 ---
 
@@ -23,7 +23,7 @@ ForgeC2 is a modern, single-binary command-and-control framework written in pure
 | **EDR** | Chunked sleep obfuscation (`evasion: true` / `FORGEC2_EVASION=1`) |
 | **Ops** | GitHub Actions CI, Makefile, audit alerts (login lockout, bulk delete) |
 | **Plugins** | 3 JSON samples in `plugins/samples/`, manifest plugins in `plugins/` |
-| **DevEx** | 4 Grok skills in `.grok/skills/` (rebuild-deploy, fix-ui-page, add-i18n, add-ai-tool) |
+| **DevEx** | 42 Grok skills in `.grok/skills/` — rebuild, UI, C2, implant, AI, ops modules |
 
 ---
 
@@ -223,15 +223,19 @@ FORGEC2_DEV=1 go run ./cmd/server -config config.yaml
 
 ### Agent Skills (Grok / Cursor)
 
-All skills live in `.grok/skills/` — invoke via slash command or auto-trigger:
+All skills live in `.grok/skills/` (42 total) — invoke via slash command or auto-trigger:
 
 | Category | Skills |
 |----------|--------|
-| **Daily dev** | `rebuild-deploy`, `fix-ui-page`, `debug-forgec2`, `ci-fix`, `e2e-smoke-test` |
-| **Features** | `add-task-type`, `add-agent-feature`, `add-ui-page`, `add-api-endpoint`, `add-i18n` |
-| **AI & plugins** | `add-ai-tool`, `plugin-task`, `add-manifest-plugin` |
-| **C2 & implant** | `add-malleable-profile`, `implant-regenerate`, `edr-evasion`, `add-recon-p1` |
-| **Realtime & reports** | `websocket-event`, `report-section`, `remote-desktop` |
+| **Daily dev** | `rebuild-deploy`, `fix-ui-page`, `fix-ui-style`, `debug-forgec2`, `ci-fix`, `e2e-smoke-test`, `release-github` |
+| **Features** | `add-task-type`, `add-agent-feature`, `add-ui-page`, `add-api-endpoint`, `add-i18n`, `add-database-model` |
+| **AI & plugins** | `add-ai-tool`, `configure-ai`, `plugin-task`, `add-manifest-plugin` |
+| **C2 & listeners** | `add-listener`, `add-malleable-profile`, `add-transport-protocol`, `add-stager`, `add-extc2`, `add-generate-option` |
+| **Implant** | `implant-regenerate`, `edr-evasion`, `add-recon-p1`, `add-injection-technique`, `add-bof` |
+| **Ops modules** | `add-lateral-method`, `add-credentials-feature`, `add-monitor-feature`, `add-socks-pivot`, `add-token-feature` |
+| **Collab & automation** | `add-collab-feature`, `add-automation-rule`, `add-shell-feature` |
+| **Realtime & reports** | `websocket-event`, `report-section`, `remote-desktop`, `add-traffic-log`, `add-timeline-loot` |
+| **Security** | `add-user-rbac` |
 
 ---
 

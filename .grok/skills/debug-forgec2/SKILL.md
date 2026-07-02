@@ -37,6 +37,10 @@ Get-Content server.err -Tail 20
 | AI buttons dead | Missing direct bind | See `fix-ui-page`; AI uses `bindAIActions()` |
 | Beacon 401 | Auth middleware on wrong path | Beacon routes must be outside auth group |
 | Chinese garbled in shell | UTF-8 encoding | `encoding_windows.go` base64 path |
+| Toolkit pages unstyled | `ui-card` missing from bundle | See `fix-ui-style` — rebuild `layout.css` → `app.bundle.css` |
+| Theme/lang toggle dead | Missing `GlobalActionHandlers` | `core.js` + `layout.js` `set_theme` / `set_language` |
+| CSS flash on navigation | JIT + full Tailwind both loaded | Keep `tailwind.min.js` in head; small bundle only |
+| `[Max tool calls reached]` in AI | Server-side cap in `converse()` | Set `ai.max_tool_rounds: 0` in config — see `configure-ai` |
 
 ## WebSocket (v2.1+)
 

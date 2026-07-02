@@ -199,21 +199,7 @@ func spawnProcess(targetExe string, shellcode []byte, technique string) string {
 	return "not supported on macOS"
 }
 
-func startSocksServer(addr string) {
-	go func() {
-		ln, err := net.Listen("tcp", addr)
-		if err != nil {
-			return
-		}
-		for {
-			c, err := ln.Accept()
-			if err != nil {
-				continue
-			}
-			c.Close()
-		}
-	}()
-}
+
 
 type tokenInfoResult struct {
 	PID         uint32

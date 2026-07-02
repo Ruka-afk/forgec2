@@ -517,7 +517,7 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 			task, err = s.createTask(agentID, "privesc_check", "privesc_check", "", "", "", 0, 0)
 		case "sleep":
 			// Args format: "interval,jitter" e.g., "30,20"
-			task, err = s.createTask(agentID, "sleep", req.Args, "", "", "", 0, 0)
+			task, err = s.createTask(agentID, "set_sleep", req.Args, "", "", "", 0, 0)
 		default:
 			task, err = s.createTask(agentID, req.TaskType, req.Command, "", "", "", 0, 0)
 		}

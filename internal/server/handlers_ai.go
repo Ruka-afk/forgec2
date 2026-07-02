@@ -115,6 +115,20 @@ func (s *Server) handleAIChat(c *gin.Context) {
 	}
 }
 
+type aiToolLimits struct {
+	maxConversationTurns  int
+	maxToolRounds         int
+	maxDuplicateToolCalls int
+}
+
+func resolveAIToolLimits(maxConversationTurns, maxToolRounds, maxDuplicateToolCalls int) aiToolLimits {
+	return aiToolLimits{
+		maxConversationTurns:  maxConversationTurns,
+		maxToolRounds:         maxToolRounds,
+		maxDuplicateToolCalls: maxDuplicateToolCalls,
+	}
+}
+
 // converse runs the LLM conversation loop with tool calling, returning SSE events
 func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage, ctx context.Context) <-chan sseEvent {
 	ch := make(chan sseEvent, 10)
@@ -130,10 +144,15 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 		messages = append(messages, userMessages...)
 		tools := buildTools()
 
+		limits := resolveAIToolLimits(
+			s.cfg.AI.MaxConversationTurns,
+			s.cfg.AI.MaxToolRounds,
+			s.cfg.AI.MaxDuplicateToolCalls,
+		)
 		toolCallHistory := make(map[string]int) // track tool calls to prevent infinite loops
 		consecutiveTools := 0
 
-		for turn := 0; turn < 3; turn++ {
+		for turn := 0; limits.maxConversationTurns == 0 || turn < limits.maxConversationTurns; turn++ {
 			// Check if client disconnected
 			select {
 			case <-ctx.Done():
@@ -177,8 +196,8 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 				var newCalls []toolCall
 				for _, tc := range toolCalls {
 					key := tc.Function.Name + ":" + tc.Function.Arguments
-					if toolCallHistory[key] >= 2 {
-						continue // already called this exact invocation twice, skip
+					if limits.maxDuplicateToolCalls > 0 && toolCallHistory[key] >= limits.maxDuplicateToolCalls {
+						continue
 					}
 					toolCallHistory[key]++
 					newCalls = append(newCalls, tc)
@@ -188,7 +207,7 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 					return
 				}
 				consecutiveTools++
-				if consecutiveTools > 2 {
+				if limits.maxToolRounds > 0 && consecutiveTools > limits.maxToolRounds {
 					ch <- sseEvent{"text", content + "\n\n[Max tool calls reached]"}
 					return
 				}

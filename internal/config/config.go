@@ -65,12 +65,15 @@ type Config struct {
 	} `yaml:"malleable"`
 
 	AI struct {
-		Enabled      bool   `yaml:"enabled"`
-		Provider     string `yaml:"provider"`      // deepseek, openai, claude, qianwen, custom
-		APIKey       string `yaml:"api_key"`
-		Model        string `yaml:"model"`
-		Endpoint     string `yaml:"endpoint"`       // optional, override default
-		SystemPrompt string `yaml:"system_prompt"`  // custom system prompt
+		Enabled               bool   `yaml:"enabled"`
+		Provider              string `yaml:"provider"` // deepseek, openai, claude, qianwen, custom
+		APIKey                string `yaml:"api_key"`
+		Model                 string `yaml:"model"`
+		Endpoint              string `yaml:"endpoint"` // optional, override default
+		SystemPrompt          string `yaml:"system_prompt"`
+		MaxConversationTurns  int    `yaml:"max_conversation_turns"`  // 0 = unlimited (default)
+		MaxToolRounds         int    `yaml:"max_tool_rounds"`         // 0 = unlimited (default)
+		MaxDuplicateToolCalls int    `yaml:"max_duplicate_tool_calls"` // 0 = unlimited; else cap identical tool+args repeats
 	} `yaml:"ai"`
 
 	Logging struct {

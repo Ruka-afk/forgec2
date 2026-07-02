@@ -6,13 +6,69 @@ let fpsInterval = null;
 let lastFpsTime = Date.now();
 let startTime = null;
 let monitorTimer = null;
+let pollTimer = null;
+
+function getScreenSettings() {
+    const intervalEl = document.getElementById('refresh-interval');
+    const qualityEl = document.getElementById('image-quality');
+    const autoRefreshEl = document.getElementById('auto-refresh');
+    return {
+        interval: intervalEl ? intervalEl.value : '5',
+        quality: qualityEl ? qualityEl.value : 'medium',
+        autoRefresh: autoRefreshEl ? autoRefreshEl.checked : true
+    };
+}
+
+function buildScreenStartBody() {
+    const s = getScreenSettings();
+    return `interval=${encodeURIComponent(s.interval)}&quality=${encodeURIComponent(s.quality)}`;
+}
+
+function restartMonitorWithSettings() {
+    if (!isMonitoring) return;
+    stopMonitor();
+    setTimeout(startMonitor, 300);
+}
+
+function wireScreenSettings() {
+    const intervalEl = document.getElementById('refresh-interval');
+    const qualityEl = document.getElementById('image-quality');
+    const autoRefreshEl = document.getElementById('auto-refresh');
+    if (intervalEl) {
+        intervalEl.addEventListener('change', function() {
+            if (isMonitoring) restartMonitorWithSettings();
+            else setupAutoRefreshPolling();
+        });
+    }
+    if (qualityEl) {
+        qualityEl.addEventListener('change', function() {
+            if (isMonitoring) restartMonitorWithSettings();
+        });
+    }
+    if (autoRefreshEl) {
+        autoRefreshEl.addEventListener('change', setupAutoRefreshPolling);
+    }
+}
+
+function setupAutoRefreshPolling() {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+    const s = getScreenSettings();
+    if (isMonitoring || !s.autoRefresh) return;
+    const ms = Math.max(3, parseInt(s.interval, 10) || 5) * 1000;
+    pollTimer = setInterval(refreshScreenshot, ms);
+}
 
 function startMonitor() {
     showLoading(true);
+    const body = buildScreenStartBody();
 
     fetch(`/agents/${agentId}/screen/start`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: body
     }).then(r => r.json()).then(data => {
         showLoading(false);
 
@@ -39,6 +95,10 @@ function startMonitor() {
 }
 
 function stopMonitor() {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
     showLoading(true);
     fetch(`/agents/${agentId}/screen/stop`, {
         method: 'POST',
@@ -265,4 +325,8 @@ function showError(message) {
     }, 3000);
 }
 
+document.addEventListener('DOMContentLoaded', function() {
+    wireScreenSettings();
+    setupAutoRefreshPolling();
+});
 setupWebSocket();

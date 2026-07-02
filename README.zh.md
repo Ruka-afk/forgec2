@@ -8,7 +8,7 @@
 
 ForgeC2 是一款纯 Go 编写的现代化单二进制 C2 框架，集成完整 Web 控制台、多协议信标、AI 智能助手、插件系统与 50+ Implant 任务类型。
 
-**v2.1.0** — CI/CD · macOS Agent · AI 智能等待 · WebSocket 心跳 · EDR 基础 · P1 侦察任务
+**v2.1.2** — 失效功能修复 · privesc/wifi/SOCKS/remote_input · Windows + Linux 发布包
 
 ---
 
@@ -23,7 +23,7 @@ ForgeC2 是一款纯 Go 编写的现代化单二进制 C2 框架，集成完整 
 | **EDR** | 分块睡眠混淆（`evasion: true` / `FORGEC2_EVASION=1`） |
 | **运维** | GitHub Actions CI、Makefile、审计告警（登录锁定、批量删除） |
 | **插件** | `plugins/samples/` 3 个 JSON 示例 |
-| **开发** | `.grok/skills/` 4 个技能（rebuild-deploy、fix-ui-page、add-i18n、add-ai-tool） |
+| **开发** | `.grok/skills/` 42 个 Agent Skills（重建、UI、C2、Implant、AI、作战模块） |
 
 ---
 
@@ -78,15 +78,19 @@ make i18n-check     # 翻译检查
 
 ### Agent Skills（Grok / Cursor）
 
-全部位于 `.grok/skills/`，可用斜杠命令或自动触发：
+全部位于 `.grok/skills/`（42 个），可用斜杠命令或自动触发：
 
 | 类别 | Skills |
 |------|--------|
-| **日常开发** | `rebuild-deploy`、`fix-ui-page`、`debug-forgec2`、`ci-fix`、`e2e-smoke-test` |
-| **功能扩展** | `add-task-type`、`add-agent-feature`、`add-ui-page`、`add-api-endpoint`、`add-i18n` |
-| **AI 与插件** | `add-ai-tool`、`plugin-task`、`add-manifest-plugin` |
-| **C2 与 Implant** | `add-malleable-profile`、`implant-regenerate`、`edr-evasion`、`add-recon-p1` |
-| **实时与报告** | `websocket-event`、`report-section`、`remote-desktop` |
+| **日常开发** | `rebuild-deploy`、`fix-ui-page`、`fix-ui-style`、`debug-forgec2`、`ci-fix`、`e2e-smoke-test`、`release-github` |
+| **功能扩展** | `add-task-type`、`add-agent-feature`、`add-ui-page`、`add-api-endpoint`、`add-i18n`、`add-database-model` |
+| **AI 与插件** | `add-ai-tool`、`configure-ai`、`plugin-task`、`add-manifest-plugin` |
+| **C2 与监听器** | `add-listener`、`add-malleable-profile`、`add-transport-protocol`、`add-stager`、`add-extc2`、`add-generate-option` |
+| **Implant 能力** | `implant-regenerate`、`edr-evasion`、`add-recon-p1`、`add-injection-technique`、`add-bof` |
+| **作战模块** | `add-lateral-method`、`add-credentials-feature`、`add-monitor-feature`、`add-socks-pivot`、`add-token-feature` |
+| **协作与自动化** | `add-collab-feature`、`add-automation-rule`、`add-shell-feature` |
+| **实时与报告** | `websocket-event`、`report-section`、`remote-desktop`、`add-traffic-log`、`add-timeline-loot` |
+| **安全与运维** | `add-user-rbac` |
 
 ---
 

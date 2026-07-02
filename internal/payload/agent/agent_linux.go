@@ -178,22 +178,7 @@ func spawnProcess(targetExe string, shellcode []byte, technique string) string {
 	return "not supported on Linux"
 }
 
-func startSocksServer(addr string) {
-	// Linux stub: could implement with net.Listen but limited for demo
-	go func() {
-		ln, err := net.Listen("tcp", addr)
-		if err != nil {
-			return
-		}
-		for {
-			c, err := ln.Accept()
-			if err != nil {
-				continue
-			}
-			c.Close()
-		}
-	}()
-}
+
 
 // tokenInfoResult — shared struct for token ops (defined here for Linux stubs)
 type tokenInfoResult struct {
