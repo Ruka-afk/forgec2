@@ -1,5 +1,7 @@
 # Compiled binaries
 *.exe
+forgec2-server-linux-amd64
+forgec2-server-linux-arm64
 *.dll
 *.so
 *.dylib
