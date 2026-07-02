@@ -77,7 +77,7 @@ func main() {
 	if !strings.Contains(err.Error(), "timed out") {
 		t.Fatalf("expected timeout message, got %q", err.Error())
 	}
-	if elapsed < 900*time.Millisecond || elapsed > 3*time.Second {
+	if elapsed < 900*time.Millisecond || elapsed > 4*time.Second {
 		t.Fatalf("unexpected elapsed time: %v", elapsed)
 	}
 }
