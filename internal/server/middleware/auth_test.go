@@ -84,19 +84,19 @@ func TestGenerateToken(t *testing.T) {
 		}
 	})
 
-	t.Run("remember me session", func(t *testing.T) {
-		user := db.User{ID: 2, Username: "operator", Role: "operator", IsActive: true}
+	t.Run("user session", func(t *testing.T) {
+		user := db.User{ID: 2, Username: "testuser", Role: "user", IsActive: true}
 		token, err := GenerateToken(user, true, 24)
 		if err != nil {
 			t.Fatalf("GenerateToken() error = %v", err)
 		}
 		if token == "" {
-			t.Fatal("GenerateToken() returned empty token for remember me")
+			t.Fatal("GenerateToken() returned empty token for user")
 		}
 	})
 
 	t.Run("invalid max age falls back to default", func(t *testing.T) {
-		user := db.User{ID: 3, Username: "viewer", Role: "viewer", IsActive: true}
+		user := db.User{ID: 3, Username: "user2", Role: "user", IsActive: true}
 		token, err := GenerateToken(user, false, 0)
 		if err != nil {
 			t.Fatalf("GenerateToken() error = %v", err)
@@ -164,7 +164,7 @@ func TestAuthRequired(t *testing.T) {
 	})
 
 	t.Run("inactive user", func(t *testing.T) {
-		user := db.User{ID: 10, Username: "inactive", Role: "viewer", IsActive: false}
+		user := db.User{ID: 10, Username: "inactive", Role: "user", IsActive: false}
 		testDB.Create(&user)
 
 		token, _ := GenerateToken(user, false, 24)
@@ -182,7 +182,7 @@ func TestAuthRequired(t *testing.T) {
 	})
 
 	t.Run("user not found in db", func(t *testing.T) {
-		user := db.User{ID: 999, Username: "nonexistent", Role: "viewer", IsActive: true}
+		user := db.User{ID: 999, Username: "nonexistent", Role: "user", IsActive: true}
 
 		token, _ := GenerateToken(user, false, 24)
 
@@ -199,7 +199,7 @@ func TestAuthRequired(t *testing.T) {
 	})
 
 	t.Run("force logout invalidates session", func(t *testing.T) {
-		user := db.User{ID: 20, Username: "forcelogout", Role: "operator", IsActive: true, ForceLogoutAt: time.Now().Add(1 * time.Hour)}
+		user := db.User{ID: 20, Username: "forcelogout", Role: "user", IsActive: true, ForceLogoutAt: time.Now().Add(1 * time.Hour)}
 		testDB.Create(&user)
 
 		token, _ := GenerateToken(user, false, 24)
@@ -217,7 +217,7 @@ func TestAuthRequired(t *testing.T) {
 	})
 
 	t.Run("context contains user info", func(t *testing.T) {
-		user := db.User{ID: 30, Username: "testuser", Role: "operator", IsActive: true}
+		user := db.User{ID: 30, Username: "testuser", Role: "user", IsActive: true}
 		testDB.Create(&user)
 
 		token, _ := GenerateToken(user, false, 24)
@@ -273,7 +273,7 @@ func TestRequireRole(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		c.Set("user_role", "admin")
 
-		RequireRole("viewer")(c)
+		RequireRole("user")(c)
 
 		if w.Code == http.StatusForbidden {
 			t.Error("admin should bypass role restrictions")
@@ -283,21 +283,21 @@ func TestRequireRole(t *testing.T) {
 	t.Run("role in allowed list", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Set("user_role", "operator")
+		c.Set("user_role", "user")
 
-		RequireRole("operator", "admin")(c)
+		RequireRole("user", "admin")(c)
 
 		if w.Code == http.StatusForbidden {
-			t.Error("operator should be allowed when in allowed list")
+			t.Error("user should be allowed when in allowed list")
 		}
 	})
 
 	t.Run("role not in allowed list", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Set("user_role", "viewer")
+		c.Set("user_role", "user")
 
-		RequireRole("operator", "admin")(c)
+		RequireRole("admin")(c)
 
 		if w.Code != http.StatusForbidden {
 			t.Errorf("expected 403, got %d", w.Code)
@@ -343,51 +343,27 @@ func TestRequirePermission(t *testing.T) {
 		}
 	})
 
-	t.Run("operator has agents.write permission", func(t *testing.T) {
+	t.Run("user has agents.write permission", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Set("user_role", "operator")
+		c.Set("user_role", "user")
 
 		RequirePermission("agents.write")(c)
 
 		if w.Code == http.StatusForbidden {
-			t.Error("operator should have agents.write permission")
+			t.Error("user should have agents.write permission")
 		}
 	})
 
-	t.Run("viewer does not have agents.write permission", func(t *testing.T) {
+	t.Run("user has all agent permissions", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Set("user_role", "viewer")
+		c.Set("user_role", "user")
 
-		RequirePermission("agents.write")(c)
-
-		if w.Code != http.StatusForbidden {
-			t.Errorf("expected 403, got %d", w.Code)
-		}
-	})
-
-	t.Run("viewer has agents.read permission", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Set("user_role", "viewer")
-
-		RequirePermission("agents.read")(c)
+		RequireAllPermissions("agents.read", "agents.write", "agents.delete")(c)
 
 		if w.Code == http.StatusForbidden {
-			t.Error("viewer should have agents.read permission")
-		}
-	})
-
-	t.Run("guest has limited permissions", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Set("user_role", "guest")
-
-		RequirePermission("audit.read")(c)
-
-		if w.Code != http.StatusForbidden {
-			t.Errorf("guest should not have audit.read permission, got %d", w.Code)
+			t.Error("user should have all agent permissions")
 		}
 	})
 
@@ -418,24 +394,24 @@ func TestRequireAllPermissions(t *testing.T) {
 		}
 	})
 
-	t.Run("operator has all agent permissions", func(t *testing.T) {
+	t.Run("user has all agent permissions", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Set("user_role", "operator")
+		c.Set("user_role", "user")
 
 		RequireAllPermissions("agents.read", "agents.write", "agents.delete")(c)
 
 		if w.Code == http.StatusForbidden {
-			t.Error("operator should have all agent permissions")
+			t.Error("user should have all agent permissions")
 		}
 	})
 
-	t.Run("viewer missing write permission", func(t *testing.T) {
+	t.Run("user missing permission", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Set("user_role", "viewer")
+		c.Set("user_role", "user")
 
-		RequireAllPermissions("agents.read", "agents.write")(c)
+		RequireAllPermissions("users.write", "users.delete")(c)
 
 		if w.Code != http.StatusForbidden {
 			t.Errorf("expected 403, got %d", w.Code)

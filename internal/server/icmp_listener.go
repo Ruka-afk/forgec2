@@ -1,11 +1,9 @@
 package server
 
 import (
-	"encoding/binary"
 	"log/slog"
 	"net"
 	"sync"
-	"time"
 
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
@@ -110,6 +108,4 @@ func (l *ICMPBeaconListener) serve() {
 	}
 }
 
-// Helper to encode uint16 in network byte order
-var _ = binary.BigEndian
-var _ = time.Second
+

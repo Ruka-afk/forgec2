@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"fmt"
@@ -29,7 +29,7 @@ func (s *Server) handleUsersPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "users_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 // handleAddUser creates a new user (admin only)
@@ -55,10 +55,8 @@ func (s *Server) handleAddUser(c *gin.Context) {
 		role = "operator"
 	}
 	validRoles := map[string]bool{
-		db.RoleAdmin:    true,
-		db.RoleOperator: true,
-		db.RoleViewer:   true,
-		db.RoleGuest:    true,
+		db.RoleAdmin: true,
+		db.RoleUser:  true,
 	}
 	if !validRoles[role] {
 		role = "operator"
@@ -124,43 +122,8 @@ func (s *Server) handleToggleUser(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("User %s", status)})
 }
-
-// handleKickUser disconnects a user's WebSocket connections (admin only)
 func (s *Server) handleKickUser(c *gin.Context) {
-	idStr := c.Param("id")
-	currentRole, _ := c.Get("user_role")
-	if currentRole != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
-		return
-	}
-
-	var target db.User
-	if err := s.db.First(&target, idStr).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-		return
-	}
-
-	// Disconnect all WS connections for this user
-	s.collab.mu.Lock()
-	kicked := 0
-	for conn, wc := range s.collab.wsConns {
-		if wc.username == target.Username {
-			wc.conn.Close()
-			delete(s.collab.wsConns, conn)
-			kicked++
-		}
-	}
-	online := s.onlineUserListLocked()
-	s.collab.mu.Unlock()
-
-	s.broadcastCollab(gin.H{"type": "user_offline", "users": online})
-
-	currentUser, _ := c.Get("user")
-	s.LogAuditRecord(c, "user_kick", "auth", currentUser.(string),
-		fmt.Sprintf("Kicked user %s (%d connections)", target.Username, kicked), true, nil)
-	slog.Info("User kicked", "username", target.Username, "by", currentUser, "connections", kicked)
-
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Kicked %s (%d connections)", target.Username, kicked)})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Kick functionality removed"})
 }
 
 // handleEditUser updates username/role (admin only)
@@ -193,10 +156,8 @@ func (s *Server) handleEditUser(c *gin.Context) {
 	}
 	if role != "" && role != user.Role {
 		validRoles := map[string]bool{
-			db.RoleAdmin:    true,
-			db.RoleOperator: true,
-			db.RoleViewer:   true,
-			db.RoleGuest:    true,
+			db.RoleAdmin: true,
+			db.RoleUser:  true,
 		}
 		if !validRoles[role] {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role"})
@@ -240,21 +201,9 @@ func (s *Server) handleForceLogoutUser(c *gin.Context) {
 		return
 	}
 
-	// Set ForceLogoutAt to now — AuthRequired will reject tokens issued before this
+	// Set ForceLogoutAt to now
 	now := time.Now()
 	s.db.Model(&target).Update("force_logout_at", now)
-
-	// Also disconnect WebSocket
-	s.collab.mu.Lock()
-	for conn, wc := range s.collab.wsConns {
-		if wc.username == target.Username {
-			wc.conn.Close()
-			delete(s.collab.wsConns, conn)
-		}
-	}
-	online := s.onlineUserListLocked()
-	s.collab.mu.Unlock()
-	s.broadcastCollab(gin.H{"type": "user_offline", "users": online})
 
 	s.LogAuditRecord(c, "user_force_logout", "auth", currentUser.(string),
 		fmt.Sprintf("Force logged out user %s", target.Username), true, nil)
@@ -290,13 +239,6 @@ func (s *Server) handleDeleteUser(c *gin.Context) {
 	tx := s.db.Begin()
 	if err := tx.Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
-		return
-	}
-
-	// Clean up agent locks held by this user
-	if err := tx.Where("user_id = ?", user.ID).Delete(&db.AgentLock{}).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clean up agent locks"})
 		return
 	}
 
@@ -341,6 +283,10 @@ func (s *Server) handleSetUserPassword(c *gin.Context) {
 	}
 
 	result := s.db.Model(&db.User{}).Where("id = ?", idStr).Update("password_hash", hash)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
 	if result.RowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
@@ -348,3 +294,4 @@ func (s *Server) handleSetUserPassword(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Password updated"})
 }
+

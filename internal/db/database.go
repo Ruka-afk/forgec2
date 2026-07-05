@@ -1,7 +1,10 @@
 package db
 
 import (
+	"crypto/rand"
+	"fmt"
 	"log/slog"
+	"math/big"
 	"os"
 	"path/filepath"
 	"sync"
@@ -78,12 +81,15 @@ func InitDB(dbPath string, logLevel slog.Level) (*gorm.DB, error) {
 	_ = db.Exec("ALTER TABLE agents RENAME TO implants").Error
 
 	// Auto-migrate all models
-	if err := db.AutoMigrate(&Implant{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &AgentLock{}, &ScanResult{}, &ChatMessage{}, &OperatorNote{}, &NetworkHost{}, &CommandTemplate{}, &BOFFile{}, &ServerConfig{}, &WebhookConfig{}, &Plugin{}, &PluginReview{}, &PluginDependency{}, &PluginUpdateStatus{}, &RolePermission{}, &AutomationRule{}, &AlertRule{}, &Alert{}, &SystemMetric{}); err != nil {
+	if err := db.AutoMigrate(&Implant{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &ScanResult{}, &NetworkHost{}, &CommandTemplate{}, &BOFFile{}, &ServerConfig{}, &WebhookConfig{}, &Plugin{}, &PluginReview{}, &PluginDependency{}, &PluginUpdateStatus{}, &RolePermission{}, &AutomationRule{}, &AlertRule{}, &Alert{}, &SystemMetric{}, &GeneratedReport{}); err != nil {
 		return nil, err
 	}
 
 	// Seed role permissions
 	seedRolePermissions(db)
+
+	// Migrate old roles
+	MigrateOldRoles(db)
 
 	// Ensure new columns exist (glebarez/sqlite AutoMigrate may not add all; ignore "duplicate column" errors)
 	_ = db.Exec("ALTER TABLE implants ADD COLUMN pid INTEGER DEFAULT 0").Error
@@ -98,7 +104,14 @@ func InitDB(dbPath string, logLevel slog.Level) (*gorm.DB, error) {
 	var userCount int64
 	db.Model(&User{}).Count(&userCount)
 	if userCount == 0 {
-		defaultAdminHash, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
+		const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+		pw := make([]byte, 24)
+		for i := range pw {
+			n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+			pw[i] = charset[n.Int64()]
+		}
+		defaultPassword := string(pw)
+		defaultAdminHash, err := bcrypt.GenerateFromPassword([]byte(defaultPassword), bcrypt.DefaultCost)
 		if err != nil {
 			slog.Error("Failed to hash default admin password", "err", err)
 		} else {
@@ -108,19 +121,11 @@ func InitDB(dbPath string, logLevel slog.Level) (*gorm.DB, error) {
 				Role:         "admin",
 				IsActive:     true,
 			})
-			slog.Info("Default admin user created with password 'admin'")
-		}
-	} else {
-		var admin User
-		result := db.Where("username = ?", "admin").First(&admin)
-		if result.Error == nil {
-			if os.Getenv("FORGEC2_RESET_ADMIN_PASSWORD") == "1" {
-				newHash, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
-				if err == nil {
-					db.Model(&admin).Update("password_hash", string(newHash))
-					slog.Info("Admin password reset to 'admin' via FORGEC2_RESET_ADMIN_PASSWORD")
-				}
-			}
+			slog.Warn("╔══════════════════════════════════════════════════════════╗")
+			slog.Warn("║  DEFAULT ADMIN CREDENTIALS                             ║")
+			slog.Warn(fmt.Sprintf("║  Username: admin  Password: %-24s  ║", defaultPassword))
+			slog.Warn("║  CHANGE THIS IMMEDIATELY AFTER LOGIN!                  ║")
+			slog.Warn("╚══════════════════════════════════════════════════════════╝")
 		}
 	}
 
@@ -148,8 +153,6 @@ func InitDB(dbPath string, logLevel slog.Level) (*gorm.DB, error) {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_scan_agent_id ON scan_results(agent_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_scan_created ON scan_results(created_at)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_chat_user ON chat_messages(user)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_chat_created ON chat_messages(created_at DESC)")
 
 	// Additional indexes for common queries
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_username ON implants(username)")
@@ -172,7 +175,6 @@ func InitDB(dbPath string, logLevel slog.Level) (*gorm.DB, error) {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_build_logs_user ON build_logs(user)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_build_logs_status ON build_logs(status)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_network_hosts_ip ON network_hosts(ip)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_operator_notes_agent ON operator_notes(agent_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_command_templates_category ON command_templates(category)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity)")
@@ -220,12 +222,10 @@ func seedRolePermissions(db *gorm.DB) {
 	slog.Info("Role permissions seeded", "roles", len(RolePermissionsMap))
 }
 
-func MigrateExistingUsersToAdmin(db *gorm.DB) {
-	var users []User
-	db.Find(&users)
-	for _, user := range users {
-		if user.Role == "" {
-			db.Model(&user).Update("role", RoleAdmin)
-		}
+// MigrateOldRoles migrates "operator"/"viewer"/"guest" to "user"
+func MigrateOldRoles(db *gorm.DB) {
+	result := db.Model(&User{}).Where("role IN ?", []string{"operator", "viewer", "guest"}).Update("role", RoleUser)
+	if result.RowsAffected > 0 {
+		slog.Info("Migrated old roles to 'user'", "count", result.RowsAffected)
 	}
 }

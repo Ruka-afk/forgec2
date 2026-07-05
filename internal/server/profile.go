@@ -1,15 +1,13 @@
 package server
 
 import (
-	"encoding/json"
-	"fmt"
-	"strings"
+	"net/http"
 
 	"github.com/forgec2/forgec2/internal/malleable"
 	"github.com/gin-gonic/gin"
 )
 
-func (s *Server) applyMalleableProfile(c *gin.Context, resp *beaconResponse) {
+func (s *Server) applyMalleableProfile(c *gin.Context, body []byte) {
 	mp := s.cfg.Malleable
 	if !mp.Enabled {
 		return
@@ -19,19 +17,14 @@ func (s *Server) applyMalleableProfile(c *gin.Context, resp *beaconResponse) {
 	if mp.ProfileName != "" {
 		presets := malleable.PredefinedProfiles()
 		if profile, ok := presets[mp.ProfileName]; ok {
-			s.applyProfilePreset(c, resp, profile)
+			s.applyProfilePreset(c, body, profile)
 			return
 		}
 	}
 
 	statusCode := mp.StatusCode
 	if statusCode < 100 || statusCode > 599 {
-		statusCode = 200
-	}
-
-	body, err := json.Marshal(resp)
-	if err != nil {
-		return
+		statusCode = http.StatusOK
 	}
 
 	wrapped := string(body)
@@ -56,12 +49,7 @@ func (s *Server) applyMalleableProfile(c *gin.Context, resp *beaconResponse) {
 	c.Writer.WriteString(wrapped)
 }
 
-func (s *Server) applyProfilePreset(c *gin.Context, resp *beaconResponse, profile *malleable.Profile) {
-	body, err := json.Marshal(resp)
-	if err != nil {
-		return
-	}
-
+func (s *Server) applyProfilePreset(c *gin.Context, body []byte, profile *malleable.Profile) {
 	// Apply output transforms
 	if profile.HttpPost.Output != nil {
 		transformed, err := profile.HttpPost.Output.Apply(body, true)
@@ -82,30 +70,8 @@ func (s *Server) applyProfilePreset(c *gin.Context, resp *beaconResponse, profil
 	}
 	c.Header("Content-Type", ct)
 
-	c.Status(200)
+	c.Status(http.StatusOK)
 	c.Writer.WriteString(wrapped)
 }
 
-func (s *Server) MalleableInfo() string {
-	mp := s.cfg.Malleable
-	if !mp.Enabled {
-		return "Malleable C2 profile is disabled"
-	}
 
-	if mp.ProfileName != "" {
-		return fmt.Sprintf("Profile preset: %s\n", mp.ProfileName)
-	}
-
-	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Status: %d | Content-Type: %s\n", mp.StatusCode, mp.ContentType))
-	if mp.Prepend != "" {
-		b.WriteString(fmt.Sprintf("Prepend: %d bytes\n", len(mp.Prepend)))
-	}
-	if mp.Append != "" {
-		b.WriteString(fmt.Sprintf("Append: %d bytes\n", len(mp.Append)))
-	}
-	for k, v := range mp.Headers {
-		b.WriteString(fmt.Sprintf("Header: %s: %s\n", k, v))
-	}
-	return b.String()
-}

@@ -85,12 +85,6 @@ func (rl *APIRateLimiter) SetWhitelist(ips []string) {
 	}
 }
 
-func (rl *APIRateLimiter) AddWhitelist(ip string) {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	rl.whitelist[ip] = true
-}
-
 func (rl *APIRateLimiter) RemoveWhitelist(ip string) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -125,7 +119,7 @@ func (rl *APIRateLimiter) LimitByUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// WebSocket upgrades must not be rate-limited (long-lived connections).
 		switch c.Request.URL.Path {
-		case "/ws", "/ws/chat", "/ws/beacon":
+		case "/ws", "/ws/beacon":
 			c.Next()
 			return
 		}
@@ -181,52 +175,6 @@ func (rl *APIRateLimiter) LimitByUser() gin.HandlerFunc {
 	}
 }
 
-func (rl *APIRateLimiter) LimitByIP() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ip := c.ClientIP()
-		if ip == "" {
-			ip = "unknown"
-		}
-
-		rl.mu.Lock()
-		if rl.whitelist[ip] {
-			rl.mu.Unlock()
-			c.Next()
-			return
-		}
-		rl.mu.Unlock()
-
-		key := "ip:" + ip
-		bucket := rl.GetBucket(key)
-
-		limit := int(rl.capacity)
-		remaining := int(bucket.Tokens())
-		resetTime := time.Now().Add(time.Duration(float64(limit-remaining+1)/rl.rate) * time.Second).Unix()
-
-		c.Header("X-RateLimit-Limit", toString(limit))
-		c.Header("X-RateLimit-Remaining", toString(remaining-1))
-		c.Header("X-RateLimit-Reset", toString(resetTime))
-
-		if !bucket.Allow() {
-			retryAfter := int((1.0 - bucket.Tokens()) / rl.rate)
-			if retryAfter < 1 {
-				retryAfter = 1
-			}
-			c.Header("Retry-After", toString(retryAfter))
-			c.Header("X-RateLimit-Remaining", "0")
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error":       "rate_limit_exceeded",
-				"message":     "Too many requests. Please try again later.",
-				"retry_after": retryAfter,
-			})
-			c.Abort()
-			return
-		}
-
-		c.Next()
-	}
-}
-
 func (rl *APIRateLimiter) GetStatus() map[string]interface{} {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -255,30 +203,16 @@ func (rl *APIRateLimiter) getWhitelistSlice() []string {
 	return ips
 }
 
-func (rl *APIRateLimiter) UpdateConfig(capacity, rate float64) {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	rl.capacity = capacity
-	rl.rate = rate
-	for _, bucket := range rl.buckets {
-		bucket.capacity = capacity
-		bucket.rate = rate
-		if bucket.tokens > capacity {
-			bucket.tokens = capacity
-		}
-	}
-}
-
 func toString(v interface{}) string {
 	switch val := v.(type) {
 	case int:
-		return itoa(val)
+		return strconv.Itoa(val)
 	case int64:
-		return itoa(int(val))
+		return strconv.FormatInt(val, 10)
 	case uint:
-		return itoa(int(val))
+		return strconv.FormatUint(uint64(val), 10)
 	case float64:
-		return itoa(int(val))
+		return strconv.Itoa(int(val))
 	case string:
 		return val
 	default:
@@ -286,95 +220,4 @@ func toString(v interface{}) string {
 	}
 }
 
-func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	neg := false
-	if i < 0 {
-		neg = true
-		i = -i
-	}
-	var buf [20]byte
-	pos := len(buf)
-	for i > 0 {
-		pos--
-		buf[pos] = byte('0' + i%10)
-		i /= 10
-	}
-	if neg {
-		pos--
-		buf[pos] = '-'
-	}
-	return string(buf[pos:])
-}
 
-type RouteRateLimiter struct {
-	routes map[string]*APIRateLimiter
-	mu     sync.Mutex
-	defaultLimiter *APIRateLimiter
-	whitelist []string
-}
-
-func NewRouteRateLimiter(defaultCapacity, defaultRate float64) *RouteRateLimiter {
-	return &RouteRateLimiter{
-		routes:         make(map[string]*APIRateLimiter),
-		defaultLimiter: NewAPIRateLimiter(defaultCapacity, defaultRate),
-	}
-}
-
-func (rrl *RouteRateLimiter) SetRouteLimit(route string, capacity, rate float64) {
-	rrl.mu.Lock()
-	defer rrl.mu.Unlock()
-	rrl.routes[route] = NewAPIRateLimiter(capacity, rate)
-	rrl.routes[route].SetWhitelist(rrl.whitelist)
-}
-
-func (rrl *RouteRateLimiter) RemoveRouteLimit(route string) {
-	rrl.mu.Lock()
-	defer rrl.mu.Unlock()
-	delete(rrl.routes, route)
-}
-
-func (rrl *RouteRateLimiter) SetWhitelist(ips []string) {
-	rrl.mu.Lock()
-	defer rrl.mu.Unlock()
-	rrl.whitelist = ips
-	rrl.defaultLimiter.SetWhitelist(ips)
-	for _, rl := range rrl.routes {
-		rl.SetWhitelist(ips)
-	}
-}
-
-func (rrl *RouteRateLimiter) Middleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		route := c.FullPath()
-		if route == "" {
-			route = c.Request.URL.Path
-		}
-
-		rrl.mu.Lock()
-		limiter, exists := rrl.routes[route]
-		rrl.mu.Unlock()
-
-		if !exists {
-			limiter = rrl.defaultLimiter
-		}
-
-		handler := limiter.LimitByUser()
-		handler(c)
-	}
-}
-
-func (rrl *RouteRateLimiter) GetStatus() map[string]interface{} {
-	rrl.mu.Lock()
-	defer rrl.mu.Unlock()
-	routes := make(map[string]interface{})
-	for route, limiter := range rrl.routes {
-		routes[route] = limiter.GetStatus()
-	}
-	return map[string]interface{}{
-		"default": rrl.defaultLimiter.GetStatus(),
-		"routes":  routes,
-	}
-}

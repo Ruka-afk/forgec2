@@ -86,8 +86,5 @@ func (s *Server) handleExtC2Send(c *gin.Context) {
 	c.JSON(http.StatusOK, extC2SendResponse{Success: true})
 }
 
-func (s *Server) registerExtC2Routes(r *gin.RouterGroup) {
-	r.POST("/extc2/receive", s.handleExtC2Receive)
-	r.POST("/extc2/send", s.handleExtC2Send)
-}
+
 

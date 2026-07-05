@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"context"
@@ -49,17 +49,22 @@ func (m *MonitorCollector) collectMetrics() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		metrics := m.collectSystemMetrics()
-		m.mu.Lock()
-		m.lastMetrics = metrics
-		m.metricsHistory = append(m.metricsHistory, metrics)
-		if len(m.metricsHistory) > 60 {
-			m.metricsHistory = m.metricsHistory[len(m.metricsHistory)-60:]
-		}
-		m.mu.Unlock()
+	for {
+		select {
+		case <-m.server.ctx.Done():
+			return
+		case <-ticker.C:
+			metrics := m.collectSystemMetrics()
+			m.mu.Lock()
+			m.lastMetrics = metrics
+			m.metricsHistory = append(m.metricsHistory, metrics)
+			if len(m.metricsHistory) > 60 {
+				m.metricsHistory = m.metricsHistory[len(m.metricsHistory)-60:]
+			}
+			m.mu.Unlock()
 
-		go m.server.db.Create(&metrics)
+			go m.server.db.Create(&metrics)
+		}
 	}
 }
 
@@ -81,29 +86,24 @@ func (m *MonitorCollector) collectSystemMetrics() db.SystemMetric {
 	return metrics
 }
 
-func (m *MonitorCollector) getCPULoad() float64 {
-	return 0
-}
-
 func (m *MonitorCollector) getMemoryStats() struct{ used, total float64 } {
 	var mstats runtime.MemStats
 	runtime.ReadMemStats(&mstats)
 	return struct{ used, total float64 }{float64(mstats.Alloc), float64(mstats.Sys)}
 }
 
-func (m *MonitorCollector) getDiskStats() struct{ used, total float64 } {
-	// Return safe defaults to avoid division by zero
-	// Real implementation would use platform-specific calls
-	return struct{ used, total float64 }{0, 1} // Default: 0% used of 1 unit
-}
-
 func (m *MonitorCollector) checkAlerts() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		m.checkSystemAlerts()
-		m.checkAgentAlerts()
+	for {
+		select {
+		case <-m.server.ctx.Done():
+			return
+		case <-ticker.C:
+			m.checkSystemAlerts()
+			m.checkAgentAlerts()
+		}
 	}
 }
 
@@ -504,7 +504,7 @@ func (s *Server) handleScreenMonitorPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "screen_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) handleStartScreenMonitor(c *gin.Context) {
@@ -650,3 +650,4 @@ func (s *Server) handleScreenFrame(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
+

@@ -3,8 +3,8 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/binary"
-	"math/rand"
 	"sync"
 	"time"
 	"unsafe"
@@ -51,8 +51,8 @@ func InitSleepMask() bool {
 	sh := (*[maskBufferSize]byte)(unsafe.Pointer(ptr))
 	smState.buffer = sh[:]
 
-	for i := range smState.key {
-		smState.key[i] = byte(rand.Intn(256))
+	if _, err := rand.Read(smState.key[:]); err != nil {
+		return false
 	}
 	smState.keyIdx = 0
 

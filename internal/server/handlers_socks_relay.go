@@ -33,6 +33,9 @@ type socksRelayEngine struct {
 	sessions    map[string]*socksRelaySession // agentID → session
 	connections map[uint64]*socksRelayConn   // connID → conn
 	nextConnID  uint64
+
+	controlFrames   map[string][]socksFrame
+	controlFramesMu sync.Mutex
 }
 
 type socksRelaySession struct {
@@ -59,8 +62,9 @@ type socksRelayConn struct {
 
 func newSocksRelayEngine() *socksRelayEngine {
 	return &socksRelayEngine{
-		sessions:    make(map[string]*socksRelaySession),
-		connections: make(map[uint64]*socksRelayConn),
+		sessions:      make(map[string]*socksRelaySession),
+		connections:   make(map[uint64]*socksRelayConn),
+		controlFrames: make(map[string][]socksFrame),
 	}
 }
 
@@ -96,7 +100,9 @@ func (e *socksRelayEngine) startSession(s *Server, agentID string, port int) (in
 		ListenPort: actualPort,
 		Status:     "active",
 	}
-	s.db.Create(&session)
+	if err := s.db.Create(&session).Error; err != nil {
+		slog.Error("Failed to persist SOCKS session", "agent", agentID, "err", err)
+	}
 	sess.dbID = session.ID
 
 	e.sessions[agentID] = sess
@@ -130,10 +136,12 @@ func (e *socksRelayEngine) stopSession(s *Server, agentID string) error {
 	}
 	e.mu.Unlock()
 
-	s.db.Model(&db.SocksSession{}).Where("id = ?", sess.dbID).Updates(map[string]interface{}{
+	if err := s.db.Model(&db.SocksSession{}).Where("id = ?", sess.dbID).Updates(map[string]interface{}{
 		"status":     "stopped",
 		"updated_at": time.Now(),
-	})
+	}).Error; err != nil {
+		slog.Error("Failed to update SOCKS session on stop", "session_id", sess.dbID, "err", err)
+	}
 
 	slog.Info("SOCKS relay stopped", "agent", agentID, "port", sess.port)
 	return nil
@@ -196,26 +204,44 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 	}
 
 	var destAddr string
+	readAddr := func(b []byte) error {
+		_, err := io.ReadFull(conn, b)
+		return err
+	}
 	switch reqHeader[3] {
 	case 0x01: // IPv4
 		ip := make([]byte, 4)
 		portb := make([]byte, 2)
-		io.ReadFull(conn, ip)
-		io.ReadFull(conn, portb)
+		if err := readAddr(ip); err != nil {
+			return
+		}
+		if err := readAddr(portb); err != nil {
+			return
+		}
 		destAddr = fmt.Sprintf("%d.%d.%d.%d:%d", ip[0], ip[1], ip[2], ip[3], int(portb[0])<<8|int(portb[1]))
 	case 0x03: // Domain
 		lb := make([]byte, 1)
-		io.ReadFull(conn, lb)
+		if err := readAddr(lb); err != nil {
+			return
+		}
 		dom := make([]byte, int(lb[0]))
-		io.ReadFull(conn, dom)
+		if err := readAddr(dom); err != nil {
+			return
+		}
 		portb := make([]byte, 2)
-		io.ReadFull(conn, portb)
+		if err := readAddr(portb); err != nil {
+			return
+		}
 		destAddr = fmt.Sprintf("%s:%d", string(dom), int(portb[0])<<8|int(portb[1]))
 	case 0x04: // IPv6
 		ip := make([]byte, 16)
 		portb := make([]byte, 2)
-		io.ReadFull(conn, ip)
-		io.ReadFull(conn, portb)
+		if err := readAddr(ip); err != nil {
+			return
+		}
+		if err := readAddr(portb); err != nil {
+			return
+		}
 		destAddr = fmt.Sprintf("[%s]:%d", net.IP(ip).String(), int(portb[0])<<8|int(portb[1]))
 	default:
 		conn.Write([]byte{0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
@@ -232,7 +258,6 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 	}
 	if activeConns >= SocksMaxConns {
 		e.mu.Unlock()
-		// SOCKS5 reply: Connection not allowed by ruleset
 		conn.Write([]byte{0x05, 0x02, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 		slog.Warn("SOCKS relay: max connections reached", "agent", sess.agentID, "limit", SocksMaxConns)
 		return
@@ -257,10 +282,12 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 	sess.mu.Unlock()
 
 	// Update database atomically
-	s.db.Model(&db.SocksSession{}).Where("id = ?", sess.dbID).Updates(map[string]interface{}{
+	if err := s.db.Model(&db.SocksSession{}).Where("id = ?", sess.dbID).Updates(map[string]interface{}{
 		"conn_count": countCopy,
 		"updated_at": time.Now(),
-	})
+	}).Error; err != nil {
+		slog.Error("Failed to update SOCKS conn_count", "session_id", sess.dbID, "err", err)
+	}
 
 	// Send connect frame to agent
 	e.enqueueFrame(sess.agentID, socksFrame{
@@ -311,12 +338,6 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 
 // ─── Frame Queue ─────────────────────────────────────────────────────────────
 
-// controlFrames stores control frames (connect/close) per agent session.
-var (
-	controlFramesMu sync.Mutex
-	controlFrames   = make(map[string][]socksFrame)
-)
-
 // enqueueFrame adds a frame to the relay queue.
 // "data" frames go to the connection's outbound buffer.
 // Control frames (connect/close) go to the session-level control queue.
@@ -327,15 +348,19 @@ func (e *socksRelayEngine) enqueueFrame(agentID string, f socksFrame) {
 		e.mu.Unlock()
 		if ok {
 			conn.mu.Lock()
-			conn.outbound = append(conn.outbound, f.Data)
+			if len(conn.outbound) < 500 {
+				conn.outbound = append(conn.outbound, f.Data)
+			}
 			conn.mu.Unlock()
 		}
 		return
 	}
-	// Control frame
-	controlFramesMu.Lock()
-	controlFrames[agentID] = append(controlFrames[agentID], f)
-	controlFramesMu.Unlock()
+	// Control frame — bounds protect (max 200 per agent)
+	e.controlFramesMu.Lock()
+	if len(e.controlFrames[agentID]) < 200 {
+		e.controlFrames[agentID] = append(e.controlFrames[agentID], f)
+	}
+	e.controlFramesMu.Unlock()
 }
 
 // collectPendingFrames gathers all pending frames for an agent.
@@ -343,12 +368,12 @@ func (e *socksRelayEngine) collectPendingFrames(agentID string) []socksFrame {
 	var frames []socksFrame
 
 	// 1. Control frames first (connect/close must arrive before data)
-	controlFramesMu.Lock()
-	if cf, ok := controlFrames[agentID]; ok && len(cf) > 0 {
+	e.controlFramesMu.Lock()
+	if cf, ok := e.controlFrames[agentID]; ok && len(cf) > 0 {
 		frames = append(frames, cf...)
-		controlFrames[agentID] = nil
+		e.controlFrames[agentID] = nil
 	}
-	controlFramesMu.Unlock()
+	e.controlFramesMu.Unlock()
 
 	// 2. Data frames from connections
 	e.mu.Lock()
@@ -400,7 +425,13 @@ func (e *socksRelayEngine) processAgentData(s *Server, agentID string, frames []
 			if ok && len(f.Data) > 0 {
 				conn.mu.Lock()
 				conn.tcpConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-				conn.tcpConn.Write(f.Data)
+				if _, err := conn.tcpConn.Write(f.Data); err != nil {
+					slog.Warn("SOCKS relay: write to operator failed, closing conn",
+						"conn", f.ConnID, "error", err)
+					conn.tcpConn.Close()
+					conn.mu.Unlock()
+					continue
+				}
 				conn.tcpConn.SetWriteDeadline(time.Time{})
 				conn.lastActive = time.Now()
 				conn.mu.Unlock()
@@ -545,7 +576,7 @@ func (s *Server) handleGetSocksSessions(c *gin.Context) {
 	if agentID := c.Query("agent_id"); agentID != "" {
 		q = q.Where("agent_id = ?", agentID)
 	}
-	q.Find(&sessions)
+	q.Limit(50).Find(&sessions)
 
 	// Enrich with live status
 	type enrichedSession struct {
@@ -596,7 +627,12 @@ func (s *Server) hasActiveSocks(agentID string) bool {
 func (s *Server) cleanupStaleSocks() {
 	ticker := time.NewTicker(SocksCleanupTimeout)
 	defer ticker.Stop()
-	for range ticker.C {
-		s.socksEngine.cleanup()
+	for {
+		select {
+		case <-ticker.C:
+			s.socksEngine.cleanup()
+		case <-s.ctx.Done():
+			return
+		}
 	}
 }

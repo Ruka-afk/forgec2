@@ -16,29 +16,36 @@ const (
 	EventTaskComplete      EventType = "task.complete"
 	EventTaskFail          EventType = "task.fail"
 	EventCredentialFound   EventType = "credential.found"
-	EventAlertTriggered    EventType = "alert.triggered"
+	_                     EventType = "alert.triggered" // reserved
 )
 
 type Event struct {
 	Type      EventType
 	AgentID   string
 	AgentHost string
+	AgentIP   string
+	AgentOS   string
+	User      string
 	Timestamp time.Time
 	Data      map[string]interface{}
 }
 
 type EventHandler func(Event)
 
+const maxConcurrentEventHandlers = 32
+
 type EventManager struct {
-	mu       sync.RWMutex
-	handlers map[EventType][]EventHandler
-	db       *gorm.DB
+	mu          sync.RWMutex
+	handlers    map[EventType][]EventHandler
+	db          *gorm.DB
+	workerSem   chan struct{}
 }
 
 func NewEventManager(database *gorm.DB) *EventManager {
 	return &EventManager{
-		handlers: make(map[EventType][]EventHandler),
-		db:       database,
+		handlers:  make(map[EventType][]EventHandler),
+		db:        database,
+		workerSem: make(chan struct{}, maxConcurrentEventHandlers),
 	}
 }
 
@@ -55,8 +62,10 @@ func (em *EventManager) Emit(evt Event) {
 	em.mu.RUnlock()
 
 	for _, h := range handlers {
+		em.workerSem <- struct{}{}
 		go func(handler EventHandler) {
 			defer func() {
+				<-em.workerSem
 				if r := recover(); r != nil {
 					slog.Error("event handler panic", "panic", r)
 				}

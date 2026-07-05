@@ -1,6 +1,6 @@
 ---
 name: fix-ui-page
-description: Fix ForgeC2 UI page issues — button binding, tabs, and bundle refresh checklist
+description: Fix ForgeC2 Next.js UI page issues — button handlers, API wiring, tabs. Use for frontend bugs on :3000.
 license: MIT
 compatibility: grok
 metadata:
@@ -10,56 +10,51 @@ metadata:
 
 ## When to use
 
-Button clicks do nothing, tabs fail to switch, or UI changes do not appear after edits.
+Button clicks do nothing, API calls fail, tabs don't switch, or page changes don't appear after edits on the **Next.js UI** (`:3000`).
 
-**CSS / styling issues** (missing cards, wrong colors, theme toggle) → use `fix-ui-style` skill instead.
+**CSS / theme issues** → use `fix-ui-style` skill.
 
-## Button binding checklist
+## Architecture
 
-ForgeC2 uses a delegated action system in `internal/server/templates/static/js/layout.js`:
+| Layer | Path |
+|-------|------|
+| Pages | `frontend/src/app/<route>/page.tsx` |
+| Components | `frontend/src/components/` |
+| API client | `frontend/src/lib/api.ts` (`apiGet`, `apiPostJson`, `apiSend`, `apiDelete`) |
+| Proxy | `frontend/src/app/api/go/route.ts` → Go `:8080` |
+| i18n | `frontend/src/lib/i18n.tsx` |
+| Theme | `frontend/src/lib/theme.tsx` |
 
-1. **HTML**: add `data-action="your_action"` on the button, link, or form.
-2. **JS**: register handler in `window.GlobalActionHandlers`:
+## Button / action checklist
 
-```js
-window.GlobalActionHandlers = window.GlobalActionHandlers || {};
-window.GlobalActionHandlers.your_action = function(el, e) {
-    // read el.dataset.* for parameters
-};
-```
-
-3. **Avoid inline `onclick`** for new code — prefer `data-action` so `initGlobalActionHandler()` picks it up.
-4. **Forms**: set `data-action` on the `<form>`; submit is intercepted automatically.
-5. **CSRF**: POST requests need `X-CSRF-Token` header (read from cookie `csrf_token`).
+1. **Handler**: wire `onClick` or form `onSubmit` in the page component (React, not `data-action`).
+2. **API call**: use `apiGet("/path")` or `apiPostJson("/path", body)` — paths match Go routes (e.g. `/agents/batch`).
+3. **Credentials**: `api.ts` helpers include `credentials: "include"` for session cookies.
+4. **Feedback**: toast, `actionMsg` banner, or `ConfirmModal` from `@/components/UI`.
+5. **Reload data**: call your `load*` function after mutation, don't rely on `location.reload()`.
 
 ## Tabs checklist
 
-Common pattern (see `agent-detail.js`):
+- Use React state: `const [tab, setTab] = useState("overview")`
+- Toggle panels with conditional render or `hidden` class
+- Sub-routes alternative: `/agents/[id]/shell`, `/files`, `/tasks` as separate pages
 
-- Tab buttons: `class="tab-btn"` + `data-tab="overview"`
-- Tab panels: `id="tab-overview"` + `class="tab-content hidden"`
-- Switch function: `switchTab(tab)` toggles `.hidden` and active styles on `.tab-btn[data-tab="..."]`
-- Export to `window.switchTab` if called from inline HTML
-- On `DOMContentLoaded`, call `switchTab(defaultTab)` for the initial panel
+## After code changes
 
-## Bundle refresh checklist
+```powershell
+cd frontend
+npm run build    # production
+# or npm run dev  # development (hot reload)
+```
 
-| Step | Action |
-|------|--------|
-| 1 | Edit source in `internal/server/templates/static/js/<page>.js` |
-| 2 | Register page in `pageScriptMap` (`internal/server/page_assets.go`) if new page |
-| 3 | Run `powershell -File build_js.ps1` (or `make build-js`) |
-| 4 | Hard-refresh browser (Ctrl+Shift+R) |
-| 5 | If still stale, use `make dev` (`FORGEC2_DEV=1`) to load unbundled scripts |
+If Go handler changed too: `go build -o forgec2-server.exe ./cmd/server` and restart API.
 
-## Handler / template checks
+## Legacy Go templates
 
-- Handler must call `s.renderPage(c, "<name>_content", data)` with all template fields
-- Missing `{{tr .Lang "key"}}` keys show raw key names — add to `locales.go`
-- Check browser DevTools → Network for 4xx/5xx on API calls
+Old `data-action` + `layout.js` pattern still exists in `internal/server/templates/static/js/` for `:8080` fallback. **Do not use for new UI work** — edit Next.js instead.
 
 ## Verify
 
-- Click handlers fire (no console errors)
-- Tabs switch and correct panel is visible
-- Bundled JS timestamp/size changes after rebuild
+- DevTools → Network: `/api/go?p=...` returns 200
+- No console errors on click
+- Hard refresh if testing production build (`next start`)

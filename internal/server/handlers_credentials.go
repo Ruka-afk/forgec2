@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"encoding/csv"
@@ -168,7 +168,7 @@ func parseCredentialsFromText(raw string, agentID string, taskID uint) []db.Cred
 		}
 	}
 
-	// Pattern 2: SAM hash dump format — username:rid:lmhash:nthash:::
+	// Pattern 2: SAM hash dump format 鈥?username:rid:lmhash:nthash:::
 	for _, line := range strings.Split(raw, "\n") {
 		if m := credReSAM.FindStringSubmatch(strings.TrimSpace(line)); len(m) > 4 {
 			entries = append(entries, db.CredentialEntry{
@@ -296,7 +296,7 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "credentials_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) handleExportCredentials(c *gin.Context) {
@@ -486,5 +486,6 @@ func (s *Server) handleToggleConfirmed(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "confirmed": cred.Confirmed})
 }
+
 
 

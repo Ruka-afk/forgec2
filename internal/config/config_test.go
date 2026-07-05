@@ -14,8 +14,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Server.Host != "0.0.0.0" {
 		t.Errorf("expected host 0.0.0.0, got %s", cfg.Server.Host)
 	}
-	if cfg.Implant.DefaultInterval != 10 {
-		t.Errorf("expected interval 10, got %d", cfg.Implant.DefaultInterval)
+	if cfg.Implant.DefaultInterval != 5 {
+		t.Errorf("expected interval 5, got %d", cfg.Implant.DefaultInterval)
 	}
 	if cfg.Implant.DefaultJitter != 20 {
 		t.Errorf("expected jitter 20, got %d", cfg.Implant.DefaultJitter)

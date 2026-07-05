@@ -1,8 +1,11 @@
-package server
+﻿package server
 
 import (
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -54,7 +57,7 @@ func (s *Server) handleReportPage(c *gin.Context) {
 		"StartDate":      startDate.Format("2006-01-02"),
 		"EndDate":        time.Now().Format("2006-01-02"),
 	}
-	s.renderPage(c, "report_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 // handleGenerateReport generates a comprehensive report
@@ -246,12 +249,12 @@ func generateHTMLReport(report gin.H) string {
 </head>
 <body>
     <div class="container">
-        <h1>🛡️ %s</h1>
+        <h1>馃洝锔?%s</h1>
         <div class="meta">
             Generated: %s | Date Range: %s
         </div>
 
-        <h2>📊 Summary</h2>
+        <h2>馃搳 Summary</h2>
         <div class="stats">
             <div class="stat-card">
                 <div class="stat-value">%d</div>
@@ -277,7 +280,7 @@ func generateHTMLReport(report gin.H) string {
 
 	// Agents table
 	if len(agents) > 0 {
-		html += `<h2>🤖 Agents</h2>
+		html += `<h2>馃 Agents</h2>
 <table>
     <tr><th>Hostname</th><th>OS</th><th>IP</th><th>User</th><th>Status</th><th>Created</th></tr>
 `
@@ -297,7 +300,7 @@ func generateHTMLReport(report gin.H) string {
 
 	// Tasks table
 	if len(tasks) > 0 {
-		html += `<h2>📋 Tasks</h2>
+		html += `<h2>馃搵 Tasks</h2>
 <table>
     <tr><th>Type</th><th>Command</th><th>Agent</th><th>Status</th><th>Created</th></tr>
 `
@@ -316,7 +319,7 @@ func generateHTMLReport(report gin.H) string {
 
 	// Credentials table
 	if len(creds) > 0 {
-		html += `<h2>🔑 Credentials</h2>
+		html += `<h2>馃攽 Credentials</h2>
 <table>
     <tr><th>Type</th><th>Username</th><th>Source</th><th>Agent</th><th>Created</th></tr>
 `
@@ -329,7 +332,7 @@ func generateHTMLReport(report gin.H) string {
 
 	// Audit table
 	if len(audits) > 0 {
-		html += `<h2>📝 Audit Log</h2>
+		html += `<h2>馃摑 Audit Log</h2>
 <table>
     <tr><th>User</th><th>Action</th><th>Details</th><th>Success</th><th>Created</th></tr>
 `
@@ -354,3 +357,288 @@ func generateHTMLReport(report gin.H) string {
 
 	return html
 }
+
+func parseReportDates(c *gin.Context) (time.Time, time.Time) {
+	startStr := c.Query("start")
+	endStr := c.Query("end")
+	var startDate, endDate time.Time
+	if startStr != "" {
+		startDate, _ = time.Parse("2006-01-02", startStr)
+	}
+	if endStr != "" {
+		endDate, _ = time.Parse("2006-01-02", endStr)
+		endDate = endDate.Add(24*time.Hour - time.Second)
+	}
+	if startDate.IsZero() {
+		startDate = time.Now().AddDate(0, -1, 0)
+	}
+	if endDate.IsZero() {
+		endDate = time.Now()
+	}
+	return startDate, endDate
+}
+
+func (s *Server) handleAPIGetReportAgents(c *gin.Context) {
+	startDate, endDate := parseReportDates(c)
+	var agents []db.Implant
+	s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Find(&agents)
+	agentList := make([]gin.H, 0, len(agents))
+	for _, a := range agents {
+		agentList = append(agentList, gin.H{
+			"id": a.ID, "hostname": a.Hostname, "os": a.OS, "ip": a.IP,
+			"user": a.Username, "status": a.Status, "created": a.CreatedAt.Format("2006-01-02 15:04:05"),
+			"version": a.Version, "integrity": a.Integrity,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"agents": agentList})
+}
+
+func (s *Server) handleAPIGetReportTasks(c *gin.Context) {
+	startDate, endDate := parseReportDates(c)
+	var tasks []db.Task
+	s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(200).Find(&tasks)
+	stats := gin.H{
+		"total":     len(tasks),
+		"completed": 0,
+		"failed":    0,
+		"pending":   0,
+	}
+	taskList := make([]gin.H, 0, len(tasks))
+	for _, t := range tasks {
+		entry := gin.H{
+			"id": t.ID, "agent": t.AgentID, "type": t.Type,
+			"command": t.Command, "status": t.Status, "created": t.CreatedAt.Format("2006-01-02 15:04:05"),
+		}
+		taskList = append(taskList, entry)
+		switch t.Status {
+		case "completed":
+			stats["completed"] = stats["completed"].(int) + 1
+		case "failed", "error":
+			stats["failed"] = stats["failed"].(int) + 1
+		default:
+			stats["pending"] = stats["pending"].(int) + 1
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"stats": stats, "tasks": taskList})
+}
+
+func (s *Server) handleAPIGetReportCredentials(c *gin.Context) {
+	startDate, endDate := parseReportDates(c)
+	var creds []db.CredentialEntry
+	s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(100).Find(&creds)
+	credList := make([]gin.H, 0, len(creds))
+	for _, c := range creds {
+		credList = append(credList, gin.H{
+			"id": c.ID, "agent": c.AgentID, "type": c.Type,
+			"username": c.Username, "source": c.Source, "host": c.Domain,
+			"created": c.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"credentials": credList})
+}
+
+func (s *Server) handleAPIGetReportNetwork(c *gin.Context) {
+	var hosts []db.NetworkHost
+	s.db.Order("last_seen desc").Limit(100).Find(&hosts)
+	hostList := make([]gin.H, 0, len(hosts))
+	for _, h := range hosts {
+		hostList = append(hostList, gin.H{
+			"id": h.ID, "agent": h.AgentID, "ip": h.IP,
+			"hostname": h.Hostname, "os": h.OS, "services": h.Services,
+			"last_seen": h.LastSeen.Format("2006-01-02 15:04:05"),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"listeners": hostList})
+}
+
+func (s *Server) handleAPIGetReportFindings(c *gin.Context) {
+	startDate, endDate := parseReportDates(c)
+	var creds []db.CredentialEntry
+	s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(50).Find(&creds)
+	findings := make([]gin.H, 0)
+	for _, c := range creds {
+		findings = append(findings, gin.H{
+			"severity": "medium",
+			"title":    fmt.Sprintf("Credential Found: %s", c.Type),
+			"detail":   fmt.Sprintf("Username %s found on %s via %s", c.Username, c.Domain, c.Source),
+			"source":   c.AgentID,
+			"created":  c.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+	var tasks []db.Task
+	s.db.Where("status = ? AND created_at BETWEEN ? AND ?", "failed", startDate, endDate).Order("created_at desc").Limit(50).Find(&tasks)
+	for _, t := range tasks {
+		findings = append(findings, gin.H{
+			"severity": "low",
+			"title":    fmt.Sprintf("Task Failed: %s", t.Type),
+			"detail":   fmt.Sprintf("Task %s on agent %s: %s", t.Type, t.AgentID, t.Error),
+			"source":   t.AgentID,
+			"created":  t.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"findings": findings})
+}
+
+func (s *Server) handleAPIGetReportHistory(c *gin.Context) {
+	var reports []db.GeneratedReport
+	s.db.Order("created_at desc").Limit(20).Find(&reports)
+	reportList := make([]gin.H, 0, len(reports))
+	for _, r := range reports {
+		var sections []string
+		if r.Sections != "" {
+			json.Unmarshal([]byte(r.Sections), &sections)
+		}
+		reportList = append(reportList, gin.H{
+			"id": r.ID, "name": r.Name, "template": r.Template,
+			"format": r.Format, "sections": sections,
+			"created": r.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"reports": reportList})
+}
+
+func (s *Server) handleAPIExportReportPDF(c *gin.Context) {
+	startDate, endDate := parseReportDates(c)
+	template := c.DefaultQuery("template", "technical")
+
+	req := struct {
+		StartDate string   `json:"start_date"`
+		EndDate   string   `json:"end_date"`
+		Sections  []string `json:"sections"`
+		Template  string   `json:"template"`
+		Format    string   `json:"format"`
+	}{
+		StartDate: startDate.Format("2006-01-02"),
+		EndDate:   endDate.Format("2006-01-02"),
+		Template:  template,
+		Format:    "html",
+	}
+
+	switch template {
+	case "technical":
+		req.Sections = []string{"summary", "agents", "tasks", "credentials", "network", "findings", "recommendations"}
+	case "executive":
+		req.Sections = []string{"overview", "recommendations"}
+	default:
+		req.Sections = []string{"summary", "agents", "tasks", "credentials", "network"}
+	}
+
+	report := s.buildReportData(req.StartDate, req.EndDate, req.Sections)
+	html := generateHTMLReport(report)
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+}
+
+func (s *Server) handleAPIDeleteReport(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid report id"})
+		return
+	}
+	if err := s.db.Delete(&db.GeneratedReport{}, id).Error; err != nil {
+		slog.Error("Failed to delete report", "id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete report"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// buildReportData constructs a gin.H report matching the format expected by generateHTMLReport
+func (s *Server) buildReportData(startDate, endDate string, sections []string) gin.H {
+	start, _ := time.Parse("2006-01-02", startDate)
+	end, _ := time.Parse("2006-01-02", endDate)
+	end = end.Add(24*time.Hour - time.Second)
+
+	report := gin.H{
+		"title":       "ForgeC2 Action Report",
+		"generated":   time.Now().Format("2006-01-02 15:04:05"),
+		"date_range":  fmt.Sprintf("%s to %s", startDate, endDate),
+		"summary":     gin.H{},
+		"agents":      []gin.H{},
+		"tasks":       []gin.H{},
+		"credentials": []gin.H{},
+		"audit":       []gin.H{},
+	}
+
+	sectionSet := make(map[string]bool, len(sections))
+	for _, s := range sections {
+		sectionSet[s] = true
+	}
+
+	var agentCount, taskCount, credCount, auditCount int64
+	if sectionSet["agents"] || sectionSet["summary"] {
+		s.db.Model(&db.Implant{}).Where("created_at BETWEEN ? AND ?", start, end).Count(&agentCount)
+	}
+	if sectionSet["tasks"] || sectionSet["summary"] {
+		s.db.Model(&db.Task{}).Where("created_at BETWEEN ? AND ?", start, end).Count(&taskCount)
+	}
+	if sectionSet["credentials"] || sectionSet["summary"] {
+		s.db.Model(&db.CredentialEntry{}).Where("created_at BETWEEN ? AND ?", start, end).Count(&credCount)
+	}
+	if sectionSet["audit"] || sectionSet["summary"] {
+		s.db.Model(&db.AuditLog{}).Where("created_at BETWEEN ? AND ?", start, end).Count(&auditCount)
+	}
+
+	report["summary"] = gin.H{
+		"total_agents": agentCount,
+		"total_tasks":  taskCount,
+		"total_creds":  credCount,
+		"total_audits": auditCount,
+		"success_rate": fmt.Sprintf("%.1f%%", float64(taskCount)/float64(agentCount+1)*100),
+	}
+
+	if sectionSet["agents"] {
+		var agents []db.Implant
+		s.db.Where("created_at BETWEEN ? AND ?", start, end).Order("created_at desc").Find(&agents)
+		agentList := make([]gin.H, 0, len(agents))
+		for _, a := range agents {
+			agentList = append(agentList, gin.H{
+				"id": a.ID, "hostname": a.Hostname, "os": a.OS, "ip": a.IP,
+				"user": a.Username, "status": a.Status, "created": a.CreatedAt.Format("2006-01-02 15:04:05"),
+			})
+		}
+		report["agents"] = agentList
+	}
+
+	if sectionSet["tasks"] {
+		var tasks []db.Task
+		s.db.Where("created_at BETWEEN ? AND ?", start, end).Order("created_at desc").Limit(100).Find(&tasks)
+		taskList := make([]gin.H, 0, len(tasks))
+		for _, t := range tasks {
+			taskList = append(taskList, gin.H{
+				"id": t.ID, "agent": t.AgentID, "type": t.Type,
+				"command": t.Command, "status": t.Status, "created": t.CreatedAt.Format("2006-01-02 15:04:05"),
+			})
+		}
+		report["tasks"] = taskList
+	}
+
+	if sectionSet["credentials"] {
+		var creds []db.CredentialEntry
+		s.db.Where("created_at BETWEEN ? AND ?", start, end).Order("created_at desc").Limit(100).Find(&creds)
+		credList := make([]gin.H, 0, len(creds))
+		for _, c := range creds {
+			credList = append(credList, gin.H{
+				"id": c.ID, "agent": c.AgentID, "type": c.Type,
+				"username": c.Username, "source": c.Source, "created": c.CreatedAt.Format("2006-01-02 15:04:05"),
+			})
+		}
+		report["credentials"] = credList
+	}
+
+	if sectionSet["audit"] {
+		var audits []db.AuditLog
+		s.db.Where("created_at BETWEEN ? AND ?", start, end).Order("created_at desc").Limit(100).Find(&audits)
+		auditList := make([]gin.H, 0, len(audits))
+		for _, a := range audits {
+			auditList = append(auditList, gin.H{
+				"id": a.ID, "user": a.User, "action": a.Action,
+				"details": a.Details, "success": a.Success, "created": a.CreatedAt.Format("2006-01-02 15:04:05"),
+			})
+		}
+		report["audit"] = auditList
+	}
+
+	return report
+}
+

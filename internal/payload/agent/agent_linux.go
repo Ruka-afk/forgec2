@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 )
 
 // Linux platform stubs. Screenshot / advanced features can be extended later
@@ -125,7 +126,7 @@ func keyloggerLoop() {
 		fmt.Println("[*] Keylogger not supported on Linux agent (requires input device access)")
 	}
 	// immediately stop so it doesn't hang
-	keylogActive = false
+	atomic.StoreInt32(&keylogActive, 0)
 }
 
 func suspendProcessWindows(target string) (string, error) {

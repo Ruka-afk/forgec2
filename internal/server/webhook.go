@@ -17,7 +17,7 @@ type WebhookEntry struct {
 
 func (s *Server) triggerWebhooks(evt Event) {
 	var webhooks []db.WebhookConfig
-	s.db.Where("event_type = ? AND enabled = ?", string(evt.Type), true).Find(&webhooks)
+	s.db.Where("event_type = ? AND enabled = ?", string(evt.Type), true).Limit(200).Find(&webhooks)
 
 	for _, wh := range webhooks {
 		go s.fireWebhook(wh, evt)
@@ -25,13 +25,17 @@ func (s *Server) triggerWebhooks(evt Event) {
 }
 
 func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
-	payload, _ := json.Marshal(map[string]interface{}{
+	payload, err := json.Marshal(map[string]interface{}{
 		"event":     evt.Type,
 		"agent_id":  evt.AgentID,
 		"hostname":  evt.AgentHost,
 		"timestamp": evt.Timestamp,
 		"data":      evt.Data,
 	})
+	if err != nil {
+		slog.Error("webhook marshal payload failed", "error", err)
+		return
+	}
 
 	req, err := http.NewRequest(wh.Method, wh.URL, bytes.NewReader(payload))
 	if err != nil {
@@ -57,10 +61,12 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 	}
 	resp.Body.Close()
 
-	_ = s.db.Create(&db.AuditLog{
+	if err := s.db.Create(&db.AuditLog{
 		User:    "system",
 		Action:  "webhook",
 		Success: resp.StatusCode >= 200 && resp.StatusCode < 300,
 		Details: fmt.Sprintf("Webhook %s -> %s: %d", wh.Name, wh.URL, resp.StatusCode),
-	})
+	}).Error; err != nil {
+		slog.Error("failed to create webhook audit log", "error", err)
+	}
 }

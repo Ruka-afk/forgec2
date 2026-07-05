@@ -14,7 +14,11 @@ func (s *Server) LogAuditRecord(c *gin.Context, action, resource, agentID, detai
 	var user string
 	if c != nil {
 		if u, exists := c.Get("user"); exists {
-			user = u.(string)
+			if us, ok := u.(string); ok {
+				user = us
+			} else {
+				user = "system"
+			}
 		} else {
 			user = "system"
 		}

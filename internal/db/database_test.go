@@ -26,10 +26,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&TokenEntry{},
 		&SocksSession{},
 		&BuildLog{},
-		&AgentLock{},
 		&ScanResult{},
-		&ChatMessage{},
-		&OperatorNote{},
 		&NetworkHost{},
 		&CommandTemplate{},
 		&BOFFile{},
@@ -892,44 +889,26 @@ func TestRolePermissions(t *testing.T) {
 		}
 	})
 
-	t.Run("operator has expected permissions", func(t *testing.T) {
-		operatorPerms := GetPermissionsForRole(RoleOperator)
-		if len(operatorPerms) == 0 {
-			t.Error("operator should have permissions")
+	t.Run("user has expected permissions", func(t *testing.T) {
+		userPerms := GetPermissionsForRole(RoleUser)
+		if len(userPerms) == 0 {
+			t.Error("user should have permissions")
 		}
 
-		if !RoleHasPermission(RoleOperator, PermAgentsRead) {
-			t.Error("operator should have agents.read")
+		if !RoleHasPermission(RoleUser, PermAgentsRead) {
+			t.Error("user should have agents.read")
 		}
-		if !RoleHasPermission(RoleOperator, PermAgentsWrite) {
-			t.Error("operator should have agents.write")
+		if !RoleHasPermission(RoleUser, PermAgentsWrite) {
+			t.Error("user should have agents.write")
 		}
-		if !RoleHasPermission(RoleOperator, PermAgentsDelete) {
-			t.Error("operator should have agents.delete")
+		if !RoleHasPermission(RoleUser, PermAgentsDelete) {
+			t.Error("user should have agents.delete")
 		}
 	})
 
-	t.Run("viewer has read-only permissions", func(t *testing.T) {
-		if !RoleHasPermission(RoleViewer, PermAgentsRead) {
-			t.Error("viewer should have agents.read")
-		}
-		if RoleHasPermission(RoleViewer, PermAgentsWrite) {
-			t.Error("viewer should not have agents.write")
-		}
-		if RoleHasPermission(RoleViewer, PermUsersWrite) {
-			t.Error("viewer should not have users.write")
-		}
-	})
-
-	t.Run("guest has minimal permissions", func(t *testing.T) {
-		if !RoleHasPermission(RoleGuest, PermAgentsRead) {
-			t.Error("guest should have agents.read")
-		}
-		if RoleHasPermission(RoleGuest, PermCredsRead) {
-			t.Error("guest should not have credentials.read")
-		}
-		if RoleHasPermission(RoleGuest, PermAuditRead) {
-			t.Error("guest should not have audit.read")
+	t.Run("user does not have users.write", func(t *testing.T) {
+		if RoleHasPermission(RoleUser, PermUsersWrite) {
+			t.Error("user should not have users.write")
 		}
 	})
 
@@ -942,8 +921,8 @@ func TestRolePermissions(t *testing.T) {
 
 	t.Run("get all roles", func(t *testing.T) {
 		roles := GetAllRoles()
-		if len(roles) != 4 {
-			t.Errorf("expected 4 roles, got %d", len(roles))
+		if len(roles) != 2 {
+			t.Errorf("expected 2 roles, got %d", len(roles))
 		}
 	})
 
@@ -962,7 +941,7 @@ func TestUserCRUD(t *testing.T) {
 		user := &User{
 			Username:     "testuser",
 			PasswordHash: "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
-			Role:         RoleOperator,
+			Role:         RoleUser,
 			IsActive:     true,
 		}
 
@@ -981,15 +960,15 @@ func TestUserCRUD(t *testing.T) {
 		if result.Error != nil {
 			t.Fatalf("failed to find user by username: %v", result.Error)
 		}
-		if user.Role != RoleOperator {
-			t.Errorf("expected role '%s', got '%s'", RoleOperator, user.Role)
+		if user.Role != RoleUser {
+			t.Errorf("expected role '%s', got '%s'", RoleUser, user.Role)
 		}
 	})
 
 	t.Run("update user last login", func(t *testing.T) {
 		user := &User{
 			Username: "logintest",
-			Role:     RoleViewer,
+			Role:     RoleUser,
 			IsActive: true,
 		}
 		db.Create(user)
@@ -1010,7 +989,7 @@ func TestUserCRUD(t *testing.T) {
 	t.Run("deactivate user", func(t *testing.T) {
 		user := &User{
 			Username: "soontodisable",
-			Role:     RoleViewer,
+			Role:     RoleUser,
 			IsActive: true,
 		}
 		db.Create(user)

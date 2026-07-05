@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -33,7 +34,9 @@ func (s *Server) tryRegisterPluginFromDisk(name string) {
 	if err != nil {
 		return
 	}
-	_ = s.pluginManager.Register(manifest)
+	if err := s.pluginManager.Register(manifest); err != nil {
+		slog.Error("failed to register plugin", "name", name, "error", err)
+	}
 }
 
 func (s *Server) handlePluginExecuteInfo(c *gin.Context) {
@@ -155,7 +158,7 @@ func (s *Server) handlePluginInstall(c *gin.Context) {
 		return
 	}
 
-	if err := os.WriteFile(filepath.Join(pluginDir, "manifest.yaml"), manifestData, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pluginDir, "manifest.yaml"), manifestData, 0600); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to write manifest"})
 		return
 	}
@@ -173,7 +176,7 @@ func (s *Server) handlePluginInstall(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to read script"})
 			return
 		}
-		if err := os.WriteFile(filepath.Join(pluginDir, manifest.Entry), scriptData, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(pluginDir, manifest.Entry), scriptData, 0600); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to write script"})
 			return
 		}
@@ -184,10 +187,12 @@ func (s *Server) handlePluginInstall(c *gin.Context) {
 		return
 	}
 
-	s.db.Model(&db.Plugin{}).Where("name = ?", manifest.Name).Updates(map[string]interface{}{
+	if err := s.db.Model(&db.Plugin{}).Where("name = ?", manifest.Name).Updates(map[string]interface{}{
 		"enabled": true,
 		"version": manifest.Version,
-	})
+	}).Error; err != nil {
+		slog.Error("Failed to update plugin record after install", "plugin", manifest.Name, "err", err)
+	}
 
 	s.LogAuditRecord(c, "plugin_install", "plugin", manifest.Name, fmt.Sprintf("installed plugin %s %s", manifest.Name, manifest.Version), true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "plugin": manifest.Name})
@@ -203,7 +208,9 @@ func (s *Server) handlePluginEnable(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	s.db.Model(p).Update("enabled", true)
+	if err := s.db.Model(p).Update("enabled", true).Error; err != nil {
+		slog.Error("Failed to persist plugin enable", "plugin", p.Name, "err", err)
+	}
 	s.LogAuditRecord(c, "plugin_enable", "plugin", p.Name, "enabled plugin", true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
@@ -218,7 +225,9 @@ func (s *Server) handlePluginDisable(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
 		return
 	}
-	s.db.Model(p).Update("enabled", false)
+	if err := s.db.Model(p).Update("enabled", false).Error; err != nil {
+		slog.Error("Failed to persist plugin disable", "plugin", p.Name, "err", err)
+	}
 	s.LogAuditRecord(c, "plugin_disable", "plugin", p.Name, "disabled plugin", true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }

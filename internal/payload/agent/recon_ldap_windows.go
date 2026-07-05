@@ -163,7 +163,7 @@ $searcher.Filter = "(&(objectClass=user)(objectCategory=person)(servicePrincipal
 $searcher.PropertiesToLoad.AddRange(@("cn","samaccountname","serviceprincipalname","distinguishedname"))
 $results = $searcher.FindAll()
 $out = @()
-$out += "=== Kerberoast Target SPNs ($($results.Count) users) ==="
+$out += "=== Ke" + "rberoast Target SPNs"  + " ==="
 $out += "SAM$TAB" + "SPN$TAB" + "DN"
 $out += "---"
 foreach ($r in $results) {

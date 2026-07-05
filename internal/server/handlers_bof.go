@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"encoding/base64"
@@ -27,7 +27,7 @@ func (s *Server) handleBOFPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "bof_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) handleBOFUpload(c *gin.Context) {
@@ -254,3 +254,4 @@ func (s *Server) handleBOFEdit(c *gin.Context) {
 	s.LogAuditRecord(c, "bof_edit", "bof", "", fmt.Sprintf("Edited BOF: %s", bof.Name), true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "bof": bof})
 }
+

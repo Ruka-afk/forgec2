@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -99,7 +100,7 @@ func TestWaitForTaskResult_Completed(t *testing.T) {
 		t.Fatalf("create task: %v", err)
 	}
 
-	s := &Server{db: database}
+	s := &Server{db: database, ctx: context.Background()}
 	result := s.waitForTaskResult(task.ID, "agent-1")
 	if result == "" || result == `{"error":"task not found"}` {
 		t.Fatalf("unexpected result: %s", result)
@@ -125,7 +126,7 @@ func TestWaitForTaskResult_TimeoutPending(t *testing.T) {
 		taskPollMinInterval = origMin
 	}()
 
-	s := &Server{db: database}
+	s := &Server{db: database, ctx: context.Background()}
 	result := s.waitForTaskResult(task.ID, "agent-1")
 	if !containsStr(result, `"status":"pending"`) || !containsStr(result, "wait timeout") {
 		t.Fatalf("expected pending timeout payload, got %s", result)

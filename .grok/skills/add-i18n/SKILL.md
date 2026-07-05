@@ -49,21 +49,16 @@ Add the same key to **all five** `*Translations` maps:
 
 ## Usage patterns
 
-### Go templates (`internal/server/templates/*.html`)
+### Next.js frontend (`frontend/src/lib/i18n.tsx`)
 
-```html
-{{tr .Lang "myfeature.title"}}
-{{printf (tr .Lang "myfeature.count") .Count}}
+```tsx
+const { t } = useI18n();
+t("myfeature.title")
 ```
 
-### JavaScript (`internal/server/templates/static/js/*.js`)
+### Go handlers
 
-```js
-__t("myfeature.title")
-__tf("js.task_completed", taskId)
-```
-
-Keys are injected via `LocaleJSON` in `renderPage`.
+Keys are injected via `LocaleJSON` in `addUserToData`.
 
 ### Go handlers
 

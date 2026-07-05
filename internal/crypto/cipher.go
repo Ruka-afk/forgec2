@@ -79,13 +79,14 @@ func (sc *StreamCipher) Decrypt(data []byte) ([]byte, error) {
 func (sc *StreamCipher) generateKeystream(nonce []byte, length int) []byte {
 	keystream := make([]byte, 0, length)
 	counter := uint32(0)
+	counterBuf := make([]byte, 4)
 	h := sha256.New()
 	for len(keystream) < length {
 		h.Reset()
 		h.Write(nonce)
 		h.Write(sc.key[:])
-		binary.LittleEndian.PutUint32(nonce[4:], counter)
-		h.Write(nonce[4:8])
+		binary.LittleEndian.PutUint32(counterBuf, counter)
+		h.Write(counterBuf)
 		keystream = append(keystream, h.Sum(nil)...)
 		counter++
 	}

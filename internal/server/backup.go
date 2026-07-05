@@ -4,10 +4,8 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -238,50 +236,6 @@ func (bm *BackupManager) decrypt(encryptedData []byte) ([]byte, error) {
 	return plaintext[backupSaltSize:], nil
 }
 
-func (bm *BackupManager) Restore(backupPath string) error {
-	bm.mu.Lock()
-	defer bm.mu.Unlock()
-
-	slog.Info("Starting database restore", "file", backupPath)
-
-	data, err := os.ReadFile(backupPath)
-	if err != nil {
-		slog.Error("Failed to read backup file", "error", err)
-		return err
-	}
-
-	decryptedData, err := bm.decrypt(data)
-	if err != nil {
-		slog.Error("Failed to decrypt backup", "error", err)
-		return err
-	}
-
-	tempPath := bm.dbPath + ".restore"
-	if err := os.WriteFile(tempPath, decryptedData, 0600); err != nil {
-		slog.Error("Failed to write temp restore file", "error", err)
-		return err
-	}
-
-	slog.Info("Restore file prepared. Server restart required to complete restore", "temp_file", tempPath)
-	return fmt.Errorf("database restore file prepared at %s - restart server to complete restore", tempPath)
-}
-
-func (bm *BackupManager) ListBackups() ([]string, error) {
-	files, err := os.ReadDir(bm.backupDir)
-	if err != nil {
-		return nil, err
-	}
-
-	var backups []string
-	for _, file := range files {
-		if !file.IsDir() && filepath.Ext(file.Name()) == ".fbk" {
-			backups = append(backups, file.Name())
-		}
-	}
-
-	return backups, nil
-}
-
 func (bm *BackupManager) cleanupOldBackups() {
 	files, err := os.ReadDir(bm.backupDir)
 	if err != nil {
@@ -309,47 +263,3 @@ func (bm *BackupManager) cleanupOldBackups() {
 	slog.Info("Cleaned up old backups", "remaining", keepCount)
 }
 
-func (bm *BackupManager) GenerateKey() string {
-	key := make([]byte, backupKeySize)
-	if _, err := rand.Read(key); err != nil {
-		return ""
-	}
-	return hex.EncodeToString(key)
-}
-
-func (bm *BackupManager) ValidateKey(key string) bool {
-	parsedKey, err := hex.DecodeString(key)
-	if err != nil {
-		return false
-	}
-	return len(parsedKey) == backupKeySize
-}
-
-func SHA256File(path string) (string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, file); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-func (bm *BackupManager) VerifyBackup(backupPath string) (bool, error) {
-	data, err := os.ReadFile(backupPath)
-	if err != nil {
-		return false, err
-	}
-
-	_, err = bm.decrypt(data)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
-}

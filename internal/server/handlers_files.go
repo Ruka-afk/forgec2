@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"encoding/base64"
@@ -34,7 +34,7 @@ func (s *Server) handleFileBrowserPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "files_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) handleListDir(c *gin.Context) {
@@ -215,3 +215,4 @@ func readFileToBase64(file *multipart.FileHeader) (string, error) {
 
 	return base64.StdEncoding.EncodeToString(data), nil
 }
+

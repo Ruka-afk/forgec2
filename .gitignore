@@ -28,6 +28,9 @@ opencode.json
 .DS_Store
 Thumbs.db
 
+# Generated agent binaries
+agent
+
 # Debug logs
 *.log
 

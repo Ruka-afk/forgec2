@@ -1,6 +1,6 @@
 ---
 name: fix-ui-style
-description: Fix ForgeC2 UI styling — dashboard alignment, ui-card/ui-input CSS, theme toggle, bundle refresh. Use when CSS missing, styles inconsistent, link underlines, theme/lang toggle broken, or /fix-ui-style.
+description: Fix ForgeC2 Next.js UI styling — Tailwind, dark mode, theme toggle, layout consistency
 license: MIT
 compatibility: grok
 metadata:
@@ -10,61 +10,64 @@ metadata:
 
 ## When to use
 
-Toolkit pages (lateral, privesc, report, plugins, AI) look unstyled while Dashboard/Agents look correct; theme or language menu does not work; CSS flashes on navigation.
+Pages look unstyled, dark mode broken, theme toggle missing, or layout inconsistent between dashboard and toolkit pages on **`:3000`**.
 
-## CSS architecture
+## CSS architecture (Next.js)
 
 | Layer | File | Role |
 |-------|------|------|
-| JIT utilities | `templates/static/js/tailwind.min.js` in `<head>` | Generates Tailwind classes, preflight (no link underlines) |
-| Component CSS | `templates/static/css/layout.css` | `.ui-card`, `.ui-input`, `.ui-select`, `.ui-modal`, `.ui-btn` |
-| Bundle | `templates/static/css/app.bundle.css` | `layout.css` + `skeleton.css` + `lazyload.css` (via `build_js.ps1`) |
+| Tailwind JIT | `frontend/public/js/tailwind.min.js` | Utility classes via `<Script>` in `app/layout.tsx` |
+| Global CSS | `frontend/src/app/globals.css` | Base styles |
+| Legacy CSS | `frontend/public/css/layout.css` | `.ui-card`, `.nav-active`, shared with Go templates |
+| Dark mode | `darkMode: 'class'` | Toggle `dark` on `<html>` via `frontend/src/lib/theme.tsx` |
 
-**Dashboard reference pattern** (inline Tailwind):
+**Dashboard reference pattern:**
 
 ```
 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm
 ```
 
-**Toolkit pattern** (component classes — must exist in `layout.css`):
+## Theme toggle
 
-```html
-<div class="ui-card p-5 shadow-sm">...</div>
-<input class="ui-input w-full">
-```
+| File | What to check |
+|------|---------------|
+| `frontend/src/lib/theme.tsx` | `ThemeProvider`, `localStorage forgec2_theme` |
+| `frontend/src/app/layout.tsx` | Inline `theme-init` script (hydration) |
+| `frontend/src/components/TopBar.tsx` | Light / Dark / System menu |
+| `frontend/src/components/ClientProvider.tsx` | Wraps `ThemeProvider` |
 
-Do **not** add `tailwind-full.css` to the bundle without explicit approval (causes flash/underline regressions).
+## Language / RTL
+
+| File | Role |
+|------|------|
+| `frontend/src/lib/i18n.tsx` | `setLocale`, `dir` for Arabic RTL |
+| `frontend/src/components/TopBar.tsx` | Language menu |
 
 ## Fix checklist
 
 | Step | Action |
 |------|--------|
-| 1 | Add missing `.ui-*` rules to `layout.css` matching Dashboard colors |
-| 2 | Run `powershell -File build_js.ps1 -SkipJS` to rebuild `app.bundle.css` |
-| 3 | Run `go build -o server.exe ./cmd/server/` (templates/CSS are go:embedded) |
-| 4 | Restart server; hard-refresh browser (Ctrl+Shift+R) |
-
-## Theme / language toggle
-
-| File | What to check |
-|------|---------------|
-| `layout.html` | `tailwind.min.js` in `<head>`; inline dark-class bootstrap script |
-| `core.js` | `handleThemeSelect`, `handleLanguageSelect` fallbacks |
-| `layout.js` | `GlobalActionHandlers.set_theme`, `GlobalActionHandlers.set_language`; `closeTopBarMenus` |
-| Menu buttons | `data-action="set_theme"` / `data-action="set_language"` with `data-theme` / `data-lang` |
+| 1 | Match existing page patterns in `frontend/src/app/dashboard/page.tsx` |
+| 2 | Use `dark:` variants for all bg/border/text |
+| 3 | Add missing i18n keys to `frontend/src/lib/i18n.tsx` |
+| 4 | `cd frontend && npm run build` (or `npm run dev`) |
+| 5 | Hard refresh browser |
 
 ## Common symptoms
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| Cards have no border/bg | `ui-card` missing from bundle | Add to `layout.css`, rebuild bundle |
-| Inputs look like plain HTML | `ui-input` missing | Same |
-| Link underlines everywhere | `tailwind.min.js` removed from head | Restore in `layout.html` |
-| Two styles flicker | Both JIT + full Tailwind CSS loaded | Use JIT + small bundle only |
-| Modals transparent | `ui-modal-backdrop` / `ui-modal` missing | Add to `layout.css` |
+| Symptom | Fix |
+|---------|-----|
+| No dark mode | Check `ThemeProvider` + `document.documentElement.classList` |
+| Raw i18n keys shown | Add key to all locales in `i18n.tsx` |
+| Sidebar overlap | `AppLayout.tsx` uses `ml-56` + fixed sidebar |
+| Font Awesome missing | `layout.tsx` links `/css/font-awesome.min.css` |
+
+## Legacy note
+
+Go template styling (`internal/server/templates/static/css/`) applies only to `:8080` HTML fallback. Primary UI is Next.js.
 
 ## Verify
 
-- `/dashboard` and `/lateral` cards look visually consistent
-- Theme toggle switches light/dark without reload errors
-- `app.bundle.css` contains `.ui-card` (grep or Network tab)
+- `/dashboard` and `/toolkit` cards look consistent in light and dark
+- Theme toggle persists after reload
+- Arabic locale sets `dir="rtl"` on `<html>`

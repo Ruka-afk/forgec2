@@ -34,11 +34,15 @@ func (s *Server) startSMBListener() {
 		slog.Error("Failed to start SMB listener", "addr", listenAddr, "err", err)
 		return
 	}
+	s.smbLn = ln
 	slog.Info("SMB transport layer listening", "addr", listenAddr)
 
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
+			if s.ctx.Err() != nil {
+				return
+			}
 			continue
 		}
 		go s.handleSMBConnection(conn)
@@ -71,7 +75,11 @@ func (s *Server) handleSMBConnection(conn net.Conn) {
 
 		resp := s.processBeacon(req, "")
 
-		respBytes, _ := json.Marshal(resp)
+		respBytes, err := json.Marshal(resp)
+		if err != nil {
+			slog.Error("SMB marshal response failed", "error", err)
+			return
+		}
 		if err := binary.Write(conn, binary.BigEndian, uint32(len(respBytes))); err != nil {
 			return
 		}

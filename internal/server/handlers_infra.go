@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"context"
@@ -35,7 +35,7 @@ type acmeProvisionRequest struct {
 
 func (s *Server) handleInfrastructurePage(c *gin.Context) {
 	listeners := s.getListeners()
-	s.renderPage(c, "infrastructure_content", gin.H{
+	s.renderPageOrJSON(c, gin.H{
 		"Title": "Infrastructure Automation",
 		"ActiveNav": "infrastructure",
 		"Listeners": listeners,
@@ -141,7 +141,7 @@ func (s *Server) handleProfileExport(c *gin.Context) {
 		data, _ := json.MarshalIndent(profile, "", "  ")
 		content = string(data)
 	case "nginx":
-		content = fmt.Sprintf(`# ForgeC2 Malleable Profile — Nginx map
+		content = fmt.Sprintf(`# ForgeC2 Malleable Profile 鈥?Nginx map
 # Apply to your nginx redirector to replicate C2 response behavior
 
 map $request_uri $c2_content_type {
@@ -153,7 +153,7 @@ map $request_uri $c2_status_code {
 }
 `, profile.ContentType, profile.StatusCode)
 	case "env":
-		content = fmt.Sprintf(`# ForgeC2 Malleable Profile — Environment variables
+		content = fmt.Sprintf(`# ForgeC2 Malleable Profile 鈥?Environment variables
 FORGEC2_PROFILE_NAME=%s
 FORGEC2_STATUS_CODE=%d
 FORGEC2_CONTENT_TYPE=%s
@@ -187,3 +187,4 @@ func toRedirectorConfig(req infraGenerateRequest, rtype string) infrastructure.R
 		Profile:    req.Profile,
 	}
 }
+

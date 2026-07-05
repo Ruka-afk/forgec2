@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"fmt"
@@ -33,7 +33,7 @@ func (s *Server) handleToolkitPage(c *gin.Context) {
 		"Agents":      agents,
 		"RecentTasks": recentTasks,
 	}
-	s.renderPage(c, "toolkit_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) handleToolkitQuickAction(c *gin.Context) {
@@ -214,3 +214,4 @@ func (s *Server) handleToolkitAgentTasks(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
 }
+

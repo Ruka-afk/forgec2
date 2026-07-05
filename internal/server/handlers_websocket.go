@@ -6,14 +6,13 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"gorm.io/gorm"
 )
 
 func gzipCompress(data []byte) ([]byte, error) {
@@ -36,7 +35,16 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for C2
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		u, err := url.Parse(origin)
+		if err != nil {
+			return false
+		}
+		originHost := u.Hostname()
+		return originHost == "localhost" || originHost == "127.0.0.1" || originHost == "::1"
 	},
 }
 
@@ -299,170 +307,6 @@ func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
 		case beacon.Send <- respJSON:
 		default:
 			slog.Warn("WebSocket send channel full", "agent_id", beacon.AgentID)
-		}
-	}
-}
-
-// handleWebSocketChat handles WebSocket chat connections for operators
-func (s *Server) handleWebSocketChat(c *gin.Context) {
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		slog.Error("Chat WebSocket upgrade failed", "error", err)
-		return
-	}
-
-	userID := c.Query("user_id")
-	if userID == "" {
-		userID = "anonymous"
-	}
-
-	slog.Info("Chat WebSocket connected", "user_id", userID, "remote_addr", conn.RemoteAddr())
-
-	// Initialize chat hub if not exists
-	if s.chatHub == nil {
-		s.chatHub = NewChatHub()
-		go s.chatHub.Run()
-	}
-
-	client := &ChatClient{
-		Hub:      s.chatHub,
-		Conn:     conn,
-		UserID:   userID,
-		Send:     make(chan []byte, 256),
-		JoinedAt: time.Now(),
-		DB:       s.db,
-	}
-
-	s.chatHub.register <- client
-
-	go client.writePump()
-	go client.readPump()
-}
-
-// ChatHub manages WebSocket chat connections
-type ChatHub struct {
-	clients    map[*ChatClient]bool
-	broadcast  chan []byte
-	register   chan *ChatClient
-	unregister chan *ChatClient
-}
-
-func NewChatHub() *ChatHub {
-	return &ChatHub{
-		clients:    make(map[*ChatClient]bool),
-		broadcast:  make(chan []byte),
-		register:   make(chan *ChatClient),
-		unregister: make(chan *ChatClient),
-	}
-}
-
-func (h *ChatHub) Run() {
-	for {
-		select {
-		case client := <-h.register:
-			h.clients[client] = true
-		case client := <-h.unregister:
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
-				close(client.Send)
-			}
-		case message := <-h.broadcast:
-			for client := range h.clients {
-				select {
-				case client.Send <- message:
-				default:
-					close(client.Send)
-					delete(h.clients, client)
-				}
-			}
-		}
-	}
-}
-
-type ChatClient struct {
-	Hub      *ChatHub
-	Conn     *websocket.Conn
-	UserID   string
-	Send     chan []byte
-	JoinedAt time.Time
-	DB       *gorm.DB
-}
-
-func (c *ChatClient) readPump() {
-	defer func() {
-		c.Hub.unregister <- c
-		c.Conn.Close()
-	}()
-
-	c.Conn.SetReadLimit(512 * 1024)
-	c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-	c.Conn.SetPongHandler(func(string) error {
-		c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-		return nil
-	})
-
-	for {
-		_, message, err := c.Conn.ReadMessage()
-		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				slog.Error("Chat WebSocket read error", "user_id", c.UserID, "error", err)
-			}
-			break
-		}
-
-		// Parse chat message
-		var chatMsg struct {
-			Type    string `json:"type"`
-			Message string `json:"message"`
-		}
-		if err := json.Unmarshal(message, &chatMsg); err != nil {
-			slog.Error("Chat message parse error", "user_id", c.UserID, "error", err)
-			continue
-		}
-
-		// Save to database
-		dbMsg := db.ChatMessage{
-			User:      c.UserID,
-			Message:   chatMsg.Message,
-			CreatedAt: time.Now(),
-		}
-		if c.DB != nil {
-			c.DB.Create(&dbMsg)
-		}
-		c.Hub.broadcast <- message
-	}
-}
-
-func (c *ChatClient) writePump() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer func() {
-		ticker.Stop()
-		c.Conn.Close()
-	}()
-
-	for {
-		select {
-		case message, ok := <-c.Send:
-			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if !ok {
-				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
-				return
-			}
-
-			w, err := c.Conn.NextWriter(websocket.TextMessage)
-			if err != nil {
-				return
-			}
-			w.Write(message)
-			if err := w.Close(); err != nil {
-				return
-			}
-
-		case <-ticker.C:
-			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				return
-			}
 		}
 	}
 }

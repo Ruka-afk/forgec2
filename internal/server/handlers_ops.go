@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"fmt"
@@ -82,7 +82,7 @@ func (s *Server) handleBuildLogs(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "builds_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 // logBuild creates a build log entry
@@ -112,3 +112,4 @@ func parseInt(s string) (int, error) {
 	}
 	return r, nil
 }
+

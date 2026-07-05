@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/db"
@@ -30,6 +32,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := cfg.Validate(); err != nil {
+		slog.Error("Invalid configuration", "err", err)
+		os.Exit(1)
+	}
+
 	// Initialize database
 	database, err := db.InitDB(cfg.Database.Path, slog.LevelInfo)
 	if err != nil {
@@ -48,6 +55,16 @@ func main() {
 ║  ForgeC2 v1.0  •  Professional Red Team C2 Framework       ║
 ║  Web UI: http://your-ip:8080    |   Login with your pass    ║
 ╚════════════════════════════════════════════════════════════╝`)
+
+	// Signal handling for graceful shutdown
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		sig := <-sigCh
+		slog.Info("Received signal, shutting down...", "signal", sig)
+		srv.Shutdown()
+	}()
 
 	if err := srv.Run(); err != nil {
 		slog.Error("Server failed", "err", err)

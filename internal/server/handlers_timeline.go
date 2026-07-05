@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"fmt"
@@ -39,7 +39,7 @@ func (s *Server) handleTimelinePage(c *gin.Context) {
 		"FilterUser":  filterUser,
 		"FilterAgent": filterAgent,
 	}
-	s.renderPage(c, "timeline_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 // handleTimelineData returns timeline events as JSON
@@ -145,11 +145,11 @@ func (s *Server) handleTimelineData(c *gin.Context) {
 			agentName = agent.Hostname
 		}
 
-		statusIcon := "✓"
+		statusIcon := "[OK]"
 		if task.Status == "failed" || task.Status == "error" {
-			statusIcon = "✗"
+			statusIcon = "[FAIL]"
 		} else if task.Status == "pending" {
-			statusIcon = "⋯"
+			statusIcon = "[...]"
 		}
 
 		events = append(events, TimelineEvent{
@@ -217,3 +217,4 @@ func (s *Server) handleTimelineExport(c *gin.Context) {
 		))
 	}
 }
+

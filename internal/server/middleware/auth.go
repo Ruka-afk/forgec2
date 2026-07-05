@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -66,11 +67,17 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr, err := c.Cookie("forgec2_session")
 		if err != nil {
-			authFail(c, "Auth failed: no session cookie", "path", c.Request.URL.Path, "ip", c.ClientIP())
+			tokenStr = c.Query("token")
+		}
+		if tokenStr == "" {
+			authFail(c, "Auth failed: no session token", "path", c.Request.URL.Path, "ip", c.ClientIP())
 			return
 		}
 
 		token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
 			return jwtSecret, nil
 		})
 		if err != nil || !token.Valid {

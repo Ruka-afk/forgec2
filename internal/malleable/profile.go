@@ -4,17 +4,17 @@ package malleable
 
 import (
 	"fmt"
-	"math/rand"
 	"strings"
 )
 
 // Profile represents a parsed Malleable C2 profile.
 type Profile struct {
-	Name        string    `json:"name"`
-	Description string    `json:"description,omitempty"`
-	HttpGet     HTTPGet   `json:"http_get,omitempty"`
-	HttpPost    HTTPPost  `json:"http_post,omitempty"`
-	Jitter      JitterCfg `json:"jitter,omitempty"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	HttpGet     HTTPGet    `json:"http_get,omitempty"`
+	HttpPost    HTTPPost   `json:"http_post,omitempty"`
+	HTTPConfig  HTTPConfig `json:"http_config,omitempty"`
+	Jitter      JitterCfg  `json:"jitter,omitempty"`
 }
 
 // HTTPGet configures the agent's GET request.
@@ -51,8 +51,18 @@ type TransformBlock struct {
 
 // Transform is a single data transform operation.
 type Transform struct {
-	Type  string // "base64", "netbios", "mask", "print", "append", "prepend", "xor"
-	Value string // parameter for transforms that need one (mask key, append/prepend string)
+	Type  string `json:"type"`  // "base64", "netbios", "mask", "print", "append", "prepend", "xor", "urlencode", "uri_append", "header", "parameter"
+	Value string `json:"value"` // parameter for transforms that need one
+}
+
+// HTTPConfig configures global HTTP settings.
+type HTTPConfig struct {
+	BlockRetry    int               `json:"block_retry"`
+	BlockTimeout  int               `json:"block_timeout"`
+	Headers       map[string]string `json:"headers"`
+	TrustCert     bool              `json:"trust_cert"`
+	UserAgent     string            `json:"user_agent"`
+	XForwardedFor string            `json:"x_forwarded_for"`
 }
 
 // Parse parses a CS-style Malleable C2 profile text and returns a Profile.
@@ -146,7 +156,8 @@ func parseHTTPPostLine(post *HTTPPost, line string) {
 func parseJitterLine(j *JitterCfg, line string) {
 	lower := strings.ToLower(strings.TrimSpace(line))
 	if strings.HasPrefix(lower, "jitter") {
-		fmt.Sscanf(line, "%*s %d", &j.ContentLength)
+		val := extractWord(line)
+		fmt.Sscanf(val, "%d", &j.ContentLength)
 	}
 }
 
@@ -167,15 +178,27 @@ func extractURIs(line string) []string {
 }
 
 func extractKV(line string) (string, string) {
-	content := extractQuoted(line)
-	if content == "" {
+	firstQ := strings.Index(line, "\"")
+	if firstQ == -1 {
 		return "", ""
 	}
-	parts := strings.SplitN(content, " ", 2)
-	if len(parts) < 2 {
-		return content, ""
+	secondQ := strings.Index(line[firstQ+1:], "\"")
+	if secondQ == -1 {
+		return "", ""
 	}
-	return parts[0], parts[1]
+	key := line[firstQ+1 : firstQ+1+secondQ]
+
+	rest := line[firstQ+1+secondQ+1:]
+	thirdQ := strings.Index(rest, "\"")
+	if thirdQ == -1 {
+		return key, ""
+	}
+	fourthQ := strings.Index(rest[thirdQ+1:], "\"")
+	if fourthQ == -1 {
+		return key, rest[thirdQ+1:]
+	}
+	value := rest[thirdQ+1 : thirdQ+1+fourthQ]
+	return key, value
 }
 
 func extractWord(line string) string {
@@ -354,41 +377,4 @@ func AkamaiProfile() *Profile {
 	}
 }
 
-// RandomURI picks a random URI from the profile's URI list for jitter.
-func (g *HTTPGet) RandomURI() string {
-	if len(g.URI) == 0 {
-		return "/"
-	}
-	return g.URI[rand.Intn(len(g.URI))]
-}
 
-func (p *HTTPPost) RandomURI() string {
-	if len(p.URI) == 0 {
-		return "/"
-	}
-	return p.URI[rand.Intn(len(p.URI))]
-}
-
-// RandomPadding generates random padding bytes for content length jitter.
-func (j *JitterCfg) RandomPadding() []byte {
-	if j.ContentLength <= 0 {
-		return nil
-	}
-	n := rand.Intn(j.ContentLength)
-	if n == 0 {
-		return nil
-	}
-	buf := make([]byte, n)
-	for i := range buf {
-		buf[i] = byte(rand.Intn(256))
-	}
-	return buf
-}
-
-// RandomParamName picks a random parameter name from the pool.
-func (j *JitterCfg) RandomParamName() string {
-	if len(j.ParameterNames) == 0 {
-		return "data"
-	}
-	return j.ParameterNames[rand.Intn(len(j.ParameterNames))]
-}

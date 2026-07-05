@@ -3,6 +3,7 @@ package malleable
 import (
 	"encoding/base64"
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -62,6 +63,33 @@ func applySingle(data []byte, t Transform, encode bool) ([]byte, error) {
 
 	case "xor":
 		return xorData(data, t.Value), nil
+
+	case "urlencode":
+		if encode {
+			return []byte(urlEncode(string(data))), nil
+		}
+		decoded, err := urlDecode(string(data))
+		if err != nil {
+			return data, nil
+		}
+		return []byte(decoded), nil
+
+	case "uri_append":
+		if encode {
+			return append(data, []byte(t.Value)...), nil
+		}
+		if len(data) > len(t.Value) && string(data[len(data)-len(t.Value):]) == t.Value {
+			return data[:len(data)-len(t.Value)], nil
+		}
+		return data, nil
+
+	case "header":
+		// Used in metadata/output blocks to set HTTP header
+		return data, nil
+
+	case "parameter":
+		// Used in metadata blocks to set URL parameter
+		return data, nil
 
 	default:
 		return data, nil
@@ -145,4 +173,14 @@ func xorData(data []byte, key string) []byte {
 		result[i] = b ^ key[i%len(key)]
 	}
 	return result
+}
+
+// urlEncode percent-encodes a string.
+func urlEncode(s string) string {
+	return url.QueryEscape(s)
+}
+
+// urlDecode percent-decodes a string.
+func urlDecode(s string) (string, error) {
+	return url.QueryUnescape(s)
 }

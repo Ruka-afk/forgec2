@@ -178,7 +178,11 @@ func (dl *DNSBeaconListener) handleTXTType(w dns.ResponseWriter, r *dns.Msg) {
 		for _, l := range dataLabels {
 			combined += l
 		}
-		requestData, _ = decodeBase32NoPad(combined)
+		var decErr error
+		requestData, decErr = decodeBase32NoPad(combined)
+		if decErr != nil {
+			requestData = nil
+		}
 	}
 
 	dl.processBeacon(agentID, requestData, m, r)
@@ -197,7 +201,7 @@ func (dl *DNSBeaconListener) processBeacon(agentID string, requestData []byte, m
 		reqJSON = requestData
 	} else {
 		reqMap := map[string]string{"uuid": agentID}
-		reqJSON, _ = json.Marshal(reqMap)
+		reqJSON, _ = json.Marshal(reqMap) // minimal static map cannot fail
 	}
 
 	respJSON := dl.handler(agentID, reqJSON)

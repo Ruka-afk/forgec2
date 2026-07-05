@@ -1,6 +1,6 @@
 ---
 name: add-ui-page
-description: Add a new ForgeC2 web page (route, handler, template, page_assets bundle, nav, i18n). Use when adding pages, navigation items, or /add-ui-page.
+description: Add a new ForgeC2 Next.js page (App Router route, layout nav, i18n, API wiring)
 license: MIT
 compatibility: grok
 metadata:
@@ -10,65 +10,75 @@ metadata:
 
 ## Steps
 
-### 1. Route
+### 1. Create page
 
-**File**: `internal/server/server.go`
+**File:** `frontend/src/app/your-page/page.tsx`
 
-```go
-auth.GET("/your-page", s.handleYourPage)
-```
+```tsx
+"use client";
 
-### 2. Handler
+import { apiGet } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
-```go
-func (s *Server) handleYourPage(c *gin.Context) {
-    data := gin.H{
-        "Title": "ForgeC2 - Your Page",
-        "ActiveNav": "yourpage",
-        "IsFullPage": false, // true for AI-style full pages
-    }
-    s.renderPage(c, "your_page_content", data)
+export default function YourPage() {
+  const { t } = useI18n();
+  // fetch via apiGet("/your-api-path")
+  return (
+    <div>
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
+        {t("yourpage.title")}
+      </h1>
+    </div>
+  );
 }
 ```
 
-### 3. Template
+### 2. Optional layout wrapper
 
-**File**: `internal/server/templates/your_page.html`
+If the page needs the sidebar, ensure it's under a route group using `AppLayout` (most pages inherit from parent `layout.tsx` in `frontend/src/app/(main)/` or similar — check existing pages).
 
-```html
-{{define "your_page_content"}}
-<div id="your-page" class="max-w-7xl mx-auto">
-  <h1>{{T .CurrentLang "yourpage.title"}}</h1>
-</div>
-{{end}}
+### 3. Navigation
+
+**File:** `frontend/src/components/Sidebar.tsx` — add to appropriate `navSections` entry:
+
+```ts
+{ href: "/your-page", labelKey: "nav.yourpage", icon: "fa-solid fa-star" },
 ```
 
-### 4. JS bundle
+### 4. i18n
 
-**File**: `internal/server/page_assets.go` — add to `pageScriptMap`:
+**File:** `frontend/src/lib/i18n.tsx` — add keys for en, zh, ja (minimum):
 
-```go
-"your_page_content": {Bundle: "ops.bundle.js", Scripts: []string{"your_page.js"}},
+```ts
+"nav.yourpage": "Your Page",
+"yourpage.title": "Your Page",
 ```
 
-Add source to `build_js.ps1` bundle group or new bundle. Run `make bundle`.
+See `add-i18n` skill for full locale coverage.
 
-### 5. Navigation
+### 5. Go API (if new endpoint)
 
-**File**: `templates/layout.html` — link with `ActiveNav` match.
+If the page needs a new backend route, use `add-api-endpoint` skill. Existing pages call Go via:
 
-### 6. i18n
-
-**File**: `locales.go` — en, zh, ja, ko, ar keys. See `add-i18n` skill.
-
-### 7. Rebuild
-
-```bash
-make build-all
 ```
+/api/go?p=/your-path&format=json
+```
+
+Handlers should call `s.renderPageOrJSON()` — it returns JSON for the Next.js proxy.
+
+### 6. Build & test
+
+```powershell
+cd frontend
+npm run dev
+# or npm run build && npx next start -p 3000
+```
+
+> All new pages are Next.js-only. Go backend no longer serves HTML templates or static assets.
 
 ## Verify
 
-- Page loads, nav highlights
-- JS handlers work (use `type="button"` + direct `addEventListener` for critical actions)
-- Language switch works
+- Page loads at `http://localhost:3000/your-page`
+- Sidebar highlights active nav
+- API calls succeed (Network tab → `/api/go?p=...`)
+- i18n keys render (not raw key names)

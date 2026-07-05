@@ -1,7 +1,8 @@
-package server
+﻿package server
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,7 +24,7 @@ func (s *Server) handleScannerPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "scanner_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 // handleScanTask creates a new scan task for an agent
@@ -33,7 +34,6 @@ func (s *Server) handleScanTask(c *gin.Context) {
 	agentID := c.PostForm("agent_id")
 	target := c.PostForm("target")
 	portRange := c.PostForm("port_range")
-	_ = c.PostForm("scan_type") // tcp_connect, tcp_syn, udp (reserved)
 	topPorts := c.PostForm("top_ports") // number of top ports to scan
 
 	// Validation
@@ -176,7 +176,9 @@ func (s *Server) handleProcessScanResult(c *gin.Context) {
 			Banner:   banner,
 		}
 
-		s.db.Create(&result)
+		if err := s.db.Create(&result).Error; err != nil {
+			slog.Error("Failed to save scan result", "agent", req.AgentID, "task", req.TaskID, "err", err)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -190,14 +192,15 @@ func (s *Server) handleExportScanResults(c *gin.Context) {
 	s.db.Where("task_id = ?", taskID).Order("port asc").Find(&results)
 
 	// Build CSV
-	csv := "Port,Protocol,State,Service,Version,Banner\n"
+	var b strings.Builder
+	b.WriteString("Port,Protocol,State,Service,Version,Banner\n")
 	for _, r := range results {
-		csv += fmt.Sprintf("%d,%s,%s,%s,%s,\"%s\"\n", r.Port, r.Protocol, r.State, r.Service, r.Version, r.Banner)
+		b.WriteString(fmt.Sprintf("%d,%s,%s,%s,%s,\"%s\"\n", r.Port, r.Protocol, r.State, r.Service, r.Version, r.Banner))
 	}
 
 	c.Header("Content-Disposition", "attachment; filename=scan_results.csv")
 	c.Header("Content-Type", "text/csv")
-	c.String(http.StatusOK, csv)
+	c.String(http.StatusOK, b.String())
 }
 
 // Helper: parse port range string (e.g., "1-100,443,8080")
@@ -252,3 +255,4 @@ func getTopPorts(n int) []int {
 	}
 	return topPorts[:n]
 }
+

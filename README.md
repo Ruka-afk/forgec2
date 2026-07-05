@@ -6,24 +6,61 @@
 
 **Professional C2 Framework for Authorized Red Team Operations**
 
-ForgeC2 is a modern, single-binary command-and-control framework written in pure Go. It ships with a full web console, multi-transport beaconing, an AI assistant, plugin system, and 50+ implant task types — built for authorized red team engagements and security research.
+ForgeC2 is a modern, single-binary command-and-control framework written in pure Go. It ships with a full Next.js web console, multi-transport beaconing, an AI assistant, plugin system, OPSEC guard, scripting engine, circuit breaker, and 50+ implant task types — built for authorized red team engagements and security research.
 
-**v2.1.2** — Dead-feature fixes · privesc/wifi/SOCKS/remote_input · Windows + Linux release binaries
+**v2.2.0** — Security overhaul · OPSEC Guard · Circuit Breaker · Scripting engine · gRPC transport · Auto-generated secrets · Next.js-only UI
 
 ---
 
-## Highlights (v2.1.0)
+## Architecture
+
+ForgeC2 uses a **split-stack** layout:
+
+| Component | Tech | Port | Path |
+|-----------|------|------|------|
+| **Web UI** | Next.js 16 + React 19 + Tailwind 4 | **3000** | `frontend/` |
+| **API & C2** | Go (Gin, SQLite, WebSocket) | **8080** | `cmd/server/` |
+
+- The browser talks to Next.js on `:3000`. API calls go through `/api/go?p=/path` (proxy in `frontend/src/app/api/go/route.ts`).
+- WebSocket connects directly to Go at `ws://host:8080/ws` with token-based auth (cross-port compatible).
+
+### One-command start (Windows)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
+
+Opens **http://localhost:3000** (UI) and **http://localhost:8080** (API/health).
+
+### Manual start
+
+```powershell
+# Terminal 1 — Go API
+go build -o forgec2-server.exe ./cmd/server
+.\forgec2-server.exe -config config.yaml
+
+# Terminal 2 — Next.js dev server
+cd frontend
+npm install
+npm run dev
+```
+
+For production UI: `cd frontend && npm run build && npm run start`
+
+---
+
+## Highlights (v2.2.0)
 
 | Area | What's New |
 |------|------------|
-| **AI Assistant** | Smart task wait (`wait_for_result`, polls by implant interval), chat persistence, optional fire-and-forget |
-| **Shell** | Real-time 0s mode, UTF-8 fix, regen hint when DB interval differs from build |
-| **Web UI** | WebSocket ping/pong (25s), 20× reconnect, stops HTTP poll when WS healthy |
-| **Implant** | macOS `agent_darwin.go`, Linux autostart persistence, `cookie_export`, `vpn_creds`, enhanced keylog |
-| **EDR** | Chunked sleep obfuscation (`evasion: true` / `FORGEC2_EVASION=1`) |
-| **Ops** | GitHub Actions CI, Makefile, audit alerts (login lockout, bulk delete) |
-| **Plugins** | 3 JSON samples in `plugins/samples/`, manifest plugins in `plugins/` |
-| **DevEx** | 42 Grok skills in `.grok/skills/` — rebuild, UI, C2, implant, AI, ops modules |
+| **Security** | Auto-generated random admin password on first start; auto-generated JWT secret replaces hardcoded default; CSP/Referrer-Policy/Permissions-Policy headers; goroutine count removed from health endpoint |
+| **OPSEC Guard** | New OPSEC rule engine — pre-flight safety checks before dispatching tasks; quick-test panel in Web UI |
+| **Circuit Breaker** | Listener health monitoring — auto-burns listeners that fail health checks; triggers profile rotation |
+| **Scripting** | Lua scripting engine — automate workflows server-side with `forgec2.*` API |
+| **gRPC Transport** | New gRPC listener type for external C2 relay |
+| **WebSocket Auth** | Token-based WebSocket auth via `?token=` query param (cross-port compatible without reverse proxy) |
+| **Web UI** | Sidebar hydration fix, XSS sanitization strengthened, accessibility improvements (login form labels, focus states) |
+| **Dead Code Cleanup** | Removed legacy Go HTML templates (150+ files), SRDI route, unused backup methods, unused validators, empty layouts |
 
 ---
 
@@ -38,11 +75,18 @@ ForgeC2 is a modern, single-binary command-and-control framework written in pure
 - **Safety**: response length cap, tool deduplication, consecutive call limits
 
 ### C2 Core
-- **Transports**: HTTP(S), TCP, DNS, ICMP
+- **Transports**: HTTP(S), TCP, DNS, ICMP, gRPC
 - **P2P chaining**: SMB named pipes / TCP relay
-- **Malleable profiles**: 15+ presets (bing, google, office365, teams, …)
+- **Malleable profiles**: 15+ presets (bing, google, office365, teams, github, …)
 - **Multi-listener**: independent host/port/profile per listener
 - **Sleep + jitter**: per-implant, supports 0s real-time mode
+- **Circuit Breaker**: automatic listener health monitoring and profile rotation
+
+### OPSEC Guard
+- Pre-flight rule engine — validates task safety before dispatch
+- Built-in rules: known-bad arguments, dangerous command patterns
+- Quick-test panel in Web UI to validate commands
+- Extensible rule set via plugin system
 
 ### Implant Capabilities
 
@@ -57,28 +101,36 @@ ForgeC2 is a modern, single-binary command-and-control framework written in pure
 | Surveillance | screenshot, keylogger (window-titled), live screen stream |
 | Recon (P1) | `cookie_export` (Chrome/Edge SQLite), `vpn_creds` (OpenVPN/cmdkey/WinSCP) |
 | Network | SOCKS5 relay, portscan, reverse port forward |
-| Remote (stub) | `remote_input` task + `POST /api/agents/:id/input` |
+| Remote | `remote_input` task + `POST /api/agents/:id/input` |
 
-### Web Console
-- Dashboard with charts, heatmaps, geo map, attack-path view
-- 3-state implant status (online / stale / offline)
-- Implant detail: tabs, port forward, task history, current window title
-- Shell, files, screen monitor, toolkit (40+ commands)
-- Generate page: cross-platform builds, shared listener, malleable profile lock
-- Global search, operator chat, audit log CSV export
-- Collapsible sidebar, online users panel, keyboard shortcuts
+### Web Console (Next.js)
+- **40+ pages** — dashboard, agents, shell, files, AI, OPSEC, circuit breaker, scripting, plugins, settings, and more
+- Dashboard charts (heatmap, OS dist, task status, traffic, geo, attack path)
+- Batch agent ops, kill/delete, agent detail with lock/notes/sleep/spawn
+- Theme (light/dark/system), i18n (en/zh/ja/ko/ar), Ctrl+K search
+- WebSocket live notifications, online operators panel
+- Generate page: cross-platform builds, malleable profile lock
 
 ### Plugins
 - Drop-in plugins under `plugins/` with `manifest.yaml`
 - Python / Go interpreters, timeout control, agent-side execution
 - Web UI: install, enable/disable, execute, import/export, reviews
 
+### Scripting Engine
+- Lua-based server-side automation
+- `forgec2.*` API: execute tasks, query agents, manage listeners
+- Timeout-controlled execution (30s default)
+- Web UI editor and output panel
+
 ### Security
-- JWT + bcrypt, HttpOnly session cookies, CSRF protection
+- JWT + bcrypt, HttpOnly secure session cookies
 - TOTP two-factor authentication with backup codes
+- Auto-generated random admin password on first start (printed to console)
+- Auto-generated JWT secret replaces default on first run
+- CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy headers
 - Per-route rate limiting (login, API, beacon)
+- IP-based login lockout with progressive delay
 - Audit logging, path traversal prevention
-- Passwords never rendered in HTML DOM
 - AES-GCM encrypted automatic database backups
 
 ---
@@ -93,24 +145,15 @@ go build -o forgec2-server ./cmd/server
 ./forgec2-server -config config/config.yaml
 ```
 
-Open **http://localhost:8080** — default credentials: `admin` / `admin`
+Open **http://localhost:3000** (Next.js UI). On first run a random admin password is generated and printed to the console — **check the server output for your credentials**.
 
-> Copy `config/config.yaml` to `config.yaml` in the project root, or pass `-config` explicitly. On first run the server creates `data/` automatically.
+> API-only mode: `http://localhost:8080`. Copy `config/config.yaml` to `config.yaml` in the project root.
 
 ### Windows Build
 
 ```powershell
-go build -o server.exe ./cmd/server
-.\server.exe -config config.yaml
-```
-
-### Frontend Asset Build (optional)
-
-Templates embed JS/CSS via `go:embed`. After editing files under `internal/server/templates/static/`, rebuild bundles:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\build_js.ps1 -SkipCSS
-go build -o server.exe ./cmd/server
+go build -o forgec2-server.exe ./cmd/server
+.\forgec2-server.exe -config config.yaml
 ```
 
 ---
@@ -147,7 +190,7 @@ See `config/config.yaml` for the full reference template.
 2. Click **Settings**, enable AI, choose provider, paste API key
 3. Save — page reloads with AI ready
 
-The assistant queues implant commands immediately and does **not** block on beacon intervals. Use natural language or quick-action buttons to manage your engagement.
+The assistant queues implant commands immediately and does **not** block on beacon intervals.
 
 ---
 
@@ -168,14 +211,19 @@ forgec2/
 ├── cmd/server/          # Server entrypoint
 ├── cmd/i18n-tool/       # Translation management CLI
 ├── internal/
-│   ├── server/          # HTTP handlers, templates, WebSocket, AI
-│   ├── payload/agent/   # Implant source (Windows / Linux)
+│   ├── server/          # HTTP handlers, WebSocket, AI, OPSEC, scripting
+│   ├── payload/agent/   # Implant source (Windows / Linux / macOS)
 │   ├── plugin/          # Plugin runtime
+│   ├── scripting/       # Lua scripting engine
 │   ├── db/              # GORM models + SQLite
-│   └── malleable/       # C2 profile engine
+│   ├── config/          # Configuration loader
+│   ├── malleable/       # C2 profile engine
+│   ├── crypto/          # Encryption utilities
+│   ├── report/          # Report generator
+│   └── infrastructure/  # Auto-generated redirector configs
+├── frontend/            # Next.js web UI
 ├── api/openapi.yaml     # REST API specification
 ├── plugins/             # Plugin packages
-├── build_js.ps1         # JS/CSS bundler
 └── config/config.yaml   # Configuration template
 ```
 
@@ -185,7 +233,7 @@ forgec2/
 
 ```mermaid
 graph TD
-    A[Web UI] --> B[Gin Server]
+    A[Web UI :3000] -->|/api/go| B[Gin :8080]
     B --> C[JWT Auth + TOTP]
     B --> D[Beacon API]
     B --> E[Task Queue]
@@ -193,64 +241,57 @@ graph TD
     B --> G[WebSocket]
     B --> H[AI SSE /ai/chat]
     B --> I[Plugin Runtime]
-    J[HTTP Listener] -->|HTTPS| D
-    K[TCP Listener] --> D
-    L[DNS :53] --> D
-    M[Parent Implant] -->|SMB/TCP| N[Child] --> M --> D
+    B --> J[Scripting Engine]
+    B --> K[OPSEC Guard]
+    B --> L[Circuit Breaker]
+    M[HTTP Listener] -->|HTTPS| D
+    N[TCP Listener] --> D
+    O[DNS :53] --> D
+    P[gRPC Listener] --> D
+    Q[Parent Implant] -->|SMB/TCP| R[Child] --> Q --> D
 ```
 
 ---
 
 ## Development
 
-Common tasks are available via the project `Makefile`:
-
 ```bash
-make build          # build server binary
-make test           # run all Go tests
-make i18n-check     # validate translations
-make bundle         # rebuild embedded JS/CSS bundles
-make dev            # dev mode (FORGEC2_DEV=1, unbundled JS)
+go build ./...           # build all packages
+go test ./...            # run all Go tests
+go vet ./...             # static analysis
+make i18n-check          # validate translations
 ```
 
-Equivalent manual commands:
+### Agent Skills (Grok / Cursor / OpenCode)
 
-```bash
-go test ./...
-go run ./cmd/i18n-tool check --lang zh
-FORGEC2_DEV=1 go run ./cmd/server -config config.yaml
-```
-
-### Agent Skills (Grok / Cursor)
-
-All skills live in `.grok/skills/` (42 total) — invoke via slash command or auto-trigger:
+All skills live in `.grok/skills/` and `.opencode/skills/` — invoke via slash command or auto-trigger:
 
 | Category | Skills |
 |----------|--------|
-| **Daily dev** | `rebuild-deploy`, `fix-ui-page`, `fix-ui-style`, `debug-forgec2`, `ci-fix`, `e2e-smoke-test`, `release-github` |
-| **Features** | `add-task-type`, `add-agent-feature`, `add-ui-page`, `add-api-endpoint`, `add-i18n`, `add-database-model` |
+| **Daily dev** | `rebuild-deploy`, `fix-ui-page`, `fix-ui-style`, `debug-forgec2`, `ci-fix`, `e2e-smoke-test`, `release-github`, `agent-build` |
+| **Features** | `add-task-type`, `add-model`, `add-test`, `add-plugin-task`, `add-ui-page`, `add-api-endpoint`, `add-i18n` |
 | **AI & plugins** | `add-ai-tool`, `configure-ai`, `plugin-task`, `add-manifest-plugin` |
 | **C2 & listeners** | `add-listener`, `add-malleable-profile`, `add-transport-protocol`, `add-stager`, `add-extc2`, `add-generate-option` |
 | **Implant** | `implant-regenerate`, `edr-evasion`, `add-recon-p1`, `add-injection-technique`, `add-bof` |
 | **Ops modules** | `add-lateral-method`, `add-credentials-feature`, `add-monitor-feature`, `add-socks-pivot`, `add-token-feature` |
-| **Collab & automation** | `add-collab-feature`, `add-automation-rule`, `add-shell-feature` |
-| **Realtime & reports** | `websocket-event`, `report-section`, `remote-desktop`, `add-traffic-log`, `add-timeline-loot` |
-| **Security** | `add-user-rbac` |
+| **Security** | `go-vet-lint`, `add-user-rbac`, `credential-parser` |
+| **Realtime & reports** | `internal-event`, `report-section`, `websocket-event`, `remote-desktop` |
 
 ---
 
 ## Roadmap
 
-- [x] HTTP/HTTPS/TCP/DNS/ICMP transport · P2P chaining
+- [x] HTTP/HTTPS/TCP/DNS/ICMP/gRPC transport · P2P chaining
 - [x] Artifact Kit · Malleable profiles · SOCKS5
 - [x] Multi-user RBAC · Collaboration · AI Assistant
 - [x] i18n · Plugins · OpenAPI · TOTP · Backups
-- [x] JS bundling · Global search · Notification center
+- [x] OPSEC Guard · Circuit Breaker · Scripting Engine
 - [x] Real-time shell · AI chat persistence · smart task wait
-- [x] macOS implant (basic: persistence, screencapture, osascript)
-- [x] EDR evasion basics (chunked sleep, `evasion: true` / `FORGEC2_EVASION=1`)
+- [x] macOS implant · EDR evasion (chunked sleep)
 - [x] P1 recon: cookie export, VPN creds, enhanced keylog
-- [ ] Interactive remote desktop · IM steal · form grabber
+- [x] Security overhaul: auto-generated secrets, CSP headers, token-based WS auth
+- [x] Dead code cleanup: removed legacy Go templates (pure Next.js UI)
+- [ ] Interactive remote desktop · Form grabber · IM steal
 
 ---
 

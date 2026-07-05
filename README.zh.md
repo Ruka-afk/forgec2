@@ -8,7 +8,37 @@
 
 ForgeC2 是一款纯 Go 编写的现代化单二进制 C2 框架，集成完整 Web 控制台、多协议信标、AI 智能助手、插件系统与 50+ Implant 任务类型。
 
-**v2.1.2** — 失效功能修复 · privesc/wifi/SOCKS/remote_input · Windows + Linux 发布包
+**v2.1.2** — 失效功能修复 · privesc/wifi/SOCKS/remote_input · Windows + Linux 发布包 · **Next.js 前端**
+
+---
+
+## 架构（v2.1+）
+
+| 组件 | 技术 | 端口 | 目录 |
+|------|------|------|------|
+| **Web UI** | Next.js 16 + React 19 | **3000** | `frontend/` |
+| **API & C2** | Go (Gin, WebSocket) | **8080** | `cmd/server/` |
+
+浏览器访问 **http://localhost:3000**。API 经 `/api/go?p=/path` 代理到 Go 后端。WebSocket 直连 `ws://host:8080/ws`。
+
+### 一键启动（Windows）
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
+
+### 前端开发
+
+```powershell
+go build -o forgec2-server.exe ./cmd/server
+.\forgec2-server.exe -config config.yaml
+
+cd frontend
+npm install
+npm run dev
+```
+
+迁移进度见 `migration-gap-analysis.md`。
 
 ---
 
@@ -63,7 +93,7 @@ make build-all    # 或 make build
 ./forgec2-server -config config/config.yaml
 ```
 
-默认 **http://localhost:8080**，账号 `admin` / `admin`
+默认 **http://localhost:3000**（Next.js UI），账号 `admin` / `admin`
 
 ---
 

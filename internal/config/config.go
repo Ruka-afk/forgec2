@@ -3,6 +3,8 @@ package config
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -12,7 +14,8 @@ import (
 
 // Config holds all configuration for ForgeC2
 type Config struct {
-	mu     sync.Mutex `yaml:"-"`
+	mu         sync.Mutex `yaml:"-"`
+	ConfigPath string     `yaml:"-"` // absolute path to the config file, set on Load
 	Server struct {
 		Port                  int    `yaml:"port"`
 		Host                  string `yaml:"host"`
@@ -27,12 +30,15 @@ type Config struct {
 		DataDir              string `yaml:"data_dir"`
 		DNSEnabled           bool   `yaml:"dns_enabled"`
 		DNSDomain            string `yaml:"dns_domain"`
+		GRPCEnabled          bool   `yaml:"grpc_enabled"`
+		GRPCAddr             string `yaml:"grpc_addr"`
 		ICMPEnabled          bool   `yaml:"icmp_enabled"`
 		ICMPAddr             string `yaml:"icmp_addr"`
 		OfflineThreshold     int    `yaml:"offline_threshold"`      // seconds
 		SessionMaxAgeHours   int    `yaml:"session_max_age_hours"`  // JWT expiry
-		CleanupRetentionDays int    `yaml:"cleanup_retention_days"` // auto-purge cutoff
-		UpdateCheckRepo      string `yaml:"update_check_repo"`      // GitHub repo for update checks (e.g. "owner/repo")
+		CleanupRetentionDays int      `yaml:"cleanup_retention_days"` // auto-purge cutoff
+		UpdateCheckRepo      string   `yaml:"update_check_repo"`      // GitHub repo for update checks (e.g. "owner/repo")
+		VantagePoints        []string `yaml:"vantage_points"`         // external proxy URLs for circuit breaker probing
 	} `yaml:"server"`
 
 	Database struct {
@@ -51,7 +57,7 @@ type Config struct {
 	} `yaml:"auth"`
 
 	Crypto struct {
-		Key string `yaml:"key"` // 32-byte hex key for beacon payload encryption (empty=disabled)
+		Key string `yaml:"key"` // 32-byte hex key for XOR encryption, or "ecdh:" for ECDH+AES-256-GCM (empty=disabled)
 	} `yaml:"crypto"`
 
 	Malleable struct {
@@ -123,7 +129,7 @@ func DefaultConfig() *Config {
 	cfg.Server.CertFile = filepath.Join(cfg.Server.DataDir, "server.crt")
 	cfg.Server.KeyFile = filepath.Join(cfg.Server.DataDir, "server.key")
 
-	cfg.Implant.DefaultInterval = 10
+	cfg.Implant.DefaultInterval = 5
 	cfg.Implant.DefaultJitter = 20
 	cfg.Implant.DefaultUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 
@@ -169,6 +175,7 @@ func Load(path string) (*Config, error) {
 			if err := os.WriteFile(path, out, 0644); err != nil {
 				return nil, err
 			}
+			cfg.ConfigPath = path
 			return cfg, nil
 		}
 		return nil, err
@@ -176,6 +183,26 @@ func Load(path string) (*Config, error) {
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
+	}
+	cfg.ConfigPath = path
+
+	// Env override for JWT secret (takes precedence over config file)
+	if envSecret := os.Getenv("FORGEC2_JWT_SECRET"); envSecret != "" {
+		cfg.Server.JWTSecret = envSecret
+	}
+
+	// Warn if using the default/example JWT secret and auto-generate a random one
+	defaultSecret := "forgec2_secret_key_change_this_in_production"
+	if cfg.Server.JWTSecret == defaultSecret {
+		key := make([]byte, 32)
+		if _, err := rand.Read(key); err != nil {
+			return nil, err
+		}
+		cfg.Server.JWTSecret = hex.EncodeToString(key)
+		if err := cfg.Save(path); err != nil {
+			return nil, err
+		}
+		slog.Warn("Default JWT secret was insecure — auto-generated and saved to config.yaml")
 	}
 
 	// Generate random JWT secret if not set
@@ -207,11 +234,72 @@ func (c *Config) AIEndpoint() string {
 		return "https://dashscope.aliyuncs.com/compatible-mode/v1"
 	case "claude":
 		return "https://api.anthropic.com/v1"
+	case "longcat":
+		return "https://api.longcat.chat/openai"
 	case "custom":
-		return "https://api.openai.com/v1" // fallback for custom
+		return "https://api.openai.com/v1"
 	default:
 		return "https://api.deepseek.com/v1"
 	}
+}
+
+// Validate checks configuration for invalid or dangerous values.
+func (c *Config) Validate() error {
+	var errs []error
+
+	if c.Server.Port <= 0 || c.Server.Port > 65535 {
+		errs = append(errs, errors.New("server.port must be between 1 and 65535"))
+	}
+	if c.Server.OfflineThreshold < 1 {
+		errs = append(errs, errors.New("server.offline_threshold must be >= 1 second"))
+	}
+	if c.Server.SessionMaxAgeHours < 1 {
+		errs = append(errs, errors.New("server.session_max_age_hours must be >= 1"))
+	}
+	if c.Server.CleanupRetentionDays < 0 {
+		errs = append(errs, errors.New("server.cleanup_retention_days must be >= 0"))
+	}
+	if c.Implant.DefaultInterval < 1 {
+		errs = append(errs, errors.New("implant.default_interval must be >= 1 second"))
+	}
+	if c.Implant.DefaultJitter < 0 || c.Implant.DefaultJitter > 100 {
+		errs = append(errs, errors.New("implant.default_jitter must be between 0 and 100"))
+	}
+	if c.Logging.Level != "" && c.Logging.Level != "debug" && c.Logging.Level != "info" && c.Logging.Level != "warn" && c.Logging.Level != "error" {
+		errs = append(errs, errors.New(`logging.level must be one of: debug, info, warn, error`))
+	}
+	if c.RateLimit.Login.MaxAttempts < 1 {
+		errs = append(errs, errors.New("rate_limit.login.max_attempts must be >= 1"))
+	}
+	if c.RateLimit.Login.Window < 1 {
+		errs = append(errs, errors.New("rate_limit.login.window must be >= 1 second"))
+	}
+	if c.RateLimit.Login.LockoutTime < 1 {
+		errs = append(errs, errors.New("rate_limit.login.lockout_time must be >= 1 second"))
+	}
+	if c.RateLimit.API.Rate < 0 {
+		errs = append(errs, errors.New("rate_limit.api.rate must be >= 0"))
+	}
+	if c.RateLimit.Beacon.Limit < 1 {
+		errs = append(errs, errors.New("rate_limit.beacon.limit must be >= 1"))
+	}
+	if c.RateLimit.Beacon.Window < 1 {
+		errs = append(errs, errors.New("rate_limit.beacon.window must be >= 1 second"))
+	}
+	if c.Server.TCPEnabled && c.Server.TCPAddr == "" {
+		errs = append(errs, errors.New("server.tcp_addr is required when tcp_enabled is true"))
+	}
+	if c.Server.SMBEnabled && c.Server.SMBPipe == "" {
+		errs = append(errs, errors.New("server.smb_pipe is required when smb_enabled is true"))
+	}
+	if c.Server.DNSEnabled && c.Server.DNSDomain == "" {
+		errs = append(errs, errors.New("server.dns_domain is required when dns_enabled is true"))
+	}
+	if c.Server.ICMPEnabled && c.Server.ICMPAddr == "" {
+		errs = append(errs, errors.New("server.icmp_addr is required when icmp_enabled is true"))
+	}
+
+	return errors.Join(errs...)
 }
 
 // Save persists the config (e.g. after setting password)
@@ -222,7 +310,22 @@ func (c *Config) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, out, 0644)
+	return os.WriteFile(path, out, 0600)
+}
+
+// CopyFrom copies all exported fields from src into c with mutex protection
+func (c *Config) CopyFrom(src *Config) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Server = src.Server
+	c.Database = src.Database
+	c.Implant = src.Implant
+	c.Auth = src.Auth
+	c.Crypto = src.Crypto
+	c.Malleable = src.Malleable
+	c.AI = src.AI
+	c.Logging = src.Logging
+	c.RateLimit = src.RateLimit
 }
 
 // LoadFromData loads config from byte data

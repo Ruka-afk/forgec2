@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ── AI Chat Page ──────────────────────────────────────────────────────────
+// 鈹€鈹€ AI Chat Page 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 func (s *Server) handleAIPage(c *gin.Context) {
 	stats := s.getNavStats()
@@ -31,11 +31,11 @@ func (s *Server) handleAIPage(c *gin.Context) {
 	for k, v := range stats {
 		data[k] = v
 	}
-	slog.Info("AI page rendered", "enabled", s.cfg.AI.Enabled, "has_key", s.cfg.AI.APIKey != "", "provider", s.cfg.AI.Provider)
-	s.renderPage(c, "ai_content", data)
+	slog.Info("AI page rendered", "enabled", s.cfg.AI.Enabled, "provider", s.cfg.AI.Provider)
+	s.renderPageOrJSON(c, data)
 }
 
-// ── AI Config Save ───────────────────────────────────────────────────────
+// 鈹€鈹€ AI Config Save 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 func (s *Server) handleAIConfig(c *gin.Context) {
 	if role, _ := c.Get("user_role"); role != "admin" {
@@ -55,7 +55,7 @@ func (s *Server) handleAIConfig(c *gin.Context) {
 		return
 	}
 
-	slog.Info("AI config save request", "enabled", req.Enabled, "provider", req.Provider, "model", req.Model, "has_key", req.APIKey != "")
+	slog.Info("AI config save request", "enabled", req.Enabled, "provider", req.Provider, "model", req.Model)
 	s.cfg.AI.Enabled = req.Enabled
 	s.cfg.AI.Provider = req.Provider
 	if strings.TrimSpace(req.APIKey) != "" {
@@ -73,15 +73,15 @@ func (s *Server) handleAIConfig(c *gin.Context) {
 		return
 	}
 	username, _ := c.Get("user")
-	slog.Info("AI config saved", "user", username, "enabled", s.cfg.AI.Enabled, "provider", s.cfg.AI.Provider, "has_key", s.cfg.AI.APIKey != "")
+	slog.Info("AI config saved", "user", username, "enabled", s.cfg.AI.Enabled, "provider", s.cfg.AI.Provider)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "AI config saved"})
 }
 
-// ── SSE Chat (streaming) ─────────────────────────────────────────────────
+// 鈹€鈹€ SSE Chat (streaming) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 func (s *Server) handleAIChat(c *gin.Context) {
 	if !s.cfg.AI.Enabled || s.cfg.AI.APIKey == "" {
-		slog.Warn("AI chat blocked", "enabled", s.cfg.AI.Enabled, "has_key", s.cfg.AI.APIKey != "", "provider", s.cfg.AI.Provider)
+		slog.Warn("AI chat blocked", "enabled", s.cfg.AI.Enabled, "provider", s.cfg.AI.Provider)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "AI not configured. Set api_key in AI settings."})
 		return
 	}
@@ -226,7 +226,7 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 				continue
 			}
 
-			// No tool calls — clear thinking and send content
+			// No tool calls 鈥?clear thinking and send content
 			ch <- sseEvent{"clear", ""}
 			if content != "" {
 				ch <- sseEvent{"text", content}
@@ -392,7 +392,7 @@ func (s *Server) aiDoRequest(payload []byte) (*http.Response, error) {
 	if s.cfg.AI.Provider == "claude" {
 		// Claude uses /v1/messages (baseURL already includes /v1)
 		// But our auto-append adds /v1, and Anthropic's base is https://api.anthropic.com
-		// So baseURL is https://api.anthropic.com/v1, need /messages → https://api.anthropic.com/v1/messages
+		// So baseURL is https://api.anthropic.com/v1, need /messages 鈫?https://api.anthropic.com/v1/messages
 		url = baseURL + "/messages"
 		// Rebuild payload for Claude format (Anthropic API)
 		payload = s.buildClaudeRequest(payload)
@@ -446,7 +446,7 @@ func (s *Server) writeSSE(c *gin.Context, flusher http.Flusher, event string, da
 	}
 }
 
-// ── JSON structures ──────────────────────────────────────────────────────
+// 鈹€鈹€ JSON structures 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 type chatMessage struct {
 	Role       string      `json:"role"`
@@ -494,7 +494,7 @@ type chatResponse struct {
 	} `json:"choices"`
 }
 
-// ── Tool Definitions ────────────────────────────────────────────────────
+// 鈹€鈹€ Tool Definitions 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 func buildTools() []toolDef {
 	return []toolDef{
@@ -608,7 +608,7 @@ func buildTools() []toolDef {
 	}
 }
 
-// ── Tool Execution ───────────────────────────────────────────────────────
+// 鈹€鈹€ Tool Execution 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 func (s *Server) executeTool(name string, argsJSON string) string {
 	var args map[string]string
@@ -731,8 +731,7 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 		return string(b)
 
 	case "get_online_operators":
-		users := s.onlineUsers()
-		b, _ := json.Marshal(users)
+		b, _ := json.Marshal([]map[string]string{})
 		return string(b)
 
 	default:
@@ -1055,16 +1054,3 @@ func (s *Server) resolveAgentID(idOrHost string) string {
 	return agent.ID
 }
 
-func (s *Server) onlineUsers() []map[string]string {
-	s.collab.mu.Lock()
-	defer s.collab.mu.Unlock()
-	var users []map[string]string
-	seen := map[string]bool{}
-	for _, wc := range s.collab.wsConns {
-		if !seen[wc.username] {
-			seen[wc.username] = true
-			users = append(users, map[string]string{"username": wc.username, "role": wc.role})
-		}
-	}
-	return users
-}

@@ -8,10 +8,8 @@ import (
 )
 
 const (
-	RoleAdmin    = "admin"
-	RoleOperator = "operator"
-	RoleViewer   = "viewer"
-	RoleGuest    = "guest"
+	RoleAdmin = "admin"
+	RoleUser  = "user"
 )
 
 const (
@@ -48,7 +46,7 @@ var RolePermissionsMap = map[string][]string{
 		PermSettingsRead, PermSettingsWrite,
 		PermAuditRead,
 	},
-	RoleOperator: {
+	RoleUser: {
 		PermAgentsRead, PermAgentsWrite, PermAgentsDelete,
 		PermListenersRead, PermListenersWrite, PermListenersDelete,
 		PermTasksRead, PermTasksWrite, PermTasksDelete,
@@ -57,21 +55,6 @@ var RolePermissionsMap = map[string][]string{
 		PermUsersRead,
 		PermSettingsRead,
 		PermAuditRead,
-	},
-	RoleViewer: {
-		PermAgentsRead,
-		PermListenersRead,
-		PermTasksRead,
-		PermCredsRead,
-		PermFilesRead,
-		PermUsersRead,
-		PermSettingsRead,
-		PermAuditRead,
-	},
-	RoleGuest: {
-		PermAgentsRead,
-		PermListenersRead,
-		PermTasksRead,
 	},
 }
 
@@ -214,12 +197,12 @@ type SocksSession struct {
 
 // User represents an authenticated operator
 // ForgeC2 multi-user support with role-based access control
-// Roles: "admin" (full control), "operator" (can interact), "viewer" (read-only)
+// Roles: "admin" (full control), "user" (standard operator)
 type User struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
 	Username      string    `gorm:"uniqueIndex;size:64" json:"username"`
 	PasswordHash  string    `json:"-"`
-	Role          string    `json:"role"` // "admin", "operator", or "viewer"
+	Role          string    `json:"role"` // "admin" or "user"
 	IsActive      bool      `json:"is_active"`
 	LastLogin     time.Time `json:"last_login"`
 	LastIP        string    `json:"last_ip"`
@@ -278,17 +261,6 @@ type BuildLog struct {
 func (BuildLog) TableName() string { return "build_logs" }
 func (User) TableName() string     { return "users" }
 
-// AgentLock records an operator's exclusive lock on an agent
-type AgentLock struct {
-	AgentID  string    `gorm:"primaryKey;size:36" json:"agent_id"`
-	UserID   uint      `json:"user_id"`
-	Username string    `json:"username"`
-	LockedAt time.Time `json:"locked_at"`
-	Note     string    `json:"note"`
-}
-
-func (AgentLock) TableName() string { return "agent_locks" }
-
 // ScanResult stores port/service scan results from agents
 type ScanResult struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
@@ -302,25 +274,6 @@ type ScanResult struct {
 	Version   string    `json:"version"`
 	Banner    string    `json:"banner"`
 	CreatedAt time.Time `json:"created_at"`
-}
-
-// ChatMessage stores operator chat messages
-type ChatMessage struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	User      string    `json:"user"`
-	Message   string    `json:"message"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-// OperatorNote stores operator notes for agents/tasks
-type OperatorNote struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	AgentID   string    `gorm:"index" json:"agent_id"`
-	TaskID    uint      `json:"task_id"`
-	User      string    `json:"user"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // NetworkHost stores discovered network hosts
@@ -444,8 +397,6 @@ type PluginUpdateStatus struct {
 func (PluginUpdateStatus) TableName() string { return "plugin_update_status" }
 
 func (ScanResult) TableName() string      { return "scan_results" }
-func (ChatMessage) TableName() string     { return "chat_messages" }
-func (OperatorNote) TableName() string    { return "operator_notes" }
 func (NetworkHost) TableName() string     { return "network_hosts" }
 func (CommandTemplate) TableName() string { return "command_templates" }
 
@@ -508,6 +459,18 @@ type SystemMetric struct {
 
 func (SystemMetric) TableName() string { return "system_metrics" }
 
+type GeneratedReport struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Name      string    `gorm:"size:255" json:"name"`
+	Template  string    `gorm:"size:50" json:"template"`
+	Format    string    `gorm:"size:10;default:html" json:"format"`
+	Content   string    `gorm:"type:text" json:"content"`
+	Sections  string    `gorm:"type:text" json:"sections"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (GeneratedReport) TableName() string { return "generated_reports" }
+
 type RolePermission struct {
 	ID           uint   `gorm:"primaryKey" json:"id"`
 	Role         string `gorm:"size:32;index:idx_role_perm_role" json:"role"`
@@ -535,7 +498,7 @@ func RoleHasPermission(role, permission string) bool {
 }
 
 func GetAllRoles() []string {
-	return []string{RoleAdmin, RoleOperator, RoleViewer, RoleGuest}
+	return []string{RoleAdmin, RoleUser}
 }
 
 func GetAllPermissions() []string {

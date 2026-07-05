@@ -94,7 +94,7 @@ func (s *Server) handleDashboardActivityHeatmap(c *gin.Context) {
 	}
 
 	var tasks []db.Task
-	s.db.Select("created_at").Where("created_at >= ?", startTime).Find(&tasks)
+	s.db.Select("created_at").Where("created_at >= ?", startTime).Limit(10000).Find(&tasks)
 
 	heatmap := make([]HeatmapData, 0)
 	now := time.Now()
@@ -151,23 +151,22 @@ func (s *Server) handleDashboardOSDistribution(c *gin.Context) {
 }
 
 func (s *Server) handleDashboardTaskStatus(c *gin.Context) {
-	var (
-		completedCount int64
-		runningCount   int64
-		pendingCount   int64
-		failedCount    int64
-	)
+	var counts []struct {
+		Status string
+		Count  int64
+	}
+	s.db.Model(&db.Task{}).Select("status, count(*) as count").Group("status").Limit(10).Find(&counts)
 
-	s.db.Model(&db.Task{}).Where("status = ?", "completed").Count(&completedCount)
-	s.db.Model(&db.Task{}).Where("status = ?", "running").Count(&runningCount)
-	s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingCount)
-	s.db.Model(&db.Task{}).Where("status = ?", "failed").Count(&failedCount)
+	countMap := make(map[string]int64, len(counts))
+	for _, c := range counts {
+		countMap[c.Status] = c.Count
+	}
 
 	statusData := []TaskStatusData{
-			{Name: "Completed", Count: completedCount, Color: "#22c55e"},
-			{Name: "Running", Count: runningCount, Color: "#f59e0b"},
-			{Name: "Pending", Count: pendingCount, Color: "#6366f1"},
-			{Name: "Failed", Count: failedCount, Color: "#ef4444"},
+		{Name: "Completed", Count: countMap["completed"], Color: "#22c55e"},
+		{Name: "Running", Count: countMap["running"], Color: "#f59e0b"},
+		{Name: "Pending", Count: countMap["pending"], Color: "#6366f1"},
+		{Name: "Failed", Count: countMap["failed"], Color: "#ef4444"},
 	}
 
 	c.JSON(http.StatusOK, statusData)
@@ -208,7 +207,7 @@ func (s *Server) handleDashboardListenerTraffic(c *gin.Context) {
 	bytesOut := make([]int64, points)
 
 	var tasks []db.Task
-	s.db.Select("created_at").Where("created_at >= ?", startTime).Find(&tasks)
+	s.db.Select("created_at").Where("created_at >= ?", startTime).Limit(10000).Find(&tasks)
 
 	now := time.Now()
 	for _, task := range tasks {
@@ -359,7 +358,6 @@ func (s *Server) handleDashboardTaskGantt(c *gin.Context) {
 		Find(&tasks)
 
 	ganttData := make([]TaskGanttItem, 0)
-	now := time.Now()
 
 	for _, task := range tasks {
 		agentName := task.Agent.Hostname
@@ -367,7 +365,6 @@ func (s *Server) handleDashboardTaskGantt(c *gin.Context) {
 			agentName = task.AgentID[:8]
 		}
 
-		totalMinutes := int(now.Sub(startTime).Minutes())
 		startOffset := int(task.CreatedAt.Sub(startTime).Minutes())
 		duration := 5
 		if task.UpdatedAt.After(task.CreatedAt) {
@@ -402,8 +399,6 @@ func (s *Server) handleDashboardTaskGantt(c *gin.Context) {
 			Status:   task.Status,
 			Color:    color,
 		})
-
-		_ = totalMinutes
 	}
 
 	c.JSON(http.StatusOK, ganttData)

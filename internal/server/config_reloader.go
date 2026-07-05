@@ -124,7 +124,7 @@ func (r *ConfigReloader) reload() {
 		return
 	}
 
-	*r.cfg = *newCfg
+	r.cfg.CopyFrom(newCfg)
 
 	if r.onReload != nil {
 		r.onReload(r.cfg)

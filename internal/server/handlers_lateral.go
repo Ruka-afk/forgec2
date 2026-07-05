@@ -1,7 +1,9 @@
-package server
+﻿package server
 
 import (
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -41,7 +43,7 @@ func (s *Server) handleLateralPage(c *gin.Context) {
 		"TotalCreds":   totalCreds,
 		"TotalTasks":   totalTasks,
 	}
-	s.renderPage(c, "lateral_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 // handleLateralHistory returns lateral movement history
@@ -88,7 +90,9 @@ func (s *Server) handleProcessLateralResult(c *gin.Context) {
 		updates["error"] = req.Error
 	}
 
-	s.db.Model(&db.Task{}).Where("id = ?", req.TaskID).Updates(updates)
+	if err := s.db.Model(&db.Task{}).Where("id = ?", req.TaskID).Updates(updates).Error; err != nil {
+		slog.Error("Failed to update lateral task", "task_id", req.TaskID, "err", err)
+	}
 
 	// If successful, add target to network hosts
 	if req.Success && req.Target != "" {
@@ -100,11 +104,54 @@ func (s *Server) handleProcessLateralResult(c *gin.Context) {
 			Services: fmt.Sprintf(`[{"method":"%s","port":0}]`, req.Method),
 			LastSeen: time.Now(),
 		}
-		s.db.Where("agent_id = ? AND ip = ?", req.AgentID, req.Target).FirstOrCreate(&host, db.NetworkHost{
+		if err := s.db.Where("agent_id = ? AND ip = ?", req.AgentID, req.Target).FirstOrCreate(&host, db.NetworkHost{
 			AgentID: req.AgentID,
 			IP:      req.Target,
-		})
+		}).Error; err != nil {
+			slog.Error("Failed to create network host from lateral result", "err", err)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
+
+// handleAPILateralExecute dispatches a lateral movement task via JSON API
+func (s *Server) handleAPILateralExecute(c *gin.Context) {
+	var req struct {
+		Source     string `json:"source"`
+		Target     string `json:"target"`
+		Method     string `json:"method"`
+		Credential string `json:"credential,omitempty"`
+		Username   string `json:"username,omitempty"`
+		Password   string `json:"password,omitempty"`
+		Command    string `json:"command,omitempty"`
+		Hash       string `json:"hash,omitempty"`
+		KeyPath    string `json:"key_path,omitempty"`
+		Port       string `json:"port,omitempty"`
+		Share      string `json:"share,omitempty"`
+		Namespace  string `json:"namespace,omitempty"`
+		Pivot      string `json:"pivot,omitempty"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	if req.Source == "" || req.Target == "" || req.Method == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "source, target and method required"})
+		return
+	}
+	spec, err := json.Marshal(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode spec"})
+		return
+	}
+	task, err := s.createTask(req.Source, "lateral", string(spec), "", "", "", 0, 0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
+	}
+	slog.Info("Lateral movement via JSON API", "agent", req.Source, "target", req.Target, "method", req.Method)
+	s.broadcastTaskUpdate(req.Source, *task)
+	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
+}
+

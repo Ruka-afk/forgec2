@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"net/http"
@@ -28,7 +28,7 @@ func (s *Server) handleTemplatesPage(c *gin.Context) {
 		"Templates":  templates,
 		"Categories": categories,
 	}
-	s.renderPage(c, "templates_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 // handleCreateTemplate creates a new command template
@@ -87,3 +87,30 @@ func (s *Server) handleGetTemplatesByCategory(c *gin.Context) {
 		"total":     len(templates),
 	})
 }
+
+// handleUpdateTemplate updates an existing command template
+// PUT /api/templates/:id
+func (s *Server) handleUpdateTemplate(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		Name        string `json:"name" binding:"required"`
+		Category    string `json:"category" binding:"required"`
+		Command     string `json:"command" binding:"required"`
+		Description string `json:"description"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	if err := s.db.Model(&db.CommandTemplate{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"name":        req.Name,
+		"category":    req.Category,
+		"command":     req.Command,
+		"description": req.Description,
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update template"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+

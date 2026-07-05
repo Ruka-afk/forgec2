@@ -3,7 +3,7 @@
 BINARY ?= forgec2-server
 
 build:
-	go build -o $(BINARY) ./cmd/server
+	go build -ldflags="-s -w -buildid=" -trimpath -buildvcs=false -o $(BINARY) ./cmd/server
 
 build-js:
 	powershell -ExecutionPolicy Bypass -File ./build_js.ps1 -SkipCSS

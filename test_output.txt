@@ -1,0 +1,11 @@
+﻿=== RUN   TestGetMissingTranslations
+    locales_test.go:74: Found 225 missing translations for ja
+    locales_test.go:79: English should have 0 missing translations, got 1
+--- FAIL: TestGetMissingTranslations (0.00s)
+FAIL
+FAIL	github.com/forgec2/forgec2/internal/server	0.150s
+testing: warning: no tests to run
+PASS
+ok  	github.com/forgec2/forgec2/internal/server/middleware	(cached) [no tests to run]
+?   	github.com/forgec2/forgec2/internal/server/totp	[no test files]
+FAIL

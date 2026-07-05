@@ -1,8 +1,9 @@
-package server
+﻿package server
 
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -15,7 +16,7 @@ func (s *Server) handleAutomationPage(c *gin.Context) {
 	rules := s.loadAutomationRules()
 	var webhooks []db.WebhookConfig
 	s.db.Find(&webhooks)
-	s.renderPage(c, "automation_content", gin.H{
+	s.renderPageOrJSON(c, gin.H{
 		"Title": "Automation",
 		"ActiveNav": "automation",
 		"Rules":     rules,
@@ -96,13 +97,21 @@ func (s *Server) handleCreateWebhook(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	s.db.Create(&wh)
+	if err := s.db.Create(&wh).Error; err != nil {
+		slog.Error("Failed to create webhook", "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create webhook"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": wh})
 }
 
 func (s *Server) handleDeleteWebhook(c *gin.Context) {
 	id := c.Param("id")
-	s.db.Delete(&db.WebhookConfig{}, id)
+	if err := s.db.Delete(&db.WebhookConfig{}, id).Error; err != nil {
+		slog.Error("Failed to delete webhook", "id", id, "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete webhook"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -172,7 +181,11 @@ func (s *Server) handlePluginToggle(c *gin.Context) {
 		return
 	}
 	p.Enabled = !p.Enabled
-	s.db.Save(p)
+	if err := s.db.Save(p).Error; err != nil {
+		slog.Error("Failed to save plugin toggle", "plugin_id", p.ID, "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to toggle plugin"})
+		return
+	}
 	if p.Name != "" {
 		_ = s.pluginManager.SetEnabled(p.Name, p.Enabled)
 	}
@@ -188,7 +201,11 @@ func (s *Server) handlePluginDelete(c *gin.Context) {
 	if p.Name != "" {
 		_ = s.pluginManager.Unregister(p.Name)
 	}
-	s.db.Delete(p)
+	if err := s.db.Delete(p).Error; err != nil {
+		slog.Error("Failed to delete plugin", "plugin_id", p.ID, "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete plugin"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -207,7 +224,7 @@ func (s *Server) handlePluginCreate(c *gin.Context) {
 }
 
 func (s *Server) handlePluginsPage(c *gin.Context) {
-	s.renderPage(c, "plugins_content", gin.H{"Title": "Plugin Marketplace", "ActiveNav": "plugins"})
+	s.renderPageOrJSON(c, gin.H{"Title": "Plugin Marketplace", "ActiveNav": "plugins"})
 }
 
 func (s *Server) handlePluginGet(c *gin.Context) {
@@ -474,3 +491,4 @@ func (s *Server) handleBOFRepoImport(c *gin.Context) {
 		"bof_id":  bof.ID,
 	})
 }
+

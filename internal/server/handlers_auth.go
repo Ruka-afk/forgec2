@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"crypto/rand"
@@ -37,14 +37,7 @@ func (s *Server) handleLoginPage(c *gin.Context) {
 }
 
 func (s *Server) renderLoginPage(c *gin.Context, data gin.H) {
-	currentLang := detectLanguage(c)
-	langInfo, _ := GetLanguageInfo(currentLang)
-	data["CurrentLang"] = currentLang
-	data["CurrentLangInfo"] = langInfo
-	data["IsRTL"] = langInfo.RTL
-	data["LocalesJSON"] = GetTranslationsJSON(currentLang)
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	s.tmpl.ExecuteTemplate(c.Writer, "login.html", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) renderLoginError(c *gin.Context, errMsg, lastUsername string, rememberMe bool) {
@@ -64,7 +57,7 @@ func (s *Server) handleLogin(c *gin.Context) {
 	rememberMe := c.PostForm("remember_me") == "on"
 	clientIP := c.ClientIP()
 
-	slog.Info("Login attempt", "username", username, "ip", clientIP, "password_length", len(password))
+	slog.Info("Login attempt", "username", username, "ip", clientIP, "password_provided", password != "")
 
 	if locked, retryAfter := s.checkLoginLockout(clientIP); locked {
 		s.LogAuditRecord(c, "login_failed", "auth", username, fmt.Sprintf("Rate limit lockout (%ds)", retryAfter), false, nil)
@@ -99,23 +92,19 @@ func (s *Server) handleLogin(c *gin.Context) {
 			s.renderLoginError(c, "Failed to set password", username, rememberMe)
 			return
 		}
-		s.db.Model(&user).Updates(map[string]interface{}{
+		if err := s.db.Model(&user).Updates(map[string]interface{}{
 			"password_hash": hash,
 			"last_login":    time.Now(),
 			"last_ip":       c.ClientIP(),
-		})
+		}).Error; err != nil {
+			slog.Error("Failed to update password hash", "username", username, "err", err)
+		}
 		user.PasswordHash = hash
 		slog.Info("Password set for user", "username", username)
 	} else if !middleware.CheckPassword(user.PasswordHash, password) {
-		hashPrefix := user.PasswordHash
-		if len(hashPrefix) > 10 {
-			hashPrefix = hashPrefix[:10]
-		}
 		slog.Warn("Login failed: wrong password",
 			"username", username,
 			"ip", c.ClientIP(),
-			"hash_prefix", hashPrefix,
-			"password_length", len(password),
 		)
 		s.LogAuditRecord(c, "login_failed", "auth", username, "Wrong password", false, nil)
 		delay := user.LoginAttempts
@@ -123,7 +112,9 @@ func (s *Server) handleLogin(c *gin.Context) {
 			delay = 10
 		}
 		time.Sleep(time.Duration(delay) * 500 * time.Millisecond)
-		s.db.Model(&user).UpdateColumn("login_attempts", user.LoginAttempts+1)
+		if err := s.db.Model(&user).UpdateColumn("login_attempts", user.LoginAttempts+1).Error; err != nil {
+			slog.Error("Failed to update login attempts", "username", username, "err", err)
+		}
 		if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
 			s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
 			return
@@ -131,11 +122,13 @@ func (s *Server) handleLogin(c *gin.Context) {
 		s.renderLoginError(c, "Invalid username or password", username, rememberMe)
 		return
 	} else {
-		s.db.Model(&user).Updates(map[string]interface{}{
+		if err := s.db.Model(&user).Updates(map[string]interface{}{
 			"last_login":     time.Now(),
 			"last_ip":        c.ClientIP(),
 			"login_attempts": 0,
-		})
+		}).Error; err != nil {
+			slog.Error("Failed to update login success", "username", username, "err", err)
+		}
 	}
 
 	if user.TOTPSecret != "" {
@@ -168,7 +161,9 @@ func (s *Server) handleLogin(c *gin.Context) {
 	c.SetCookie("forgec2_session", token, maxAge, "/", "", middleware.CookieSecure, true)
 
 	s.clearLoginLockout(clientIP)
-	s.db.Model(&db.User{}).Where("id = ?", user.ID).Update("force_logout_at", nil)
+	if err := s.db.Model(&db.User{}).Where("id = ?", user.ID).Update("force_logout_at", nil).Error; err != nil {
+		slog.Error("Failed to clear force_logout_at", "user_id", user.ID, "err", err)
+	}
 
 	if s.pluginManager != nil {
 		go s.pluginManager.ExecuteHook(context.Background(), plugin.Event{
@@ -260,11 +255,9 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 
 	// Mask JWT secret for display
 	jwtSecret := s.cfg.Server.JWTSecret
-	jwtMasked := ""
-	if len(jwtSecret) > 8 {
-		jwtMasked = jwtSecret[:4] + strings.Repeat("*", len(jwtSecret)-8) + jwtSecret[len(jwtSecret)-4:]
-	} else if len(jwtSecret) > 0 {
-		jwtMasked = strings.Repeat("*", len(jwtSecret))
+		jwtMasked := ""
+	if len(jwtSecret) > 0 {
+		jwtMasked = "****"
 	}
 
 	currentUser, _ := c.Get("user")
@@ -346,7 +339,7 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "settings_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) handleSaveAgentConfig(c *gin.Context) {
@@ -375,7 +368,7 @@ func (s *Server) handleSaveAgentConfig(c *gin.Context) {
 
 	s.cfg.Implant.DefaultSkipTLS = skipTLS == "true" || skipTLS == "1"
 
-	if err := s.cfg.Save("config.yaml"); err != nil {
+	if err := s.cfg.Save(s.configPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save config"})
 		return
 	}
@@ -413,7 +406,11 @@ func (s *Server) handleChangePassword(c *gin.Context) {
 		return
 	}
 
-	s.db.Model(&user).Update("password_hash", hash)
+	if err := s.db.Model(&user).Update("password_hash", hash).Error; err != nil {
+		slog.Error("Failed to update password hash", "user_id", user.ID, "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
+		return
+	}
 	s.LogAuditRecord(c, "password_change", "auth", user.Username, "Password changed", true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
@@ -477,7 +474,11 @@ func (s *Server) handleTOTPEnable(c *gin.Context) {
 		return
 	}
 
-	s.db.Model(&user).Update("totp_secret", secret)
+	if err := s.db.Model(&user).Update("totp_secret", secret).Error; err != nil {
+		slog.Error("Failed to enable TOTP", "user_id", user.ID, "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to enable 2FA"})
+		return
+	}
 	s.LogAuditRecord(c, "2fa_enable", "auth", user.Username, "2FA enabled", true, nil)
 	slog.Info("2FA enabled for user", "username", user.Username)
 
@@ -504,7 +505,11 @@ func (s *Server) handleTOTPDisable(c *gin.Context) {
 		return
 	}
 
-	s.db.Model(&user).Update("totp_secret", "")
+	if err := s.db.Model(&user).Update("totp_secret", "").Error; err != nil {
+		slog.Error("Failed to disable TOTP", "user_id", user.ID, "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to disable 2FA"})
+		return
+	}
 	s.LogAuditRecord(c, "2fa_disable", "auth", user.Username, "2FA disabled", true, nil)
 	slog.Info("2FA disabled for user", "username", user.Username)
 
@@ -550,7 +555,7 @@ func (s *Server) handleSaveServerConfig(c *gin.Context) {
 		}
 	}
 
-	if err := s.cfg.Save("config.yaml"); err != nil {
+	if err := s.cfg.Save(s.configPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save config"})
 		return
 	}
@@ -593,7 +598,7 @@ func (s *Server) handleSaveMalleableProfile(c *gin.Context) {
 		}
 	}
 
-	if err := s.cfg.Save("config.yaml"); err != nil {
+	if err := s.cfg.Save(s.configPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save config"})
 		return
 	}
@@ -644,7 +649,7 @@ func (s *Server) handleRegenerateJWT(c *gin.Context) {
 		return
 	}
 	s.cfg.Server.JWTSecret = hex.EncodeToString(b)
-	if err := s.cfg.Save("config.yaml"); err != nil {
+	if err := s.cfg.Save(s.configPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save config"})
 		return
 	}
@@ -700,16 +705,16 @@ func (s *Server) handleBackupDatabase(c *gin.Context) {
 }
 
 func (s *Server) handleDownloadConfig(c *gin.Context) {
-	data, err := os.ReadFile("config.yaml")
+	data, err := os.ReadFile(s.configPath)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Failed to read config")
 		return
 	}
 	// Redact JWT secret before serving
-	redacted := strings.Replace(string(data), s.cfg.Server.JWTSecret, strings.Repeat("*", len(s.cfg.Server.JWTSecret)), 1)
+	redacted := strings.ReplaceAll(string(data), s.cfg.Server.JWTSecret, "****")
 	// Redact password hash
 	if s.cfg.Auth.PasswordHash != "" {
-		redacted = strings.Replace(redacted, s.cfg.Auth.PasswordHash, strings.Repeat("*", len(s.cfg.Auth.PasswordHash)), 1)
+		redacted = strings.ReplaceAll(redacted, s.cfg.Auth.PasswordHash, "****")
 	}
 	c.Header("Content-Disposition", "attachment; filename=config.yaml")
 	c.Data(http.StatusOK, "application/x-yaml", []byte(redacted))
@@ -730,7 +735,7 @@ func (s *Server) handleAuditLogPage(c *gin.Context) {
 		data[k] = v
 	}
 
-	s.renderPage(c, "audit_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) handleGetAuditLogs(c *gin.Context) {
@@ -807,7 +812,7 @@ func (s *Server) handleSetLanguage(c *gin.Context) {
 }
 
 func (s *Server) handleTranslationsPage(c *gin.Context) {
-	s.renderPage(c, "translations_content", gin.H{
+	s.renderPageOrJSON(c, gin.H{
 		"Title": "Translation Management",
 		"ActiveNav": "translations",
 	})
@@ -875,3 +880,4 @@ func (s *Server) handleTranslationCheck(c *gin.Context) {
 		"html_tag_issues":      htmlIssues,
 	})
 }
+

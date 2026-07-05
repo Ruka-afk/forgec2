@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"fmt"
@@ -139,7 +139,7 @@ func (s *Server) handlePrivescPage(c *gin.Context) {
 		"Stats":     stats,
 		"Agents":    agents,
 	}
-	s.renderPage(c, "privesc_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 // handlePrivescHistory returns privesc check history
@@ -157,3 +157,4 @@ func (s *Server) handlePrivescHistory(c *gin.Context) {
 		"total": len(tasks),
 	})
 }
+

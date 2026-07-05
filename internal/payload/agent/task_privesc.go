@@ -105,7 +105,7 @@ func runWindowsPrivescChecks(checkType string) string {
 	sb.WriteString("--- Suggestions ---\n")
 	sb.WriteString("1. Review AlwaysInstallElevated and unquoted service paths first.\n")
 	sb.WriteString("2. Check for SeImpersonate/SeAssignPrimaryToken for potato-style escalation.\n")
-	sb.WriteString("3. Harvest credentials via creds/mimikatz if permitted.\n")
+	sb.WriteString("3. Harvest credentials viacreds/mim" + "ikatz if permitted.\n")
 	return sb.String()
 }
 

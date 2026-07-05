@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"strings"
 	"sync"
 )
@@ -123,15 +122,6 @@ var enTranslations = TranslationMap{
 	"nav.online_users": "Online Users",
 
 	"notifications.user": "User",
-	"chat.operations": "Operations Chat",
-	"chat.connecting": "Connecting...",
-	"chat.type_message": "Type a message...",
-	"chat.send": "Send",
-
-	"collab.no_online_users": "No users online",
-	"collab.you": "you",
-	"collab.load_failed": "Unable to load online users",
-
 	"ai.title": "AI Assistant",
 	"ai.settings": "Settings",
 	"ai.clear": "Clear",
@@ -162,7 +152,7 @@ var enTranslations = TranslationMap{
 	"ai.quick_agents": "Online Implants",
 	"ai.quick_listeners": "Listeners",
 	"ai.quick_credentials": "Credentials",
-	"ai.quick_operators": "Online Operators",
+	"ai.quick_operators": "Online Users",
 	"ai.prompt_redteam": "You are ForgeC2 red team assistant. List online agents, view target details, execute commands, manage credentials and listeners.",
 	"ai.prompt_concise": "Security analysis assistant. Answer concisely with bullet points. Prioritize actionable steps.",
 	"ai.prompt_verbose": "Senior penetration testing expert. Provide detailed technical analysis using MITRE ATT&CK terminology. Output structured reports.",
@@ -207,11 +197,11 @@ var enTranslations = TranslationMap{
 
 	"login.remember_me": "Remember me",
 	"login.forgot_password": "Forgot password?",
-	"login.operator_login": "Operator Login",
+	"login.operator_login": "User Login",
 	"login.subtitle": "Sign in to your command & control console",
 	"login.access_console": "Access Console",
 	"login.totp_label": "Two-Factor Code (Optional)",
-	"login.authorized_only": "Authorized operators only. All access is audited.",
+	"login.authorized_only":      "Authorized users only. All access is audited.",
 
 	"search.title": "Global Search",
 	"search.subtitle": "Search across implants, listeners, credentials and more",
@@ -315,7 +305,8 @@ var enTranslations = TranslationMap{
 	"builds.format": "Format",
 	"builds.c2_url": "C2 URL",
 	"builds.filename": "Filename",
-	"builds.operator": "Operator",
+	"builds.operator": "User",
+	"builds.operator_short": "User",
 	"builds.status": "Status",
 	"builds.details": "Details",
 	"builds.success": "Success",
@@ -337,7 +328,7 @@ var enTranslations = TranslationMap{
 	"users.last_login": "Last Login",
 	"users.created_at": "Created At",
 	"users.admin": "Admin",
-	"users.operator": "Operator",
+	"users.operator": "User",
 	"users.viewer": "Viewer",
 
 	"theme.light": "Light Mode",
@@ -515,15 +506,6 @@ var zhTranslations = TranslationMap{
 	"nav.online_users": "在线用户",
 
 	"notifications.user": "用户",
-	"chat.operations": "作战聊天",
-	"chat.connecting": "连接中...",
-	"chat.type_message": "输入消息...",
-	"chat.send": "发送",
-
-	"collab.no_online_users": "暂无在线用户",
-	"collab.you": "你",
-	"collab.load_failed": "在线用户加载失败",
-
 	"ai.title": "AI 智能助手",
 	"ai.settings": "设置",
 	"ai.clear": "清除",
@@ -554,7 +536,7 @@ var zhTranslations = TranslationMap{
 	"ai.quick_agents": "在线 Implant",
 	"ai.quick_listeners": "监听器",
 	"ai.quick_credentials": "凭据摘要",
-	"ai.quick_operators": "在线操作员",
+	"ai.quick_operators": "在线用户",
 	"ai.prompt_redteam": "你是 ForgeC2 红队行动助手。可以列出在线 Implant、查看目标详情、执行命令、管理凭据和监听器。",
 	"ai.prompt_concise": "安全分析助手。用要点简洁回答，优先给出可执行步骤。",
 	"ai.prompt_verbose": "资深渗透测试专家。使用 MITRE ATT&CK 术语提供详细技术分析，输出结构化报告。",
@@ -598,11 +580,11 @@ var zhTranslations = TranslationMap{
 	"login.too_many_attempts": "登录尝试次数过多，请稍后再试。",
 	"login.remember_me": "记住我",
 	"login.forgot_password": "忘记密码？",
-	"login.operator_login": "操作员登录",
+	"login.operator_login": "用户登录",
 	"login.subtitle": "登录您的指挥控制控制台",
 	"login.access_console": "进入控制台",
 	"login.totp_label": "双因素验证码（可选）",
-	"login.authorized_only": "仅限授权操作员，所有访问均被审计。",
+	"login.authorized_only": "仅限授权用户，所有访问均被审计。",
 
 	"search.title": "全局搜索",
 	"search.subtitle": "搜索 Implant、监听器、凭据等",
@@ -706,7 +688,8 @@ var zhTranslations = TranslationMap{
 	"builds.format": "格式",
 	"builds.c2_url": "C2 地址",
 	"builds.filename": "文件名",
-	"builds.operator": "操作员",
+	"builds.operator": "用户",
+	"builds.operator_short": "用户",
 	"builds.status": "状态",
 	"builds.details": "详情",
 	"builds.success": "成功",
@@ -728,8 +711,7 @@ var zhTranslations = TranslationMap{
 	"users.last_login": "最后登录",
 	"users.created_at": "创建时间",
 	"users.admin": "管理员",
-	"users.operator": "操作员",
-	"users.viewer": "查看者",
+	"users.operator": "用户",
 
 	"theme.light": "亮色模式",
 	"theme.dark": "暗色模式",
@@ -918,9 +900,6 @@ var jaTranslations = TranslationMap{
 	"notifications.task": "タスク",
 	"notifications.system": "システム",
 	"notifications.settings": "通知設定",
-	"chat.operations": "オペレーションチャット",
-	"chat.connecting": "接続中...",
-	"chat.type_message": "メッセージを入力...",
 	"update.available": "新しいバージョンがあります",
 	"update.download": "更新をダウンロード",
 	"task.details": "タスク詳細",
@@ -1070,9 +1049,6 @@ var koTranslations = TranslationMap{
 	"notifications.task": "작업",
 	"notifications.system": "시스템",
 	"notifications.settings": "알림 설정",
-	"chat.operations": "작전 채팅",
-	"chat.connecting": "연결 중...",
-	"chat.type_message": "메시지 입력...",
 	"update.available": "새 버전 사용 가능",
 	"update.download": "업데이트 다운로드",
 	"task.details": "작업 상세",
@@ -1222,9 +1198,6 @@ var arTranslations = TranslationMap{
 	"notifications.task": "المهمة",
 	"notifications.system": "النظام",
 	"notifications.settings": "إعدادات الإشعارات",
-	"chat.operations": "دردشة العمليات",
-	"chat.connecting": "جاري الاتصال...",
-	"chat.type_message": "اكتب رسالة...",
 	"update.available": "إصدار جديد متاح",
 	"update.download": "تنزيل التحديث",
 	"task.details": "تفاصيل المهمة",
@@ -1294,7 +1267,7 @@ func GetSupportedLanguages() map[string]LanguageInfo {
 }
 
 // GetTranslationsJSON returns all translations for a language as JSON for client-side __().
-func GetTranslationsJSON(lang string) template.JS {
+func GetTranslationsJSON(lang string) string {
 	i18nMutex.RLock()
 	defer i18nMutex.RUnlock()
 
@@ -1307,9 +1280,9 @@ func GetTranslationsJSON(lang string) template.JS {
 	}
 	b, err := json.Marshal(transMap)
 	if err != nil {
-		return template.JS("{}")
+		return "{}"
 	}
-	return template.JS(b)
+	return string(b)
 }
 
 func GetTranslation(lang, key string) string {

@@ -1,12 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
+	"unsafe"
 )
 
 // SandboxDetector detects sandbox and virtual machine environments
@@ -136,17 +139,51 @@ func (sd *SandboxDetector) checkCPUCores() bool {
 	return runtime.NumCPU() < 2
 }
 
-// checkMemorySize checks if memory is too low
+// checkMemorySize checks if memory is too low on Windows using GlobalMemoryStatusEx.
 func (sd *SandboxDetector) checkMemorySize() bool {
-	// This is a simplified check; real implementation would use system APIs
-	// For now, we'll use a heuristic
-	return false // Placeholder
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	k32 := syscall.NewLazyDLL("kernel32.dll")
+	procGlobalMemoryStatusEx := k32.NewProc("GlobalMemoryStatusEx")
+	var memInfo struct {
+		length        uint32
+		memoryLoad    uint32
+		totalPhys     uint64
+		availPhys     uint64
+		totalPageFile uint64
+		availPageFile uint64
+		totalVirtual  uint64
+		availVirtual  uint64
+		reserved      [8]uint64
+	}
+	memInfo.length = uint32(unsafe.Sizeof(memInfo))
+	ret, _, _ := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&memInfo)))
+	if ret == 0 {
+		return false
+	}
+	return memInfo.totalPhys < 4*1024*1024*1024
 }
 
-// checkDiskSize checks if disk is too small
+// checkDiskSize checks if disk is too small using GetDiskFreeSpaceExW.
 func (sd *SandboxDetector) checkDiskSize() bool {
-	// Simplified check
-	return false // Placeholder
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	k32 := syscall.NewLazyDLL("kernel32.dll")
+	procGetDiskFreeSpaceEx := k32.NewProc("GetDiskFreeSpaceExW")
+	root, _ := syscall.UTF16PtrFromString("C:\\")
+	var freeBytesAvailable, totalBytes, totalFreeBytes int64
+	ret, _, _ := procGetDiskFreeSpaceEx.Call(
+		uintptr(unsafe.Pointer(root)),
+		uintptr(unsafe.Pointer(&freeBytesAvailable)),
+		uintptr(unsafe.Pointer(&totalBytes)),
+		uintptr(unsafe.Pointer(&totalFreeBytes)),
+	)
+	if ret == 0 {
+		return false
+	}
+	return totalBytes < 60*1024*1024*1024
 }
 
 // checkVMProcesses checks for VM-related processes
@@ -179,8 +216,11 @@ func (sd *SandboxDetector) checkVMProcesses() bool {
 	return false
 }
 
-// checkVMMAC checks for VM MAC address prefixes
+// checkVMMAC retrieves MAC address via GetAdaptersInfo and checks against VM prefixes.
 func (sd *SandboxDetector) checkVMMAC() bool {
+	if runtime.GOOS != "windows" {
+		return false
+	}
 	vmMACPrefixes := []string{
 		"00:05:69", // VMware
 		"00:0C:29", // VMware
@@ -192,10 +232,60 @@ func (sd *SandboxDetector) checkVMMAC() bool {
 		"00:16:3E", // Xen
 		"00:15:5D", // Hyper-V
 	}
-
-	// This would call system APIs to get MAC addresses
-	// Placeholder implementation
-	_ = vmMACPrefixes // Use variable
+	iphlpapi := syscall.NewLazyDLL("iphlpapi.dll")
+	procGetAdaptersInfo := iphlpapi.NewProc("GetAdaptersInfo")
+	var bufSize uint32
+	procGetAdaptersInfo.Call(0, uintptr(unsafe.Pointer(&bufSize)))
+	if bufSize == 0 {
+		return false
+	}
+	buf := make([]byte, bufSize)
+	ret, _, _ := procGetAdaptersInfo.Call(uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&bufSize)))
+	if ret != 0 {
+		return false
+	}
+	type ipAddressList struct {
+		next     uintptr
+		ipAddress [16]byte
+		ipMask   [16]byte
+		context  uint32
+	}
+	type adapterInfo struct {
+		next                uintptr
+		comboIndex          uint32
+		name                [260 + 4]byte
+		description         [132 + 4]byte
+		addressLength       uint32
+		address             [8]byte
+		index               uint32
+		_type               uint32
+		dhcpEnabled         uint32
+		currentIpAddress    uintptr
+		ipAddressList       ipAddressList
+		gatewayList         ipAddressList
+		dhcpServer          ipAddressList
+		haveWins            bool
+		primaryWinsServer   ipAddressList
+		secondaryWinsServer ipAddressList
+		leaseObtained       int64
+		leaseExpires        int64
+	}
+	ai := (*adapterInfo)(unsafe.Pointer(&buf[0]))
+	for ai != nil {
+		mac := fmt.Sprintf("%02X:%02X:%02X:%02X:%02X:%02X",
+			ai.address[0], ai.address[1], ai.address[2],
+			ai.address[3], ai.address[4], ai.address[5])
+		for _, prefix := range vmMACPrefixes {
+			if strings.HasPrefix(strings.ToUpper(mac), prefix) {
+				return true
+			}
+		}
+		if ai.next != 0 {
+			ai = (*adapterInfo)(unsafe.Pointer(ai.next))
+		} else {
+			break
+		}
+	}
 	return false
 }
 
@@ -242,11 +332,24 @@ func (sd *SandboxDetector) checkUptime() bool {
 	return uptime < 5*time.Minute
 }
 
-// checkMouseMovement checks for lack of mouse movement
+// checkMouseMovement checks for lack of mouse movement via GetCursorPos.
 func (sd *SandboxDetector) checkMouseMovement() bool {
-	// This would require Windows API calls
-	// Placeholder implementation
-	return false
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	user32 := syscall.NewLazyDLL("user32.dll")
+	procGetCursorPos := user32.NewProc("GetCursorPos")
+	// Sample cursor position twice with a small delay
+	var pos1 struct{ x, y int32 }
+	ret1, _, _ := procGetCursorPos.Call(uintptr(unsafe.Pointer(&pos1)))
+	time.Sleep(50 * time.Millisecond)
+	var pos2 struct{ x, y int32 }
+	ret2, _, _ := procGetCursorPos.Call(uintptr(unsafe.Pointer(&pos2)))
+	if ret1 == 0 || ret2 == 0 {
+		return false
+	}
+	// If cursor hasn't moved = sandbox indicator
+	return pos1.x == pos2.x && pos1.y == pos2.y
 }
 
 // AntiDebug provides anti-debugging techniques
@@ -257,26 +360,46 @@ func NewAntiDebug() *AntiDebug {
 	return &AntiDebug{}
 }
 
-// IsDebuggerPresent checks if a debugger is attached (Windows)
+// IsDebuggerPresent checks if a debugger is attached using NtQueryInformationProcess.
 func (ad *AntiDebug) IsDebuggerPresent() bool {
 	if runtime.GOOS != "windows" {
 		return false
 	}
-
-	// Call IsDebuggerPresent API
-	// This is a placeholder; real implementation would use syscall
-	return false
+	ntdll := syscall.NewLazyDLL("ntdll.dll")
+	procNtQueryInformationProcess := ntdll.NewProc("NtQueryInformationProcess")
+	// ProcessDebugPort = 7
+	const processDebugPort = 7
+	var debugPort uintptr
+	var retLen uint32
+	ret, _, _ := procNtQueryInformationProcess.Call(
+		^uintptr(0), // NtCurrentProcess = -1
+		processDebugPort,
+		uintptr(unsafe.Pointer(&debugPort)),
+		unsafe.Sizeof(debugPort),
+		uintptr(unsafe.Pointer(&retLen)),
+	)
+	if ret != 0 {
+		return false
+	}
+	return debugPort != 0
 }
 
-// CheckRemoteDebuggerPresent checks for remote debugger
+// CheckRemoteDebuggerPresent checks for remote debugger.
 func (ad *AntiDebug) CheckRemoteDebuggerPresent() bool {
 	if runtime.GOOS != "windows" {
 		return false
 	}
-
-	// Call CheckRemoteDebuggerPresent API
-	// Placeholder implementation
-	return false
+	k32 := syscall.NewLazyDLL("kernel32.dll")
+	procCheckRemoteDebuggerPresent := k32.NewProc("CheckRemoteDebuggerPresent")
+	var isDebugger bool
+	ret, _, _ := procCheckRemoteDebuggerPresent.Call(
+		^uintptr(0), // GetCurrentProcess = -1
+		uintptr(unsafe.Pointer(&isDebugger)),
+	)
+	if ret == 0 {
+		return false
+	}
+	return isDebugger
 }
 
 // DetectTimingAttack detects debugger through timing analysis

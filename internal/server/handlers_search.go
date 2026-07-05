@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"fmt"
@@ -29,7 +29,7 @@ func (s *Server) handleSearchPage(c *gin.Context) {
 	for k, v := range stats {
 		data[k] = v
 	}
-	s.renderPage(c, "search_content", data)
+	s.renderPageOrJSON(c, data)
 }
 
 func (s *Server) handleAPISearch(c *gin.Context) {
@@ -53,7 +53,7 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 			Type:     "agent",
 			ID:       a.ID,
 			Title:    a.Hostname,
-			Subtitle: fmt.Sprintf("%s@%s · %s · %s", a.Username, a.IP, a.OS, a.Status),
+			Subtitle: fmt.Sprintf("%s@%s 路 %s 路 %s", a.Username, a.IP, a.OS, a.Status),
 			URL:      "/agents/" + a.ID,
 			Icon:     "fa-bug",
 		})
@@ -83,7 +83,7 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 			Type:     "credential",
 			ID:       fmt.Sprintf("%d", cr.ID),
 			Title:    cr.Domain + "\\" + cr.Username,
-			Subtitle: cr.Source + " · " + cr.Type,
+			Subtitle: cr.Source + " 路 " + cr.Type,
 			URL:      "/credentials",
 			Icon:     "fa-key",
 		})
@@ -127,13 +127,13 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 	for _, t := range tasks {
 		cmd := t.Command
 		if len(cmd) > 60 {
-			cmd = cmd[:60] + "…"
+			cmd = cmd[:60] + "..."
 		}
 		results = append(results, SearchResult{
 			Type:     "task",
 			ID:       fmt.Sprintf("%d", t.ID),
 			Title:    t.Type,
-			Subtitle: fmt.Sprintf("%s · %s · %s", t.AgentID, t.Status, cmd),
+			Subtitle: fmt.Sprintf("%s 路 %s 路 %s", t.AgentID, t.Status, cmd),
 			URL:      "/agents/" + t.AgentID,
 			Icon:     "fa-terminal",
 		})
