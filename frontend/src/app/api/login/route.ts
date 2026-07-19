@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
-  const GO_BACKEND = process.env.GO_BACKEND_URL || "http://127.0.0.1:8080";
+  const GO_BACKEND = process.env.GO_BACKEND_URL || "http://127.0.0.1:8000";
 
   const body = await request.text();
 
@@ -14,20 +14,30 @@ export async function POST(request: Request) {
     redirect: "manual",
   });
 
-  const setCookie = response.headers.get("set-cookie");
-
-  if ((response.ok || response.status === 302) && setCookie) {
+  if (response.ok || response.status === 302) {
     const res = NextResponse.json({ success: true }, { status: 200 });
-    const cookieParts = setCookie.split(";")[0];
-    const eqIdx = cookieParts.indexOf("=");
-    const name = cookieParts.substring(0, eqIdx);
-    const value = cookieParts.substring(eqIdx + 1);
-    res.cookies.set(name, value, {
-      path: "/",
-      httpOnly: true,
-      maxAge: 86400,
-      sameSite: "lax",
-    });
+
+    // Parse all Set-Cookie headers (Node.js join-joined string)
+    const rawCookies = response.headers.get("set-cookie");
+    if (rawCookies) {
+      // Split on ", " before a cookie name pattern (name=) to get individual cookies
+      const cookieEntries = rawCookies.split(/,(?=\s*[A-Za-z0-9_-]+=)/);
+      for (const entry of cookieEntries) {
+        const parts = entry.trim().split(";");
+        const nameValue = parts[0];
+        const eqIdx = nameValue.indexOf("=");
+        if (eqIdx < 0) continue;
+        const name = nameValue.substring(0, eqIdx).trim();
+        const value = nameValue.substring(eqIdx + 1).trim();
+        res.cookies.set(name, value, {
+          path: "/",
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+        });
+      }
+    }
+
     return res;
   }
 

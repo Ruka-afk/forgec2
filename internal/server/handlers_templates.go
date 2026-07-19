@@ -41,7 +41,7 @@ func (s *Server) handleCreateTemplate(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
@@ -53,7 +53,7 @@ func (s *Server) handleCreateTemplate(c *gin.Context) {
 	}
 
 	if err := s.db.Create(&template).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create template"})
+		respondError(c, http.StatusInternalServerError, "failed to create template")
 		return
 	}
 
@@ -68,7 +68,7 @@ func (s *Server) handleDeleteTemplate(c *gin.Context) {
 	templateID := c.Param("id")
 
 	if err := s.db.Delete(&db.CommandTemplate{}, templateID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete template"})
+		respondError(c, http.StatusInternalServerError, "failed to delete template")
 		return
 	}
 
@@ -99,7 +99,7 @@ func (s *Server) handleUpdateTemplate(c *gin.Context) {
 		Description string `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 	if err := s.db.Model(&db.CommandTemplate{}).Where("id = ?", id).Updates(map[string]interface{}{
@@ -108,9 +108,19 @@ func (s *Server) handleUpdateTemplate(c *gin.Context) {
 		"command":     req.Command,
 		"description": req.Description,
 	}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update template"})
+		respondError(c, http.StatusInternalServerError, "failed to update template")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// handleListTemplatesJSON returns all templates as JSON
+func (s *Server) handleListTemplatesJSON(c *gin.Context) {
+	var templates []db.CommandTemplate
+	s.db.Order("category, name").Find(&templates)
+	c.JSON(http.StatusOK, gin.H{
+		"templates": templates,
+		"total":     len(templates),
+	})
 }
 

@@ -1,0 +1,29 @@
+name: op-timeline
+version: 1.0.0
+type: report
+description: Generates operational timeline showing all agent events, tasks, and actions in chronological order
+author: ""
+category: reporting
+entry: report.py
+interpreter: python3
+timeout: 60
+params:
+    - name: format
+      type: string
+      required: false
+      default: html
+      description: Output format (html, markdown, json)
+    - name: title
+      type: string
+      required: false
+      default: Operational Timeline
+      description: Report title
+    - name: hours
+      type: int
+      required: false
+      default: "0"
+      description: Time window in hours (0 = all time)
+    - name: agent_id
+      type: string
+      required: false
+      description: Filter to specific agent

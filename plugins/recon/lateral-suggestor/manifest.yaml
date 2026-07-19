@@ -1,0 +1,14 @@
+name: lateral-suggestor
+version: 1.0.0
+type: command
+description: Suggests lateral movement paths based on agent topology, credentials, and network data
+author: ForgeC2
+category: recon
+entry: suggest.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Focus on specific agent

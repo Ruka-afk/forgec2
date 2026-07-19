@@ -1,7 +1,22 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { API_BASE } from "@/lib/constants";
+import { api } from "@/lib/api";
+import { downloadText, downloadJSON } from "@/lib/download";
+import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n";
+import { PageHeader, Spinner } from "@/components/UI";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Crosshair, FileCode, FileSpreadsheet, History, Inbox, Info, Play, Radar } from "lucide-react";
 
 interface ScanAgent {
   id?: string;
@@ -82,16 +97,16 @@ export default function ScannerPage() {
   const [scanning, setScanning] = useState(false);
   const [activeTab, setActiveTab] = useState<"results" | "active" | "history">("results");
 
+  const { t } = useI18n();
+
   const loadData = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}?p=/scanner&format=json`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const result = await res.json();
+      const result = await api.get("/scanner");
       setData({
-        agents: result.Agents || result.agents || [],
-        results: result.Results || result.results || [],
-        active_scans: result.ActiveScans || result.active_scans || [],
-        history: result.History || result.history || [],
+        agents: (result.agents || []) as ScanAgent[],
+        results: (result.results || []) as ScanResult[],
+        active_scans: (result.active_scans || []) as ActiveScan[],
+        history: (result.history || []) as ScanHistory[],
       });
     } catch {
       setData({ agents: [], results: [], active_scans: [], history: [] });
@@ -99,363 +114,334 @@ export default function ScannerPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { Promise.resolve().then(() => loadData()); }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   useEffect(() => {
-    Promise.resolve().then(() => setShowCustomRange(portMode === "custom"));
+    setShowCustomRange(portMode === "custom");
   }, [portMode]);
 
-  useEffect(() => {
-    Promise.resolve().then(() => {
-      if (data?.active_scans && data.active_scans.some(s => (s.Status || s.status) === "running")) {
-        const timer = setInterval(loadData, 3000);
-        return () => clearInterval(timer);
-      }
-    });
-  }, [data?.active_scans, loadData]);
+  const hasActiveScan = data?.active_scans && data.active_scans.some(s => (s.status) === "running");
+  useVisibleInterval(loadData, hasActiveScan ? 3000 : 0);
 
   const handleStartScan = async () => {
     if (!selectedAgent || !targetAddr) return;
     setScanning(true);
     try {
-      const body = new URLSearchParams();
-      body.append("agent_id", selectedAgent);
-      body.append("target", targetAddr);
-      body.append("scan_type", scanType);
+      const body: Record<string, string> = {
+        agent_id: selectedAgent,
+        target: targetAddr,
+        scan_type: scanType,
+      };
       if (portMode === "custom" && customPorts) {
-        body.append("port_range", customPorts);
+        body.port_range = customPorts;
       } else {
-        body.append("top_ports", "1000");
+        body.top_ports = "1000";
       }
-      await fetch(`${API_BASE}?p=/api/scan&format=json`, {
-        method: "POST",
-        body,
-      });
+      await api.post("/api/scan", body);
       setActiveTab("active");
       loadData();
-    } catch (e) { console.error("Scanner: start scan failed", e); }
+    } catch { toast.error("Failed to start scan"); }
     setScanning(false);
   };
 
   const handleExport = (format: "csv" | "json") => {
     const results = data?.results || [];
     if (results.length === 0) return;
-    let content: string;
-    let filename: string;
-    let mimeType: string;
     if (format === "csv") {
       const header = "IP,Port,Protocol,State,Service,Version,Banner";
       const rows = results.map(r => {
-        const ip = r.IP ?? r.ip ?? "";
-        const port = r.Port ?? r.port ?? "";
-        const proto = r.Protocol ?? r.protocol ?? "";
-        const state = r.Status ?? r.status ?? "";
-        const svc = r.Service ?? r.service ?? "";
-        const ver = r.Version ?? r.version ?? "";
-        const banner = (r.Banner ?? r.banner ?? "").replace(/,/g, " ");
+        const ip = r.ip ?? "";
+        const port = r.port ?? "";
+        const proto = r.protocol ?? "";
+        const state = r.status ?? "";
+        const svc = r.service ?? "";
+        const ver = r.version ?? "";
+        const banner = (r.banner ?? "").replace(/,/g, " ");
         return `${ip},${port},${proto},${state},${svc},${ver},${banner}`;
       });
-      content = [header, ...rows].join("\n");
-      filename = "scan_results.csv";
-      mimeType = "text/csv";
+      downloadText([header, ...rows].join("\n"), "scan_results.csv", "text/csv");
     } else {
-      content = JSON.stringify(results, null, 2);
-      filename = "scan_results.json";
-      mimeType = "application/json";
+      downloadJSON(results, "scan_results.json");
     }
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusVariant = (status: string) => {
     const s = status?.toLowerCase() ?? "";
-    if (s === "open") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
-    if (s === "closed") return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
-    if (s === "filtered") return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
-    return "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300";
+    if (s === "open") return "success" as const;
+    if (s === "closed") return "destructive" as const;
+    if (s === "filtered") return "warning" as const;
+    return "secondary" as const;
   };
 
   return (
-    <div className="max-w-7xl mx-auto mb-20 md:mb-0">
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">网络扫描器</h1>
-        <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1">通过Agent进行网络扫描、端口识别、漏洞探测</p>
-      </div>
+    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title={<><Radar className="w-4 h-4" />{t("scanner.title")}</>} subtitle={t("scanner.subtitle")} />
 
-      <div className="ui-card p-6 mb-6 shadow-sm hover:shadow-md transition-shadow">
+      <Card className="p-4 sm:p-5 mb-6 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
           <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-            <i className="fa-solid fa-radar text-blue-600 dark:text-blue-400"></i>
+            <Radar className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">新建扫描任务</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">选择Agent创建扫描任务</div>
+            <div className="text-sm font-semibold text-foreground">{t("scanner.new_task")}</div>
+            <div className="text-xs text-muted-foreground">{t("scanner.new_task_desc")}</div>
           </div>
         </div>
 
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">目标 Agent</label>
-              <select value={selectedAgent} onChange={e => setSelectedAgent(e.target.value)}
-                className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 dark:text-slate-100">
-                <option value="">-- 选择 Agent --</option>
-                {data?.agents?.map(a => {
-                  const id = a.id || a.ID || "";
-                  const hostname = a.hostname || a.Hostname || "";
-                  const ip = a.ip || a.IP || "";
-                  return <option key={id} value={id}>{hostname} ({ip})</option>;
-                })}
-              </select>
+              <Label className="block text-xs font-medium text-muted-foreground mb-1.5">{t("scanner.target_agent")}</Label>
+              <Select value={selectedAgent} onValueChange={v => setSelectedAgent(v ?? "")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t("scanner.select_agent")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {data?.agents?.map(a => {
+                    const id = a.id || "";
+                    const hostname = a.hostname || "";
+                    const ip = a.ip || "";
+                    return <SelectItem key={id} value={id}>{hostname} ({ip})</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">目标地址</label>
-              <input type="text" value={targetAddr} onChange={e => setTargetAddr(e.target.value)} placeholder="192.168.1.1 或 10.0.0.0/24"
-                className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2.5 font-mono focus:outline-none focus:border-indigo-500 dark:text-slate-100" />
+              <Label className="block text-xs font-medium text-muted-foreground mb-1.5">{t("scanner.target_addr")}</Label>
+              <Input aria-label={t("scanner.target_addr_ph")} type="text" value={targetAddr} onChange={e => setTargetAddr(e.target.value)} placeholder={t("scanner.target_addr_ph")} className="font-mono" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">扫描类型</label>
-              <select value={scanType} onChange={e => setScanType(e.target.value)}
-                className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 dark:text-slate-100">
-                <option value="tcp_connect">TCP Connect</option>
-                <option value="tcp_syn">TCP SYN (Stealth)</option>
-                <option value="udp">UDP</option>
-              </select>
+              <Label className="block text-xs font-medium text-muted-foreground mb-1.5">{t("scanner.scan_type")}</Label>
+              <Select value={scanType} onValueChange={v => setScanType(v ?? "tcp_connect")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tcp_connect">TCP Connect</SelectItem>
+                  <SelectItem value="tcp_syn">TCP SYN (Stealth)</SelectItem>
+                  <SelectItem value="udp">UDP</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">端口范围</label>
-              <select value={portMode} onChange={e => setPortMode(e.target.value)}
-                className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 dark:text-slate-100">
-                <option value="top">Top 1000 端口</option>
-                <option value="top100">Top 100 端口</option>
-                <option value="custom">自定义范围</option>
-              </select>
+              <Label className="block text-xs font-medium text-muted-foreground mb-1.5">{t("scanner.port_range")}</Label>
+              <Select value={portMode} onValueChange={v => setPortMode(v ?? "top")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="top">{t("scanner.top1000")}</SelectItem>
+                  <SelectItem value="top100">{t("scanner.top100")}</SelectItem>
+                  <SelectItem value="custom">{t("scanner.custom_range")}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
           {showCustomRange && (
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">端口范围</label>
-              <input type="text" value={customPorts} onChange={e => setCustomPorts(e.target.value)} placeholder="1-1000,8080,8443"
-                className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2.5 font-mono focus:outline-none focus:border-indigo-500 dark:text-slate-100" />
-              <p className="text-xs text-slate-500 mt-1">支持格式: 1-1000,8080,8443</p>
+              <Label className="block text-xs font-medium text-muted-foreground mb-1.5">{t("scanner.port_range")}</Label>
+              <Input aria-label="1-1000,8080,8443" type="text" value={customPorts} onChange={e => setCustomPorts(e.target.value)} placeholder="1-1000,8080,8443" className="font-mono" />
+              <p className="text-xs text-muted-foreground mt-1">{t("scanner.port_format_hint")}</p>
             </div>
           )}
 
           <div className="flex items-center gap-3 pt-2">
-            <button onClick={handleStartScan} disabled={scanning || !selectedAgent || !targetAddr}
-              className="px-4 h-10 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-sm font-medium transition-colors">
-              <i className={`fa-solid ${scanning ? "fa-circle-notch fa-spin" : "fa-play"} mr-1`}></i>
-              <span>{scanning ? "扫描中..." : "开始扫描"}</span>
-            </button>
-            <span className="text-xs text-slate-500 dark:text-slate-400">
-              <i className="fa-solid fa-circle-info mr-1"></i>
-              扫描将在后台执行，完成后可查看结果            </span>
+            <Button onClick={handleStartScan} disabled={scanning || !selectedAgent || !targetAddr}>
+              {scanning ? <Spinner size="xs" className="mr-1" /> : <Play className="w-4 h-4" />}
+              <span>{scanning ? t("scanner.scanning") : t("scanner.start_scan")}</span>
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              <Info className="w-4 h-4" />
+               {t("scanner.scan_bg_hint")}            </span>
           </div>
         </div>
-      </div>
+      </Card>
 
       {(data?.active_scans?.length ?? 0) > 0 && (
-        <div className="ui-card p-6 mb-6 shadow-sm hover:shadow-md transition-shadow">
+        <Card className="p-4 sm:p-5 mb-6 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
           <div className="flex items-center gap-x-3 mb-4">
-            <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center">
-              <i className="fa-solid fa-spinner fa-spin text-orange-600 dark:text-orange-400"></i>
+            <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center">
+              <Spinner size="xs" />
             </div>
             <div>
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">活跃扫描</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">{data?.active_scans?.length || 0} 个扫描任务正在执行</div>
+              <div className="text-sm font-semibold text-foreground">{t("scanner.active_scans_title")}</div>
+              <div className="text-xs text-muted-foreground">{data?.active_scans?.length || 0} {t("scanner.active_scan_msg")}</div>
             </div>
           </div>
           <div className="space-y-3">
             {data?.active_scans?.map((scan, i) => {
-              const scanId = scan.ID || scan.id || String(i);
-              const target = scan.Target || scan.target || "";
-              const progress = scan.Progress ?? scan.progress ?? 0;
-              const status = scan.Status || scan.status || "running";
-              const type = scan.Type || scan.type || "";
-              const agent = scan.Agent || scan.agent || "";
+              const scanId = scan.id || String(i);
+              const target = scan.target || "";
+              const progress = scan.progress ?? 0;
+              const status = scan.status || "running";
+              const type = scan.type || "";
+              const agent = scan.agent || "";
               return (
-                <div key={scanId} className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4">
+                <div key={scanId} className="bg-muted rounded-xl p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <i className="fa-solid fa-crosshairs text-slate-400 text-xs"></i>
-                      <span className="text-sm font-medium text-slate-900 dark:text-slate-100 font-mono">{target}</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">{type}</span>
+                      <Crosshair className="w-4 h-4" />
+                      <span className="text-sm font-medium text-foreground font-mono">{target}</span>
+                       <Badge variant="outline">{type}</Badge>
                     </div>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">{status} via {agent}</span>
+                    <span className="text-xs text-muted-foreground">{status} via {agent}</span>
                   </div>
-                  <div className="w-full h-2 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                  <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
                     <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
                   </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 text-right">{progress}%</div>
+                  <div className="text-xs text-muted-foreground mt-1 text-right">{progress}%</div>
                 </div>
               );
             })}
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="ui-card hover:shadow-md transition-shadow">
-        <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
-          <div className="flex gap-1">
-            {(["results", "active", "history"] as const).map(tab => (
-              <button key={tab} onClick={() => setActiveTab(tab)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                  activeTab === tab
-                    ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400"
-                    : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                }`}>
-                {tab === "results" ? "扫描结果" : tab === "active" ? "活跃扫描" : "扫描历史"}
-              </button>
-            ))}
-          </div>
+      <Card className="py-0 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
+        <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
+            <TabsList>
+              {(["results", "active", "history"] as const).map(tab => (
+                <TabsTrigger key={tab} value={tab}>
+                  {tab === "results" ? t("scanner.tab_results") : tab === "active" ? t("scanner.tab_active") : t("scanner.tab_history")}
+                </TabsTrigger>
+              ))}
+            </TabsList>
           {activeTab === "results" && (
             <div className="flex items-center gap-2">
-              <button onClick={() => handleExport("csv")}
-                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-[var(--text-secondary)] rounded-lg text-xs transition-colors">
-                <i className="fa-solid fa-file-csv mr-1"></i>CSV
-              </button>
-              <button onClick={() => handleExport("json")}
-                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-[var(--text-secondary)] rounded-lg text-xs transition-colors">
-                <i className="fa-solid fa-file-code mr-1"></i>JSON
-              </button>
+              <Button variant="secondary" size="sm" onClick={() => handleExport("csv")} className="text-muted-foreground">
+                <FileSpreadsheet className="w-4 h-4" />CSV
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => handleExport("json")} className="text-muted-foreground">
+                <FileCode className="w-4 h-4" />JSON
+              </Button>
             </div>
           )}
         </div>
 
         <div className="p-4">
-          {activeTab === "results" && (
-            loading ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b border-[var(--border)]">
-                    {["IP", "端口", "协议", "状态", "服务", "版本", "Banner"].map(h => (
-                      <th key={h} className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">{h}</th>
-                    ))}
-                  </tr></thead>
-                  <tbody>{[1,2,3].map(i => (
-                    <tr key={i}>{[1,2,3,4,5,6,7].map(j => (
-                      <td key={j} className="py-3 px-4"><div className="h-3 bg-slate-200 dark:bg-slate-700 rounded animate-pulse w-16"></div></td>
-                    ))}</tr>
-                  ))}</tbody>
-                </table>
-              </div>
+          <TabsContent value="results" className="mt-0">
+            {loading ? (
+              <Table>
+                <TableHeader><TableRow>
+                  {["IP", t("scanner.col_port"), t("scanner.col_protocol"), t("scanner.col_status"), t("scanner.col_service"), t("scanner.col_version"), "Banner"].map(h => (
+                    <TableHead key={h}>{h}</TableHead>
+                  ))}
+                </TableRow></TableHeader>
+                <TableBody>{[1,2,3].map(i => (
+                  <TableRow key={i}>{[1,2,3,4,5,6,7].map(j => (
+                    <TableCell key={j}><Skeleton className="h-3 w-16" /></TableCell>
+                  ))}</TableRow>
+                ))}</TableBody>
+              </Table>
             ) : data?.results && data.results.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--border)]">
-                      <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">IP</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">端口</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">协议</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">状态</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">服务</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">版本</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">Banner</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {data.results.map((r, i) => (
-                      <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                        <td className="py-3 px-4 font-mono text-[var(--text-secondary)]">{r.IP ?? r.ip ?? "-"}</td>
-                        <td className="py-3 px-4 font-mono font-medium text-blue-600 dark:text-blue-400">{r.Port ?? r.port ?? "-"}</td>
-                        <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{r.Protocol ?? r.protocol ?? "-"}</td>
-                        <td className="py-3 px-4"><span className={`text-[10px] px-2 py-0.5 rounded-full ${getStatusColor(r.Status ?? r.status ?? "open")}`}>{r.Status ?? r.status ?? "open"}</span></td>
-                        <td className="py-3 px-4 text-[var(--text-secondary)]">{r.Service ?? r.service ?? "-"}</td>
-                        <td className="py-3 px-4 text-slate-500 text-xs">{r.Version ?? r.version ?? "-"}</td>
-                        <td className="py-3 px-4 text-xs text-slate-500 max-w-xs truncate">{r.Banner ?? r.banner ?? "-"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>IP</TableHead>
+                    <TableHead>{t("scanner.col_port")}</TableHead>
+                    <TableHead>{t("scanner.col_protocol")}</TableHead>
+                    <TableHead>{t("scanner.col_status")}</TableHead>
+                    <TableHead>{t("scanner.col_service")}</TableHead>
+                    <TableHead>{t("scanner.col_version")}</TableHead>
+                    <TableHead>Banner</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.results.map((r, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-mono text-muted-foreground">{r.ip ?? "-"}</TableCell>
+                      <TableCell className="font-mono font-medium text-blue-600 dark:text-blue-400">{r.port ?? "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">{r.protocol ?? "-"}</TableCell>
+                      <TableCell><Badge variant={getStatusVariant(r.status ?? "open")}>{r.status ?? "open"}</Badge></TableCell>
+                      <TableCell className="text-muted-foreground">{r.service ?? "-"}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{r.version ?? "-"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-xs truncate">{r.banner ?? "-"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             ) : (
-              <div className="text-center py-8 text-slate-400 dark:text-slate-500">
-                <i className="fa-solid fa-inbox text-3xl mb-2 text-slate-300 dark:text-slate-600"></i>
-                <p>暂无扫描结果</p>
+              <div className="text-center py-16 sm:py-20 text-muted-foreground dark:text-muted-foreground">
+                <Inbox className="w-4 h-4" />
+                <p>{t("scanner.no_results")}</p>
               </div>
-            )
-          )}
+            )}
+          </TabsContent>
 
-          {activeTab === "active" && (
-            data?.active_scans && data.active_scans.length > 0 ? (
+          <TabsContent value="active" className="mt-0">
+            {data?.active_scans && data.active_scans.length > 0 ? (
               <div className="space-y-3">
                 {data.active_scans.map((scan, i) => {
-                  const scanId = scan.ID || scan.id || String(i);
-                  const progress = scan.Progress ?? scan.progress ?? 0;
+                  const scanId = scan.id || String(i);
+                  const progress = scan.progress ?? 0;
                   return (
-                    <div key={scanId} className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4">
+                    <div key={scanId} className="bg-muted rounded-xl p-4">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium font-mono text-slate-900 dark:text-slate-100">{scan.Target || scan.target}</span>
-                        <span className="text-xs text-slate-500">{progress}%</span>
+                        <span className="text-sm font-medium font-mono text-foreground">{scan.target}</span>
+                        <span className="text-xs text-muted-foreground">{progress}%</span>
                       </div>
-                      <div className="w-full h-2 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                      <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
                         <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
                       </div>
                       <div className="flex items-center justify-between mt-2">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">{scan.Type || scan.type}</span>
-                        <span className="text-xs text-slate-500">{scan.StartedAt || scan.started_at || ""}</span>
+                        <Badge variant="outline">{scan.type}</Badge>
+                        <span className="text-xs text-muted-foreground">{scan.started_at || ""}</span>
                       </div>
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <div className="text-center py-8 text-slate-400 dark:text-slate-500">
-                <i className="fa-solid fa-inbox text-3xl mb-2 text-slate-300 dark:text-slate-600"></i>
-                <p>暂无活跃扫描任务</p>
+              <div className="text-center py-16 sm:py-20 text-muted-foreground dark:text-muted-foreground">
+                <Inbox className="w-4 h-4" />
+                <p>{t("scanner.no_active")}</p>
               </div>
-            )
-          )}
+            )}
+          </TabsContent>
 
-          {activeTab === "history" && (
-            data?.history && data.history.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--border)]">
-                      <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">目标</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">类型</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">端口数</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">结果</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">状态</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">时间</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {data.history.map((h, i) => (
-                      <tr key={h.ID || h.id || i} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                        <td className="py-3 px-4 font-mono text-[var(--text-secondary)]">{h.Target ?? h.target}</td>
-                        <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{h.Type ?? h.type}</td>
-                        <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{h.Ports ?? h.ports ?? 0}</td>
-                        <td className="py-3 px-4 font-medium text-blue-600 dark:text-blue-400">{h.Results ?? h.results ?? 0}</td>
-                        <td className="py-3 px-4">
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                            (h.Status ?? h.status ?? "") === "completed"
-                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                              : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                          }`}>{h.Status ?? h.status}</span>
-                        </td>
-                        <td className="py-3 px-4 text-xs text-slate-500">{h.CreatedAt ?? h.created_at ?? "-"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          <TabsContent value="history" className="mt-0">
+            {data?.history && data.history.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("scanner.col_target")}</TableHead>
+                    <TableHead>{t("scanner.col_type")}</TableHead>
+                    <TableHead>{t("scanner.col_port_count")}</TableHead>
+                    <TableHead>{t("scanner.col_result")}</TableHead>
+                    <TableHead>{t("scanner.col_status")}</TableHead>
+                    <TableHead>{t("scanner.col_time")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.history.map((h, i) => (
+                    <TableRow key={h.id || i}>
+                      <TableCell className="font-mono text-muted-foreground truncate max-w-[200px]">{h.target}</TableCell>
+                      <TableCell className="text-muted-foreground">{h.type}</TableCell>
+                      <TableCell className="text-muted-foreground">{h.ports ?? 0}</TableCell>
+                      <TableCell className="font-medium text-blue-600 dark:text-blue-400">{h.results ?? 0}</TableCell>
+                      <TableCell>
+                        <Badge variant={(h.status ?? "") === "completed" ? "success" : "warning"}>
+                          {h.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{h.created_at ?? "-"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             ) : (
-              <div className="text-center py-8 text-slate-400 dark:text-slate-500">
-                <i className="fa-solid fa-clock-rotate-left text-3xl mb-2 text-slate-300 dark:text-slate-600"></i>
-                <p>暂无扫描历史</p>
+              <div className="text-center py-16 sm:py-20 text-muted-foreground dark:text-muted-foreground">
+                <History className="w-4 h-4" />
+                <p>{t("scanner.no_history")}</p>
               </div>
-            )
-          )}
+            )}
+          </TabsContent>
         </div>
-      </div>
+        </Tabs>
+      </Card>
     </div>
   );
 }
+

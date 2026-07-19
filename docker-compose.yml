@@ -1,14 +1,22 @@
-version: '3.8'
+version: "3.9"
 
 services:
   forgec2:
     build: .
     container_name: forgec2
+    restart: unless-stopped
     ports:
       - "8080:8080"
+      - "53:53/udp"
     volumes:
-      - ./data:/app/data
-      - ./config.yaml:/app/config.yaml:ro
-    restart: unless-stopped
+      - ./config.yaml:/data/config.yaml:ro
+      - forgec2_data:/data
     environment:
-      - TZ=Asia/Shanghai
+      - FORGEC2_JWT_SECRET=${FORGEC2_JWT_SECRET:-}
+      - FORGEC2_AI_API_KEY=${FORGEC2_AI_API_KEY:-}
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+
+volumes:
+  forgec2_data:

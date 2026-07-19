@@ -17,7 +17,7 @@ func (s *Server) handleLateralPage(c *gin.Context) {
 
 	// Get available agents
 	var agents []db.Implant
-	s.db.Where("status = 'online'").Find(&agents)
+	s.db.Where("status = 'online'").Limit(5000).Find(&agents)
 
 	// Get credentials from vault
 	var credentials []db.CredentialEntry
@@ -75,7 +75,7 @@ func (s *Server) handleProcessLateralResult(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
@@ -117,6 +117,9 @@ func (s *Server) handleProcessLateralResult(c *gin.Context) {
 
 // handleAPILateralExecute dispatches a lateral movement task via JSON API
 func (s *Server) handleAPILateralExecute(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	var req struct {
 		Source     string `json:"source"`
 		Target     string `json:"target"`
@@ -133,21 +136,21 @@ func (s *Server) handleAPILateralExecute(c *gin.Context) {
 		Pivot      string `json:"pivot,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 	if req.Source == "" || req.Target == "" || req.Method == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "source, target and method required"})
+		respondError(c, http.StatusBadRequest, "source, target and method required")
 		return
 	}
 	spec, err := json.Marshal(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode spec"})
+		respondError(c, http.StatusInternalServerError, "failed to encode spec")
 		return
 	}
 	task, err := s.createTask(req.Source, "lateral", string(spec), "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Lateral movement via JSON API", "agent", req.Source, "target", req.Target, "method", req.Method)

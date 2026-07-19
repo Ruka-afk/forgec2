@@ -19,7 +19,11 @@ var (
 	ErrBadMagic  = errors.New("invalid magic bytes")
 )
 
-// StreamCipher provides a simple stream cipher for C2 beacon payloads.
+// DEPRECATED: StreamCipher provides a simple stream cipher (no AEAD).
+// Use ECDH + AES-256-GCM (config crypto.key = "ecdh:") instead.
+// This cipher lacks authentication — attackers can flip ciphertext bits
+// without detection. Kept for backward compatibility with older agents.
+//
 // Uses a shared 32-byte key with per-message random nonce.
 // Keystream: SHA256(key || nonce || counter) expanded via AES-CTR-like chaining.
 type StreamCipher struct {

@@ -1,8 +1,24 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { API_BASE } from "@/lib/constants";
-import { ConfirmModal, PageHeader, SearchInput, Pagination } from "@/components/UI";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { downloadText, downloadJSON } from "@/lib/download";
+import { useI18n } from "@/lib/i18n";
+import { formatTime } from "@/lib/utils";
+import { ConfirmModal, EmptyState, PageHeader, StatusBadge } from "@/components/UI";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Download, FileUp, Images, Keyboard, Terminal, Trash2, X } from "lucide-react";
 
 interface Screenshot {
   id: string;
@@ -42,26 +58,25 @@ interface LootData {
 
 type LootTab = "screenshots" | "keylogs" | "downloads";
 
-
 export default function LootPage() {
+  const { t } = useI18n();
   const [data, setData] = useState<LootData | null>(null);
   const [loading, setLoading] = useState(true);
   const [modalImg, setModalImg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LootTab>("screenshots");
   const [agentFilter, setAgentFilter] = useState("");
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [keylogSearch, setKeylogSearch] = useState("");
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
 
   const loadLoot = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}?p=/loot&format=json`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const result = await res.json();
+      const result = await api.get("/loot");
       setData({
-        screenshots: result.Screenshots || result.screenshots || [],
-        keylog_tasks: result.KeylogTasks || result.Keylogs || result.keylog_tasks || result.keylogs || [],
-        download_tasks: result.DownloadTasks || result.Downloads || result.download_tasks || result.downloads || [],
+        screenshots: (result.screenshots || []) as Screenshot[],
+        keylog_tasks: (result.keylog_tasks || result.keylogs || []) as KeylogTask[],
+        download_tasks: (result.download_tasks || result.downloads || []) as DownloadTask[],
       });
     } catch {
       setData({ screenshots: [], keylog_tasks: [], download_tasks: [] });
@@ -69,10 +84,19 @@ export default function LootPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { Promise.resolve().then(() => loadLoot()); }, [loadLoot]);
+  useEffect(() => { loadLoot(); }, [loadLoot]);
 
   const filteredScreenshots = data?.screenshots?.filter(s => !agentFilter || s.agent_id === agentFilter) || [];
-  const filteredKeylogs = data?.keylog_tasks?.filter(k => !agentFilter || k.agent_id === agentFilter) || [];
+  const filteredKeylogs = data?.keylog_tasks?.filter(k => {
+    if (agentFilter && k.agent_id !== agentFilter) return false;
+    if (keylogSearch) {
+      const q = keylogSearch.toLowerCase();
+      const content = (k.result || k.error || "").toLowerCase();
+      const agent = (k.agent?.hostname || k.hostname || k.agent_id || "").toLowerCase();
+      if (!content.includes(q) && !agent.includes(q)) return false;
+    }
+    return true;
+  }) || [];
   const filteredDownloads = data?.download_tasks?.filter(d => !agentFilter || d.agent_id === agentFilter) || [];
 
   const allAgents = [...new Set([
@@ -101,37 +125,36 @@ export default function LootPage() {
 
   const deleteSelected = () => {
     if (selectedItems.size === 0) return;
-    setCfm({msg: `确定删除选中的 ${selectedItems.size} 个条目？`, cb: async () => {
+    setCfm({msg: `Delete ${selectedItems.size} selected items?`, cb: async () => {
       try {
-        await fetch(`${API_BASE}?p=/loot/bulk-delete`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ids: [...selectedItems] }),
-        });
+        await api.postJson("/loot/bulk-delete", { ids: [...selectedItems] });
         setSelectedItems(new Set());
         loadLoot();
-      } catch (e) { console.error("Loot: delete items failed", e); }
+      } catch { toast.error("Failed to delete loot items"); }
     }});
   };
 
-  const exportAll = () => {
+  const exportAll = (format: "json" | "csv" = "json") => {
     const exportData = {
       screenshots: filteredScreenshots,
       keylogs: filteredKeylogs,
       downloads: filteredDownloads,
     };
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `loot-export-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const formatTime = (t: string) => {
-    if (!t) return "-";
-    try { return new Date(t).toLocaleString(); } catch { return t; }
+    if (format === "csv") {
+      const rows: string[] = ["Type,Agent,Filename,Path,Created"];
+      for (const s of filteredScreenshots) {
+        rows.push(`screenshot,${s.agent_id},"${s.filename}","${s.path}",${s.created_at}`);
+      }
+      for (const k of filteredKeylogs) {
+        rows.push(`keylog,${k.agent_id},"","","${k.created_at}"`);
+      }
+      for (const d of filteredDownloads) {
+        rows.push(`download,${d.agent_id},"${d.command}","${d.result}",${d.created_at}`);
+      }
+      downloadText(rows.join("\n"), `loot-export-${new Date().toISOString().slice(0, 10)}.csv`, "text/csv");
+    } else {
+      downloadJSON(exportData, `loot-export-${new Date().toISOString().slice(0, 10)}.json`);
+    }
   };
 
   const formatBytes = (str: string) => {
@@ -140,109 +163,114 @@ export default function LootPage() {
     return (size / 1024).toFixed(1) + " KB";
   };
 
-  const tabs: { key: LootTab; label: string; icon: string; count: number }[] = [
-    { key: "screenshots", label: "截图", icon: "fa-images", count: filteredScreenshots.length },
-    { key: "keylogs", label: "键盘记录", icon: "fa-keyboard", count: filteredKeylogs.length },
-    { key: "downloads", label: "文件下载", icon: "fa-download", count: filteredDownloads.length },
+  const tabs: { key: LootTab; label: string; icon: React.ReactNode; count: number }[] = [
+    { key: "screenshots", label: t("loot.screenshots_tab"), icon: <Images className="w-4 h-4" />, count: filteredScreenshots.length },
+    { key: "keylogs", label: t("loot.keylogs_tab"), icon: <Keyboard className="w-4 h-4" />, count: filteredKeylogs.length },
+    { key: "downloads", label: t("loot.downloads_tab"), icon: <Download className="w-4 h-4" />, count: filteredDownloads.length },
   ];
 
   return (
-    <div className="max-w-7xl mx-auto mb-20 md:mb-0">
-      <PageHeader title={<>截图收集 <span className="text-amber-500">Loot</span></>} subtitle="管理所有截图、键盘记录、下载的文件等收集品">
+    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title={<>Screenshot <span className="text-amber-500">Collection</span></>} subtitle={t("loot.subtitle")}>
         <div className="flex items-center gap-2 flex-wrap">
-          <select value={agentFilter} onChange={e => { setAgentFilter(e.target.value); setSelectedItems(new Set()); }}
-            className="ui-card px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 dark:text-slate-100">
-            <option value="">全部 Agent</option>
-            {allAgents.map(a => (
-              <option key={a} value={a}>{a.substring(0, 12)}</option>
-            ))}
-          </select>
-          <button onClick={exportAll} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors">
-            <i className="fa-solid fa-file-export mr-1"></i>导出全部
-          </button>
+          <Select value={agentFilter || "all"} onValueChange={(v) => { setAgentFilter(v === "all" ? "" : v ?? ""); setSelectedItems(new Set()); }}>
+            <SelectTrigger className="w-full sm:w-48" aria-label="Filter by agent"><SelectValue placeholder={t("loot.all_agents")} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("loot.all_agents")}</SelectItem>
+              {allAgents.map(a => <SelectItem key={a} value={a}>{a.substring(0, 12)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button onClick={() => exportAll("json")} className="gap-1">
+            <FileUp className="w-4 h-4" /> {t("loot.export_json")}
+          </Button>
+          <Button variant="outline" onClick={() => exportAll("csv")} className="gap-1">
+            <FileUp className="w-4 h-4" /> {t("loot.export_csv")}
+          </Button>
           {selectedItems.size > 0 && (
-            <button onClick={deleteSelected} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors">
-              <i className="fa-solid fa-trash mr-1"></i>删除选中 ({selectedItems.size})
-            </button>
+            <Button variant="destructive" onClick={deleteSelected} className="gap-1">
+              <Trash2 className="w-4 h-4" /> {t("loot.delete_selected", { count: selectedItems.size })}
+            </Button>
           )}
         </div>
       </PageHeader>
 
-      <div className="flex border-b border-[var(--border)] mb-4">
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => { setActiveTab(t.key); setSelectedItems(new Set()); }}
-            className={`flex items-center gap-x-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === t.key ? "border-indigo-500 text-indigo-600 dark:text-indigo-400" : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"}`}>
-            <i className={`fa-solid ${t.icon}`}></i>
-            <span>{t.label}</span>
-            <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === t.key ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400" : "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400"}`}>{t.count}</span>
-          </button>
-        ))}
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as LootTab); setSelectedItems(new Set()); }}>
+        <TabsList className="mb-4">
+          {tabs.map(tab => (
+            <TabsTrigger key={tab.key} value={tab.key} className="gap-2">
+              {tab.icon}
+              <span>{tab.label}</span>
+              <Badge variant={activeTab === tab.key ? "default" : "secondary"}>{tab.count}</Badge>
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      {activeTab === "screenshots" && (
-        <div className="ui-card rounded-3xl p-6">
+      <TabsContent value="screenshots">
+        <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4">
-            <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2">
-              <i className="fa-solid fa-images text-purple-500"></i>
-              <span>截图库</span>
+            <div className="font-semibold flex items-center gap-x-2">
+              <Images className="w-4 h-4" />
+              <span>{t("loot.screenshots_title")}</span>
             </div>
             <div className="flex items-center gap-3">
               {filteredScreenshots.length > 0 && (
-                <label className="flex items-center gap-x-2 text-xs text-slate-500 cursor-pointer">
-                  <input type="checkbox" checked={filteredScreenshots.length > 0 && filteredScreenshots.every(s => selectedItems.has(s.id))} onChange={toggleSelectAll} className="rounded border-[var(--border)] text-indigo-600" />
-                  全选                </label>
+                <Label className="flex items-center gap-x-2 text-xs text-muted-foreground cursor-pointer">
+                  <Checkbox checked={filteredScreenshots.length > 0 && filteredScreenshots.every(s => selectedItems.has(s.id))} onCheckedChange={toggleSelectAll} aria-label="Select all screenshots" />
+                  {t("loot.select_all")}
+                </Label>
               )}
-              <span className="text-xs text-slate-400 dark:text-slate-500">{filteredScreenshots.length} </span>
+              <span className="text-xs text-muted-foreground">{filteredScreenshots.length}</span>
             </div>
           </div>
           {loading ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
               {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="rounded-xl border border-[var(--border)] bg-slate-100 dark:bg-slate-700/50 h-24 animate-pulse"></div>
+                <Skeleton key={i} className="rounded-xl border border-border h-24" />
               ))}
             </div>
           ) : filteredScreenshots.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
               {filteredScreenshots.map(s => (
-                <div key={s.id} className={`group relative rounded-xl overflow-hidden border-2 cursor-pointer bg-slate-50 dark:bg-slate-700/30 ${selectedItems.has(s.id) ? "border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-800" : "border-[var(--border)]"}`}
+                <div key={s.id} className={`group relative rounded-xl overflow-hidden border-2 cursor-pointer bg-muted/50 ${selectedItems.has(s.id) ? "border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-800" : "border-border"}`}
                   onClick={() => setModalImg(`/screenshots/${s.path}`)}>
                   <div className="absolute top-1.5 left-1.5 z-10" onClick={e => { e.stopPropagation(); toggleSelect(s.id); }}>
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${selectedItems.has(s.id) ? "bg-indigo-500 border-indigo-500" : "bg-white/80 border-slate-300"}`}>
-                      {selectedItems.has(s.id) && <i className="fa-solid fa-check text-white text-[10px]"></i>}
-                    </div>
+                    <Checkbox checked={selectedItems.has(s.id)} aria-label={`Select screenshot ${s.filename}`} className="bg-secondary/90" />
                   </div>
-                  <img src={`/screenshots/${s.path}`} alt={s.filename} className="w-full h-24 object-contain bg-white dark:bg-slate-900" loading="lazy" />
+                  <img src={`/screenshots/${s.path}`} alt={s.filename} className="w-full h-24 object-contain bg-background" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[10px] text-white px-2 py-1 opacity-0 group-hover:opacity-100 transition flex justify-between items-center">
                     <span className="truncate">{s.agent_id.substring(0, 8)}</span>
-                    <a href={`/screenshots/${s.path}`} download onClick={e => e.stopPropagation()} className="hover:text-emerald-300 px-1"><i className="fa-solid fa-download"></i></a>
+                    <a href={`/screenshots/${s.path}`} download onClick={e => e.stopPropagation()} className="hover:text-emerald-600 dark:hover:text-emerald-300 px-1 transition-colors"><Download className="w-4 h-4" /></a>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 text-slate-400 dark:text-slate-500">
-              <i className="fa-solid fa-images text-4xl mb-3 text-slate-300 dark:text-slate-600"></i>
-              <p className="text-sm">暂无截图</p>
+            <div className="text-center py-12 text-muted-foreground">
+              <Images className="w-4 h-4" />
+              <p className="text-sm">{t("loot.empty_screenshots")}</p>
             </div>
           )}
-        </div>
-      )}
+        </Card>
+      </TabsContent>
 
-      {activeTab === "keylogs" && (
-        <div className="ui-card rounded-3xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2">
-              <i className="fa-solid fa-keyboard text-emerald-500"></i>
-              <span>键盘记录存储</span>
+      <TabsContent value="keylogs">
+        <Card className="p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-4 gap-2">
+            <div className="font-semibold flex items-center gap-x-2">
+              <Keyboard className="w-4 h-4" />
+              <span>{t("loot.keylogs_title")}</span>
             </div>
-            <span className="text-xs text-slate-400 dark:text-slate-500">{filteredKeylogs.length} </span>
+            <div className="flex items-center gap-2">
+              <Input placeholder={t("loot.search_keylogs")} value={keylogSearch} onChange={e => setKeylogSearch(e.target.value)} className="h-8 w-48 text-xs" />
+              <span className="text-xs text-muted-foreground">{filteredKeylogs.length}</span>
+            </div>
           </div>
           {loading ? (
             <div className="space-y-3">
               {[1, 2].map(i => (
-                <div key={i} className="border border-[var(--border)] rounded-2xl p-4 animate-pulse">
-                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-32 mb-2"></div>
-                  <div className="h-20 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                <div key={i} className="border border-border rounded-xl p-4">
+                  <Skeleton className="h-3 w-32 mb-2" />
+                  <Skeleton className="h-20" />
                 </div>
               ))}
             </div>
@@ -254,104 +282,102 @@ export default function LootPage() {
                 const full = k.result || k.error;
                 const isExpanded = selectedItems.has(k.id);
                 return (
-                  <div key={k.id} className="border border-[var(--border)] rounded-2xl overflow-hidden">
-                    <div className="flex justify-between items-center px-4 py-2 bg-slate-50 dark:bg-slate-700/30 border-b border-slate-100 dark:border-slate-700">
+                  <div key={k.id} className="border border-border rounded-xl overflow-hidden">
+                    <div className="flex justify-between items-center px-4 py-2 bg-muted/50 border-b border-border">
                       <div className="flex items-center gap-x-3">
-                        <i className="fa-solid fa-terminal text-emerald-500 text-xs"></i>
-                        <span className="font-medium text-sm text-slate-900 dark:text-slate-100">{agentName}</span>
+                        <Terminal className="w-4 h-4" />
+                        <span className="font-medium text-sm">{agentName}</span>
                       </div>
                       <div className="flex items-center gap-x-3">
-                        <span className="text-xs text-slate-400">{formatTime(k.created_at)}</span>
-                        <button onClick={() => toggleSelect(k.id)} className="text-xs text-indigo-500 hover:text-indigo-600">
-                          {isExpanded ? "收起" : "展开"}
-                        </button>
+                        <span className="text-xs text-muted-foreground">{formatTime(k.created_at)}</span>
+                        <Button variant="ghost" size="sm" onClick={() => downloadText(full, `keylog-${agentName}-${k.id}.txt`)} className="text-xs h-auto p-1 text-emerald-600 hover:text-emerald-700"><Download className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => toggleSelect(k.id)} className="text-xs h-auto p-1">
+                          {isExpanded ? t("loot.collapse") : t("loot.expand")}
+                        </Button>
                       </div>
                     </div>
-                    <div className={`bg-slate-900 text-emerald-300 font-mono text-xs ${isExpanded ? "p-4 max-h-[500px]" : "px-4 py-3 max-h-32"} overflow-y-auto whitespace-pre-wrap break-all`}>
+                    <div className={`bg-background text-emerald-700 dark:text-emerald-300 font-mono text-xs ${isExpanded ? "p-4 max-h-[500px]" : "px-4 py-3 max-h-32"} overflow-y-auto whitespace-pre-wrap break-all`}>
                       {isExpanded ? full : initial}
-                      {!isExpanded && full.length > 200 && <span className="text-emerald-500 ml-1">... (可展开)</span>}
+                      {!isExpanded && full.length > 200 && <span className="text-emerald-500 ml-1">... (expandable)</span>}
                     </div>
                   </div>
                 );
               })}
             </div>
           ) : (
-            <div className="text-center py-12 text-slate-400 dark:text-slate-500">
-              <i className="fa-solid fa-keyboard text-4xl mb-3 text-slate-300 dark:text-slate-600"></i>
-              <p className="text-sm">暂无键盘记录</p>
+            <div className="text-center py-12 text-muted-foreground">
+              <Keyboard className="w-4 h-4" />
+              <p className="text-sm">{t("loot.empty_keylogs")}</p>
             </div>
           )}
-        </div>
-      )}
+        </Card>
+      </TabsContent>
 
-      {activeTab === "downloads" && (
-        <div className="ui-card rounded-3xl p-6">
+      <TabsContent value="downloads">
+        <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4">
-            <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2">
-              <i className="fa-solid fa-download text-blue-500"></i>
-              <span>文件导入导出</span>
+            <div className="font-semibold flex items-center gap-x-2">
+              <Download className="w-4 h-4" />
+              <span>{t("loot.downloads_title")}</span>
             </div>
-            <span className="text-xs text-slate-400 dark:text-slate-500">{filteredDownloads.length} </span>
+            <span className="text-xs text-muted-foreground">{filteredDownloads.length}</span>
           </div>
           {loading ? (
             <div className="space-y-2">
               {[1, 2, 3].map(i => (
-                <div key={i} className="h-10 bg-slate-100 dark:bg-slate-700/50 rounded animate-pulse"></div>
+                <Skeleton key={i} className="h-10" />
               ))}
             </div>
           ) : filteredDownloads.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-slate-500 dark:text-slate-400 border-b border-[var(--border)]">
-                    <th className="py-2 pr-4 min-w-[140px]">时间</th>
-                    <th className="py-2 pr-4 min-w-[150px]">文件/路径</th>
-                    <th className="py-2 pr-4 min-w-[200px]">来源</th>
-                    <th className="py-2 pr-4 min-w-[80px]">大小</th>
-                    <th className="py-2 min-w-[80px]">状态</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                  {filteredDownloads.map(d => (
-                    <tr key={d.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                      <td className="py-3 pr-4 font-mono text-xs text-slate-500 dark:text-slate-400">{formatTime(d.created_at)}</td>
-                      <td className="py-3 pr-4">
-                        <span className="font-medium text-slate-900 dark:text-slate-100 text-xs">{d.agent?.hostname || d.hostname || d.agent_id.substring(0, 8)}</span>
-                      </td>
-                      <td className="py-3 pr-4 font-mono text-xs text-slate-500 max-w-[200px] truncate">{d.command}</td>
-                      <td className="py-3 pr-4 font-mono text-xs text-slate-500 max-w-[300px] truncate">{d.result || "-"}</td>
-                      <td className="py-3 pr-4 text-xs text-slate-500">{formatBytes(d.result || "")}</td>
-                      <td className="py-3">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${d.status === "completed" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : d.status === "pending" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400"}`}>{d.status}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("loot.time")}</TableHead>
+                  <TableHead>{t("loot.file_path")}</TableHead>
+                  <TableHead>{t("loot.source")}</TableHead>
+                  <TableHead>{t("loot.size")}</TableHead>
+                  <TableHead>{t("loot.status")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredDownloads.map(d => (
+                  <TableRow key={d.id}>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{formatTime(d.created_at)}</TableCell>
+                    <TableCell><span className="font-medium text-xs">{d.agent?.hostname || d.hostname || d.agent_id.substring(0, 8)}</span></TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground max-w-[200px] truncate">{d.command}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground max-w-[300px] truncate">{d.result || "-"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{formatBytes(d.result || "")}</TableCell>
+                    <TableCell><StatusBadge status={d.status} /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
             </div>
           ) : (
-            <div className="text-center py-12 text-slate-400 dark:text-slate-500">
-              <i className="fa-solid fa-download text-4xl mb-3 text-slate-300 dark:text-slate-600"></i>
-              <p className="text-sm">暂无下载记录</p>
-            </div>
+            <EmptyState icon={Download} title={t("loot.empty_downloads")} />
           )}
-        </div>
-      )}
+        </Card>
+      </TabsContent>
+      </Tabs>
 
       {modalImg && (
-        <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4" onClick={() => setModalImg(null)}>
-          <div className="absolute top-4 right-4 flex gap-2 z-10">
-            <a href={modalImg} download className="px-3 py-2 bg-[var(--card-bg)] rounded-xl text-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-              <i className="fa-solid fa-download mr-1"></i>下载
-            </a>
-            <button onClick={() => setModalImg(null)} className="w-10 h-10 bg-[var(--card-bg)] rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center justify-center">
-              <i className="fa-solid fa-xmark"></i>
-            </button>
-          </div>
-          <img src={modalImg} alt="Screenshot" className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl" onClick={e => e.stopPropagation()} />
-        </div>
+        <Dialog open={true} onOpenChange={() => setModalImg(null)}>
+          <DialogContent className="max-w-4xl bg-transparent border-0 p-0" showCloseButton={false}>
+            <div className="absolute top-4 right-4 flex gap-2 z-10">
+              <a href={modalImg} download>
+                <Button variant="secondary" className="gap-1"><Download className="w-4 h-4" />Download</Button>
+              </a>
+              <Button variant="secondary" onClick={() => setModalImg(null)} className="w-10 h-10 p-0" aria-label="Close screenshot">
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <img src={modalImg} alt="Screenshot" className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          </DialogContent>
+        </Dialog>
       )}
-      <ConfirmModal open={!!cfm} title="Confirm" message={cfm?.msg || ""} confirmText="Delete" cancelText="Cancel" danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.delete")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
     </div>
   );
 }
+

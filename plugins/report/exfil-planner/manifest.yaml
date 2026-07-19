@@ -1,0 +1,20 @@
+name: exfil-planner
+version: 1.0.0
+type: report
+description: Generates data exfiltration plan — staged data, transfer methods, timing, and detection avoidance
+author: ""
+category: reporting
+entry: report.py
+interpreter: python3
+timeout: 60
+params:
+    - name: format
+      type: string
+      required: false
+      default: html
+      description: Output format (html, markdown, json)
+    - name: title
+      type: string
+      required: false
+      default: Exfiltration Plan
+      description: Report title

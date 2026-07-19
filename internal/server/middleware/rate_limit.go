@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"sync"
@@ -63,16 +64,18 @@ type APIRateLimiter struct {
 	capacity  float64
 	rate      float64
 	whitelist map[string]bool
+	stop      chan struct{}
 }
 
-func NewAPIRateLimiter(capacity, rate float64) *APIRateLimiter {
+func NewAPIRateLimiter(ctx context.Context, capacity, rate float64) *APIRateLimiter {
 	rl := &APIRateLimiter{
 		buckets:   make(map[string]*TokenBucket),
 		capacity:  capacity,
 		rate:      rate,
 		whitelist: make(map[string]bool),
+		stop:      make(chan struct{}),
 	}
-	go rl.cleanup()
+	go rl.cleanup(ctx)
 	return rl
 }
 
@@ -102,17 +105,30 @@ func (rl *APIRateLimiter) GetBucket(key string) *TokenBucket {
 	return bucket
 }
 
-func (rl *APIRateLimiter) cleanup() {
+func (rl *APIRateLimiter) cleanup(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Minute)
-	for range ticker.C {
-		rl.mu.Lock()
-		for key, bucket := range rl.buckets {
-			if bucket.Tokens() >= rl.capacity*0.95 && time.Since(bucket.lastRefill) > 5*time.Minute {
-				delete(rl.buckets, key)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-rl.stop:
+			return
+		case <-ticker.C:
+			rl.mu.Lock()
+			for key, bucket := range rl.buckets {
+				if bucket.Tokens() >= rl.capacity*0.95 && time.Since(bucket.lastRefill) > 5*time.Minute {
+					delete(rl.buckets, key)
+				}
 			}
+			rl.mu.Unlock()
 		}
-		rl.mu.Unlock()
 	}
+}
+
+// Stop terminates the cleanup goroutine.
+func (rl *APIRateLimiter) Stop() {
+	close(rl.stop)
 }
 
 func (rl *APIRateLimiter) LimitByUser() gin.HandlerFunc {

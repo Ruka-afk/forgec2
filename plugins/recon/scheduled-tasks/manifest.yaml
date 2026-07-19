@@ -1,0 +1,14 @@
+name: scheduled-tasks
+version: 1.0.0
+type: command
+description: Enumerates Windows scheduled tasks and Linux cron jobs from agent hosts
+author: ""
+category: recon
+entry: list_tasks.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Specific agent to scan

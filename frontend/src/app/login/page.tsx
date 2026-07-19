@@ -2,10 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Label } from "@/components/ui/label";
+import { AlertCircle, Lock, Shield, User, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [totpCode, setTotpCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -15,121 +21,134 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const params = new URLSearchParams();
-    params.append("username", username);
-    params.append("password", password);
+    try {
+      const params = new URLSearchParams();
+      params.append("username", username);
+      params.append("password", password);
+      if (totpCode) params.append("totp_code", totpCode);
 
-    const response = await fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString(),
-    });
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+        credentials: "include",
+      });
 
-    if (response.ok) {
-      router.push("/dashboard");
-      router.refresh();
-    } else {
-      const data = await response.json().catch(() => ({}));
-      setError(data.error || "Login failed");
+      if (response.ok) {
+        router.push("/dashboard");
+        router.refresh();
+      } else {
+        const data = await response.json().catch(() => ({}));
+        setError(data.error || "Login failed");
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden"
-      style={{ background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)" }}>
-      {/* Grid decoration */}
-      <div className="absolute inset-0"
-        style={{
-          backgroundImage: "linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px)",
-          backgroundSize: "40px 40px",
-        }} />
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-background via-muted/30 to-primary/5 dark:from-background dark:via-primary/[0.03] dark:to-primary/8">
+      {/* Animated background orbs */}
+      <div className="absolute rounded-full blur-[60px] opacity-15 dark:opacity-10 w-72 h-72 bg-primary/30 top-[-10%] left-[-5%] animate-orb-float" style={{ animationDelay: "0s" }} />
+      <div className="absolute rounded-full blur-[60px] opacity-15 dark:opacity-10 w-56 h-56 bg-primary/20 bottom-[-5%] right-[-3%] animate-orb-float" style={{ animationDelay: "2s" }} />
+      <div className="absolute rounded-full blur-[60px] opacity-15 dark:opacity-10 w-40 h-40 bg-violet-400/15 top-[40%] right-[20%] animate-orb-float" style={{ animationDelay: "4s" }} />
 
-      <div className="relative z-10 w-full max-w-sm mx-4">
+      {/* Grid decoration */}
+      <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.04] [background-image:linear-gradient(var(--border)_1px,transparent_1px),linear-gradient(90deg,var(--border)_1px,transparent_1px)] [background-size:40px_40px]" />
+
+      <div className="relative z-10 w-full max-w-[22rem] mx-4 animate-fade-slide-up">
         {/* Brand */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-            <i className="fa-solid fa-shield-halved text-white text-2xl"></i>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-xl shadow-indigo-500/25 animate-float">
+            <Shield className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>
-            Forge<span className="text-indigo-500">C2</span>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Forge<span className="text-primary">C2</span>
           </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text-tertiary)" }}>Professional Red Team C2 Framework</p>
+          <p className="text-sm mt-1.5 text-muted-foreground/70">Professional Red Team Framework</p>
         </div>
 
         {/* Login card */}
-        <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-2xl p-8 shadow-lg">
+        <div className="bg-card/80 backdrop-blur-xl border border-border/60 rounded-xl p-7 shadow-2xl shadow-black/5 dark:shadow-black/20">
           {error && (
-            <div className="mb-5 p-3 rounded-xl text-xs font-medium flex items-center gap-2"
-              style={{ background: "var(--danger-bg)", color: "var(--danger-text)" }}>
-              <i className="fa-solid fa-circle-exclamation"></i>
-              {error}
-            </div>
+            <Alert variant="destructive" className="mb-5 animate-scale-in" role="alert">
+              <AlertCircle className="w-4 h-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" aria-label="Login form">
             <div>
-              <label htmlFor="login-username" className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Username</label>
-              <div className="relative">
-                <i className="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--text-tertiary)" }}></i>
-                <input
+              <Label htmlFor="login-username" className="text-xs font-medium text-muted-foreground mb-1.5 block">Username</Label>
+              <div className="relative group">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" />
+                <Input
                   id="login-username"
                   type="text"
+                  autoFocus
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pl-9 pr-4 h-11 rounded-xl text-sm outline-none transition-all duration-150"
-                  style={{
-                    background: "var(--background)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-primary)",
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = "#6366f1"; e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.1)"; }}
-                  onBlur={(e) => { e.target.style.borderColor = "var(--border)"; e.target.style.boxShadow = "none"; }}
+                  className="h-11 pl-9 transition-colors"
                   required
+                  autoComplete="username"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="login-password" className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Password</label>
-              <div className="relative">
-                <i className="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "var(--text-tertiary)" }}></i>
-                <input
+              <Label htmlFor="login-password" className="text-xs font-medium text-muted-foreground mb-1.5 block">Password</Label>
+              <div className="relative group">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" />
+                <Input
                   id="login-password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-9 pr-4 h-11 rounded-xl text-sm outline-none transition-all duration-150"
-                  style={{
-                    background: "var(--background)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-primary)",
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = "#6366f1"; e.target.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.1)"; }}
-                  onBlur={(e) => { e.target.style.borderColor = "var(--border)"; e.target.style.boxShadow = "none"; }}
+                  className="h-11 pl-9 transition-colors"
                   required
+                  autoComplete="current-password"
                 />
               </div>
             </div>
 
-            <button
+            <div>
+              <Label htmlFor="login-totp" className="text-xs font-medium text-muted-foreground mb-1.5 block">TOTP Code <span className="text-muted-foreground/70">(optional)</span></Label>
+              <div className="relative group">
+                <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" />
+                <Input
+                  id="login-totp"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  pattern="[0-9]{6}"
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value)}
+                  placeholder="000000"
+                  className="h-11 pl-9 font-mono tracking-[0.3em] text-center transition-colors"
+                />
+              </div>
+            </div>
+
+            <Button
               type="submit"
               disabled={loading}
-              className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-medium rounded-xl text-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              className="w-full h-11 font-semibold transition-all duration-200 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 active:scale-[0.98]"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
+                  <Loader2 className="w-4 h-4 animate-spin" />
                   Signing in...
                 </span>
               ) : "Sign in"}
-            </button>
+            </Button>
           </form>
         </div>
 
-        <p className="text-center text-xs mt-6" style={{ color: "var(--text-tertiary)" }}>
-          ForgeC2 v2.0 — Authorized access only
+        <p className="text-center text-xs mt-6 text-muted-foreground/70">
+          ForgeC2 v2.1 — Authorized access only
         </p>
       </div>
     </div>

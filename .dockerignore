@@ -1,0 +1,14 @@
+*.exe
+*.log
+*.err
+*.out
+*.test
+*.exe~
+node_modules/
+.git/
+.gitignore
+data/
+tmp/
+frontend/.next/
+frontend/node_modules/
+frontend/tsconfig.tsbuildinfo

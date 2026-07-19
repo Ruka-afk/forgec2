@@ -1,0 +1,25 @@
+name: realtime-dashboard
+version: 1.0.0
+type: report
+description: Generates real-time operational dashboard with auto-refresh HTML page
+author: ""
+category: reporting
+entry: report.py
+interpreter: python3
+timeout: 60
+params:
+    - name: format
+      type: string
+      required: false
+      default: html
+      description: Output format (html, json)
+    - name: title
+      type: string
+      required: false
+      default: Real-Time Dashboard
+      description: Dashboard title
+    - name: refresh_seconds
+      type: int
+      required: false
+      default: "30"
+      description: Auto-refresh interval in seconds

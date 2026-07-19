@@ -25,6 +25,8 @@ func netEnumHosts(domain string) (string, error) {
 }
 
 func netScanSMBDiscovery() (string, error) {
-	out, err := exec.Command("cmd", "/c", "net view").CombinedOutput()
+	cmd := exec.Command("cmd", "/c", "net view")
+	applyHideWindow(cmd)
+	out, err := cmd.CombinedOutput()
 	return fmt.Sprintf("Net view:\n%s", string(out)), err
 }

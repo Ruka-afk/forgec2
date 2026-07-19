@@ -106,7 +106,7 @@ func (s *Server) handleTokenListProcs(c *gin.Context) {
 	task, err := s.createTask(id, "token_list_procs", "", "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("token_list_procs: failed to create task", "agent_id", id, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -122,11 +122,11 @@ func (s *Server) handleTokenSteal(c *gin.Context) {
 	processName := c.PostForm("process_name") // optional, for display
 
 	if pidStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "pid required"})
+		respondError(c, http.StatusBadRequest, "pid required")
 		return
 	}
 	if _, err := strconv.ParseUint(pidStr, 10, 32); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid pid"})
+		respondError(c, http.StatusBadRequest, "invalid pid")
 		return
 	}
 
@@ -137,7 +137,7 @@ func (s *Server) handleTokenSteal(c *gin.Context) {
 	task, err := s.createTask(id, "token_steal", pidStr, "", processName, "", 0, 0)
 	if err != nil {
 		slog.Error("token_steal: failed to create task", "agent_id", id, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -156,7 +156,7 @@ func (s *Server) handleTokenMake(c *gin.Context) {
 	logonType := c.PostForm("logon_type")
 
 	if domUser == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user required (format: DOMAIN\\user or user@domain)"})
+		respondError(c, http.StatusBadRequest, "user required (format: DOMAIN\\user or user@domain)")
 		return
 	}
 	if logonType == "" {
@@ -167,11 +167,11 @@ func (s *Server) handleTokenMake(c *gin.Context) {
 		return
 	}
 
-	// Command = user, Shell = password, Path = logon_type
+	// Command = user, Shell = password (needed by agent for LogonUser), Path = logon_type
 	task, err := s.createTask(id, "token_make", domUser, password, logonType, "", 0, 0)
 	if err != nil {
 		slog.Error("token_make: failed to create task", "agent_id", id, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -192,7 +192,7 @@ func (s *Server) handleTokenRevert(c *gin.Context) {
 	task, err := s.createTask(id, "token_revert", "", "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("token_revert: failed to create task", "agent_id", id, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -216,7 +216,7 @@ func (s *Server) handleTokenWhoami(c *gin.Context) {
 
 	task, err := s.createTask(id, "token_whoami", "", "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -231,17 +231,17 @@ func (s *Server) handleTokenDrop(c *gin.Context) {
 
 	tokenID, err := strconv.ParseUint(tokenIDStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token id"})
+		respondError(c, http.StatusBadRequest, "invalid token id")
 		return
 	}
 
 	result := s.db.Where("id = ? AND agent_id = ?", tokenID, id).Delete(&db.TokenEntry{})
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		respondError(c, http.StatusInternalServerError, result.Error.Error())
 		return
 	}
 	if result.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "token not found"})
+		respondError(c, http.StatusNotFound, "token not found")
 		return
 	}
 
@@ -257,17 +257,17 @@ func (s *Server) handleTokenImpersonate(c *gin.Context) {
 
 	tokenID, err := strconv.ParseUint(tokenIDStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token id"})
+		respondError(c, http.StatusBadRequest, "invalid token id")
 		return
 	}
 
 	var entry db.TokenEntry
 	if err := s.db.First(&entry, tokenID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "token entry not found"})
+		respondError(c, http.StatusNotFound, "token entry not found")
 		return
 	}
 	if entry.AgentID != id {
-		c.JSON(http.StatusForbidden, gin.H{"error": "token does not belong to this agent"})
+		respondError(c, http.StatusForbidden, "token does not belong to this agent")
 		return
 	}
 
@@ -278,7 +278,7 @@ func (s *Server) handleTokenImpersonate(c *gin.Context) {
 	// Re-steal the same pid
 	task, err := s.createTask(id, "token_steal", fmt.Sprintf("%d", entry.PID), "", entry.ProcessName, "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -381,13 +381,13 @@ func (s *Server) handleTokenNoteUpdate(c *gin.Context) {
 
 	tokenID, err := strconv.ParseUint(tokenIDStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token id"})
+		respondError(c, http.StatusBadRequest, "invalid token id")
 		return
 	}
 
 	result := s.db.Model(&db.TokenEntry{}).Where("id = ? AND agent_id = ?", tokenID, id).Update("notes", notes)
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
+		respondError(c, http.StatusInternalServerError, result.Error.Error())
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})

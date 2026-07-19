@@ -1,0 +1,20 @@
+name: security-event-logger
+version: 1.0.0
+type: hook
+description: Log all security-relevant events for audit trail - agent activity, tasks, user sessions
+author: ForgeC2
+category: monitoring
+entry: logger.py
+interpreter: python
+timeout: 30
+params: []
+events:
+    - agent.connect
+    - agent.disconnect
+    - task.created
+    - task.completed
+    - user.login
+    - user.logout
+config:
+    log_file: ""
+    verbose: "true"

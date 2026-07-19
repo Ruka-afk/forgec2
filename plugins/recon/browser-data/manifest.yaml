@@ -1,0 +1,19 @@
+name: browser-data
+version: 1.0.0
+type: command
+description: Analyzes browser history, bookmarks, saved passwords, and cookies from agent hosts
+author: ""
+category: recon
+entry: analyze.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Specific agent to analyze
+    - name: top_n
+      type: int
+      required: false
+      default: "20"
+      description: Number of top entries to show

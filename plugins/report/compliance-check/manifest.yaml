@@ -1,0 +1,25 @@
+name: compliance-check
+version: 1.0.0
+type: report
+description: Generates compliance check report — maps findings to CIS Benchmark and NIST 800-53 controls
+author: ForgeC2
+category: reporting
+entry: report.py
+interpreter: python3
+timeout: 60
+params:
+    - name: format
+      type: string
+      required: false
+      default: html
+      description: Output format (html, markdown, json)
+    - name: title
+      type: string
+      required: false
+      default: Compliance Check Report
+      description: Report title
+    - name: framework
+      type: string
+      required: false
+      default: cis
+      description: Framework to check against (cis, nist, both)

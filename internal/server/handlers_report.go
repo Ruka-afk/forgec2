@@ -3,6 +3,7 @@
 import (
 	"encoding/json"
 	"fmt"
+	htmlesc "html"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -76,24 +77,40 @@ func (s *Server) handleGenerateReport(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
-	if req.Format == "" {
-		req.Format = "html"
-	}
+ 	// Validate format whitelist
+ 	if req.Format == "" {
+ 		req.Format = "html"
+ 	}
+ 	if req.Format != "html" && req.Format != "json" {
+ 		respondError(c, http.StatusBadRequest, "invalid format: must be 'html' or 'json'")
+ 		return
+ 	}
 
-	// Parse dates
-	startDate, err := time.Parse("2006-01-02", req.StartDate)
-	if err != nil {
-		startDate = time.Now().AddDate(0, -1, 0) // Default: last month
-	}
-	endDate, err := time.Parse("2006-01-02", req.EndDate)
-	if err != nil {
-		endDate = time.Now()
-	}
-	endDate = endDate.Add(24*time.Hour - 1*time.Second) // End of day
+ 	// Parse dates
+ 	startDate, err := time.Parse("2006-01-02", req.StartDate)
+ 	if err != nil {
+ 		startDate = time.Now().AddDate(0, -1, 0) // Default: last month
+ 	}
+ 	endDate, err := time.Parse("2006-01-02", req.EndDate)
+ 	if err != nil {
+ 		endDate = time.Now()
+ 	}
+ 	endDate = endDate.Add(24*time.Hour - 1*time.Second) // End of day
+
+ 	// Validate date range
+ 	if startDate.After(endDate) {
+ 		respondError(c, http.StatusBadRequest, "start_date must be before end_date")
+ 		return
+ 	}
+ 	// Cap date range to 365 days
+ 	if endDate.Sub(startDate) > MaxReportDateRange {
+ 		respondError(c, http.StatusBadRequest, "date range cannot exceed 365 days")
+ 		return
+ 	}
 
 	// Build report
 	report := gin.H{
@@ -132,8 +149,8 @@ func (s *Server) handleGenerateReport(c *gin.Context) {
 
 	// Agents
 	if req.Include.Agents {
-		var agents []db.Implant
-		s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Find(&agents)
+ 		var agents []db.Implant
+ 		s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(5000).Find(&agents)
 		agentList := make([]gin.H, 0, len(agents))
 		for _, a := range agents {
 			agentList = append(agentList, gin.H{
@@ -286,14 +303,14 @@ func generateHTMLReport(report gin.H) string {
 `
 		for _, a := range agents {
 			html += fmt.Sprintf("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td><span class=\"badge badge-%s\">%s</span></td><td>%s</td></tr>\n",
-				a["hostname"], a["os"], a["ip"], a["user"],
+				htmlesc.EscapeString(fmt.Sprint(a["hostname"])), htmlesc.EscapeString(fmt.Sprint(a["os"])), htmlesc.EscapeString(fmt.Sprint(a["ip"])), htmlesc.EscapeString(fmt.Sprint(a["user"])),
 				func() string {
 					if a["status"] == "online" {
 						return "success"
 					}
 					return "pending"
 				}(),
-				a["status"], a["created"])
+				htmlesc.EscapeString(fmt.Sprint(a["status"])), htmlesc.EscapeString(fmt.Sprint(a["created"])))
 		}
 		html += "</table>\n"
 	}
@@ -312,7 +329,7 @@ func generateHTMLReport(report gin.H) string {
 				statusBadge = "failed"
 			}
 			html += fmt.Sprintf("<tr><td>%s</td><td><code>%s</code></td><td>%s</td><td><span class=\"badge badge-%s\">%s</span></td><td>%s</td></tr>\n",
-				t["type"], t["command"], t["agent"], statusBadge, t["status"], t["created"])
+				htmlesc.EscapeString(fmt.Sprint(t["type"])), htmlesc.EscapeString(fmt.Sprint(t["command"])), htmlesc.EscapeString(fmt.Sprint(t["agent"])), statusBadge, htmlesc.EscapeString(fmt.Sprint(t["status"])), htmlesc.EscapeString(fmt.Sprint(t["created"])))
 		}
 		html += "</table>\n"
 	}
@@ -325,7 +342,7 @@ func generateHTMLReport(report gin.H) string {
 `
 		for _, c := range creds {
 			html += fmt.Sprintf("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n",
-				c["type"], c["username"], c["source"], c["agent"], c["created"])
+				htmlesc.EscapeString(fmt.Sprint(c["type"])), htmlesc.EscapeString(fmt.Sprint(c["username"])), htmlesc.EscapeString(fmt.Sprint(c["source"])), htmlesc.EscapeString(fmt.Sprint(c["agent"])), htmlesc.EscapeString(fmt.Sprint(c["created"])))
 		}
 		html += "</table>\n"
 	}
@@ -342,7 +359,7 @@ func generateHTMLReport(report gin.H) string {
 				successBadge = "failed"
 			}
 			html += fmt.Sprintf("<tr><td>%s</td><td>%s</td><td>%s</td><td><span class=\"badge badge-%s\">%v</span></td><td>%s</td></tr>\n",
-				a["user"], a["action"], a["details"], successBadge, a["success"], a["created"])
+				htmlesc.EscapeString(fmt.Sprint(a["user"])), htmlesc.EscapeString(fmt.Sprint(a["action"])), htmlesc.EscapeString(fmt.Sprint(a["details"])), successBadge, a["success"], htmlesc.EscapeString(fmt.Sprint(a["created"])))
 		}
 		html += "</table>\n"
 	}
@@ -532,12 +549,12 @@ func (s *Server) handleAPIDeleteReport(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid report id"})
+		respondError(c, http.StatusBadRequest, "invalid report id")
 		return
 	}
 	if err := s.db.Delete(&db.GeneratedReport{}, id).Error; err != nil {
 		slog.Error("Failed to delete report", "id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete report"})
+		respondError(c, http.StatusInternalServerError, "failed to delete report")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})

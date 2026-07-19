@@ -11,6 +11,9 @@ import (
 
 // handlePrivescCheck handles privilege escalation reconnaissance
 func (s *Server) handlePrivescCheck(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	user := c.GetString("username")
 	agentID := c.Param("id")
 
@@ -40,7 +43,7 @@ func (s *Server) handlePrivescCheck(c *gin.Context) {
 	}
 
 	if err := s.db.Create(&task).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create privesc check task"})
+		respondError(c, http.StatusInternalServerError, "failed to create privesc check task")
 		return
 	}
 
@@ -69,7 +72,7 @@ func (s *Server) handleProcessPrivescResult(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
@@ -131,7 +134,7 @@ func (s *Server) handlePrivescPage(c *gin.Context) {
 
 	// Get available agents
 	var agents []db.Implant
-	s.db.Where("status = 'online'").Find(&agents)
+	s.db.Where("status = 'online'").Limit(5000).Find(&agents)
 
 	data := gin.H{
 		"Title":     "ForgeC2 - Privilege Escalation",
@@ -156,5 +159,74 @@ func (s *Server) handlePrivescHistory(c *gin.Context) {
 		"tasks": tasks,
 		"total": len(tasks),
 	})
+}
+
+// handlePrivescRun creates a privesc check task for the given agent.
+func (s *Server) handlePrivescRun(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	user := c.GetString("username")
+	var req struct {
+		AgentID   string `json:"agent_id"`
+		CheckType string `json:"check_type"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.AgentID == "" {
+		respondError(c, http.StatusBadRequest, "agent_id required")
+		return
+	}
+	if req.CheckType == "" {
+		req.CheckType = "all"
+	}
+	command := fmt.Sprintf("privesc_check:%s", req.CheckType)
+	task := db.Task{
+		AgentID:   req.AgentID,
+		Type:      "privesc_check",
+		Command:   command,
+		Status:    "pending",
+		CreatedBy: user,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := s.db.Create(&task).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to create task")
+		return
+	}
+	s.LogAuditRecord(c, "privesc_check", "agent", req.AgentID,
+		fmt.Sprintf("Privesc check task created (type: %s)", req.CheckType), true, nil)
+	respond(c, gin.H{"success": true, "task_id": task.ID})
+}
+
+// handlePrivescExecute executes an exploit command for a privesc finding.
+func (s *Server) handlePrivescExecute(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	user := c.GetString("username")
+	var req struct {
+		AgentID        string `json:"agent_id"`
+		CheckType      string `json:"check_type"`
+		ExploitCommand string `json:"exploit_command"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.AgentID == "" || req.ExploitCommand == "" {
+		respondError(c, http.StatusBadRequest, "agent_id and exploit_command required")
+		return
+	}
+	task := db.Task{
+		AgentID:   req.AgentID,
+		Type:      "privesc_execute",
+		Command:   req.ExploitCommand,
+		Status:    "pending",
+		CreatedBy: user,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := s.db.Create(&task).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to create exploit task")
+		return
+	}
+	s.LogAuditRecord(c, "privesc_execute", "agent", req.AgentID,
+		fmt.Sprintf("Privesc exploit task created: %s", req.ExploitCommand), true, nil)
+	respond(c, gin.H{"success": true, "task_id": task.ID})
 }
 

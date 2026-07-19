@@ -1,0 +1,15 @@
+name: credential-scraper
+version: 1.0.0
+type: hook
+description: Automatically extracts and indexes credentials from task results using regex patterns
+author: ""
+category: monitoring
+entry: scraper.py
+interpreter: python3
+timeout: 30
+params: []
+events:
+    - task.completed
+    - task.result
+config:
+    log_file: ""

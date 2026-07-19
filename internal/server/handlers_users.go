@@ -9,6 +9,7 @@ import (
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // handleUsersPage shows user management
@@ -36,7 +37,7 @@ func (s *Server) handleUsersPage(c *gin.Context) {
 func (s *Server) handleAddUser(c *gin.Context) {
 	currentRole, _ := c.Get("user_role")
 	if currentRole != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		respondError(c, http.StatusForbidden, "Admin access required")
 		return
 	}
 	username := c.PostForm("username")
@@ -44,39 +45,39 @@ func (s *Server) handleAddUser(c *gin.Context) {
 	role := c.PostForm("role")
 
 	if username == "" || password == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Username and password required"})
+		respondError(c, http.StatusBadRequest, "Username and password required")
 		return
 	}
 	if len(password) < 8 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Password must be at least 8 characters"})
+		respondError(c, http.StatusBadRequest, "Password must be at least 8 characters")
 		return
-	}
-	if role == "" {
-		role = "operator"
 	}
 	validRoles := map[string]bool{
 		db.RoleAdmin: true,
 		db.RoleUser:  true,
 	}
 	if !validRoles[role] {
-		role = "operator"
+		role = db.RoleUser
 	}
 
 	hash, err := middleware.HashPassword(password)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		respondError(c, http.StatusInternalServerError, "Failed to hash password")
 		return
 	}
 
-	user := db.User{
-		Username:     username,
-		PasswordHash: hash,
-		Role:         role,
-		IsActive:     true,
-	}
-
-	if result := s.db.Create(&user); result.Error != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Username already exists"})
+	var user db.User
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		user = db.User{
+			Username:     username,
+			PasswordHash: hash,
+			Role:         role,
+			IsActive:     true,
+		}
+		return tx.Create(&user).Error
+	})
+	if err != nil {
+		respondError(c, http.StatusConflict, "Username already exists")
 		return
 	}
 
@@ -93,7 +94,7 @@ func (s *Server) handleToggleUser(c *gin.Context) {
 	idStr := c.Param("id")
 	var user db.User
 	if err := s.db.First(&user, idStr).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		respondError(c, http.StatusNotFound, "User not found")
 		return
 	}
 
@@ -102,16 +103,19 @@ func (s *Server) handleToggleUser(c *gin.Context) {
 
 	// Prevent disabling yourself
 	if currentUser == user.Username {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot disable your own account"})
+		respondError(c, http.StatusBadRequest, "Cannot disable your own account")
 		return
 	}
 	// Only admins can toggle users
 	if currentRole != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		respondError(c, http.StatusForbidden, "Admin access required")
 		return
 	}
 
-	s.db.Model(&user).Update("is_active", !user.IsActive)
+	if err := s.db.Model(&user).Update("is_active", !user.IsActive).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to toggle user")
+		return
+	}
 	status := "enabled"
 	if !user.IsActive {
 		status = "disabled"
@@ -131,13 +135,13 @@ func (s *Server) handleEditUser(c *gin.Context) {
 	idStr := c.Param("id")
 	currentRole, _ := c.Get("user_role")
 	if currentRole != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		respondError(c, http.StatusForbidden, "Admin access required")
 		return
 	}
 
 	var user db.User
 	if err := s.db.First(&user, idStr).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		respondError(c, http.StatusNotFound, "User not found")
 		return
 	}
 
@@ -149,7 +153,7 @@ func (s *Server) handleEditUser(c *gin.Context) {
 		// Check uniqueness
 		var dup db.User
 		if s.db.Where("username = ?", username).First(&dup).Error == nil {
-			c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
+			respondError(c, http.StatusConflict, "Username already taken")
 			return
 		}
 		updates["username"] = username
@@ -160,7 +164,7 @@ func (s *Server) handleEditUser(c *gin.Context) {
 			db.RoleUser:  true,
 		}
 		if !validRoles[role] {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role"})
+			respondError(c, http.StatusBadRequest, "Invalid role")
 			return
 		}
 		updates["role"] = role
@@ -171,7 +175,10 @@ func (s *Server) handleEditUser(c *gin.Context) {
 		return
 	}
 
-	s.db.Model(&user).Updates(updates)
+	if err := s.db.Model(&user).Updates(updates).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to update user")
+		return
+	}
 	currentUser, _ := c.Get("user")
 	s.LogAuditRecord(c, "user_edit", "auth", currentUser.(string),
 		fmt.Sprintf("Edited user %s: %v", user.Username, updates), true, nil)
@@ -185,25 +192,28 @@ func (s *Server) handleForceLogoutUser(c *gin.Context) {
 	idStr := c.Param("id")
 	currentRole, _ := c.Get("user_role")
 	if currentRole != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		respondError(c, http.StatusForbidden, "Admin access required")
 		return
 	}
 
 	currentUser, _ := c.Get("user")
 	var target db.User
 	if err := s.db.First(&target, idStr).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		respondError(c, http.StatusNotFound, "User not found")
 		return
 	}
 
 	if currentUser == target.Username {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot force-logout yourself"})
+		respondError(c, http.StatusBadRequest, "Cannot force-logout yourself")
 		return
 	}
 
 	// Set ForceLogoutAt to now
 	now := time.Now()
-	s.db.Model(&target).Update("force_logout_at", now)
+	if err := s.db.Model(&target).Update("force_logout_at", now).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to force logout user")
+		return
+	}
 
 	s.LogAuditRecord(c, "user_force_logout", "auth", currentUser.(string),
 		fmt.Sprintf("Force logged out user %s", target.Username), true, nil)
@@ -219,38 +229,38 @@ func (s *Server) handleDeleteUser(c *gin.Context) {
 	currentRole, _ := c.Get("user_role")
 
 	if currentRole != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		respondError(c, http.StatusForbidden, "Admin access required")
 		return
 	}
 
 	var user db.User
 	if err := s.db.First(&user, idStr).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		respondError(c, http.StatusNotFound, "User not found")
 		return
 	}
 
 	// Prevent deleting yourself
 	if currentUser == user.Username {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot delete your own account"})
+		respondError(c, http.StatusBadRequest, "Cannot delete your own account")
 		return
 	}
 
 	// Use transaction to clean up associated data
 	tx := s.db.Begin()
 	if err := tx.Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
+		respondError(c, http.StatusInternalServerError, "Failed to start transaction")
 		return
 	}
 
 	// Delete the user
 	if err := tx.Delete(&user).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+		respondError(c, http.StatusInternalServerError, "Failed to delete user")
 		return
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		respondError(c, http.StatusInternalServerError, "Failed to commit transaction")
 		return
 	}
 
@@ -268,27 +278,27 @@ func (s *Server) handleSetUserPassword(c *gin.Context) {
 	currentRole, _ := c.Get("user_role")
 
 	if currentRole != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+		respondError(c, http.StatusForbidden, "Admin access required")
 		return
 	}
 	if len(password) < 8 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Password must be at least 8 characters"})
+		respondError(c, http.StatusBadRequest, "Password must be at least 8 characters")
 		return
 	}
 
 	hash, err := middleware.HashPassword(password)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Hash failed"})
+		respondError(c, http.StatusInternalServerError, "Hash failed")
 		return
 	}
 
 	result := s.db.Model(&db.User{}).Where("id = ?", idStr).Update("password_hash", hash)
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		respondError(c, http.StatusInternalServerError, "Database error")
 		return
 	}
 	if result.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		respondError(c, http.StatusNotFound, "User not found")
 		return
 	}
 

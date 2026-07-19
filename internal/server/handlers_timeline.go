@@ -69,10 +69,10 @@ func (s *Server) handleTimelineData(c *gin.Context) {
 		// Skip audit logs if filtering by other types
 	} else {
 		if filterUser != "" {
-			query = query.Where("user LIKE ?", "%"+filterUser+"%")
+		query = query.Where("user LIKE ? ESCAPE '\\'", "%"+escapeLike(filterUser)+"%")
 		}
 		if filterAgent != "" {
-			query = query.Where("agent_id LIKE ?", "%"+filterAgent+"%")
+		query = query.Where("agent_id LIKE ? ESCAPE '\\'", "%"+escapeLike(filterAgent)+"%")
 		}
 		if dateFrom != "" {
 			query = query.Where("created_at >= ?", dateFrom)
@@ -99,7 +99,7 @@ func (s *Server) handleTimelineData(c *gin.Context) {
 
 	if filterType == "" || filterType == "task" {
 		if filterAgent != "" {
-			taskQuery = taskQuery.Where("agent_id LIKE ?", "%"+filterAgent+"%")
+			taskQuery = taskQuery.Where("agent_id LIKE ? ESCAPE '\\'", "%"+escapeLike(filterAgent)+"%")
 		}
 		if dateFrom != "" {
 			taskQuery = taskQuery.Where("created_at >= ?", dateFrom)
@@ -113,14 +113,37 @@ func (s *Server) handleTimelineData(c *gin.Context) {
 	// Build unified timeline
 	events := make([]TimelineEvent, 0)
 
+	// Batch-load agent hostnames to avoid N+1 queries
+	agentIDs := make(map[string]bool)
+	for _, log := range auditLogs {
+		if log.AgentID != "" {
+			agentIDs[log.AgentID] = true
+		}
+	}
+	for _, task := range tasks {
+		if task.AgentID != "" {
+			agentIDs[task.AgentID] = true
+		}
+	}
+	agentNames := make(map[string]string)
+	if len(agentIDs) > 0 {
+		ids := make([]string, 0, len(agentIDs))
+		for id := range agentIDs {
+			ids = append(ids, id)
+		}
+		var agents []struct {
+			ID       string
+			Hostname string
+		}
+		s.db.Table("agents").Select("id, hostname").Where("id IN ?", ids).Find(&agents)
+		for _, a := range agents {
+			agentNames[a.ID] = a.Hostname
+		}
+	}
+
 	// Add audit logs
 	for _, log := range auditLogs {
-		agentName := ""
-		if log.AgentID != "" {
-			var agent struct{ Hostname string }
-			s.db.Table("agents").Select("hostname").Where("id = ?", log.AgentID).First(&agent)
-			agentName = agent.Hostname
-		}
+		agentName := agentNames[log.AgentID]
 
 		events = append(events, TimelineEvent{
 			ID:        log.ID,
@@ -138,12 +161,7 @@ func (s *Server) handleTimelineData(c *gin.Context) {
 
 	// Add tasks
 	for _, task := range tasks {
-		agentName := ""
-		if task.AgentID != "" {
-			var agent struct{ Hostname string }
-			s.db.Table("agents").Select("hostname").Where("id = ?", task.AgentID).First(&agent)
-			agentName = agent.Hostname
-		}
+		agentName := agentNames[task.AgentID]
 
 		statusIcon := "[OK]"
 		if task.Status == "failed" || task.Status == "error" {
@@ -193,10 +211,10 @@ func (s *Server) handleTimelineExport(c *gin.Context) {
 
 	query := s.db.Table("audit_logs").Select("created_at as timestamp, user, action, details, agent_id, ip, success")
 	if filterUser != "" {
-		query = query.Where("user LIKE ?", "%"+filterUser+"%")
+		query = query.Where("user LIKE ? ESCAPE '\\'", "%"+escapeLike(filterUser)+"%")
 	}
 	if filterAgent != "" {
-		query = query.Where("agent_id LIKE ?", "%"+filterAgent+"%")
+		query = query.Where("agent_id LIKE ? ESCAPE '\\'", "%"+escapeLike(filterAgent)+"%")
 	}
 	query.Order("created_at desc").Limit(1000).Find(&auditLogs)
 
@@ -208,11 +226,11 @@ func (s *Server) handleTimelineExport(c *gin.Context) {
 	for _, log := range auditLogs {
 		c.Writer.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s,%s,%t\n",
 			log.Timestamp.Format("2006-01-02 15:04:05"),
-			log.User,
-			log.Action,
-			log.Details,
-			log.AgentID,
-			log.IP,
+			csvSanitize(log.User),
+			csvSanitize(log.Action),
+			csvSanitize(log.Details),
+			csvSanitize(log.AgentID),
+			csvSanitize(log.IP),
 			log.Success,
 		))
 	}

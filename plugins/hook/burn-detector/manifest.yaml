@@ -1,0 +1,17 @@
+name: burn-detector
+version: 1.0.0
+type: hook
+description: Automatically detects agent burn indicators — AV detection, network blocking, process termination
+author: ""
+category: monitoring
+entry: detect.py
+interpreter: python3
+timeout: 30
+params: []
+events:
+    - task.completed
+    - agent.disconnect
+    - agent.connect
+config:
+    alert_threshold: "3"
+    log_file: ""

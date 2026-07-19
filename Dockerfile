@@ -1,22 +1,17 @@
 FROM golang:1.25-alpine AS builder
-
-WORKDIR /app
+WORKDIR /build
+RUN apk add --no-cache gcc musl-dev
 COPY go.mod go.sum ./
 RUN go mod download
-
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -buildid=" -trimpath -buildvcs=false -o /forgec2 ./cmd/server
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o forgec2-server ./cmd/server
 
-FROM alpine:3.19
+FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata
-
-WORKDIR /app
-COPY --from=builder /forgec2 /app/forgec2
-COPY config.yaml /app/config.yaml
-
-# Create data dirs
-RUN mkdir -p /app/data/db /app/data/screenshots /app/data/agents
-
+RUN adduser -D -h /data forgec2
+COPY --from=builder /build/forgec2-server /usr/local/bin/
 EXPOSE 8080
-
-ENTRYPOINT ["/app/forgec2", "-config", "/app/config.yaml"]
+USER forgec2
+WORKDIR /data
+ENTRYPOINT ["forgec2-server"]
+CMD ["-config", "/data/config.yaml"]

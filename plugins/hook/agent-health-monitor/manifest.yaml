@@ -1,0 +1,16 @@
+name: agent-health-monitor
+version: 1.0.0
+type: hook
+description: Monitor agent health - alert on unexpected disconnections, track uptime, and log health metrics
+author: ForgeC2
+category: monitoring
+entry: monitor.py
+interpreter: python
+timeout: 30
+params: []
+events:
+    - agent.connect
+    - agent.disconnect
+config:
+    log_file: ""
+    max_offline_seconds: "600"

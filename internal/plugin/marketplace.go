@@ -19,6 +19,7 @@ type Marketplace struct {
 	db        *gorm.DB
 	mu        sync.RWMutex
 	updateJob *time.Ticker
+	stopCh    chan struct{}
 }
 
 func NewMarketplace(database *gorm.DB) *Marketplace {
@@ -30,17 +31,28 @@ func (m *Marketplace) StartUpdateChecker(interval time.Duration) {
 	if m.updateJob != nil {
 		m.updateJob.Stop()
 	}
+	m.stopCh = make(chan struct{})
 	m.updateJob = time.NewTicker(interval)
 	go func() {
-		for range m.updateJob.C {
-			m.CheckAllUpdates()
+		for {
+			select {
+			case <-m.updateJob.C:
+				m.CheckAllUpdates()
+			case <-m.stopCh:
+				return
+			}
 		}
 	}()
 }
 
 func (m *Marketplace) StopUpdateChecker() {
+	if m.stopCh != nil {
+		close(m.stopCh)
+		m.stopCh = nil
+	}
 	if m.updateJob != nil {
 		m.updateJob.Stop()
+		m.updateJob = nil
 	}
 }
 
@@ -212,10 +224,10 @@ func (m *Marketplace) CheckAllUpdates() {
 
 func (m *Marketplace) CheckPluginUpdate(plugin *db.Plugin) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	var status db.PluginUpdateStatus
 	if err := m.db.FirstOrCreate(&status, db.PluginUpdateStatus{PluginID: plugin.ID}).Error; err != nil {
+		m.mu.Unlock()
 		return err
 	}
 
@@ -223,8 +235,14 @@ func (m *Marketplace) CheckPluginUpdate(plugin *db.Plugin) error {
 	if err != nil {
 		status.LastCheckedAt = time.Now()
 		m.db.Save(&status)
+		m.mu.Unlock()
 		return err
 	}
+
+	m.mu.Unlock()
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	status.LastCheckedAt = time.Now()
 	status.LatestVersion = latestVersion

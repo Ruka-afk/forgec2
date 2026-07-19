@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -89,7 +90,7 @@ func (r *ConfigReloader) monitor() {
 				debounce.Stop()
 			}
 
-			debounce = time.AfterFunc(500*time.Millisecond, func() {
+			debounce = time.AfterFunc(ConfigReloadDebounce, func() {
 				r.reload()
 			})
 
@@ -131,4 +132,32 @@ func (r *ConfigReloader) reload() {
 	}
 
 	slog.Info("Config reloaded successfully")
+}
+
+// Reload manually triggers a config reload from disk. Returns an error if the
+// reload fails (e.g., file not found, parse error). Safe for concurrent use.
+func (r *ConfigReloader) Reload() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	slog.Info("Manual config reload triggered", "path", r.path)
+
+	data, err := os.ReadFile(r.path)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+
+	newCfg := config.DefaultConfig()
+	if err := newCfg.LoadFromData(data); err != nil {
+		return fmt.Errorf("parse config: %w", err)
+	}
+
+	r.cfg.CopyFrom(newCfg)
+
+	if r.onReload != nil {
+		r.onReload(r.cfg)
+	}
+
+	slog.Info("Manual config reload completed")
+	return nil
 }

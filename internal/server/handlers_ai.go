@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -38,8 +40,8 @@ func (s *Server) handleAIPage(c *gin.Context) {
 // 鈹€鈹€ AI Config Save 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 func (s *Server) handleAIConfig(c *gin.Context) {
-	if role, _ := c.Get("user_role"); role != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Admin only"})
+	if role, _ := c.Get("user_role"); fmt.Sprintf("%v", role) != "admin" {
+		respondError(c, http.StatusForbidden, "Admin only")
 		return
 	}
 	var req struct {
@@ -51,7 +53,7 @@ func (s *Server) handleAIConfig(c *gin.Context) {
 		SystemPrompt string `json:"system_prompt"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
@@ -69,7 +71,7 @@ func (s *Server) handleAIConfig(c *gin.Context) {
 		configPath = "config.yaml"
 	}
 	if err := s.cfg.Save(configPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Save failed: " + err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "AI operation"))
 		return
 	}
 	username, _ := c.Get("user")
@@ -82,7 +84,7 @@ func (s *Server) handleAIConfig(c *gin.Context) {
 func (s *Server) handleAIChat(c *gin.Context) {
 	if !s.cfg.AI.Enabled || s.cfg.AI.APIKey == "" {
 		slog.Warn("AI chat blocked", "enabled", s.cfg.AI.Enabled, "provider", s.cfg.AI.Provider)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "AI not configured. Set api_key in AI settings."})
+		respondError(c, http.StatusBadRequest, "AI not configured. Set api_key in AI settings.")
 		return
 	}
 
@@ -90,7 +92,7 @@ func (s *Server) handleAIChat(c *gin.Context) {
 		Messages []chatMessage `json:"messages"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || len(req.Messages) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "messages required"})
+		respondError(c, http.StatusBadRequest, "messages required")
 		return
 	}
 
@@ -134,6 +136,7 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 	ch := make(chan sseEvent, 10)
 
 	go func() {
+		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
 		defer close(ch)
 
 		// Send immediate thinking indicator
@@ -187,8 +190,8 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 			resp.Body.Close()
 
 			// Safety: cap content length
-			if len(content) > 8000 {
-				content = content[:8000] + "\n\n[Response truncated]"
+			if len(content) > AIResponseTruncLen {
+				content = content[:AIResponseTruncLen] + "\n\n[Response truncated]"
 			}
 
 			if finishReason == "tool_calls" && len(toolCalls) > 0 {
@@ -242,7 +245,7 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 // and accumulates tool calls. Returns collected tool calls, full content, full reasoning, and finish reason.
 func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent) (toolCalls []toolCall, content, reasoning, finishReason string) {
 	reader := io.Reader(resp.Body)
-	buf := make([]byte, 4096)
+	buf := make([]byte, AIStreamBufSize)
 	var leftover string
 
 	type buildingTool struct {
@@ -307,9 +310,9 @@ func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent) (too
 				// Forward text in real-time (cap at 8000 chars to prevent runaway generation)
 				if delta.Content != "" {
 					content += delta.Content
-					if len(content) > 8000 {
-			content = content[:8000] + "\n\n[Response truncated]"
-						return
+	if len(content) > AIResponseTruncLen {
+			content = content[:AIResponseTruncLen] + "\n\n[Response truncated]"
+					return
 					}
 					ch <- sseEvent{"text", content}
 				}
@@ -360,8 +363,8 @@ func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent) (too
 
 func (s *Server) logParseError(bodyBytes []byte, ch chan<- sseEvent) {
 	preview := string(bodyBytes)
-	if len(preview) > 300 {
-		preview = preview[:300]
+	if len(preview) > AIThinkingPreviewLen {
+		preview = preview[:AIThinkingPreviewLen]
 	}
 	base := strings.TrimRight(s.cfg.AIEndpoint(), "/")
 	hp := base
@@ -417,7 +420,7 @@ func (s *Server) aiDoRequest(payload []byte) (*http.Response, error) {
 		httpReq.Header.Set("Accept", "application/json")
 	}
 
-	client := &http.Client{Timeout: 120 * time.Second}
+	client := &http.Client{Timeout: AIAPITimeout}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %v", err)
@@ -426,8 +429,8 @@ func (s *Server) aiDoRequest(payload []byte) (*http.Response, error) {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		bodyStr := string(body)
-		if len(bodyStr) > 500 {
-			bodyStr = bodyStr[:500] + "..."
+		if len(bodyStr) > AIErrorBodyTruncLen {
+			bodyStr = bodyStr[:AIErrorBodyTruncLen] + "..."
 		}
 		slog.Error("AI API error", "status", resp.StatusCode, "url", url, "body", bodyStr)
 		return nil, fmt.Errorf("API %d from %s: %s", resp.StatusCode, url, bodyStr)
@@ -692,7 +695,7 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 				"status": t.Status, "created_at": t.CreatedAt.Format(time.RFC3339),
 			}
 			if t.Result != "" {
-				r["result"] = truncateStr(t.Result, 500)
+				r["result"] = truncateStr(t.Result, AIToolResultTruncLen)
 			}
 			if t.Error != "" {
 				r["error"] = t.Error
@@ -747,8 +750,8 @@ func truncateStr(s string, n int) string {
 }
 
 var (
-	taskWaitMaxDuration = 60 * time.Second
-	taskPollMinInterval = 250 * time.Millisecond
+	taskWaitMaxDuration = AITaskWaitMax
+	taskPollMinInterval = AITaskPollMinInterval
 )
 
 type executeCommandArgs struct {
@@ -765,7 +768,9 @@ func parseExecuteCommandArgs(argsJSON string) executeCommandArgs {
 		Shell         string `json:"shell"`
 		WaitForResult *bool  `json:"wait_for_result"`
 	}
-	_ = json.Unmarshal([]byte(argsJSON), &raw)
+	if err := json.Unmarshal([]byte(argsJSON), &raw); err != nil {
+		slog.Error("ai: failed to unmarshal execute command args", "error", err, "args", argsJSON)
+	}
 	out := executeCommandArgs{
 		AgentID:       raw.AgentID,
 		Command:       raw.Command,
@@ -811,7 +816,7 @@ func marshalTaskResult(task db.Task, extra map[string]interface{}) string {
 		result[k] = v
 	}
 	if task.Result != "" {
-		result["result"] = truncateStr(task.Result, 2000)
+		result["result"] = truncateStr(task.Result, AITaskResultTruncLen)
 	}
 	if task.Error != "" {
 		result["error"] = task.Error
@@ -918,7 +923,7 @@ func (s *Server) buildClaudeRequest(openAIPayload []byte) []byte {
 	claudeReq := map[string]interface{}{
 		"model":      req.Model,
 		"messages":   claudeMessages,
-		"max_tokens": 4096,
+		"max_tokens": ClaudeMaxTokens,
 		"stream":     req.Stream,
 	}
 	if systemPrompt != "" {
@@ -943,7 +948,7 @@ func parseJSONMap(s string) map[string]interface{} {
 
 func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent) (toolCalls []toolCall, content, finishReason string) {
 	reader := io.Reader(resp.Body)
-	buf := make([]byte, 4096)
+	buf := make([]byte, AIStreamBufSize)
 	var leftover string
 
 	type buildingClaudeTool struct {

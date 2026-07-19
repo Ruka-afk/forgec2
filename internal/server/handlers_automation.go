@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -32,7 +33,7 @@ func (s *Server) handleListAutomationRules(c *gin.Context) {
 func (s *Server) handleSaveAutomationRule(c *gin.Context) {
 	var rule AutomationRule
 	if err := c.ShouldBindJSON(&rule); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Rule operation"))
 		return
 	}
 	if rule.ID == "" {
@@ -42,7 +43,7 @@ func (s *Server) handleSaveAutomationRule(c *gin.Context) {
 		rule.CreatedAt = time.Now().Format(time.RFC3339)
 	}
 	if err := s.saveAutomationRule(rule); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Rule operation"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": rule})
@@ -52,12 +53,12 @@ func (s *Server) handleUpdateAutomationRule(c *gin.Context) {
 	ruleID := c.Param("id")
 	var rule AutomationRule
 	if err := c.ShouldBindJSON(&rule); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Rule operation"))
 		return
 	}
 	rule.ID = ruleID
 	if err := s.saveAutomationRule(rule); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Rule operation"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": rule})
@@ -66,7 +67,7 @@ func (s *Server) handleUpdateAutomationRule(c *gin.Context) {
 func (s *Server) handleDeleteAutomationRule(c *gin.Context) {
 	ruleID := c.Param("id")
 	if err := s.deleteAutomationRule(ruleID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Rule operation"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -94,12 +95,12 @@ func (s *Server) handleListWebhooks(c *gin.Context) {
 func (s *Server) handleCreateWebhook(c *gin.Context) {
 	var wh db.WebhookConfig
 	if err := c.ShouldBindJSON(&wh); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Webhook operation"))
 		return
 	}
 	if err := s.db.Create(&wh).Error; err != nil {
 		slog.Error("Failed to create webhook", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create webhook"})
+		respondError(c, http.StatusInternalServerError, "failed to create webhook")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": wh})
@@ -109,7 +110,7 @@ func (s *Server) handleDeleteWebhook(c *gin.Context) {
 	id := c.Param("id")
 	if err := s.db.Delete(&db.WebhookConfig{}, id).Error; err != nil {
 		slog.Error("Failed to delete webhook", "id", id, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete webhook"})
+		respondError(c, http.StatusInternalServerError, "failed to delete webhook")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -121,11 +122,15 @@ func (s *Server) handleTestWebhook(c *gin.Context) {
 		Method string `json:"method"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Webhook operation"))
 		return
 	}
 	if req.Method == "" {
 		req.Method = "POST"
+	}
+	if err := validateWebhookURL(req.URL); err != nil {
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Webhook operation"))
+		return
 	}
 	evt := Event{
 		Type:      EventImplantCheckin,
@@ -151,7 +156,8 @@ func (s *Server) handlePluginList(c *gin.Context) {
 	query := s.db.Model(&db.Plugin{})
 
 	if search != "" {
-		query = query.Where("name LIKE ? OR description LIKE ? OR author LIKE ?", "%"+search+"%", "%"+search+"%", "%"+search+"%")
+		query = query.Where("(name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR author LIKE ? ESCAPE '\\')",
+			"%"+escapeLike(search)+"%", "%"+escapeLike(search)+"%", "%"+escapeLike(search)+"%")
 	}
 	if category != "" {
 		query = query.Where("category = ?", category)
@@ -177,17 +183,19 @@ func (s *Server) handlePluginList(c *gin.Context) {
 func (s *Server) handlePluginToggle(c *gin.Context) {
 	p, err := s.resolvePluginRecord(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "plugin not found"})
+		respondError(c, http.StatusNotFound, "plugin not found")
 		return
 	}
 	p.Enabled = !p.Enabled
 	if err := s.db.Save(p).Error; err != nil {
 		slog.Error("Failed to save plugin toggle", "plugin_id", p.ID, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to toggle plugin"})
+		respondError(c, http.StatusInternalServerError, "failed to toggle plugin")
 		return
 	}
 	if p.Name != "" {
-		_ = s.pluginManager.SetEnabled(p.Name, p.Enabled)
+		if err := s.pluginManager.SetEnabled(p.Name, p.Enabled); err != nil {
+			slog.Error("automation: failed to set plugin enabled state", "plugin_name", p.Name, "enabled", p.Enabled, "error", err)
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
@@ -195,15 +203,17 @@ func (s *Server) handlePluginToggle(c *gin.Context) {
 func (s *Server) handlePluginDelete(c *gin.Context) {
 	p, err := s.resolvePluginRecord(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "plugin not found"})
+		respondError(c, http.StatusNotFound, "plugin not found")
 		return
 	}
 	if p.Name != "" {
-		_ = s.pluginManager.Unregister(p.Name)
+		if err := s.pluginManager.Unregister(p.Name); err != nil {
+			slog.Error("automation: failed to unregister plugin", "plugin_name", p.Name, "error", err)
+		}
 	}
 	if err := s.db.Delete(p).Error; err != nil {
 		slog.Error("Failed to delete plugin", "plugin_id", p.ID, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete plugin"})
+		respondError(c, http.StatusInternalServerError, "failed to delete plugin")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -212,11 +222,11 @@ func (s *Server) handlePluginDelete(c *gin.Context) {
 func (s *Server) handlePluginCreate(c *gin.Context) {
 	var p db.Plugin
 	if err := c.ShouldBindJSON(&p); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Plugin operation"))
 		return
 	}
 	if err := s.db.Create(&p).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
 		return
 	}
 	s.tryRegisterPluginFromDisk(p.Name)
@@ -231,7 +241,7 @@ func (s *Server) handlePluginGet(c *gin.Context) {
 	id := c.Param("id")
 	var plugin db.Plugin
 	if err := s.db.First(&plugin, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "plugin not found"})
+		respondError(c, http.StatusNotFound, "plugin not found")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": plugin})
@@ -244,7 +254,7 @@ func (s *Server) handlePluginRating(c *gin.Context) {
 
 	summary, err := s.marketplace.GetRatingSummary(pluginID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": summary})
@@ -257,7 +267,7 @@ func (s *Server) handlePluginReviews(c *gin.Context) {
 
 	reviews, err := s.marketplace.GetReviews(pluginID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": reviews})
@@ -278,12 +288,42 @@ func (s *Server) handlePluginAddReview(c *gin.Context) {
 		Comment string `json:"comment"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Plugin operation"))
 		return
 	}
 
 	if err := s.marketplace.AddReview(pluginID, uid, uname, req.Rating, req.Comment); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// handlePluginRate submits a rating for a plugin.
+func (s *Server) handlePluginRate(c *gin.Context) {
+	id := c.Param("id")
+	var pluginID uint
+	fmt.Sscanf(id, "%d", &pluginID)
+
+	userID, _ := c.Get("user_id")
+	uid, _ := userID.(uint)
+	username, _ := c.Get("user")
+	uname, _ := username.(string)
+
+	var req struct {
+		Rating int `json:"rating"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Plugin operation"))
+		return
+	}
+	if req.Rating < 1 || req.Rating > 5 {
+		respondError(c, http.StatusBadRequest, "rating must be 1-5")
+		return
+	}
+
+	if err := s.marketplace.AddReview(pluginID, uid, uname, req.Rating, ""); err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -296,7 +336,7 @@ func (s *Server) handlePluginDependencies(c *gin.Context) {
 
 	deps, err := s.marketplace.GetDependencies(pluginID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": deps})
@@ -309,7 +349,7 @@ func (s *Server) handlePluginUpdateStatus(c *gin.Context) {
 
 	status, err := s.marketplace.GetUpdateStatus(pluginID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
 		return
 	}
 
@@ -333,7 +373,7 @@ func (s *Server) handlePluginUpdate(c *gin.Context) {
 	fmt.Sscanf(id, "%d", &pluginID)
 
 	if err := s.marketplace.UpdatePlugin(pluginID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Plugin operation"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -346,7 +386,7 @@ func (s *Server) handlePluginExport(c *gin.Context) {
 
 	data, err := s.marketplace.ExportPlugin(pluginID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
 		return
 	}
 
@@ -358,26 +398,26 @@ func (s *Server) handlePluginExport(c *gin.Context) {
 func (s *Server) handlePluginImport(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "no file provided"})
+		respondError(c, http.StatusBadRequest, "no file provided")
 		return
 	}
 
 	f, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
 		return
 	}
 	defer f.Close()
 
 	data, err := io.ReadAll(f)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Plugin operation"))
 		return
 	}
 
 	plugin, err := s.marketplace.ImportPlugin(data)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Plugin operation"))
 		return
 	}
 	s.tryRegisterPluginFromDisk(plugin.Name)
@@ -437,33 +477,46 @@ func (s *Server) handleBOFRepoImport(c *gin.Context) {
 		Filename string `json:"filename"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "BOF operation"))
 		return
 	}
 	if req.URL == "" || req.Filename == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "url and filename are required"})
+		respondError(c, http.StatusBadRequest, "url and filename are required")
 		return
 	}
 
-	client := &http.Client{Timeout: 60 * time.Second}
+	// Validate URL scheme to prevent SSRF
+	parsedURL, err := url.Parse(req.URL)
+	if err != nil || (parsedURL.Scheme != "https" && parsedURL.Scheme != "http") {
+		respondError(c, http.StatusBadRequest, "url must be http or https")
+		return
+	}
+	// Block private/internal IP ranges to prevent SSRF
+	host := parsedURL.Hostname()
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" || strings.HasPrefix(host, "10.") || strings.HasPrefix(host, "172.") || strings.HasPrefix(host, "192.168.") || strings.HasPrefix(host, "169.254.") {
+		respondError(c, http.StatusBadRequest, "url must not target private/internal addresses")
+		return
+	}
+
+	client := &http.Client{Timeout: AutomationDownloadTimeout}
 	resp, err := client.Get(req.URL)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "download failed: " + err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "BOF operation"))
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("download failed: HTTP %d", resp.StatusCode)})
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("download failed: HTTP %d", resp.StatusCode))
 		return
 	}
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxUploadSize+1))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "read body: " + err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "BOF operation"))
 		return
 	}
 	if int64(len(data)) > MaxUploadSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("file too large (max %d bytes)", MaxUploadSize)})
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("file too large (max %d bytes)", MaxUploadSize))
 		return
 	}
 
@@ -480,7 +533,7 @@ func (s *Server) handleBOFRepoImport(c *gin.Context) {
 		CreatedBy:   c.GetString("username"),
 	}
 	if err := s.db.Create(&bof).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save BOF: " + err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "BOF operation"))
 		return
 	}
 
@@ -490,5 +543,32 @@ func (s *Server) handleBOFRepoImport(c *gin.Context) {
 		"message": fmt.Sprintf("Imported %s (%d bytes)", name, len(data)),
 		"bof_id":  bof.ID,
 	})
+}
+
+// bofRatings stores in-memory ratings for BOF repo items
+var bofRatings = map[string]int{}
+
+// handleBOFRepoRate rates a BOF repo item.
+func (s *Server) handleBOFRepoRate(c *gin.Context) {
+	itemID := c.Param("id")
+	if itemID == "" {
+		respondError(c, http.StatusBadRequest, "item id required")
+		return
+	}
+
+	var req struct {
+		Rating int `json:"rating"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid request")
+		return
+	}
+	if req.Rating < 0 || req.Rating > 5 {
+		respondError(c, http.StatusBadRequest, "rating must be 0-5")
+		return
+	}
+
+	bofRatings[itemID] = req.Rating
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 

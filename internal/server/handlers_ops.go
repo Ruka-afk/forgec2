@@ -2,6 +2,7 @@
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -9,14 +10,49 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const ServerVersion = "2.1.0"
-
 func (s *Server) handleHealth(c *gin.Context) {
 	uptime := time.Since(s.startTime)
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "ok",
 		"version": ServerVersion,
 		"uptime":  uptime.String(),
+	})
+}
+
+func (s *Server) handleReadyCheck(c *gin.Context) {
+	checks := gin.H{}
+	ready := true
+
+	// Check database connectivity
+	if sqlDB, err := s.db.DB(); err != nil {
+		checks["database"] = "error: " + sanitizeError(err, "Server operation")
+		ready = false
+	} else if err := sqlDB.Ping(); err != nil {
+		checks["database"] = "error: " + sanitizeError(err, "Server operation")
+		ready = false
+	} else {
+		checks["database"] = "connected"
+	}
+
+	// Check listener count
+	var listenerCount int64
+	if err := s.db.Model(&db.Listener{}).Count(&listenerCount).Error; err != nil {
+		checks["listeners"] = "error: " + sanitizeError(err, "Server operation")
+		ready = false
+	} else {
+		checks["listeners"] = listenerCount
+	}
+
+	status := "ok"
+	code := http.StatusOK
+	if !ready {
+		status = "not ready"
+		code = http.StatusServiceUnavailable
+	}
+
+	c.JSON(code, gin.H{
+		"status": status,
+		"checks": checks,
 	})
 }
 
@@ -88,7 +124,7 @@ func (s *Server) handleBuildLogs(c *gin.Context) {
 // logBuild creates a build log entry
 func (s *Server) logBuild(platform, format, c2URL string, listenerID uint, filename, status, errStr, outputPath string) {
 	user := "system"
-	s.db.Create(&db.BuildLog{
+	if err := s.db.Create(&db.BuildLog{
 		Platform:   platform,
 		Format:     format,
 		C2URL:      c2URL,
@@ -98,7 +134,9 @@ func (s *Server) logBuild(platform, format, c2URL string, listenerID uint, filen
 		Status:     status,
 		Error:      errStr,
 		OutputPath: outputPath,
-	})
+	}).Error; err != nil {
+		slog.Error("Failed to create build log", "error", err)
+	}
 }
 
 // parseInt is a simple helper to convert string to int, returns 0 on error

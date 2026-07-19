@@ -1,10 +1,11 @@
 # Compiled binaries
 *.exe
-forgec2-server-linux-amd64
-forgec2-server-linux-arm64
 *.dll
 *.so
 *.dylib
+forgec2-server
+forgec2-server-linux-amd64
+forgec2-server-linux-arm64
 
 # ForgeC2 specific
 data/
@@ -31,8 +32,23 @@ Thumbs.db
 # Generated agent binaries
 agent
 
-# Debug logs
+# Debug logs and temp output
 *.log
+*.err
+*.tmp
+*.txt
+!README.md
+
+# Build artifacts
+build/
+dist/
+
+# Next.js
+.next/
+node_modules/
+
+# Docker
+docker-data/
 
 # Temp
 tmp/
@@ -42,6 +58,7 @@ tmp/
 .workbuddy/
 agent-tools/
 cookies.txt
-server.err
 terminals/
 
+# Scripts (local dev only)
+dev_check.ps1

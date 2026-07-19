@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"encoding/json"
@@ -27,7 +27,7 @@ func (s *Server) handleOpsecCheck(c *gin.Context) {
 		Processes []string `json:"processes"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "OPSEC operation"))
 		return
 	}
 
@@ -56,6 +56,20 @@ func (s *Server) handleOpsecCheck(c *gin.Context) {
 			blocked = true
 		}
 		messages = append(messages, r.Message)
+
+		// Persist evaluation history
+		if err := s.db.Create(&db.OpsecHistory{
+			AgentID:  req.AgentID,
+			TaskType: req.TaskType,
+			RuleName: r.RuleName,
+			Allowed:  r.Allowed,
+			Message:  r.Message,
+			RiskLevel: int(r.RiskLevel),
+			Username: req.Username,
+			Hostname: req.Hostname,
+		}).Error; err != nil {
+			slog.Error("Failed to record opsec history", "err", err)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -131,7 +145,7 @@ func (s *Server) handleProfileRotate(c *gin.Context) {
 		Encoding     string `json:"encoding"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "OPSEC operation"))
 		return
 	}
 
@@ -147,7 +161,7 @@ func (s *Server) handleProfileRotate(c *gin.Context) {
 	}
 
 	if err := s.db.Create(&task).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 

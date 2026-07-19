@@ -15,5 +15,11 @@ func sleepMaskEncrypt() {}
 func sleepMaskDecrypt() {}
 
 func sleepWithMask(d time.Duration) {
+	if activeSleepMask != nil {
+		activeSleepMask.Encrypt()
+	}
 	time.Sleep(d)
+	if activeSleepMask != nil {
+		activeSleepMask.Decrypt()
+	}
 }

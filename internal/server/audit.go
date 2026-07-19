@@ -30,10 +30,7 @@ func (s *Server) LogAuditRecord(c *gin.Context, action, resource, agentID, detai
 	if c != nil {
 		ip = c.ClientIP()
 		if ip == "" {
-			ip = c.Request.Header.Get("X-Forwarded-For")
-		}
-		if ip == "" {
-			ip = c.Request.Header.Get("X-Real-IP")
+			ip = c.Request.RemoteAddr
 		}
 	}
 
@@ -71,14 +68,18 @@ func (s *Server) AuditMiddleware() gin.HandlerFunc {
 		// Log the request before processing
 		var user string
 		if u, exists := c.Get("user"); exists {
-			user = u.(string)
+			if s, ok := u.(string); ok {
+				user = s
+			} else {
+				user = "anonymous"
+			}
 		} else {
 			user = "anonymous"
 		}
 
 		ip := c.ClientIP()
 		if ip == "" {
-			ip = c.Request.Header.Get("X-Forwarded-For")
+			ip = c.Request.RemoteAddr
 		}
 
 		slog.Info("API access",

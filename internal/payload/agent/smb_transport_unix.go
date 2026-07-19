@@ -45,3 +45,13 @@ func sendSMBBeacon(body []byte) []byte {
 	}
 	return resp
 }
+
+// ConnectSMBChildPipe is a no-op on non-Windows platforms.
+func ConnectSMBChildPipe(pipeName string) (net.Conn, error) {
+	return nil, fmt.Errorf("SMB pipes not supported on this platform")
+}
+
+// StartSMBParentPipe is a no-op on non-Windows platforms.
+func StartSMBParentPipe(pipeName string) error {
+	return fmt.Errorf("SMB parent pipe not supported on this platform")
+}

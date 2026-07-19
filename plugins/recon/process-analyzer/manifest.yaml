@@ -1,0 +1,12 @@
+name: process-analyzer
+version: 1.0.0
+type: command
+description: Analyze task results to extract process lists, detect security tools, and summarize running processes
+author: ForgeC2
+category: recon
+entry: analyze.py
+interpreter: python
+timeout: 30
+params: []
+config:
+    security_tool_keywords: MsSense,SENSE,cylance,cyltray,symcorp,symantec,mcafee,mcshield,avp,avg,avpui,cb,cbrps,cylance,bulwark,deep-security,osquery,sysmon,winaudit,procmon,procmon64,wireshark,fiddler,processhacker

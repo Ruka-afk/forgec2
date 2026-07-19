@@ -31,7 +31,7 @@ export function loadShortcuts(): Record<string, ShortcutDef> {
       return result;
     }
   } catch {
-    /* ignore */
+    // corrupt localStorage — fall back to defaults silently
   }
   return { ...DEFAULT_SHORTCUTS };
 }

@@ -46,7 +46,7 @@ func (m *MonitorCollector) Start() {
 }
 
 func (m *MonitorCollector) collectMetrics() {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(MonitorMetricsInterval)
 	defer ticker.Stop()
 
 	for {
@@ -93,7 +93,7 @@ func (m *MonitorCollector) getMemoryStats() struct{ used, total float64 } {
 }
 
 func (m *MonitorCollector) checkAlerts() {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(MonitorAlertInterval)
 	defer ticker.Stop()
 
 	for {
@@ -152,9 +152,9 @@ func (m *MonitorCollector) checkAgentAlerts() {
 	}
 
 	var agents []db.Implant
-	m.server.db.Find(&agents)
+	m.server.db.Where("status != ?", "offline").Find(&agents)
 
-	thresholdSeconds := int64(300)
+	thresholdSeconds := int64(DefaultOfflineThresholdSec)
 	for _, rule := range rules {
 		if rule.Threshold > 0 {
 			thresholdSeconds = int64(rule.Threshold)
@@ -163,21 +163,29 @@ func (m *MonitorCollector) checkAgentAlerts() {
 
 	threshold := time.Duration(thresholdSeconds) * time.Second
 
+	var offlineIDs []string
 	for _, agent := range agents {
 		if time.Since(agent.LastSeen) > threshold && agent.Status != "offline" {
-			m.server.db.Model(&agent).Update("status", "offline")
-			go m.server.broadcastAgentOffline(agent)
+			offlineIDs = append(offlineIDs, agent.ID)
+			m.server.broadcastAgentOffline(agent)
 			if m.server.pluginManager != nil {
-				go m.server.pluginManager.ExecuteHook(context.Background(), plugin.Event{
-					Type:      plugin.EventAgentDisconnect,
-					Timestamp: time.Now(),
-					AgentID:   agent.ID,
-					Payload: map[string]interface{}{
-						"hostname":            agent.Hostname,
-						"ip":                  agent.IP,
-						"offline_for_seconds": time.Since(agent.LastSeen).Seconds(),
-					},
-				})
+				go func(a db.Implant) {
+					defer func() {
+						if r := recover(); r != nil {
+							slog.Error("Plugin hook panicked (agent offline)", "agent", a.ID, "recover", r)
+						}
+					}()
+					m.server.pluginManager.ExecuteHook(context.Background(), plugin.Event{
+						Type:      plugin.EventAgentDisconnect,
+						Timestamp: time.Now(),
+						AgentID:   a.ID,
+						Payload: map[string]interface{}{
+							"hostname":            a.Hostname,
+							"ip":                  a.IP,
+							"offline_for_seconds": time.Since(a.LastSeen).Seconds(),
+						},
+					})
+				}(agent)
 			}
 			for _, rule := range rules {
 				m.triggerAlert(&rule, agent.ID, agent.Hostname,
@@ -185,6 +193,9 @@ func (m *MonitorCollector) checkAgentAlerts() {
 					map[string]interface{}{"agent_id": agent.ID, "hostname": agent.Hostname})
 			}
 		}
+	}
+	if len(offlineIDs) > 0 {
+		m.server.db.Model(&db.Implant{}).Where("id IN ?", offlineIDs).Update("status", "offline")
 	}
 }
 
@@ -251,7 +262,7 @@ func (m *MonitorCollector) GetMetricsHistory() []db.SystemMetric {
 
 func (s *Server) handleGetSystemMetrics(c *gin.Context) {
 	if s.monitorCollector == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "monitor collector not initialized"})
+		respondError(c, http.StatusServiceUnavailable, "monitor collector not initialized")
 		return
 	}
 
@@ -291,7 +302,7 @@ func (s *Server) handleGetSystemMetrics(c *gin.Context) {
 
 func (s *Server) handleGetMetricsHistory(c *gin.Context) {
 	if s.monitorCollector == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "monitor collector not initialized"})
+		respondError(c, http.StatusServiceUnavailable, "monitor collector not initialized")
 		return
 	}
 
@@ -341,19 +352,22 @@ func (s *Server) handleGetAlertRules(c *gin.Context) {
 }
 
 func (s *Server) handleCreateAlertRule(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	var rule db.AlertRule
 	if err := c.ShouldBindJSON(&rule); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Alert rule operation"))
 		return
 	}
 
 	if rule.Name == "" || rule.Type == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name and type are required"})
+		respondError(c, http.StatusBadRequest, "name and type are required")
 		return
 	}
 
 	if err := s.db.Create(&rule).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Alert rule operation"))
 		return
 	}
 
@@ -361,11 +375,14 @@ func (s *Server) handleCreateAlertRule(c *gin.Context) {
 }
 
 func (s *Server) handleUpdateAlertRule(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	var rule db.AlertRule
 
 	if err := s.db.First(&rule, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "rule not found"})
+		respondError(c, http.StatusNotFound, "rule not found")
 		return
 	}
 
@@ -377,7 +394,7 @@ func (s *Server) handleUpdateAlertRule(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&updates); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Alert rule operation"))
 		return
 	}
 
@@ -391,7 +408,7 @@ func (s *Server) handleUpdateAlertRule(c *gin.Context) {
 	rule.Enabled = updates.Enabled
 
 	if err := s.db.Save(&rule).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Alert rule operation"))
 		return
 	}
 
@@ -399,10 +416,13 @@ func (s *Server) handleUpdateAlertRule(c *gin.Context) {
 }
 
 func (s *Server) handleDeleteAlertRule(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 
 	if err := s.db.Delete(&db.AlertRule{}, id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Alert rule operation"))
 		return
 	}
 
@@ -410,17 +430,20 @@ func (s *Server) handleDeleteAlertRule(c *gin.Context) {
 }
 
 func (s *Server) handleAcknowledgeAlert(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	var alert db.Alert
 
 	if err := s.db.First(&alert, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "alert not found"})
+		respondError(c, http.StatusNotFound, "alert not found")
 		return
 	}
 
 	alert.Status = "acknowledged"
 	if err := s.db.Save(&alert).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Alert rule operation"))
 		return
 	}
 
@@ -428,17 +451,20 @@ func (s *Server) handleAcknowledgeAlert(c *gin.Context) {
 }
 
 func (s *Server) handleResolveAlert(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	var alert db.Alert
 
 	if err := s.db.First(&alert, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "alert not found"})
+		respondError(c, http.StatusNotFound, "alert not found")
 		return
 	}
 
 	alert.Status = "resolved"
 	if err := s.db.Save(&alert).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Alert rule operation"))
 		return
 	}
 
@@ -456,9 +482,10 @@ func (s *Server) handleGetAgentStatus(c *gin.Context) {
 	s.db.Model(&db.Implant{}).Count(&stats.Total)
 
 	threshold := s.offlineThreshold()
+	staleThreshold := StaleThreshold
 	s.db.Model(&db.Implant{}).Where("last_seen > ?", time.Now().Add(-threshold)).Count(&stats.Online)
-	s.db.Model(&db.Implant{}).Where("last_seen <= ? AND last_seen > ?", time.Now().Add(-threshold), time.Now().Add(-30*time.Minute)).Count(&stats.Stale)
-	s.db.Model(&db.Implant{}).Where("last_seen <= ?", time.Now().Add(-30*time.Minute)).Count(&stats.Offline)
+	s.db.Model(&db.Implant{}).Where("last_seen <= ? AND last_seen > ?", time.Now().Add(-threshold), time.Now().Add(-staleThreshold)).Count(&stats.Stale)
+	s.db.Model(&db.Implant{}).Where("last_seen <= ?", time.Now().Add(-staleThreshold)).Count(&stats.Offline)
 
 	c.JSON(http.StatusOK, stats)
 }
@@ -508,6 +535,9 @@ func (s *Server) handleScreenMonitorPage(c *gin.Context) {
 }
 
 func (s *Server) handleStartScreenMonitor(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 
 	if _, ok := s.getAgentOrFail(c, id); !ok {
@@ -536,7 +566,7 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 	task, err := s.createTask(id, "screen_stream_start", streamCmd, "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Screen monitor: failed to create task", "agent_id", id, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -546,6 +576,9 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 }
 
 func (s *Server) handleStopScreenMonitor(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 
 	s.screenMonitorMu.Lock()
@@ -562,7 +595,7 @@ func (s *Server) handleStopScreenMonitor(c *gin.Context) {
 	stopTask, err := s.createTask(id, "screen_stream_stop", "", "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Screen monitor stop: failed to create task", "agent_id", id, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create stop task"})
+		respondError(c, http.StatusInternalServerError, "failed to create stop task")
 		return
 	}
 	s.broadcastTaskUpdate(id, *stopTask)
@@ -598,6 +631,9 @@ func (s *Server) BroadcastScreenshot(agentID string, base64Data string) {
 // Payload JSON: {"type":"click|move|key","x":0,"y":0,"key":""}
 // Note: agent-side injection is stub-only (log); full SendInput relay is future work.
 func (s *Server) handleAgentRemoteInput(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -610,18 +646,18 @@ func (s *Server) handleAgentRemoteInput(c *gin.Context) {
 		Key  string `json:"key"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json: expected {type, x, y, key}"})
+		respondError(c, http.StatusBadRequest, "invalid json: expected {type, x, y, key}")
 		return
 	}
 	if req.Type == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "type is required (click, move, key)"})
+		respondError(c, http.StatusBadRequest, "type is required (click, move, key)")
 		return
 	}
 
 	payload, _ := json.Marshal(req)
 	task, err := s.createTask(id, "remote_input", string(payload), "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -636,7 +672,7 @@ func (s *Server) handleScreenFrame(c *gin.Context) {
 		Data string `json:"data"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
+		respondError(c, http.StatusBadRequest, "invalid json")
 		return
 	}
 	if req.UUID == "" || req.Data == "" {

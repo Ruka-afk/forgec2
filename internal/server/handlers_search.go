@@ -24,7 +24,7 @@ func (s *Server) handleSearchPage(c *gin.Context) {
 	data := gin.H{
 		"Title":       "ForgeC2 - Search",
 		"ActiveNav":   "search",
-		"SearchQuery": q,
+		"search_query": q,
 	}
 	for k, v := range stats {
 		data[k] = v
@@ -39,13 +39,13 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 		return
 	}
 
-	like := "%" + q + "%"
+	like := "%" + escapeLike(q) + "%"
 	const perType = 8
 	var results []SearchResult
 
 	var agents []db.Implant
 	s.db.Select("id", "hostname", "username", "ip", "os", "status").
-		Where("hostname LIKE ? OR username LIKE ? OR ip LIKE ? OR notes LIKE ? OR id LIKE ?",
+		Where("(hostname LIKE ? ESCAPE '\\' OR username LIKE ? ESCAPE '\\' OR ip LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\')",
 			like, like, like, like, like).
 		Limit(perType).Find(&agents)
 	for _, a := range agents {
@@ -61,7 +61,7 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 
 	var listeners []db.Listener
 	s.db.Select("id", "name", "host", "port", "scheme").
-		Where("name LIKE ? OR host LIKE ? OR notes LIKE ?", like, like, like).
+		Where("(name LIKE ? ESCAPE '\\' OR host LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\')", like, like, like).
 		Limit(perType).Find(&listeners)
 	for _, l := range listeners {
 		results = append(results, SearchResult{
@@ -76,7 +76,7 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 
 	var creds []db.CredentialEntry
 	s.db.Select("id", "domain", "username", "source", "type").
-		Where("domain LIKE ? OR username LIKE ? OR notes LIKE ?", like, like, like).
+		Where("(domain LIKE ? ESCAPE '\\' OR username LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\')", like, like, like).
 		Limit(perType).Find(&creds)
 	for _, cr := range creds {
 		results = append(results, SearchResult{
@@ -91,7 +91,7 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 
 	var bofs []db.BOFFile
 	s.db.Select("id", "name", "description").
-		Where("name LIKE ? OR description LIKE ?", like, like).
+		Where("(name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')", like, like).
 		Limit(perType).Find(&bofs)
 	for _, b := range bofs {
 		results = append(results, SearchResult{
@@ -106,7 +106,7 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 
 	var users []db.User
 	s.db.Select("id", "username", "role").
-		Where("username LIKE ?", like).
+		Where("username LIKE ? ESCAPE '\\'", like).
 		Limit(perType).Find(&users)
 	for _, u := range users {
 		results = append(results, SearchResult{
@@ -121,7 +121,7 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 
 	var tasks []db.Task
 	s.db.Select("id", "agent_id", "type", "command", "status").
-		Where("command LIKE ? OR type LIKE ? OR agent_id LIKE ?", like, like, like).
+		Where("(command LIKE ? ESCAPE '\\' OR type LIKE ? ESCAPE '\\' OR agent_id LIKE ? ESCAPE '\\')", like, like, like).
 		Order("created_at DESC").
 		Limit(perType).Find(&tasks)
 	for _, t := range tasks {

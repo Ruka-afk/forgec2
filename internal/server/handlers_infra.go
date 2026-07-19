@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/infrastructure"
@@ -45,7 +46,7 @@ func (s *Server) handleInfrastructurePage(c *gin.Context) {
 func (s *Server) handleGenerateNginx(c *gin.Context) {
 	var req infraGenerateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: " + err.Error()})
+		respondError(c, http.StatusBadRequest, "invalid request: " + err.Error())
 		return
 	}
 	rc := toRedirectorConfig(req, "nginx")
@@ -56,7 +57,7 @@ func (s *Server) handleGenerateNginx(c *gin.Context) {
 func (s *Server) handleGenerateApache(c *gin.Context) {
 	var req infraGenerateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: " + err.Error()})
+		respondError(c, http.StatusBadRequest, "invalid request: " + err.Error())
 		return
 	}
 	rc := toRedirectorConfig(req, "apache")
@@ -67,7 +68,7 @@ func (s *Server) handleGenerateApache(c *gin.Context) {
 func (s *Server) handleGenerateHAProxy(c *gin.Context) {
 	var req infraGenerateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: " + err.Error()})
+		respondError(c, http.StatusBadRequest, "invalid request: " + err.Error())
 		return
 	}
 	rc := toRedirectorConfig(req, "haproxy")
@@ -78,17 +79,29 @@ func (s *Server) handleGenerateHAProxy(c *gin.Context) {
 func (s *Server) handleACMECertProvision(c *gin.Context) {
 	var req acmeProvisionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: " + err.Error()})
+		respondError(c, http.StatusBadRequest, "invalid request: " + err.Error())
 		return
 	}
 	if req.Domain == "" || req.Email == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "domain and email are required"})
+		respondError(c, http.StatusBadRequest, "domain and email are required")
 		return
 	}
 
-	dataDir := filepath.Join(s.cfg.Server.DataDir, "certs", req.Domain)
+	safeDomain := sanitizeRe.ReplaceAllString(req.Domain, "_")
+	if safeDomain == "" {
+		respondError(c, http.StatusBadRequest, "invalid domain")
+		return
+	}
+
+	dataDir := filepath.Join(s.cfg.Server.DataDir, "certs", safeDomain)
+	resolvedDir := filepath.Clean(dataDir)
+	baseDir := filepath.Clean(filepath.Join(s.cfg.Server.DataDir, "certs"))
+	if !strings.HasPrefix(resolvedDir, baseDir+string(os.PathSeparator)) && resolvedDir != baseDir {
+		respondError(c, http.StatusBadRequest, "invalid domain")
+		return
+	}
 	if err := os.MkdirAll(dataDir, 0750); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "mkdir: " + err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Infrastructure mkdir"))
 		return
 	}
 
@@ -101,12 +114,12 @@ func (s *Server) handleACMECertProvision(c *gin.Context) {
 	}
 
 	client := infrastructure.NewACMEClient(acmeCfg)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), ACMEProvisionTimeout)
 	defer cancel()
 
 	certPEM, keyPEM, err := client.Provision(ctx)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "acme provision: " + err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "ACME provision"))
 		return
 	}
 
@@ -114,11 +127,11 @@ func (s *Server) handleACMECertProvision(c *gin.Context) {
 	keyFile := filepath.Join(dataDir, "privkey.pem")
 
 	if err := os.WriteFile(certFile, certPEM, 0644); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "write cert: " + err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Write cert"))
 		return
 	}
 	if err := os.WriteFile(keyFile, keyPEM, 0600); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "write key: " + err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Write key"))
 		return
 	}
 
@@ -126,7 +139,7 @@ func (s *Server) handleACMECertProvision(c *gin.Context) {
 		"success":   true,
 		"cert_file": certFile,
 		"key_file":  keyFile,
-		"expires":   time.Now().Add(80 * 24 * time.Hour).Format(time.RFC3339),
+		"expires":   time.Now().Add(CertExpiryEstimate).Format(time.RFC3339),
 	})
 }
 
@@ -159,7 +172,7 @@ FORGEC2_STATUS_CODE=%d
 FORGEC2_CONTENT_TYPE=%s
 `, profile.ProfileName, profile.StatusCode, profile.ContentType)
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported format: " + format})
+		respondError(c, http.StatusBadRequest, "unsupported format: " + format)
 		return
 	}
 
@@ -171,7 +184,7 @@ func toRedirectorConfig(req infraGenerateRequest, rtype string) infrastructure.R
 		req.ExtC2Paths = []string{}
 	}
 	if req.ListenPort == 0 {
-		req.ListenPort = 443
+		req.ListenPort = DefaultRedirectorPort
 	}
 	return infrastructure.RedirectorConfig{
 		Type:       rtype,

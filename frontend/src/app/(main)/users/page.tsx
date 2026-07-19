@@ -1,8 +1,19 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { API_BASE } from "@/lib/constants";
-import { ConfirmModal, PageHeader, SearchInput } from "@/components/UI";
+import { api } from "@/lib/api";
+import { ConfirmModal, EmptyState, PageHeader, StatusBadge, PageSpinner } from "@/components/UI";
+import { toast } from "sonner";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Ban, Check, Crown, Key, LogOut, Pencil, Plus, Trash2, User as UserIcon, Users } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 interface User {
   ID?: string;
@@ -14,19 +25,17 @@ interface User {
   IsActive?: boolean | string;
   is_active?: boolean;
   LastActivity?: string;
+  last_activity?: string;
   LastLogin?: string;
+  last_login?: string;
   CreatedAt?: string;
-}
-
-interface ToastNotification {
-  msg: string;
-  type: "success" | "error" | "info";
+  created_at?: string;
 }
 
 function getRoleBadge(role: string) {
   if (role === "admin")
-    return { icon: "fa-crown", text: "Admin", cls: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300" };
-  return { icon: "fa-user", text: "User", cls: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" };
+    return { icon: <Crown className="w-2.5 h-2.5" />, key: "users.role_admin", cls: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300" };
+  return { icon: <UserIcon className="w-2.5 h-2.5" />, key: "users.role_user", cls: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" };
 }
 
 export default function UsersPage() {
@@ -38,104 +47,90 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ username: "", password: "", role: "user" });
   const [role, setUserRole] = useState("admin");
+  const [customRoles, setCustomRoles] = useState<string[]>([]);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordUserId, setPasswordUserId] = useState<string>("");
   const [newPassword, setNewPassword] = useState("");
-  const [toasts, setToasts] = useState<ToastNotification[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
-
-  const showToast = useCallback((msg: string, type: "success" | "error" | "info" = "info") => {
-    setToasts((prev) => [...prev, { msg, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.slice(1));
-    }, 3000);
-  }, []);
+  const { t } = useI18n();
 
   const loadUsers = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}?p=/users&format=json`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setUsers(data.users || data.Users || []);
-      if (data.UserRole) setUserRole(data.UserRole);
+      const data = await api.get("/users") as Record<string, unknown>;
+      setUsers((data.users || []) as User[]);
+      if (data.UserRole) setUserRole(data.UserRole as string);
     } catch {
       setUsers([]);
+      toast.error(t("users.toast.load_failed"));
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { Promise.resolve().then(() => loadUsers()); }, [loadUsers]);
+  useEffect(() => {
+    loadUsers();
+    api.get("/api/roles")
+      .then((d: Record<string, unknown>) => { if (d.success) setCustomRoles(((d.data as unknown[]) || []).map((r: unknown) => (r as { name: string }).name as string)); })
+      .catch(() => toast.error(t("users.toast.load_roles_failed")));
+  }, [loadUsers]);
 
   const filtered = users.filter((u) => {
-    const name = (u.Username || u.username || "").toLowerCase();
-    const urole = (u.Role || u.role || "").toLowerCase();
+    const name = (u.username || "").toLowerCase();
+    const urole = (u.role || "").toLowerCase();
     const term = search.toLowerCase();
     return name.includes(term) || urole.includes(term);
   });
 
   const totalUsers = users.length;
-  const adminCount = users.filter((u) => (u.Role || u.role || "") === "admin").length;
-  const userCount = users.filter((u) => (u.Role || u.role || "") !== "admin").length;
-  const activeCount = users.filter((u) => u.IsActive === true || u.IsActive === "true" || u.is_active === true).length;
+  const adminCount = users.filter((u) => (u.role || "") === "admin").length;
+  const userCount = users.filter((u) => (u.role || "") !== "admin").length;
+  const activeCount = users.filter((u) => u.is_active === true).length;
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await fetch(`${API_BASE}?p=/users/add&format=json`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams(form).toString(),
-      });
-      showToast("User created successfully", "success");
+      await api.post("/users/add", form);
+      toast.success(t("users.toast.created"));
       setShowAdd(false);
       setForm({ username: "", password: "", role: "user" });
       loadUsers();
-    } catch { showToast("Failed to create user", "error"); }
+    } catch { toast.error(t("users.toast.create_failed")); }
   };
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editUser) return;
     try {
-      const uid = editUser.ID || editUser.id;
-      await fetch(`${API_BASE}?p=/users/${uid}&format=json`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ username: form.username, role: form.role, ...(form.password ? { password: form.password } : {}) }).toString(),
-      });
-      showToast("User updated successfully", "success");
+      const uid = editUser.id;
+      await api.post(`/users/${uid}/edit`, { username: form.username, role: form.role, ...(form.password ? { password: form.password } : {}) });
+      toast.success(t("users.toast.updated"));
       setShowEdit(false);
       setEditUser(null);
       loadUsers();
-    } catch { showToast("Failed to update user", "error"); }
+    } catch { toast.error(t("users.toast.update_failed")); }
   };
 
   const handleToggle = (id: string) => {
-    setCfm({msg: "确认切换用户状态？", cb: async () => {
+    setCfm({msg: t("users.confirm.toggle"), cb: async () => {
       setActionLoading(id + "_toggle");
       try {
-        await fetch(`${API_BASE}?p=/users/${id}/toggle&format=json`, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({}).toString(),
-        });
-        showToast("User status toggled", "success");
+        await api.post(`/users/${id}/toggle`, {});
+        toast.success(t("users.toast.toggle_success"));
         loadUsers();
-      } catch { showToast("Failed to toggle user status", "error"); }
+      } catch { toast.error(t("users.toast.toggle_failed")); }
       finally { setActionLoading(null); }
     }});
   };
 
   const handleDelete = (id: string) => {
-    setCfm({msg: "确认删除该用户？此操作不可恢复！", cb: async () => {
+    setCfm({msg: t("users.confirm.delete"), cb: async () => {
       setActionLoading(id + "_delete");
       try {
-        await fetch(`${API_BASE}?p=/users/${id}&format=json`, { method: "DELETE" });
-        showToast("User deleted", "success");
+        await api.del(`/users/${id}`);
+        toast.success(t("users.toast.deleted"));
         loadUsers();
-      } catch { showToast("Failed to delete user", "error"); }
+      } catch { toast.error(t("users.toast.delete_failed")); }
       finally { setActionLoading(null); }
     }});
   };
@@ -144,285 +139,265 @@ export default function UsersPage() {
     e.preventDefault();
     if (!passwordUserId) return;
     try {
-      await fetch(`${API_BASE}?p=/users/${passwordUserId}/password&format=json`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ password: newPassword }).toString(),
-      });
-      showToast("Password updated", "success");
+      await api.post(`/users/${passwordUserId}/password`, { password: newPassword });
+      toast.success(t("users.toast.password_updated"));
       setShowPasswordModal(false);
       setNewPassword("");
       setPasswordUserId("");
-    } catch { showToast("Failed to set password", "error"); }
+    } catch { toast.error(t("users.toast.password_failed")); }
   };
 
   const handleForceLogout = (id: string) => {
-    setCfm({msg: "Force logout this user?", cb: async () => {
+    setCfm({msg: t("users.confirm.force_logout"), cb: async () => {
       try {
-        await fetch(`${API_BASE}?p=/users/${id}/force-logout&format=json`, { method: "POST" });
-        showToast("User force logged out", "success");
-      } catch { showToast("Failed to force logout", "error"); }
+        await api.post(`/users/${id}/force-logout`);
+        toast.success(t("users.toast.force_logout_success"));
+      } catch { toast.error(t("users.toast.force_logout_failed")); }
     }});
   };
 
   const handleKick = (id: string) => {
-    setCfm({msg: "Kick this user from all sessions?", cb: async () => {
+    setCfm({msg: t("users.confirm.kick"), cb: async () => {
       try {
-        await fetch(`${API_BASE}?p=/users/${id}/kick&format=json`, { method: "POST" });
-        showToast("User kicked", "success");
-      } catch { showToast("Failed to kick user", "error"); }
+        await api.post(`/users/${id}/kick`);
+        toast.success(t("users.toast.kick_success"));
+      } catch { toast.error(t("users.toast.kick_failed")); }
     }});
   };
 
   if (loading)
-    return (
-      <div className="flex items-center justify-center h-64">
-        <i className="fa-solid fa-circle-notch fa-spin text-3xl text-indigo-500"></i>
-      </div>
-    );
+    return <PageSpinner />;
 
   return (
-    <div className="max-w-6xl mx-auto mb-20 md:mb-0">
-      {toasts.length > 0 && (
-        <div className="fixed top-4 right-4 z-[100] space-y-2">
-          {toasts.map((t, i) => (
-            <div key={i} className={`px-4 py-3 rounded-2xl shadow-lg text-sm font-medium text-white ${t.type === "success" ? "bg-emerald-600" : t.type === "error" ? "bg-red-600" : "bg-indigo-600"}`}>
-              <i className={`fa-solid ${t.type === "success" ? "fa-check-circle" : t.type === "error" ? "fa-exclamation-circle" : "fa-info-circle"} mr-2`}></i>
-              {t.msg}
-            </div>
-          ))}
+    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title={<><Users className="w-4 h-4" />{t("users.title")}</>} subtitle={t("users.subtitle")}>
+        <div className="flex items-center gap-2">
+          <Input placeholder={t("users.search_placeholder")} value={search} onChange={(e) => setSearch(e.target.value)} className="w-48" />
+          {role === "admin" && (
+            <Button onClick={() => setShowAdd(true)}>
+              <Plus className="w-4 h-4" /> {t("users.add_user")}
+            </Button>
+          )}
         </div>
-      )}
-
-      <PageHeader title={<><i className="fa-solid fa-users text-indigo-500 mr-2"></i>User Management</>} subtitle="Manage users and roles">
-        {role === "admin" && (
-          <button onClick={() => setShowAdd(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 h-9 rounded-2xl text-sm font-medium flex items-center gap-x-2 transition-colors">
-            <i className="fa-solid fa-plus"></i> Add User
-          </button>
-        )}
       </PageHeader>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <div className="ui-card p-3 shadow-sm text-center">
-          <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{totalUsers}</div>
-          <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total</div>
-        </div>
-        <div className="ui-card p-3 shadow-sm text-center">
+        <Card className="p-4 sm:p-5 text-center opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30" style={{ animationDelay: "0ms" }}>
+          <div className="text-2xl font-bold text-foreground">{totalUsers}</div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("users.stat_total")}</div>
+        </Card>
+        <Card className="p-4 sm:p-5 text-center opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30" style={{ animationDelay: "40ms" }}>
           <div className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{adminCount}</div>
-          <div className="text-[10px] text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Admins</div>
-        </div>
-        <div className="ui-card p-3 shadow-sm text-center">
+          <div className="text-[10px] text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">{t("users.stat_admins")}</div>
+        </Card>
+        <Card className="p-4 sm:p-5 text-center opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30" style={{ animationDelay: "80ms" }}>
           <div className="text-2xl font-bold text-sky-700 dark:text-sky-300">{userCount}</div>
-          <div className="text-[10px] text-sky-600 dark:text-sky-400 uppercase tracking-wider">Users</div>
-        </div>
-        <div className="ui-card p-3 shadow-sm text-center">
+          <div className="text-[10px] text-sky-600 dark:text-sky-400 uppercase tracking-wider">{t("users.stat_users")}</div>
+        </Card>
+        <Card className="p-4 sm:p-5 text-center opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30" style={{ animationDelay: "120ms" }}>
           <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{activeCount}</div>
-          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Active</div>
-        </div>
+          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">{t("users.stat_active")}</div>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="ui-card p-4">
+        <Card className="p-4">
           <div className="flex items-center gap-2 mb-2">
-            <i className="fa-solid fa-crown text-indigo-600 text-sm"></i>
-            <span className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">Admin</span>
+            <Crown className="w-4 h-4" />
+            <span className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">{t("users.role_admin")}</span>
           </div>
           <ul className="text-xs text-indigo-700 dark:text-indigo-400 space-y-1">
-            <li className="flex items-start gap-1.5"><i className="fa-solid fa-check mt-0.5 text-[10px]"></i>Full control over all features</li>
-            <li className="flex items-start gap-1.5"><i className="fa-solid fa-check mt-0.5 text-[10px]"></i>Manage users, roles, permissions</li>
-            <li className="flex items-start gap-1.5"><i className="fa-solid fa-check mt-0.5 text-[10px]"></i>Server configuration and maintenance</li>
-            <li className="flex items-start gap-1.5"><i className="fa-solid fa-check mt-0.5 text-[10px]"></i>Lock/unlock agents</li>
+            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.admin_desc_1")}</li>
+            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.admin_desc_2")}</li>
+            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.admin_desc_3")}</li>
+            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.admin_desc_4")}</li>
           </ul>
-        </div>
-        <div className="ui-card p-4">
+        </Card>
+        <Card className="p-4">
           <div className="flex items-center gap-2 mb-2">
-            <i className="fa-solid fa-user text-sky-600 text-sm"></i>
-            <span className="text-sm font-semibold text-sky-800 dark:text-sky-300">User</span>
+            <UserIcon className="w-4 h-4" />
+            <span className="text-sm font-semibold text-sky-800 dark:text-sky-300">{t("users.role_user")}</span>
           </div>
           <ul className="text-xs text-sky-700 dark:text-sky-400 space-y-1">
-            <li className="flex items-start gap-1.5"><i className="fa-solid fa-check mt-0.5 text-[10px]"></i>Send commands, execute modules</li>
-            <li className="flex items-start gap-1.5"><i className="fa-solid fa-check mt-0.5 text-[10px]"></i>File browsing, credential harvesting</li>
-            <li className="flex items-start gap-1.5"><i className="fa-solid fa-check mt-0.5 text-[10px]"></i>Generate payloads, create listeners</li>
-            <li className="flex items-start gap-1.5"><i className="fa-solid fa-check mt-0.5 text-[10px]"></i>Lock agents for exclusive ops</li>
+            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.user_desc_1")}</li>
+            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.user_desc_2")}</li>
+            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.user_desc_3")}</li>
+            <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.user_desc_4")}</li>
           </ul>
-        </div>
+        </Card>
       </div>
 
       <div className="mb-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search by username or role..." className="flex-1 max-w-md" />
-        <div className="text-xs text-slate-500 dark:text-slate-400">
-          Showing {filtered.length} of {totalUsers} users
+        <div className="text-xs text-muted-foreground">
+          {t("users.showing", { filtered: String(filtered.length), total: String(totalUsers) })}
         </div>
       </div>
 
-      <div className="ui-card rounded-3xl overflow-hidden shadow-sm">
+      <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-[var(--border)]">
-              <tr className="text-xs text-slate-500 dark:text-slate-400">
-                <th className="text-left py-4 px-6 font-normal">Username</th>
-                <th className="text-left py-4 px-4 font-normal">Role</th>
-                <th className="text-left py-4 px-4 font-normal">Active</th>
-                <th className="text-left py-4 px-4 font-normal">Last Activity</th>
-                <th className="text-left py-4 px-4 font-normal">Created At</th>
-                {role === "admin" && <th className="text-center py-4 px-4 font-normal">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {filtered.map((u) => {
-                const uid = u.ID || u.id || "";
-                const name = u.Username || u.username || "-";
-                const urole = u.Role || u.role || "user";
-                const isActive = u.IsActive === true || u.IsActive === "true" || u.is_active === true;
-                const badge = getRoleBadge(urole);
-                return (
-                  <tr key={uid} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                    <td className="py-4 px-6">
-                      <div className="font-medium text-slate-900 dark:text-slate-100">{name}</div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className={`inline-flex items-center px-2.5 py-1 text-xs font-medium ${badge.cls} rounded-full`}>
-                        <i className={`fa-solid ${badge.icon} mr-1 text-[10px]`}></i> {badge.text}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4">
-                      {isActive ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
-                          <span className="w-2 h-2 bg-emerald-500 rounded-full"></span> Yes
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
-                          <span className="w-2 h-2 bg-red-500 rounded-full"></span> No
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-4 px-4 font-mono text-xs text-slate-500 dark:text-slate-400">
-                      {u.LastActivity || u.LastLogin || "-"}
-                    </td>
-                    <td className="py-4 px-4 font-mono text-xs text-slate-500 dark:text-slate-400">
-                      {u.CreatedAt || "-"}
-                    </td>
-                    {role === "admin" && (
-                      <td className="py-4 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => handleToggle(uid)} disabled={actionLoading === uid + "_toggle"} className={`p-1.5 rounded-lg transition-colors ${isActive ? "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30" : "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"}`} title={isActive ? "Disable" : "Enable"}>
-                            <i className={`fa-solid ${isActive ? "fa-ban" : "fa-check"}`}></i>
-                          </button>
-                          <button onClick={() => { setEditUser(u); setForm({ username: name, password: "", role: urole }); setShowEdit(true); }} className="p-1.5 text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/30 rounded-lg transition-colors" title="Edit">
-                            <i className="fa-solid fa-pen"></i>
-                          </button>
-                          <button onClick={() => { setPasswordUserId(uid); setNewPassword(""); setShowPasswordModal(true); }} className="p-1.5 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg transition-colors" title="Set Password">
-                            <i className="fa-solid fa-key"></i>
-                          </button>
-                          <button onClick={() => handleForceLogout(uid)} className="p-1.5 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30 rounded-lg transition-colors" title="Force Logout">
-                            <i className="fa-solid fa-right-from-bracket"></i>
-                          </button>
-                          <button onClick={() => handleKick(uid)} className="p-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors" title="Kick User">
-                            <i className="fa-solid fa-person-walking-arrow-loop-left"></i>
-                          </button>
-                          <button onClick={() => handleDelete(uid)} disabled={actionLoading === uid + "_delete"} className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors" title="Delete">
-                            <i className="fa-solid fa-trash"></i>
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={role === "admin" ? 6 : 5} className="py-20 text-center text-slate-400 dark:text-slate-500">
-                    No users found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted border-b border-border text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+              <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_username")}</TableHead>
+              <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_role")}</TableHead>
+              <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_active")}</TableHead>
+              <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_last_activity")}</TableHead>
+              <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_created_at")}</TableHead>
+              {role === "admin" && <TableHead className="py-3 px-4 sm:py-3.5 font-semibold text-center">{t("users.col_actions")}</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.map((u) => {
+              const uid = u.id || "";
+              const name = u.username || "-";
+              const urole = u.role || "user";
+              const isActive = u.is_active === true;
+              const badge = getRoleBadge(urole);
+              return (
+                <TableRow key={uid}>
+                  <TableCell className="py-3 px-4 sm:py-3.5">
+                    <div className="font-medium text-foreground">{name}</div>
+                  </TableCell>
+                  <TableCell className="py-3 px-4 sm:py-3.5">
+                    <Badge variant="outline" className={badge.cls}>
+                      {badge.icon} {t(badge.key)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="py-3 px-4 sm:py-3.5">
+                    <StatusBadge status={isActive ? "online" : "offline"} />
+                  </TableCell>
+                  <TableCell className="py-3 px-4 sm:py-3.5 font-mono text-xs text-muted-foreground">
+                    {u.last_activity || u.last_login || "-"}
+                  </TableCell>
+                  <TableCell className="py-3 px-4 sm:py-3.5 font-mono text-xs text-muted-foreground">
+                    {u.created_at || "-"}
+                  </TableCell>
+                  {role === "admin" && (
+                    <TableCell className="py-3 px-4 sm:py-3.5 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <Button variant="ghost" size="icon-sm" onClick={() => handleToggle(uid)} disabled={actionLoading === uid + "_toggle"} className={`${isActive ? "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30" : "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"}`} title={isActive ? t("users.disable") : t("users.enable")} aria-label={isActive ? t("users.disable") : t("users.enable")}>
+                          {isActive ? <Ban className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => { setEditUser(u); setForm({ username: name, password: "", role: urole }); setShowEdit(true); }} className="text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/30" title={t("common.edit")} aria-label={t("common.edit")}>
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => { setPasswordUserId(uid); setNewPassword(""); setShowPasswordModal(true); }} className="text-primary hover:bg-primary/10" title={t("users.set_password")} aria-label={t("users.set_password")}>
+                          <Key className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => handleForceLogout(uid)} className="text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30" title={t("users.force_logout")} aria-label={t("users.force_logout")}>
+                          <LogOut className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => handleKick(uid)} className="text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30" title={t("users.kick_user")} aria-label={t("users.kick_user")}>
+                          <LogOut className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(uid)} disabled={actionLoading === uid + "_delete"} className="text-destructive hover:bg-destructive/10" title={t("common.delete")} aria-label={t("common.delete")}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
+                </TableRow>
+              );
+            })}
+            {filtered.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={role === "admin" ? 6 : 5} className="py-20 text-center text-muted-foreground">
+                  <EmptyState icon={UserIcon} title={t("users.empty_title")} message={t("users.empty_message")} />
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
         </div>
-      </div>
+      </Card>
 
-      {showAdd && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowAdd(false)}>
-          <div className="bg-[var(--card-bg)] rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">Add User</div>
-              <button onClick={() => setShowAdd(false)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><i className="fa-solid fa-xmark"></i></button>
+      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("users.add_user")}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAdd} className="space-y-4">
+            <div>
+              <Label>{t("users.label_username")}</Label>
+              <Input type="text" required minLength={3} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
             </div>
-            <form onSubmit={handleAdd} className="space-y-4">
-              <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Username</label>
-                <input type="text" required minLength={3} className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm focus:outline-none" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Password</label>
-                <input type="password" required minLength={8} className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm focus:outline-none" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Role</label>
-                <select className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm focus:outline-none" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <button type="submit" className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-medium transition-colors">Create User</button>
-            </form>
-          </div>
-        </div>
-      )}
+            <div>
+              <Label>{t("users.label_password")}</Label>
+              <Input type="password" required minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            </div>
+            <div>
+              <Label>{t("users.label_role")}</Label>
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v ?? "user" })}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t("users.label_role")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">{t("users.role_user")}</SelectItem>
+                  <SelectItem value="admin">{t("users.role_admin")}</SelectItem>
+                  {customRoles.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="submit" className="w-full h-11">{t("users.btn.create_user")}</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {showEdit && editUser && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowEdit(false)}>
-          <div className="bg-[var(--card-bg)] rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">Edit User</div>
-              <button onClick={() => setShowEdit(false)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><i className="fa-solid fa-xmark"></i></button>
+      <Dialog open={showEdit} onOpenChange={setShowEdit}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("users.edit_title")}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4">
+            <div>
+              <Label>{t("users.label_username")}</Label>
+              <Input type="text" required minLength={3} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
             </div>
-            <form onSubmit={handleEdit} className="space-y-4">
-              <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Username</label>
-                <input type="text" minLength={3} className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm focus:outline-none" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Password</label>
-                <input type="password" className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm focus:outline-none" placeholder="Leave blank to keep unchanged" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Role</label>
-                <select className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm focus:outline-none" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setShowEdit(false)} className="flex-1 h-11 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-600 dark:text-slate-300 rounded-2xl font-medium text-sm transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-medium text-sm transition-colors">Save</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <div>
+              <Label>{t("users.label_password")}</Label>
+              <Input type="password" placeholder={t("users.placeholder.leave_blank")} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            </div>
+            <div>
+              <Label>{t("users.label_role")}</Label>
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v ?? "user" })}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t("users.label_role")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">{t("users.role_user")}</SelectItem>
+                  <SelectItem value="admin">{t("users.role_admin")}</SelectItem>
+                  {customRoles.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setShowEdit(false)}>{t("users.btn.cancel")}</Button>
+              <Button type="submit">{t("users.btn.save")}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowPasswordModal(false)}>
-          <div className="bg-[var(--card-bg)] rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">Set Password</div>
-              <button onClick={() => setShowPasswordModal(false)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><i className="fa-solid fa-xmark"></i></button>
+      <Dialog open={showPasswordModal} onOpenChange={setShowPasswordModal}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("users.password_title")}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSetPassword} className="space-y-4">
+            <div>
+              <Label>{t("users.password_label")}</Label>
+              <Input type="password" required minLength={8} placeholder={t("users.password_placeholder")} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
             </div>
-            <form onSubmit={handleSetPassword} className="space-y-4">
-              <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">New Password</label>
-                <input type="password" required minLength={8} className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] focus:border-indigo-500 rounded-2xl px-4 h-11 text-sm focus:outline-none" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Minimum 8 characters" />
-              </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setShowPasswordModal(false)} className="flex-1 h-11 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-600 dark:text-slate-300 rounded-2xl font-medium text-sm transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-medium text-sm transition-colors">Update Password</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      <ConfirmModal open={!!cfm} title="Confirm" message={cfm?.msg || ""} confirmText="Confirm" cancelText="Cancel" danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setShowPasswordModal(false)}>{t("users.btn.cancel")}</Button>
+              <Button type="submit">{t("users.btn.update_password")}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
     </div>
   );
 }
+
+

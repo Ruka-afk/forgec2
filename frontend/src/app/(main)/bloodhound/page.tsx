@@ -1,0 +1,287 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { API_BASE } from "@/lib/constants";
+import { api, getCsrfToken } from "@/lib/api";
+import { downloadFromResponse } from "@/lib/download";
+import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n";
+import { useAgentList } from "@/lib/hooks/useAgentList";
+import { ConfirmModal, EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CheckCircle, CircleAlert, Download, PawPrint, Play, RefreshCw, Table2, Trash2, Upload } from "lucide-react";
+
+
+interface BHResult {
+  ID?: number;
+  id?: number;
+  AgentID?: string;
+  agent_id?: string;
+  AgentName?: string;
+  agent_name?: string;
+  Method?: string;
+  method?: string;
+  Users?: number;
+  users?: number;
+  Computers?: number;
+  computers?: number;
+  Groups?: number;
+  groups?: number;
+  DAs?: number;
+  das?: number;
+  SPNs?: number;
+  spns?: number;
+  CreatedAt?: string;
+  created_at?: string;
+}
+
+export default function BloodHoundPage() {
+  const { t } = useI18n();
+  const { agents, refresh: refreshAgents } = useAgentList();
+  const [results, setResults] = useState<BHResult[]>([]);
+  const [binaryStatus, setBinaryStatus] = useState<{ uploaded: boolean; filename: string }>({ uploaded: false, filename: "" });
+  const [selectedAgent, setSelectedAgent] = useState("");
+  const [method, setMethod] = useState("DCOnly");
+  const [collecting, setCollecting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [resultsRes, statusRes] = await Promise.all([
+        api.get("/bloodhound/list").catch(() => null),
+        api.json<{ uploaded: boolean; filename: string }>("/bloodhound/status").catch(() => null),
+      ]);
+      if (resultsRes) setResults((resultsRes.data || []) as BHResult[]);
+      if (statusRes) setBinaryStatus(statusRes);
+    } catch { toast.error("Failed to load BloodHound data"); }
+  }, []);
+
+  useEffect(() => { loadData(); refreshAgents(); }, [loadData, refreshAgents]);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      await api.postFormData("/bloodhound/upload", form);
+      toast.success("SharpHound binary uploaded");
+      loadData();
+    } catch { toast.error("Failed to upload SharpHound binary"); }
+    setUploading(false);
+  };
+
+  const handleCollect = async () => {
+    if (!selectedAgent) return;
+    setCollecting(true);
+    try {
+      await api.post("/bloodhound/collect", { agent_id: selectedAgent, method });
+      toast.success("Collection started");
+      loadData();
+    } catch { toast.error("Failed to start collection"); }
+    setCollecting(false);
+  };
+
+  const handleDownload = async (id: number) => {
+    try {
+      const res = await fetch(`${API_BASE}/bloodhound/${id}/download`, { credentials: "include", headers: { "X-CSRF-Token": getCsrfToken() } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await downloadFromResponse(res, `bloodhound-${id}.zip`);
+    } catch { toast.error("Failed to download report"); }
+  };
+
+  const handleDelete = (id: number) => {
+    setCfm({msg: t("bloodhound.delete_report"), cb: async () => {
+      try {
+        await api.del(`/bloodhound/${id}`);
+        loadData();
+      } catch { toast.error("Failed to delete report"); }
+    }});
+  };
+
+  const getVal = (obj: BHResult, keys: (keyof BHResult)[]) => {
+    for (const k of keys) {
+      const v = obj[k];
+      if (v !== undefined && v !== null) return v;
+    }
+    return undefined;
+  };
+
+  return (
+    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title="BloodHound" subtitle="Active Directory attack path analysis via SharpHound data collection" />
+
+      <Card className="px-4 sm:px-5 mb-6 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+        <div className="flex items-center gap-x-3 mb-5">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${binaryStatus.uploaded ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-amber-100 dark:bg-amber-900/30"}`}>
+            {binaryStatus.uploaded ? <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /> : <CircleAlert className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-foreground">SharpHound Status</div>
+            <div className="text-xs text-muted-foreground">
+              {binaryStatus.uploaded
+                ? `Uploaded ${binaryStatus.filename}`
+                : "SharpHound.exe not uploaded"}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Label className="relative cursor-pointer">
+            <input aria-label="Upload SharpHound executable" name="input-0" type="file" accept=".exe" onChange={handleUpload} className="sr-only" />
+            <span className="inline-flex shrink-0 items-center justify-center rounded-xl bg-primary px-2.5 py-1.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/80 disabled:pointer-events-none disabled:opacity-50 gap-1.5 cursor-pointer">
+              {uploading ? <Spinner size="xs" /> : <Upload className="w-4 h-4" />}
+              <span>{uploading ? "Uploading..." : "Upload SharpHound.exe"}</span>
+            </span>
+          </Label>
+          {binaryStatus.uploaded && (
+            <span className="text-xs text-emerald-600 dark:text-emerald-400">
+              <CheckCircle className="w-4 h-4" />{binaryStatus.filename}
+            </span>
+          )}
+        </div>
+      </Card>
+
+      <Card className="px-4 sm:px-5 mb-6 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+        <div className="flex items-center gap-x-3 mb-5">
+          <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+            <PawPrint className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-foreground">New Collection Task</div>
+            <div className="text-xs text-muted-foreground">Select an agent and collection method to run BloodHound data collection</div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Target Agent</span>
+            <Select value={selectedAgent || "placeholder"} onValueChange={(v) => setSelectedAgent(v === "placeholder" || v === null ? "" : v)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="-- Select Agent --" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="placeholder">-- Select Agent --</SelectItem>
+                {agents.map(a => {
+                  const id = a.id || "";
+                  const hostname = a.hostname || "";
+                  const ip = a.ip || "";
+                  return <SelectItem key={id} value={id}>{hostname} ({ip})</SelectItem>;
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Collection Method</span>
+            <Select value={method} onValueChange={(v) => { if (v) setMethod(v); }}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DCOnly">DCOnly</SelectItem>
+                <SelectItem value="All">All</SelectItem>
+                <SelectItem value="Session">Session</SelectItem>
+                <SelectItem value="LDAP">LDAP</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-end">
+            <Button onClick={handleCollect} disabled={collecting || !selectedAgent}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed">
+              {collecting ? <Spinner size="xs" /> : <Play className="w-4 h-4" />}
+              <span>{collecting ? "Collecting..." : "Start Collection"}</span>
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="px-0 mb-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+        <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-secondary rounded-xl flex items-center justify-center">
+              <Table2 className="w-4 h-4" />
+            </div>
+            <h2 className="text-sm font-semibold text-foreground">Collection Results</h2>
+            <span className="text-xs text-muted-foreground">({results.length})</span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => loadData()}>
+            <RefreshCw className="w-4 h-4" />Refresh
+          </Button>
+        </div>
+        <div>
+          {results.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b border-border bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">ID</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">Agent</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">Method</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">Users</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">Computers</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">Groups</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">DA</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">SPN</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">Time</TableHead>
+                  <TableHead className="text-right py-3 px-4 sm:py-3.5 sm:px-5">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-y divide-border">
+                {results.map((r, i) => {
+                  const id = (getVal(r, ["ID", "id"]) as number) ?? i;
+                  const agent = (getVal(r, ["AgentName", "agent_name"]) as string) ?? (getVal(r, ["AgentID", "agent_id"]) as string) ?? "-";
+                  const methodVal = (getVal(r, ["Method", "method"]) as string) ?? "-";
+                  const users = (getVal(r, ["Users", "users"]) as number) ?? 0;
+                  const computers = (getVal(r, ["Computers", "computers"]) as number) ?? 0;
+                  const groups = (getVal(r, ["Groups", "groups"]) as number) ?? 0;
+                  const das = (getVal(r, ["DAs", "das"]) as number) ?? 0;
+                  const spns = (getVal(r, ["SPNs", "spns"]) as number) ?? 0;
+                  const time = (getVal(r, ["CreatedAt", "created_at"]) as string) ?? "";
+                  return (
+                    <TableRow key={id || i} className="hover:bg-muted">
+                      <TableCell className="py-3 px-4 font-mono text-xs text-muted-foreground">{id}</TableCell>
+                      <TableCell className="py-3 px-4 text-muted-foreground font-medium">{agent}</TableCell>
+                      <TableCell className="py-3 px-4">
+                        <Badge variant="outline" className="text-[10px]">{methodVal}</Badge>
+                      </TableCell>
+                       <TableCell className="py-3 px-4 font-mono text-primary">{users}</TableCell>
+                       <TableCell className="py-3 px-4 font-mono text-primary">{computers}</TableCell>
+                       <TableCell className="py-3 px-4 font-mono text-primary">{groups}</TableCell>
+                       <TableCell className="py-3 px-4 font-mono text-rose-600 dark:text-rose-400 font-semibold">{das}</TableCell>
+                       <TableCell className="py-3 px-4 font-mono text-primary">{spns}</TableCell>
+                      <TableCell className="py-3 px-4 text-xs text-muted-foreground">{time}</TableCell>
+                      <TableCell className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <Button variant="ghost" size="icon-xs" onClick={() => handleDownload(id)}
+                            className="bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 rounded-xl transition-colors"
+                            aria-label="Download report">
+                            <Download className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon-xs" onClick={() => handleDelete(id)}
+                            className="bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-xl transition-colors"
+                            aria-label="Delete report">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <EmptyState icon={PawPrint} title="No collection results yet" message="Upload SharpHound.exe and run a collection task to see results here." />
+            </div>
+          )}
+        </div>
+      </Card>
+      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.delete")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+    </div>
+  );
+}
+

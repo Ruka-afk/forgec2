@@ -1,0 +1,14 @@
+name: token-hunter
+version: 1.0.0
+type: command
+description: Extracts authentication tokens, session cookies, API keys, and certificates from agent hosts
+author: ""
+category: recon
+entry: hunt.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Specific agent to scan

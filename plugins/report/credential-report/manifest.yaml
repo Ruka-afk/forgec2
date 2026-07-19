@@ -1,0 +1,22 @@
+name: credential-report
+version: 1.0.0
+type: report
+description: Generate a detailed credential collection report with type analysis, source breakdown, and high-value findings
+author: ForgeC2
+category: reporting
+entry: report.py
+interpreter: python
+timeout: 60
+params:
+    - name: format
+      type: string
+      required: false
+      default: html
+      description: Output format (html, markdown, json)
+    - name: title
+      type: string
+      required: false
+      default: Credential Collection Report
+      description: Report title
+config:
+    redact_passwords: "true"

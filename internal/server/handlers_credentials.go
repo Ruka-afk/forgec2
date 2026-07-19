@@ -51,7 +51,7 @@ func parseAndStoreCredentials(database *gorm.DB, agentID string, raw string, tas
 	}
 	
 	var existing []db.CredentialEntry
-	database.Where("agent_id = ?", agentID).Find(&existing)
+	database.Where("agent_id = ?", agentID).Limit(50000).Find(&existing)
 	
 	existingSet := make(map[credKey]bool, len(existing))
 	for _, e := range existing {
@@ -78,12 +78,26 @@ func parseAndStoreCredentials(database *gorm.DB, agentID string, raw string, tas
 // and stores entries in the credential vault.
 func parseAndStoreKerberoastResults(database *gorm.DB, agentID string, raw string, taskID uint) {
 	lines := strings.Split(raw, "\n")
+	// Batch-load existing hashes to avoid N+1 queries
+	type credKey struct {
+		AgentID, Domain, Username, Hash, Source string
+	}
+	var existingKeys []credKey
+	database.Model(&db.CredentialEntry{}).
+		Select("agent_id, domain, username, hash, source").
+		Where("agent_id = ? AND source = 'kerberoast'", agentID).
+		Find(&existingKeys)
+	existSet := make(map[credKey]bool, len(existingKeys))
+	for _, k := range existingKeys {
+		existSet[k] = true
+	}
+
+	var newEntries []db.CredentialEntry
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		// Format: SPN:HASH (kerberoast output)
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) != 2 {
 			continue
@@ -93,7 +107,6 @@ func parseAndStoreKerberoastResults(database *gorm.DB, agentID string, raw strin
 		if spn == "" || hash == "" {
 			continue
 		}
-		// Extract user and domain from SPN (user@domain or service/domain)
 		user := spn
 		domain := ""
 		if atIdx := strings.Index(spn, "@"); atIdx > 0 {
@@ -103,26 +116,19 @@ func parseAndStoreKerberoastResults(database *gorm.DB, agentID string, raw strin
 			user = spn[slashIdx+1:]
 			domain = spn[:slashIdx]
 		}
-
-		entry := db.CredentialEntry{
-			AgentID:  agentID,
-			Domain:   domain,
-			Username: user,
-			Hash:     hash,
-			Source:   "kerberoast",
-			Type:     "krb_tgs",
-			Notes:    "SPN: " + spn,
-			TaskID:   taskID,
+		k := credKey{AgentID: agentID, Domain: domain, Username: user, Hash: hash, Source: "kerberoast"}
+		if existSet[k] {
+			continue
 		}
-		// Avoid exact duplicates
-		var count int64
-		database.Model(&db.CredentialEntry{}).
-			Where("agent_id = ? AND domain = ? AND username = ? AND hash = ? AND source = ?",
-				entry.AgentID, entry.Domain, entry.Username, entry.Hash, entry.Source).Count(&count)
-		if count == 0 {
-			database.Create(&entry)
-			slog.Info("Kerberoast hash stored in vault", "agent", agentID, "spn", spn)
-		}
+		existSet[k] = true
+		newEntries = append(newEntries, db.CredentialEntry{
+			AgentID: agentID, Domain: domain, Username: user, Hash: hash,
+			Source: "kerberoast", Type: "krb_tgs", Notes: "SPN: " + spn, TaskID: taskID,
+		})
+	}
+	if len(newEntries) > 0 {
+		database.Create(&newEntries)
+		slog.Info("Kerberoast hashes stored in vault", "agent", agentID, "count", len(newEntries))
 	}
 }
 
@@ -221,12 +227,12 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 	confirmedFilter := c.Query("confirmed")
 
 	if tagFilter != "" {
-		query = query.Where("tags LIKE ?", "%"+tagFilter+"%")
+		query = query.Where("tags LIKE ? ESCAPE '\\'", "%"+escapeLike(tagFilter)+"%")
 	}
 
 	if searchQuery != "" {
-		query = query.Where("domain LIKE ? OR username LIKE ? OR notes LIKE ?",
-			"%"+searchQuery+"%", "%"+searchQuery+"%", "%"+searchQuery+"%")
+		query = query.Where("(domain LIKE ? ESCAPE '\\' OR username LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\')",
+			"%"+escapeLike(searchQuery)+"%", "%"+escapeLike(searchQuery)+"%", "%"+escapeLike(searchQuery)+"%")
 	}
 
 	if expiryFilter != "" {
@@ -252,16 +258,14 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 	query.Find(&creds)
 
 	var allTags []string
-	var allCreds []db.CredentialEntry
-	s.db.Find(&allCreds)
+	var tagStrings []string
+	s.db.Model(&db.CredentialEntry{}).Where("tags != '' AND tags IS NOT NULL").Pluck("tags", &tagStrings)
 	tagSet := make(map[string]int)
-	for _, cred := range allCreds {
-		if cred.Tags != "" {
-			for _, tag := range strings.Split(cred.Tags, ",") {
-				tag = strings.TrimSpace(tag)
-				if tag != "" {
-					tagSet[tag]++
-				}
+	for _, tags := range tagStrings {
+		for _, tag := range strings.Split(tags, ",") {
+			tag = strings.TrimSpace(tag)
+			if tag != "" {
+				tagSet[tag]++
 			}
 		}
 	}
@@ -289,7 +293,7 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 		"VaultCount":   len(creds),
 		"AllTags":      allTags,
 		"TagFilter":    tagFilter,
-		"SearchQuery":  searchQuery,
+		"search_query":  searchQuery,
 		"ExpiryFilter": expiryFilter,
 	}
 	for k, v := range stats {
@@ -307,7 +311,7 @@ func (s *Server) handleExportCredentials(c *gin.Context) {
 	expiryFilter := c.Query("expiry")
 
 	if tagFilter != "" {
-		query = query.Where("tags LIKE ?", "%"+tagFilter+"%")
+		query = query.Where("tags LIKE ? ESCAPE '\\'", "%"+escapeLike(tagFilter)+"%")
 	}
 
 	if expiryFilter != "" {
@@ -342,6 +346,9 @@ func (s *Server) handleExportCredentials(c *gin.Context) {
 }
 
 func (s *Server) handleAddCredential(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	entry := db.CredentialEntry{
 		AgentID:  c.PostForm("agent_id"),
 		Domain:   c.PostForm("domain"),
@@ -360,7 +367,7 @@ func (s *Server) handleAddCredential(c *gin.Context) {
 		}
 	}
 	if err := s.db.Create(&entry).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add credential"})
+		respondError(c, http.StatusInternalServerError, "failed to add credential")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "id": entry.ID})
@@ -370,42 +377,48 @@ func (s *Server) handleGetCredential(c *gin.Context) {
 	idStr := c.Param("cred_id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		respondError(c, http.StatusBadRequest, "invalid id")
 		return
 	}
 	var cred db.CredentialEntry
 	if err := s.db.First(&cred, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "credential not found"})
+		respondError(c, http.StatusNotFound, "credential not found")
 		return
 	}
 	c.JSON(http.StatusOK, cred)
 }
 
 func (s *Server) handleDeleteCredential(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	idStr := c.Param("cred_id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		respondError(c, http.StatusBadRequest, "invalid id")
 		return
 	}
 	if err := s.db.Delete(&db.CredentialEntry{}, id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete"})
+		respondError(c, http.StatusInternalServerError, "failed to delete")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 func (s *Server) handleUpdateCredential(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	idStr := c.Param("cred_id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		respondError(c, http.StatusBadRequest, "invalid id")
 		return
 	}
 
 	var cred db.CredentialEntry
 	if err := s.db.First(&cred, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "credential not found"})
+		respondError(c, http.StatusNotFound, "credential not found")
 		return
 	}
 
@@ -423,65 +436,60 @@ func (s *Server) handleUpdateCredential(c *gin.Context) {
 	}
 
 	if err := s.db.Save(&cred).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update"})
+		respondError(c, http.StatusInternalServerError, "failed to update")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 func (s *Server) handleBatchAddTags(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	var req struct {
 		IDs  []uint   `json:"ids"`
 		Tags []string `json:"tags"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
 	if len(req.IDs) == 0 || len(req.Tags) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no ids or tags provided"})
+		respondError(c, http.StatusBadRequest, "no ids or tags provided")
 		return
 	}
 
 	newTags := strings.Join(req.Tags, ",")
 
-	for _, id := range req.IDs {
-		var cred db.CredentialEntry
-		if err := s.db.First(&cred, id).Error; err != nil {
-			continue
-		}
-
-		if cred.Tags == "" {
-			cred.Tags = newTags
-		} else {
-			cred.Tags = cred.Tags + "," + newTags
-		}
-
-		s.db.Save(&cred)
-	}
+	s.db.Model(&db.CredentialEntry{}).
+		Where("id IN ?", req.IDs).
+		Update("tags", gorm.Expr("CASE WHEN tags = '' OR tags IS NULL THEN ? ELSE tags || ',' || ? END", newTags, newTags))
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "count": len(req.IDs)})
 }
 
 func (s *Server) handleToggleConfirmed(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	idStr := c.Param("cred_id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		respondError(c, http.StatusBadRequest, "invalid id")
 		return
 	}
 
 	var cred db.CredentialEntry
 	if err := s.db.First(&cred, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "credential not found"})
+		respondError(c, http.StatusNotFound, "credential not found")
 		return
 	}
 
 	cred.Confirmed = !cred.Confirmed
 
 	if err := s.db.Save(&cred).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update"})
+		respondError(c, http.StatusInternalServerError, "failed to update")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "confirmed": cred.Confirmed})

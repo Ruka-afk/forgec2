@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 )
@@ -25,6 +24,10 @@ func (s *Server) triggerWebhooks(evt Event) {
 }
 
 func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
+	if err := validateWebhookURL(wh.URL); err != nil {
+		slog.Error("webhook URL rejected", "name", wh.Name, "url", wh.URL, "error", err)
+		return
+	}
 	payload, err := json.Marshal(map[string]interface{}{
 		"event":     evt.Type,
 		"agent_id":  evt.AgentID,
@@ -53,13 +56,13 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 		}
 	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: WebhookDeliveryTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		slog.Error("webhook delivery failed", "name", wh.Name, "error", err)
 		return
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 
 	if err := s.db.Create(&db.AuditLog{
 		User:    "system",

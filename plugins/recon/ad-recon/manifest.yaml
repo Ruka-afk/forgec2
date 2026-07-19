@@ -1,0 +1,14 @@
+name: ad-recon
+version: 1.0.0
+type: command
+description: Active Directory enumeration — users, groups, SPNs, trust relationships, GPOs
+author: ForgeC2
+category: recon
+entry: enumerate.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Specific agent to enumerate AD from

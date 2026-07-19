@@ -1,0 +1,19 @@
+name: network-enumerator
+version: 1.0.0
+type: command
+description: Enumerates active network connections, listening ports, and DNS configuration from agent data
+author: ForgeC2
+category: recon
+entry: enumerate.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Specific agent to enumerate
+    - name: ports_only
+      type: bool
+      required: false
+      default: "false"
+      description: Only show listening ports

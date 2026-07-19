@@ -1,0 +1,16 @@
+name: credential-rotation
+version: 1.0.0
+type: hook
+description: Monitors credential age and alerts when rotation is recommended
+author: ForgeC2
+category: monitoring
+entry: check.py
+interpreter: python3
+timeout: 30
+params: []
+events:
+    - task.completed
+config:
+    log_file: ""
+    max_age_days: 30
+    warning_age_days: 14

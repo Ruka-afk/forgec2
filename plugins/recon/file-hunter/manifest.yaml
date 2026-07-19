@@ -1,0 +1,19 @@
+name: file-hunter
+version: 1.0.0
+type: command
+description: Searches for sensitive files — private keys, certificates, config files, databases, and documents
+author: ""
+category: recon
+entry: hunt.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Specific agent to scan
+    - name: max_results
+      type: int
+      required: false
+      default: "100"
+      description: Maximum results per agent

@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"log/slog"
@@ -8,38 +8,80 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/sync/errgroup"
 )
 
 // ── REST API: Agents ──
 
 func (s *Server) apiListAgents(c *gin.Context) {
-	var agents []db.Implant
-	query := s.db.Order("last_seen desc")
+	search := c.Query("search")
+	statusFilter := c.Query("status")
+	osFilter := c.Query("os")
+	tagID := c.Query("tag_id")
 
-	if status := c.Query("status"); status != "" {
-		query = query.Where("status = ?", status)
-	}
-	if os := c.Query("os"); os != "" {
-		query = query.Where("os LIKE ?", "%"+os+"%")
-	}
-	if limit := c.Query("limit"); limit != "" {
-		if n, err := strconv.Atoi(limit); err == nil {
-			query = query.Limit(n)
+	pageNum := 1
+	if v := c.Query("page"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			pageNum = n
 		}
 	}
-
-	if err := query.Limit(500).Find(&agents).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "database error"})
-		return
+	pageSize := DefaultPageSize
+	if v := c.Query("page_size"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			pageSize = n
+		}
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": agents, "total": len(agents)})
+	if pageSize > MaxPageSize {
+		pageSize = MaxPageSize
+	}
+
+	offlineCutoff := time.Now().Add(-s.offlineThreshold())
+	staleCutoff := time.Now().Add(-StaleThreshold)
+
+	query := s.db.Model(&db.Implant{})
+
+	if search != "" {
+		query = query.Where("(hostname LIKE ? ESCAPE '\\' OR username LIKE ? ESCAPE '\\' OR ip LIKE ? ESCAPE '\\')",
+			"%"+escapeLike(search)+"%", "%"+escapeLike(search)+"%", "%"+escapeLike(search)+"%")
+	}
+	if statusFilter == "online" {
+		query = query.Where("last_seen > ?", offlineCutoff)
+	} else if statusFilter == "stale" {
+		query = query.Where("last_seen <= ? AND last_seen > ?", offlineCutoff, staleCutoff)
+	} else if statusFilter == "offline" {
+		query = query.Where("last_seen <= ?", staleCutoff)
+	}
+	if osFilter != "" {
+		query = query.Where("LOWER(os) LIKE ? ESCAPE '\\'", "%"+escapeLike(osFilter)+"%")
+	}
+	if tagID != "" {
+		query = query.Joins("JOIN agent_tag_assignments ON agent_tag_assignments.implant_id = implants.id").
+			Where("agent_tag_assignments.agent_tag_id = ?", tagID)
+	}
+
+	var total int64
+	query.Count(&total)
+
+	var agents []db.Implant
+	query.Order("last_seen desc").Offset((pageNum - 1) * pageSize).Limit(pageSize).Find(&agents)
+
+	for i := range agents {
+		agents[i].Status = s.agentStatus(agents[i]).Status
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"agents":    agents,
+		"total":     total,
+		"page":      pageNum,
+		"page_size": pageSize,
+	})
 }
 
 func (s *Server) apiGetAgent(c *gin.Context) {
 	id := c.Param("id")
 	var agent db.Implant
 	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "agent not found"})
+		respondError(c, http.StatusNotFound, "agent not found")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": agent})
@@ -48,13 +90,13 @@ func (s *Server) apiGetAgent(c *gin.Context) {
 func (s *Server) apiDeleteAgent(c *gin.Context) {
 	role, _ := c.Get("user_role")
 	if role != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "admin required"})
+		respondError(c, http.StatusForbidden, "admin required")
 		return
 	}
 
 	id := c.Param("id")
 	if err := s.db.Delete(&db.Implant{}, "id = ?", id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "delete failed"})
+		respondError(c, http.StatusInternalServerError, "delete failed")
 		return
 	}
 	s.LogAuditRecord(c, "delete_agent", "agent", id, "Agent deleted", true, nil)
@@ -82,8 +124,8 @@ func (s *Server) apiListTasks(c *gin.Context) {
 		}
 	}
 
-	if err := query.Limit(200).Find(&tasks).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "database error"})
+	if err := query.Limit(APITaskListLimit).Find(&tasks).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "database error")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": tasks, "total": len(tasks)})
@@ -93,7 +135,7 @@ func (s *Server) apiGetTask(c *gin.Context) {
 	id := c.Param("id")
 	var task db.Task
 	if err := s.db.Preload("Agent").First(&task, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "task not found"})
+		respondError(c, http.StatusNotFound, "task not found")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": task})
@@ -107,13 +149,13 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 		Shell   string `json:"shell"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "invalid request"})
+		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
 	task, err := s.createTask(req.AgentID, req.Type, req.Command, req.Shell, "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "task creation failed"})
+		respondError(c, http.StatusInternalServerError, "task creation failed")
 		return
 	}
 
@@ -134,11 +176,11 @@ func (s *Server) apiListCredentials(c *gin.Context) {
 		query = query.Where("type = ?", credType)
 	}
 	if domain := c.Query("domain"); domain != "" {
-		query = query.Where("domain LIKE ?", "%"+domain+"%")
+		query = query.Where("domain LIKE ? ESCAPE '\\'", "%"+escapeLike(domain)+"%")
 	}
 
-	if err := query.Limit(500).Find(&creds).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "database error"})
+	if err := query.Limit(APICredentialListLimit).Find(&creds).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "database error")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": creds, "total": len(creds)})
@@ -147,37 +189,72 @@ func (s *Server) apiListCredentials(c *gin.Context) {
 // ── REST API: Listeners ──
 
 func (s *Server) apiListListeners(c *gin.Context) {
-	var listeners []db.Listener
-	if err := s.db.Order("created_at desc").Limit(100).Find(&listeners).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "database error"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": listeners, "total": len(listeners)})
+	s.handleListListeners(c)
 }
 
 // ── REST API: Dashboard Stats ──
 
 func (s *Server) apiDashboardStats(c *gin.Context) {
-	stats := s.getNavStats()
+	offlineCutoff := time.Now().Add(-s.offlineThreshold())
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
-	var totalTasks, completedTasks, failedTasks, pendingTasks int64
-	if err := s.db.Model(&db.Task{}).Count(&totalTasks).Error; err != nil {
-		slog.Error("api: failed to count tasks", "error", err)
-	}
-	if err := s.db.Model(&db.Task{}).Where("status = ?", "completed").Count(&completedTasks).Error; err != nil {
-		slog.Error("api: failed to count completed tasks", "error", err)
-	}
-	if err := s.db.Model(&db.Task{}).Where("status = ?", "failed").Count(&failedTasks).Error; err != nil {
-		slog.Error("api: failed to count failed tasks", "error", err)
-	}
-	if err := s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks).Error; err != nil {
-		slog.Error("api: failed to count pending tasks", "error", err)
+	var totalAgents, onlineAgents, todayTasks, pendingTasks, failedTasks,
+		totalCreds, totalTokens, totalListeners, totalTasks, totalAudits int64
+
+	g, ctx := errgroup.WithContext(c.Request.Context())
+	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Implant{}).Count(&totalAgents).Error })
+	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Implant{}).Where("last_seen > ?", offlineCutoff).Count(&onlineAgents).Error })
+	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Task{}).Where("created_at >= ?", todayStart).Count(&todayTasks).Error })
+	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks).Error })
+	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Task{}).Where("status = ?", "failed").Count(&failedTasks).Error })
+	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Task{}).Count(&totalTasks).Error })
+	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.CredentialEntry{}).Count(&totalCreds).Error })
+	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.TokenEntry{}).Count(&totalTokens).Error })
+	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Listener{}).Count(&totalListeners).Error })
+	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.AuditLog{}).Count(&totalAudits).Error })
+	if err := g.Wait(); err != nil {
+		slog.Error("api: failed to count dashboard stats", "error", err)
 	}
 
-	stats["TotalTasks"] = totalTasks
-	stats["CompletedTasks"] = completedTasks
-	stats["FailedTasks"] = failedTasks
-	stats["PendingTasks"] = pendingTasks
+	var staleCount int64
+	staleCutoff := now.Add(-30 * time.Minute)
+	if err := s.db.Model(&db.Implant{}).Where("last_seen > ? AND last_seen <= ?", offlineCutoff, staleCutoff).Count(&staleCount).Error; err != nil {
+		slog.Error("api: failed to count stale agents", "error", err)
+	}
+	var offlineCount int64
+	if err := s.db.Model(&db.Implant{}).Where("last_seen <= ?", offlineCutoff).Count(&offlineCount).Error; err != nil {
+		slog.Error("api: failed to count offline agents", "error", err)
+	}
+
+	onlineUsers := int64(len(s.getOnlineUsers()))
+
+	var recentTasks []db.Task
+	s.db.Preload("Agent").
+		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
+		Order("created_at desc").Limit(DashboardRecentTasks).Find(&recentTasks)
+
+	stats := gin.H{
+		"total_agents":     totalAgents,
+		"online_agents":    onlineAgents,
+		"today_tasks":      todayTasks,
+		"pending_tasks":    pendingTasks,
+		"failed_tasks":     failedTasks,
+		"total_tasks":      totalTasks,
+		"total_creds":      totalCreds,
+		"total_tokens":     totalTokens,
+		"total_listeners":  totalListeners,
+		"total_audits":     totalAudits,
+		"online_count":     onlineAgents,
+		"stale_count":      staleCount,
+		"offline_count":    offlineCount,
+		"listener_count":   totalListeners,
+		"pending_count":    pendingTasks,
+		"online_users":     onlineUsers,
+		"completed_tasks":  totalTasks - failedTasks - pendingTasks,
+		"server_version":   ServerVersion,
+		"recent_tasks":     recentTasks,
+	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": stats})
 }
@@ -192,14 +269,25 @@ func (s *Server) apiListAuditLogs(c *gin.Context) {
 		query = query.Where("action = ?", action)
 	}
 	if user := c.Query("user"); user != "" {
-		query = query.Where("user LIKE ?", "%"+user+"%")
+		query = query.Where("user LIKE ? ESCAPE '\\'", "%"+escapeLike(user)+"%")
 	}
 
-	if err := query.Limit(200).Find(&logs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "database error"})
+	if err := query.Limit(APIAuditLogListLimit).Find(&logs).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "database error")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": logs, "total": len(logs)})
+}
+
+// ── REST API: Bulk Results ──
+
+func (s *Server) apiBulkResults(c *gin.Context) {
+	s.bulkHistoryMu.Lock()
+	results := make([]BulkResult, len(s.bulkHistory))
+	copy(results, s.bulkHistory)
+	s.bulkHistoryMu.Unlock()
+
+	c.JSON(http.StatusOK, gin.H{"results": results, "total": len(results)})
 }
 
 // ── REST API: Health ──
@@ -239,6 +327,7 @@ func (s *Server) registerAPIRoutes(api *gin.RouterGroup) {
 	api.GET("/credentials", s.apiListCredentials)
 	api.GET("/listeners", s.apiListListeners)
 	api.GET("/audit", s.apiListAuditLogs)
+	api.GET("/bulk/results", s.apiBulkResults)
 }
 
 

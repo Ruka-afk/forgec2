@@ -3,6 +3,7 @@
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -108,10 +109,10 @@ func (s *Server) handleLogin(c *gin.Context) {
 		)
 		s.LogAuditRecord(c, "login_failed", "auth", username, "Wrong password", false, nil)
 		delay := user.LoginAttempts
-		if delay > 10 {
-			delay = 10
+		if delay > MaxLoginDelayIter {
+			delay = MaxLoginDelayIter
 		}
-		time.Sleep(time.Duration(delay) * 500 * time.Millisecond)
+		time.Sleep(time.Duration(delay) * LoginBruteForceDelay)
 		if err := s.db.Model(&user).UpdateColumn("login_attempts", user.LoginAttempts+1).Error; err != nil {
 			slog.Error("Failed to update login attempts", "username", username, "err", err)
 		}
@@ -136,7 +137,13 @@ func (s *Server) handleLogin(c *gin.Context) {
 			s.renderLoginError(c, "Two-factor authentication required", username, rememberMe)
 			return
 		}
-		if !totp.VerifyCode(user.TOTPSecret, totpCode) {
+		decryptedSecret, err := decryptSecret(user.TOTPSecret, s.cfg.Server.JWTSecret)
+		if err != nil {
+			slog.Error("Failed to decrypt TOTP secret", "username", username, "err", err)
+			s.renderLoginError(c, "2FA configuration error", username, rememberMe)
+			return
+		}
+		if !totp.VerifyCode(decryptedSecret, totpCode) {
 			slog.Warn("Login failed: invalid 2FA code", "username", username, "ip", c.ClientIP())
 			s.LogAuditRecord(c, "login_failed", "auth", username, "Invalid 2FA code", false, nil)
 			s.renderLoginError(c, "Invalid two-factor authentication code", username, rememberMe)
@@ -152,13 +159,13 @@ func (s *Server) handleLogin(c *gin.Context) {
 
 	sessionHours := s.cfg.Server.SessionMaxAgeHours
 	if sessionHours < 1 {
-		sessionHours = 24
+		sessionHours = DefaultSessionHours
 	}
-	maxAge := sessionHours * 3600
+	maxAge := sessionHours * SecondsPerHour
 	if rememberMe {
-		maxAge = 7 * 86400
+		maxAge = RememberMeMaxAgeSec
 	}
-	c.SetCookie("forgec2_session", token, maxAge, "/", "", middleware.CookieSecure, true)
+	middleware.SetCookieWithSameSite(c, "forgec2_session", token, maxAge, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
 
 	s.clearLoginLockout(clientIP)
 	if err := s.db.Model(&db.User{}).Where("id = ?", user.ID).Update("force_logout_at", nil).Error; err != nil {
@@ -213,7 +220,7 @@ func (s *Server) handleLogout(c *gin.Context) {
 
 	s.LogAuditRecord(c, "logout", "auth", username, "User logged out", true, nil)
 	slog.Info("User logged out", "username", username, "ip", c.ClientIP())
-	c.SetCookie("forgec2_session", "", -1, "/", "", middleware.CookieSecure, true)
+	middleware.SetCookieWithSameSite(c, "forgec2_session", "", -1, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
 	c.Redirect(http.StatusFound, "/login")
 }
 
@@ -334,6 +341,9 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 		"MalleableHeaders": s.cfg.Malleable.Headers,
 		"MalleablePrepend": s.cfg.Malleable.Prepend,
 		"MalleableAppend":  s.cfg.Malleable.Append,
+		"WorkingStart":     s.cfg.Implant.DefaultWorkingStart,
+		"WorkingEnd":       s.cfg.Implant.DefaultWorkingEnd,
+		"WorkingTZ":        s.cfg.Implant.DefaultWorkingTZ,
 	}
 	for k, v := range stats {
 		data[k] = v
@@ -347,6 +357,9 @@ func (s *Server) handleSaveAgentConfig(c *gin.Context) {
 	jitter := c.PostForm("jitter")
 	userAgent := c.PostForm("user_agent")
 	skipTLS := c.PostForm("skip_tls")
+	workingStart := c.PostForm("working_start")
+	workingEnd := c.PostForm("working_end")
+	workingTZ := c.PostForm("working_tz")
 
 	if interval != "" {
 		var intInterval int
@@ -368,8 +381,12 @@ func (s *Server) handleSaveAgentConfig(c *gin.Context) {
 
 	s.cfg.Implant.DefaultSkipTLS = skipTLS == "true" || skipTLS == "1"
 
+	s.cfg.Implant.DefaultWorkingStart = workingStart
+	s.cfg.Implant.DefaultWorkingEnd = workingEnd
+	s.cfg.Implant.DefaultWorkingTZ = workingTZ
+
 	if err := s.cfg.Save(s.configPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save config"})
+		respondError(c, http.StatusInternalServerError, "Failed to save config")
 		return
 	}
 
@@ -383,7 +400,7 @@ func (s *Server) handleChangePassword(c *gin.Context) {
 	confirm := c.PostForm("confirm_password")
 
 	if newPass != confirm || len(newPass) < 8 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Passwords do not match or too short"})
+		respondError(c, http.StatusBadRequest, "Passwords do not match or too short")
 		return
 	}
 
@@ -391,24 +408,24 @@ func (s *Server) handleChangePassword(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	var user db.User
 	if err := s.db.First(&user, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		respondError(c, http.StatusUnauthorized, "User not found")
 		return
 	}
 
 	if !middleware.CheckPassword(user.PasswordHash, current) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current password incorrect"})
+		respondError(c, http.StatusUnauthorized, "Current password incorrect")
 		return
 	}
 
 	hash, err := middleware.HashPassword(newPass)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Hash failed"})
+		respondError(c, http.StatusInternalServerError, "Hash failed")
 		return
 	}
 
 	if err := s.db.Model(&user).Update("password_hash", hash).Error; err != nil {
 		slog.Error("Failed to update password hash", "user_id", user.ID, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update password"})
+		respondError(c, http.StatusInternalServerError, "Failed to update password")
 		return
 	}
 	s.LogAuditRecord(c, "password_change", "auth", user.Username, "Password changed", true, nil)
@@ -419,7 +436,7 @@ func (s *Server) handleTOTPStatus(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	var user db.User
 	if err := s.db.First(&user, userID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "User not found"})
+		respondError(c, http.StatusInternalServerError, "User not found")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -432,13 +449,13 @@ func (s *Server) handleTOTPGenerate(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	var user db.User
 	if err := s.db.First(&user, userID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "User not found"})
+		respondError(c, http.StatusInternalServerError, "User not found")
 		return
 	}
 
 	secret, err := totp.GenerateSecret()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate secret"})
+		respondError(c, http.StatusInternalServerError, "Failed to generate secret")
 		return
 	}
 
@@ -459,24 +476,31 @@ func (s *Server) handleTOTPEnable(c *gin.Context) {
 	code := c.PostForm("code")
 
 	if secret == "" || code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Secret and code are required"})
+		respondError(c, http.StatusBadRequest, "Secret and code are required")
 		return
 	}
 
 	if !totp.VerifyCode(secret, code) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid verification code"})
+		respondError(c, http.StatusBadRequest, "Invalid verification code")
 		return
 	}
 
 	var user db.User
 	if err := s.db.First(&user, userID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "User not found"})
+		respondError(c, http.StatusInternalServerError, "User not found")
 		return
 	}
 
-	if err := s.db.Model(&user).Update("totp_secret", secret).Error; err != nil {
+	encryptedSecret, err := encryptSecret(secret, s.cfg.Server.JWTSecret)
+	if err != nil {
+		slog.Error("Failed to encrypt TOTP secret", "user_id", user.ID, "err", err)
+		respondError(c, http.StatusInternalServerError, "Failed to enable 2FA")
+		return
+	}
+
+	if err := s.db.Model(&user).Update("totp_secret", encryptedSecret).Error; err != nil {
 		slog.Error("Failed to enable TOTP", "user_id", user.ID, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to enable 2FA"})
+		respondError(c, http.StatusInternalServerError, "Failed to enable 2FA")
 		return
 	}
 	s.LogAuditRecord(c, "2fa_enable", "auth", user.Username, "2FA enabled", true, nil)
@@ -490,24 +514,24 @@ func (s *Server) handleTOTPDisable(c *gin.Context) {
 	password := c.PostForm("password")
 
 	if password == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Password is required"})
+		respondError(c, http.StatusBadRequest, "Password is required")
 		return
 	}
 
 	var user db.User
 	if err := s.db.First(&user, userID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "User not found"})
+		respondError(c, http.StatusInternalServerError, "User not found")
 		return
 	}
 
 	if !middleware.CheckPassword(user.PasswordHash, password) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Incorrect password"})
+		respondError(c, http.StatusUnauthorized, "Incorrect password")
 		return
 	}
 
 	if err := s.db.Model(&user).Update("totp_secret", "").Error; err != nil {
 		slog.Error("Failed to disable TOTP", "user_id", user.ID, "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to disable 2FA"})
+		respondError(c, http.StatusInternalServerError, "Failed to disable 2FA")
 		return
 	}
 	s.LogAuditRecord(c, "2fa_disable", "auth", user.Username, "2FA disabled", true, nil)
@@ -538,25 +562,25 @@ func (s *Server) handleSaveServerConfig(c *gin.Context) {
 	}
 
 	if offlineThreshold != "" {
-		if v, err := strconv.Atoi(offlineThreshold); err == nil && v >= 5 && v <= 3600 {
+		if v, err := strconv.Atoi(offlineThreshold); err == nil && v >= MinOfflineThresholdSec && v <= MaxOfflineThresholdSec {
 			s.cfg.Server.OfflineThreshold = v
 		}
 	}
 
 	if sessionMaxAge != "" {
-		if v, err := strconv.Atoi(sessionMaxAge); err == nil && v >= 1 && v <= 720 {
+		if v, err := strconv.Atoi(sessionMaxAge); err == nil && v >= MinSessionMaxAgeHours && v <= MaxSessionMaxAgeHours {
 			s.cfg.Server.SessionMaxAgeHours = v
 		}
 	}
 
 	if cleanupRetention != "" {
-		if v, err := strconv.Atoi(cleanupRetention); err == nil && v >= 1 && v <= 365 {
+		if v, err := strconv.Atoi(cleanupRetention); err == nil && v >= MinCleanupRetentionDays && v <= MaxCleanupRetentionDays {
 			s.cfg.Server.CleanupRetentionDays = v
 		}
 	}
 
 	if err := s.cfg.Save(s.configPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save config"})
+		respondError(c, http.StatusInternalServerError, "Failed to save config")
 		return
 	}
 
@@ -567,7 +591,7 @@ func (s *Server) handleSaveServerConfig(c *gin.Context) {
 func (s *Server) handleSaveMalleableProfile(c *gin.Context) {
 	s.cfg.Malleable.Enabled = c.PostForm("enabled") == "true"
 	if sc := c.PostForm("status_code"); sc != "" {
-		if v, err := strconv.Atoi(sc); err == nil && v >= 100 && v <= 599 {
+		if v, err := strconv.Atoi(sc); err == nil && v >= MinHTTPStatusCode && v <= MaxHTTPStatusCode {
 			s.cfg.Malleable.StatusCode = v
 		}
 	}
@@ -599,7 +623,7 @@ func (s *Server) handleSaveMalleableProfile(c *gin.Context) {
 	}
 
 	if err := s.cfg.Save(s.configPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save config"})
+		respondError(c, http.StatusInternalServerError, "Failed to save config")
 		return
 	}
 
@@ -618,7 +642,7 @@ func (s *Server) handlePurgeTasks(c *gin.Context) {
 		Where("status IN ?", []string{"completed", "failed"}).
 		Delete(&db.Task{})
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to purge tasks"})
+		respondError(c, http.StatusInternalServerError, "Failed to purge tasks")
 		return
 	}
 	slog.Info("Purged old tasks", "count", result.RowsAffected, "older_than_days", days)
@@ -629,12 +653,15 @@ func (s *Server) handlePurgeAuditLogs(c *gin.Context) {
 	daysStr := c.PostForm("days")
 	days, err := strconv.Atoi(daysStr)
 	if err != nil || days < 1 {
-		days = 30
+		days = 90
+	}
+	if days < 90 {
+		days = 90 // enforce 90-day minimum retention for audit logs
 	}
 	cutoff := time.Now().AddDate(0, 0, -days)
 	result := s.db.Where("created_at < ?", cutoff).Delete(&db.AuditLog{})
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to purge audit logs"})
+		respondError(c, http.StatusInternalServerError, "Failed to purge audit logs")
 		return
 	}
 	slog.Info("Purged old audit logs", "count", result.RowsAffected, "older_than_days", days)
@@ -645,12 +672,12 @@ func (s *Server) handleRegenerateJWT(c *gin.Context) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		slog.Error("Failed to generate JWT secret", "err", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT secret"})
+		respondError(c, http.StatusInternalServerError, "Failed to generate JWT secret")
 		return
 	}
 	s.cfg.Server.JWTSecret = hex.EncodeToString(b)
 	if err := s.cfg.Save(s.configPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save config"})
+		respondError(c, http.StatusInternalServerError, "Failed to save config")
 		return
 	}
 	middleware.InitJWTSecret(s.cfg)
@@ -662,11 +689,11 @@ func (s *Server) handleDBVacuum(c *gin.Context) {
 	var dbSize int64
 	rawDB, err := s.db.DB()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get database connection"})
+		respondError(c, http.StatusInternalServerError, "Failed to get database connection")
 		return
 	}
 	if _, err := rawDB.Exec("VACUUM"); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "VACUUM failed"})
+		respondError(c, http.StatusInternalServerError, "VACUUM failed")
 		return
 	}
 	// Get new size
@@ -679,25 +706,25 @@ func (s *Server) handleBackupDatabase(c *gin.Context) {
 	src := s.cfg.Database.Path
 	backupDir := filepath.Join(s.cfg.Server.DataDir, "backups")
 	if err := os.MkdirAll(backupDir, 0700); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create backup directory"})
+		respondError(c, http.StatusInternalServerError, "Failed to create backup directory")
 		return
 	}
 	ts := time.Now().Format("20060102_150405")
 	backupPath := filepath.Join(backupDir, fmt.Sprintf("forgec2_%s.db", ts))
 	srcFile, err := os.Open(src)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open database file"})
+		respondError(c, http.StatusInternalServerError, "Failed to open database file")
 		return
 	}
 	defer srcFile.Close()
 	dstFile, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create backup file"})
+		respondError(c, http.StatusInternalServerError, "Failed to create backup file")
 		return
 	}
 	defer dstFile.Close()
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to copy database"})
+		respondError(c, http.StatusInternalServerError, "Failed to copy database")
 		return
 	}
 	slog.Info("Database backup created", "path", backupPath)
@@ -710,11 +737,22 @@ func (s *Server) handleDownloadConfig(c *gin.Context) {
 		c.String(http.StatusInternalServerError, "Failed to read config")
 		return
 	}
-	// Redact JWT secret before serving
-	redacted := strings.ReplaceAll(string(data), s.cfg.Server.JWTSecret, "****")
-	// Redact password hash
-	if s.cfg.Auth.PasswordHash != "" {
-		redacted = strings.ReplaceAll(redacted, s.cfg.Auth.PasswordHash, "****")
+	redacted := string(data)
+	// Redact all secret fields
+	secrets := []string{
+		s.cfg.Server.JWTSecret,
+		s.cfg.Auth.PasswordHash,
+		s.cfg.AI.APIKey,
+		s.cfg.SSO.ClientSecret,
+		s.cfg.Integrations.Slack.BotToken,
+		s.cfg.Integrations.Slack.AppToken,
+		s.cfg.Integrations.Slack.SigningSecret,
+		s.cfg.Crypto.Key,
+	}
+	for _, secret := range secrets {
+		if secret != "" {
+			redacted = strings.ReplaceAll(redacted, secret, "****")
+		}
 	}
 	c.Header("Content-Disposition", "attachment; filename=config.yaml")
 	c.Data(http.StatusOK, "application/x-yaml", []byte(redacted))
@@ -749,8 +787,8 @@ func (s *Server) handleGetAuditLogs(c *gin.Context) {
 	query := s.db.Model(&db.AuditLog{}).Order("created_at DESC")
 
 	if search != "" {
-		query = query.Where("user LIKE ? OR resource LIKE ? OR details LIKE ?",
-			"%"+search+"%", "%"+search+"%", "%"+search+"%")
+		query = query.Where("(user LIKE ? ESCAPE '\\' OR resource LIKE ? ESCAPE '\\' OR details LIKE ? ESCAPE '\\')",
+			"%"+escapeLike(search)+"%", "%"+escapeLike(search)+"%", "%"+escapeLike(search)+"%")
 	}
 
 	if action != "" {
@@ -787,19 +825,19 @@ func (s *Server) handleSetLanguage(c *gin.Context) {
 		lang = c.Query("lang")
 	}
 	if lang == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Language code is required"})
+		respondError(c, http.StatusBadRequest, "Language code is required")
 		return
 	}
 
 	if !IsLanguageSupported(lang) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported language"})
+		respondError(c, http.StatusBadRequest, "Unsupported language")
 		return
 	}
 
-	c.SetCookie("forgec2_lang", lang, 365*24*3600, "/", "", false, true)
+	middleware.SetCookieWithSameSite(c, "forgec2_lang", lang, LangCookieMaxAgeSec, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
 
 	referer := c.GetHeader("Referer")
-	if referer != "" {
+	if referer != "" && strings.HasPrefix(referer, "/") && !strings.HasPrefix(referer, "//") {
 		c.Redirect(http.StatusFound, referer)
 		return
 	}
@@ -830,7 +868,7 @@ func (s *Server) handleGetTranslations(c *gin.Context) {
 
 	translations, err := ExportTranslations(lang)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Settings save"))
 		return
 	}
 
@@ -879,5 +917,82 @@ func (s *Server) handleTranslationCheck(c *gin.Context) {
 		"placeholder_issues":   placeholderIssues,
 		"html_tag_issues":      htmlIssues,
 	})
+}
+
+// handleGetSettingsWebhooks returns saved notification webhook targets
+func (s *Server) handleGetSettingsWebhooks(c *gin.Context) {
+	var cfg db.ServerConfig
+	s.db.Where("key = ?", "notification_targets").First(&cfg)
+	if cfg.Value == "" {
+		respond(c, gin.H{"data": gin.H{"notifications": []interface{}{}}})
+		return
+	}
+	respond(c, gin.H{"data": gin.H{"notifications": cfg.Value}})
+}
+
+// handleSaveSettingsWebhooks saves notification webhook targets
+func (s *Server) handleSaveSettingsWebhooks(c *gin.Context) {
+	var req struct {
+		Notifications interface{} `json:"notifications"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid request")
+		return
+	}
+	data, err := json.Marshal(req.Notifications)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "failed to marshal notifications")
+		return
+	}
+	cfg := db.ServerConfig{Key: "notification_targets", Value: string(data), UpdatedAt: time.Now()}
+	if err := s.db.Save(&cfg).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Notification config"))
+		return
+	}
+	respond(c, gin.H{"success": true})
+}
+
+// handleTestSettingsWebhook sends a test notification to a webhook target
+func (s *Server) handleTestSettingsWebhook(c *gin.Context) {
+	var req struct {
+		Type     string `json:"type"`
+		URL      string `json:"url"`
+		Secret   string `json:"secret"`
+		To       string `json:"to"`
+		SMTPHost string `json:"smtp_host"`
+		SMTPPort int    `json:"smtp_port"`
+		SMTPUser string `json:"smtp_user"`
+		SMTPPass string `json:"smtp_pass"`
+		From     string `json:"from"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid request")
+		return
+	}
+
+	if req.Type == "email" {
+		respond(c, gin.H{"success": true, "message": "email test not implemented in dev mode"})
+		return
+	}
+
+	if req.URL == "" {
+		respondError(c, http.StatusBadRequest, "webhook URL is required")
+		return
+	}
+
+	payload := gin.H{"text": "ForgeC2 test notification", "content": "This is a test notification from ForgeC2."}
+	body, _ := json.Marshal(payload)
+	resp, err := http.Post(req.URL, "application/json", strings.NewReader(string(body)))
+	if err != nil {
+		respond(c, gin.H{"success": false, "error": sanitizeError(err, "Settings save")})
+		return
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		respond(c, gin.H{"success": true})
+	} else {
+		respond(c, gin.H{"success": false, "error": fmt.Sprintf("HTTP %d", resp.StatusCode)})
+	}
 }
 

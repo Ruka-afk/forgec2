@@ -93,28 +93,27 @@ func (s *Server) handleDashboardActivityHeatmap(c *gin.Context) {
 		startTime = time.Now().Add(-24 * time.Hour)
 	}
 
-	var tasks []db.Task
-	s.db.Select("created_at").Where("created_at >= ?", startTime).Limit(10000).Find(&tasks)
+	type hourBucket struct {
+		Day   int
+		Hour  int
+		Count int64
+	}
+	var buckets []hourBucket
+	s.db.Raw(`SELECT CAST((julianday('now') - julianday(created_at)) AS INTEGER) as day, strftime('%H', created_at) as hour, COUNT(*) as count FROM tasks WHERE created_at >= ? GROUP BY day, hour`, startTime).Scan(&buckets)
 
-	heatmap := make([]HeatmapData, 0)
-	now := time.Now()
+	// Build a map for O(1) lookup
+	bucketMap := make(map[[2]int]int64, len(buckets))
+	for _, b := range buckets {
+		bucketMap[[2]int{b.Day, b.Hour}] = b.Count
+	}
 
+	heatmap := make([]HeatmapData, 0, days*24)
 	for d := 0; d < days; d++ {
 		for h := 0; h < 24; h++ {
-			count := 0
-			for _, task := range tasks {
-				taskDay := int(now.Sub(task.CreatedAt).Hours() / 24)
-				if days == 1 {
-					taskDay = 0
-				}
-				if taskDay == d && task.CreatedAt.Hour() == h {
-					count++
-				}
-			}
 			heatmap = append(heatmap, HeatmapData{
 				Day:   d,
 				Hour:  h,
-				Count: count,
+				Count: int(bucketMap[[2]int{d, h}]),
 			})
 		}
 	}
@@ -207,7 +206,7 @@ func (s *Server) handleDashboardListenerTraffic(c *gin.Context) {
 	bytesOut := make([]int64, points)
 
 	var tasks []db.Task
-	s.db.Select("created_at").Where("created_at >= ?", startTime).Limit(10000).Find(&tasks)
+	s.db.Select("created_at").Where("created_at >= ?", startTime).Limit(DashboardTrafficLimit).Find(&tasks)
 
 	now := time.Now()
 	for _, task := range tasks {

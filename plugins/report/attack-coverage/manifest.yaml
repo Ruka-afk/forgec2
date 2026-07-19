@@ -1,0 +1,20 @@
+name: attack-coverage
+version: 1.0.0
+type: report
+description: Generates ATT&CK coverage dashboard — visual heatmap, technique coverage, gap analysis
+author: ""
+category: reporting
+entry: report.py
+interpreter: python3
+timeout: 60
+params:
+    - name: format
+      type: string
+      required: false
+      default: html
+      description: Output format (html, markdown, json)
+    - name: title
+      type: string
+      required: false
+      default: ATT&CK Coverage Dashboard
+      description: Report title

@@ -1,0 +1,12 @@
+name: system-recon
+version: 1.0.0
+type: command
+description: Comprehensive system reconnaissance - agent inventory, OS breakdown, geo-location map, listener topology
+author: ForgeC2
+category: recon
+entry: recon.py
+interpreter: python
+timeout: 30
+params: []
+config:
+    include_offline: "true"

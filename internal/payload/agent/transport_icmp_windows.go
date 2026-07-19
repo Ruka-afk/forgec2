@@ -87,7 +87,8 @@ func sendICMPBeacon(body []byte) []byte {
 	if status != 0 {
 		return nil
 	}
-	dataOffset := 8 + 4 + 4 + 2 + 2 + 8 + 8
+	var reply icmpEchoReply
+	dataOffset := int(unsafe.Sizeof(reply))
 	if dataOffset >= len(replyBuf) {
 		return nil
 	}

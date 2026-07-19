@@ -72,9 +72,11 @@ func (wl *WebSocketListener) handleAgentWS(c *gin.Context) {
 		compress:   true,
 	}
 
-	if wl.server.wsHub == nil {
-		wl.server.wsHub = NewWebSocketHub()
-	}
+	wl.server.wsHubOnce.Do(func() {
+		if wl.server.wsHub == nil {
+			wl.server.wsHub = NewWebSocketHub()
+		}
+	})
 	wl.server.wsHub.Register(agentID, beacon)
 
 	// Start pumps
@@ -89,10 +91,10 @@ func (wl *WebSocketListener) agentReadPump(beacon *WebSocketBeacon) {
 		beacon.Conn.Close()
 	}()
 
-	beacon.Conn.SetReadLimit(512 * 1024)
-	beacon.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	beacon.Conn.SetReadLimit(WSMaxMessageSize)
+	beacon.Conn.SetReadDeadline(time.Now().Add(WSReadDeadline))
 	beacon.Conn.SetPongHandler(func(string) error {
-		beacon.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		beacon.Conn.SetReadDeadline(time.Now().Add(WSReadDeadline))
 		beacon.LastSeen = time.Now()
 		return nil
 	})
@@ -184,7 +186,7 @@ func (wl *WebSocketListener) BroadcastToOperators(msg []byte) {
 	defer wl.mu.Unlock()
 
 	for _, session := range wl.sessions {
-		session.Conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		session.Conn.SetWriteDeadline(time.Now().Add(OperatorWriteDeadline))
 		if err := session.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 			slog.Debug("Failed to send to operator", "user", session.UserID, "error", err)
 		}

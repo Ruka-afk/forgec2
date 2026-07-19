@@ -14,7 +14,6 @@ interface AppState {
   listeners: Listener[];
   stats: DashboardStats | null;
   statsError?: string;
-  loading: boolean;
 
   // Sidebar layout state
   sidebarCollapsed: boolean;
@@ -30,6 +29,8 @@ interface AppState {
   setOnlineUsers: (users: OnlineUser[]) => void;
   currentUsername: string;
   setCurrentUsername: (name: string) => void;
+  currentUserRole: string;
+  setCurrentUserRole: (role: string) => void;
 
   fetchListeners: () => Promise<void>;
   fetchStats: () => Promise<void>;
@@ -38,18 +39,24 @@ interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   listeners: [],
   stats: null,
-  loading: false,
   onlineUsers: [],
   currentUsername: "",
+  currentUserRole: "",
 
-  sidebarCollapsed: false,
+  sidebarCollapsed: typeof window !== "undefined"
+    ? localStorage.getItem("forgec2_sidebar_collapsed") === "true"
+    : false,
   isMobile: false,
   mobileMenuOpen: false,
 
   toggleSidebar: () => {
     const { isMobile, mobileMenuOpen, sidebarCollapsed } = get();
     if (isMobile) set({ mobileMenuOpen: !mobileMenuOpen });
-    else set({ sidebarCollapsed: !sidebarCollapsed });
+    else {
+      const next = !sidebarCollapsed;
+      localStorage.setItem("forgec2_sidebar_collapsed", String(next));
+      set({ sidebarCollapsed: next });
+    }
   },
 
   setMobileMenuOpen: (open: boolean) => set({ mobileMenuOpen: open }),
@@ -57,18 +64,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ isMobile: mobile, mobileMenuOpen: mobile ? false : get().mobileMenuOpen }),
 
   getSidebarWidth: () => {
-    const { isMobile, mobileMenuOpen, sidebarCollapsed } = get();
-    if (isMobile && !mobileMenuOpen) return 0;
-    return sidebarCollapsed ? 64 : 224;
+    const state = get();
+    if (state.isMobile && !state.mobileMenuOpen) return 0;
+    return state.sidebarCollapsed ? 64 : 224;
   },
 
   setOnlineUsers: (users) => set({ onlineUsers: users }),
   setCurrentUsername: (name) => set({ currentUsername: name }),
+  setCurrentUserRole: (role) => set({ currentUserRole: role }),
 
   fetchListeners: async () => {
     try {
-      const data = await api.get<{ listeners?: Listener[]; Listeners?: Listener[] }>("/listeners");
-      const listeners = data.listeners || data.Listeners || [];
+      const data = await api.get<{ data?: Listener[]; listeners?: Listener[]; Listeners?: Listener[] }>("/listeners");
+      const listeners = data.data || data.listeners || [];
       set({ listeners });
     } catch {
       set({ listeners: [] });
@@ -77,10 +85,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   fetchStats: async () => {
     try {
-      const stats = await api.get<DashboardStats>("/dashboard");
+      const stats = await api.get<DashboardStats>("/api/v1/dashboard");
       set({ stats, statsError: undefined });
     } catch (e) {
-      console.error("[store] fetchStats failed", e);
+      if (process.env.NODE_ENV === "development") console.error("[store] fetchStats failed", e);
       set({ statsError: e instanceof Error ? e.message : "Failed to load stats" });
     }
   },

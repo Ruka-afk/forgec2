@@ -3,8 +3,10 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"log/slog"
 	"net"
+	"runtime/debug"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -90,10 +92,11 @@ func (l *GRPCListener) Start() error {
 		return err
 	}
 
-	l.server = grpc.NewServer(grpc.MaxRecvMsgSize(10 * 1024 * 1024))
+	l.server = grpc.NewServer(grpc.MaxRecvMsgSize(GRPCMaxRecvMsgSize))
 	l.server.RegisterService(&grpcServiceDesc, l.beaconSrv)
 
 	go func() {
+		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
 		slog.Info("gRPC listener started", "addr", l.addr)
 		if err := l.server.Serve(lis); err != nil {
 			slog.Error("gRPC server error", "err", err)

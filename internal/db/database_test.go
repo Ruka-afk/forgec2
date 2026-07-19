@@ -37,6 +37,8 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&AlertRule{},
 		&Alert{},
 		&SystemMetric{},
+		&BloodHoundResult{},
+		&BloodHoundFile{},
 	)
 	if err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)
@@ -901,8 +903,8 @@ func TestRolePermissions(t *testing.T) {
 		if !RoleHasPermission(RoleUser, PermAgentsWrite) {
 			t.Error("user should have agents.write")
 		}
-		if !RoleHasPermission(RoleUser, PermAgentsDelete) {
-			t.Error("user should have agents.delete")
+		if RoleHasPermission(RoleUser, PermAgentsDelete) {
+			t.Error("user should NOT have agents.delete (admin only)")
 		}
 	})
 

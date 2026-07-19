@@ -1,0 +1,19 @@
+name: log-analyzer
+version: 1.0.0
+type: command
+description: Analyzes Windows Event Logs (Security, System, PowerShell) and Linux syslog for security events
+author: ForgeC2
+category: recon
+entry: analyze.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Specific agent to analyze
+    - name: max_events
+      type: int
+      required: false
+      default: "500"
+      description: Maximum events to analyze

@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"encoding/json"
@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/plugin"
@@ -42,18 +43,18 @@ func (s *Server) tryRegisterPluginFromDisk(name string) {
 func (s *Server) handlePluginExecuteInfo(c *gin.Context) {
 	p, err := s.resolvePluginRecord(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusNotFound, err.Error())
 		return
 	}
 	runtime, err := s.pluginManager.Get(p.Name)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusNotFound, err.Error())
 		return
 	}
 
 	manifest, ok := pluginManifest(runtime)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "plugin has no manifest"})
+		respondError(c, http.StatusInternalServerError, "plugin has no manifest")
 		return
 	}
 
@@ -77,7 +78,7 @@ func (s *Server) handlePluginExecuteInfo(c *gin.Context) {
 func (s *Server) handlePluginExecute(c *gin.Context) {
 	p, err := s.resolvePluginRecord(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusNotFound, err.Error())
 		return
 	}
 	var req struct {
@@ -85,13 +86,13 @@ func (s *Server) handlePluginExecute(c *gin.Context) {
 		Params  map[string]interface{} `json:"params"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "invalid request body"})
+		respondError(c, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	result, err := s.pluginManager.ExecuteCommand(c.Request.Context(), p.Name, req.AgentID, req.Params)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "result": result})
@@ -100,20 +101,20 @@ func (s *Server) handlePluginExecute(c *gin.Context) {
 func (s *Server) handlePluginReport(c *gin.Context) {
 	p, err := s.resolvePluginRecord(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusNotFound, err.Error())
 		return
 	}
 	var req struct {
 		Params map[string]interface{} `json:"params"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "invalid request body"})
+		respondError(c, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	report, err := s.pluginManager.GenerateReport(c.Request.Context(), p.Name, req.Params)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -129,37 +130,47 @@ func (s *Server) handlePluginReport(c *gin.Context) {
 func (s *Server) handlePluginInstall(c *gin.Context) {
 	manifestFile, err := c.FormFile("manifest")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "manifest file is required"})
+		respondError(c, http.StatusBadRequest, "manifest file is required")
 		return
 	}
 
 	mf, err := manifestFile.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to open manifest"})
+		respondError(c, http.StatusInternalServerError, "failed to open manifest")
 		return
 	}
 	defer mf.Close()
 
 	manifestData, err := io.ReadAll(mf)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to read manifest"})
+		respondError(c, http.StatusInternalServerError, "failed to read manifest")
 		return
 	}
 
 	var manifest plugin.Manifest
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "invalid manifest json: " + err.Error()})
+		respondError(c, http.StatusBadRequest, "invalid manifest json: "+err.Error())
+		return
+	}
+
+	// Sanitize plugin name and entry to prevent path traversal
+	if strings.ContainsAny(manifest.Name, `/\..`) || manifest.Name == "" {
+		respondError(c, http.StatusBadRequest, "invalid plugin name: must not contain path separators or dots")
+		return
+	}
+	if manifest.Entry != "" && strings.ContainsAny(manifest.Entry, `/\..`) {
+		respondError(c, http.StatusBadRequest, "invalid entry point: must not contain path separators or dots")
 		return
 	}
 
 	pluginDir := s.pluginManager.PluginDir(manifest.Name)
 	if err := os.MkdirAll(pluginDir, 0750); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to create plugin directory"})
+		respondError(c, http.StatusInternalServerError, "failed to create plugin directory")
 		return
 	}
 
 	if err := os.WriteFile(filepath.Join(pluginDir, "manifest.yaml"), manifestData, 0600); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to write manifest"})
+		respondError(c, http.StatusInternalServerError, "failed to write manifest")
 		return
 	}
 
@@ -167,23 +178,23 @@ func (s *Server) handlePluginInstall(c *gin.Context) {
 	if err == nil {
 		sf, err := scriptFile.Open()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to open script"})
+			respondError(c, http.StatusInternalServerError, "failed to open script")
 			return
 		}
 		defer sf.Close()
 		scriptData, err := io.ReadAll(sf)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to read script"})
+			respondError(c, http.StatusInternalServerError, "failed to read script")
 			return
 		}
 		if err := os.WriteFile(filepath.Join(pluginDir, manifest.Entry), scriptData, 0600); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to write script"})
+			respondError(c, http.StatusInternalServerError, "failed to write script")
 			return
 		}
 	}
 
 	if err := s.pluginManager.Register(&manifest); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -201,11 +212,11 @@ func (s *Server) handlePluginInstall(c *gin.Context) {
 func (s *Server) handlePluginEnable(c *gin.Context) {
 	p, err := s.resolvePluginRecord(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusNotFound, err.Error())
 		return
 	}
 	if err := s.pluginManager.SetEnabled(p.Name, true); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	if err := s.db.Model(p).Update("enabled", true).Error; err != nil {
@@ -218,11 +229,11 @@ func (s *Server) handlePluginEnable(c *gin.Context) {
 func (s *Server) handlePluginDisable(c *gin.Context) {
 	p, err := s.resolvePluginRecord(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusNotFound, err.Error())
 		return
 	}
 	if err := s.pluginManager.SetEnabled(p.Name, false); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	if err := s.db.Model(p).Update("enabled", false).Error; err != nil {

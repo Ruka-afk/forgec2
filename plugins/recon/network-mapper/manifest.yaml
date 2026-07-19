@@ -1,0 +1,12 @@
+name: network-mapper
+version: 1.0.0
+type: command
+description: Map network topology from agent connections, scan results, and discovered hosts
+author: ForgeC2
+category: recon
+entry: map.py
+interpreter: python
+timeout: 30
+params: []
+config:
+    max_display_hosts: "50"

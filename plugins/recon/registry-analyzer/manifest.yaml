@@ -1,0 +1,14 @@
+name: registry-analyzer
+version: 1.0.0
+type: command
+description: Analyzes Windows registry auto-start entries, persistence locations, and configuration
+author: ""
+category: recon
+entry: analyze.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Specific agent to scan

@@ -1,16 +1,20 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { API_BASE } from "@/lib/constants";
+import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
+import { EmptyState, PageHeader, PageSpinner, Spinner } from "@/components/UI";
+import { Card } from "@/components/ui/card";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { BookOpen, Code, Eraser, History, Layers, Play, Save, Terminal, Trash2, X } from "lucide-react";
 
-interface Agent {
-  id?: string;
-  ID?: string;
-  hostname?: string;
-  Hostname?: string;
-  ip?: string;
-  IP?: string;
-}
+import type { Agent } from "@/types/agent";
 
 interface SavedScript {
   id?: string;
@@ -43,6 +47,7 @@ const defaultTemplates: ScriptTemplate[] = [
 ];
 
 export default function ScriptingPage() {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [savedScripts, setSavedScripts] = useState<SavedScript[]>([]);
@@ -52,50 +57,39 @@ export default function ScriptingPage() {
   const [scriptCode, setScriptCode] = useState("-- Lua Script Example\nforgec2.log('Starting batch operation')\n\nlocal agents = forgec2.get_agents()\nforgec2.log('Agents: ' .. tostring(#agents))\n\nforgec2.set_output('Script execution complete')");
   const [scriptOutput, setScriptOutput] = useState("Waiting for execution...");
   const [running, setRunning] = useState(false);
-  const [activeTab, setActiveTab] = useState<"editor" | "history">("editor");
   const [showTemplates, setShowTemplates] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
-      const agentRes = await fetch(`${API_BASE}?p=/agents&format=json`);
-      if (!agentRes.ok) throw new Error(`HTTP ${agentRes.status}`);
-      const agentData = await agentRes.json();
-      setAgents(agentData.Agents || agentData.agents || []);
+      const agentData = await api.get("/agents");
+      setAgents((agentData.agents || []) as Agent[]);
     } catch { setAgents([]); }
     try {
-      const scriptRes = await fetch(`${API_BASE}?p=/api/scripts&format=json`);
-      if (!scriptRes.ok) throw new Error(`HTTP ${scriptRes.status}`);
-      const scriptData = await scriptRes.json();
-      setSavedScripts(scriptData.scripts || []);
+      const scriptData = await api.get("/api/scripts");
+      setSavedScripts((scriptData.scripts || []) as SavedScript[]);
     } catch { setSavedScripts([]); }
     try {
-      const historyRes = await fetch(`${API_BASE}?p=/api/scripts/history&format=json`);
-      if (!historyRes.ok) throw new Error(`HTTP ${historyRes.status}`);
-      const historyData = await historyRes.json();
-      setRunHistory(historyData.history || []);
+      const historyData = await api.get("/api/scripts/history");
+      setRunHistory((historyData.history || []) as RunHistory[]);
     } catch { setRunHistory([]); }
     setLoading(false);
   }, []);
 
-  useEffect(() => { Promise.resolve().then(() => loadData()); }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const handleSaveScript = async () => {
     if (!scriptName.trim() || !scriptCode.trim()) return;
     try {
-      await fetch(`${API_BASE}?p=/api/scripts&format=json`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: scriptName, code: scriptCode }),
-      });
+      await api.postJson("/api/scripts", { name: scriptName, code: scriptCode });
       loadData();
-    } catch (e) { console.error("Scripting: save script failed", e); }
+    } catch { toast.error("Failed to save script"); }
   };
 
   const handleDeleteScript = async (scriptId: string) => {
     try {
-      await fetch(`${API_BASE}?p=/api/scripts/${scriptId}&format=json`, { method: "DELETE" });
+      await api.del(`/api/scripts/${scriptId}`);
       loadData();
-    } catch (e) { console.error("Scripting: delete script failed", e); }
+    } catch { toast.error("Failed to delete script"); }
   };
 
   const handleLoadScript = (script: SavedScript) => {
@@ -108,14 +102,8 @@ export default function ScriptingPage() {
     setRunning(true);
     setScriptOutput("Executing script...");
     try {
-      const res = await fetch(`${API_BASE}?p=/api/scripts/execute&format=json`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent_id: selectedAgent, code: scriptCode, name: scriptName }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setScriptOutput(data.output || data.result || data.error || "Script executed with no output");
+      const data = await api.postJson("/api/scripts/execute", { agent_id: selectedAgent, code: scriptCode, name: scriptName });
+      setScriptOutput((data.output || data.result || data.error || "Script executed with no output") as string);
       loadData();
     } catch {
       setScriptOutput("Error: Failed to execute script");
@@ -142,205 +130,197 @@ export default function ScriptingPage() {
   ];
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <i className="fa-solid fa-circle-notch fa-spin text-3xl text-indigo-500"></i>
-      </div>
-    );
+    return <PageSpinner />;
   }
 
   return (
-    <div className="max-w-7xl mx-auto mb-20 md:mb-0">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Script Console</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1">Lua script automation &middot; Batch operations &middot; Custom workflows</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowTemplates(!showTemplates)}
-            className="px-4 h-10 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
-            <i className="fa-solid fa-book"></i>
-            Templates
-          </button>
-        </div>
-      </div>
+    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title={t("scripting.title")} subtitle={t("scripting.subtitle")}>
+        <Button onClick={() => setShowTemplates(!showTemplates)}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground">
+          <BookOpen className="w-4 h-4" />
+          <span className="hidden sm:inline">{t("scripting.templates")}</span>
+        </Button>
+      </PageHeader>
 
       {showTemplates && (
-        <div className="mb-6 ui-card p-5 shadow-sm">
+        <Card className="mb-6 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <i className="fa-solid fa-layer-group text-purple-600 dark:text-purple-400"></i>
-              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Script Library</span>
+              <Layers className="w-4 h-4" />
+              <span className="text-sm font-semibold text-foreground">{t("scripting.script_library")}</span>
             </div>
-            <button onClick={() => setShowTemplates(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-              <i className="fa-solid fa-xmark"></i>
-            </button>
+            <Button variant="ghost" size="sm" onClick={() => setShowTemplates(false)} className="text-muted-foreground hover:text-foreground">
+              <X className="w-4 h-4" />
+            </Button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {defaultTemplates.map((t) => (
-              <button key={t.name} onClick={() => handleApplyTemplate(t)}
-                className="text-left p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-[var(--border)] hover:border-purple-400 dark:hover:border-purple-500 transition-colors">
-                <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{t.name}</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t.description}</div>
-              </button>
+              <Button key={t.name} variant="outline" onClick={() => handleApplyTemplate(t)}
+                className="text-left p-4 h-auto bg-muted hover:border-purple-400 dark:hover:border-purple-500 transition-colors">
+                <div className="text-sm font-medium text-foreground">{t.name}</div>
+                <div className="text-xs text-muted-foreground mt-1">{t.description}</div>
+              </Button>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       <div className="space-y-4">
-        <div className="flex gap-1 ui-card p-1.5">
-          <button onClick={() => setActiveTab("editor")}
-            className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors ${activeTab === "editor" ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}>
-            <i className="fa-solid fa-code mr-1.5"></i>Editor
-          </button>
-          <button onClick={() => setActiveTab("history")}
-            className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors ${activeTab === "history" ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}>
-            <i className="fa-solid fa-clock-rotate-left mr-1.5"></i>Run History ({runHistory.length})
-          </button>
-        </div>
+        <Tabs defaultValue="editor">
+        <TabsList className="mb-4">
+          <TabsTrigger value="editor" className="gap-1.5">
+            <Code className="w-4 h-4" />{t("scripting.editor")}
+          </TabsTrigger>
+          <TabsTrigger value="history" className="gap-1.5">
+            <History className="w-4 h-4" />{t("scripting.run_history", { count: String(runHistory.length) })}
+          </TabsTrigger>
+        </TabsList>
 
-        {activeTab === "editor" && (
+        <TabsContent value="editor">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div className="lg:col-span-1 space-y-4">
-              <div className="ui-card overflow-hidden">
-                <div className="p-4 border-b border-[var(--border)]">
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Target Agent</div>
+              <Card className="overflow-hidden">
+                <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
+                  <div className="text-sm font-semibold text-foreground">{t("scripting.target_agent")}</div>
                 </div>
                 <div className="p-4">
-                  <select value={selectedAgent} onChange={e => setSelectedAgent(e.target.value)}
-                    className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 dark:text-slate-100">
-                    <option value="">-- Select Agent --</option>
-                    {agents.map(a => {
-                      const aid = a.ID || a.id || "";
-                      const host = a.Hostname || a.hostname || "";
-                      const ip = a.IP || a.ip || "";
-                      return <option key={aid} value={aid}>{host} ({ip})</option>;
-                    })}
-                  </select>
+                  <Label htmlFor="agent-select" className="sr-only">{t("scripting.select_agent")}</Label>
+                  <Select value={selectedAgent} onValueChange={v => setSelectedAgent(v ?? "")}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder={t("scripting.select_agent_placeholder")} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">{t("scripting.select_agent_placeholder")}</SelectItem>
+                      {agents.map(a => {
+                        const aid = a.id || "";
+                        const host = a.hostname || "";
+                        const ip = a.ip || "";
+                        return <SelectItem key={aid} value={aid}>{host} ({ip})</SelectItem>;
+                      })}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </div>
+              </Card>
 
-              <div className="ui-card overflow-hidden">
-                <div className="p-4 border-b border-[var(--border)]">
-                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Saved Scripts</span>
+              <Card className="overflow-hidden">
+                <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
+                  <span className="text-sm font-semibold text-foreground">{t("scripting.saved_scripts")}</span>
                 </div>
                 <div className="max-h-60 overflow-y-auto">
                   {savedScripts.length === 0 ? (
-                    <div className="p-4 text-center text-slate-400 text-sm">No scripts saved</div>
+                    <div className="p-4 text-center text-muted-foreground text-sm">{t("scripting.no_scripts")}</div>
                   ) : (
                     savedScripts.map((s) => (
-                      <div key={s.id} className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                        <button onClick={() => handleLoadScript(s)} className="text-sm text-[var(--text-secondary)] hover:text-indigo-600 dark:hover:text-indigo-400 truncate text-left flex-1">
-                          {s.name || "Untitled"}
-                        </button>
-                        <button onClick={() => s.id && handleDeleteScript(s.id)} className="text-slate-400 hover:text-red-500 ml-2">
-                          <i className="fa-solid fa-trash text-xs"></i>
-                        </button>
+                      <div key={s.id} className="flex items-center justify-between px-4 py-2.5 border-b border-border hover:bg-muted transition-colors">
+                        <Button variant="ghost" size="sm" onClick={() => handleLoadScript(s)} className="text-sm text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400 truncate text-left flex-1 justify-start">
+                          {s.name || t("scripting.untitled")}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => s.id && handleDeleteScript(s.id)} className="text-muted-foreground hover:text-destructive ml-2">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     ))
                   )}
                 </div>
-              </div>
+              </Card>
 
-              <div className="ui-card overflow-hidden">
-                <div className="p-4 border-b border-[var(--border)]">
-                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">API Reference</span>
+              <Card className="overflow-hidden">
+                <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
+                  <span className="text-sm font-semibold text-foreground">{t("scripting.api_reference")}</span>
                 </div>
                 <div className="p-3 text-xs font-mono text-blue-600 dark:text-blue-400 space-y-1">
                   {apiRefs.map((ref) => (
                     <div key={ref} className="py-0.5">{ref}</div>
                   ))}
                 </div>
-              </div>
+              </Card>
             </div>
 
             <div className="lg:col-span-3">
-              <div className="ui-card overflow-hidden">
-                <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
+              <Card className="overflow-hidden">
+                <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <input type="text" placeholder="Script name..." value={scriptName} onChange={e => setScriptName(e.target.value)}
-                      className="bg-transparent border-none text-sm font-semibold text-slate-900 dark:text-slate-100 focus:outline-none w-48" />
+                    <Input id="script-name" placeholder={t("scripting.script_name_ph")} value={scriptName} onChange={e => setScriptName(e.target.value)}
+                      className="bg-transparent border-none text-sm font-semibold focus:outline-none w-48 h-auto p-0" />
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={handleSaveScript} disabled={!scriptName.trim()}
-                      className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-[var(--text-secondary)] rounded-lg text-xs font-medium transition-colors">
-                      <i className="fa-solid fa-floppy-disk mr-1"></i>Save
-                    </button>
-                    <button onClick={handleRunScript} disabled={running || !selectedAgent || !scriptCode.trim()}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-xs font-medium transition-colors">
-                      <i className={`fa-solid ${running ? "fa-circle-notch fa-spin" : "fa-play"} mr-1`}></i>
-                      {running ? "Running..." : "Run"}
-                    </button>
+                    <Button variant="outline" size="sm" onClick={handleSaveScript} disabled={!scriptName.trim()}>
+                      <Save className="w-4 h-4" />{t("scripting.save")}
+                    </Button>
+                    <Button size="sm" onClick={handleRunScript} disabled={running || !selectedAgent || !scriptCode.trim()}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                      {running ? <Spinner size="xs" className="mr-1" /> : <Play className="w-4 h-4" />}
+                      {running ? t("scripting.running") : t("scripting.run")}
+                    </Button>
                   </div>
                 </div>
                 <div className="flex">
-                  <div className="bg-slate-800 dark:bg-slate-900 text-slate-500 text-xs font-mono py-4 px-2 text-right select-none min-w-[3rem] overflow-hidden">
+                  <div className="bg-muted text-muted-foreground text-xs font-mono py-4 px-2 text-right select-none min-w-[3rem] overflow-hidden">
                     {Array.from({ length: lineNumbers }, (_, i) => (
                       <div key={i + 1} className="leading-5 h-5">{i + 1}</div>
                     ))}
                   </div>
-                  <textarea
+                  <Textarea
                     value={scriptCode}
                     onChange={e => setScriptCode(e.target.value)}
-                    className="flex-1 h-72 p-4 font-mono text-sm bg-slate-900 text-emerald-300 resize-none focus:outline-none leading-5"
-                    placeholder="Enter Lua script..."
+                    className="flex-1 h-72 p-4 font-mono text-sm bg-background text-emerald-300 resize-none focus:outline-none leading-5 border-none rounded-none"
+                    placeholder={t("scripting.code_ph")}
                     spellCheck={false}
                   />
                 </div>
-                <div className="border-t border-[var(--border)]">
-                  <div className="p-3 px-4 text-xs font-semibold text-slate-500 flex items-center justify-between">
+                <div className="border-t border-border">
+                  <div className="p-3 px-4 text-xs font-semibold text-muted-foreground flex items-center justify-between">
                     <span>
-                      <i className="fa-solid fa-terminal mr-1"></i>Output
+                      <Terminal className="w-4 h-4" />{t("scripting.output")}
                     </span>
-                    <button onClick={() => setScriptOutput("Waiting for execution...")} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                      <i className="fa-solid fa-eraser mr-1"></i>Clear
-                    </button>
+                    <Button variant="ghost" size="sm" onClick={() => setScriptOutput("Waiting for execution...")} className="text-xs text-muted-foreground hover:text-foreground h-auto p-0">
+                      <Eraser className="w-4 h-4" />{t("scripting.clear")}
+                    </Button>
                   </div>
-                  <pre className="p-4 text-xs font-mono text-emerald-300 bg-slate-900 m-2 rounded-lg max-h-48 overflow-y-auto whitespace-pre-wrap border border-slate-700">
+                  <pre className="p-4 text-xs font-mono text-emerald-300 bg-background m-2 rounded-lg max-h-48 overflow-y-auto whitespace-pre-wrap border border-border">
                     {scriptOutput}
                   </pre>
                 </div>
-              </div>
+              </Card>
             </div>
           </div>
-        )}
+        </TabsContent>
 
-        {activeTab === "history" && (
-          <div className="ui-card overflow-hidden">
+        <TabsContent value="history">
+          <Card className="overflow-hidden">
             {runHistory.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 dark:text-slate-500">
-                <i className="fa-solid fa-clock-rotate-left text-3xl mb-3 text-slate-300 dark:text-slate-600"></i>
-                <p>No run history yet</p>
+              <div className="text-center py-16 sm:py-20">
+                <EmptyState icon={History} title={t("scripting.no_history")} />
               </div>
             ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-700">
+              <div className="divide-y divide-border">
                 {runHistory.map((run, i) => (
                   <div key={run.id || i} className="p-4">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{run.script_name || "Unknown"}</span>
-                        <span className="text-xs text-slate-500">{run.agent_hostname || "Unknown"}</span>
+                        <span className="text-sm font-medium text-foreground">{run.script_name || "Unknown"}</span>
+                        <span className="text-xs text-muted-foreground">{run.agent_hostname || "Unknown"}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`text-[10px] px-2 py-0.5 rounded-full ${
                           (run.status || "") === "success"
                             ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                            : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                            : "bg-destructive/10 text-destructive"
                         }`}>{run.status || "completed"}</span>
-                        <span className="text-xs text-slate-500">{run.created_at || ""}</span>
+                        <span className="text-xs text-muted-foreground">{run.created_at || ""}</span>
                       </div>
                     </div>
                     {run.output && (
-                      <pre className="text-xs font-mono text-slate-300 bg-slate-900 rounded-lg p-3 mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap">{run.output}</pre>
+                      <pre className="text-xs font-mono text-muted-foreground bg-background rounded-lg p-3 mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap">{run.output}</pre>
                     )}
                   </div>
                 ))}
               </div>
             )}
-          </div>
-        )}
+          </Card>
+        </TabsContent>
+      </Tabs>
       </div>
     </div>
   );
 }
+

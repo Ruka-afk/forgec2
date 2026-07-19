@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"net/http"
@@ -8,12 +8,15 @@ import (
 
 // handleGetProcesses returns process list for tree visualization
 func (s *Server) handleGetProcesses(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	agentID := c.Param("id")
 
 	// Request process list from agent
 	task, err := s.createTask(agentID, "ps", "", "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create ps task"})
+		respondError(c, http.StatusInternalServerError, "failed to create ps task")
 		return
 	}
 
@@ -40,7 +43,7 @@ func (s *Server) handleGetProcessTree(c *gin.Context) {
 		Scan(&task).Error
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No process list available. Run 'ps' command first."})
+		respondError(c, http.StatusNotFound, "No process list available. Run 'ps' command first.")
 		return
 	}
 

@@ -1,10 +1,12 @@
-package server
+﻿package server
 
 import (
 	"fmt"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,13 +30,13 @@ func (s *Server) handleRPortFwdRelayStart(c *gin.Context) {
 	}
 	forwardTarget := c.PostForm("target")
 	if forwardTarget == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "target host:port required"})
+		respondError(c, http.StatusBadRequest, "target host:port required")
 		return
 	}
 
 	lport, err := strconv.Atoi(localPortStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid port"})
+		respondError(c, http.StatusBadRequest, "invalid port")
 		return
 	}
 
@@ -47,7 +49,7 @@ func (s *Server) handleRPortFwdRelayStart(c *gin.Context) {
 
 	key := fmt.Sprintf("%s:%d", id, lport)
 	if _, exists := s.rportfwdListeners[key]; exists {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "rportfwd already active for this agent:port"})
+		respondError(c, http.StatusBadRequest, "rportfwd already active for this agent:port")
 		return
 	}
 
@@ -132,7 +134,7 @@ func (s *Server) handleRPortFwdRelayStop(c *gin.Context) {
 	s.rportfwdMu.Unlock()
 
 	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no active rportfwd for this agent:port"})
+		respondError(c, http.StatusNotFound, "no active rportfwd for this agent:port")
 		return
 	}
 	relay.stop()
@@ -180,6 +182,7 @@ func (r *rportfwdRelay) start() {
 		connMap: make(map[uint64]net.Conn),
 	}
 	go func() {
+		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
 		<-r.stopCh
 		ln.Close()
 	}()

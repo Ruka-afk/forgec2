@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white dark:bg-slate-900">
-      <div className="text-center space-y-4">
-        <div className="text-6xl font-bold text-slate-200 dark:text-slate-700">404</div>
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Page not found</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">The page you&apos;re looking for doesn&apos;t exist.</p>
-        <Link href="/dashboard" className="inline-block px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-xl transition-colors">
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="text-center space-y-4 animate-fade-slide-up">
+        <div className="text-7xl font-bold bg-gradient-to-br from-muted-foreground/30 to-muted-foreground/60 bg-clip-text text-transparent select-none">404</div>
+        <h1 className="text-xl font-bold text-foreground">Page not found</h1>
+        <p className="text-sm text-muted-foreground">The page you&apos;re looking for doesn&apos;t exist.</p>
+        <Link href="/dashboard" className={buttonVariants()}>
           Back to Dashboard
         </Link>
       </div>

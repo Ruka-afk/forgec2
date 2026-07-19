@@ -31,27 +31,30 @@ func (s *Server) handleBOFPage(c *gin.Context) {
 }
 
 func (s *Server) handleBOFUpload(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "BOF file (.o) required"})
+		respondError(c, http.StatusBadRequest, "BOF file (.o) required")
 		return
 	}
 
 	if file.Size > MaxUploadSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("BOF too large: %d bytes (max %d)", file.Size, MaxUploadSize)})
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("BOF too large: %d bytes (max %d)", file.Size, MaxUploadSize))
 		return
 	}
 
 	f, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read BOF file"})
+		respondError(c, http.StatusInternalServerError, "failed to read BOF file")
 		return
 	}
 	defer f.Close()
 
 	data, err := io.ReadAll(f)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read BOF data"})
+		respondError(c, http.StatusInternalServerError, "failed to read BOF data")
 		return
 	}
 
@@ -66,7 +69,7 @@ func (s *Server) handleBOFUpload(c *gin.Context) {
 	}
 
 	if err := s.db.Create(&bof).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save BOF: " + err.Error()})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "BOF operation"))
 		return
 	}
 
@@ -94,15 +97,21 @@ func (s *Server) handleBOFList(c *gin.Context) {
 }
 
 func (s *Server) handleBOFDelete(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	bofID := c.Param("id")
 
 	var bof db.BOFFile
 	if err := s.db.First(&bof, bofID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "BOF not found"})
+		respondError(c, http.StatusNotFound, "BOF not found")
 		return
 	}
 
-	s.db.Delete(&bof)
+	if err := s.db.Delete(&bof).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to delete BOF")
+		return
+	}
 	slog.Info("BOF deleted", "name", bof.Name, "id", bofID)
 	s.LogAuditRecord(c, "bof_delete", "bof", "", fmt.Sprintf("Deleted BOF: %s", bof.Name), true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -113,7 +122,7 @@ func (s *Server) handleBOFDownload(c *gin.Context) {
 
 	var bof db.BOFFile
 	if err := s.db.First(&bof, bofID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "BOF not found"})
+		respondError(c, http.StatusNotFound, "BOF not found")
 		return
 	}
 
@@ -122,18 +131,21 @@ func (s *Server) handleBOFDownload(c *gin.Context) {
 }
 
 func (s *Server) handleBOFRun(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	bofID := c.Param("id")
 	agentID := c.PostForm("agent_id")
 	args := c.PostForm("args")
 
 	if agentID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "agent_id required"})
+		respondError(c, http.StatusBadRequest, "agent_id required")
 		return
 	}
 
 	var bof db.BOFFile
 	if err := s.db.First(&bof, bofID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "BOF not found"})
+		respondError(c, http.StatusNotFound, "BOF not found")
 		return
 	}
 
@@ -145,7 +157,7 @@ func (s *Server) handleBOFRun(c *gin.Context) {
 
 	task, err := s.createTask(agentID, "bof", args, "", "", b64Data, 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -155,6 +167,9 @@ func (s *Server) handleBOFRun(c *gin.Context) {
 }
 
 func (s *Server) handleBOFQuickRun(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -162,22 +177,22 @@ func (s *Server) handleBOFQuickRun(c *gin.Context) {
 
 	file, err := c.FormFile("bof")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "bof file (.o) required"})
+		respondError(c, http.StatusBadRequest, "bof file (.o) required")
 		return
 	}
 	if file.Size > MaxUploadSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("BOF too large: %d bytes (max %d)", file.Size, MaxUploadSize)})
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("BOF too large: %d bytes (max %d)", file.Size, MaxUploadSize))
 		return
 	}
 	f, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read BOF file"})
+		respondError(c, http.StatusInternalServerError, "failed to read BOF file")
 		return
 	}
 	defer f.Close()
 	data, err := io.ReadAll(f)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read BOF data"})
+		respondError(c, http.StatusInternalServerError, "failed to read BOF data")
 		return
 	}
 	args := c.PostForm("args")
@@ -185,7 +200,7 @@ func (s *Server) handleBOFQuickRun(c *gin.Context) {
 
 	task, err := s.createTask(id, "bof", args, "", "", b64Data, 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("BOF quick execute", "agent", id, "file", file.Filename, "size", len(data), "args", args)
@@ -196,7 +211,7 @@ func (s *Server) handleBOFQuickRun(c *gin.Context) {
 func (s *Server) handleBOFRecentResults(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "20")
 	var limit int
-	if _, err := fmt.Sscanf(limitStr, "%d", &limit); err != nil || limit < 1 || limit > 100 {
+	if _, err := fmt.Sscanf(limitStr, "%d", &limit); err != nil || limit < 1 || limit > MaxBOFResultLimit {
 		limit = 20
 	}
 
@@ -230,11 +245,14 @@ func (s *Server) handleBOFRecentResults(c *gin.Context) {
 }
 
 func (s *Server) handleBOFEdit(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	bofID := c.Param("id")
 
 	var bof db.BOFFile
 	if err := s.db.First(&bof, bofID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "BOF not found"})
+		respondError(c, http.StatusNotFound, "BOF not found")
 		return
 	}
 
@@ -247,7 +265,7 @@ func (s *Server) handleBOFEdit(c *gin.Context) {
 	}
 
 	if err := s.db.Save(&bof).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update BOF"})
+		respondError(c, http.StatusInternalServerError, "failed to update BOF")
 		return
 	}
 

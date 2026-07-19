@@ -1,9 +1,27 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
-import { apiGet, apiSend, apiDelete } from "@/lib/api";
-import { API_BASE } from "@/lib/constants";
-import { ConfirmModal } from "@/components/UI";
+import { useEffect, useState, useCallback } from "react";
+import { api, getCsrfToken } from "@/lib/api";
+import { downloadFromResponse } from "@/lib/download";
+import { useI18n } from "@/lib/i18n";
+import { ConfirmModal, EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { toast } from "sonner";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Anchor, ArrowUp, Bug, CheckCircle, Clock, CloudUpload, Download, FileDown, Info, Key, LayoutGrid, Layers, Link, List, Play, Plus, Puzzle, Search, Star, Terminal, Trash2 } from "lucide-react";
 
 interface Plugin {
   ID?: string;
@@ -50,22 +68,17 @@ interface Review {
   created_at?: string;
 }
 
-interface ToastNotification {
-  msg: string;
-  type: "success" | "error" | "info";
-}
-
-
 const CATEGORIES = [
-  { key: "", label: "All", icon: "fa-layer-group", color: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300" },
-  { key: "post-exploitation", label: "Post-Exploitation", icon: "fa-terminal", color: "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" },
-  { key: "reconnaissance", label: "Reconnaissance", icon: "fa-search", color: "bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400" },
-  { key: "exploitation", label: "Exploitation", icon: "fa-bug", color: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400" },
-  { key: "credential", label: "Credential", icon: "fa-key", color: "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400" },
-  { key: "persistence", label: "Persistence", icon: "fa-anchor", color: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" },
+  { key: "", label: "All", icon: <Layers className="w-4 h-4" />, color: "bg-secondary text-muted-foreground" },
+  { key: "post-exploitation", label: "Post-Exploitation", icon: <Terminal className="w-4 h-4" />, color: "bg-destructive/10 text-destructive" },
+  { key: "reconnaissance", label: "Reconnaissance", icon: <Search className="w-4 h-4" />, color: "bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400" },
+  { key: "exploitation", label: "Exploitation", icon: <Bug className="w-4 h-4" />, color: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400" },
+  { key: "credential", label: "Credential", icon: <Key className="w-4 h-4" />, color: "bg-primary/10 text-primary" },
+  { key: "persistence", label: "Persistence", icon: <Anchor className="w-4 h-4" />, color: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" },
 ];
 
 export default function PluginsPage() {
+  const { t } = useI18n();
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -81,42 +94,33 @@ export default function PluginsPage() {
   const [showReviews, setShowReviews] = useState(false);
   const [reviewsPlugin, setReviewsPlugin] = useState<Plugin | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [toasts, setToasts] = useState<ToastNotification[]>([]);
   const [createForm, setCreateForm] = useState({ name: "", description: "", author: "", category: "", version: "1.0.0" });
   const [importFile, setImportFile] = useState<File | null>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
-
-  const showToast = useCallback((msg: string, type: "success" | "error" | "info" = "info") => {
-    const id = Date.now().toString();
-    setToasts((prev) => [...prev, { msg, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.msg !== msg || t.type !== type));
-    }, 3000);
-  }, []);
 
   const loadPlugins = useCallback(async () => {
     setLoading(true);
     try {
-      const apiData = await apiGet<{ plugins?: Plugin[]; Plugins?: Plugin[] } | Plugin[]>("/api/plugins");
+      const apiData = await api.get<{ plugins?: Plugin[]; Plugins?: Plugin[] } | Plugin[]>("/api/plugins");
       const data = apiData as { plugins?: Plugin[]; Plugins?: Plugin[] };
-      setPlugins(data.plugins || data.Plugins || (Array.isArray(apiData) ? apiData : []));
+      setPlugins(data.plugins || (Array.isArray(apiData) ? apiData : []));
     } catch {
       setPlugins([]);
+      toast.error("Failed to load plugins");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { Promise.resolve().then(() => loadPlugins()); }, [loadPlugins]);
+  useEffect(() => { loadPlugins(); }, [loadPlugins]);
 
   const filtered = plugins.filter((p) => {
-    const name = (p.Name || p.name || "").toLowerCase();
-    const desc = (p.Description || p.description || "").toLowerCase();
-    const author = (p.Author || p.author || "").toLowerCase();
+    const name = (p.name || "").toLowerCase();
+    const desc = (p.description || "").toLowerCase();
+    const author = (p.author || "").toLowerCase();
     const term = search.toLowerCase();
     const matchSearch = name.includes(term) || desc.includes(term) || author.includes(term);
-    const matchCategory = !category || (p.Category || p.category || "") === category;
+    const matchCategory = !category || (p.category || "") === category;
     return matchSearch && matchCategory;
   });
 
@@ -131,21 +135,20 @@ export default function PluginsPage() {
   const handleInstall = async (pluginId: string) => {
     setAction(pluginId, "installing");
     try {
-      const body = new URLSearchParams({ id: pluginId });
-      await apiSend(`/api/plugins/install`, "POST", body);
-      showToast("Plugin installed successfully", "success");
+      await api.post(`/api/plugins/${pluginId}/install`, {});
+      toast.success("Plugin installed successfully");
       loadPlugins();
-    } catch { showToast("Failed to install plugin", "error"); }
+    } catch { toast.error("Failed to install plugin"); }
     finally { setAction(pluginId, null); }
   };
 
   const handleUninstall = async (pluginId: string) => {
     setAction(pluginId, "uninstalling");
     try {
-      await apiSend(`/api/plugins/${pluginId}/toggle`, "POST", new URLSearchParams({ enabled: "false" }));
-      showToast("Plugin uninstalled", "success");
+      await api.post(`/api/plugins/${pluginId}/toggle`, { enabled: "false" });
+      toast.success("Plugin uninstalled");
       loadPlugins();
-    } catch { showToast("Failed to uninstall plugin", "error"); }
+    } catch { toast.error("Failed to uninstall plugin"); }
     finally { setAction(pluginId, null); }
   };
 
@@ -153,10 +156,10 @@ export default function PluginsPage() {
     setCfm({msg: "Delete this plugin permanently? This cannot be undone.", cb: async () => {
       setAction(pluginId, "deleting");
       try {
-        await apiDelete(`/api/plugins/${pluginId}`);
-        showToast("Plugin deleted", "success");
+        await api.del(`/api/plugins/${pluginId}`);
+        toast.success("Plugin deleted");
         loadPlugins();
-      } catch { showToast("Failed to delete plugin", "error"); }
+      } catch { toast.error("Failed to delete plugin"); }
       finally { setAction(pluginId, null); }
     }});
   };
@@ -164,54 +167,48 @@ export default function PluginsPage() {
   const handleToggle = async (pluginId: string, enabled: boolean) => {
     setAction(pluginId, "toggling");
     try {
-      await apiSend(`/api/plugins/${pluginId}/toggle`, "POST", new URLSearchParams({ enabled: String(enabled) }));
-      showToast(enabled ? "Plugin enabled" : "Plugin disabled", "success");
+      await api.post(`/api/plugins/${pluginId}/toggle`, { enabled: String(enabled) });
+      toast.success(enabled ? "Plugin enabled" : "Plugin disabled");
       loadPlugins();
-    } catch { showToast("Failed to toggle plugin", "error"); }
+    } catch { toast.error("Failed to toggle plugin"); }
     finally { setAction(pluginId, null); }
   };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const body = new URLSearchParams();
-      Object.entries(createForm).forEach(([k, v]) => { if (v) body.append(k, v); });
-      await apiSend("/api/plugins", "POST", body);
-      showToast("Plugin created", "success");
+      const body: Record<string, string> = {};
+      Object.entries(createForm).forEach(([k, v]) => { if (v) body[k] = v; });
+      await api.post("/api/plugins", body);
+      toast.success("Plugin created");
       setShowCreate(false);
       setCreateForm({ name: "", description: "", author: "", category: "", version: "1.0.0" });
       loadPlugins();
-    } catch { showToast("Failed to create plugin", "error"); }
+    } catch { toast.error("Failed to create plugin"); }
   };
+
+  const [executeLoading, setExecuteLoading] = useState(false);
 
   const handleExecute = async (pluginId: string) => {
     setExecuteResult(null);
     setExecuteLoading(true);
     try {
-      const result = await apiSend(`/api/plugins/${pluginId}/execute`, "POST");
+      const result = await api.post(`/api/plugins/${pluginId}/execute`);
       setExecuteResult(JSON.stringify(result, null, 2));
-      showToast("Plugin executed", "success");
+      toast.success("Plugin executed");
     } catch {
       setExecuteResult("Execution failed");
-      showToast("Failed to execute plugin", "error");
+      toast.error("Failed to execute plugin");
     }
   };
 
-  const [executeLoading, setExecuteLoading] = useState(false);
-
   const handleExport = async (pluginId: string) => {
     try {
-      const result = await fetch(`${API_BASE}?p=/api/plugins/${pluginId}/export&format=json`);
-      if (!result.ok) throw new Error(`HTTP ${result.status}`);
-      const blob = await result.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `plugin_${pluginId}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast("Plugin exported", "success");
-    } catch { showToast("Failed to export plugin", "error"); }
+      const res = await fetch(`/api/go/api/plugins/${pluginId}/export`, { credentials: "include", headers: { "Accept": "application/octet-stream", "X-CSRF-Token": getCsrfToken() } });
+      if (!res.ok) throw new Error("Export failed");
+      await downloadFromResponse(res, `plugin_${pluginId}.json`);
+      toast.success("Plugin exported");
+    } catch { toast.error("Failed to export plugin"); }
   };
 
   const handleImport = async () => {
@@ -219,136 +216,112 @@ export default function PluginsPage() {
     try {
       const formData = new FormData();
       formData.append("file", importFile);
-      await fetch(`${API_BASE}?p=/api/plugins/import&format=json`, {
-        method: "POST",
-        body: formData,
-      });
-      showToast("Plugin imported", "success");
+      await api.postFormData("/api/plugins/import?format=json", formData);
+      toast.success("Plugin imported");
       setShowImport(false);
       setImportFile(null);
       loadPlugins();
-    } catch { showToast("Failed to import plugin", "error"); }
+    } catch { toast.error("Failed to import plugin"); }
   };
 
   const handleUpdate = async (pluginId: string) => {
     setAction(pluginId, "updating");
     try {
-      await apiSend(`/api/plugins/${pluginId}/update`, "POST");
-      showToast("Plugin updated", "success");
+      await api.post(`/api/plugins/${pluginId}/update`);
+      toast.success("Plugin updated");
       loadPlugins();
-    } catch { showToast("Failed to update plugin", "error"); }
+    } catch { toast.error("Failed to update plugin"); }
     finally { setAction(pluginId, null); }
   };
 
   const handleUpdateCheck = async () => {
     try {
-      await apiSend("/api/plugins/check-updates", "POST");
-      showToast("Update check complete", "success");
+      await api.post("/api/plugins/check-updates");
+      toast.success("Update check complete");
       loadPlugins();
-    } catch { showToast("Update check failed", "error"); }
+    } catch { toast.error("Failed to check for plugin updates"); }
   };
 
   const handleLoadReviews = async (plugin: Plugin) => {
-    const pid = plugin.ID || plugin.id || "";
+    const pid = plugin.id || "";
     setReviewsPlugin(plugin);
     setShowReviews(true);
     try {
-      const apiData = await apiGet<{ reviews?: Review[]; Reviews?: Review[] } | Review[]>(`/api/plugins/${pid}/reviews`);
+      const apiData = await api.get<{ reviews?: Review[]; Reviews?: Review[] } | Review[]>(`/api/plugins/${pid}/reviews`);
       const d = apiData as { reviews?: Review[]; Reviews?: Review[] };
-      setReviews(d.reviews || d.Reviews || (Array.isArray(apiData) ? apiData : []));
+      setReviews(d.reviews || (Array.isArray(apiData) ? apiData : []));
     } catch { setReviews([]); }
   };
 
   const handlePostReview = async (pluginId: string, rating: number, content: string) => {
     try {
-      const body = new URLSearchParams({ rating: String(rating), content });
-      await apiSend(`/api/plugins/${pluginId}/reviews`, "POST", body);
-      showToast("Review posted", "success");
+      const body = { rating: String(rating), content };
+      await api.post(`/api/plugins/${pluginId}/reviews`, body);
+      toast.success("Review posted");
       if (reviewsPlugin) handleLoadReviews(reviewsPlugin);
-    } catch { showToast("Failed to post review", "error"); }
+    } catch { toast.error("Failed to post review"); }
   };
 
   const handleRating = async (pluginId: string, rating: number) => {
     try {
-      await apiSend(`/api/plugins/${pluginId}/rating`, "POST", new URLSearchParams({ rating: String(rating) }));
-      showToast("Rating submitted", "success");
+      await api.post(`/api/plugins/${pluginId}/rating`, { rating: String(rating) });
+      toast.success("Rating submitted");
       loadPlugins();
-    } catch { showToast("Failed to submit rating", "error"); }
+    } catch { toast.error("Failed to submit rating"); }
   };
 
   const handleLoadDependencies = async (plugin: Plugin) => {
-    const pid = plugin.ID || plugin.id || "";
+    const pid = plugin.id || "";
     try {
-      const apiData = await apiGet<{ dependencies?: string[]; Dependencies?: string[] } | string[]>(`/api/plugins/${pid}/dependencies`);
+      const apiData = await api.get<{ dependencies?: string[]; Dependencies?: string[] } | string[]>(`/api/plugins/${pid}/dependencies`);
       const d = apiData as { dependencies?: string[]; Dependencies?: string[] };
-      const deps = d.dependencies || d.Dependencies || (Array.isArray(apiData) ? apiData : []);
+      const deps = d.dependencies || (Array.isArray(apiData) ? apiData : []);
       setDetailPlugin({ ...plugin, Dependencies: Array.isArray(deps) ? deps : [] });
-    } catch (e) { console.error("Plugins: load dependencies failed", e); }
+    } catch { toast.error("Failed to load dependencies"); }
   };
 
-  const currentCat = CATEGORIES.find((c) => c.key === category);
-
   return (
-    <div className="max-w-7xl mx-auto mb-20 md:mb-0">
-      {toasts.length > 0 && (
-        <div className="fixed top-4 right-4 z-[100] space-y-2">
-          {toasts.map((t, i) => (
-            <div key={i} className={`px-4 py-3 rounded-2xl shadow-lg text-sm font-medium text-white ${t.type === "success" ? "bg-emerald-600" : t.type === "error" ? "bg-red-600" : "bg-indigo-600"} animate-[fadeIn_0.2s_ease-out]`}>
-              <i className={`fa-solid ${t.type === "success" ? "fa-check-circle" : t.type === "error" ? "fa-exclamation-circle" : "fa-info-circle"} mr-2`}></i>
-              {t.msg}
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-            <i className="fa-solid fa-puzzle-piece text-indigo-500 mr-2"></i>Plugins
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            {plugins.length} plugins available &middot; Manage, install, and configure
-          </p>
-        </div>
+    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title={<><Puzzle className="w-4 h-4" />{t("plugins.title")}</>} subtitle={t("plugins.subtitle", { count: String(plugins.length) })}>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={handleUpdateCheck} className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-medium rounded-2xl transition-colors">
-            <i className="fa-solid fa-circle-check"></i> Check Updates
-          </button>
-          <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-2xl transition-colors">
-            <i className="fa-solid fa-plus"></i> Create
-          </button>
-          <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-medium rounded-2xl transition-colors">
-            <i className="fa-solid fa-file-import"></i> Import
-          </button>
-          <div className="flex bg-slate-100 dark:bg-slate-700 rounded-2xl p-0.5">
-            <button onClick={() => setViewMode("grid")} className={`p-2 rounded-lg transition-colors ${viewMode === "grid" ? "bg-white dark:bg-slate-600 shadow-sm" : "text-slate-500"}`}>
-              <i className="fa-solid fa-grid-2 text-sm"></i>
-            </button>
-            <button onClick={() => setViewMode("list")} className={`p-2 rounded-lg transition-colors ${viewMode === "list" ? "bg-white dark:bg-slate-600 shadow-sm" : "text-slate-500"}`}>
-              <i className="fa-solid fa-list text-sm"></i>
-            </button>
+          <Button variant="outline" size="lg" onClick={handleUpdateCheck}>
+            <CheckCircle className="w-4 h-4" /> {t("plugins.check_updates")}
+          </Button>
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus className="w-4 h-4" /> {t("plugins.create")}
+          </Button>
+          <Button variant="secondary" onClick={() => setShowImport(true)}>
+            <FileDown className="w-4 h-4" /> {t("plugins.import")}
+          </Button>
+          <div className="flex bg-secondary rounded-xl p-0.5">
+            <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon-sm" onClick={() => setViewMode("grid")} aria-label="Grid view">
+              <LayoutGrid className="w-4 h-4" />
+            </Button>
+            <Button variant={viewMode === "list" ? "secondary" : "ghost"} size="icon-sm" onClick={() => setViewMode("list")} aria-label="List view">
+              <List className="w-4 h-4" />
+            </Button>
           </div>
         </div>
-      </div>
+      </PageHeader>
 
-      <div className="ui-card p-3 sm:p-4 mb-4 shadow-sm">
+      <Card className="p-4 sm:p-5 mb-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
-            <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 text-sm"></i>
-            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search plugins by name, description, author..." className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] text-sm rounded-2xl pl-9 pr-4 h-10 focus:outline-none focus:border-indigo-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input aria-label={t("plugins.search_ph")} name="input-0" type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("plugins.search_ph")} className="pl-9 h-10" />
           </div>
         </div>
-      </div>
+      </Card>
 
       <div className="flex flex-wrap gap-2 mb-4">
         {CATEGORIES.map((cat) => {
-          const count = cat.key === "" ? plugins.length : plugins.filter((p) => (p.Category || p.category || "") === cat.key).length;
+          const count = cat.key === "" ? plugins.length : plugins.filter((p) => (p.category || "") === cat.key).length;
           return (
-            <button key={cat.key} onClick={() => setCategory(cat.key)} className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-2xl border transition-all ${category === cat.key ? "ring-2 ring-indigo-500 border-indigo-300 dark:border-indigo-700 " + cat.color : "border-[var(--border)] text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50"}`}>
-              <i className={`fa-solid ${cat.icon}`}></i>
+            <Button key={cat.key} variant="outline" size="sm" onClick={() => setCategory(cat.key)} className={`rounded-xl transition-all ${category === cat.key ? "ring-2 ring-primary/50 border-primary/30 " + cat.color : "text-muted-foreground"}`}>
+              {cat.icon}
               {cat.label}
-              <span className="ml-1 px-1.5 py-0.5 bg-white/50 dark:bg-slate-800/50 rounded-md text-[10px]">{count}</span>
-            </button>
+              <Badge variant="secondary" className="text-[10px]">{count}</Badge>
+            </Button>
           );
         })}
       </div>
@@ -356,116 +329,106 @@ export default function PluginsPage() {
       {loading ? (
         <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-3"}>
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="ui-card p-5 shadow-sm">
+            <Card key={i} className="p-4 sm:p-5">
               <div className="flex gap-3 mb-3">
-                <div className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-2xl animate-pulse shrink-0"></div>
+                <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-slate-100 dark:bg-slate-700 rounded w-3/4 animate-pulse"></div>
-                  <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded w-1/2 animate-pulse"></div>
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
                 </div>
               </div>
-              <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded w-full animate-pulse mb-2"></div>
-              <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded w-2/3 animate-pulse"></div>
-            </div>
+              <Skeleton className="h-3 w-full mb-2" />
+              <Skeleton className="h-3 w-2/3" />
+            </Card>
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-slate-400">
-          <i className="fa-solid fa-puzzle-piece text-4xl mb-3"></i>
-          <p className="text-sm">No plugins found matching your criteria</p>
+        <div className="text-center py-16 text-muted-foreground">
+          <EmptyState icon={Puzzle} title={t("plugins.empty")} />
         </div>
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((p, i) => <PluginCard key={p.ID || p.id || String(i)} plugin={p} actionState={actionStates[p.ID || p.id || String(i)]} onInstall={handleInstall} onUninstall={handleUninstall} onDelete={handleDelete} onToggle={handleToggle} onDetail={() => { setDetailPlugin(p); handleLoadDependencies(p); }} onExecute={() => { setExecutePlugin(p); setShowExecute(true); setExecuteResult(null); }} onExport={() => handleExport(p.ID || p.id || "")} onUpdate={() => handleUpdate(p.ID || p.id || "")} onReviews={() => handleLoadReviews(p)} onRating={(r) => handleRating(p.ID || p.id || "", r)} />)}
+          {filtered.map((p, i) => <PluginCard key={p.id || String(i)} plugin={p} actionState={actionStates[p.id || String(i)]} onInstall={handleInstall} onUninstall={handleUninstall} onDelete={handleDelete} onToggle={handleToggle} onDetail={() => { setDetailPlugin(p); handleLoadDependencies(p); }} onExecute={() => { setExecutePlugin(p); setShowExecute(true); setExecuteResult(null); }} onExport={() => handleExport(p.id || "")} onUpdate={() => handleUpdate(p.id || "")} onReviews={() => handleLoadReviews(p)} onRating={(r) => handleRating(p.id || "", r)} />)}
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((p, i) => <PluginListItem key={p.ID || p.id || String(i)} plugin={p} actionState={actionStates[p.ID || p.id || String(i)]} onInstall={handleInstall} onUninstall={handleUninstall} onDelete={handleDelete} onToggle={handleToggle} onDetail={() => { setDetailPlugin(p); handleLoadDependencies(p); }} onExecute={() => { setExecutePlugin(p); setShowExecute(true); setExecuteResult(null); }} onExport={() => handleExport(p.ID || p.id || "")} onUpdate={() => handleUpdate(p.ID || p.id || "")} onReviews={() => handleLoadReviews(p)} onRating={(r) => handleRating(p.ID || p.id || "", r)} />)}
+          {filtered.map((p, i) => <PluginListItem key={p.id || String(i)} plugin={p} actionState={actionStates[p.id || String(i)]} onInstall={handleInstall} onUninstall={handleUninstall} onDelete={handleDelete} onToggle={handleToggle} onDetail={() => { setDetailPlugin(p); handleLoadDependencies(p); }} onExecute={() => { setExecutePlugin(p); setShowExecute(true); setExecuteResult(null); }} onExport={() => handleExport(p.id || "")} onUpdate={() => handleUpdate(p.id || "")} onReviews={() => handleLoadReviews(p)} onRating={(r) => handleRating(p.id || "", r)} />)}
         </div>
       )}
 
-      {detailPlugin && <PluginDetailModal plugin={detailPlugin} onClose={() => setDetailPlugin(null)} overlayRef={overlayRef} />}
+      {detailPlugin && <PluginDetailModal plugin={detailPlugin} open={!!detailPlugin} onOpenChange={(open) => { if (!open) setDetailPlugin(null); }} />}
 
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowCreate(false)}>
-          <div className="bg-[var(--card-bg)] rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Create Plugin</h3>
-              <button onClick={() => setShowCreate(false)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><i className="fa-solid fa-xmark"></i></button>
-            </div>
-            <form onSubmit={handleCreate} className="space-y-3">
-              <input type="text" required placeholder="Plugin name" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] rounded-2xl px-4 h-10 text-sm focus:outline-none focus:border-indigo-500" />
-              <textarea placeholder="Description" value={createForm.description} onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] rounded-2xl px-4 py-2 text-sm focus:outline-none focus:border-indigo-500 resize-none h-20" />
-              <input type="text" placeholder="Author" value={createForm.author} onChange={(e) => setCreateForm({ ...createForm, author: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] rounded-2xl px-4 h-10 text-sm focus:outline-none focus:border-indigo-500" />
-              <select value={createForm.category} onChange={(e) => setCreateForm({ ...createForm, category: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] rounded-2xl px-4 h-10 text-sm focus:outline-none focus:border-indigo-500">
-                <option value="">Select category</option>
-                {CATEGORIES.slice(1).map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-              </select>
-              <input type="text" placeholder="Version (e.g. 1.0.0)" value={createForm.version} onChange={(e) => setCreateForm({ ...createForm, version: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] rounded-2xl px-4 h-10 text-sm focus:outline-none focus:border-indigo-500" />
-              <button type="submit" className="w-full h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-medium transition-colors">Create Plugin</button>
-            </form>
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("plugins.create_title")}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-3">
+            <Input aria-label={t("plugins.name_ph")} name="plugin-name-1" type="text" required placeholder={t("plugins.name_ph")} value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} />
+            <Textarea aria-label={t("plugins.desc_ph")} name="description-2" placeholder={t("plugins.desc_ph")} value={createForm.description} onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })} className="min-h-[5rem] resize-none" />
+            <Input aria-label={t("plugins.author_ph")} name="author-3" type="text" placeholder={t("plugins.author_ph")} value={createForm.author} onChange={(e) => setCreateForm({ ...createForm, author: e.target.value })} />
+            <Select value={createForm.category} onValueChange={(v) => setCreateForm({ ...createForm, category: v ?? "" })}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t("plugins.select_category")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">{t("plugins.select_category")}</SelectItem>
+                {CATEGORIES.slice(1).map((c) => <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Input aria-label="Version (e.g. 1.0.0)" name="version-e-g-1-0-0-5" type="text" placeholder="1.0.0" value={createForm.version} onChange={(e) => setCreateForm({ ...createForm, version: e.target.value })} />
+            <Button type="submit" className="w-full h-10">{t("plugins.create_title")}</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showImport} onOpenChange={setShowImport}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("plugins.import_title")}</DialogTitle>
+          </DialogHeader>
+          <div className="border-2 border-dashed border-border rounded-xl p-4 sm:p-5 text-center mb-4 hover:border-indigo-500 transition-colors">
+            <CloudUpload className="w-4 h-4" />
+            <p className="text-sm text-muted-foreground mb-3">{t("plugins.upload_desc")}</p>
+            <input aria-label="Upload plugin file" name="input-6" type="file" accept=".json,.zip" onChange={(e) => setImportFile(e.target.files?.[0] || null)} className="text-sm text-muted-foreground file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-indigo-50 dark:file:bg-indigo-900/30 file:text-indigo-700 dark:file:text-indigo-400 hover:file:bg-indigo-100" />
+            {importFile && <p className="text-xs text-muted-foreground mt-2">{importFile.name}</p>}
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowImport(false)}>{t("plugins.cancel")}</Button>
+            <Button onClick={handleImport}>{t("plugins.import")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {showImport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowImport(false)}>
-          <div className="bg-[var(--card-bg)] rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Import Plugin</h3>
-              <button onClick={() => setShowImport(false)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><i className="fa-solid fa-xmark"></i></button>
+      <Dialog open={showExecute} onOpenChange={setShowExecute}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t("plugins.execute_title")} {executePlugin?.Name || executePlugin?.name}</DialogTitle>
+          </DialogHeader>
+          <Button onClick={() => handleExecute(executePlugin?.ID || executePlugin?.id || "")} disabled={executeLoading} className="w-full mb-4">
+            {executeLoading ? <><Spinner className="mr-2" />{t("plugins.running")}</> : <><Play className="w-4 h-4" />{t("plugins.run_plugin")}</>}
+          </Button>
+          {executeResult && (
+            <div className="bg-card rounded-xl p-4 max-h-96 overflow-y-auto">
+              <pre className="text-xs font-mono text-emerald-300 whitespace-pre-wrap">{executeResult}</pre>
             </div>
-            <div className="border-2 border-dashed border-[var(--border)] rounded-2xl p-8 text-center mb-4 hover:border-indigo-500 transition-colors">
-              <i className="fa-solid fa-cloud-arrow-up text-3xl text-slate-400 mb-2"></i>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">Upload a plugin JSON file</p>
-              <input type="file" accept=".json,.zip" onChange={(e) => setImportFile(e.target.files?.[0] || null)} className="text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-indigo-50 dark:file:bg-indigo-900/30 file:text-indigo-700 dark:file:text-indigo-400 hover:file:bg-indigo-100" />
-              {importFile && <p className="text-xs text-slate-500 mt-2">{importFile.name}</p>}
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setShowImport(false)} className="flex-1 h-10 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-600 dark:text-slate-300 rounded-2xl text-sm font-medium transition-colors">Cancel</button>
-              <button onClick={handleImport} className="flex-1 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-medium transition-colors">Import</button>
-            </div>
-          </div>
-        </div>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
 
-      {showExecute && executePlugin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowExecute(false)}>
-          <div className="bg-[var(--card-bg)] rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Execute: {executePlugin.Name || executePlugin.name}</h3>
-              <button onClick={() => setShowExecute(false)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><i className="fa-solid fa-xmark"></i></button>
-            </div>
-            <button onClick={() => handleExecute(executePlugin.ID || executePlugin.id || "")} disabled={executeLoading} className="w-full h-10 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl text-sm font-medium transition-colors mb-4">
-              {executeLoading ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i>Running...</> : <><i className="fa-solid fa-play mr-2"></i>Run Plugin</>}
-            </button>
-            {executeResult && (
-              <div className="bg-slate-900 rounded-2xl p-4 max-h-96 overflow-y-auto">
-                <pre className="text-xs font-mono text-emerald-300 whitespace-pre-wrap">{executeResult}</pre>
-              </div>
-            )}
-          </div>
-        </div>
+      {reviewsPlugin && (
+        <ReviewsModal plugin={reviewsPlugin} reviews={reviews} open={showReviews} onOpenChange={setShowReviews} onPost={handlePostReview} />
       )}
-
-      {showReviews && reviewsPlugin && (
-        <ReviewsModal plugin={reviewsPlugin} reviews={reviews} onClose={() => setShowReviews(false)} onPost={handlePostReview} />
-      )}
-      <ConfirmModal open={!!cfm} title="Confirm" message={cfm?.msg || ""} confirmText="Delete" cancelText="Cancel" danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      <ConfirmModal open={!!cfm} title={t("plugins.confirm_title")} message={cfm?.msg || ""} confirmText={t("plugins.btn_delete")} cancelText={t("plugins.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
     </div>
   );
 }
 
-function ReviewsModal({ plugin, reviews, onClose, onPost }: { plugin: Plugin; reviews: Review[]; onClose: () => void; onPost: (id: string, rating: number, content: string) => void }) {
-  const pid = plugin.ID || plugin.id || "";
+function ReviewsModal({ plugin, reviews, open, onOpenChange, onPost }: { plugin: Plugin; reviews: Review[]; open: boolean; onOpenChange: (open: boolean) => void; onPost: (id: string, rating: number, content: string) => void }) {
+  const { t } = useI18n();
+  const pid = plugin.id || "";
   const [rating, setRating] = useState(5);
   const [content, setContent] = useState("");
-
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handleEsc);
-    return () => document.removeEventListener("keydown", handleEsc);
-  }, [onClose]);
 
   const submit = () => {
     onPost(pid, rating, content);
@@ -473,41 +436,40 @@ function ReviewsModal({ plugin, reviews, onClose, onPost }: { plugin: Plugin; re
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-[var(--card-bg)] rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Reviews: {plugin.Name || plugin.name}</h3>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><i className="fa-solid fa-xmark"></i></button>
-        </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{t("plugins.reviews_title")} {plugin.name}</DialogTitle>
+        </DialogHeader>
         <div className="space-y-3 mb-4">
           <div className="flex items-center gap-1 mb-2">
             {[1, 2, 3, 4, 5].map((s) => (
-              <button key={s} onClick={() => setRating(s)} className="text-lg">
-                <i className={`fa-solid fa-star ${s <= rating ? "text-amber-400" : "text-slate-200 dark:text-slate-600"}`}></i>
-              </button>
+              <Button key={s} variant="ghost" size="icon-xs" onClick={() => setRating(s)} className="text-lg" aria-label={`${s} star`}>
+                <Star className={`w-4 h-4 ${s <= rating ? "text-amber-400 fill-amber-400" : "text-muted-foreground"}`} />
+              </Button>
             ))}
           </div>
-          <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Write your review..." className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] rounded-2xl px-4 py-2 text-sm focus:outline-none focus:border-indigo-500 resize-none h-20" />
-          <button onClick={submit} className="w-full h-9 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-medium transition-colors">Submit Review</button>
+          <Textarea aria-label={t("plugins.review_ph")} name="textarea-7" value={content} onChange={(e) => setContent(e.target.value)} placeholder={t("plugins.review_ph")} className="min-h-[5rem] resize-none" />
+          <Button onClick={submit} className="w-full">{t("plugins.submit_review")}</Button>
         </div>
         <div className="space-y-3">
-          {reviews.length === 0 && <p className="text-sm text-slate-400 text-center py-4">No reviews yet</p>}
+          {reviews.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">{t("plugins.no_reviews")}</p>}
           {reviews.map((r) => (
-            <div key={r.id} className="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-3">
+            <div key={r.id} className="bg-muted rounded-xl p-3">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-[var(--text-secondary)]">{r.user || "Anonymous"}</span>
+                <span className="text-xs font-medium text-muted-foreground">{r.user || t("plugins.anonymous")}</span>
                 <div className="flex items-center gap-0.5">
                   {[1, 2, 3, 4, 5].map((s) => (
-                    <i key={s} className={`fa-solid fa-star text-[10px] ${s <= (r.rating || 0) ? "text-amber-400" : "text-slate-200 dark:text-slate-600"}`}></i>
+                    <Star key={s} className={`w-2.5 h-2.5 ${s <= (r.rating || 0) ? "text-amber-400 fill-amber-400" : "text-muted-foreground"}`} />
                   ))}
                 </div>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{r.content}</p>
+              <p className="text-xs text-muted-foreground">{r.content}</p>
             </div>
           ))}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -525,94 +487,92 @@ function PluginCard({ plugin, actionState, onInstall, onUninstall, onDelete, onT
   onReviews: () => void;
   onRating: (r: number) => void;
 }) {
-  const id = plugin.ID || plugin.id || "";
-  const name = plugin.Name || plugin.name || "Unknown";
-  const version = plugin.Version || plugin.version || "1.0.0";
-  const desc = plugin.Description || plugin.description || "";
-  const author = plugin.Author || plugin.author || "-";
-  const cat = plugin.Category || plugin.category || "";
+  const { t } = useI18n();
+  const id = plugin.id || "";
+  const name = plugin.name || t("plugins.unknown");
+  const version = plugin.version || "1.0.0";
+  const desc = plugin.description || "";
+  const author = plugin.author || "-";
+  const cat = plugin.category || "";
   const enabled = plugin.Enabled !== undefined ? plugin.Enabled : plugin.enabled;
   const rating = plugin.Rating !== undefined ? plugin.Rating : plugin.rating || 0;
-  const deps = plugin.Dependencies || plugin.dependencies || [];
+  const deps = plugin.dependencies || [];
   const installed = plugin.Installed !== undefined ? plugin.Installed : plugin.installed;
   const updateAvail = plugin.UpdateAvailable !== undefined ? plugin.UpdateAvailable : plugin.update_available;
-  const icon = plugin.Icon || plugin.icon || "fa-puzzle-piece";
-  const downloads = plugin.Downloads || plugin.downloads || 0;
+  const downloads = plugin.downloads || 0;
   const [hoverRating, setHoverRating] = useState(0);
   const catInfo = CATEGORIES.find((c) => c.key === cat);
 
   return (
-    <div className="ui-card p-5 shadow-sm hover:shadow-md transition-all group">
+    <Card className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-all group">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center shrink-0">
-            <i className={`fa-solid ${icon} text-indigo-600 dark:text-indigo-400`}></i>
+          <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center shrink-0">
+            <Puzzle className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" onClick={onDetail}>{name}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">v{version} &middot; {author}</p>
+            <h3 className="text-sm font-semibold text-foreground truncate cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" onClick={onDetail}>{name}</h3>
+            <p className="text-xs text-muted-foreground">v{version} &middot; {author}</p>
           </div>
         </div>
         {updateAvail && (
-          <button onClick={(e) => { e.stopPropagation(); onUpdate(); }} className="shrink-0 px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-medium rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors" title="Update available - click to update">
-            <i className="fa-solid fa-arrow-up mr-0.5"></i>Update
-          </button>
+          <Button size="xs" onClick={(e) => { e.stopPropagation(); onUpdate(); }} className="shrink-0 px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-medium rounded-xl hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors" title={t("plugins.update_available")}>
+            <ArrowUp className="w-4 h-4" />{t("plugins.update")}
+          </Button>
         )}
       </div>
 
-      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 line-clamp-2 leading-relaxed">{desc || "No description available"}</p>
+      <p className="text-xs text-muted-foreground mb-3 line-clamp-2 leading-relaxed">{desc || t("plugins.no_desc")}</p>
 
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         {catInfo && (
           <span className={`text-[10px] px-2 py-0.5 rounded-lg ${catInfo.color}`}>
-            <i className={`fa-solid ${catInfo.icon} mr-1`}></i>{catInfo.label}
+            <span className="mr-1">{catInfo.icon}</span>{catInfo.label}
           </span>
         )}
       </div>
 
       <div className="flex items-center gap-0.5 mb-1">
         {[1, 2, 3, 4, 5].map((s) => (
-          <button key={s} onClick={() => onRating(s)} onMouseEnter={() => setHoverRating(s)} onMouseLeave={() => setHoverRating(0)} className="p-0.5">
-            <i className={`fa-solid fa-star text-[10px] transition-colors ${s <= (hoverRating || rating) ? "text-amber-400" : "text-slate-200 dark:text-slate-600"}`}></i>
-          </button>
+          <Button key={s} variant="ghost" size="icon-xs" onClick={() => onRating(s)} onMouseEnter={() => setHoverRating(s)} onMouseLeave={() => setHoverRating(0)} className="p-0.5" aria-label={`${s} star`}>
+            <Star className={`w-2.5 h-2.5 transition-colors ${s <= (hoverRating || rating) ? "text-amber-400 fill-amber-400" : "text-muted-foreground"}`} />
+          </Button>
         ))}
-        <span className="text-[10px] text-slate-400 ml-1">{(hoverRating || rating).toFixed(1)}</span>
-        <button onClick={onReviews} className="text-[10px] text-indigo-500 ml-1 hover:underline">Reviews</button>
+        <span className="text-[10px] text-muted-foreground ml-1">{(hoverRating || rating).toFixed(1)}</span>
+        <Button variant="ghost" size="xs" onClick={onReviews} className="text-[10px] text-indigo-500 ml-1 hover:underline">{t("plugins.reviews")}</Button>
       </div>
-      <div className="text-[10px] text-slate-400 mb-3">{downloads.toLocaleString()} downloads</div>
+      <div className="text-[10px] text-muted-foreground mb-3">{downloads.toLocaleString()} {t("plugins.downloads")}</div>
 
       {deps.length > 0 && (
-        <div className="mb-3 text-[10px] text-slate-400">
-          <i className="fa-solid fa-link mr-1"></i>Deps: {deps.join(", ")}
+        <div className="mb-3 text-[10px] text-muted-foreground">
+          <Link className="w-4 h-4" />{t("plugins.deps")} {deps.join(", ")}
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-700">
+        <div className="flex items-center justify-between pt-3 border-t border-border">
         {installed ? (
           <div className="flex items-center gap-2">
-            <button onClick={() => onToggle(id, !enabled)} disabled={actionState === "toggling"} className={`w-10 h-5 rounded-full transition-colors disabled:opacity-50 ${enabled ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-600"}`}>
-              <div className={`w-4 h-4 bg-white rounded-full transition-transform mt-0.5 ${enabled ? "translate-x-5" : "translate-x-0.5"}`}></div>
-            </button>
-            <span className="text-[10px] text-slate-500">{enabled ? "Enabled" : "Disabled"}</span>
+            <Switch checked={enabled} onCheckedChange={() => onToggle(id, !enabled)} disabled={actionState === "toggling"} />
+            <span className="text-[10px] text-muted-foreground">{enabled ? t("plugins.enabled") : t("plugins.disabled")}</span>
           </div>
         ) : (
-          <span className="text-[10px] text-slate-400">Not installed</span>
+          <span className="text-[10px] text-muted-foreground">{t("plugins.not_installed")}</span>
         )}
         <div className="flex items-center gap-1">
-          <button onClick={onExecute} disabled={!installed} className="p-1.5 text-slate-400 hover:text-emerald-500 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors disabled:opacity-30" title="Execute"><i className="fa-solid fa-play text-xs"></i></button>
-          <button onClick={onExport} className="p-1.5 text-slate-400 hover:text-blue-500 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="Export"><i className="fa-solid fa-download text-xs"></i></button>
+          <Button variant="ghost" size="icon-xs" onClick={onExecute} disabled={!installed} className="text-muted-foreground hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 disabled:opacity-30" aria-label="Execute plugin"><Play className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon-xs" onClick={onExport} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-primary/20" aria-label="Export plugin"><Download className="w-4 h-4" /></Button>
           {installed ? (
             <>
-              <button onClick={() => onUninstall(id)} disabled={actionState === "uninstalling"} className="px-2 py-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-lg transition-colors disabled:opacity-50">{actionState === "uninstalling" ? <i className="fa-solid fa-spinner fa-spin"></i> : "Uninstall"}</button>
-              <button onClick={() => onDelete(id)} disabled={actionState === "deleting"} className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Delete"><i className="fa-solid fa-trash text-xs"></i></button>
+              <Button size="xs" onClick={() => onUninstall(id)} disabled={actionState === "uninstalling"} className="px-2 py-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50">{actionState === "uninstalling" ? <Spinner /> : t("plugins.uninstall")}</Button>
+              <Button variant="ghost" size="icon-xs" onClick={() => onDelete(id)} disabled={actionState === "deleting"} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50" aria-label={t("plugins.delete")}><Trash2 className="w-4 h-4" /></Button>
             </>
           ) : (
-            <button onClick={() => onInstall(id)} disabled={actionState === "installing"} className="px-2.5 py-1 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-lg transition-colors disabled:opacity-50">{actionState === "installing" ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>...</> : "Install"}</button>
+            <Button size="xs" onClick={() => onInstall(id)} disabled={actionState === "installing"} className="px-2.5 py-1 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50">{actionState === "installing" ? <><Spinner className="mr-1" />...</> : t("plugins.install")}</Button>
           )}
-          <button onClick={onDetail} className="p-1.5 text-slate-400 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors" title="Details"><i className="fa-solid fa-circle-info text-xs"></i></button>
+          <Button variant="ghost" size="icon-xs" onClick={onDetail} className="text-muted-foreground hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" aria-label="View plugin details"><Info className="w-4 h-4" /></Button>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -630,154 +590,142 @@ function PluginListItem({ plugin, actionState, onInstall, onUninstall, onDelete,
   onReviews: () => void;
   onRating: (r: number) => void;
 }) {
-  const id = plugin.ID || plugin.id || "";
-  const name = plugin.Name || plugin.name || "Unknown";
-  const version = plugin.Version || plugin.version || "1.0.0";
-  const desc = plugin.Description || plugin.description || "";
-  const author = plugin.Author || plugin.author || "-";
-  const cat = plugin.Category || plugin.category || "";
+  const { t } = useI18n();
+  const id = plugin.id || "";
+  const name = plugin.name || t("plugins.unknown");
+  const version = plugin.version || "1.0.0";
+  const desc = plugin.description || "";
+  const cat = plugin.category || "";
   const enabled = plugin.Enabled !== undefined ? plugin.Enabled : plugin.enabled;
   const rating = plugin.Rating !== undefined ? plugin.Rating : plugin.rating || 0;
-  const deps = plugin.Dependencies || plugin.dependencies || [];
+  const deps = plugin.dependencies || [];
   const installed = plugin.Installed !== undefined ? plugin.Installed : plugin.installed;
   const updateAvail = plugin.UpdateAvailable !== undefined ? plugin.UpdateAvailable : plugin.update_available;
   const catInfo = CATEGORIES.find((c) => c.key === cat);
 
   return (
-    <div className="ui-card p-4 shadow-sm hover:shadow-md transition-all">
+    <Card className="p-4 hover:shadow-lg dark:hover:shadow-black/30 transition-all">
       <div className="flex items-center gap-4">
-        <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center shrink-0">
-          <i className="fa-solid fa-puzzle-piece text-indigo-600 dark:text-indigo-400"></i>
+        <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center shrink-0">
+          <Puzzle className="w-4 h-4" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" onClick={onDetail}>{name}</h3>
-            <span className="text-[10px] text-slate-400">v{version}</span>
+            <h3 className="text-sm font-semibold text-foreground truncate cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" onClick={onDetail}>{name}</h3>
+            <span className="text-[10px] text-muted-foreground">v{version}</span>
             {catInfo && <span className={`text-[10px] px-1.5 py-0.5 rounded ${catInfo.color}`}>{catInfo.label}</span>}
-            {updateAvail && <button onClick={onUpdate} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200"><i className="fa-solid fa-arrow-up mr-0.5"></i>Update</button>}
+            {updateAvail && <Button size="xs" onClick={onUpdate} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200"><ArrowUp className="w-4 h-4" />{t("plugins.update")}</Button>}
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{desc || "No description"}</p>
+          <p className="text-xs text-muted-foreground truncate">{desc || t("plugins.no_desc_short")}</p>
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
-          {[1, 2, 3, 4, 5].map((s) => <button key={s} onClick={() => onRating(s)}><i className={`fa-solid fa-star text-[10px] hover:text-amber-400 ${s <= rating ? "text-amber-400" : "text-slate-200 dark:text-slate-600"}`}></i></button>)}
-          <button onClick={onReviews} className="text-[10px] text-indigo-500 ml-1 hover:underline">Reviews</button>
+          {[1, 2, 3, 4, 5].map((s) => <Button key={s} variant="ghost" size="icon-xs" onClick={() => onRating(s)} aria-label={`${s} star`}><Star className={`w-2.5 h-2.5 hover:text-amber-400 transition-colors ${s <= rating ? "text-amber-400 fill-amber-400" : "text-muted-foreground"}`} /></Button>)}
+        <Button variant="ghost" size="xs" onClick={onReviews} className="text-[10px] text-indigo-500 ml-1 hover:underline">{t("plugins.reviews")}</Button>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={onExecute} disabled={!installed} className="p-1.5 text-slate-400 hover:text-emerald-500 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors disabled:opacity-30" title="Execute"><i className="fa-solid fa-play text-xs"></i></button>
-          <button onClick={onExport} className="p-1.5 text-slate-400 hover:text-blue-500 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="Export"><i className="fa-solid fa-download text-xs"></i></button>
+          <Button variant="ghost" size="icon-xs" onClick={onExecute} disabled={!installed} className="text-muted-foreground hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 disabled:opacity-30" aria-label="Execute plugin"><Play className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon-xs" onClick={onExport} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-primary/20" aria-label="Export plugin"><Download className="w-4 h-4" /></Button>
           {installed ? (
             <>
-              <button onClick={() => onToggle(id, !enabled)} disabled={actionState === "toggling"} className={`w-10 h-5 rounded-full transition-colors disabled:opacity-50 shrink-0 ${enabled ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-600"}`}>
-                <div className={`w-4 h-4 bg-white rounded-full transition-transform mt-0.5 ${enabled ? "translate-x-5" : "translate-x-0.5"}`}></div>
-              </button>
-              <button onClick={() => onUninstall(id)} disabled={actionState === "uninstalling"} className="px-2 py-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-lg transition-colors disabled:opacity-50">{actionState === "uninstalling" ? <i className="fa-solid fa-spinner fa-spin"></i> : "Uninstall"}</button>
-              <button onClick={() => onDelete(id)} disabled={actionState === "deleting"} className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Delete"><i className="fa-solid fa-trash text-xs"></i></button>
+              <Switch checked={enabled} onCheckedChange={() => onToggle(id, !enabled)} disabled={actionState === "toggling"} className="shrink-0" />
+              <Button size="xs" onClick={() => onUninstall(id)} disabled={actionState === "uninstalling"} className="px-2 py-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50">{actionState === "uninstalling" ? <Spinner /> : t("plugins.uninstall")}</Button>
+              <Button variant="ghost" size="icon-xs" onClick={() => onDelete(id)} disabled={actionState === "deleting"} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50" aria-label={t("plugins.delete")}><Trash2 className="w-4 h-4" /></Button>
             </>
           ) : (
-            <button onClick={() => onInstall(id)} disabled={actionState === "installing"} className="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50">{actionState === "installing" ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>Installing...</> : "Install"}</button>
+            <Button onClick={() => onInstall(id)} disabled={actionState === "installing"} className="px-2.5 py-1 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50">{actionState === "installing" ? <><Spinner className="mr-1" />{t("plugins.installing")}</> : t("plugins.install")}</Button>
           )}
-          <button onClick={onDetail} className="p-1.5 text-slate-400 hover:text-indigo-500 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"><i className="fa-solid fa-circle-info text-xs"></i></button>
+          <Button variant="ghost" size="icon-xs" onClick={onDetail} className="text-muted-foreground hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" aria-label="View plugin details"><Info className="w-4 h-4" /></Button>
         </div>
       </div>
       {deps.length > 0 && (
-        <div className="mt-2 ml-14 text-[10px] text-slate-400">
-          <i className="fa-solid fa-link mr-1"></i>Dependencies: {deps.join(", ")}
+        <div className="mt-2 ml-14 text-[10px] text-muted-foreground">
+          <Link className="w-4 h-4" />{t("plugins.dependencies")} {deps.join(", ")}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
-function PluginDetailModal({ plugin, onClose, overlayRef }: {
+function PluginDetailModal({ plugin, open, onOpenChange }: {
   plugin: Plugin;
-  onClose: () => void;
-  overlayRef: React.RefObject<HTMLDivElement | null>;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const id = plugin.ID || plugin.id || "";
-  const name = plugin.Name || plugin.name || "Unknown";
-  const version = plugin.Version || plugin.version || "1.0.0";
-  const desc = plugin.Description || plugin.description || "No description available";
-  const author = plugin.Author || plugin.author || "-";
-  const cat = plugin.Category || plugin.category || "";
+  const { t } = useI18n();
+  const name = plugin.name || t("plugins.unknown");
+  const version = plugin.version || "1.0.0";
+  const desc = plugin.description || t("plugins.no_desc");
+  const author = plugin.author || "-";
+  const cat = plugin.category || "";
   const enabled = plugin.Enabled !== undefined ? plugin.Enabled : plugin.enabled;
   const rating = plugin.Rating !== undefined ? plugin.Rating : plugin.rating || 0;
-  const deps = plugin.Dependencies || plugin.dependencies || [];
+  const deps = plugin.dependencies || [];
   const installed = plugin.Installed !== undefined ? plugin.Installed : plugin.installed;
   const updateAvail = plugin.UpdateAvailable !== undefined ? plugin.UpdateAvailable : plugin.update_available;
-  const readme = plugin.Readme || plugin.readme || "";
-  const downloads = plugin.Downloads || plugin.downloads || 0;
-  const lastUpdated = plugin.LastUpdated || plugin.last_updated || "-";
-  const icon = plugin.Icon || plugin.icon || "fa-puzzle-piece";
-
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", handleEsc);
-    return () => document.removeEventListener("keydown", handleEsc);
-  }, [onClose]);
+  const readme = plugin.readme || "";
+  const downloads = plugin.downloads || 0;
+  const lastUpdated = plugin.last_updated || "-";
 
   const catInfo = CATEGORIES.find((c) => c.key === cat);
 
   return (
-    <div ref={overlayRef} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}>
-      <div className="ui-card shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="px-6 py-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center">
-              <i className={`fa-solid ${icon} text-indigo-600 dark:text-indigo-400`}></i>
+            <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
+              <Puzzle className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{name}</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">v{version} &middot; {author}</p>
+              <DialogTitle>{name}</DialogTitle>
+              <p className="text-xs text-muted-foreground">v{version} &middot; {author}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-            <i className="fa-solid fa-xmark text-lg"></i>
-          </button>
-        </div>
+        </DialogHeader>
 
-        <div className="overflow-y-auto flex-1 p-6 space-y-5">
+        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5">
           <div className="flex items-center gap-3 flex-wrap">
             {catInfo && (
               <span className={`text-xs px-2.5 py-1 rounded-lg ${catInfo.color}`}>
-                <i className={`fa-solid ${catInfo.icon} mr-1`}></i>{catInfo.label}
+                <span className="mr-1">{catInfo.icon}</span>{catInfo.label}
               </span>
             )}
             {installed ? (
-              <span className={`text-xs px-2.5 py-1 rounded-lg ${enabled ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300"}`}>
-                <i className={`fa-solid ${enabled ? "fa-check-circle" : "fa-circle"} mr-1`}></i>{enabled ? "Enabled" : "Disabled"}
-              </span>
+              <Badge variant={enabled ? "success" : "secondary"} className="text-xs">
+                {enabled ? <CheckCircle className="w-3 h-3 mr-1" /> : <span className="w-2 h-2 rounded-full bg-current inline-block mr-1" />}{enabled ? t("plugins.enabled") : t("plugins.disabled")}
+              </Badge>
             ) : (
-              <span className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400">Not Installed</span>
+              <Badge variant="secondary" className="text-xs">{t("plugins.not_installed")}</Badge>
             )}
             {updateAvail && (
-              <span className="text-xs px-2.5 py-1 rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                <i className="fa-solid fa-arrow-up mr-1"></i>Update Available
-              </span>
+              <Badge variant="warning" className="text-xs">
+                <ArrowUp className="w-4 h-4" />{t("plugins.update_available")}
+              </Badge>
             )}
           </div>
 
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-0.5">
               {[1, 2, 3, 4, 5].map((s) => (
-                <i key={s} className={`fa-solid fa-star text-xs ${s <= rating ? "text-amber-400" : "text-slate-200 dark:text-slate-600"}`}></i>
+                <Star key={s} className={`w-3 h-3 ${s <= rating ? "text-amber-400 fill-amber-400" : "text-muted-foreground"}`} />
               ))}
-              <span className="text-xs text-slate-500 ml-1">{rating.toFixed(1)}</span>
+              <span className="text-xs text-muted-foreground ml-1">{rating.toFixed(1)}</span>
             </div>
-            <span className="text-xs text-slate-400"><i className="fa-solid fa-download mr-1"></i>{downloads.toLocaleString()} downloads</span>
-            <span className="text-xs text-slate-400"><i className="fa-solid fa-clock mr-1"></i>Updated: {lastUpdated}</span>
+            <span className="text-xs text-muted-foreground"><Download className="w-4 h-4" />{downloads.toLocaleString()} {t("plugins.downloads")}</span>
+            <span className="text-xs text-muted-foreground"><Clock className="w-4 h-4" />{t("plugins.updated")}: {lastUpdated}</span>
           </div>
 
           <div>
-            <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Description</h3>
-            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{desc}</p>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t("plugins.description")}</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
           </div>
 
           {deps.length > 0 && (
             <div>
-              <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Dependencies</h3>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t("plugins.dependencies")}</h3>
               <div className="flex flex-wrap gap-2">
                 {deps.map((d, i) => (
-                  <span key={i} className="text-xs px-2.5 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg border border-[var(--border)] font-mono">{d}</span>
+                  <span key={i} className="text-xs px-2.5 py-1 bg-secondary text-muted-foreground rounded-lg border border-border font-mono">{d}</span>
                 ))}
               </div>
             </div>
@@ -785,12 +733,14 @@ function PluginDetailModal({ plugin, onClose, overlayRef }: {
 
           {readme && (
             <div>
-              <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Readme</h3>
-              <div className="bg-slate-50 dark:bg-slate-900 border border-[var(--border)] rounded-2xl p-4 text-xs text-[var(--text-secondary)] whitespace-pre-wrap max-h-60 overflow-y-auto">{readme}</div>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t("plugins.readme")}</h3>
+              <div className="bg-muted border border-border rounded-xl p-4 text-xs text-muted-foreground whitespace-pre-wrap max-h-60 overflow-y-auto">{readme}</div>
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
+
+

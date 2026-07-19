@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/forgec2/forgec2/internal/config"
@@ -15,12 +17,26 @@ import (
 
 func main() {
 	configPath := flag.String("config", "config.yaml", "Path to configuration file")
+	logFormat := flag.String("log-format", "text", "Log format: text or json")
+	logFile := flag.String("log-file", "", "Path to log file (empty = stdout)")
 	flag.Parse()
 
-	// Initialize structured logger
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
+	// Initialize structured logger with log rotation
+	logDir := "logs"
+	if *logFile != "" {
+		logDir = filepath.Dir(*logFile)
+	}
+	logWriter := server.SetupLogRotation(logDir)
+
+	var logHandler slog.Handler
+	handlerOpts := &slog.HandlerOptions{Level: slog.LevelInfo}
+	switch strings.ToLower(*logFormat) {
+	case "json":
+		logHandler = slog.NewJSONHandler(logWriter, handlerOpts)
+	default:
+		logHandler = slog.NewTextHandler(logWriter, handlerOpts)
+	}
+	logger := slog.New(logHandler)
 	slog.SetDefault(logger)
 
 	slog.Info("Starting ForgeC2 Professional C2 Framework")
@@ -38,7 +54,7 @@ func main() {
 	}
 
 	// Initialize database
-	database, err := db.InitDB(cfg.Database.Path, slog.LevelInfo)
+	database, err := db.InitDB(cfg.Database.Path, slog.LevelInfo, cfg.Auth.DefaultPasswd)
 	if err != nil {
 		slog.Error("Failed to initialize database", "err", err)
 		os.Exit(1)

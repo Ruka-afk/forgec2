@@ -1,0 +1,20 @@
+name: credential-paths
+version: 1.0.0
+type: report
+description: Maps collected credentials to attack paths — which credentials can reach which hosts/services
+author: ""
+category: reporting
+entry: report.py
+interpreter: python3
+timeout: 60
+params:
+    - name: format
+      type: string
+      required: false
+      default: html
+      description: Output format (html, markdown, json)
+    - name: title
+      type: string
+      required: false
+      default: Credential Attack Paths
+      description: Report title

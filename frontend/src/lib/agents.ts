@@ -1,30 +1,25 @@
-import { API_BASE } from "./constants";
+import { api } from "./api";
+import type { NormalizedAgent } from '@/types/agent';
 
-export interface AgentSummary {
-  id: string;
-  hostname: string;
-  ip: string;
-  os: string;
-  status: string;
-  username?: string;
-}
+export type { NormalizedAgent as AgentSummary };
 
-function normalizeAgent(raw: Record<string, unknown>): AgentSummary {
-  return {
-    id: String(raw.id || raw.ID || ""),
-    hostname: String(raw.hostname || raw.Hostname || "unknown"),
-    ip: String(raw.ip || raw.IP || "-"),
-    os: String(raw.os || raw.OS || ""),
-    status: String(raw.status || raw.Status || "offline"),
-    username: String(raw.username || raw.Username || ""),
-  };
-}
-
-export async function fetchAgentList(onlineOnly = false): Promise<AgentSummary[]> {
-  const res = await fetch(`${API_BASE}?p=/agents&pageSize=500&format=json`, { credentials: "include" });
-  if (!res.ok) return [];
-  const data = await res.json();
-  const raw = (data.Beacons || data.Agents || data.agents || data.data || []) as Record<string, unknown>[];
-  const list = (Array.isArray(raw) ? raw : []).map(normalizeAgent).filter((a) => a.id);
-  return onlineOnly ? list.filter((a) => a.status === "online") : list;
+export async function fetchAgentList(onlineOnly = false): Promise<NormalizedAgent[]> {
+  try {
+    const data = await api.get("/api/v1/agents");
+    const raw = (data.data || data.agents || data.Beacons || data || []) as Record<string, unknown>[];
+    const list = (Array.isArray(raw) ? raw : []).map((r) => ({
+      id: String(r.id ?? ""),
+      hostname: String(r.hostname ?? ""),
+      username: String(r.username ?? ""),
+      ip: String(r.ip ?? r.internal_ip ?? ""),
+      os: String(r.os ?? ""),
+      status: String(r.status ?? "offline"),
+      last_seen: String(r.last_seen ?? ""),
+      listener_id: String(r.listener_id ?? ""),
+      tags: String(r.tags ?? ""),
+    })).filter((a) => a.id);
+    return onlineOnly ? list.filter((a) => a.status === "online") : list;
+  } catch {
+    return [];
+  }
 }

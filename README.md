@@ -19,10 +19,10 @@ ForgeC2 uses a **split-stack** layout:
 | Component | Tech | Port | Path |
 |-----------|------|------|------|
 | **Web UI** | Next.js 16 + React 19 + Tailwind 4 | **3000** | `frontend/` |
-| **API & C2** | Go (Gin, SQLite, WebSocket) | **8080** | `cmd/server/` |
+| **API & C2** | Go (Gin, SQLite, WebSocket) | **8000** | `cmd/server/` |
 
-- The browser talks to Next.js on `:3000`. API calls go through `/api/go?p=/path` (proxy in `frontend/src/app/api/go/route.ts`).
-- WebSocket connects directly to Go at `ws://host:8080/ws` with token-based auth (cross-port compatible).
+- The browser talks to Next.js on `:3000`. API calls go through `/api/go/path` (proxy in `frontend/src/app/api/go/route.ts`).
+- WebSocket connects directly to Go at `ws://host:8000/ws` with token-based auth (cross-port compatible).
 
 ### One-command start (Windows)
 
@@ -30,7 +30,7 @@ ForgeC2 uses a **split-stack** layout:
 powershell -ExecutionPolicy Bypass -File .\start.ps1
 ```
 
-Opens **http://localhost:3000** (UI) and **http://localhost:8080** (API/health).
+Opens **http://localhost:3000** (UI) and **http://localhost:8000** (API/health).
 
 ### Manual start
 
@@ -147,7 +147,7 @@ go build -o forgec2-server ./cmd/server
 
 Open **http://localhost:3000** (Next.js UI). On first run a random admin password is generated and printed to the console — **check the server output for your credentials**.
 
-> API-only mode: `http://localhost:8080`. Copy `config/config.yaml` to `config.yaml` in the project root.
+> API-only mode: `http://localhost:8000`. Copy `config/config.yaml` to `config.yaml` in the project root.
 
 ### Windows Build
 
@@ -164,7 +164,7 @@ Key sections in `config.yaml`:
 
 ```yaml
 server:
-  port: 8080
+  port: 8000
   offline_threshold: 60      # seconds before "stale"
 implant:
   default_interval: 0        # 0 = real-time shell mode
@@ -196,7 +196,7 @@ The assistant queues implant commands immediately and does **not** block on beac
 
 ## API Documentation
 
-Interactive docs: **http://localhost:8080/api/docs**
+Interactive docs: **http://localhost:8000/api/docs**
 
 OpenAPI spec: `api/openapi.yaml` (also served at `/api/docs/openapi.yaml`)
 
@@ -233,7 +233,7 @@ forgec2/
 
 ```mermaid
 graph TD
-    A[Web UI :3000] -->|/api/go| B[Gin :8080]
+    A[Web UI :3000] -->|/api/go| B[Gin :8000]
     B --> C[JWT Auth + TOTP]
     B --> D[Beacon API]
     B --> E[Task Queue]
@@ -276,6 +276,26 @@ All skills live in `.grok/skills/` and `.opencode/skills/` — invoke via slash 
 | **Ops modules** | `add-lateral-method`, `add-credentials-feature`, `add-monitor-feature`, `add-socks-pivot`, `add-token-feature` |
 | **Security** | `go-vet-lint`, `add-user-rbac`, `credential-parser` |
 | **Realtime & reports** | `internal-event`, `report-section`, `websocket-event`, `remote-desktop` |
+
+---
+
+## Deployment
+
+### Docker
+
+```yaml
+docker compose up -d
+```
+
+The compose file creates `forgec2-server`, pulls the frontend image, and auto-generates TLS + JWT secrets on first run. Config is at `config.yaml` in the mounted volume.
+
+### Hardening checklist
+- Use a reverse proxy (nginx/Caddy) to terminate TLS in production
+- Restrict `/api/go` proxy to known routes
+- Enable TOTP 2FA for all users
+- Rotate JWT secret via `/api/settings/jwt/regenerate` (or set `FORGEC2_JWT_SECRET` env)
+- Review audit logs regularly (`AuditLog` table)
+- Use `VACUUM` and DB backups via Settings UI
 
 ---
 

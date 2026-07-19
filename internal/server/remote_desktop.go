@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"encoding/json"
@@ -86,7 +86,7 @@ func (h *RDHub) BroadcastFrame(agentID string, frameData []byte) {
 	session.mu.RUnlock()
 
 	for operatorID, conn := range operators {
-		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		conn.SetWriteDeadline(time.Now().Add(RemoteDesktopWriteDeadline))
 		if err := conn.WriteMessage(websocket.BinaryMessage, frameData); err != nil {
 			slog.Debug("Failed to send frame", "operator", operatorID, "error", err)
 			h.Leave(agentID, operatorID)
@@ -158,7 +158,7 @@ func (s *Server) handleRDAPIGetFrame(c *gin.Context) {
 	// Get frame from the frame buffer
 	frame := getFrameBuffer(agentID)
 	if frame == nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "no frame available"})
+		respondError(c, http.StatusNotFound, "no frame available")
 		return
 	}
 
@@ -187,7 +187,7 @@ func (s *Server) handleRDAPIScreenshot(c *gin.Context) {
 
 	task, err := s.createTask(id, "screenshot", "screenshot", "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to create screenshot task"})
+		respondError(c, http.StatusInternalServerError, "failed to create screenshot task")
 		return
 	}
 

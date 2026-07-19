@@ -1,0 +1,14 @@
+name: memory-indicators
+version: 1.0.0
+type: command
+description: Detects memory forensics indicators — credential dumping tools, code injection, suspicious DLL loads
+author: ""
+category: recon
+entry: scan.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Specific agent to scan

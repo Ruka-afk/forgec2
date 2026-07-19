@@ -31,8 +31,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const saved = localStorage.getItem("forgec2_theme") as Theme | null;
     const initial = saved && ["light", "dark", "system"].includes(saved) ? saved : "system";
-    setThemeState(initial);
-    setResolved(applyTheme(initial));
+    Promise.resolve().then(() => {
+      setThemeState(initial);
+      setResolved(applyTheme(initial));
+    });
 
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => {

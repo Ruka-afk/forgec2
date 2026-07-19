@@ -1,0 +1,14 @@
+name: defense-recon
+version: 1.0.0
+type: command
+description: Detects installed antivirus, EDR, and security products on agent hosts
+author: ""
+category: recon
+entry: detect.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Specific agent to check

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,7 +11,7 @@ import (
 )
 
 func TestNewRateLimiter(t *testing.T) {
-	rl := NewRateLimiter(2, 100*time.Millisecond)
+	rl := NewRateLimiter(context.Background(), 2, 100*time.Millisecond)
 	if rl == nil {
 		t.Fatal("NewRateLimiter returned nil")
 	}
@@ -21,7 +22,7 @@ func TestNewRateLimiter(t *testing.T) {
 
 func TestRateLimiterBasic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	rl := NewRateLimiter(2, 1*time.Minute)
+	rl := NewRateLimiter(context.Background(), 2, 1*time.Minute)
 
 	for i := 0; i < 2; i++ {
 		w := httptest.NewRecorder()
@@ -49,7 +50,7 @@ func TestRateLimiterBasic(t *testing.T) {
 
 func TestRateLimiterDifferentIPs(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	rl := NewRateLimiter(1, 1*time.Minute)
+	rl := NewRateLimiter(context.Background(), 1, 1*time.Minute)
 
 	for _, ip := range []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"} {
 		w := httptest.NewRecorder()
@@ -66,7 +67,7 @@ func TestRateLimiterDifferentIPs(t *testing.T) {
 
 func TestRateLimiterWindowReset(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	rl := NewRateLimiter(1, 50*time.Millisecond)
+	rl := NewRateLimiter(context.Background(), 1, 50*time.Millisecond)
 
 	// First request - allowed
 	w := httptest.NewRecorder()

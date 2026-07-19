@@ -1,0 +1,23 @@
+name: engagement-report
+version: 1.0.0
+type: report
+description: Generate a comprehensive engagement summary report with agent stats, tasks, credentials, and timeline
+author: ForgeC2
+category: reporting
+entry: report.py
+interpreter: python
+timeout: 60
+params:
+    - name: format
+      type: string
+      required: false
+      default: html
+      description: Output format (html, markdown, json)
+    - name: title
+      type: string
+      required: false
+      default: Engagement Report
+      description: Report title
+config:
+    include_recommendations: "true"
+    include_timeline: "true"

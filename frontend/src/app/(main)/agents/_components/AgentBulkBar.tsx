@@ -1,0 +1,104 @@
+"use client";
+
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
+import type { BulkResult } from "./types";
+import { Camera, Clock, History, Power, Terminal, Trash2, X } from "lucide-react";
+
+interface AgentBulkBarProps {
+  selected: Set<string>;
+  bulkMode: boolean;
+  bulkResults: BulkResult[];
+  showResults: boolean; setShowResults: (v: boolean) => void;
+  onBulkShell: () => void;
+  onBulkScreenshot: () => void;
+  onBulkSleep: () => void;
+  onBulkKill: () => void;
+  onBulkUninstall: () => void;
+  onBulkDelete: () => void;
+  onClearSelection: () => void;
+  actionMsg: string | null; dismissActionMsg: () => void;
+}
+
+export function AgentBulkBar({
+  selected, bulkMode,
+  bulkResults, showResults, setShowResults,
+  onBulkShell, onBulkScreenshot, onBulkSleep,
+  onBulkKill, onBulkUninstall, onBulkDelete,
+  onClearSelection,
+  actionMsg, dismissActionMsg,
+}: AgentBulkBarProps) {
+  const { t } = useI18n();
+  return (
+    <>
+      {actionMsg && (
+        <div role="status" aria-live="polite" className="mb-3 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl text-sm text-indigo-700 dark:text-indigo-300 flex items-center justify-between">
+          <span>{actionMsg}</span>
+          <Button variant="ghost" size="icon-xs" onClick={dismissActionMsg} aria-label="Dismiss action message"><X className="w-4 h-4" /></Button>
+        </div>
+      )}
+
+      {bulkMode && selected.size > 0 && (
+        <div className="mb-3 px-4 py-3 bg-sidebar border border-border rounded-xl flex flex-wrap items-center gap-2 shadow-sm">
+          <span className="text-sm text-foreground font-medium mr-2">{t("agents.n_selected").replace("{n}", String(selected.size))}</span>
+          <Button size="sm" onClick={onBulkShell} ><Terminal className="w-4 h-4" />{t("agents.execute_command")}</Button>
+          <Button size="sm" onClick={onBulkKill} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"><Power className="w-4 h-4" />{t("agents.kill")}</Button>
+          <Button size="sm" onClick={onBulkUninstall} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"><Trash2 className="w-4 h-4" />{t("agents.uninstall")}</Button>
+          <Button variant="ghost" size="sm" onClick={onClearSelection} className="ml-auto text-muted-foreground/70 hover:text-foreground">{t("agents.clear_selection")}</Button>
+        </div>
+      )}
+
+      {!bulkMode && selected.size > 0 && (
+        <div className="mb-3 px-4 py-3 bg-sidebar border border-border rounded-xl flex flex-wrap items-center gap-2 shadow-sm">
+          <span className="text-sm text-foreground font-medium mr-2">{t("agents.n_selected").replace("{n}", String(selected.size))}</span>
+          <Button size="sm" onClick={onBulkShell} ><Terminal className="w-4 h-4" />{t("agents.shell")}</Button>
+          <Button size="sm" variant="secondary" onClick={onBulkScreenshot}><Camera className="w-4 h-4" />{t("agents.screenshot")}</Button>
+          <Button size="sm" variant="secondary" onClick={onBulkSleep}><Clock className="w-4 h-4" />{t("agents.sleep")}</Button>
+          <Button size="sm" onClick={onBulkDelete} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"><Trash2 className="w-4 h-4" />{t("agents.delete")}</Button>
+          <Button variant="ghost" size="sm" onClick={onClearSelection} className="ml-auto text-muted-foreground/70 hover:text-foreground">{t("agents.clear")}</Button>
+        </div>
+      )}
+
+      {showResults && (
+        <Card className="p-4 mb-4 gap-0">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-foreground"><History className="w-4 h-4" />{t("agents.recent_bulk_ops")}</h3>
+            <Button variant="ghost" size="icon-xs" onClick={() => setShowResults(false)} aria-label="Close bulk results"><X className="w-4 h-4" /></Button>
+          </div>
+          {bulkResults.length === 0 ? (
+            <p className="text-xs text-muted-foreground/70 text-center py-4">{t("agents.no_bulk_ops")}</p>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {bulkResults.map((r, i) => (
+                <div key={r.id || i} className="flex items-center justify-between px-3 py-2 bg-muted rounded-xl text-xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-white text-[10px] font-bold shrink-0 ${
+                      r.type === "kill" ? "bg-orange-500" :
+                      r.type === "uninstall" ? "bg-red-500" :
+                      "bg-indigo-500"
+                    }`}>
+                      {r.type === "kill" ? <Power className="w-3 h-3" /> :
+                        r.type === "uninstall" ? <Trash2 className="w-3 h-3" /> :
+                        r.type === "screenshot" ? <Camera className="w-3 h-3" /> :
+                        <Terminal className="w-3 h-3" />}
+                    </span>
+                    <div className="min-w-0">
+                      <span className="font-medium text-foreground">{r.type}</span>
+                      {r.command && <span className="ml-1.5 text-muted-foreground/70">{r.command}</span>}
+                      <span className="ml-2 text-muted-foreground/70">{r.agent_ids?.length || 0} agent{(r.agent_ids?.length || 0) !== 1 ? "s" : ""}</span>
+                    </div>
+                  </div>
+                  <span className="text-muted-foreground/70 shrink-0">
+                    {r.task_count ?? 0} task{(r.task_count ?? 0) !== 1 ? "s" : ""}
+                    {r.failed?.length ? <span className="ml-1 text-destructive">({r.failed.length} failed)</span> : null}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+    </>
+  );
+}

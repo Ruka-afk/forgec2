@@ -1,0 +1,24 @@
+syntax = "proto3";
+package c2;
+option go_package = "github.com/forgec2/forgec2/internal/c2pb";
+
+service C2Service {
+  rpc Beacon(stream BeaconRequest) returns (stream BeaconResponse);
+}
+
+message BeaconRequest {
+  string agent_id = 1;
+  string task_id = 2;
+  string type = 3;
+  bytes payload = 4;
+  int64 sequence = 5;
+  map<string, string> metadata = 6;
+}
+
+message BeaconResponse {
+  string task_id = 1;
+  string type = 2;
+  bytes payload = 3;
+  int64 sequence = 4;
+  bool has_more = 5;
+}

@@ -1,0 +1,6 @@
+#!/bin/sh
+# pre-commit: fail the commit if frontend i18n/css gates do not pass.
+set -e
+ROOT=$(git rev-parse --show-toplevel)
+echo "==> frontend checks (css + i18n key consistency)"
+npm --prefix "$ROOT/frontend" run check

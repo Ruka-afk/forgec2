@@ -38,6 +38,9 @@ func (s *Server) handleFileBrowserPage(c *gin.Context) {
 }
 
 func (s *Server) handleListDir(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	path := c.PostForm("path")
 	if path == "" {
@@ -51,7 +54,7 @@ func (s *Server) handleListDir(c *gin.Context) {
 	task, err := s.createTask(id, "ls", path, "", path, "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -60,10 +63,13 @@ func (s *Server) handleListDir(c *gin.Context) {
 }
 
 func (s *Server) handleFileDelete(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	filePath := c.PostForm("path")
 	if filePath == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file path required"})
+		respondError(c, http.StatusBadRequest, "file path required")
 		return
 	}
 
@@ -74,7 +80,7 @@ func (s *Server) handleFileDelete(c *gin.Context) {
 	task, err := s.createTask(id, "delete", filePath, "", filePath, "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -83,10 +89,13 @@ func (s *Server) handleFileDelete(c *gin.Context) {
 }
 
 func (s *Server) handleFileRead(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	filePath := c.PostForm("path")
 	if filePath == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file path required"})
+		respondError(c, http.StatusBadRequest, "file path required")
 		return
 	}
 
@@ -97,7 +106,7 @@ func (s *Server) handleFileRead(c *gin.Context) {
 	task, err := s.createTask(id, "read", filePath, "", filePath, "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -106,10 +115,13 @@ func (s *Server) handleFileRead(c *gin.Context) {
 }
 
 func (s *Server) handleFileUploadFromAgent(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	filePath := c.PostForm("path")
 	if filePath == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file path required"})
+		respondError(c, http.StatusBadRequest, "file path required")
 		return
 	}
 
@@ -120,7 +132,7 @@ func (s *Server) handleFileUploadFromAgent(c *gin.Context) {
 	task, err := s.createTask(id, "upload", filePath, "", filePath, "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -129,12 +141,15 @@ func (s *Server) handleFileUploadFromAgent(c *gin.Context) {
 }
 
 func (s *Server) handleDownload(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	fileURL := c.PostForm("url")
 	targetPath := c.PostForm("path")
 
 	if fileURL == "" || targetPath == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "url and path required"})
+		respondError(c, http.StatusBadRequest, "url and path required")
 		return
 	}
 
@@ -145,7 +160,7 @@ func (s *Server) handleDownload(c *gin.Context) {
 	task, err := s.createTask(id, "download", fileURL, targetPath, targetPath, "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -154,16 +169,19 @@ func (s *Server) handleDownload(c *gin.Context) {
 }
 
 func (s *Server) handleUploadFile(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	targetPath := c.PostForm("target_path")
 	if targetPath == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "target path required"})
+		respondError(c, http.StatusBadRequest, "target path required")
 		return
 	}
 
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file required"})
+		respondError(c, http.StatusBadRequest, "file required")
 		return
 	}
 
@@ -172,27 +190,30 @@ func (s *Server) handleUploadFile(c *gin.Context) {
 	}
 
 	if file.Size > MaxUploadSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file too large (max 50MB)"})
+		respondError(c, http.StatusBadRequest, "file too large (max 50MB)")
 		return
 	}
 
 	fileData, err := readFileToBase64(file)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read file"})
+		respondError(c, http.StatusInternalServerError, "failed to read file")
 		return
 	}
 
 	task, err := s.createTask(id, "upload", targetPath, "", targetPath, fileData, 0, 0)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	// chunked support
 	if offsetStr := c.PostForm("offset"); offsetStr != "" {
 		if off, err := strconv.ParseInt(offsetStr, 10, 64); err == nil {
 			task.Offset = off
-			s.db.Save(task)
+			if err := s.db.Save(task).Error; err != nil {
+				respondError(c, http.StatusInternalServerError, "failed to save upload offset")
+				return
+			}
 		}
 	}
 	s.LogAuditRecord(c, "file_upload_push", "agent", id, targetPath, true, nil)

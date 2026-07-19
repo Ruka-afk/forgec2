@@ -2,12 +2,11 @@ package db
 
 import (
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
-	"math/big"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -18,47 +17,66 @@ import (
 	glebarez "github.com/glebarez/sqlite"
 )
 
-var queryCache sync.Map
-var cacheExpiry = 5 * time.Minute
-
-type cacheEntry struct {
-	data      interface{}
-	timestamp time.Time
+// execMigration runs a migration SQL statement and logs unexpected errors.
+// Duplicate column/index errors are expected during migrations and are silently ignored.
+func execMigration(db *gorm.DB, sql, label string) {
+	if err := db.Exec(sql).Error; err != nil && !isMigrationIgnorable(err) {
+		slog.Warn("Migration warning", "label", label, "err", err)
+	}
 }
 
-func GetFromCache(key string) (interface{}, bool) {
-	if entry, ok := queryCache.Load(key); ok {
-		c := entry.(cacheEntry)
-		if time.Since(c.timestamp) < cacheExpiry {
-			return c.data, true
+func isMigrationIgnorable(err error) bool {
+	s := err.Error()
+	for _, kw := range []string{"duplicate column", "already exists", "no such table"} {
+		if len(s) >= len(kw) {
+			for i := 0; i <= len(s)-len(kw); i++ {
+				if s[i:i+len(kw)] == kw {
+					return true
+				}
+			}
 		}
-		queryCache.Delete(key)
 	}
-	return nil, false
+	return false
+}
+
+// generateRandomPassword creates a random alphanumeric password of the given length.
+func generateRandomPassword(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+	b := make([]byte, length)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to hex if rand fails
+		key := make([]byte, length/2+1)
+		rand.Read(key)
+		return hex.EncodeToString(key)[:length]
+	}
+	for i, v := range b {
+		b[i] = charset[v%byte(len(charset))]
+	}
+	return string(b)
+}
+
+// queryCache is a bounded TTL cache replacing the old unbounded sync.Map.
+// Max 1000 entries, 5-minute expiry.
+var queryCache = NewTTLCache(1000, 5*time.Minute)
+
+func GetFromCache(key string) (interface{}, bool) {
+	return queryCache.Get(key)
 }
 
 func SetCache(key string, data interface{}) {
-	queryCache.Store(key, cacheEntry{
-		data:      data,
-		timestamp: time.Now(),
-	})
+	queryCache.Set(key, data)
 }
 
 func InvalidateCache(prefix string) {
-	queryCache.Range(func(key, value interface{}) bool {
-		if k, ok := key.(string); ok && len(k) >= len(prefix) && k[:len(prefix)] == prefix {
-			queryCache.Delete(key)
-		}
-		return true
-	})
+	queryCache.InvalidateByPrefix(prefix)
 }
 
 func ClearCache() {
-	queryCache = sync.Map{}
+	queryCache.Clear()
 }
 
 // InitDB initializes the database using glebarez/sqlite pure Go driver
-func InitDB(dbPath string, logLevel slog.Level) (*gorm.DB, error) {
+func InitDB(dbPath string, logLevel slog.Level, defaultPassword ...string) (*gorm.DB, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {
 		return nil, err
 	}
@@ -78,10 +96,10 @@ func InitDB(dbPath string, logLevel slog.Level) (*gorm.DB, error) {
 	}
 
 	// Rename legacy table (Agent → Implant rename, ignore if already renamed)
-	_ = db.Exec("ALTER TABLE agents RENAME TO implants").Error
+	execMigration(db, "ALTER TABLE agents RENAME TO implants", "rename_agents_to_implants")
 
 	// Auto-migrate all models
-	if err := db.AutoMigrate(&Implant{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &ScanResult{}, &NetworkHost{}, &CommandTemplate{}, &BOFFile{}, &ServerConfig{}, &WebhookConfig{}, &Plugin{}, &PluginReview{}, &PluginDependency{}, &PluginUpdateStatus{}, &RolePermission{}, &AutomationRule{}, &AlertRule{}, &Alert{}, &SystemMetric{}, &GeneratedReport{}); err != nil {
+	if err := db.AutoMigrate(&Implant{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &ScanResult{}, &NetworkHost{}, &CommandTemplate{}, &BOFFile{}, &BOFLibrary{}, &ServerConfig{}, &WebhookConfig{}, &Plugin{}, &PluginReview{}, &PluginDependency{}, &PluginUpdateStatus{}, &RolePermission{}, &AutomationRule{}, &AlertRule{}, &Alert{}, &SystemMetric{}, &GeneratedReport{}, &Campaign{}, &CampaignAgent{}, &MeshPeer{}, &BloodHoundResult{}, &BloodHoundFile{}, &SessionRecording{}, &OpsecHistory{}, &OpsecRule{}, &CircuitBreakerConfig{}, &CircuitBreakerEvent{}, &CustomRole{}, &PhishingTemplate{}, &PhishingCampaign{}, &PhishingEvent{}, &AgentTag{}, &AgentTagAssignment{}, &AutoTagRule{}, &ScheduledTask{}, &Notification{}, &AgentGroup{}, &AgentGroupAssignment{}, &Workflow{}, &WorkflowStep{}, &WorkflowExecution{}, &WorkflowStepLog{}, &ChatMessage{}, &ScheduledReport{}, &StagerToken{}, &Redirector{}, &AgentLock{}, &CloudCred{}, &AIChatSession{}, &AIChatMessage{}, &ExtC2Channel{}); err != nil {
 		return nil, err
 	}
 
@@ -92,39 +110,41 @@ func InitDB(dbPath string, logLevel slog.Level) (*gorm.DB, error) {
 	MigrateOldRoles(db)
 
 	// Ensure new columns exist (glebarez/sqlite AutoMigrate may not add all; ignore "duplicate column" errors)
-	_ = db.Exec("ALTER TABLE implants ADD COLUMN pid INTEGER DEFAULT 0").Error
-	_ = db.Exec("ALTER TABLE implants ADD COLUMN public_ip TEXT DEFAULT ''").Error
-	_ = db.Exec("ALTER TABLE implants ADD COLUMN country TEXT DEFAULT ''").Error
-	_ = db.Exec("ALTER TABLE implants ADD COLUMN city TEXT DEFAULT ''").Error
-	_ = db.Exec("ALTER TABLE implants ADD COLUMN latitude REAL DEFAULT 0").Error
-	_ = db.Exec("ALTER TABLE implants ADD COLUMN longitude REAL DEFAULT 0").Error
-	_ = db.Exec("ALTER TABLE implants ADD COLUMN active_window TEXT DEFAULT ''").Error
+	execMigration(db, "ALTER TABLE implants ADD COLUMN pid INTEGER DEFAULT 0", "add_pid")
+	execMigration(db, "ALTER TABLE implants ADD COLUMN public_ip TEXT DEFAULT ''", "add_public_ip")
+	execMigration(db, "ALTER TABLE implants ADD COLUMN country TEXT DEFAULT ''", "add_country")
+	execMigration(db, "ALTER TABLE implants ADD COLUMN city TEXT DEFAULT ''", "add_city")
+	execMigration(db, "ALTER TABLE implants ADD COLUMN latitude REAL DEFAULT 0", "add_latitude")
+	execMigration(db, "ALTER TABLE implants ADD COLUMN longitude REAL DEFAULT 0", "add_longitude")
+	execMigration(db, "ALTER TABLE implants ADD COLUMN active_window TEXT DEFAULT ''", "add_active_window")
+	execMigration(db, "ALTER TABLE implants ADD COLUMN trusted INTEGER DEFAULT 0", "add_trusted")
 
 	// Seed default admin user if none exist
 	var userCount int64
 	db.Model(&User{}).Count(&userCount)
 	if userCount == 0 {
-		const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
-		pw := make([]byte, 24)
-		for i := range pw {
-			n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-			pw[i] = charset[n.Int64()]
+		// Use configured default password, or generate a random one
+		adminPass := ""
+		if len(defaultPassword) > 0 && defaultPassword[0] != "" {
+			adminPass = defaultPassword[0]
+		} else {
+			adminPass = generateRandomPassword(12)
 		}
-		defaultPassword := string(pw)
-		defaultAdminHash, err := bcrypt.GenerateFromPassword([]byte(defaultPassword), bcrypt.DefaultCost)
+		defaultAdminHash, err := bcrypt.GenerateFromPassword([]byte(adminPass), bcrypt.DefaultCost)
 		if err != nil {
 			slog.Error("Failed to hash default admin password", "err", err)
 		} else {
 			db.Create(&User{
-				Username:     "admin",
-				PasswordHash: string(defaultAdminHash),
-				Role:         "admin",
-				IsActive:     true,
+				Username:            "admin",
+				PasswordHash:        string(defaultAdminHash),
+				Role:                "admin",
+				IsActive:            true,
+				ForcePasswordChange: true,
 			})
 			slog.Warn("╔══════════════════════════════════════════════════════════╗")
-			slog.Warn("║  DEFAULT ADMIN CREDENTIALS                             ║")
-			slog.Warn(fmt.Sprintf("║  Username: admin  Password: %-24s  ║", defaultPassword))
-			slog.Warn("║  CHANGE THIS IMMEDIATELY AFTER LOGIN!                  ║")
+			slog.Warn("║  DEFAULT ADMIN CREDENTIALS (CHANGE IMMEDIATELY!)       ║")
+			slog.Warn(fmt.Sprintf("║  Username: admin  Password: %-24s  ║", adminPass))
+			slog.Warn("║  You will be prompted to change this on first login.   ║")
 			slog.Warn("╚══════════════════════════════════════════════════════════╝")
 		}
 	}
@@ -137,68 +157,82 @@ func InitDB(dbPath string, logLevel slog.Level) (*gorm.DB, error) {
 	db.Exec("PRAGMA foreign_keys = ON;")
 
 	// Performance indexes for common queries
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_last_seen ON implants(last_seen)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_status ON implants(status)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_listener_id ON implants(listener_id)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_hostname ON implants(hostname)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_ip ON implants(ip)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_agent_status_created ON tasks(agent_id, status, created_at)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_created_status ON tasks(created_at, status)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_type ON tasks(type)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_credential_entries_agent_id ON credential_entries(agent_id)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_credential_entries_source ON credential_entries(source)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_credential_entries_created ON credential_entries(created_at)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_scan_agent_id ON scan_results(agent_id)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_scan_created ON scan_results(created_at)")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_implants_last_seen ON implants(last_seen)", "idx_implants_last_seen")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_implants_status ON implants(status)", "idx_implants_status")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_implants_listener_id ON implants(listener_id)", "idx_implants_listener_id")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_implants_hostname ON implants(hostname)", "idx_implants_hostname")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_implants_ip ON implants(ip)", "idx_implants_ip")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_tasks_agent_status_created ON tasks(agent_id, status, created_at)", "idx_tasks_agent_status_created")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_tasks_created_status ON tasks(created_at, status)", "idx_tasks_created_status")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_tasks_type ON tasks(type)", "idx_tasks_type")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_credential_entries_agent_id ON credential_entries(agent_id)", "idx_credential_entries_agent_id")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_credential_entries_source ON credential_entries(source)", "idx_credential_entries_source")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_credential_entries_created ON credential_entries(created_at)", "idx_credential_entries_created")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user)", "idx_audit_user")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action)", "idx_audit_action")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at)", "idx_audit_created")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_scan_agent_id ON scan_results(agent_id)", "idx_scan_agent_id")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_scan_created ON scan_results(created_at)", "idx_scan_created")
 
 	// Additional indexes for common queries
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_username ON implants(username)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_os ON implants(os)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_arch ON implants(arch)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_elevated ON implants(elevated)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_created ON implants(created_at)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_implants_parent_id ON implants(parent_id)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_result ON tasks(result)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_listeners_enabled ON listeners(enabled)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_listeners_scheme ON listeners(scheme)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_token_entries_active ON token_entries(active)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_token_entries_domain ON token_entries(domain)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_socks_sessions_status ON socks_sessions(status)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_credentials_type ON credential_entries(type)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_credentials_confirmed ON credential_entries(confirmed)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_build_logs_user ON build_logs(user)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_build_logs_status ON build_logs(status)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_network_hosts_ip ON network_hosts(ip)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_command_templates_category ON command_templates(category)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_alerts_type ON alerts(type)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled ON alert_rules(enabled)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_system_metrics_created ON system_metrics(created_at)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_automation_rules_enabled ON automation_rules(enabled)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_automation_rules_event ON automation_rules(event_type)")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_implants_username ON implants(username)", "idx_implants_username")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_implants_os ON implants(os)", "idx_implants_os")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_implants_arch ON implants(arch)", "idx_implants_arch")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_implants_elevated ON implants(elevated)", "idx_implants_elevated")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_implants_created ON implants(created_at)", "idx_implants_created")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_implants_parent_id ON implants(parent_id)", "idx_implants_parent_id")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)", "idx_users_username")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)", "idx_users_role")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)", "idx_users_active")
+	execMigration(db, "ALTER TABLE listeners ADD COLUMN tags VARCHAR(500) DEFAULT ''", "add_listeners_tags")
+	execMigration(db, "ALTER TABLE listeners ADD COLUMN color VARCHAR(7) DEFAULT ''", "add_listeners_color")
+	execMigration(db, "ALTER TABLE listeners ADD COLUMN status VARCHAR(20) DEFAULT 'running'", "add_listeners_status")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_listeners_enabled ON listeners(enabled)", "idx_listeners_enabled")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_listeners_scheme ON listeners(scheme)", "idx_listeners_scheme")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_token_entries_active ON token_entries(active)", "idx_token_entries_active")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_token_entries_domain ON token_entries(domain)", "idx_token_entries_domain")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_socks_sessions_status ON socks_sessions(status)", "idx_socks_sessions_status")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_credentials_type ON credential_entries(type)", "idx_credentials_type")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_credentials_confirmed ON credential_entries(confirmed)", "idx_credentials_confirmed")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_build_logs_user ON build_logs(user)", "idx_build_logs_user")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_build_logs_status ON build_logs(status)", "idx_build_logs_status")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_network_hosts_ip ON network_hosts(ip)", "idx_network_hosts_ip")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_command_templates_category ON command_templates(category)", "idx_command_templates_category")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status)", "idx_alerts_status")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity)", "idx_alerts_severity")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_alerts_type ON alerts(type)", "idx_alerts_type")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled ON alert_rules(enabled)", "idx_alert_rules_enabled")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_system_metrics_created ON system_metrics(created_at)", "idx_system_metrics_created")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_automation_rules_enabled ON automation_rules(enabled)", "idx_automation_rules_enabled")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_automation_rules_event ON automation_rules(event_type)", "idx_automation_rules_event")
+
+	// Composite indexes for common query patterns
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_tasks_agent_created ON tasks(agent_id, created_at DESC)", "idx_tasks_agent_created")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_credential_entries_agent_created ON credential_entries(agent_id, created_at)", "idx_credential_entries_agent_created")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_notifications_type_read_created ON notifications(type, read, created_at)", "idx_notifications_type_read_created")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_notifications_read_created ON notifications(read, created_at)", "idx_notifications_read_created")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_implants_status_last_seen ON implants(status, last_seen)", "idx_implants_status_last_seen")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_audit_logs_action_created ON audit_logs(action, created_at)", "idx_audit_logs_action_created")
+
+	// Security fix: additional query-path indexes
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_tasks_agent_status ON tasks(agent_id, status)", "idx_tasks_agent_status")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)", "idx_tasks_status")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_tasks_type ON tasks(type)", "idx_tasks_type")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_cred_entries_type ON credential_entries(type)", "idx_cred_entries_type")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_alerts_status_severity ON alerts(status, severity)", "idx_alerts_status_severity")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_alerts_rule_source ON alerts(rule_id, source, status)", "idx_alerts_rule_source")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_messages(channel)", "idx_chat_messages_channel")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run ON scheduled_tasks(next_run, enabled)", "idx_scheduled_tasks_next_run")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_opsec_history_agent_created ON opsec_history(agent_id, created_at)", "idx_opsec_history_agent_created")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_network_hosts_agent_ip ON network_hosts(agent_id, ip)", "idx_network_hosts_agent_ip")
+	execMigration(db, "CREATE INDEX IF NOT EXISTS idx_phishing_events_type_created ON phishing_events(event_type, created_at)", "idx_phishing_events_type_created")
 
 	// SQLite performance optimizations
-	db.Exec("PRAGMA journal_mode = WAL;")
-	db.Exec("PRAGMA cache_size = -2000;")
-	db.Exec("PRAGMA temp_store = MEMORY;")
-	db.Exec("PRAGMA synchronous = NORMAL;")
-	db.Exec("PRAGMA mmap_size = 268435456;")
-
-	// Configure connection pool (optimization)
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, err
-	}
-	sqlDB.SetMaxOpenConns(25)                 // Maximum open connections
-	sqlDB.SetMaxIdleConns(10)                 // Maximum idle connections
-	sqlDB.SetConnMaxLifetime(5 * time.Minute) // Connection max lifetime
+	execMigration(db, "PRAGMA journal_mode = WAL;", "pragma_wal")
+	execMigration(db, "PRAGMA cache_size = -2000;", "pragma_cache")
+	execMigration(db, "PRAGMA temp_store = MEMORY;", "pragma_temp_store")
+	execMigration(db, "PRAGMA synchronous = NORMAL;", "pragma_sync")
+	execMigration(db, "PRAGMA mmap_size = 268435456;", "pragma_mmap")
 
 	slog.Info("Database initialized", "path", dbPath)
 	return db, nil

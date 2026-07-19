@@ -1,0 +1,27 @@
+name: timeline-report
+version: 1.0.0
+type: report
+description: Generate a chronological timeline of all engagement events - agent activity, tasks, and audit logs
+author: ForgeC2
+category: reporting
+entry: report.py
+interpreter: python
+timeout: 60
+params:
+    - name: format
+      type: string
+      required: false
+      default: html
+      description: Output format (html, markdown, json)
+    - name: title
+      type: string
+      required: false
+      default: Engagement Timeline
+      description: Report title
+    - name: hours
+      type: number
+      required: false
+      default: "72"
+      description: Hours of history to include (0 = all)
+config:
+    max_events: "500"

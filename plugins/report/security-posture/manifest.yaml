@@ -1,0 +1,20 @@
+name: security-posture
+version: 1.0.0
+type: report
+description: Generates security posture assessment — vulnerabilities, misconfigurations, and risk scoring
+author: ""
+category: reporting
+entry: report.py
+interpreter: python3
+timeout: 60
+params:
+    - name: format
+      type: string
+      required: false
+      default: html
+      description: Output format (html, markdown, json)
+    - name: title
+      type: string
+      required: false
+      default: Security Posture Assessment
+      description: Report title

@@ -1,0 +1,25 @@
+name: executive-summary
+version: 1.0.0
+type: report
+description: Generates executive summary report with key metrics, risk assessment, and recommendations
+author: ""
+category: reporting
+entry: report.py
+interpreter: python3
+timeout: 60
+params:
+    - name: format
+      type: string
+      required: false
+      default: html
+      description: Output format (html, markdown, json)
+    - name: title
+      type: string
+      required: false
+      default: Executive Summary
+      description: Report title
+    - name: hours
+      type: int
+      required: false
+      default: "0"
+      description: Time window in hours (0 = all time)

@@ -1,9 +1,16 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { API_BASE } from "@/lib/constants";
+import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
+import { PageSpinner, PageHeader } from "@/components/UI";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ArrowLeft, Plug } from "lucide-react";
 
 interface ListenerDetail {
   ID?: string;
@@ -25,22 +32,16 @@ interface ListenerDetail {
   Notes?: string;
   notes?: string;
   CreatedAt?: string;
+  created_at?: string;
 }
 
-interface Agent {
-  ID?: string;
+interface ListenerAgent {
   id?: string;
-  Hostname?: string;
   hostname?: string;
-  IP?: string;
   ip?: string;
-  OS?: string;
   os?: string;
-  Arch?: string;
   arch?: string;
-  LastSeen?: string;
   last_seen?: string;
-  Status?: string;
   status?: string;
 }
 
@@ -48,20 +49,19 @@ export default function ListenerDetailPage() {
   const params = useParams();
   const id = params?.id as string;
   const [listener, setListener] = useState<ListenerDetail | null>(null);
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agents, setAgents] = useState<ListenerAgent[]>([]);
   const [stats, setStats] = useState({ total: 0, active: 0 });
   const [loading, setLoading] = useState(true);
+  const { t } = useI18n();
 
   const loadDetail = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await fetch(`${API_BASE}?p=${encodeURIComponent(`/listeners/${id}`)}&format=json`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setListener(data.Listener || data.listener || data);
-      const a: Agent[] = data.Agents || data.agents || [];
+      const data = await api.get(`/listeners/${id}`);
+      setListener(data.listener || data);
+      const a: ListenerAgent[] = (data.agents || []) as ListenerAgent[];
       setAgents(a);
-      setStats({ total: a.length, active: a.filter(ag => (ag.Status || ag.status) === "online").length });
+      setStats({ total: a.length, active: a.filter(ag => (ag.status) === "online").length });
     } catch {
       setListener(null);
       setAgents([]);
@@ -71,137 +71,132 @@ export default function ListenerDetailPage() {
     }
   }, [id]);
 
-  useEffect(() => { Promise.resolve().then(() => loadDetail()); }, [loadDetail]);
+  useEffect(() => { loadDetail(); }, [loadDetail]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-spin w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
-      </div>
-    );
+    return <PageSpinner />;
   }
 
   if (!listener) {
     return (
-      <div className="text-center py-20 text-slate-400 dark:text-slate-500">
-        <i className="fa-solid fa-plug text-4xl mb-3 opacity-30"></i>
+      <div className="text-center py-20 text-muted-foreground">
+        <Plug className="w-4 h-4" />
         <p>Listener not found</p>
       </div>
     );
   }
 
-  const name = listener.Name || listener.name || "Unknown";
-  const scheme = listener.Scheme || listener.scheme || listener.Protocol || listener.protocol || listener.Type || listener.type || "http";
-  const host = listener.Host || listener.host || "0.0.0.0";
-  const port = listener.Port ?? listener.port ?? 8080;
-  const isEnabled = listener.Enabled === true || listener.Enabled === "true" || listener.enabled === true;
-  const notes = listener.notes || listener.Notes || "-";
-  const createdAt = listener.CreatedAt || "-";
+  const name = listener.name || "Unknown";
+  const scheme = listener.scheme || listener.protocol || listener.type || "http";
+  const host = listener.host || "0.0.0.0";
+  const port = listener.port ?? 8080;
+  const isEnabled = listener.enabled === true;
+  const notes = listener.notes || "-";
+  const createdAt = listener.created_at || "-";
 
   return (
-    <div className="max-w-7xl mx-auto mb-20 md:mb-0">
+    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <div className="flex items-center gap-x-4 mb-6">
-        <Link href="/listeners" className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:text-slate-300">
-          <i className="fa-solid fa-arrow-left text-xl"></i>
+        <Link href="/listeners" className="text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="w-4 h-4" />
         </Link>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{name}</h1>
-          <div className="text-slate-500 dark:text-slate-400 text-sm">{scheme}://{host}:{port}</div>
+          <PageHeader title={name} subtitle={`${scheme}://${host}:${port}`} />
         </div>
         <div className="ml-auto">
           {isEnabled ? (
-            <span className="px-3 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-full text-sm">启用</span>
+            <Badge variant="default">{t("listener.enabled")}</Badge>
           ) : (
-            <span className="px-3 py-1 bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400 rounded-full text-sm">禁用</span>
+            <Badge variant="secondary">{t("listener.disabled")}</Badge>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-1">
-          <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-3xl p-6">
-            <h3 className="font-semibold mb-4 text-slate-900 dark:text-slate-100">监听器信息</h3>
+          <Card className="p-4 sm:p-5">
+            <h3 className="font-semibold mb-4 text-foreground">{t("listener.info_title")}</h3>
             <div className="space-y-3 text-sm">
-              <div><span className="text-slate-500 dark:text-slate-400">方案:</span> <span className="text-slate-900 dark:text-slate-100">{scheme}</span></div>
-              <div><span className="text-slate-500 dark:text-slate-400">地址:</span> <span className="text-slate-900 dark:text-slate-100">{host}:{port}</span></div>
-              <div><span className="text-slate-500 dark:text-slate-400">传输类型:</span> <span className="text-slate-900 dark:text-slate-100">{listener.Type || listener.type || scheme}</span></div>
-              <div><span className="text-slate-500 dark:text-slate-400">备注:</span> <span className="text-slate-900 dark:text-slate-100">{notes}</span></div>
-              <div><span className="text-slate-500 dark:text-slate-400">创建:</span> <span className="text-slate-900 dark:text-slate-100">{createdAt}</span></div>
+              <div><span className="text-muted-foreground">{t("listener.scheme")}</span> <span className="text-foreground">{scheme}</span></div>
+              <div><span className="text-muted-foreground">{t("listener.address")}</span> <span className="text-foreground">{host}:{port}</span></div>
+              <div><span className="text-muted-foreground">{t("listener.transport_type")}</span> <span className="text-foreground">{listener.type || scheme}</span></div>
+              <div><span className="text-muted-foreground">{t("listener.notes")}</span> <span className="text-foreground">{notes}</span></div>
+              <div><span className="text-muted-foreground">{t("listener.created")}</span> <span className="text-foreground">{createdAt}</span></div>
             </div>
             <div className="mt-6 flex gap-2">
-               <a href={`/generate?listener_id=${id}`} className="flex-1 text-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm">为此监听器生成 Implant</a>
+               <Button render={<Link href={`/generate?listener_id=${id}`} />} className="flex-1">{t("listener.generate_implant")}</Button>
             </div>
-          </div>
+          </Card>
         </div>
 
         <div className="lg:col-span-2">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-3xl p-5">
-              <div className="text-xs text-slate-500 dark:text-slate-400">关联 Agent 总数</div>
-              <div className="text-4xl font-semibold mt-2 text-slate-900 dark:text-slate-100">{stats.total}</div>
-            </div>
-            <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-3xl p-5">
-              <div className="text-xs text-slate-500 dark:text-slate-400">当前活跃</div>
+            <Card className="p-4 sm:p-5">
+              <div className="text-xs text-muted-foreground">{t("listener.agent_total")}</div>
+              <div className="text-4xl font-semibold mt-2 text-foreground">{stats.total}</div>
+            </Card>
+            <Card className="p-4 sm:p-5">
+              <div className="text-xs text-muted-foreground">{t("listener.active_now")}</div>
               <div className="text-4xl font-semibold mt-2 text-emerald-600">{stats.active}</div>
-            </div>
-            <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-3xl p-5">
-              <div className="text-xs text-slate-500 dark:text-slate-400">负载均衡提示</div>
-              <div className="text-sm mt-2 text-slate-600 dark:text-slate-300">可将多个监听器指向不同服务器或端口实现多路负载均衡。Agent 可随机或按策略连接不同监听器</div>
-            </div>
+            </Card>
+            <Card className="p-4 sm:p-5">
+              <div className="text-xs text-muted-foreground">{t("listener.lb_hint_title")}</div>
+              <div className="text-sm mt-2 text-muted-foreground">{t("listener.lb_hint")}</div>
+            </Card>
           </div>
         </div>
       </div>
 
       <div className="mt-8">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">使用此监听器的 Agent ({stats.total})</h2>
-          <Link href="/agents" className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400">查看全部 Agent </Link>
+          <h2 className="text-xl font-bold text-foreground">{t("listener.agents_using")} ({stats.total})</h2>
+          <Link href="/agents" className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 transition-colors">{t("listener.view_all_agents")}</Link>
         </div>
 
-        <div className="bg-[var(--card-bg)] border border-[var(--border)] rounded-3xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-700/50">
-              <tr>
-                <th className="text-left py-3 px-6 font-medium text-slate-600 dark:text-slate-400">Agent</th>
-                <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400">IP</th>
-                <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400">系统</th>
-                <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400">最后在线</th>
-                <th className="text-center py-3 px-4 font-medium text-slate-600 dark:text-slate-400">状态</th>
-                <th className="text-right py-3 px-6 font-medium text-slate-600 dark:text-slate-400">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+        <Card className="overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="py-3 px-6">Agent</TableHead>
+                <TableHead className="py-3 px-4">IP</TableHead>
+                <TableHead className="py-3 px-4">{t("listener.os")}</TableHead>
+                <TableHead className="py-3 px-4">{t("listener.last_seen")}</TableHead>
+                <TableHead className="py-3 px-4 text-center">{t("listener.status")}</TableHead>
+                <TableHead className="py-3 px-6 text-right">{t("listener.action")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {agents.length > 0 ? (
                 agents.map((a, i) => {
-                  const aid = a.ID || a.id || String(i);
-                  const status = a.Status || a.status || "offline";
+                  const aid = a.id || String(i);
+                  const status = a.status || "offline";
                   return (
-                    <tr key={aid} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                      <td className="py-3 px-6 font-medium text-slate-900 dark:text-slate-100">{a.Hostname || a.hostname || "-"}</td>
-                      <td className="py-3 px-4 font-mono text-xs text-slate-600 dark:text-slate-300">{a.IP || a.ip || "-"}</td>
-                      <td className="py-3 px-4 text-xs text-slate-600 dark:text-slate-300">{a.OS || a.os || "-"}/{a.Arch || a.arch || "-"}</td>
-                      <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">{a.LastSeen || a.last_seen || "-"}</td>
-                      <td className="py-3 px-4 text-center">
+                    <TableRow key={aid}>
+                      <TableCell className="py-3 px-6 font-medium text-foreground">{a.hostname || "-"}</TableCell>
+                      <TableCell className="py-3 px-4 font-mono text-xs text-muted-foreground">{a.ip || "-"}</TableCell>
+                      <TableCell className="py-3 px-4 text-xs text-muted-foreground">{a.os || "-"}/{a.arch || "-"}</TableCell>
+                      <TableCell className="py-3 px-4 text-xs text-muted-foreground">{a.last_seen || "-"}</TableCell>
+                      <TableCell className="py-3 px-4 text-center">
                         {status === "online" ? (
-                          <span className="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded">在线</span>
+                          <Badge variant="default">{t("listener.online")}</Badge>
                         ) : (
-                          <span className="px-2 py-0.5 text-xs bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400 rounded">离线</span>
+                          <Badge variant="secondary">{t("listener.offline")}</Badge>
                         )}
-                      </td>
-                      <td className="py-3 px-6 text-right">
-                        <a href={`/agents/${aid}`} className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 hover:underline text-sm">璇︽儏</a>
-                      </td>
-                    </tr>
+                      </TableCell>
+                      <TableCell className="py-3 px-6 text-right">
+                        <Link href={`/agents/${aid}`} className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 hover:underline text-sm transition-colors">{t("listener.detail")}</Link>
+                      </TableCell>
+                    </TableRow>
                   );
                 })
               ) : (
-                <tr>
-                  <td colSpan={6} className="py-10 text-center text-slate-400 dark:text-slate-500">暂无 Implant 使用此监听器</td>
-                </tr>
+                <TableRow>
+                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">{t("listener.empty")}</TableCell>
+                </TableRow>
               )}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       </div>
     </div>
   );

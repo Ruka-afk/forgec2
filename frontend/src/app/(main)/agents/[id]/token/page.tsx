@@ -2,7 +2,18 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { API_BASE } from "@/lib/constants";
+import { api } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AlertCircle, BadgeInfo, Check, CircleDot, Info, Key, List, Loader2, Pencil, Plus, PlusCircle, RotateCcw, RotateCw, Trash2, User, UserCheck, UserCog, X } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { useI18n } from "@/lib/i18n";
 
 interface Token {
   id?: number;
@@ -39,6 +50,7 @@ interface Process {
 
 
 export default function AgentTokenPage() {
+  const { t } = useI18n();
   const params = useParams();
   const agentId = params.id as string;
   const [tokens, setTokens] = useState<Token[]>([]);
@@ -49,45 +61,28 @@ export default function AgentTokenPage() {
   const [makeDomain, setMakeDomain] = useState("");
   const [makePass, setMakePass] = useState("");
   const [activeAction, setActiveAction] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ text: string; type: string } | null>(null);
+
   const [whoamiResult, setWhoamiResult] = useState<string | null>(null);
   const [tokenNotes, setTokenNotes] = useState<Record<string, string>>({});
   const [noteTargetId, setNoteTargetId] = useState<string | null>(null);
 
-  const showToast = useCallback((text: string, type: string = "info") => {
-    setToast({ text, type });
-    setTimeout(() => setToast(null), 3000);
-  }, []);
-
   const loadTokens = useCallback(async () => {
     try {
-      const r = await fetch(`${API_BASE}?p=/agents/${agentId}/token/list&format=json`);
-      if (r.ok) {
-        const data = await r.json();
-        setTokens(data.Tokens || data.tokens || []);
-      }
-    } catch (e) { console.error("Token: list tokens failed", e); }
-  }, [agentId]);
+      const data = await api.get<{ Tokens?: Token[]; tokens?: Token[] }>(`/agents/${agentId}/token/list?format=json`);
+      setTokens(data.tokens || []);
+    } catch { toast.error(t("agents.token_load_failed")); }
+  }, [agentId, t]);
 
   const loadProcesses = useCallback(async () => {
     try {
-      const r = await fetch(`${API_BASE}?p=/agents/${agentId}/token/list_procs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "",
-      });
-      if (r.ok) {
-        const data = await r.json();
-        setProcesses(data.processes || data.data || data || []);
-      }
-    } catch (e) { console.error("Token: list processes failed", e); }
-  }, [agentId]);
+      const data = await api.post<{ processes?: Process[]; data?: Process[] }>(`/agents/${agentId}/token/list_procs`);
+      setProcesses(data.processes || data.data || []);
+    } catch { toast.error(t("agents.token_load_processes_failed")); }
+  }, [agentId, t]);
 
   useEffect(() => {
-    Promise.resolve().then(() => {
-      setLoading(true);
-      Promise.all([loadTokens(), loadProcesses()]).finally(() => setLoading(false));
-    });
+    setLoading(true);
+    Promise.all([loadTokens(), loadProcesses()]).finally(() => setLoading(false));
   }, [loadTokens, loadProcesses]);
 
   const handleStealToken = async (e: React.FormEvent) => {
@@ -97,15 +92,12 @@ export default function AgentTokenPage() {
     try {
       const body = new URLSearchParams();
       body.append("pid", stealPid);
-      await fetch(`${API_BASE}?p=/agents/${agentId}/token/steal`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: body.toString(),      });
+      await api.post(`/agents/${agentId}/token/steal`, Object.fromEntries(body.entries()));
       setStealPid("");
-      showToast("Token steal task dispatched", "success");
+      toast.success(t("agents.token_steal_success"));
       await loadTokens();
     } catch {
-      showToast("Failed to steal token", "error");
+      toast.error(t("agents.token_steal_failed"));
     } finally {
       setActiveAction(null);
     }
@@ -116,13 +108,12 @@ export default function AgentTokenPage() {
       const body = new URLSearchParams();      body.append("username", makeUser);
       body.append("domain", makeDomain);
       body.append("password", makePass);
-      await fetch(`${API_BASE}?p=/agents/${agentId}/token/make`, {        method: "POST",        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: body.toString(),
-      });      setMakeUser(""); setMakeDomain(""); setMakePass("");
-      showToast("Token creation task dispatched", "success");
+      await api.post(`/agents/${agentId}/token/make`, Object.fromEntries(body.entries()));
+      setMakeUser(""); setMakeDomain(""); setMakePass("");
+      toast.success(t("agents.token_make_success"));
       await loadTokens();
     } catch {
-      showToast("Failed to create token", "error");    } finally {
+      toast.error(t("agents.token_make_failed"));    } finally {
       setActiveAction(null);
     }
   };
@@ -130,28 +121,22 @@ export default function AgentTokenPage() {
   const handleRevert = async () => {
     setActiveAction("revert");
     try {
-      await fetch(`${API_BASE}?p=/agents/${agentId}/token/revert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "",
-      });
-      showToast("Token reverted to self", "success");
+      await api.post(`/agents/${agentId}/token/revert`);
+      toast.success(t("agents.token_revert_success"));
       setWhoamiResult(null);
       await loadTokens();
     } catch {
-      showToast("Failed to revert token", "error");    } finally {
+      toast.error(t("agents.token_revert_failed"));    } finally {
       setActiveAction(null);
     }
   };  const handleDrop = async (tokenId: string) => {
     setActiveAction(`drop-${tokenId}`);
     try {
-      await fetch(`${API_BASE}?p=/agents/${agentId}/token/${tokenId}`, {
-        method: "DELETE",
-      });
-      showToast("Token dropped", "success");
+      await api.del(`/agents/${agentId}/token/${tokenId}`);
+      toast.success(t("agents.token_drop_success"));
       await loadTokens();
     } catch {
-      showToast("Failed to drop token", "error");
+      toast.error(t("agents.token_drop_failed"));
     } finally {
       setActiveAction(null);
     }
@@ -159,36 +144,25 @@ export default function AgentTokenPage() {
 
   const handleImpersonate = async (tokenId: string) => {
     setActiveAction(`impersonate-${tokenId}`);    try {
-      await fetch(`${API_BASE}?p=/agents/${agentId}/token/${tokenId}/impersonate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "",
-      });      showToast("Impersonation active", "success");
+      await api.post(`/agents/${agentId}/token/${tokenId}/impersonate`);
+      toast.success(t("agents.token_impersonate"));
       await loadTokens();
     } catch {
-      showToast("Failed to impersonate", "error");
+      toast.error(t("agents.token_drop_failed"));
     } finally {      setActiveAction(null);    }
   };
 
   const handleWhoami = async () => {
     setActiveAction("whoami");
     try {
-      const r = await fetch(`${API_BASE}?p=/agents/${agentId}/token/whoami`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "",
-      });
-      if (r.ok) {
-        const data = await r.json();
-        setWhoamiResult(data.user || data.username || data.name || JSON.stringify(data));        showToast(`Identity: ${data.user || data.username || "unknown"}`, "info");
-      } else {
-        const text = await r.text();
-        setWhoamiResult(`Error ${r.status}: ${text}`);
-        showToast("Whoami failed", "error");
-      }
+      const data = await api.post(`/agents/${agentId}/token/whoami`);
+      const d = data as Record<string, unknown>;
+      const user = String(d.user || d.username || d.name || JSON.stringify(data));
+      setWhoamiResult(user);
+      toast(`Identity: ${d.user || d.username || "unknown"}`);
     } catch (err) {
       setWhoamiResult(`Error: ${err}`);
-      showToast("Whoami failed", "error");    } finally {      setActiveAction(null);    }
+      toast.error(t("agents.token_whoami_failed"));    } finally {      setActiveAction(null);    }
   };
 
   const handleNote = async (tokenId: string) => {
@@ -196,240 +170,257 @@ export default function AgentTokenPage() {
     try {
       const body = new URLSearchParams();
       body.append("note", noteText || "");
-      await fetch(`${API_BASE}?p=/agents/${agentId}/token/${tokenId}/note`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: body.toString(),
-      });
-      showToast(noteText ? "Note saved" : "Note cleared", "success");
+      await api.post(`/agents/${agentId}/token/${tokenId}/note`, Object.fromEntries(body.entries()));
+      toast.success(noteText ? t("agents.token_notes") : t("agents.token_notes"));
       await loadTokens();
     } catch {
-      showToast("Failed to save note", "error");
+      toast.error(t("agents.token_notes"));
     } finally {
       setActiveAction(null);
       setNoteTargetId(null);
     }  };
 
   const getIntegrityBadge = (integrity: string) => {
-    const colors: Record<string, string> = {
-      System: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border border-red-200 dark:border-red-800",
-      High: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 border border-orange-200 dark:border-orange-800",
-      Medium: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800",
-      Low: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border border-[var(--border)]",
+    const variants: Record<string, "destructive" | "default" | "secondary" | "outline"> = {
+      System: "destructive",
+      High: "destructive",
+      Medium: "secondary",
+      Low: "outline",
     };
-    return <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${colors[integrity] || colors.Medium}`}>{integrity}</span>;
+    return <Badge variant={variants[integrity] || "secondary"}>{integrity}</Badge>;
   };
 
   const getTokenTypeBadge = (source: string, tokenType?: string, protocol?: string) => {
-    const type = tokenType || protocol || source;    const icons: Record<string, string> = {
-      steal: "fa-user-ninja",
-      make: "fa-plus-circle",
-      named_pipe: "fa-circle-nodes",
-      impersonate: "fa-user-secret",      create: "fa-key",
+    const type = tokenType || protocol || source;
+    const icons: Record<string, React.ReactNode> = {
+      steal: <UserCog className="w-3 h-3" />,
+      make: <PlusCircle className="w-3 h-3" />,
+      named_pipe: <CircleDot className="w-3 h-3" />,
+      impersonate: <UserCog className="w-3 h-3" />,
+      create: <Key className="w-3 h-3" />,
     };
-    const icon = icons[type] || "fa-id-badge";
+    const icon = icons[type] || <BadgeInfo className="w-3 h-3" />;
     const labels: Record<string, string> = {
       steal: "Named Pipe (Stolen)",
-      make: "Logon (Created)",      named_pipe: "Named Pipe",
+      make: "Logon (Created)",
+      named_pipe: "Named Pipe",
       impersonate: "Impersonation",
       create: "Logon Create",
     };
     const label = labels[type] || type;
-    return (      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg ${        source === "steal" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800" :
-        "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
-      }`}>
-        <i className={`fa-solid ${icon}`}></i>
-        {label}
-      </span>
+    return (
+      <Badge variant={source === "steal" ? "destructive" : "default"}>
+        {icon} {label}
+      </Badge>
     );
   };  return (
-    <div className="max-w-7xl mx-auto mb-20 md:mb-0 space-y-6">
-      {toast && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl text-sm font-medium shadow-lg ${          toast.type === "success" ? "bg-emerald-600 text-white" :          toast.type === "error" ? "bg-red-600 text-white" :          "bg-blue-600 text-white"
-        }`}>
-          {toast.text}
-        </div>
-      )}
+    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-            <i className="fa-solid fa-id-badge text-indigo-500 mr-2"></i>Token Operations
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            <BadgeInfo className="w-4 h-4" />{t("agents.token_title")}
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">Manage tokens for agent {agentId.substring(0, 12)}</p>
+          <p className="text-muted-foreground text-xs mt-1">Manage tokens for agent {agentId.substring(0, 12)}</p>
         </div>
-        <div className="flex items-center gap-2">          <button            onClick={handleWhoami}            disabled={activeAction === "whoami"}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5"
-          >
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleWhoami} disabled={activeAction === "whoami"}>
             {activeAction === "whoami" ? (
-              <><i className="fa-solid fa-spinner fa-spin"></i> Checking...</>
+              <><Loader2 className="w-4 h-4" /> Checking...</>
             ) : (
-              <><i className="fa-solid fa-user-check"></i> Whoami</>            )}
-          </button>
-          <button
-            onClick={() => { setLoading(true); Promise.all([loadTokens(), loadProcesses()]).finally(() => setLoading(false)); }}
-            className="px-4 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 dark:text-indigo-400 rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5"
-          >
-            <i className="fa-solid fa-rotate"></i> Refresh
-          </button>
+              <><UserCheck className="w-4 h-4" /> {t("agents.token_whoami")}</>
+            )}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => { setLoading(true); Promise.all([loadTokens(), loadProcesses()]).finally(() => setLoading(false)); }}>
+            <RotateCw className="w-4 h-4" /> {t("common.refresh")}
+          </Button>
         </div>      </div>
 
       {whoamiResult && (
         <div className={`border rounded-xl px-4 py-3 text-sm flex items-center gap-2 ${
-          whoamiResult.startsWith("Error")            ? "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 text-red-700 dark:text-red-400"
+          whoamiResult.startsWith("Error")            ? "border-destructive/30 bg-destructive/10 text-destructive"
             : "border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400"
         }`}>
-          <i className={`fa-solid ${whoamiResult.startsWith("Error") ? "fa-circle-exclamation" : "fa-user-check"}`}></i>
+          {whoamiResult.startsWith("Error") ? <AlertCircle className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
           <span>Current context: <strong>{whoamiResult}</strong></span>
-          <button onClick={() => setWhoamiResult(null)} className="ml-auto text-xs opacity-60 hover:opacity-100">
-            <i className="fa-solid fa-xmark"></i>
-          </button>
+          <Button variant="ghost" size="sm" onClick={() => setWhoamiResult(null)} className="ml-auto opacity-60 hover:opacity-100">
+            <X className="w-4 h-4" />
+          </Button>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="ui-card p-5 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">            <i className="fa-solid fa-user-ninja text-amber-500 mr-2"></i>Steal Token
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-foreground mb-3">            <User className="w-4 h-4" />{t("agents.token_steal")}
           </h2>
-          <form onSubmit={handleStealToken} className="space-y-3">            <div>              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Target Process (PID)</label>
-              <select value={stealPid} onChange={(e) => setStealPid(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] text-sm rounded-xl px-3 h-10 cursor-pointer dark:text-slate-100">
-                <option value="">Select process to steal from...</option>
-                {processes.map((p) => (
-                  <option key={p.pid} value={p.pid}>[{p.pid}] {p.name}{p.user ? ` (${p.user})` : ""}</option>
-                ))}
-              </select>
+          <form onSubmit={handleStealToken} className="space-y-3">
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">{t("agents.token_pid")}</Label>
+              <Select value={stealPid} onValueChange={(v) => setStealPid(v ?? "")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t("agents.token_steal")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {processes.map((p) => (
+                    <SelectItem key={p.pid} value={String(p.pid)}>[{p.pid}] {p.name}{p.user ? ` (${p.user})` : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <button type="submit" disabled={!stealPid || activeAction === "steal"} className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5">
-              {activeAction === "steal" ? <><i className="fa-solid fa-spinner fa-spin"></i>Stealing...</> : <><i className="fa-solid fa-user-ninja"></i>Steal Token</>}
-            </button>
+            <Button type="submit" disabled={!stealPid || activeAction === "steal"} className="w-full" variant="default">
+              {activeAction === "steal" ? <><Loader2 className="w-4 h-4" />Stealing...</> : <><User className="w-4 h-4" />{t("agents.token_steal")}</>}
+            </Button>
           </form>
-        </div>
+        </Card>
 
-        <div className="ui-card p-5 shadow-sm">          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">            <i className="fa-solid fa-plus-circle text-emerald-500 mr-2"></i>Make Token
+        <Card className="p-5">          <h2 className="text-sm font-semibold text-foreground mb-3">            <PlusCircle className="w-4 h-4" />{t("agents.token_make")}
           </h2>
           <form onSubmit={handleMakeToken} className="space-y-3">
-            <div>              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Username <span className="text-red-400">*</span></label>
-              <input type="text" value={makeUser} onChange={(e) => setMakeUser(e.target.value)} placeholder="Target username" className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] text-sm rounded-xl px-3 h-10 focus:outline-none focus:border-emerald-500 dark:text-slate-100" />
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">{t("agents.token_username")} <span className="text-destructive">*</span></Label>
+              <Input type="text" value={makeUser} onChange={(e) => setMakeUser(e.target.value)} placeholder={t("agents.token_username")} />
             </div>
             <div>
-              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Domain</label>
-              <input type="text" value={makeDomain} onChange={(e) => setMakeDomain(e.target.value)} placeholder="Domain (optional)" className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] text-sm rounded-xl px-3 h-10 focus:outline-none focus:border-emerald-500 dark:text-slate-100" />            </div>
-            <div>
-              <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Password</label>
-              <input type="password" value={makePass} onChange={(e) => setMakePass(e.target.value)} placeholder="Password" className="w-full bg-slate-50 dark:bg-slate-700 border border-[var(--border)] text-sm rounded-xl px-3 h-10 focus:outline-none focus:border-emerald-500 dark:text-slate-100" />
+              <Label className="text-xs text-muted-foreground mb-1 block">{t("agents.token_domain")}</Label>
+              <Input type="text" value={makeDomain} onChange={(e) => setMakeDomain(e.target.value)} placeholder={t("agents.token_domain")} />
             </div>
-            <button type="submit" disabled={!makeUser || activeAction === "make"} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5">
-              {activeAction === "make" ? <><i className="fa-solid fa-spinner fa-spin"></i>Creating...</> : <><i className="fa-solid fa-plus"></i>Create Token</>}
-            </button>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">{t("agents.token_password")}</Label>
+              <Input type="password" value={makePass} onChange={(e) => setMakePass(e.target.value)} placeholder={t("agents.token_password")} />
+            </div>
+            <Button type="submit" disabled={!makeUser || activeAction === "make"} className="w-full" variant="default">
+              {activeAction === "make" ? <><Loader2 className="w-4 h-4" />Creating...</> : <><Plus className="w-4 h-4" />{t("agents.token_make")}</>}
+            </Button>
           </form>
-        </div>        <div className="ui-card p-5 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">
-            <i className="fa-solid fa-rotate-left text-indigo-500 mr-2"></i>Quick Actions          </h2>
-          <div className="space-y-3">            <button onClick={handleRevert} disabled={activeAction === "revert"} className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5">
-              {activeAction === "revert" ? <><i className="fa-solid fa-spinner fa-spin"></i>Reverting...</> : <><i className="fa-solid fa-rotate-left"></i>Revert to Self</>}
-            </button>
-            <button onClick={handleWhoami} disabled={activeAction === "whoami"} className="w-full py-2.5 bg-slate-600 hover:bg-slate-700 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5">
-              {activeAction === "whoami" ? <><i className="fa-solid fa-spinner fa-spin"></i>Querying...</> : <><i className="fa-solid fa-user-check"></i>Check Identity</>}
-            </button>
-            <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 rounded-xl p-3 flex items-start gap-2">
-              <i className="fa-solid fa-info-circle text-indigo-500 mt-0.5"></i>
+        </Card>        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-foreground mb-3">
+            <RotateCcw className="w-4 h-4" />Quick Actions          </h2>
+          <div className="space-y-3">
+            <Button onClick={handleRevert} disabled={activeAction === "revert"} className="w-full" variant="default">
+              {activeAction === "revert" ? <><Loader2 className="w-4 h-4" />Reverting...</> : <><RotateCcw className="w-4 h-4" />{t("agents.token_revert")}</>}
+            </Button>
+            <Button onClick={handleWhoami} disabled={activeAction === "whoami"} className="w-full" variant="secondary">
+              {activeAction === "whoami" ? <><Loader2 className="w-4 h-4" />Querying...</> : <><UserCheck className="w-4 h-4" />{t("agents.token_whoami")}</>}
+            </Button>
+            <div className="text-xs text-muted-foreground bg-muted/50 rounded-xl p-3 flex items-start gap-2">
+              <Info className="w-4 h-4" />
               <span>Impersonate which token is used by all agent operations. Use revert to return to original context.</span>
             </div>
-          </div>        </div>
+          </div>        </Card>
       </div>
 
-      <div className="ui-card overflow-hidden">
-        <div className="px-5 py-3 border-b border-[var(--border)] flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            <i className="fa-solid fa-list text-slate-400 mr-2"></i>Harvested Tokens ({tokens.length})
+      <Card className="overflow-hidden">
+        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">
+            <List className="w-4 h-4" />{t("agents.token_title")} ({tokens.length})
           </h2>          <div className="flex items-center gap-2">
-            <div className="text-xs text-slate-400 dark:text-slate-500">
+            <div className="text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>                {tokens.filter(t => t.Active || t.active).length} active
+                <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>                {tokens.filter(t => t.active).length} active
               </span>
             </div>
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-[var(--border)]">
-              <tr className="text-xs text-slate-500 dark:text-slate-400">
-                <th className="text-left px-5 py-3 font-normal">User</th>                <th className="text-left px-4 py-3 font-normal">Integrity</th>                <th className="text-left px-4 py-3 font-normal">Type</th>
-                <th className="text-left px-4 py-3 font-normal">Source</th>
-                <th className="text-left px-4 py-3 font-normal">Process</th>                <th className="text-left px-4 py-3 font-normal">Status</th>
-                <th className="text-left px-4 py-3 font-normal">Note</th>                <th className="text-left px-4 py-3 font-normal">Created</th>
-                <th className="text-left px-4 py-3 font-normal">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">              {!loading && tokens.map((t) => {                const tid = t.id ? String(t.id) : t.ID || "";
-                const domain = t.Domain || t.domain || "";                const username = t.Username || t.username || "";
-                const integrity = t.Integrity || t.integrity || "Medium";
-                const source = t.Source || t.source || "steal";
-                const tokenType = t.TokenType || t.token_type;
-                const protocol = t.Protocol || t.protocol;
-                const pid = t.PID || t.pid;
-                const procName = t.ProcessName || t.process_name;                const active = t.Active !== undefined ? t.Active : t.active;
-                const createdAt = t.CreatedAt || t.created_at || "";
-                const noteText = t.Note || t.note || tokenNotes[tid] || "";
+          <Table className="w-full text-sm">
+            <TableHeader className="bg-muted/50 border-b border-border">
+              <TableRow className="text-xs text-muted-foreground">
+                <TableHead className="text-left px-5 py-3 font-normal">{t("agents.token_username")}</TableHead>
+                <TableHead className="text-left px-4 py-3 font-normal">Integrity</TableHead>
+                <TableHead className="text-left px-4 py-3 font-normal">{t("agents.token_type")}</TableHead>
+                <TableHead className="text-left px-4 py-3 font-normal">{t("agents.token_source")}</TableHead>
+                <TableHead className="text-left px-4 py-3 font-normal">Process</TableHead>
+                <TableHead className="text-left px-4 py-3 font-normal">{t("agents.token_status")}</TableHead>
+                <TableHead className="text-left px-4 py-3 font-normal">{t("agents.token_notes")}</TableHead>
+                <TableHead className="text-left px-4 py-3 font-normal">Created</TableHead>
+                <TableHead className="text-left px-4 py-3 font-normal">{t("agents.token_actions")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="divide-y divide-border">
+              {!loading && tokens.map((tok) => {
+                const tid = tok.id ? String(tok.id) : "";
+                const domain = tok.domain || "";
+                const username = tok.username || "";
+                const integrity = tok.integrity || "Medium";
+                const source = tok.source || "steal";
+                const tokenType = tok.token_type;
+                const protocol = tok.protocol;
+                const pid = tok.pid;
+                const procName = tok.process_name;
+                const active = tok.Active !== undefined ? tok.Active : tok.active;
+                const createdAt = tok.created_at || "";
+                const noteText = tok.note || tokenNotes[tid] || "";
                 const isEditingNote = noteTargetId === tid;
                 return (
-                  <tr key={tid} className={`hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${active ? "bg-amber-50/30 dark:bg-amber-900/10" : ""}`}>
-                    <td className="px-5 py-3">
-                      <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm">{domain ? `${domain}\\${username}` : username || "Unknown"}</span>
-                    </td>
-                    <td className="px-4 py-3">{getIntegrityBadge(integrity)}</td>
-                    <td className="px-4 py-3">{getTokenTypeBadge(source, tokenType, protocol)}</td>                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${                        source === "steal" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
-                        source === "make" || source === "create" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
-                        "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                      }`}>
+                  <TableRow key={tid} className={`hover:bg-muted/50 transition-colors ${active ? "bg-amber-50/30 dark:bg-amber-900/10" : ""}`}>
+                    <TableCell className="px-5 py-3">
+                      <span className="font-semibold text-foreground text-sm">{domain ? `${domain}\\${username}` : username || "Unknown"}</span>
+                    </TableCell>
+                    <TableCell className="px-4 py-3">{getIntegrityBadge(integrity)}</TableCell>
+                    <TableCell className="px-4 py-3">{getTokenTypeBadge(source, tokenType, protocol)}</TableCell>
+                    <TableCell className="px-4 py-3">
+                      <Badge variant={source === "steal" ? "destructive" : source === "make" || source === "create" ? "default" : "secondary"}>
                         {source}
-                      </span>
-                    </td>                    <td className="px-4 py-3 text-xs font-mono text-slate-500 dark:text-slate-400">{pid ? `[${pid}]` : ""} {procName || ""}</td>
-                    <td className="px-4 py-3">
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-xs font-mono text-muted-foreground">{pid ? `[${pid}]` : ""} {procName || ""}</TableCell>
+                    <TableCell className="px-4 py-3">
                       {active ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 font-medium"><span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>Active</span>
-                      ) : (                        <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500"><span className="w-2 h-2 bg-slate-300 dark:bg-slate-600 rounded-full"></span>Inactive</span>
+                        <Badge variant="secondary" className="text-xs gap-1.5"><span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>Active</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-xs gap-1.5"><span className="w-2 h-2 bg-muted rounded-full"></span>Inactive</Badge>
                       )}
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
                       {isEditingNote ? (
-                        <div className="flex items-center gap-1">                          <input
-                            type="text"                            value={tokenNotes[tid] || ""}
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="text"
+                            value={tokenNotes[tid] || ""}
                             onChange={(e) => setTokenNotes(prev => ({ ...prev, [tid]: e.target.value }))}
-                            className="w-24 bg-[var(--card-bg)] border border-[var(--border)] rounded-lg px-2 py-1 text-xs dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                            className="w-24 h-7 text-xs"
                             placeholder="Note..."
                             autoFocus
                           />
-                          <button onClick={() => handleNote(tid)} className="text-emerald-500 hover:text-emerald-600 p-0.5">                            <i className="fa-solid fa-check text-xs"></i>                          </button>
-                          <button onClick={() => setNoteTargetId(null)} className="text-slate-400 hover:text-slate-500 p-0.5">
-                            <i className="fa-solid fa-xmark text-xs"></i>                          </button>
+                          <Button variant="ghost" size="sm" onClick={() => handleNote(tid)} className="h-7 w-7 p-0 text-emerald-500 hover:text-emerald-600">
+                            <Check className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setNoteTargetId(null)} className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground">
+                            <X className="w-4 h-4" />
+                          </Button>
                         </div>
                       ) : (
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => { setNoteTargetId(tid); setTokenNotes(prev => ({ ...prev, [tid]: noteText })); }}
-                          className="text-xs text-slate-400 dark:text-slate-500 hover:text-indigo-500 transition-colors flex items-center gap-1"
+                          className="text-xs text-muted-foreground hover:text-indigo-500"
                           title="Edit note"
-                        >                          <i className="fa-solid fa-pen-to-square"></i>                          {noteText ? <span className="truncate max-w-20">{noteText}</span> : <span className="text-slate-300 dark:text-slate-600">Add note</span>}
-                        </button>
+                        >
+                          <Pencil className="w-4 h-4" />
+                          {noteText ? <span className="truncate max-w-20">{noteText}</span> : <span className="text-muted-foreground">Add note</span>}
+                        </Button>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-xs font-mono text-slate-400 dark:text-slate-500">{createdAt ? new Date(createdAt).toLocaleString() : ""}</td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-xs font-mono text-muted-foreground">{createdAt ? new Date(createdAt).toLocaleString() : ""}</TableCell>
+                    <TableCell className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => handleImpersonate(tid)} disabled={!active || activeAction === `impersonate-${tid}`} className={`p-2 rounded-lg transition-colors flex items-center gap-1 ${active ? "text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" : "text-slate-300 dark:text-slate-600 cursor-not-allowed"}`} title="Impersonate">                          {activeAction === `impersonate-${tid}` ? <i className="fa-solid fa-spinner fa-spin text-xs"></i> : <i className="fa-solid fa-user-secret text-xs"></i>}                        </button>
-                        <button onClick={() => handleDrop(tid)} disabled={activeAction === `drop-${tid}`} className={`p-2 rounded-lg transition-colors flex items-center gap-1 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 ${activeAction === `drop-${tid}` ? "opacity-50" : ""}`} title="Drop Token">
-                          <i className={`fa-solid ${activeAction === `drop-${tid}` ? "fa-spinner fa-spin" : "fa-trash"} text-xs`}></i>
-                        </button>
+                        <Button variant="ghost" size="sm" onClick={() => handleImpersonate(tid)} disabled={!active || activeAction === `impersonate-${tid}`} className={`h-8 w-8 p-0 ${active ? "" : "cursor-not-allowed"}`} title={t("agents.token_impersonate")}>
+                          {activeAction === `impersonate-${tid}` ? <Loader2 className="w-4 h-4" /> : <User className="w-4 h-4" />}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDrop(tid)} disabled={activeAction === `drop-${tid}`} className={`h-8 w-8 p-0 text-destructive hover:text-destructive/80 hover:bg-destructive/5`} title={t("agents.token_drop")}>
+                          {activeAction === `drop-${tid}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                        </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-              {loading && Array.from({ length: 3 }).map((_, i) => (<tr key={i}><td colSpan={8} className="py-3 px-4"><div className="h-8 bg-slate-100 dark:bg-slate-700 rounded animate-pulse"></div></td></tr>))}
-              {!loading && tokens.length === 0 && (<tr><td colSpan={8} className="py-16 text-center text-slate-400"><i className="fa-solid fa-id-badge text-2xl mb-2 text-slate-300 dark:text-slate-600"></i><p className="text-sm">No tokens harvested yet</p></td></tr>)}
-            </tbody>          </table>
-        </div>      </div>
+              {loading && Array.from({ length: 3 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={8} className="py-3 px-4"><Skeleton className="h-8 w-full" /></TableCell></TableRow>))}
+              {!loading && tokens.length === 0 && (<TableRow><TableCell colSpan={8} className="py-16 text-center text-muted-foreground"><BadgeInfo className="w-4 h-4" /><p className="text-sm">{t("agents.token_no_tokens")}</p></TableCell></TableRow>)}
+            </TableBody>
+          </Table>
+        </div>      </Card>
     </div>
   );
 }

@@ -1,14 +1,19 @@
-package server
+﻿package server
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,7 +52,7 @@ func (s *Server) initUpdateChecker() {
 				slog.Error("Update checker panicked", "recover", r)
 			}
 		}()
-		initialDelay := time.NewTimer(10 * time.Second)
+		initialDelay := time.NewTimer(UpdateCheckInitialDelay)
 		select {
 		case <-initialDelay.C:
 			s.checkForUpdate()
@@ -55,7 +60,7 @@ func (s *Server) initUpdateChecker() {
 			initialDelay.Stop()
 			return
 		}
-		ticker := time.NewTicker(1 * time.Hour)
+		ticker := time.NewTicker(UpdateCheckInterval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -104,7 +109,7 @@ func (s *Server) checkForUpdate() {
 // fetchLatestVersion calls the GitHub API and returns the latest tag
 func fetchLatestVersion(repo string) (string, error) {
 	url := fmt.Sprintf(defaultUpdateCheckURLFmt, repo)
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: GitHubAPITimeout}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
@@ -219,17 +224,18 @@ func (s *Server) handleHotUpdate(c *gin.Context) {
 	s.updateState.mu.RUnlock()
 
 	if !available || latest == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "No updates available"})
+		respondError(c, http.StatusBadRequest, "No updates available")
 		return
 	}
 
 	if compareVersions(latest, ServerVersion) <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Already up to date"})
+		respondError(c, http.StatusBadRequest, "Already up to date")
 		return
 	}
 
 	// Trigger async hot-update
 	go func() {
+		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
 		if err := s.performHotUpdate(latest); err != nil {
 			slog.Error("Hot update failed", "err", err)
 		}
@@ -253,11 +259,13 @@ func (s *Server) performHotUpdate(latest string) error {
 	binName := "server.exe"
 	ext := ".exe"
 	var downloadURL string
+	var checksumURL string
+	safeBinRe := regexp.MustCompile(`[^a-zA-Z0-9._-]`)
 	for _, a := range assets {
 		name := strings.ToLower(a.Name)
 		if strings.HasSuffix(name, ext) && (strings.Contains(name, "windows") || strings.Contains(name, "amd64") || strings.Contains(name, "x64")) {
 			downloadURL = a.BrowserDownloadURL
-			binName = a.Name
+			binName = safeBinRe.ReplaceAllString(a.Name, "_")
 			break
 		}
 	}
@@ -266,9 +274,17 @@ func (s *Server) performHotUpdate(latest string) error {
 		for _, a := range assets {
 			if strings.HasSuffix(strings.ToLower(a.Name), ext) {
 				downloadURL = a.BrowserDownloadURL
-				binName = a.Name
+				binName = safeBinRe.ReplaceAllString(a.Name, "_")
 				break
 			}
+		}
+	}
+	// Find a checksum file for integrity verification
+	for _, a := range assets {
+		name := strings.ToLower(a.Name)
+		if strings.HasSuffix(name, ".sha256") || strings.HasSuffix(name, ".checksum") {
+			checksumURL = a.BrowserDownloadURL
+			break
 		}
 	}
 	if downloadURL == "" {
@@ -294,6 +310,15 @@ func (s *Server) performHotUpdate(latest string) error {
 	if fi, err := os.Stat(tmpPath); err != nil || fi.Size() == 0 {
 		os.Remove(tmpPath)
 		return fmt.Errorf("downloaded binary is invalid")
+	}
+
+	// Verify SHA-256 checksum if a checksum file was found
+	if checksumURL != "" {
+		if err := verifyChecksum(tmpPath, checksumURL); err != nil {
+			os.Remove(tmpPath)
+			return fmt.Errorf("checksum verification failed: %w", err)
+		}
+		slog.Info("Hot update: checksum verified")
 	}
 
 	// Create a restart script
@@ -348,15 +373,16 @@ exec "%s" "$@"
 	}
 
 	// Graceful shutdown after a brief delay for the script to start
-	time.Sleep(500 * time.Millisecond)
-	os.Exit(0)
+	time.Sleep(GracefulShutdownDelay)
+	s.ctxCancel()
+	s.wg.Wait()
 	return nil
 }
 
 // fetchReleaseAssets gets the asset list for a given tag
 func fetchReleaseAssets(repo, tag string) ([]GitHubAsset, error) {
 	url := fmt.Sprintf(defaultReleaseAssetsURLFmt, repo, tag)
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: GitHubAPITimeout}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -389,7 +415,7 @@ func fetchReleaseAssets(repo, tag string) ([]GitHubAsset, error) {
 // downloadFile downloads a URL to a local file path
 func downloadFile(url, dest string) error {
 	slog.Info("Downloading update binary", "url", url, "dest", dest)
-	client := &http.Client{Timeout: 5 * time.Minute}
+	client := &http.Client{Timeout: UpdateDownloadTimeout}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return err
@@ -482,4 +508,43 @@ func (s *Server) handleUpdateCheck(c *gin.Context) {
 		resp["check_error"] = s.updateState.Error
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+// verifyChecksum downloads a checksum file and verifies the SHA-256 of the binary.
+func verifyChecksum(binaryPath, checksumURL string) error {
+	client := &http.Client{Timeout: ChecksumDownloadTimeout}
+	req, err := http.NewRequest("GET", checksumURL, nil)
+	if err != nil {
+		return fmt.Errorf("create checksum request: %w", err)
+	}
+	req.Header.Set("User-Agent", "ForgeC2/"+ServerVersion)
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("download checksum: %w", err)
+	}
+	defer resp.Body.Close()
+	checksumData, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if err != nil {
+		return fmt.Errorf("read checksum: %w", err)
+	}
+
+	// Compute hash of the downloaded binary
+	f, err := os.Open(binaryPath)
+	if err != nil {
+		return fmt.Errorf("open binary: %w", err)
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return fmt.Errorf("hash binary: %w", err)
+	}
+	actualHash := hex.EncodeToString(h.Sum(nil))
+
+	// Parse expected hash from checksum file (supports "hash  filename" or bare hash)
+	expectedHash := strings.TrimSpace(strings.SplitN(string(checksumData), "  ", 2)[0])
+	expectedHash = strings.TrimSpace(strings.SplitN(expectedHash, "\t", 2)[0])
+	if !strings.EqualFold(actualHash, expectedHash) {
+		return fmt.Errorf("hash mismatch: expected %s, got %s", expectedHash, actualHash)
+	}
+	return nil
 }

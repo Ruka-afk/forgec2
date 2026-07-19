@@ -96,9 +96,11 @@ func (sc *streamCipher) generateKeystream(nonce []byte, length int) []byte {
 
 // ecdhSession manages a single ECDH session with the server
 type ecdhSession struct {
-	privateKey *ecdh.PrivateKey
-	sessionKey []byte // AES-256-GCM key derived from ECDH shared secret
-	msgCount   int
+	privateKey       *ecdh.PrivateKey
+	sessionKey       []byte // AES-256-GCM key derived from ECDH shared secret
+	msgCount         int
+	rotationPending  bool   // agent key was rotated; include new pub key in next beacon
+	rotationPubKeyB64 string // new public key to send
 }
 
 // newECDSession generates a new ECDH key pair for session initiation
@@ -201,7 +203,21 @@ func (es *ecdhSession) decryptAESGCM(encoded string) ([]byte, error) {
 
 // needsKeyRotation checks if the session key should be rotated
 func (es *ecdhSession) needsKeyRotation() bool {
-	return es.msgCount >= 100
+	return es.sessionKey != nil && es.msgCount >= 100
+}
+
+// rotateKeyPair generates a new ECDH key pair for forward secrecy during rotation
+func (es *ecdhSession) rotateKeyPair() error {
+	curve := ecdh.X25519()
+	privateKey, err := curve.GenerateKey(rand.Reader)
+	if err != nil {
+		return err
+	}
+	es.privateKey = privateKey
+	es.rotationPubKeyB64 = es.publicKeyB64()
+	es.rotationPending = true
+	es.msgCount = 0
+	return nil
 }
 
 // needsHandshake returns true if the session hasn't been established yet

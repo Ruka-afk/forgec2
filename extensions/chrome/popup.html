@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Office Hub</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 320px;
+      min-height: 200px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8f9fa;
+      color: #1a1a2e;
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+    .status.online {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status.offline {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot.online { background: #28a745; }
+    .dot.offline { background: #dc3545; }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      padding: 6px 0;
+      border-bottom: 1px solid #e9ecef;
+    }
+    .info-row .label { color: #6c757d; }
+    .info-row .value { color: #1a1a2e; font-weight: 500; }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 12px;
+      transition: background 0.2s;
+    }
+    .btn-primary {
+      background: #4361ee;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #3a56d4; }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .error { color: #dc3545; font-size: 11px; margin-top: 8px; }
+    .footer { font-size: 10px; color: #adb5bd; text-align: center; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4361ee" stroke-width="2">
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <path d="M9 12h6M12 9v6" stroke="#4361ee" stroke-width="2" />
+    </svg>
+    <h1>Office Hub</h1>
+  </div>
+
+  <div class="status offline" id="statusBar">
+    <span class="dot offline" id="statusDot"></span>
+    <span id="statusText">Disconnected</span>
+  </div>
+
+  <div class="info-row">
+    <span class="label">Extension ID</span>
+    <span class="value" id="extId">-</span>
+  </div>
+  <div class="info-row">
+    <span class="label">Status</span>
+    <span class="value" id="connStatus">Initializing...</span>
+  </div>
+
+  <button class="btn btn-primary" id="forceBtn">Sync Now</button>
+  <div class="error" id="errorMsg"></div>
+  <div class="footer">Office Hub v1.0 &mdash; Connected workplace tools</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

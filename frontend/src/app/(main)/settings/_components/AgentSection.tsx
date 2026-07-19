@@ -1,5 +1,9 @@
 import { AgentForm } from "./types";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import Toggle from "./Toggle";
+import { Bot, Save } from "lucide-react";
 
 export default function AgentSection({
   form, setForm, saving, inputCls, onSave,
@@ -11,42 +15,61 @@ export default function AgentSection({
   onSave: (e: React.FormEvent) => void;
 }) {
   return (
-    <section className="ui-card overflow-hidden">
+    <Card className="overflow-hidden">
       <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center"><i className="fa-solid fa-robot text-white"></i></div>
+          <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Bot className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-white">Implant Default Config</h2><p className="text-xs text-emerald-200">Default values for new implants</p></div>
         </div>
       </div>
-      <div className="p-6">
+      <div className="p-4 sm:p-5">
         <form onSubmit={onSave} className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Heartbeat Interval (sec)</label>
-              <input type="number" min={0} max={300} value={form.interval} onChange={(e) => setForm({ ...form, interval: Number(e.target.value) })} className={inputCls} />
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">0 = real-time mode</p>
+              <span className="block text-xs text-muted-foreground mb-1.5">Heartbeat Interval (sec)</span>
+              <Input aria-label="Heartbeat interval in seconds" name="input-0" type="number" min={0} max={300} value={form.interval} onChange={(e) => setForm({ ...form, interval: Number(e.target.value) })} className={inputCls} />
+              <p className="text-[10px] text-muted-foreground mt-1">0 = real-time mode</p>
             </div>
             <div>
-              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Jitter (%)</label>
-              <input type="number" min={0} max={100} value={form.jitter} onChange={(e) => setForm({ ...form, jitter: Number(e.target.value) })} className={inputCls} />
+              <span className="block text-xs text-muted-foreground mb-1.5">Jitter (%)</span>
+              <Input aria-label="Jitter percentage" name="input-1" type="number" min={0} max={100} value={form.jitter} onChange={(e) => setForm({ ...form, jitter: Number(e.target.value) })} className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Skip TLS Verification</label>
+              <span className="block text-xs text-muted-foreground mb-1.5">Skip TLS Verification</span>
               <div className="h-11 flex items-center gap-3">
                 <Toggle checked={form.skip_tls} onChange={(v) => setForm({ ...form, skip_tls: v })} />
-                <span className="text-sm text-slate-600 dark:text-slate-400">{form.skip_tls ? "Enabled" : "Disabled"}</span>
+                <span className="text-sm text-muted-foreground">{form.skip_tls ? "Enabled" : "Disabled"}</span>
               </div>
             </div>
           </div>
           <div>
-            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5">Default User-Agent</label>
-            <input type="text" value={form.user_agent} onChange={(e) => setForm({ ...form, user_agent: e.target.value })} className={`${inputCls} font-mono`} />
+            <span className="block text-xs text-muted-foreground mb-1.5">Default User-Agent</span>
+            <Input aria-label="Default User-Agent string" name="input-2" type="text" value={form.user_agent} onChange={(e) => setForm({ ...form, user_agent: e.target.value })} className={`${inputCls} font-mono`} />
           </div>
-          <button type="submit" disabled={saving} className="h-11 px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
-            <i className="fa-solid fa-save mr-2"></i>Save Agent Config
-          </button>
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">Working Hours</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div>
+                <span className="block text-xs text-muted-foreground mb-1.5">Start Time (HH:MM)</span>
+                <Input aria-label="Working hours start time" type="time" value={form.working_start} onChange={(e) => setForm({ ...form, working_start: e.target.value })} className={inputCls} />
+              </div>
+              <div>
+                <span className="block text-xs text-muted-foreground mb-1.5">End Time (HH:MM)</span>
+                <Input aria-label="Working hours end time" type="time" value={form.working_end} onChange={(e) => setForm({ ...form, working_end: e.target.value })} className={inputCls} />
+              </div>
+              <div>
+                <span className="block text-xs text-muted-foreground mb-1.5">Timezone</span>
+                <Input aria-label="Working hours timezone" type="text" placeholder="UTC" value={form.working_tz} onChange={(e) => setForm({ ...form, working_tz: e.target.value })} className={`${inputCls} font-mono`} />
+                <p className="text-[10px] text-muted-foreground mt-1">IANA tz (e.g. America/New_York)</p>
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-2">Agents will only communicate during these hours (local to specified timezone)</p>
+          </div>
+          <Button type="submit" disabled={saving} className="h-11 px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+            <Save className="w-4 h-4" />Save Agent Config
+          </Button>
         </form>
       </div>
-    </section>
+    </Card>
   );
 }

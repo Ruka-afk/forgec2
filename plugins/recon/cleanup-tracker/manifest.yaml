@@ -1,0 +1,13 @@
+name: cleanup-tracker
+version: 1.0.0
+type: command
+description: Track and recommend cleanup actions - audit log analysis, agent artifacts, task traces
+author: ForgeC2
+category: recon
+entry: track.py
+interpreter: python
+timeout: 30
+params: []
+config:
+    check_audit_logs: "true"
+    check_task_traces: "true"

@@ -38,7 +38,7 @@ func (s *Server) handleScanTask(c *gin.Context) {
 
 	// Validation
 	if agentID == "" || target == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "agent_id and target are required"})
+		respondError(c, http.StatusBadRequest, "agent_id and target are required")
 		return
 	}
 
@@ -47,14 +47,14 @@ func (s *Server) handleScanTask(c *gin.Context) {
 	if topPorts != "" {
 		n, err := strconv.Atoi(topPorts)
 		if err != nil || n <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid top_ports value"})
+			respondError(c, http.StatusBadRequest, "invalid top_ports value")
 			return
 		}
 		ports = getTopPorts(n)
 	} else if portRange != "" {
 		ports = parsePortRange(portRange)
 		if len(ports) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid port range"})
+			respondError(c, http.StatusBadRequest, "invalid port range")
 			return
 		}
 	} else {
@@ -63,7 +63,7 @@ func (s *Server) handleScanTask(c *gin.Context) {
 	}
 
 	if len(ports) > 10000 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "too many ports, maximum 10000"})
+		respondError(c, http.StatusBadRequest, "too many ports, maximum 10000")
 		return
 	}
 
@@ -87,7 +87,7 @@ func (s *Server) handleScanTask(c *gin.Context) {
 	}
 
 	if err := s.db.Create(&task).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create scan task"})
+		respondError(c, http.StatusInternalServerError, "failed to create scan task")
 		return
 	}
 
@@ -106,7 +106,7 @@ func (s *Server) handleScanResults(c *gin.Context) {
 	taskID := c.Param("taskId")
 
 	var results []db.ScanResult
-	s.db.Where("task_id = ?", taskID).Order("port asc").Find(&results)
+	s.db.Where("task_id = ?", taskID).Order("port asc").Limit(65535).Find(&results)
 
 	c.JSON(http.StatusOK, gin.H{
 		"results": results,
@@ -136,7 +136,7 @@ func (s *Server) handleProcessScanResult(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
@@ -195,7 +195,7 @@ func (s *Server) handleExportScanResults(c *gin.Context) {
 	var b strings.Builder
 	b.WriteString("Port,Protocol,State,Service,Version,Banner\n")
 	for _, r := range results {
-		b.WriteString(fmt.Sprintf("%d,%s,%s,%s,%s,\"%s\"\n", r.Port, r.Protocol, r.State, r.Service, r.Version, r.Banner))
+		b.WriteString(fmt.Sprintf("%d,%s,%s,%s,%s,\"%s\"\n", r.Port, csvSanitize(r.Protocol), csvSanitize(r.State), csvSanitize(r.Service), csvSanitize(r.Version), csvSanitize(r.Banner)))
 	}
 
 	c.Header("Content-Disposition", "attachment; filename=scan_results.csv")

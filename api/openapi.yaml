@@ -906,19 +906,55 @@ paths:
     get:
       tags: [Listeners]
       summary: List all listeners
-      description: Retrieve all configured listeners
+      description: Retrieve all configured listeners with pagination and filtering
       operationId: listListeners
       security:
         - SessionCookie: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Items per page
+        - name: tag
+          in: query
+          schema:
+            type: string
+          description: Filter by tag (substring match)
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [running, stopped, error]
+          description: Filter by status
       responses:
         '200':
           description: Successful response
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Listener'
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Listener'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  page_size:
+                    type: integer
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -993,6 +1029,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/listeners/{id}/enable:
+    post:
+      tags: [Listeners]
+      summary: Enable a listener
+      description: Re-enable a disabled listener and set status to running
+      operationId: enableListener
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Listener enabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/listeners/{id}/disable:
+    post:
+      tags: [Listeners]
+      summary: Disable a listener
+      description: Disable a listener and set status to stopped
+      operationId: disableListener
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Listener disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -3685,6 +3779,16 @@ components:
           type: string
         enabled:
           type: boolean
+        tags:
+          type: string
+          description: Comma-separated tags for categorization
+        color:
+          type: string
+          description: Hex color code for UI display
+        status:
+          type: string
+          enum: [running, stopped, error]
+          description: Runtime status
         created_at:
           type: string
           format: date-time
@@ -3707,6 +3811,16 @@ components:
           type: integer
         notes:
           type: string
+        tags:
+          type: string
+          description: Comma-separated tags for categorization
+        color:
+          type: string
+          description: Hex color code for UI display
+        status:
+          type: string
+          enum: [running, stopped, error]
+          description: Runtime status
 
     ListenerUpdate:
       type: object
@@ -3723,6 +3837,16 @@ components:
           type: string
         enabled:
           type: boolean
+        tags:
+          type: string
+          description: Comma-separated tags for categorization
+        color:
+          type: string
+          description: Hex color code for UI display
+        status:
+          type: string
+          enum: [running, stopped, error]
+          description: Runtime status
 
     Credential:
       type: object

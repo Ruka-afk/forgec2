@@ -1,0 +1,18 @@
+name: data-stager
+version: 1.0.0
+type: command
+description: Analyzes and stages data for exfiltration — calculates sizes, identifies high-value files
+author: ""
+category: recon
+entry: stage.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Specific agent to stage data from
+    - name: path
+      type: string
+      required: false
+      description: Directory path to analyze

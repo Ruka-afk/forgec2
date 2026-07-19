@@ -1,0 +1,122 @@
+{
+  "version": "1.0",
+  "name": "ForgeC2 UI Library",
+  "styles": {
+    "colors": [
+      { "name": "Background", "value": "#f1f5f9", "dark": "#0f172a", "type": "FILL" },
+      { "name": "Card BG", "value": "#ffffff", "dark": "#1e293b", "type": "FILL" },
+      { "name": "Card BG Secondary", "value": "#f8fafc", "dark": "#1e293b", "type": "FILL" },
+      { "name": "Sidebar BG", "value": "#ffffff", "dark": "#0f172a", "type": "FILL" },
+      { "name": "Border", "value": "#e2e8f0", "dark": "#334155", "type": "STROKE" },
+      { "name": "Text Primary", "value": "#0f172a", "dark": "#f1f5f9", "type": "TEXT" },
+      { "name": "Text Secondary", "value": "#475569", "dark": "#94a3b8", "type": "TEXT" },
+      { "name": "Text Tertiary", "value": "#94a3b8", "dark": "#64748b", "type": "TEXT" },
+      { "name": "Link", "value": "#4f46e5", "dark": "#818cf8", "type": "TEXT" },
+      { "name": "Success", "value": "#059669", "dark": "#34d399", "type": "FILL" },
+      { "name": "Warning", "value": "#d97706", "dark": "#fbbf24", "type": "FILL" },
+      { "name": "Danger", "value": "#dc2626", "dark": "#f87171", "type": "FILL" },
+      { "name": "Info", "value": "#2563eb", "dark": "#60a5fa", "type": "FILL" },
+      { "name": "Nav Active BG", "value": "#e0e7ff", "dark": "#4338ca", "type": "FILL" },
+      { "name": "Nav Active Text", "value": "#4338ca", "dark": "#e0e7ff", "type": "TEXT" },
+      { "name": "Nav Active Border", "value": "#6366f1", "dark": "#818cf8", "type": "STROKE" }
+    ],
+    "text": [
+      { "name": "XS / 12px", "fontFamily": "Inter", "fontWeight": 400, "fontSize": 12, "lineHeight": 1.5, "letterSpacing": 0 },
+      { "name": "SM / 14px", "fontFamily": "Inter", "fontWeight": 400, "fontSize": 14, "lineHeight": 1.5, "letterSpacing": 0 },
+      { "name": "Base / 16px", "fontFamily": "Inter", "fontWeight": 400, "fontSize": 16, "lineHeight": 1.5, "letterSpacing": 0 },
+      { "name": "LG / 18px", "fontFamily": "Inter", "fontWeight": 500, "fontSize": 18, "lineHeight": 1.375, "letterSpacing": 0 },
+      { "name": "XL / 22px", "fontFamily": "Inter", "fontWeight": 600, "fontSize": 22, "lineHeight": 1.25, "letterSpacing": "-0.025em" },
+      { "name": "2XL / 28px", "fontFamily": "Inter", "fontWeight": 600, "fontSize": 28, "lineHeight": 1.25, "letterSpacing": "-0.025em" },
+      { "name": "3XL / 36px", "fontFamily": "Inter", "fontWeight": 700, "fontSize": 36, "lineHeight": 1.25, "letterSpacing": "-0.025em" },
+      { "name": "Mono / 12px", "fontFamily": "JetBrains Mono", "fontWeight": 400, "fontSize": 12, "lineHeight": 1.5 },
+      { "name": "Mono / 14px", "fontFamily": "JetBrains Mono", "fontWeight": 500, "fontSize": 14, "lineHeight": 1.5 }
+    ],
+    "effects": [
+      { "name": "Card Shadow", "type": "DROP_SHADOW", "color": "#0000000a", "offsetX": 0, "offsetY": 1, "radius": 3 },
+      { "name": "Shadow SM", "type": "DROP_SHADOW", "color": "#00000008", "offsetX": 0, "offsetY": 1, "radius": 2 },
+      { "name": "Shadow MD", "type": "DROP_SHADOW", "color": "#0000000d", "offsetX": 0, "offsetY": 4, "radius": 6 },
+      { "name": "Shadow LG", "type": "DROP_SHADOW", "color": "#00000014", "offsetX": 0, "offsetY": 10, "radius": 15 }
+    ]
+  },
+  "components": [
+    {
+      "name": "PageHeader",
+      "description": "Page title with optional subtitle and action buttons",
+      "props": {
+        "title": { "type": "text", "required": true },
+        "subtitle": { "type": "text", "required": false },
+        "actions": { "type": "instance", "required": false }
+      },
+      "states": ["default", "with-subtitle", "with-actions"]
+    },
+    {
+      "name": "StatusBadge",
+      "description": "Colored status indicator with dot and label",
+      "props": {
+        "status": { "type": "enum", "values": ["online", "offline", "stale", "locked", "completed", "failed", "pending", "running"] },
+        "pulse": { "type": "boolean", "default": false }
+      },
+      "states": ["online", "offline", "stale", "locked", "running"]
+    },
+    {
+      "name": "SearchInput",
+      "description": "Search input with magnifying glass icon",
+      "props": {
+        "placeholder": { "type": "text", "default": "Search..." },
+        "width": { "type": "enum", "values": ["fixed", "full"] }
+      }
+    },
+    {
+      "name": "Card",
+      "description": "Container card with hover shadow elevation (CSS class: ui-card)",
+      "variants": [
+        { "name": "Default", "borderRadius": 16, "padding": 16 },
+        { "name": "Large", "borderRadius": 24, "padding": 24 },
+        { "name": "Small", "borderRadius": 12, "padding": 12 }
+      ],
+      "props": {
+        "padding": { "type": "enum", "values": ["sm", "md", "lg"], "default": "md" }
+      }
+    },
+    {
+      "name": "ChartCard",
+      "description": "Dashboard card with chart/stat content, icon header, refresh and export",
+      "props": {
+        "title": { "type": "text", "required": true },
+        "icon": { "type": "text", "required": true },
+        "loading": { "type": "boolean", "default": false },
+        "error": { "type": "boolean", "default": false }
+      },
+      "states": ["loaded", "loading", "error"]
+    },
+    {
+      "name": "TableCard",
+      "description": "Card-wrapped table with optional header",
+      "props": {
+        "header": { "type": "text", "required": false },
+        "responsive": { "type": "boolean", "default": true }
+      }
+    },
+    {
+      "name": "Pagination",
+      "description": "Bottom bar showing current range and prev/next buttons",
+      "props": {
+        "page": { "type": "number", "required": true },
+        "total": { "type": "number", "required": true },
+        "pageSize": { "type": "number", "default": 20 }
+      }
+    },
+    {
+      "name": "ConfirmModal",
+      "description": "Modal dialog for destructive action confirmation",
+      "props": {
+        "title": { "type": "text", "required": true },
+        "message": { "type": "text", "required": true },
+        "confirmText": { "type": "text", "default": "Confirm" },
+        "cancelText": { "type": "text", "default": "Cancel" },
+        "danger": { "type": "boolean", "default": false }
+      },
+      "states": ["default", "danger"]
+    }
+  ]
+}

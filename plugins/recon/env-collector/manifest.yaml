@@ -1,0 +1,14 @@
+name: env-collector
+version: 1.0.0
+type: command
+description: Collects environment variables, system configuration, and build tools from agent hosts
+author: ForgeC2
+category: recon
+entry: collect.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Specific agent to scan

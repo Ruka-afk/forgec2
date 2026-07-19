@@ -74,6 +74,12 @@ func (m *Manifest) Validate() error {
 	if m.Timeout < 0 {
 		return fmt.Errorf("plugin timeout cannot be negative")
 	}
+	if filepath.IsAbs(m.Entry) {
+		return fmt.Errorf("entry must be a relative path")
+	}
+	if strings.Contains(m.Entry, "..") {
+		return fmt.Errorf("entry path must not contain '..'")
+	}
 	return nil
 }
 

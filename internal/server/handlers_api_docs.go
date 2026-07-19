@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"net/http"
@@ -93,7 +93,7 @@ func resolveOpenAPIPath() string {
 func (s *Server) handleAPIDocsYAML(c *gin.Context) {
 	data, err := os.ReadFile(resolveOpenAPIPath())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read OpenAPI specification"})
+		respondError(c, http.StatusInternalServerError, "Failed to read OpenAPI specification")
 		return
 	}
 

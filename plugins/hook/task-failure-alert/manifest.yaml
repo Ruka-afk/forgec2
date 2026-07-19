@@ -1,0 +1,16 @@
+name: task-failure-alert
+version: 1.0.0
+type: hook
+description: Alerts when consecutive task failures exceed threshold — indicates infrastructure or detection issues
+author: ""
+category: monitoring
+entry: alert.py
+interpreter: python3
+timeout: 30
+params: []
+events:
+    - task.completed
+config:
+    consecutive_threshold: 3
+    log_file: ""
+    time_window_seconds: 300

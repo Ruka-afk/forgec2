@@ -1,0 +1,20 @@
+name: webhook-forwarder
+version: 1.0.0
+type: hook
+description: Forwards ForgeC2 events to external webhook endpoints (Slack, Discord, generic)
+author: ""
+category: monitoring
+entry: forward.py
+interpreter: python3
+timeout: 30
+params: []
+events:
+    - agent.connect
+    - agent.disconnect
+    - task.completed
+    - task.failed
+config:
+    events_filter: ""
+    log_file: ""
+    webhook_type: generic
+    webhook_url: ""

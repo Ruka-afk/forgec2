@@ -1,6 +1,6 @@
-import { toPng } from "html-to-image";
-
 export async function exportElementPng(element: HTMLElement, filename: string): Promise<void> {
+  // Dynamically imported so html-to-image is only fetched when an export is triggered.
+  const { toPng } = await import("html-to-image");
   const dataUrl = await toPng(element, {
     cacheBust: true,
     pixelRatio: 2,

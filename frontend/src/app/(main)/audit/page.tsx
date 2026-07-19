@@ -1,8 +1,19 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { API_BASE } from "@/lib/constants";
-import { PageHeader, SearchInput, Pagination } from "@/components/UI";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { downloadText } from "@/lib/download";
+import { PageHeader, Pagination } from "@/components/UI";
+import { useI18n } from "@/lib/i18n";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Download, FileText, Filter } from "lucide-react";
 
 interface AuditLog {
   id?: string;
@@ -27,23 +38,20 @@ interface AuditLog {
   Severity?: string;
 }
 
-const SEVERITY_LEVELS = ["info", "warning", "error", "critical"] as const;
-const ACTION_TYPES = ["login", "create", "update", "delete", "logout", "failed"] as const;
-
 const ACTION_BADGES: Record<string, string> = {
-  login: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  create: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  update: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  delete: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-  logout: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
-  failed: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  login: "success",
+  create: "secondary",
+  update: "warning",
+  delete: "destructive",
+  logout: "secondary",
+  failed: "destructive",
 };
 
 const SEVERITY_BADGES: Record<string, string> = {
-  info: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
-  warning: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  error: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-  critical: "bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200",
+  info: "secondary",
+  warning: "warning",
+  error: "destructive",
+  critical: "destructive",
 };
 
 
@@ -53,40 +61,46 @@ export default function AuditPage() {
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(50);
-  const [totalPages, setTotalPages] = useState(1);
+  const [perPage] = useState(50);
   const [search, setSearch] = useState("");
   const [userFilter, setUserFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [users, setUsers] = useState<{ username: string }[]>([]);
+  const { t } = useI18n();
+
+  useEffect(() => {
+    api.get("/users")
+      .then((data) => {
+        const list = (data.users || data.data || []) as { username: string }[];
+        setUsers(list);
+      })
+      .catch(() => { /* silent: filter still works with manual entry */ });
+  }, []);
 
   const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        p: "/audit/logs",
-        format: "json",
         page: String(page),
         pageSize: String(perPage),
       });
       if (search) params.set("search", search);
       if (userFilter) params.set("user", userFilter);
       if (actionFilter) params.set("action", actionFilter);
-      const resp = await fetch(`${API_BASE}?${params}`);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      setLogs(data.data || []);
-      setTotal(data.total || 0);
-      setTotalPages(Math.ceil((data.total || 0) / perPage));
+      const data = await api.get(`/audit/logs?${params}`);
+      setLogs((data.data as AuditLog[]) || []);
+      setTotal((data.total as number) || 0);
     } catch {
       setLogs([]);
       setTotal(0);
+      toast.error("Failed to load audit logs");
     } finally {
       setLoading(false);
     }
   }, [page, perPage, search, userFilter, actionFilter]);
 
-  useEffect(() => { Promise.resolve().then(() => loadLogs()); }, [loadLogs]);
+  useEffect(() => { loadLogs(); }, [loadLogs]);
 
   const applyFilters = () => { setPage(1); };
   const resetFilters = () => {
@@ -97,26 +111,20 @@ export default function AuditPage() {
   };
 
   const handleExport = () => {
-    const csv = logs.map((l) => {
-      const time = l.timestamp || l.Timestamp || "";
-      const user = l.username || l.Username || "";
-      const ip = l.ip || l.IP || "";
-      const action = l.action || l.Action || "";
-      const resource = l.resource || l.Resource || "";
-      const target = l.target || l.Target || "";
-      const status = l.status || l.Status || "";
-      const severity = l.severity || l.Severity || "";
-      const details = (l.details || l.Details || "").replace(/,/g, ";");
+    const csv = logs.filter(Boolean).map((l) => {
+      const time = l.timestamp || "";
+      const user = l.username || "";
+      const ip = l.ip || "";
+      const action = l.action || "";
+      const resource = l.resource || "";
+      const target = l.target || "";
+      const status = l.status || "";
+      const severity = l.severity || "";
+      const details = (l.details || "").replace(/,/g, ";");
       return `${time},${user},${ip},${action},${resource},${target},${status},${severity},${details}`;
     }).join("\n");
     const header = "Timestamp,User,IP,Action,Resource,Target,Status,Severity,Details\n";
-    const blob = new Blob([header + csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "audit-logs.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadText(header + csv, "audit-logs.csv", "text/csv");
   };
 
   const getActionBadge = (action: string) => {
@@ -124,183 +132,189 @@ export default function AuditPage() {
     for (const [key, badge] of Object.entries(ACTION_BADGES)) {
       if (a.includes(key)) return badge;
     }
-    return "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300";
+    return "secondary";
   };
 
   const getSeverityBadge = (severity: string) => {
     const s = (severity || "").toLowerCase();
-    return SEVERITY_BADGES[s] || "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300";
+    return SEVERITY_BADGES[s] || "secondary";
   };
 
-  const getLogField = (log: AuditLog, field: keyof AuditLog | "severity") => {
+  const getLogField = (log: AuditLog | null, field: keyof AuditLog | "severity") => {
+    if (!log) return "";
     switch (field) {
-      case "id": return String(log.id || log.ID || "");
-      case "timestamp": return String(log.timestamp || log.Timestamp || "");
-      case "username": return String(log.username || log.Username || "-");
-      case "action": return String(log.action || log.Action || "-");
-      case "resource": return String(log.resource || log.Resource || "-");
-      case "target": return String(log.target || log.Target || "-");
-      case "status": return String(log.status || log.Status || "-");
-      case "details": return String(log.details || log.Details || "-");
-      case "ip": return String(log.ip || log.IP || "-");
-      case "severity": return String(log.severity || log.Severity || "info");
+      case "id": return String(log.id || "");
+      case "timestamp": return String(log.timestamp || "");
+      case "username": return String(log.username || "-");
+      case "action": return String(log.action || "-");
+      case "resource": return String(log.resource || "-");
+      case "target": return String(log.target || "-");
+      case "status": return String(log.status || "-");
+      case "details": return String(log.details || "-");
+      case "ip": return String(log.ip || "-");
+      case "severity": return String(log.severity || "info");
       default: return "";
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto mb-20 md:mb-0">
-      <PageHeader title="安全审计日志" subtitle="记录所有系统操作和安全行为">
-        <button onClick={handleExport} className="px-4 h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm flex items-center gap-2 transition-colors shrink-0">
-          <i className="fa-solid fa-download"></i>
-          <span>导出 CSV</span>
-        </button>
+    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title={t("audit.title")} subtitle={t("audit.subtitle")}>
+        <Button onClick={handleExport}>
+          <Download className="w-4 h-4" />
+          <span>{t("audit.export")} CSV</span>
+        </Button>
       </PageHeader>
 
-      <div className="grid grid-cols-1 sm:grid-cols-1 gap-4 mb-4">
-        <div className="ui-card p-5 shadow-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">总记录数</div>
-              <div className="text-3xl font-bold mt-2 text-slate-900 dark:text-slate-100">{total}</div>
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("audit.total_records")}</div>
+              <div className="mt-2 text-2xl font-bold">{total}</div>
             </div>
             <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
-              <i className="fa-solid fa-file-text text-xl text-indigo-500"></i>
+              <FileText className="w-4 h-4" />
             </div>
           </div>
-        </div>
+        </Card>
       </div>
 
-      <div className="ui-card p-4 mb-4 shadow-sm">
+      <Card className="p-4 mb-4">
         <div className="flex flex-wrap items-center gap-3">
-          <SearchInput value={search} onChange={setSearch} placeholder="搜索用户、资源、详情..." className="flex-1 min-w-[200px]" />
-          <select className="bg-slate-50 dark:bg-slate-700 border border-[var(--border)] rounded-xl px-3 h-10 text-sm min-w-[140px]" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
-            <option value="">所有操作</option>
-            <option value="login">登录</option>
-            <option value="logout">退出</option>
-            <option value="create">创建</option>
-            <option value="update">更新</option>
-            <option value="delete">删除</option>
-            <option value="failed">失败</option>
-          </select>
-          <select className="bg-slate-50 dark:bg-slate-700 border border-[var(--border)] rounded-xl px-3 h-10 text-sm min-w-[140px]" value={userFilter} onChange={(e) => setUserFilter(e.target.value)}>
-            <option value="">所有用户</option>
-          </select>
-          <button onClick={applyFilters} className="px-4 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm flex items-center gap-1.5 transition-colors">
-            <i className="fa-solid fa-filter"></i>
-            <span>应用</span>
-          </button>
-          <button onClick={resetFilters} className="px-4 h-10 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-[var(--text-secondary)] rounded-xl text-sm transition-colors">
-            重置
-          </button>
+          <Select value={actionFilter || "all"} onValueChange={(v) => setActionFilter(v === "all" || !v ? "" : v)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder={t("audit.all_actions")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("audit.all_actions")}</SelectItem>
+              <SelectItem value="login">{t("audit.login")}</SelectItem>
+              <SelectItem value="logout">{t("audit.logout")}</SelectItem>
+              <SelectItem value="create">{t("audit.create")}</SelectItem>
+              <SelectItem value="update">{t("audit.update")}</SelectItem>
+              <SelectItem value="delete">{t("audit.delete")}</SelectItem>
+              <SelectItem value="failed">{t("audit.failed")}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={userFilter || "all"} onValueChange={(v) => setUserFilter(v === "all" || !v ? "" : v)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder={t("audit.all_users")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("audit.all_users")}</SelectItem>
+              {users.map((u) => (
+                <SelectItem key={u.username} value={u.username}>{u.username}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button onClick={applyFilters}>
+            <Filter className="w-4 h-4" />
+            <span>{t("audit.apply")}</span>
+          </Button>
+          <Button variant="outline" onClick={resetFilters}>
+            {t("audit.reset")}
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      <div className="ui-card overflow-hidden">
+      <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-50 dark:bg-[var(--card-bg)] border-b border-[var(--border)]">
-              <tr>
-                <th className="text-left py-3 px-4 text-xs font-medium text-slate-500">时间</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-slate-500">用户</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-slate-500">IP</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-slate-500">操作</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-slate-500">严重度</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-slate-500">资源</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-slate-500">Target</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-slate-500">状态</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-slate-500">详情</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border">
+                <TableHead className="text-left">{t("audit.time")}</TableHead>
+                <TableHead className="text-left">{t("audit.user")}</TableHead>
+                <TableHead className="text-left">IP</TableHead>
+                <TableHead className="text-left">{t("audit.action")}</TableHead>
+                <TableHead className="text-left">{t("audit.severity")}</TableHead>
+                <TableHead className="text-left">{t("audit.resource")}</TableHead>
+                <TableHead className="text-left">Target</TableHead>
+                <TableHead className="text-left">{t("audit.status")}</TableHead>
+                <TableHead className="text-left">{t("audit.details")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {loading ? (
-                <tr><td colSpan={9} className="py-16 text-center text-slate-400">
-                  <i className="fa-solid fa-circle-notch fa-spin text-2xl text-indigo-500"></i>
-                </td></tr>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    {Array.from({ length: 9 }).map((_, j) => (
+                      <TableCell key={j} className="py-3 px-4"><Skeleton className="h-4 w-full" /></TableCell>
+                    ))}
+                  </TableRow>
+                ))
               ) : !loading && logs.length === 0 ? (
-                <tr><td colSpan={9} className="py-16 text-center text-slate-400 dark:text-slate-500">暂无审计记录</td></tr>
+                <TableRow><TableCell colSpan={9} className="py-16 text-center">{t("audit.empty")}</TableCell></TableRow>
               ) : (
-                logs.map((log, i) => {
+                logs.filter(Boolean).map((log, i) => {
                   const action = getLogField(log, "action");
                   const severity = getLogField(log, "severity");
                   return (
-                    <tr key={getLogField(log, "id") || String(i)} onClick={() => setSelectedLog(log)} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer">
-                      <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400 font-mono whitespace-nowrap">{getLogField(log, "timestamp")}</td>
-                      <td className="py-3 px-4 text-sm font-medium text-[var(--text-secondary)]">{getLogField(log, "username")}</td>
-                      <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400 font-mono">{getLogField(log, "ip")}</td>
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full ${getActionBadge(action)}`}>
+                    <TableRow key={getLogField(log, "id") || String(i)} onClick={() => setSelectedLog(log)} className="cursor-pointer"
+                      tabIndex={0} role="button"
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedLog(log); } }}>
+                      <TableCell className="text-xs font-mono whitespace-nowrap">{getLogField(log, "timestamp")}</TableCell>
+                      <TableCell className="text-sm font-medium text-muted-foreground">{getLogField(log, "username")}</TableCell>
+                      <TableCell className="text-xs font-mono">{getLogField(log, "ip")}</TableCell>
+                      <TableCell>
+                        <Badge variant={getActionBadge(action) as "success" | "secondary" | "warning" | "destructive"}>
                           {action}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full uppercase ${getSeverityBadge(severity)}`}>
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getSeverityBadge(severity) as "secondary" | "warning" | "destructive"}>
                           {severity}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-xs text-slate-600 dark:text-slate-400 max-w-[200px] truncate">{getLogField(log, "resource")}</td>
-                      <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400 font-mono">{getLogField(log, "target")}</td>
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full ${
-                          (getLogField(log, "status") || "").toLowerCase().includes("fail")
-                            ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                            : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                        }`}>
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs max-w-[200px] truncate">{getLogField(log, "resource")}</TableCell>
+                      <TableCell className="text-xs font-mono">{getLogField(log, "target")}</TableCell>
+                      <TableCell>
+                        <Badge variant={(getLogField(log, "status") || "").toLowerCase().includes("fail") ? "destructive" : "success"}>
                           {getLogField(log, "status")}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400 max-w-[300px] truncate">{getLogField(log, "details")}</td>
-                    </tr>
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs max-w-[300px] truncate">{getLogField(log, "details")}</TableCell>
+                    </TableRow>
                   );
                 })
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
         <Pagination page={page} pageSize={perPage} total={total} onPageChange={setPage} />
-      </div>
+      </Card>
 
-      {selectedLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedLog(null)}>
-          <div className="ui-card shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">审计记录详情</h3>
-              <button onClick={() => setSelectedLog(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              {(["timestamp", "username", "ip", "action", "severity", "resource", "target", "status", "details"] as const).map(field => (
-                <div key={field}>
-                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">{field}</label>
-                  <p className={`text-sm mt-0.5 ${field === "action" || field === "severity" || field === "status" ? "" : "text-[var(--text-secondary)]"}`}>
-                    {field === "action" ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full ${getActionBadge(getLogField(selectedLog, field))}`}>
-                        {selectedLog.action || selectedLog.Action}
-                      </span>
-                    ) : field === "severity" ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full uppercase ${getSeverityBadge(getLogField(selectedLog, field))}`}>
-                        {selectedLog.severity || selectedLog.Severity || "info"}
-                      </span>
-                    ) : field === "status" ? (
-                      <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full ${
-                        (getLogField(selectedLog, field)).toLowerCase().includes("fail")
-                          ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                      }`}>
-                        {getLogField(selectedLog, field)}
-                      </span>
-                    ) : (
-                      <span className="font-mono">{getLogField(selectedLog, field)}</span>
-                    )}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t("audit.detail_title")}</DialogTitle>
+          </DialogHeader>
+          {selectedLog && (<div className="space-y-4">
+            {(["timestamp", "username", "ip", "action", "severity", "resource", "target", "status", "details"] as const).map(field => (
+              <div key={field}>
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{field}</span>
+                <p className={`text-sm mt-0.5 ${field === "action" || field === "severity" || field === "status" ? "" : "text-muted-foreground"}`}>
+                  {field === "action" ? (
+                    <Badge variant={getActionBadge(getLogField(selectedLog, field)) as "success" | "secondary" | "warning" | "destructive"}>
+                      {selectedLog.action}
+                    </Badge>
+                  ) : field === "severity" ? (
+                    <Badge variant={getSeverityBadge(getLogField(selectedLog, field)) as "secondary" | "warning" | "destructive"}>
+                      {selectedLog.severity || "info"}
+                    </Badge>
+                  ) : field === "status" ? (
+                    <Badge variant={(getLogField(selectedLog, field)).toLowerCase().includes("fail") ? "destructive" : "success"}>
+                      {getLogField(selectedLog, field)}
+                    </Badge>
+                  ) : (
+                    <span className="font-mono">{getLogField(selectedLog, field)}</span>
+                  )}
+                </p>
+              </div>
+            ))}
+          </div>)}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

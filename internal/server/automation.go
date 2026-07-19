@@ -222,6 +222,10 @@ func (s *Server) executeWebhook(params struct {
 	Headers map[string]string `json:"headers"`
 	Secret  string            `json:"secret"`
 }, evt Event) {
+	if err := validateWebhookURL(params.URL); err != nil {
+		slog.Error("automation: webhook URL rejected", "url", params.URL, "error", err)
+		return
+	}
 	body, err := json.Marshal(evt)
 	if err != nil {
 		slog.Error("automation: marshal webhook body", "error", err)
@@ -251,7 +255,7 @@ func (s *Server) executeWebhook(params struct {
 		req.Header.Set("X-ForgeC2-Signature", hex.EncodeToString(h.Sum(nil)))
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: WebhookHTTPTimeout}
 	if resp, err := client.Do(req); err != nil {
 		slog.Error("automation: webhook request failed", "url", params.URL, "error", err)
 	} else {
@@ -261,7 +265,7 @@ func (s *Server) executeWebhook(params struct {
 
 func (s *Server) loadAutomationRules() []AutomationRule {
 	var dbRules []db.AutomationRule
-	if err := s.db.Limit(200).Find(&dbRules).Error; err != nil {
+	if err := s.db.Limit(AutomationRuleLimit).Find(&dbRules).Error; err != nil {
 		slog.Error("automation: failed to load rules", "error", err)
 	}
 	

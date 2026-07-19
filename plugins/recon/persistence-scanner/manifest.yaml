@@ -1,0 +1,14 @@
+name: persistence-scanner
+version: 1.0.0
+type: command
+description: Scans agent hosts for persistence mechanisms including ForgeC2 artifacts and OS-level persistence
+author: ForgeC2
+category: recon
+entry: scan.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Specific agent to scan

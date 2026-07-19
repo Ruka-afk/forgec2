@@ -1,0 +1,14 @@
+name: privilege-check
+version: 1.0.0
+type: command
+description: Analyzes agent privilege level, token impersonation opportunities, and UAC bypass possibilities
+author: ""
+category: recon
+entry: check.py
+interpreter: python3
+timeout: 30
+params:
+    - name: agent_id
+      type: string
+      required: false
+      description: Specific agent to analyze (empty = all agents)

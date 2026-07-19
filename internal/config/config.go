@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -30,15 +32,33 @@ type Config struct {
 		DataDir              string `yaml:"data_dir"`
 		DNSEnabled           bool   `yaml:"dns_enabled"`
 		DNSDomain            string `yaml:"dns_domain"`
+		DNSAddr              string `yaml:"dns_addr"`
 		GRPCEnabled          bool   `yaml:"grpc_enabled"`
 		GRPCAddr             string `yaml:"grpc_addr"`
 		ICMPEnabled          bool   `yaml:"icmp_enabled"`
 		ICMPAddr             string `yaml:"icmp_addr"`
+		DNSDoHEnabled        bool   `yaml:"dns_doh_enabled"`
+		DNSDoHURL            string `yaml:"dns_doh_url"`
+		DNSDoTEnabled        bool   `yaml:"dns_dot_enabled"`
+		DNSDoTAddr           string `yaml:"dns_dot_addr"`
+		DNSIPv6Enabled       bool   `yaml:"dns_ipv6_enabled"`
 		OfflineThreshold     int    `yaml:"offline_threshold"`      // seconds
 		SessionMaxAgeHours   int    `yaml:"session_max_age_hours"`  // JWT expiry
 		CleanupRetentionDays int      `yaml:"cleanup_retention_days"` // auto-purge cutoff
 		UpdateCheckRepo      string   `yaml:"update_check_repo"`      // GitHub repo for update checks (e.g. "owner/repo")
 		VantagePoints        []string `yaml:"vantage_points"`         // external proxy URLs for circuit breaker probing
+		SSHEnabled           bool     `yaml:"ssh_enabled"`             // enable SSH transport listener
+		SSHPort              int      `yaml:"ssh_port"`                // SSH listener port (default 2222)
+		SSHAddr              string   `yaml:"ssh_addr"`                // SSH listener addr (default :ssh_port)
+		SSHHostKey           string   `yaml:"ssh_host_key"`            // path to SSH host key (auto-generated if missing)
+		SSHUser              string   `yaml:"ssh_user"`                // SSH user for agent auth
+		SSHPassword          string   `yaml:"ssh_password"`            // SSH password (empty = any password or key-only)
+		SSHKeyAuth           bool     `yaml:"ssh_key_auth"`            // allow public key authentication
+		GeoIPEnabled         bool     `yaml:"geoip_enabled"`           // enable GeoIP lookup via ip-api.com (opt-in)
+		FrontDomains         []string `yaml:"front_domains"`           // CDN front domains for domain fronting auto-failover
+		FrontCheckInterval   int      `yaml:"front_check_interval"`    // seconds between domain front health checks (default 60)
+		AllowedOrigins       []string `yaml:"allowed_origins"`         // allowed WebSocket/CORS origins (default: localhost,127.0.0.1,::1)
+		CookieDomain         string   `yaml:"cookie_domain"`           // domain for session/CSRF cookies (for cross-origin deployments)
 	} `yaml:"server"`
 
 	Database struct {
@@ -46,14 +66,21 @@ type Config struct {
 	} `yaml:"database"`
 
 	Implant struct {
-		DefaultInterval int    `yaml:"default_interval"` // seconds
-		DefaultJitter   int    `yaml:"default_jitter"`   // percent
-		DefaultUA       string `yaml:"default_user_agent"`
-		DefaultSkipTLS  bool   `yaml:"default_skip_tls"`
+		DefaultInterval    int    `yaml:"default_interval"`    // seconds
+		DefaultJitter      int    `yaml:"default_jitter"`      // percent
+		DefaultUA          string `yaml:"default_user_agent"`
+		DefaultSkipTLS     bool   `yaml:"default_skip_tls"`
+		DefaultWorkingStart string `yaml:"default_working_start"` // HH:MM local time (empty = disabled)
+		DefaultWorkingEnd   string `yaml:"default_working_end"`   // HH:MM local time (empty = disabled)
+		DefaultWorkingTZ    string `yaml:"default_working_tz"`    // IANA timezone (e.g. "America/New_York"), empty = UTC
+		DNSDoHURL          string `yaml:"dns_doh_url"`          // DNS-over-HTTPS endpoint
+		DNSDoTAddr         string `yaml:"dns_dot_addr"`         // DNS-over-TLS address:port
+		DNSIPv6            bool   `yaml:"dns_ipv6"`             // enable IPv6 AAAA tunneling
 	} `yaml:"implant"`
 
 	Auth struct {
-		PasswordHash string `yaml:"password_hash"` // bcrypt hash, set on first run
+		PasswordHash  string `yaml:"password_hash"`  // bcrypt hash, set on first run
+		DefaultPasswd string `yaml:"default_password"` // plaintext; used only on first boot if password_hash is empty
 	} `yaml:"auth"`
 
 	Crypto struct {
@@ -80,11 +107,31 @@ type Config struct {
 		MaxConversationTurns  int    `yaml:"max_conversation_turns"`  // 0 = unlimited (default)
 		MaxToolRounds         int    `yaml:"max_tool_rounds"`         // 0 = unlimited (default)
 		MaxDuplicateToolCalls int    `yaml:"max_duplicate_tool_calls"` // 0 = unlimited; else cap identical tool+args repeats
+		AllowExecute          bool   `yaml:"allow_execute"`           // permit AI to run commands on agents (default false = safe)
 	} `yaml:"ai"`
 
 	Logging struct {
 		Level string `yaml:"level"` // debug, info, warn, error
 	} `yaml:"logging"`
+
+	SSO SSOConfig `yaml:"sso"`
+
+	Integrations struct {
+		Slack SlackConfig `yaml:"slack"`
+	} `yaml:"integrations"`
+
+
+	Listeners ListenersConfig `yaml:"listeners"`
+
+	// Allow external programs to write plain SOCKS5 operations server -> agent
+	Socks struct {
+		Enabled           bool     `yaml:"enabled"`
+		AuthRequired      bool     `yaml:"auth_required"`
+		Users             []SocksUser `yaml:"users"`
+		AllowedDests      []string `yaml:"allowed_destinations"`
+	} `yaml:"socks"`
+
+	TLSFingerprint TLSFingerprintConfig `yaml:"tls_fingerprint"`
 
 	RateLimit struct {
 		Login struct {
@@ -102,6 +149,12 @@ type Config struct {
 			Limit  int `yaml:"limit"`  // requests per window
 			Window int `yaml:"window"` // window in seconds
 		} `yaml:"beacon"`
+		ExtC2 struct {
+			Enabled    bool    `yaml:"enabled"`
+			Rate       float64 `yaml:"rate"`        // requests per second per beacon ID
+			Burst      int     `yaml:"burst"`       // max burst size
+			CleanupAge int     `yaml:"cleanup_age"` // minutes to keep idle entries
+		} `yaml:"extc2"`
 	} `yaml:"rate_limit"`
 }
 
@@ -110,20 +163,34 @@ func DefaultConfig() *Config {
 	cfg := &Config{}
 	cfg.Server.Port = 8080
 	cfg.Server.Host = "0.0.0.0"
-	cfg.Server.TLSEnabled = false
+	cfg.Server.TLSEnabled = true
 	cfg.Server.TCPEnabled = false
 	cfg.Server.TCPAddr = ""
 	cfg.Server.SMBEnabled = false
 	cfg.Server.SMBPipe = "forgec2"
 	cfg.Server.DNSEnabled = false
 	cfg.Server.DNSDomain = ""
+	cfg.Server.DNSAddr = ":53"
 	cfg.Server.ICMPEnabled = false
 	cfg.Server.ICMPAddr = "0.0.0.0"
+	cfg.Server.DNSDoHEnabled = false
+	cfg.Server.DNSDoHURL = "https://dns.google/dns-query"
+	cfg.Server.DNSDoTEnabled = false
+	cfg.Server.DNSDoTAddr = "1.1.1.1:853"
+	cfg.Server.DNSIPv6Enabled = false
+	cfg.Server.SSHEnabled = false
+	cfg.Server.SSHPort = 2222
+	cfg.Server.SSHAddr = ""
+	cfg.Server.SSHUser = "forgec2"
+	cfg.Server.SSHPassword = ""
+	cfg.Server.SSHKeyAuth = true
 	cfg.Server.DataDir = "data"
+	cfg.Server.SSHHostKey = filepath.Join(cfg.Server.DataDir, "ssh_host_key")
 	cfg.Server.OfflineThreshold = 60
 	cfg.Server.SessionMaxAgeHours = 24
 	cfg.Server.CleanupRetentionDays = 30
 	cfg.Server.UpdateCheckRepo = "forgec2/forgec2"
+	cfg.Server.FrontCheckInterval = 60
 
 	cfg.Database.Path = filepath.Join(cfg.Server.DataDir, "db/forgec2.db")
 	cfg.Server.CertFile = filepath.Join(cfg.Server.DataDir, "server.crt")
@@ -132,6 +199,12 @@ func DefaultConfig() *Config {
 	cfg.Implant.DefaultInterval = 5
 	cfg.Implant.DefaultJitter = 20
 	cfg.Implant.DefaultUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+	cfg.Implant.DefaultWorkingStart = ""
+	cfg.Implant.DefaultWorkingEnd = ""
+	cfg.Implant.DefaultWorkingTZ = ""
+	cfg.Implant.DNSDoHURL = "https://dns.google/dns-query"
+	cfg.Implant.DNSDoTAddr = "1.1.1.1:853"
+	cfg.Implant.DNSIPv6 = false
 
 	cfg.Malleable.Enabled = false
 	cfg.Malleable.StatusCode = 200
@@ -142,7 +215,16 @@ func DefaultConfig() *Config {
 	cfg.AI.Enabled = false
 	cfg.AI.Provider = "deepseek"
 	cfg.AI.Model = "deepseek-chat"
+	cfg.AI.MaxConversationTurns = 20
+	cfg.AI.MaxToolRounds = 10
+	cfg.AI.MaxDuplicateToolCalls = 3
 	cfg.AI.SystemPrompt = "You are the ForgeC2 red team operations assistant, running on the C2 server. You can list online agents, view target details, execute commands, view credentials, manage listeners, and more."
+	cfg.TLSFingerprint.JARMEnabled = false
+	cfg.TLSFingerprint.JARMRotate = "24h"
+	cfg.TLSFingerprint.JA3Enabled = false
+	cfg.TLSFingerprint.JA3Profile = "random"
+	cfg.TLSFingerprint.JA3Rotate = "24h"
+
 	cfg.Logging.Level = "info"
 
 	cfg.RateLimit.Login.MaxAttempts = 5
@@ -157,7 +239,54 @@ func DefaultConfig() *Config {
 	cfg.RateLimit.Beacon.Limit = 100
 	cfg.RateLimit.Beacon.Window = 60
 
+	cfg.Socks.Enabled = false
+	cfg.Socks.AuthRequired = false
+	cfg.Socks.Users = []SocksUser{}
+	cfg.Socks.AllowedDests = []string{}
+
+	cfg.SSO.Enabled = false
+	cfg.SSO.Scopes = "openid profile email"
+	cfg.SSO.DefaultRole = "user"
+
+	cfg.RateLimit.ExtC2.Enabled = true
+	cfg.RateLimit.ExtC2.Rate = 10
+	cfg.RateLimit.ExtC2.Burst = 20
+	cfg.RateLimit.ExtC2.CleanupAge = 30
+
+	// Listener defaults
+	cfg.Listeners.MTLS.Enabled = false
+	cfg.Listeners.MTLS.Addr = ":8000"
+	cfg.Listeners.MTLS.CertFile = filepath.Join(cfg.Server.DataDir, "server.crt")
+	cfg.Listeners.MTLS.KeyFile = filepath.Join(cfg.Server.DataDir, "server.key")
+	cfg.Listeners.MTLS.ClientCAFile = filepath.Join(cfg.Server.DataDir, "ca.crt")
+
+	cfg.Listeners.H2C.Enabled = false
+	cfg.Listeners.H2C.Addr = ":8081"
+
+	cfg.Listeners.WG.Enabled = false
+	cfg.Listeners.WG.Addr = ":51820"
+
 	return cfg
+}
+
+// isWeakSecret returns true if the secret is commonly known, too short, or trivially guessable.
+func isWeakSecret(s string) bool {
+	if len(s) < 32 {
+		return true
+	}
+	weak := []string{
+		"forgec2_secret_key_change_this_in_production",
+		"change_me", "secret", "password", "admin",
+		"jwt_secret", "your_secret_here", "todo",
+		"0b0d003179038fb3742671c8242100f77f03be74aa69dbc38139fe1e500d9dfd",
+	}
+	lower := strings.ToLower(s)
+	for _, w := range weak {
+		if strings.Contains(lower, w) {
+			return true
+		}
+	}
+	return false
 }
 
 // Load loads config from file, creates default if not exists
@@ -191,9 +320,8 @@ func Load(path string) (*Config, error) {
 		cfg.Server.JWTSecret = envSecret
 	}
 
-	// Warn if using the default/example JWT secret and auto-generate a random one
-	defaultSecret := "forgec2_secret_key_change_this_in_production"
-	if cfg.Server.JWTSecret == defaultSecret {
+	// Auto-generate JWT secret if using default/insecure value
+	if cfg.Server.JWTSecret == "" || isWeakSecret(cfg.Server.JWTSecret) {
 		key := make([]byte, 32)
 		if _, err := rand.Read(key); err != nil {
 			return nil, err
@@ -202,19 +330,31 @@ func Load(path string) (*Config, error) {
 		if err := cfg.Save(path); err != nil {
 			return nil, err
 		}
-		slog.Warn("Default JWT secret was insecure — auto-generated and saved to config.yaml")
+		slog.Warn("JWT secret auto-generated. To use a custom secret, set FORGEC2_JWT_SECRET env var or edit server.jwt_secret in config.yaml")
 	}
 
-	// Generate random JWT secret if not set
-	if cfg.Server.JWTSecret == "" {
-		key := make([]byte, 32)
-		if _, err := rand.Read(key); err != nil {
-			return nil, err
+	// Env override for AI API key (takes precedence over config file)
+	if envAIKey := os.Getenv("FORGEC2_AI_API_KEY"); envAIKey != "" {
+		cfg.AI.APIKey = envAIKey
+	}
+
+	// Env overrides for critical settings
+	if envDBPath := os.Getenv("FORGEC2_DB_PATH"); envDBPath != "" {
+		cfg.Database.Path = envDBPath
+	}
+	if envHost := os.Getenv("FORGEC2_HOST"); envHost != "" {
+		cfg.Server.Host = envHost
+	}
+	if envPort := os.Getenv("FORGEC2_PORT"); envPort != "" {
+		if p, err := strconv.Atoi(envPort); err == nil && p > 0 && p <= 65535 {
+			cfg.Server.Port = p
 		}
-		cfg.Server.JWTSecret = hex.EncodeToString(key)
-		if err := cfg.Save(path); err != nil {
-			return nil, err
-		}
+	}
+	if envSSOSecret := os.Getenv("FORGEC2_SSO_CLIENT_SECRET"); envSSOSecret != "" {
+		cfg.SSO.ClientSecret = envSSOSecret
+	}
+	if envSlackToken := os.Getenv("FORGEC2_SLACK_BOT_TOKEN"); envSlackToken != "" {
+		cfg.Integrations.Slack.BotToken = envSlackToken
 	}
 
 	return cfg, nil
@@ -298,6 +438,79 @@ func (c *Config) Validate() error {
 	if c.Server.ICMPEnabled && c.Server.ICMPAddr == "" {
 		errs = append(errs, errors.New("server.icmp_addr is required when icmp_enabled is true"))
 	}
+	if c.Server.GRPCEnabled && c.Server.GRPCAddr == "" {
+		errs = append(errs, errors.New("server.grpc_addr is required when grpc_enabled is true"))
+	}
+	if c.Server.SSHEnabled && c.Server.SSHPort <= 0 {
+		errs = append(errs, errors.New("server.ssh_port must be > 0 when ssh_enabled is true"))
+	}
+
+	// AI validation
+	if c.AI.Enabled && c.AI.APIKey == "" && os.Getenv("FORGEC2_AI_API_KEY") == "" {
+		slog.Warn("ai.api_key is empty — AI features will fail at runtime unless set via env FORGEC2_AI_API_KEY")
+	}
+	if c.AI.Enabled && c.AI.Provider != "" {
+		validProviders := map[string]bool{"openai": true, "anthropic": true, "claude": true, "google": true, "deepseek": true, "qianwen": true, "longcat": true, "local": true, "custom": true}
+		if !validProviders[c.AI.Provider] {
+			errs = append(errs, errors.New("ai.provider must be one of: openai, anthropic, claude, google, deepseek, qianwen, longcat, local, custom"))
+		}
+	}
+
+	// SSO validation
+	if c.SSO.Enabled {
+		if c.SSO.ClientID == "" {
+			errs = append(errs, errors.New("sso.client_id is required when sso.enabled is true"))
+		}
+		if c.SSO.ClientSecret == "" {
+			errs = append(errs, errors.New("sso.client_secret is required when sso.enabled is true"))
+		}
+	}
+
+	// TLS validation
+	if c.Server.TLSEnabled {
+		if c.Server.CertFile == "" {
+			errs = append(errs, errors.New("server.cert_file is required when server.tls_enabled is true"))
+		}
+		if c.Server.KeyFile == "" {
+			errs = append(errs, errors.New("server.key_file is required when server.tls_enabled is true"))
+		}
+	}
+
+	// Rate limit validation
+	if c.RateLimit.API.Capacity <= 0 {
+		errs = append(errs, errors.New("rate_limit.api.capacity must be > 0"))
+	}
+
+	if c.Listeners.MTLS.Enabled {
+		if c.Listeners.MTLS.Addr == "" {
+			errs = append(errs, errors.New("listeners.mtls.addr is required when listeners.mtls.enabled is true"))
+		}
+		if c.Listeners.MTLS.CertFile == "" {
+			errs = append(errs, errors.New("listeners.mtls.cert_file is required when listeners.mtls.enabled is true"))
+		}
+		if c.Listeners.MTLS.KeyFile == "" {
+			errs = append(errs, errors.New("listeners.mtls.key_file is required when listeners.mtls.enabled is true"))
+		}
+		if c.Listeners.MTLS.ClientCAFile == "" {
+			errs = append(errs, errors.New("listeners.mtls.client_ca_file is required when listeners.mtls.enabled is true"))
+		}
+	}
+
+	if c.Listeners.H2C.Enabled && c.Listeners.H2C.Addr == "" {
+		errs = append(errs, errors.New("listeners.h2c.addr is required when listeners.h2c.enabled is true"))
+	}
+
+	if c.Listeners.WG.Enabled {
+		if c.Listeners.WG.Addr == "" {
+			errs = append(errs, errors.New("listeners.wg.addr is required when listeners.wg.enabled is true"))
+		}
+		if c.Listeners.WG.PrivateKey == "" {
+			errs = append(errs, errors.New("listeners.wg.private_key is required when listeners.wg.enabled is true"))
+		}
+		if c.Listeners.WG.PeerPublicKey == "" {
+			errs = append(errs, errors.New("listeners.wg.peer_public_key is required when listeners.wg.enabled is true"))
+		}
+	}
 
 	return errors.Join(errs...)
 }
@@ -326,6 +539,78 @@ func (c *Config) CopyFrom(src *Config) {
 	c.AI = src.AI
 	c.Logging = src.Logging
 	c.RateLimit = src.RateLimit
+	c.SSO = src.SSO
+	c.Integrations = src.Integrations
+	c.Listeners = src.Listeners
+}
+
+// SSOConfig holds enterprise SSO/OIDC/SAML authentication settings
+type SSOConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	ProviderName string `yaml:"provider_name"` // oidc, azure, google, okta, onelogin, custom
+	DisplayName  string `yaml:"display_name"`  // human-readable name shown on login button (e.g. "Login with Azure AD")
+	ClientID     string `yaml:"client_id"`
+	ClientSecret string `yaml:"client_secret"`
+	RedirectURL  string `yaml:"redirect_url"`
+	AuthURL      string `yaml:"auth_url"`      // authorization endpoint
+	TokenURL     string `yaml:"token_url"`     // token exchange endpoint
+	UserInfoURL  string `yaml:"userinfo_url"`  // userinfo endpoint
+	Scopes       string `yaml:"scopes"`        // space-separated (default: "openid profile email")
+	Domains      string `yaml:"domains"`       // comma-separated allowed email domains
+	DefaultRole  string `yaml:"default_role"`  // role for auto-provisioned users (admin/user)
+}
+
+// SocksUser holds SOCKS5 username/password auth credentials.
+type SocksUser struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
+// TLSFingerprintConfig holds JARM/JA3 fingerprint randomization settings
+type TLSFingerprintConfig struct {
+	JARMEnabled    bool   `yaml:"jarm_randomize"`
+	JARMRotate     string `yaml:"jarm_rotate_interval"`
+	JA3Enabled     bool   `yaml:"ja3_randomize"`
+	JA3Profile     string `yaml:"ja3_profile"`
+	JA3Rotate      string `yaml:"ja3_rotate_interval"`
+}
+
+// SlackConfig holds Slack integration settings
+type SlackConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	AppToken      string `yaml:"app_token"`
+	BotToken      string `yaml:"bot_token"`
+	SigningSecret string `yaml:"signing_secret"`
+}
+
+// ListenersConfig holds transport listener configurations.
+type ListenersConfig struct {
+	MTLS MTLSListenerConfig `yaml:"mtls"`
+	H2C  H2CListenerConfig  `yaml:"h2c"`
+	WG   WGListenerConfig   `yaml:"wg"`
+}
+
+// MTLSListenerConfig configures the mTLS listener.
+type MTLSListenerConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	Addr         string `yaml:"addr"`
+	CertFile     string `yaml:"cert_file"`
+	KeyFile      string `yaml:"key_file"`
+	ClientCAFile string `yaml:"client_ca_file"`
+}
+
+// H2CListenerConfig configures the H2C (HTTP/2 cleartext) listener.
+type H2CListenerConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Addr    string `yaml:"addr"`
+}
+
+// WGListenerConfig configures the WireGuard-style UDP listener.
+type WGListenerConfig struct {
+	Enabled       bool   `yaml:"enabled"`
+	Addr          string `yaml:"addr"`
+	PrivateKey    string `yaml:"private_key"`
+	PeerPublicKey string `yaml:"peer_public_key"`
 }
 
 // LoadFromData loads config from byte data
@@ -333,4 +618,20 @@ func (c *Config) LoadFromData(data []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return yaml.Unmarshal(data, c)
+}
+
+// AllowedOrigin checks if the given origin hostname is in the configured allow list.
+// Returns true if allowedOrigins is empty (allow all) or the hostname matches.
+func (c *Config) AllowedOrigin(hostname string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.Server.AllowedOrigins) == 0 {
+		return true
+	}
+	for _, allowed := range c.Server.AllowedOrigins {
+		if hostname == allowed {
+			return true
+		}
+	}
+	return false
 }

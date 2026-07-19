@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -109,5 +111,49 @@ func TestSaveConcurrentSafety(t *testing.T) {
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		t.Fatal("config file should exist after concurrent saves")
+	}
+}
+
+func TestIsWeakSecret(t *testing.T) {
+	tests := []struct {
+		secret string
+		weak   bool
+	}{
+		{"", true},
+		{"short", true},
+		{"change_me", true},
+		{"forgec2_secret_key_change_this_in_production", true},
+		{"secret", true},
+		{"password", true},
+		{"a]32chars-----------------------------------", false},
+		{"a]32chars-----------------------------------2", false},
+	}
+	for _, tt := range tests {
+		if got := isWeakSecret(tt.secret); got != tt.weak {
+			t.Errorf("isWeakSecret(%q) = %v, want %v", tt.secret, got, tt.weak)
+		}
+	}
+}
+
+func TestAutoGenerateJWTSecret(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.yaml")
+
+	// Write config with empty JWT secret
+	cfg := DefaultConfig()
+	cfg.Server.JWTSecret = ""
+	out, _ := yaml.Marshal(cfg)
+	os.WriteFile(path, out, 0644)
+
+	// Load should auto-generate
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded.Server.JWTSecret == "" {
+		t.Fatal("expected auto-generated JWT secret, got empty")
+	}
+	if len(loaded.Server.JWTSecret) != 64 { // 32 bytes hex
+		t.Fatalf("expected 64-char hex secret, got %d chars", len(loaded.Server.JWTSecret))
 	}
 }

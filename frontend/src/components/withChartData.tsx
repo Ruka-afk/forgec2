@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { apiGet } from "@/lib/api";
+import { api } from "@/lib/api";
+import { Spinner } from "@/components/UI";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle } from "lucide-react";
 
 interface ChartDataProps<T> {
   data: T;
@@ -15,7 +18,7 @@ export function withChartData<T>(
   endpoint: string,
   transform?: (raw: unknown) => T,
 ) {
-  return function ChartDataWrapper() {
+  const ChartDataWrapper = function ChartDataWrapper() {
     const [data, setData] = useState<T | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
@@ -37,7 +40,7 @@ export function withChartData<T>(
     const load = useCallback(() => {
       setLoading(true);
       setError(false);
-      apiGet<unknown>(endpoint)
+      api.get<unknown>(endpoint)
         .then((raw) => setData(transform ? transform(raw) : (raw as T)))
         .catch(() => setError(true))
         .finally(() => setLoading(false));
@@ -48,13 +51,13 @@ export function withChartData<T>(
     return (
       <div ref={ref}>
         {loading ? (
-          <div className="h-24 flex items-center justify-center text-[var(--text-tertiary)] text-xs">
-            <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading...
+          <div className="h-24 flex items-center justify-center text-muted-foreground/70 text-xs">
+            <Spinner size="sm" />Loading...
           </div>
         ) : error ? (
-          <div className="h-24 flex items-center justify-center text-[var(--danger-text)] text-xs">
-            <i className="fa-solid fa-triangle-exclamation mr-2"></i>Failed to load
-            <button onClick={load} className="ml-2 underline hover:no-underline">Retry</button>
+          <div className="h-24 flex items-center justify-center text-destructive text-xs">
+            <AlertTriangle className="w-4 h-4 mr-2 inline" />Failed to load
+            <Button variant="link" size="sm" onClick={load} className="ml-2">Retry</Button>
           </div>
         ) : data != null ? (
           <Wrapped data={data as T} loading={false} error={false} onRefresh={load} />
@@ -62,4 +65,6 @@ export function withChartData<T>(
       </div>
     );
   };
+  ChartDataWrapper.displayName = `ChartDataWrapper(${Wrapped.displayName || Wrapped.name || "Component"})`;
+  return ChartDataWrapper;
 }

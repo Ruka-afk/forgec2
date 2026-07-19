@@ -1,6 +1,7 @@
-package server
+﻿package server
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -32,6 +33,9 @@ func (s *Server) handleAPIGetScripts(c *gin.Context) {
 
 // handleAPISaveScript saves a new or updated script
 func (s *Server) handleAPISaveScript(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	var req struct {
 		ID          string `json:"id"`
 		Name        string `json:"name" binding:"required"`
@@ -39,7 +43,7 @@ func (s *Server) handleAPISaveScript(c *gin.Context) {
 		Code        string `json:"code" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "invalid request"})
+		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
@@ -62,24 +66,34 @@ func (s *Server) handleAPISaveScript(c *gin.Context) {
 
 // handleAPIDeleteScript deletes a script
 func (s *Server) handleAPIDeleteScript(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if scripting.GetEngine().DeleteScript(id) {
 		s.LogAuditRecord(c, "delete_script", "scripting", id, "Script deleted", true, nil)
 		c.JSON(http.StatusOK, gin.H{"success": true})
 	} else {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "script not found"})
+		respondError(c, http.StatusNotFound, "script not found")
 	}
 }
 
 // handleAPIExecuteScript executes a script
 func (s *Server) handleAPIExecuteScript(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	if role, _ := c.Get("user_role"); fmt.Sprintf("%v", role) != "admin" {
+		respondError(c, http.StatusForbidden, "Admin only")
+		return
+	}
 	var req struct {
 		ScriptID string                 `json:"script_id"`
 		Code     string                 `json:"code"`
 		Context  map[string]interface{} `json:"context"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "invalid request"})
+		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
 
@@ -110,7 +124,7 @@ func (s *Server) handleAPIExecuteScript(c *gin.Context) {
 	} else if req.Code != "" {
 		result = engine.ExecuteCode(req.Code, context)
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "no script_id or code provided"})
+		respondError(c, http.StatusBadRequest, "no script_id or code provided")
 		return
 	}
 

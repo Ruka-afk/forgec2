@@ -1,8 +1,33 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useI18n } from "@/lib/i18n";
 import { API_BASE } from "@/lib/constants";
+import { downloadText } from "@/lib/download";
+import { api, getCsrfToken } from "@/lib/api";
+import { renderMarkdown } from "@/lib/markdown";
+import { sanitizeHtml } from "@/lib/sanitize";
+import { CopyButton, Spinner, MdContent, PageHeader } from "@/components/UI";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { Bot, Brain, Wand2, Check, Copy, Download, Menu, MessageSquare, Pencil, Plus, RotateCw, Send, Settings, Square, Terminal, Trash2, User, Wrench, X } from "lucide-react";
+
+function SanitizedMarkdown({ content }: { content: string }) {
+  const [safe, setSafe] = useState<string>("");
+  useEffect(() => {
+    let cancelled = false;
+    sanitizeHtml(renderMarkdown(content)).then((h) => { if (!cancelled) setSafe(h); });
+    return () => { cancelled = true; };
+  }, [content]);
+  return <MdContent dangerouslySetInnerHTML={{ __html: safe }} />;
+}
 
 interface AIMessage {
   role: "user" | "assistant" | "tool";
@@ -18,8 +43,14 @@ interface AIConfig {
   model: string;
   endpoint: string;
   system_prompt: string;
+  allow_execute?: boolean;
 }
 
+interface AISession {
+  id: number;
+  title: string;
+  updated_at: string;
+}
 
 export default function AIPage() {
   const { t } = useI18n();
@@ -27,93 +58,211 @@ export default function AIPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [configured, setConfigured] = useState(false);
-  const [hasAPIKey, setHasAPIKey] = useState(false);
   const [provider, setProvider] = useState("deepseek");
   const [model, setModel] = useState("deepseek-chat");
+  const [apiKey, setApiKey] = useState("");
   const [endpoint, setEndpoint] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
-  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [allowExecute, setAllowExecute] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
+  const [sessions, setSessions] = useState<AISession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<{ id: number; current: string } | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const adjustTextarea = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 128) + "px";
+  };
+
+  // messagesRef mirrors `messages` synchronously so streaming/autosave can read
+  // the latest value without stale closures.
+  const messagesRef = useRef<AIMessage[]>([]);
+  const setMessagesBoth = useCallback(
+    (updater: AIMessage[] | ((prev: AIMessage[]) => AIMessage[])) => {
+      setMessages((prev) => {
+        const next =
+          typeof updater === "function"
+            ? (updater as (p: AIMessage[]) => AIMessage[])(prev)
+            : updater;
+        messagesRef.current = next;
+        return next;
+      });
+    },
+    []
+  );
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => { scrollToBottom(); }, [messages]);
+  useEffect(() => { adjustTextarea(); }, [input]);
 
   const loadConfig = useCallback(async () => {
     try {
-      setSettingsLoading(true);
-      const res = await fetch(`${API_BASE}?p=/ai&format=json`);
-      if (res.ok) {
-        const data = await res.json();
-        setConfigured(Boolean(data.AIConfigured));
-        setHasAPIKey(Boolean(data.AIHasAPIKey));
-        if (data.AIConfig) {
-          const cfg = data.AIConfig as AIConfig;
-          if (cfg.provider) setProvider(cfg.provider);
-          if (cfg.model) setModel(cfg.model);
-          if (cfg.endpoint) setEndpoint(cfg.endpoint);
-          if (cfg.system_prompt) setSystemPrompt(cfg.system_prompt);
-        }
+      const data = await api.get("/ai");
+      if (data.AIConfig) {
+        const cfg = data.AIConfig as AIConfig;
+        if (cfg.provider) setProvider(cfg.provider);
+        if (cfg.model) setModel(cfg.model);
+        if (cfg.endpoint) setEndpoint(cfg.endpoint);
+        if (cfg.system_prompt) setSystemPrompt(cfg.system_prompt);
+        setAllowExecute(Boolean(cfg.allow_execute));
       }
-    } catch (e) { console.error("AI: load config failed", e); } finally {
-      setSettingsLoading(false);
-    }
+    } catch { toast.error("AI: load config failed"); }
   }, []);
 
-  useEffect(() => { Promise.resolve().then(() => loadConfig()); }, [loadConfig]);
+  const loadSessions = useCallback(async () => {
+    try {
+      const data = await api.get("/ai/sessions");
+      const list = Array.isArray(data) ? data : (data?.data ?? []);
+      setSessions(list as AISession[]);
+    } catch { toast.error("AI: load sessions failed"); }
+  }, []);
+
+  useEffect(() => { loadConfig(); }, [loadConfig]);
+  useEffect(() => { loadSessions(); }, [loadSessions]);
 
   const handleSaveConfig = async () => {
     try {
       setConfigSaving(true);
-      const res = await fetch(`${API_BASE}?p=/ai/config`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: true, provider, model, endpoint, system_prompt: systemPrompt }),
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setConfigured(true);
-          setShowSettings(false);
-        }
+      const data = await api.postJson("/ai/config", { enabled: true, provider, model, api_key: apiKey, endpoint, system_prompt: systemPrompt, allow_execute: allowExecute });
+      if (data.success) {
+        setShowSettings(false);
       }
-    } catch (e) { console.error("AI: save config failed", e); } finally {
+    } catch { toast.error("AI: save config failed"); } finally {
       setConfigSaving(false);
+    }
+  };
+
+  const selectSession = async (id: number) => {
+    try {
+      const data = await api.get(`/ai/sessions/${id}/messages`);
+      const list = Array.isArray(data) ? data : (data?.data ?? []);
+      const mapped = (list as { role: string; content: string; tool_name?: string }[]).map(
+        (m) => ({ role: m.role as AIMessage["role"], content: m.content, tool_name: m.tool_name, thinking: false })
+      );
+      setMessagesBoth(mapped);
+      setActiveSessionId(id);
+      setSidebarOpen(false);
+    } catch { toast.error("AI: load session messages failed"); }
+  };
+
+  const deleteSession = async (id: number) => {
+    try {
+      await api.del(`/ai/sessions/${id}`);
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      if (activeSessionId === id) {
+        setActiveSessionId(null);
+        setMessagesBoth([]);
+      }
+    } catch { toast.error("AI: delete session failed"); }
+  };
+
+  const handleNewChat = () => {
+    setMessagesBoth([]);
+    setActiveSessionId(null);
+    setSidebarOpen(false);
+  };
+
+  const renameSession = (id: number, current: string) => {
+    setRenameTarget({ id, current });
+    setRenameValue(current);
+  };
+
+  const confirmRename = async () => {
+    if (!renameTarget) return;
+    const title = renameValue.trim();
+    if (title === "" || title === renameTarget.current) { setRenameTarget(null); return; }
+    try {
+      await api.putJson(`/ai/sessions/${renameTarget.id}`, { title });
+      setSessions((prev) => prev.map((s) => (s.id === renameTarget.id ? { ...s, title } : s)));
+    } catch { toast.error("AI: rename session failed"); }
+    setRenameTarget(null);
+  };
+
+  // handleRegenerate trims the trailing assistant/tool reply and re-asks the last
+  // user message, reusing the existing streaming path via handleSend.
+  const handleRegenerate = () => {
+    if (loading) return;
+    const cur = messagesRef.current;
+    let lastUser = -1;
+    for (let i = cur.length - 1; i >= 0; i--) {
+      if (cur[i].role === "user") { lastUser = i; break; }
+    }
+    if (lastUser < 0) return;
+    const lastUserMsg = cur[lastUser];
+    setMessagesBoth(cur.slice(0, lastUser + 1));
+    setInput(lastUserMsg.content);
+    setTimeout(() => handleSend(), 0);
+  };
+
+  // saveTurn persists every message added since `fromIndex` into the session.
+  const saveTurn = async (sessionId: number, fromIndex: number) => {
+    const msgs = messagesRef.current.slice(fromIndex);
+    for (const m of msgs) {
+      if (m.thinking) continue;
+      try {
+        await api.postJson(`/ai/sessions/${sessionId}/messages`, {
+          role: m.role,
+          content: m.content,
+          tool_name: m.tool_name || "",
+        });
+      } catch { toast.error("AI: save message failed"); }
     }
   };
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
-    const userMsg: AIMessage = { role: "user", content: input.trim() };
-
-    const conversationHistory = [...messages, userMsg];
-    setMessages((prev) => [...prev, userMsg]);
+    const text = input.trim();
+    const userMsg: AIMessage = { role: "user", content: text };
+    const userIndex = messagesRef.current.length;
+    setMessagesBoth((prev) => [...prev, userMsg]);
     setInput("");
     setLoading(true);
+
+    let sessionId = activeSessionId;
+    if (sessionId == null) {
+      try {
+        const created = await api.postJson<{ id: number; title: string }>("/ai/sessions", {
+          title: text.slice(0, 40),
+        });
+        sessionId = created?.id ?? null;
+        if (sessionId != null) {
+          setActiveSessionId(sessionId);
+          loadSessions();
+        }
+      } catch {
+        sessionId = null;
+        toast.error("Failed to create AI session");
+      }
+    }
 
     const controller = new AbortController();
     abortRef.current = controller;
 
     const thinkingMsg: AIMessage = { role: "assistant", content: "", thinking: true };
-    setMessages((prev) => [...prev, thinkingMsg]);
+    setMessagesBoth((prev) => [...prev, thinkingMsg]);
 
     try {
-      const response = await fetch(`${API_BASE}?p=/ai/chat`, {
+      const conversationHistory = [...messagesRef.current, userMsg];
+      const response = await fetch(`${API_BASE}/ai/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": getCsrfToken() },
         body: JSON.stringify({ messages: conversationHistory }),
         credentials: "include",
         signal: controller.signal,
       });
 
       if (!response.ok || !response.body) {
-        setMessages((prev) => {
+        setMessagesBoth((prev) => {
           const updated = [...prev];
           const idx = updated.findIndex((m) => m.thinking);
           if (idx !== -1) {
@@ -148,7 +297,7 @@ export default function AIPage() {
 
             switch (currentEvent) {
               case "thinking": {
-                setMessages((prev) => {
+                setMessagesBoth((prev) => {
                   const updated = [...prev];
                   const idx = updated.findIndex((m) => m.thinking);
                   if (idx !== -1) {
@@ -159,7 +308,7 @@ export default function AIPage() {
                 break;
               }
               case "clear": {
-                setMessages((prev) => {
+                setMessagesBoth((prev) => {
                   const updated = [...prev];
                   const idx = updated.findIndex((m) => m.thinking);
                   if (idx !== -1) {
@@ -172,7 +321,7 @@ export default function AIPage() {
               }
               case "text": {
                 currentContent = data;
-                setMessages((prev) => {
+                setMessagesBoth((prev) => {
                   const updated = [...prev];
                   const idx = updated.findIndex((m) => m.role === "assistant" && !m.thinking);
                   if (idx !== -1) {
@@ -188,7 +337,7 @@ export default function AIPage() {
                 break;
               }
               case "reasoning": {
-                setMessages((prev) => {
+                setMessagesBoth((prev) => {
                   const updated = [...prev];
                   const idx = updated.findIndex((m) => m.thinking);
                   if (idx !== -1) {
@@ -200,7 +349,7 @@ export default function AIPage() {
               }
               case "tool_start": {
                 const toolLabel = `${t("ai.calling_tool")} ${data}...`;
-                setMessages((prev) => [
+                setMessagesBoth((prev) => [
                   ...prev,
                   { role: "tool", content: toolLabel, tool_name: data },
                 ]);
@@ -210,7 +359,7 @@ export default function AIPage() {
                 try {
                   const parsed = JSON.parse(data);
                   const resultLabel = `${t("ai.tool_result")}:\n${parsed.result}`;
-                  setMessages((prev) => {
+                  setMessagesBoth((prev) => {
                     const updated = [...prev];
                     const idx = updated.findIndex(
                       (m) => m.role === "tool" && m.tool_name === parsed.name
@@ -223,7 +372,7 @@ export default function AIPage() {
                     return updated;
                   });
                 } catch {
-                  setMessages((prev) => [
+                  setMessagesBoth((prev) => [
                     ...prev,
                     { role: "tool", content: data, tool_name: t("ai.tool") },
                   ]);
@@ -231,7 +380,7 @@ export default function AIPage() {
                 break;
               }
               case "error": {
-                setMessages((prev) => [
+                setMessagesBoth((prev) => [
                   ...prev,
                   { role: "assistant", content: t("ai.error_prefix") + data },
                 ]);
@@ -247,7 +396,7 @@ export default function AIPage() {
       if (err instanceof Error && err.name === "AbortError") {
         return;
       }
-      setMessages((prev) => {
+      setMessagesBoth((prev) => {
         const updated = [...prev];
         const idx = updated.findIndex((m) => m.thinking);
         if (idx !== -1) {
@@ -260,6 +409,10 @@ export default function AIPage() {
     } finally {
       setLoading(false);
       abortRef.current = null;
+      if (sessionId != null) {
+        await saveTurn(sessionId, userIndex);
+        loadSessions();
+      }
     }
   };
 
@@ -272,24 +425,20 @@ export default function AIPage() {
   };
 
   const handleClear = () => {
-    setMessages([]);
+    setMessagesBoth([]);
+    setActiveSessionId(null);
   };
 
   const handleExport = () => {
     const text = messages
       .filter((m) => !m.thinking)
       .map((m) => {
-        const roleLabel = m.role === "user" ? "[user]" : m.role === "assistant" ? "[assistant]" : `[tool:${m.tool_name}]`;
+        const roleLabel =
+          m.role === "user" ? "[user]" : m.role === "assistant" ? "[assistant]" : `[tool:${m.tool_name}]`;
         return `${roleLabel} ${m.content}`;
       })
       .join("\n\n");
-    const blob = new Blob([text], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "ai-chat-export.txt";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadText(text, "ai-chat-export.txt");
   };
 
   const quickActions = [
@@ -306,196 +455,350 @@ export default function AIPage() {
     }
   };
 
-  return (
-    <div className="h-full min-h-0 flex flex-col max-w-5xl mx-auto w-full pb-20 md:pb-0">
-      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 px-1">
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <span className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center shrink-0">
-              <i className="fa-solid fa-robot text-indigo-500 dark:text-indigo-400"></i>
-            </span>
-            {t("nav.ai")}
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-xs mt-1.5 flex items-center gap-2 flex-wrap">
-            {configured ? (
-              <>
-                <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                  {t("common.online")}
-                </span>
-                <span className="text-slate-400">&middot;</span>
-                <span className="font-semibold text-indigo-600 dark:text-indigo-400">{provider}</span>
-                {hasAPIKey && <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400"><i className="fa-solid fa-key"></i> API key set</span>}
-                <span className="font-mono text-[10px] bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">{model}</span>
-              </>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
-                <i className="fa-solid fa-circle-exclamation text-[10px]"></i>
-                {t("ai.not_configured")}
-              </span>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap shrink-0">
-          <button onClick={() => setShowSettings(!showSettings)} className="ui-btn ui-btn-secondary h-9 text-xs">
-            <i className="fa-solid fa-gear"></i> {t("common.edit")}
-          </button>
-          <button onClick={handleClear} className="ui-btn ui-btn-danger h-9 text-xs">
-            <i className="fa-solid fa-broom"></i> {t("ai.clear")}
-          </button>
-          <button onClick={handleExport} className="ui-btn ui-btn-secondary h-9 text-xs">
-            <i className="fa-solid fa-download"></i> {t("ai.export")}
-          </button>
-        </div>
-      </div>
+  const lastAssistantIndex = (() => {
+    let idx = -1;
+    messages.forEach((m, i) => {
+      if (m.role === "assistant" && !m.thinking) idx = i;
+    });
+    return idx;
+  })();
 
-      {showSettings && (
-        <div className="shrink-0 mb-3 ui-card p-4 sm:p-6 border border-[var(--border)]">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t("ai.config_title")}</h2>
-            <button onClick={() => setShowSettings(false)} className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-500 flex items-center justify-center">
-              <i className="fa-solid fa-times"></i>
-            </button>
-          </div>
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                <span className="text-sm text-[var(--text-secondary)]">{t("ai.enable_ai")}</span>
-              </label>
+  const SessionList = (
+    <div className="flex flex-col h-full">
+      <Button
+        onClick={handleNewChat}
+        className="h-9 text-xs mb-2 shrink-0"
+      >
+        <Plus className="w-4 h-4" /> {t("ai.new_chat")}
+      </Button>
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-1 pr-1">
+        {sessions.length === 0 ? (
+          <p className="text-xs text-muted-foreground px-2 py-3">
+            {t("ai.no_sessions")}
+          </p>
+        ) : (
+          sessions.map((s) => (
+            <div
+              key={s.id}
+              onClick={() => selectSession(s.id)}
+              className={`group flex items-center gap-2 rounded-lg px-2 py-2 cursor-pointer text-sm ${
+                activeSessionId === s.id
+                  ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                  : "hover:bg-muted transition-colors text-muted-foreground"
+              }`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span className="flex-1 truncate">{s.title}</span>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  renameSession(s.id, s.title);
+                }}
+                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-300 transition-opacity shrink-0"
+                title={t("ai.rename")}
+                aria-label={t("ai.rename")}
+              >
+                <Pencil className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteSession(s.id);
+                }}
+                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity shrink-0"
+                title={t("ai.delete_session")}
+                aria-label={t("ai.delete_session")}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t("ai.provider")}</label>
-                <select className="ui-select w-full" value={provider} onChange={(e) => setProvider(e.target.value)}>
-                  <option value="deepseek">DeepSeek</option>
-                  <option value="openai">OpenAI</option>
-                  <option value="claude">Claude</option>
-                  <option value="qianwen">Qianwen</option>
-                  <option value="longcat">LongCat</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t("ai.model")}</label>
-                <input type="text" value={model} onChange={(e) => setModel(e.target.value)} className="ui-input font-mono w-full" />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t("ai.endpoint") || "API Endpoint (optional)"}</label>
-                <input type="text" value={endpoint} onChange={(e) => setEndpoint(e.target.value)} placeholder="https://api.openai.com/v1" className="ui-input font-mono w-full text-xs" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">{t("ai.system_prompt") || "System Prompt (optional)"}</label>
-              <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={3} className="ui-input w-full text-xs resize-y" placeholder="You are a helpful C2 operations assistant..." />
-            </div>
-            <button type="button" onClick={handleSaveConfig} disabled={configSaving} className="w-full h-10 ui-btn ui-btn-primary">
-              {configSaving ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i>{t("common.saving")}</> : t("common.save")}
-            </button>
-          </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="animate-fade-slide-up h-full min-h-0 flex w-full gap-3 pb-20 md:pb-0">
+      {/* Desktop session sidebar */}
+      <aside className="hidden md:flex w-56 shrink-0 flex-col border border-border rounded-2xl p-2">
+        {SessionList}
+      </aside>
+
+      {/* Mobile session sidebar overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setSidebarOpen(false)}>
+          <div className="absolute inset-0 bg-black/30" />
+          <aside
+            className="absolute left-0 top-0 bottom-0 w-64 bg-card p-2 flex flex-col border-r border-border"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {SessionList}
+          </aside>
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-4 mb-3 pr-1 scroll-smooth rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white/50 dark:bg-slate-800/30 p-3 sm:p-4">
-        {messages.length === 0 ? (
-          <div className="flex gap-3">
-            <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">
-              <i className="fa-solid fa-robot text-indigo-500 dark:text-indigo-400 text-sm"></i>
-            </div>
-            <div className="ui-card px-4 py-3 max-w-[90%] border border-slate-100 dark:border-slate-700">
-              <p className="text-sm text-[var(--text-secondary)] font-medium">{t("ai.greeting_title")}</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t("ai.greeting_desc")}</p>
-              <div className="flex flex-wrap gap-2 mt-3">
-                {quickActions.map((q) => (
-                  <button key={q.label} onClick={() => { setInput(q.query); }} className="ui-btn ui-btn-ghost text-xs h-8" data-query={q.query}>
-                    {q.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col max-w-[80rem] mx-auto w-full">
+        <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 px-1">
+          <div className="min-w-0 flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden"
+              title={t("ai.sessions")}
+              aria-label="Toggle sessions"
+            >
+              <Menu className="w-4 h-4" />
+            </Button>
+            <PageHeader title={<><span className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center shrink-0"><Bot className="w-4 h-4" /></span>{t("nav.ai")}</>} />
           </div>
-        ) : (
-          messages.map((msg, i) => {
-            if (msg.thinking) {
-              return (
-                <div key={i} className="flex gap-3">
-                  <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <i className="fa-solid fa-robot text-indigo-500 dark:text-indigo-400 text-sm"></i>
-                  </div>
-                  <div className="ui-card rounded-tl-md px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                      <i className="fa-solid fa-brain text-indigo-400 animate-pulse"></i>
-                      <span>{t("ai.thinking")}</span>
-                      <span className="flex gap-1 ml-1">
-                        <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></span>
-                        <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "0.15s" }}></span>
-                        <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "0.3s" }}></span>
-                      </span>
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <Button variant="secondary" size="sm" onClick={() => setShowSettings(!showSettings)}>
+              <Settings className="w-4 h-4" /> {t("common.edit")}
+            </Button>
+            <Button variant="destructive" size="sm" onClick={handleClear}>
+              <Wand2 className="w-4 h-4" /> {t("ai.clear")}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleExport}>
+              <Download className="w-4 h-4" /> {t("ai.export")}
+            </Button>
+          </div>
+        </div>
+
+        <div className="shrink-0 mb-1 px-1">
+          <span className="text-[11px] text-muted-foreground">
+            {activeSessionId != null ? `${t("ai.sessions")} #${activeSessionId}` : t("ai.new_chat")}
+          </span>
+        </div>
+
+        {showSettings && (
+          <Card className="shrink-0 mb-3 p-4 sm:p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-foreground">{t("ai.config_title")}</h2>
+              <Button variant="ghost" size="icon" onClick={() => setShowSettings(false)} aria-label="Close settings">
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="flex items-center gap-2 cursor-pointer">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span className="text-sm text-muted-foreground">{t("ai.enable_ai")}</span>
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <span className="block text-xs text-muted-foreground mb-1">{t("ai.provider")}</span>
+                  <Select value={provider} onValueChange={(v) => v && setProvider(v)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="deepseek">DeepSeek</SelectItem>
+                      <SelectItem value="openai">OpenAI</SelectItem>
+                      <SelectItem value="claude">Claude</SelectItem>
+                      <SelectItem value="qianwen">Qianwen</SelectItem>
+                      <SelectItem value="longcat">LongCat</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <span className="block text-xs text-muted-foreground mb-1">{t("ai.model")}</span>
+                  <Input type="text" value={model} onChange={(e) => setModel(e.target.value)} className="font-mono w-full" />
+                </div>
+                <div className="md:col-span-2">
+                  <span className="block text-xs text-muted-foreground mb-1">{t("ai.endpoint") || "API Endpoint (optional)"}</span>
+                  <Input type="text" value={endpoint} onChange={(e) => setEndpoint(e.target.value)} placeholder="https://api.openai.com/v1" className="font-mono w-full text-xs" />
+                </div>
+                <div className="md:col-span-2">
+                  <span className="block text-xs text-muted-foreground mb-1">{t("ai.api_key") || "API Key"}</span>
+                  <Input type="password" autoComplete="new-password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-..." className="font-mono w-full text-xs" />
+                  <span className="block text-[11px] text-muted-foreground mt-0.5">{t("ai.api_key_hint") || "Leave blank to keep the existing key. The key is never returned to the client."}</span>
+                </div>
+              </div>
+              <div>
+                <span className="block text-xs text-muted-foreground mb-1">{t("ai.system_prompt") || "System Prompt (optional)"}</span>
+                <Textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={3} className="w-full text-xs resize-y" placeholder="You are a helpful C2 operations assistant..." />
+              </div>
+              <Label className="flex items-start gap-3 cursor-pointer select-none">
+                <Checkbox checked={allowExecute} onCheckedChange={(v) => setAllowExecute(v === true)} className="mt-1" />
+                <span>
+                  <span className="text-sm text-muted-foreground">{t("ai.allow_execute") || "Allow AI to execute commands on agents"}</span>
+                  <span className="block text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">{t("ai.allow_execute_warn") || "Warning: the assistant can run commands on your agents. Off by default."}</span>
+                </span>
+              </Label>
+              <Button type="button" onClick={handleSaveConfig} disabled={configSaving} className="w-full h-10">
+                {configSaving ? <><Spinner size="xs" className="mr-2" />{t("common.saving")}</> : t("common.save")}
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-4 mb-3 pr-1 scroll-smooth rounded-xl border border-border bg-card/50 p-3 sm:p-4">
+          {messages.length === 0 ? (
+            <div className="flex gap-3">
+              <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center shrink-0 mt-1">
+                <Bot className="w-4 h-4" />
+              </div>
+              <Card className="px-4 py-3 max-w-[90%] border border-border">
+                <p className="text-sm text-muted-foreground font-medium">{t("ai.greeting_title")}</p>
+                <p className="text-sm text-muted-foreground mt-1">{t("ai.greeting_desc")}</p>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {quickActions.map((q) => (
+                    <Button key={q.label} variant="ghost" size="xs" onClick={() => { setInput(q.query); }} data-query={q.query}>
+                      {q.label}
+                    </Button>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          ) : (
+            messages.map((msg, i) => {
+              if (msg.thinking) {
+                return (
+                  <div key={i} className="flex gap-3">
+                    <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center shrink-0">
+                      <Bot className="w-4 h-4" />
                     </div>
+                    <Card className="rounded-tl-md px-4 py-3">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Brain className="w-4 h-4" />
+                        <span>{t("ai.thinking")}</span>
+                        <span className="flex gap-1 ml-1">
+                          <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></span>
+                          <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce delay-150"></span>
+                          <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce delay-300"></span>
+                        </span>
+                      </div>
+                    </Card>
+                  </div>
+                );
+              }
+              return (
+                <div key={i} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-1 ${msg.role === "user" ? "bg-secondary" : msg.role === "tool" ? "bg-amber-100 dark:bg-amber-900/40" : "bg-indigo-100 dark:bg-indigo-900/40"}`}>
+                    {msg.role === "user" ? <User className="w-4 h-4 text-muted-foreground" /> : msg.role === "tool" ? <Wrench className="w-4 h-4 text-amber-500" /> : <Bot className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />}
+                  </div>
+                  <div className={`max-w-[80%] ${msg.role === "user" ? "bg-indigo-600 text-white rounded-2xl rounded-tr-md" : "bg-card text-card-foreground ring-1 ring-foreground/10 rounded-tl-md"} px-4 py-3`}>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      {msg.tool_name ? (
+                        <div className="text-[10px] font-mono text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <Terminal className="w-4 h-4" />
+                          {msg.tool_name}
+                        </div>
+                      ) : (
+                        <span />
+                      )}
+                      <div className="flex items-center gap-2">
+                        {msg.role === "assistant" && !msg.thinking && i === lastAssistantIndex && (
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={handleRegenerate}
+className="text-[10px] text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-300 shrink-0"
+                            title={t("ai.regenerate")}
+                          >
+                            <RotateCw className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {msg.role === "assistant" && !msg.thinking && (
+                          <CopyButton text={msg.content} size="xs"
+                            className="text-[10px] text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-300 shrink-0"
+                            title={t("ai.copy")} onError={() => toast.error("Copy failed")}>
+                            {(copied) => (<>{copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />} {copied ? t("ai.copied") : t("ai.copy")}</>)}
+                          </CopyButton>
+                        )}
+                      </div>
+                    </div>
+                    {msg.role === "tool" ? (
+                      <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-words font-mono leading-relaxed max-h-80 overflow-auto">
+                        {msg.content}
+                      </pre>
+                    ) : msg.role === "assistant" ? (
+                      <SanitizedMarkdown content={msg.content} />
+                    ) : (
+                      <p className={`text-sm whitespace-pre-wrap ${msg.role === "user" ? "" : "text-muted-foreground"}`}>
+                        {msg.content}
+                      </p>
+                    )}
                   </div>
                 </div>
               );
-            }
-            return (
-              <div key={i} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-1 ${msg.role === "user" ? "bg-slate-200 dark:bg-slate-600" : msg.role === "tool" ? "bg-amber-100 dark:bg-amber-900/40" : "bg-indigo-100 dark:bg-indigo-900/40"}`}>
-                  <i className={`fa-solid text-sm ${msg.role === "user" ? "fa-user text-slate-500 dark:text-slate-300" : msg.role === "tool" ? "fa-wrench text-amber-500" : "fa-robot text-indigo-500 dark:text-indigo-400"}`}></i>
-                </div>
-                <div className={`max-w-[80%] ${msg.role === "user" ? "bg-indigo-600 text-white rounded-2xl rounded-tr-md" : "ui-card rounded-tl-md"} px-4 py-3`}>
-                  {msg.tool_name && (
-                    <div className="text-[10px] font-mono text-amber-600 dark:text-amber-400 mb-1 flex items-center gap-1">
-                      <i className="fa-solid fa-terminal"></i>
-                      {msg.tool_name}
-                    </div>
-                  )}
-                  <p className={`text-sm whitespace-pre-wrap ${msg.role === "user" ? "" : "text-[var(--text-secondary)]"}`}>{msg.content}</p>
-                </div>
+            })
+          )}
+          {loading && !messages.some((m) => m.thinking) && (
+            <div className="flex gap-3">
+              <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center shrink-0">
+                <Bot className="w-4 h-4" />
               </div>
-            );
-          })
-        )}
-        {loading && !messages.some((m) => m.thinking) && (
-          <div className="flex gap-3">
-            <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center flex-shrink-0">
-              <i className="fa-solid fa-robot text-indigo-500 dark:text-indigo-400 text-sm"></i>
+              <Card className="rounded-tl-md px-4 py-3">
+                <div className="flex gap-1">
+                  <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></span>
+                  <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce delay-100"></span>
+                  <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce delay-200"></span>
+                </div>
+              </Card>
             </div>
-            <div className="ui-card rounded-tl-md px-4 py-3">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 bg-slate-300 dark:bg-slate-500 rounded-full animate-bounce"></span>
-                <span className="w-2 h-2 bg-slate-300 dark:bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></span>
-                <span className="w-2 h-2 bg-slate-300 dark:bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></span>
-              </div>
-            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <Card className="shrink-0 p-2 sm:p-3">
+          <div className="flex items-end gap-2">
+            <Textarea
+              ref={textareaRef}
+              rows={1}
+              placeholder={t("ai.input_placeholder")}
+              className="flex-1 resize-none border-0 focus:ring-0 text-sm py-2.5 px-2 max-h-32 bg-transparent text-foreground placeholder:text-muted-foreground outline-none"
+              value={input}
+              onChange={(e) => { setInput(e.target.value); adjustTextarea(); }}
+              onKeyDown={handleKeyDown}
+            />
+            {loading ? (
+              <Button variant="destructive" size="icon" onClick={handleStop} className="shrink-0 rounded-xl" aria-label="Stop generation">
+                <Square className="w-4 h-4" />
+              </Button>
+            ) : (
+              <Button size="icon" onClick={handleSend} className="shrink-0 rounded-xl" aria-label="Send message">
+                <Send className="w-4 h-4" />
+              </Button>
+            )}
           </div>
-        )}
-        <div ref={messagesEndRef} />
+          <div className="flex justify-between items-center mt-1.5 px-1">
+            <span className="text-[10px] text-muted-foreground">
+              {messages.filter((m) => !m.thinking).length}/40
+              {input.trim() && <> &middot; ~{Math.ceil(input.trim().length / 4)} {t("ai.tokens_est")}</>}
+            </span>
+            <span className="text-[10px] text-muted-foreground hidden sm:inline">{t("ai.input_hint")}</span>
+          </div>
+        </Card>
       </div>
 
-      <div className="shrink-0 ui-card p-2 sm:p-3 border border-[var(--border)] shadow-sm">
-        <div className="flex items-end gap-2">
-          <textarea
-            rows={1}
-            placeholder={t("ai.input_placeholder")}
-            className="flex-1 resize-none border-0 focus:ring-0 text-sm py-2.5 px-2 max-h-32 bg-transparent text-[var(--text-primary)] placeholder:text-slate-400 outline-none"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
+      <Dialog open={!!renameTarget} onOpenChange={() => setRenameTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("ai.rename") || "Rename conversation"}</DialogTitle>
+          </DialogHeader>
+          <Input
+            type="text"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") confirmRename(); }}
+            className="w-full"
+            autoFocus
           />
-          {loading ? (
-            <button onClick={handleStop} className="w-10 h-10 ui-btn ui-btn-danger flex items-center justify-center flex-shrink-0 rounded-xl">
-              <i className="fa-solid fa-stop text-sm"></i>
-            </button>
-          ) : (
-            <button onClick={handleSend} className="w-10 h-10 ui-btn ui-btn-primary flex items-center justify-center flex-shrink-0 rounded-xl">
-              <i className="fa-solid fa-paper-plane text-sm"></i>
-            </button>
-          )}
-        </div>
-        <div className="flex justify-between items-center mt-1.5 px-1">
-          <span className="text-[10px] text-slate-400 dark:text-slate-500">{messages.filter((m) => !m.thinking).length}/40</span>
-          <span className="text-[10px] text-slate-400 dark:text-slate-500 hidden sm:inline">{t("ai.input_hint")}</span>
-        </div>
-      </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameTarget(null)}>Cancel</Button>
+            <Button onClick={confirmRename}>Rename</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,8 +1,23 @@
 "use client";
 
+import { toast } from "sonner";
 import { useState, useEffect, useCallback } from "react";
-import { API_BASE } from "@/lib/constants";
-import { PageHeader, SearchInput, Pagination } from "@/components/UI";
+import { api } from "@/lib/api";
+import { downloadText } from "@/lib/download";
+import { useI18n } from "@/lib/i18n";
+import { PageHeader } from "@/components/UI";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Label } from "@/components/ui/label";
+import { AlertTriangle, CircleCheck, CircleQuestionMark, Copy, Database, Download, Eye, EyeOff, Filter, Lock, Pencil, PenLine, Plus, Shield, Tag, Trash2, WandSparkles } from "lucide-react";
 
 interface VaultEntry {
   id: string;
@@ -28,18 +43,19 @@ interface CredentialData {
 
 const CRED_TYPES = ["all", "password", "hash", "token", "key", "ntlm", "kerberos", "cleartext"];
 
-const TYPE_COLORS: Record<string, string> = {
-  cleartext: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  password: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  ntlm: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  hash: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-  token: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  key: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-  kerberos: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400",
-  sha1: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+const TYPE_BADGE_VARIANT: Record<string, "success" | "warning" | "outline"> = {
+  cleartext: "success",
+  password: "success",
+  ntlm: "warning",
+  hash: "warning",
+  token: "outline",
+  key: "outline",
+  kerberos: "outline",
+  sha1: "warning",
 };
 
 export default function CredentialsPage() {
+  const { t } = useI18n();
   const [data, setData] = useState<CredentialData | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -51,7 +67,7 @@ export default function CredentialsPage() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<VaultEntry | null>(null);
-  const [toast, setToast] = useState<{ text: string; type: string } | null>(null);
+
   const [showPasswords, setShowPasswords] = useState<Set<string>>(new Set());
 
   const [form, setForm] = useState({
@@ -70,41 +86,30 @@ export default function CredentialsPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}?p=/credentials&format=json`);
-      if (res.ok) {
-        const result = await res.json();
-        setData({
-          VaultEntries: result.VaultEntries || result.vault_entries || [],
-          VaultCount: result.VaultCount || result.vault_count || result.VaultEntries?.length || 0,
-          AllTags: result.AllTags || result.all_tags || [],
-        });
-      }
+      const result = await api.get<{ VaultEntries?: VaultEntry[]; vault_entries?: VaultEntry[]; VaultCount?: number; vault_count?: number; AllTags?: string[]; all_tags?: string[] }>("/credentials?format=json");
+      setData({
+        VaultEntries: result.vault_entries || [],
+        VaultCount: result.vault_count || 0,
+        AllTags: result.all_tags || [],
+      });
     } catch {
       setData({ VaultEntries: [], VaultCount: 0, AllTags: [] });
     }
     setLoading(false);
   }, []);
 
-  useEffect(() => { Promise.resolve().then(() => loadData()); }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  const showToastNotify = (text: string, type: string = "info") => {
-    setToast({ text, type });
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  const postAPI = async (path: string, params: Record<string, string>) => {
-    const body = new URLSearchParams(params);
-    return fetch(`${API_BASE}?p=${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: body.toString(),
-    });
+  const showToastNotify = (text: string, type: "success" | "error" | "info" = "info") => {
+    if (type === "success") toast.success(text);
+    else if (type === "error") toast.error(text);
+    else toast.info(text);
   };
 
   const handleAdd = async () => {
-    if (!form.username) return showToastNotify("Username is required", "error");
+    if (!form.username) return showToastNotify(t("cred.toast.username_required"), "error");
     try {
-      const res = await postAPI("/credentials/add", {
+      await api.post("/credentials/add", {
         domain: form.domain,
         username: form.username,
         password: form.password,
@@ -114,14 +119,10 @@ export default function CredentialsPage() {
         tags: form.tags,
         notes: form.notes,
       });
-      if (res.ok) {
-        showToastNotify("Credential added successfully", "success");
-        setShowAddModal(false);
-        resetForm();
-        loadData();
-      } else {
-        showToastNotify(`Add failed: ${res.status}`, "error");
-      }
+      showToastNotify(t("cred.toast.added"), "success");
+      setShowAddModal(false);
+      resetForm();
+      loadData();
     } catch (err) {
       showToastNotify(String(err), "error");
     }
@@ -130,12 +131,11 @@ export default function CredentialsPage() {
   const handleEdit = async () => {
     if (!editTarget) return;
     try {
-      const { apiPut } = await import("@/lib/api");
-      const body = new URLSearchParams();
-      if (form.tags) body.set("tags", form.tags);
-      if (form.notes) body.set("notes", form.notes);
-      await apiPut(`/credentials/${editTarget.id}`, body);
-      showToastNotify("Credential updated", "success");
+      const body: Record<string, string> = {};
+      if (form.tags) body.tags = form.tags;
+      if (form.notes) body.notes = form.notes;
+      await api.put(`/credentials/${editTarget.id}`, body);
+      showToastNotify(t("cred.toast.updated"), "success");
       setShowEditModal(false);
       setEditTarget(null);
       resetForm();
@@ -147,9 +147,8 @@ export default function CredentialsPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      const { apiDelete } = await import("@/lib/api");
-      await apiDelete(`/credentials/${id}`);
-      showToastNotify("Credential deleted", "success");
+      await api.del(`/credentials/${id}`);
+      showToastNotify(t("cred.toast.deleted"), "success");
       setShowDeleteConfirm(null);
       loadData();
     } catch (err) {
@@ -159,23 +158,19 @@ export default function CredentialsPage() {
 
   const handleToggleConfirm = async (entry: VaultEntry) => {
     try {
-      await fetch(`${API_BASE}?p=/credentials/${entry.id}/confirm&format=json`, {
-        method: "POST",
-        credentials: "include",
-      });
+      await api.post(`/credentials/${entry.id}/confirm`);
       loadData();
-    } catch (e) { console.error("Credentials: toggle confirm failed", e); }
+    } catch { toast.error(t("cred.toast.confirm_failed")); }
   };
 
   const handleBatchTags = async () => {
     if (!batchTags || selectedIds.size === 0) return;
     try {
-      const { apiPostJson } = await import("@/lib/api");
-      await apiPostJson("/credentials/batch/tags", {
+      await api.postJson("/credentials/batch/tags", {
         ids: Array.from(selectedIds).map((id) => Number(id)),
-        tags: batchTags.split(",").map((t) => t.trim()).filter(Boolean),
+        tags: batchTags.split(",").map((tag) => tag.trim()).filter(Boolean),
       });
-      showToastNotify(`Tags added to ${selectedIds.size} credentials`, "success");
+      showToastNotify(t("cred.toast.tags_added", { count: selectedIds.size }), "success");
       setShowBatchModal(false);
       setBatchTags("");
       setSelectedIds(new Set());
@@ -199,14 +194,8 @@ export default function CredentialsPage() {
       e.notes || "",
     ]);
     const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `credentials_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToastNotify("CSV exported", "success");
+    downloadText(csv, `credentials_${new Date().toISOString().slice(0, 10)}.csv`, "text/csv");
+    showToastNotify(t("cred.toast.csv_exported"), "success");
   };
 
   const openEdit = (entry: VaultEntry) => {
@@ -281,553 +270,500 @@ export default function CredentialsPage() {
     total: data?.VaultCount || 0,
     confirmed: entries.filter(e => e.confirmed).length || 0,
     unconfirmed: entries.filter(e => !e.confirmed).length || 0,
-    byType: CRED_TYPES.slice(1).map(t => ({
-      type: t,
-      count: entries.filter(e => e.type === t).length || 0,
+    byType: CRED_TYPES.slice(1).map(ct => ({
+      type: ct,
+      count: entries.filter(e => e.type === ct).length || 0,
     })),
   };
 
   return (
     <>
-      {toast && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl text-sm font-medium shadow-lg ${
-          toast.type === "success" ? "bg-emerald-600 text-white" :
-          toast.type === "error" ? "bg-red-600 text-white" :
-          "bg-blue-600 text-white"
-        }`}>
-          {toast.text}
-        </div>
-      )}
-
-      <div className="max-w-7xl mx-auto mb-20 md:mb-0">
-      <PageHeader title="Credentials" subtitle="Credential vault and management">
+      <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title={t("cred.title")} subtitle={t("cred.subtitle")}>
         {filteredEntries.length > 0 && (
-          <button
+          <Button
             onClick={exportCSV}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 h-9 rounded-xl text-sm font-medium flex items-center gap-x-2 transition-colors"
+            size="lg"
+            className="gap-x-2"
           >
-            <i className="fa-solid fa-download text-xs"></i>
-            <span>Export CSV</span>
-          </button>
+            <Download className="w-4 h-4" />
+            <span>{t("cred.export_csv")}</span>
+          </Button>
         )}
-        <button
+        <Button
           onClick={() => { resetForm(); setShowAddModal(true); }}
-          className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 h-9 rounded-xl text-sm font-medium flex items-center gap-x-2 transition-colors"
+          size="lg"
+          className="gap-x-2"
         >
-          <i className="fa-solid fa-plus text-xs"></i>
-          <span>Add Credential</span>
-        </button>
+          <Plus className="w-4 h-4" />
+          <span>{t("cred.add")}</span>
+        </Button>
       </PageHeader>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="ui-card p-4">
+        <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
           <div className="text-2xl font-bold">{stats.total}</div>
-          <div className="text-xs text-gray-500 mt-1">Total Credentials</div>
-        </div>
-        <div className="ui-card p-4">
-          <div className="text-2xl font-bold text-emerald-500">{stats.confirmed}</div>
-          <div className="text-xs text-gray-500 mt-1">Confirmed</div>
-        </div>
-        <div className="ui-card p-4">
-          <div className="text-2xl font-bold text-amber-500">{stats.unconfirmed}</div>
-          <div className="text-xs text-gray-500 mt-1">Unconfirmed</div>
-        </div>
-        <div className="ui-card p-4">
+          <div className="text-xs text-muted-foreground mt-1">{t("cred.stat_total")}</div>
+        </Card>
+        <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
+          <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stats.confirmed}</div>
+          <div className="text-xs text-muted-foreground mt-1">{t("cred.stat_confirmed")}</div>
+        </Card>
+        <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
+          <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.unconfirmed}</div>
+          <div className="text-xs text-muted-foreground mt-1">{t("cred.stat_unconfirmed")}</div>
+        </Card>
+        <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
           <div className="flex flex-wrap gap-1 mt-1">
             {stats.byType.map(s => s.count > 0 && (
-              <span key={s.type} className={`px-2 py-0.5 text-[10px] rounded-full ${TYPE_COLORS[s.type] || "bg-slate-100 text-slate-600"}`}>
+              <Badge key={s.type} variant={TYPE_BADGE_VARIANT[s.type] || "outline"}>
                 {s.type}: {s.count}
-              </span>
+              </Badge>
             ))}
           </div>
-          <div className="text-xs text-gray-500 mt-1">By Type</div>
-        </div>
+          <div className="text-xs text-muted-foreground mt-1">{t("cred.stat_by_type")}</div>
+        </Card>
       </div>
 
-      <div className="ui-card p-4 mb-6">
+      <Card className="p-4 sm:p-5 mb-6">
         <div className="flex flex-wrap items-center gap-3">
-          <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search username, domain, notes..." className="flex-1 min-w-[200px]" />
-          <select
-            value={typeFilter}
-            onChange={e => setTypeFilter(e.target.value)}
-            className="bg-slate-50 dark:bg-slate-700/50 border border-[var(--border)] text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 dark:text-slate-100"
-          >
-            {CRED_TYPES.map(t => (
-              <option key={t} value={t}>{t === "all" ? "All Types" : t.charAt(0).toUpperCase() + t.slice(1)}</option>
-            ))}
-          </select>
-          <select
-            value={confirmedFilter}
-            onChange={e => setConfirmedFilter(e.target.value)}
-            className="bg-slate-50 dark:bg-slate-700/50 border border-[var(--border)] text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 dark:text-slate-100"
-          >
-            <option value="">All Status</option>
-            <option value="true">Confirmed</option>
-            <option value="false">Unconfirmed</option>
-          </select>
-          <button
+          <Input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder={t("cred.search_placeholder")}
+            className="flex-1 min-w-[200px]"
+          />
+          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v ?? "")}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CRED_TYPES.map(ct => (
+                <SelectItem key={ct} value={ct}>{ct === "all" ? t("cred.filter_all_types") : ct.charAt(0).toUpperCase() + ct.slice(1)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={confirmedFilter} onValueChange={(v) => setConfirmedFilter(v ?? "")}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">{t("cred.filter_all_status")}</SelectItem>
+              <SelectItem value="true">{t("cred.filter_confirmed")}</SelectItem>
+              <SelectItem value="false">{t("cred.filter_unconfirmed")}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
             onClick={loadData}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 h-9 rounded-xl text-sm font-medium transition-colors"
+            size="lg"
           >
-            <i className="fa-solid fa-filter mr-1"></i>Filter
-          </button>
-          <button
+            <Filter className="w-4 h-4" />{t("cred.filter")}
+          </Button>
+          <Button
             onClick={() => { setSearchQuery(""); setTypeFilter("all"); setConfirmedFilter(""); }}
-            className="bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 px-4 h-9 rounded-xl text-sm font-medium transition-colors"
+            variant="outline"
+            size="lg"
           >
-            Clear
-          </button>
+            {t("cred.clear")}
+          </Button>
           {selectedIds.size > 0 && (
-            <button
+            <Button
               onClick={() => setShowBatchModal(true)}
-              className="bg-amber-600 hover:bg-amber-500 text-white px-4 h-9 rounded-xl text-sm font-medium flex items-center gap-x-2 transition-colors"
+              size="lg"
+              className="gap-x-2"
             >
-              <i className="fa-solid fa-tags text-xs"></i>
-              <span>Batch Tags ({selectedIds.size})</span>
-            </button>
+              <Tag className="w-4 h-4" />
+              <span>{t("cred.batch_tags")} ({selectedIds.size})</span>
+            </Button>
           )}
         </div>
-      </div>
+      </Card>
 
       {data?.AllTags && data.AllTags.length > 0 && (
-        <div className="ui-card p-4 mb-6">
-          <div className="font-medium text-sm text-slate-700 dark:text-slate-200 flex items-center gap-2 mb-3">
-            <i className="fa-solid fa-tags text-indigo-500"></i>
-            <span>Tags</span>
+        <Card className="p-4 sm:p-5 mb-6">
+          <div className="font-medium text-sm text-foreground flex items-center gap-2 mb-3">
+            <Tag className="w-4 h-4" />
+            <span>{t("cred.tags")}</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {data.AllTags.map(tag => (
-              <button
+              <Badge
                 key={tag}
+                variant="outline"
+                className="cursor-pointer"
                 onClick={() => setSearchQuery(tag)}
-                className="px-3 py-1 text-xs rounded-full transition-colors bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300"
               >
                 {tag}
-              </button>
+              </Badge>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="ui-card overflow-hidden mb-8">
-        <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
-          <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-x-2">
-            <i className="fa-solid fa-vault text-indigo-500"></i>
-            <span>Credential Vault</span>
+      <Card className="overflow-hidden mb-8">
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+          <div className="font-semibold text-foreground flex items-center gap-x-2">
+            <Lock className="w-4 h-4" />
+            <span>{t("cred.vault_title")}</span>
             {filteredEntries.length > 0 && (
-              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 text-xs rounded-full font-mono">
+              <Badge variant="outline" className="font-mono">
                 {filteredEntries.length}
-              </span>
+              </Badge>
             )}
           </div>
         </div>
 
         {loading ? (
-          <div className="p-8 text-center text-slate-400">
-            <i className="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
-            <br />Loading...
+          <div className="p-4 sm:p-5 text-center text-muted-foreground">
+            <div className="flex flex-col items-center gap-2">
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <Skeleton className="h-4 w-20" />
+            </div>
           </div>
         ) : filteredEntries.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-[var(--border)]">
-                <tr className="text-xs text-slate-500 dark:text-slate-400">
-                  <th className="text-left py-3 px-2 font-normal">
-                    <input
-                      type="checkbox"
-                      onChange={toggleSelectAll}
+            <Table className="w-full text-sm">
+              <TableHeader className="bg-muted/50 border-b border-border">
+                <TableRow className="text-xs text-muted-foreground">
+                  <TableHead className="text-left py-3 px-2 font-normal">
+                    <Checkbox
                       checked={selectedIds.size === filteredEntries.length && filteredEntries.length > 0}
-                      className="rounded border-slate-300"
+                      onCheckedChange={() => toggleSelectAll()}
                     />
-                  </th>
-                  <th className="text-left py-3 px-4 font-normal">Type</th>
-                  <th className="text-left py-3 px-4 font-normal">Username</th>
-                  <th className="text-left py-3 px-4 font-normal">Password</th>
-                  <th className="text-left py-3 px-4 font-normal">Domain</th>
-                  <th className="text-left py-3 px-4 font-normal">Source</th>
-                  <th className="text-left py-3 px-4 font-normal">Confirmed</th>
-                  <th className="text-left py-3 px-4 font-normal">Tags</th>
-                  <th className="text-center py-3 px-4 font-normal">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                  </TableHead>
+                  <TableHead className="text-left py-3 px-4 font-normal">{t("cred.col_type")}</TableHead>
+                  <TableHead className="text-left py-3 px-4 font-normal">{t("cred.col_username")}</TableHead>
+                  <TableHead className="text-left py-3 px-4 font-normal">{t("cred.col_password")}</TableHead>
+                  <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal">{t("cred.col_domain")}</TableHead>
+                  <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal">{t("cred.col_source")}</TableHead>
+                  <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal">{t("cred.col_confirmed")}</TableHead>
+                  <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal">{t("cred.col_tags")}</TableHead>
+                  <TableHead className="text-center py-3 px-4 font-normal">{t("cred.col_actions")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-y divide-border">
                 {filteredEntries.map(entry => (
-                  <tr key={entry.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                    <td className="py-3 px-2">
-                      <input
-                        type="checkbox"
+                  <TableRow key={entry.id} className="hover:bg-muted/50 transition-colors">
+                    <TableCell className="py-3 px-2">
+                      <Checkbox
                         checked={selectedIds.has(entry.id)}
-                        onChange={() => toggleSelect(entry.id)}
-                        className="rounded border-slate-300"
+                        onCheckedChange={() => toggleSelect(entry.id)}
                       />
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 text-[10px] rounded-full font-medium ${TYPE_COLORS[entry.type] || "bg-slate-100 text-slate-600 dark:bg-slate-600 dark:text-slate-300"}`}>
+                    </TableCell>
+                    <TableCell className="py-3 px-4">
+                      <Badge variant={TYPE_BADGE_VARIANT[entry.type] || "outline"}>
                         {entry.type || "unknown"}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-medium text-slate-900 dark:text-slate-100">
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="py-3 px-4 font-medium text-foreground">
                       {entry.username}
-                    </td>
-                    <td className="py-3 px-4 font-mono text-xs">
+                    </TableCell>
+                    <TableCell className="py-3 px-4 font-mono text-xs">
                       {entry.password ? (
                         <div className="flex items-center gap-1">
-                          <span className="text-slate-600 dark:text-slate-300">
+                          <span className="text-muted-foreground">
                             {showPasswords.has(entry.id) ? entry.password : "????????"}
                           </span>
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={() => togglePasswordVisibility(entry.id)}
-                            className="text-slate-400 hover:text-slate-600 ml-1"
+                            aria-label={showPasswords.has(entry.id) ? t("cred.hide_password") : t("cred.show_password")}
                           >
-                            <i className={`fa-solid ${showPasswords.has(entry.id) ? "fa-eye-slash" : "fa-eye"} text-xs`}></i>
-                          </button>
-                          <button
-                            onClick={() => { navigator.clipboard.writeText(entry.password); showToastNotify("Copied!", "success"); }}
-                            className="text-slate-400 hover:text-slate-600"
+                            {showPasswords.has(entry.id) ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => { navigator.clipboard.writeText(entry.password); toast.success(t("cred.copied")); }}
+                            aria-label={t("cred.copy_password")}
                           >
-                            <i className="fa-solid fa-copy text-xs"></i>
-                          </button>
+                            <Copy className="w-4 h-4" />
+                          </Button>
                         </div>
                       ) : (
-                        <span className="text-slate-400">-</span>
+                        <span className="text-muted-foreground">-</span>
                       )}
-                    </td>
-                    <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{entry.domain || "无"}</td>
-                    <td className="py-3 px-4 text-xs text-slate-500">
-                      <i className={`fa-solid ${entry.source === "mimikatz" ? "fa-wand-magic-sparkles text-amber-500" : entry.source === "sam" ? "fa-database text-blue-500" : entry.source === "kerberoast" ? "fa-shield-halved text-orange-500" : "fa-pen text-slate-400"} mr-1`}></i>
+                    </TableCell>
+                    <TableCell className="max-sm:hidden py-3 px-4 text-muted-foreground">{entry.domain || "-"}</TableCell>
+                    <TableCell className="max-sm:hidden py-3 px-4 text-xs text-muted-foreground">
+                      {entry.source === "mimikatz" ? <WandSparkles className="w-3 h-3 text-amber-600 dark:text-amber-400 mr-1" /> : entry.source === "sam" ? <Database className="w-3 h-3 text-blue-500 mr-1" /> : entry.source === "kerberoast" ? <Shield className="w-3 h-3 text-orange-500 mr-1" /> : <PenLine className="w-3 h-3 text-muted-foreground mr-1" />}
                       {entry.source || "manual"}
-                    </td>
-                    <td className="py-3 px-4">
-                      <button
+                    </TableCell>
+                    <TableCell className="max-sm:hidden py-3 px-4">
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleToggleConfirm(entry)}
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
-                          entry.confirmed
-                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-200"
-                            : "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200"
-                        }`}
+                        className={entry.confirmed ? "text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30" : "text-muted-foreground hover:bg-muted"}
                       >
-                        <i className={`fa-solid ${entry.confirmed ? "fa-check-circle" : "fa-circle-question"}`}></i>
-                        {entry.confirmed ? "Confirmed" : "Unconfirmed"}
-                      </button>
-                    </td>
-                    <td className="py-3 px-4">
+                        {entry.confirmed ? <CircleCheck className="w-4 h-4" /> : <CircleQuestionMark className="w-4 h-4" />}
+                        {entry.confirmed ? t("cred.confirmed") : t("cred.unconfirmed")}
+                      </Button>
+                    </TableCell>
+                    <TableCell className="max-sm:hidden py-3 px-4">
                       {entry.tags ? (
                         <div className="flex flex-wrap gap-1">
-                          {entry.tags.split(",").map(t => (
-                            <span key={t} className="px-2 py-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 text-[10px] rounded-full">
-                              {t.trim()}
-                            </span>
+                          {entry.tags.split(",").map(tag => (
+                            <Badge key={tag} variant="outline">
+                              {tag.trim()}
+                            </Badge>
                           ))}
                         </div>
                       ) : (
-                        <span className="text-slate-400 text-xs">-</span>
+                        <span className="text-muted-foreground text-xs">-</span>
                       )}
-                    </td>
-                    <td className="py-3 px-4 text-center whitespace-nowrap">
-                      <button
-                        onClick={() => openEdit(entry)}
-                        className="text-xs px-2 py-1 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors mr-1"
-                        title="Edit"
-                      >
-                        <i className="fa-solid fa-edit"></i>
-                      </button>
-                      <button
-                        onClick={() => setShowDeleteConfirm(entry.id)}
-                        className="text-xs px-2 py-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                        title="Delete"
-                      >
-                        <i className="fa-solid fa-trash"></i>
-                      </button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                    <TableCell className="py-3 px-4 text-center whitespace-nowrap">
+                       <Button
+                         variant="ghost"
+                         size="icon-sm"
+                         onClick={() => openEdit(entry)}
+                         title={t("common.edit")}
+                         aria-label={t("cred.edit_title")}
+                       >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                       <Button
+                         variant="ghost"
+                         size="icon-sm"
+                         onClick={() => setShowDeleteConfirm(entry.id)}
+                         title={t("common.delete")}
+                         className="text-destructive hover:text-destructive/80 hover:bg-destructive/5"
+                         aria-label={t("cred.delete_title")}
+                       >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         ) : (
-          <div className="p-8 text-center text-slate-400 dark:text-slate-500">
-            <i className="fa-solid fa-vault text-2xl mb-2"></i>
-            <br />The vault is empty. Credentials will be auto-parsed from agent tasks.
+          <div className="p-4 sm:p-5 text-center text-muted-foreground">
+            <Lock className="w-4 h-4 mb-2" />
+            <p>{t("cred.empty")}</p>
           </div>
         )}
-      </div>
+      </Card>
 
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAddModal(false)} />
-          <div className="relative bg-[var(--card-bg)] rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
-            <div className="bg-gradient-to-r from-indigo-500 to-indigo-700 px-6 py-5">
-              <h3 className="text-lg font-semibold text-white">Add Credential</h3>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Type *</label>
-                  <select
-                    value={form.type}
-                    onChange={e => setForm({ ...form, type: e.target.value })}
-                    className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100"
-                  >
-                    {CRED_TYPES.filter(t => t !== "all").map(t => (
-                      <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("cred.add_title")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_type")} *</Label>
+                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v ?? "cleartext" })}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CRED_TYPES.filter(ct => ct !== "all").map(ct => (
+                      <SelectItem key={ct} value={ct}>{ct.charAt(0).toUpperCase() + ct.slice(1)}</SelectItem>
                     ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Username *</label>
-                  <input
-                    type="text"
-                    value={form.username}
-                    onChange={e => setForm({ ...form, username: e.target.value })}
-                    className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Password</label>
-                  <input
-                    type="text"
-                    value={form.password}
-                    onChange={e => setForm({ ...form, password: e.target.value })}
-                    className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Domain</label>
-                  <input
-                    type="text"
-                    value={form.domain}
-                    onChange={e => setForm({ ...form, domain: e.target.value })}
-                    className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Source</label>
-                  <input
-                    type="text"
-                    value={form.source}
-                    onChange={e => setForm({ ...form, source: e.target.value })}
-                    placeholder="manual, mimikatz, sam..."
-                    className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Hash (NTLM/SHA)</label>
-                  <input
-                    type="text"
-                    value={form.hash}
-                    onChange={e => setForm({ ...form, hash: e.target.value })}
-                    className="w-full bg-[var(--card-bg)] border border-[var(--border)] font-mono text-xs rounded-xl px-3 py-2 dark:text-slate-100"
-                  />
-                </div>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
-                <label className="text-xs text-slate-500 block mb-1">Tags (comma separated)</label>
-                <input
-                  type="text"
-                  value={form.tags}
-                  onChange={e => setForm({ ...form, tags: e.target.value })}
-                  placeholder="admin, high-value"
-                  className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100"
+                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_username")} *</Label>
+                <Input
+                  value={form.username}
+                  onChange={e => setForm({ ...form, username: e.target.value })}
                 />
               </div>
               <div>
-                <label className="text-xs text-slate-500 block mb-1">Notes</label>
-                <textarea
-                  value={form.notes}
-                  onChange={e => setForm({ ...form, notes: e.target.value })}
-                  rows={2}
-                  className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100 resize-none"
+                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_password")}</Label>
+                <Input
+                  value={form.password}
+                  onChange={e => setForm({ ...form, password: e.target.value })}
                 />
               </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAdd}
-                  className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors"
-                >
-                  Add
-                </button>
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_domain")}</Label>
+                <Input
+                  value={form.domain}
+                  onChange={e => setForm({ ...form, domain: e.target.value })}
+                />
               </div>
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_source")}</Label>
+                <Input
+                  value={form.source}
+                  onChange={e => setForm({ ...form, source: e.target.value })}
+                  placeholder={t("cred.ph_source")}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_hash")}</Label>
+                <Input
+                  value={form.hash}
+                  onChange={e => setForm({ ...form, hash: e.target.value })}
+                  className="font-mono text-xs"
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_tags")}</Label>
+              <Input
+                value={form.tags}
+                onChange={e => setForm({ ...form, tags: e.target.value })}
+                placeholder={t("cred.ph_tags")}
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_notes")}</Label>
+              <Textarea
+                value={form.notes}
+                onChange={e => setForm({ ...form, notes: e.target.value })}
+                rows={2}
+                className="resize-none"
+              />
             </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddModal(false)} className="flex-1">
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={handleAdd} className="flex-1">
+              {t("cred.btn.add")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {showEditModal && editTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setShowEditModal(false); setEditTarget(null); }} />
-          <div className="relative bg-[var(--card-bg)] rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
-            <div className="bg-gradient-to-r from-indigo-500 to-indigo-700 px-6 py-5">
-              <h3 className="text-lg font-semibold text-white">Edit Credential</h3>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Type</label>
-                  <select
-                    value={form.type}
-                    onChange={e => setForm({ ...form, type: e.target.value })}
-                    className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100"
-                  >
-                    {CRED_TYPES.filter(t => t !== "all").map(t => (
-                      <option key={t} value={t}>{t}</option>
+      <Dialog open={showEditModal} onOpenChange={(open) => { if (!open) { setShowEditModal(false); setEditTarget(null); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("cred.edit_title")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_type")}</Label>
+                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v ?? "cleartext" })}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CRED_TYPES.filter(ct => ct !== "all").map(ct => (
+                      <SelectItem key={ct} value={ct}>{ct}</SelectItem>
                     ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Username *</label>
-                  <input
-                    type="text"
-                    value={form.username}
-                    onChange={e => setForm({ ...form, username: e.target.value })}
-                    className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Password</label>
-                  <input
-                    type="text"
-                    value={form.password}
-                    onChange={e => setForm({ ...form, password: e.target.value })}
-                    className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Domain</label>
-                  <input
-                    type="text"
-                    value={form.domain}
-                    onChange={e => setForm({ ...form, domain: e.target.value })}
-                    className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Source</label>
-                  <input
-                    type="text"
-                    value={form.source}
-                    onChange={e => setForm({ ...form, source: e.target.value })}
-                    className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 block mb-1">Hash</label>
-                  <input
-                    type="text"
-                    value={form.hash}
-                    onChange={e => setForm({ ...form, hash: e.target.value })}
-                    className="w-full bg-[var(--card-bg)] border border-[var(--border)] font-mono text-xs rounded-xl px-3 py-2 dark:text-slate-100"
-                  />
-                </div>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
-                <label className="text-xs text-slate-500 block mb-1">Tags (comma separated)</label>
-                <input
-                  type="text"
-                  value={form.tags}
-                  onChange={e => setForm({ ...form, tags: e.target.value })}
-                  className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100"
+                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_username")} *</Label>
+                <Input
+                  value={form.username}
+                  onChange={e => setForm({ ...form, username: e.target.value })}
                 />
               </div>
               <div>
-                <label className="text-xs text-slate-500 block mb-1">Notes</label>
-                <textarea
-                  value={form.notes}
-                  onChange={e => setForm({ ...form, notes: e.target.value })}
-                  rows={2}
-                  className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100 resize-none"
+                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_password")}</Label>
+                <Input
+                  value={form.password}
+                  onChange={e => setForm({ ...form, password: e.target.value })}
                 />
               </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => { setShowEditModal(false); setEditTarget(null); }}
-                  className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleEdit}
-                  className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors"
-                >
-                  Save
-                </button>
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_domain")}</Label>
+                <Input
+                  value={form.domain}
+                  onChange={e => setForm({ ...form, domain: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_source")}</Label>
+                <Input
+                  value={form.source}
+                  onChange={e => setForm({ ...form, source: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_hash")}</Label>
+                <Input
+                  value={form.hash}
+                  onChange={e => setForm({ ...form, hash: e.target.value })}
+                  className="font-mono text-xs"
+                />
               </div>
             </div>
+            <div>
+              <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_tags")}</Label>
+              <Input
+                value={form.tags}
+                onChange={e => setForm({ ...form, tags: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_notes")}</Label>
+              <Textarea
+                value={form.notes}
+                onChange={e => setForm({ ...form, notes: e.target.value })}
+                rows={2}
+                className="resize-none"
+              />
+            </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowEditModal(false); setEditTarget(null); }} className="flex-1">
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={handleEdit} className="flex-1">
+              {t("common.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {showBatchModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowBatchModal(false)} />
-          <div className="relative bg-[var(--card-bg)] rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-            <div className="bg-gradient-to-r from-amber-500 to-amber-700 px-6 py-5">
-              <h3 className="text-lg font-semibold text-white">Batch Add Tags</h3>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Add tags to {selectedIds.size} selected credential(s)
-              </p>
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">Tags (comma separated)</label>
-                <input
-                  type="text"
-                  value={batchTags}
-                  onChange={e => setBatchTags(e.target.value)}
-                  placeholder="high-value, production, dc"
-                  className="w-full bg-[var(--card-bg)] border border-[var(--border)] text-sm rounded-xl px-3 py-2 dark:text-slate-100"
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowBatchModal(false)}
-                  className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleBatchTags}
-                  className="flex-1 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-medium transition-colors"
-                >
-                  Add Tags
-                </button>
-              </div>
-            </div>
+      <Dialog open={showBatchModal} onOpenChange={setShowBatchModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("cred.batch_title")}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {t("cred.batch_desc", { count: selectedIds.size })}
+          </p>
+          <div>
+            <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_tags")}</Label>
+            <Input
+              value={batchTags}
+              onChange={e => setBatchTags(e.target.value)}
+              placeholder="high-value, production, dc"
+            />
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBatchModal(false)} className="flex-1">
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={handleBatchTags} className="flex-1">
+              {t("cred.batch_btn")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(null)} />
-          <div className="relative bg-[var(--card-bg)] rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
-            <div className="px-6 py-6 text-center">
-              <i className="fa-solid fa-triangle-exclamation text-red-500 text-3xl mb-3"></i>
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">Delete Credential?</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400">This action cannot be undone.</p>
-            </div>
-            <div className="px-6 pb-6 flex gap-3">
-              <button
-                onClick={() => setShowDeleteConfirm(null)}
-                className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(showDeleteConfirm)}
-                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors"
-              >
-                Delete
-              </button>
-            </div>
+      <Dialog open={!!showDeleteConfirm} onOpenChange={(open) => { if (!open) setShowDeleteConfirm(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <div className="flex flex-col items-center gap-2 py-4">
+            <AlertTriangle className="w-4 h-4" />
+            <DialogTitle>{t("cred.delete_title")}</DialogTitle>
+            <p className="text-sm text-muted-foreground">{t("cred.delete_message")}</p>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(null)} className="flex-1">
+              {t("common.cancel")}
+            </Button>
+            <Button variant="destructive" onClick={() => showDeleteConfirm && handleDelete(showDeleteConfirm)} className="flex-1">
+              {t("common.delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       </div>
     </>
   );

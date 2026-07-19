@@ -3,6 +3,7 @@
 package encoding
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -116,7 +117,7 @@ func Unmarshal(data []byte, v any) error {
 			if len(payload) == 0 {
 				return fmt.Errorf("encoding: empty payload")
 			}
-			return json.Unmarshal(payload, v)
+			return decodeJSON(payload, v)
 		case FormatCBOR:
 			return cbor.Unmarshal(payload, v)
 		case FormatMsgpack:
@@ -124,7 +125,7 @@ func Unmarshal(data []byte, v any) error {
 		}
 	}
 	// Backward compatibility: treat as plain JSON
-	return json.Unmarshal(data, v)
+	return decodeJSON(data, v)
 }
 
 // FormatName returns the human-readable name for a format byte.
@@ -133,4 +134,12 @@ func FormatName(fmtID byte) string {
 		return name
 	}
 	return fmt.Sprintf("unknown(0x%02x)", fmtID)
+}
+
+// decodeJSON decodes the first JSON value from data, ignoring any trailing
+// bytes. The agent appends random padding after the JSON payload
+// (see applyTrafficShaping), so a strict json.Unmarshal on the whole slice
+// would fail. json.Decoder stops after the first complete value.
+func decodeJSON(data []byte, v any) error {
+	return json.NewDecoder(bytes.NewReader(data)).Decode(v)
 }

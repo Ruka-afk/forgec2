@@ -1,137 +1,407 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API_BASE } from "@/lib/constants";
-import { PageHeader } from "@/components/UI";
+import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
+import { EmptyState, PageHeader, ConfirmModal, TableCard, PageSpinner } from "@/components/UI";
+import { toast } from "sonner";
+import { formatTime, cn } from "@/lib/utils";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { CheckCircle, CircleAlert, History, Key, Network, Pencil, Plus, ShieldCheck, Skull, Syringe, Terminal, Trash2, Users } from "lucide-react";
 
 interface OpsecRule {
   name: string;
   description: string;
   risk_level: number;
   default_action: number;
+  enabled?: boolean;
+}
+
+interface OpsecHistoryItem {
+  id: number;
+  agent_id: string;
+  task_type: string;
+  rule_name: string;
+  allowed: boolean;
+  message: string;
+  risk_level: number;
+  username: string;
+  hostname: string;
+  created_at: string;
+}
+
+interface TestResult {
+  allowed: boolean;
+  blocked: boolean;
+  messages: string;
+  results?: { allowed: boolean; rule_name: string; message: string; risk_level: number; action_taken: number }[];
 }
 
 export default function OpsecPage() {
+  const { t } = useI18n();
   const [rules, setRules] = useState<OpsecRule[]>([]);
+  const [history, setHistory] = useState<OpsecHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [testResult, setTestResult] = useState<{ allowed: boolean; messages: string } | null>(null);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
+  const [showRuleModal, setShowRuleModal] = useState(false);
+  const [editingRule, setEditingRule] = useState<OpsecRule | null>(null);
+  const [cfm, setCfm] = useState<{ msg: string; cb: () => void } | null>(null);
+  const [ruleForm, setRuleForm] = useState({
+    name: "",
+    description: "",
+    risk_level: 2,
+    default_action: 1,
+    enabled: true,
+  });
+  const [testForm, setTestForm] = useState({
+    agent_id: "test-agent",
+    task_type: "mimikatz",
+    username: "Administrator",
+    hostname: "DC-01",
+    ip: "10.0.1.5",
+    domain: "corp.local",
+    is_da: false,
+    processes: "explorer.exe, svchost.exe",
+  });
+
+  const riskLabels: Record<number, { label: string; cls: string }> = {
+    1: { label: t("opsec.risk_low"), cls: "bg-secondary text-muted-foreground" },
+    2: { label: t("opsec.risk_medium"), cls: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" },
+    3: { label: t("opsec.risk_high"), cls: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400" },
+    4: { label: t("opsec.risk_critical"), cls: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" },
+  };
+
+  const actionLabels: Record<number, { label: string; cls: string }> = {
+    0: { label: t("opsec.action_block"), cls: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" },
+    1: { label: t("opsec.action_warn"), cls: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400" },
+    2: { label: t("opsec.action_bypass"), cls: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400" },
+  };
+
+  const testTypes = [
+    { id: "mimikatz", label: "Mimikatz", icon: <Skull className="w-4 h-4" />, danger: true },
+    { id: "creds", label: "Creds", icon: <Key className="w-4 h-4" />, danger: false },
+    { id: "inject", label: "Inject", icon: <Syringe className="w-4 h-4" />, danger: false },
+    { id: "shell", label: "Shell", icon: <Terminal className="w-4 h-4" />, danger: false },
+    { id: "ldap_users", label: "LDAP Users", icon: <Users className="w-4 h-4" />, danger: false },
+    { id: "portscan", label: "Portscan", icon: <Network className="w-4 h-4" />, danger: false },
+  ];
 
   useEffect(() => {
-    fetch(`${API_BASE}?p=/api/opsec/rules&format=json`)
-      .then((r) => r.json())
-      .then((data) => setRules(data.rules || []))
-      .catch(() => setRules([]))
-      .finally(() => setLoading(false));
+    Promise.all([
+      api.json<{ rules: OpsecRule[] }>("/api/opsec/rules").catch(() => ({ rules: [] as OpsecRule[] })),
+      api.get("/opsec/history").catch(() => ({ history: [] })),
+    ]).then(([rulesData, histData]) => {
+      setRules(rulesData.rules || []);
+      setHistory((histData.history || []) as OpsecHistoryItem[]);
+    }).catch(() => {
+      setRules([]);
+      setHistory([]);
+    }).finally(() => setLoading(false));
   }, []);
 
-  const riskLabel = (level: number) => {
-    switch (level) {
-      case 4: return <span className="text-red-600 dark:text-red-400 font-semibold">CRITICAL</span>;
-      case 3: return <span className="text-orange-600 dark:text-orange-400 font-semibold">HIGH</span>;
-      case 2: return <span className="text-yellow-600 dark:text-yellow-400 font-semibold">MEDIUM</span>;
-      default: return <span className="text-slate-500">LOW</span>;
+  const handleRunTest = async (taskType: string) => {
+    try {
+      const processes = testForm.processes.split(",").map(s => s.trim()).filter(Boolean);
+      const data = await api.postJson("/api/opsec/check", {
+        agent_id: testForm.agent_id,
+        task_type: taskType,
+        username: testForm.username,
+        hostname: testForm.hostname,
+        ip: testForm.ip,
+        domain: testForm.domain,
+        is_da: testForm.is_da,
+        processes,
+      });
+      setTestResult(data as unknown as TestResult);
+    } catch {
+      setTestResult({ allowed: false, blocked: true, messages: "Test failed" });
     }
   };
 
-  const actionLabel = (action: number) => {
-    switch (action) {
-      case 0: return <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs rounded-lg">BLOCK</span>;
-      case 1: return <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs rounded-lg">WARN</span>;
-      case 2: return <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs rounded-lg">BYPASS</span>;
-      default: return <span className="text-xs">-</span>;
+  const handleSaveRule = async () => {
+    try {
+      await api.postJson("/opsec/rules", ruleForm);
+      setShowRuleModal(false);
+      setEditingRule(null);
+      setRuleForm({ name: "", description: "", risk_level: 1, default_action: 1, enabled: true });
+      toast.success(t("opsec.save_rule"));
+      api.json<{ rules: OpsecRule[] }>("/opsec/rules").then(d => setRules(d.rules || []));
+    } catch {
+      toast.error(t("opsec.toast.save_failed"));
     }
   };
+
+  const handleDeleteRule = (name: string) => {
+    setCfm({ msg: t("opsec.delete") + ` "${name}"?`, cb: async () => {
+      try {
+        await api.del(`/opsec/rules/${name}`);
+        toast.success(t("opsec.toast.deleted"));
+      api.json<{ rules: OpsecRule[] }>("/api/opsec/rules").then(d => setRules(d.rules || []));
+      } catch { toast.error(t("opsec.toast.delete_failed")); }
+    }});
+  };
+
+  const openEditRule = (rule: OpsecRule) => {
+    setEditingRule(rule);
+    setRuleForm({
+      name: rule.name,
+      description: rule.description,
+      risk_level: rule.risk_level,
+      default_action: rule.default_action,
+      enabled: rule.enabled !== undefined ? rule.enabled : true,
+    });
+    setShowRuleModal(true);
+  };
+
+  if (loading) return <PageSpinner />;
 
   return (
-    <div className="max-w-7xl mx-auto mb-20 md:mb-0">
-      <PageHeader title="OPSEC Guard" subtitle="Pre-flight safety checks for agent operations">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-          <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Active</span>
-        </div>
-      </PageHeader>
-
-      <div className="ui-card p-6 mb-6">
-        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-4">Active Rules</h2>
-        {loading ? (
-          <div className="space-y-3">
-            {[1,2,3,4].map(i => <div key={i} className="h-16 bg-slate-100 dark:bg-slate-700 rounded-xl animate-pulse" />)}
+    <>
+      <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
+        <PageHeader title={t("opsec.title")} subtitle={t("opsec.subtitle")}>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+              {rules.length} {t("opsec.active_rules")}
+            </span>
           </div>
-        ) : rules.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">No OPSEC rules configured</p>
-        ) : (
-          <div className="space-y-3">
-            {rules.map((rule) => (
-              <div key={rule.name} className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
-                <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center shrink-0">
-                  <i className="fa-solid fa-shield-halved text-indigo-600 dark:text-indigo-400"></i>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <code className="text-sm font-semibold text-slate-900 dark:text-slate-100">{rule.name}</code>
-                    {riskLabel(rule.risk_level)}
-                    {actionLabel(rule.default_action)}
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{rule.description}</p>
-                </div>
-              </div>
+        </PageHeader>
+
+        <TableCard header={
+          <div className="flex items-center justify-between">
+            <span>{t("opsec.col_actions")}</span>
+            <Button onClick={() => { setEditingRule(null); setRuleForm({ name: "", description: "", risk_level: 1, default_action: 1, enabled: true }); setShowRuleModal(true); }}>
+              <Plus className="w-4 h-4" />{t("opsec.new_rule")}
+            </Button>
+          </div>
+        }>
+          <Table className="w-full text-sm">
+            <TableHeader>
+              <TableRow className="text-left text-xs text-muted-foreground border-b border-border">
+                <TableHead className="px-4 py-3 font-medium">{t("opsec.col_name")}</TableHead>
+                <TableHead className="px-4 py-3 font-medium">{t("opsec.col_desc")}</TableHead>
+                <TableHead className="px-4 py-3 font-medium">{t("opsec.col_risk")}</TableHead>
+                <TableHead className="px-4 py-3 font-medium">{t("opsec.col_action")}</TableHead>
+                <TableHead className="px-4 py-3 font-medium text-right">{t("opsec.col_actions")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rules.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-16 text-muted-foreground">
+                  <EmptyState icon={ShieldCheck} title={t("opsec.empty")} message={t("opsec.empty_desc")} />
+                </TableCell>
+              </TableRow>
+              ) : rules.map((rule) => {
+                const risk = riskLabels[rule.risk_level] || riskLabels[1];
+                const action = actionLabels[rule.default_action] || actionLabels[2];
+                return (
+                  <TableRow key={rule.name} className="border-b border-border hover:bg-muted transition-colors">
+                    <TableCell className="px-4 py-3">
+                      <code className="font-semibold text-foreground">{rule.name}</code>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-muted-foreground">{rule.description}</TableCell>
+                    <TableCell className="px-4 py-3">
+                      <span className={cn("inline-flex px-2 py-0.5 rounded-lg text-xs font-medium", risk.cls)}>{risk.label}</span>
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      <span className={cn("inline-flex px-2 py-0.5 rounded-lg text-xs font-medium", action.cls)}>{action.label}</span>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button onClick={() => openEditRule(rule)} variant="ghost" size="icon" title={t("opsec.dialog_edit")} aria-label={t("opsec.dialog_edit")}>
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button onClick={() => handleDeleteRule(rule.name)} variant="ghost" size="icon" className="text-destructive" title={t("opsec.delete")} aria-label={t("opsec.delete")}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableCard>
+
+        <Card className="p-4 sm:p-5">
+          <h2 className="text-sm font-semibold text-foreground mb-4">{t("opsec.quick_test")}</h2>
+          <p className="text-xs text-muted-foreground mb-4">{t("opsec.test_desc")}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_agent")}</Label>
+              <Input aria-label="Agent ID" name="input-0" className="w-full mt-1" value={testForm.agent_id} onChange={(e) => setTestForm({ ...testForm, agent_id: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_user")}</Label>
+              <Input aria-label="Username" name="input-1" className="w-full mt-1" value={testForm.username} onChange={(e) => setTestForm({ ...testForm, username: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_hostname")}</Label>
+              <Input aria-label="Hostname" name="input-2" className="w-full mt-1" value={testForm.hostname} onChange={(e) => setTestForm({ ...testForm, hostname: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_domain")}</Label>
+              <Input aria-label="Domain" name="input-3" className="w-full mt-1" value={testForm.domain} onChange={(e) => setTestForm({ ...testForm, domain: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_ip")}</Label>
+              <Input aria-label="IP address" name="input-4" className="w-full mt-1" value={testForm.ip} onChange={(e) => setTestForm({ ...testForm, ip: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_procs")}</Label>
+              <Input aria-label="explorer.exe, svchost.exe" name="input-5" className="w-full mt-1" value={testForm.processes} onChange={(e) => setTestForm({ ...testForm, processes: e.target.value })} placeholder="explorer.exe, svchost.exe" />
+            </div>
+          </div>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <Checkbox aria-label="Domain admin privileges" id="is-da" checked={testForm.is_da} onCheckedChange={(checked) => setTestForm({ ...testForm, is_da: checked === true })} />
+              <Label htmlFor="is-da" className="text-xs text-muted-foreground">{t("opsec.domain_admin")}</Label>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {testTypes.map((tt) => (
+              <Button
+                key={tt.id}
+                onClick={() => handleRunTest(tt.id)}
+                variant={tt.danger ? "destructive" : "secondary"}
+                className="rounded-xl"
+              >
+                {tt.icon}
+                {tt.label}
+              </Button>
             ))}
           </div>
-        )}
+          {testResult && (
+            <div className={cn(
+              "mt-4 p-4 rounded-xl text-sm",
+              testResult.allowed
+                ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
+            )}>
+              <div className="flex items-center gap-2 mb-2">
+                {testResult.allowed ? <CheckCircle className="w-4 h-4" /> : <CircleAlert className="w-4 h-4" />}
+                <span className="font-semibold">{testResult.allowed ? t("opsec.allowed") : t("opsec.blocked")}</span>
+              </div>
+              <p className="text-xs opacity-80 mb-2">{testResult.messages || t("opsec.no_rule")}</p>
+              {testResult.results && testResult.results.length > 0 && (
+                <div className="space-y-1">
+                  {testResult.results.map((r, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <span className={cn("w-2 h-2 rounded-full", r.allowed ? "bg-emerald-500" : "bg-red-500")}></span>
+                      <code className="opacity-80">{r.rule_name}</code>
+                      <span className="opacity-60">- {r.message}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-4 sm:p-5">
+          <h2 className="text-sm font-semibold text-foreground mb-4">
+            <History className="w-4 h-4" />
+            {t("opsec.history")}
+          </h2>
+          {history.length === 0 ? (
+            <EmptyState icon={History} title={t("opsec.history_empty")} />
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {history.map((h) => (
+                <div key={h.id} className="flex items-start gap-3 p-3 bg-muted border border-border rounded-xl">
+                  <span className={cn("w-2 h-2 mt-1 rounded-full shrink-0", h.allowed ? "bg-emerald-500" : "bg-red-500")}></span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 text-xs">
+                      <code className="font-semibold text-foreground">{h.rule_name}</code>
+                      <span className={cn(
+                        "px-1.5 py-0.5 rounded text-[10px] font-medium",
+                        h.risk_level >= 4 ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                        h.risk_level >= 3 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" :
+                        "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                      )}>
+                        L{h.risk_level}
+                      </span>
+                      <span className="text-muted-foreground">{h.hostname}\\{h.username}</span>
+                      <span className="text-muted-foreground">task: {h.task_type}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{h.message}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{formatTime(h.created_at)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
       </div>
 
-      <div className="ui-card p-6">
-        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-4">Quick Test</h2>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Simulate an OPSEC check to verify rule behavior</p>
-        <div className="flex flex-wrap gap-2">
-          {["mimikatz", "creds", "inject", "shell", "ldap_users"].map((type) => (
-            <button
-              key={type}
-              onClick={async () => {
-                try {
-                  const res = await fetch(`${API_BASE}?p=/api/opsec/check&format=json`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      agent_id: "test-agent",
-                      task_type: type,
-                      username: "Administrator",
-                      hostname: "DC-01",
-                      ip: "10.0.1.5",
-                      domain: "corp.local",
-                      is_da: true,
-                      processes: ["explorer.exe", "svchost.exe", "csfalcon.exe"],
-                    }),
-                  });
-                  const data = await res.json();
-                  setTestResult(data);
-                } catch { setTestResult({ allowed: false, messages: "Test failed" }); }
-              }}
-              className={`px-4 h-10 rounded-xl text-xs font-medium transition-colors ${
-                type === "mimikatz"
-                  ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50"
-                  : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
-              }`}
-            >
-              <i className={`fa-solid mr-1.5 ${type === "mimikatz" ? "fa-skull" : "fa-bolt"}`}></i>
-              {type}
-            </button>
-          ))}
-        </div>
-        {testResult && (
-          <div className={`mt-4 p-4 rounded-xl text-sm ${
-            testResult.allowed
-              ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
-              : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
-          }`}>
-            <div className="flex items-center gap-2 mb-1">
-              <i className={`fa-solid ${testResult.allowed ? "fa-check-circle" : "fa-circle-exclamation"}`}></i>
-              <span className="font-semibold">{testResult.allowed ? "ALLOWED" : "BLOCKED"}</span>
+      <Dialog open={showRuleModal} onOpenChange={setShowRuleModal}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingRule ? t("opsec.dialog_edit") : t("opsec.dialog_create")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_rule_name")}</Label>
+              <Input aria-label="e.g. block_mimikatz_da" name="input-7" className="w-full mt-1" value={ruleForm.name} onChange={(e) => setRuleForm({ ...ruleForm, name: e.target.value })} placeholder="e.g. block_mimikatz_da" />
             </div>
-            <p className="text-xs opacity-80">{testResult.messages || "No issues"}</p>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.col_desc")}</Label>
+              <Input aria-label="e.g. Block mimikatz when Domain Admin" name="input-8" className="w-full mt-1" value={ruleForm.description} onChange={(e) => setRuleForm({ ...ruleForm, description: e.target.value })} placeholder="e.g. Block mimikatz when Domain Admin" />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_risk")}</Label>
+              <Select
+                value={String(ruleForm.risk_level)}
+                onValueChange={(v) => v !== null && setRuleForm({ ...ruleForm, risk_level: parseInt(v) })}
+              >
+                <SelectTrigger className="w-full mt-1" aria-label="Risk level">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">{t("opsec.risk_low")}</SelectItem>
+                  <SelectItem value="2">{t("opsec.risk_medium")}</SelectItem>
+                  <SelectItem value="3">{t("opsec.risk_high")}</SelectItem>
+                  <SelectItem value="4">{t("opsec.risk_critical")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">{t("opsec.field_default_action")}</Label>
+              <Select
+                value={String(ruleForm.default_action)}
+                onValueChange={(v) => v !== null && setRuleForm({ ...ruleForm, default_action: parseInt(v) })}
+              >
+                <SelectTrigger className="w-full mt-1" aria-label="Default action">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">{t("opsec.action_block")}</SelectItem>
+                  <SelectItem value="1">{t("opsec.action_warn")}</SelectItem>
+                  <SelectItem value="2">{t("opsec.action_bypass")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox aria-label="Rule enabled" id="rule-enabled" checked={ruleForm.enabled} onCheckedChange={(checked) => setRuleForm({ ...ruleForm, enabled: checked === true })} />
+              <Label htmlFor="rule-enabled" className="text-xs text-muted-foreground">{t("opsec.field_enabled")}</Label>
+            </div>
           </div>
-        )}
-      </div>
-    </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setShowRuleModal(false)}>{t("opsec.cancel")}</Button>
+            <Button onClick={handleSaveRule} disabled={!ruleForm.name}>{t("opsec.save_rule")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmModal open={!!cfm} title={t("opsec.confirm")} message={cfm?.msg || ""} confirmText={t("opsec.delete")} cancelText={t("opsec.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+    </>
   );
 }

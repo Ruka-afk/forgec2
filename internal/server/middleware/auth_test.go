@@ -355,15 +355,15 @@ func TestRequirePermission(t *testing.T) {
 		}
 	})
 
-	t.Run("user has all agent permissions", func(t *testing.T) {
+	t.Run("user has any matching agent permission (OR logic)", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Set("user_role", "user")
 
-		RequireAllPermissions("agents.read", "agents.write", "agents.delete")(c)
+		RequirePermission("agents.read", "agents.write", "agents.delete")(c)
 
 		if w.Code == http.StatusForbidden {
-			t.Error("user should have all agent permissions")
+			t.Error("user should have at least one agent permission (agents.read or agents.write)")
 		}
 	})
 
@@ -394,15 +394,27 @@ func TestRequireAllPermissions(t *testing.T) {
 		}
 	})
 
-	t.Run("user has all agent permissions", func(t *testing.T) {
+	t.Run("user has agents.read and agents.write", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set("user_role", "user")
+
+		RequireAllPermissions("agents.read", "agents.write")(c)
+
+		if w.Code == http.StatusForbidden {
+			t.Error("user should have agents.read and agents.write permissions")
+		}
+	})
+
+	t.Run("user lacks agents.delete", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Set("user_role", "user")
 
 		RequireAllPermissions("agents.read", "agents.write", "agents.delete")(c)
 
-		if w.Code == http.StatusForbidden {
-			t.Error("user should have all agent permissions")
+		if w.Code != http.StatusForbidden {
+			t.Errorf("expected 403 for missing agents.delete, got %d", w.Code)
 		}
 	})
 

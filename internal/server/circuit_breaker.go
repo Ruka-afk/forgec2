@@ -45,6 +45,7 @@ type CircuitBreaker struct {
 	checkInterval time.Duration
 	config        *config.Config
 	onBurned      func(targetID string) // callback to rotate agents
+	stopCh        chan struct{}
 }
 
 type TargetHealth struct {
@@ -65,9 +66,10 @@ func NewCircuitBreaker(cfg *config.Config) *CircuitBreaker {
 	cb := &CircuitBreaker{
 		targets:       make(map[string]*TargetHealth),
 		vantagePoints: cfg.Server.VantagePoints,
-		checkInterval: 60 * time.Second,
+		checkInterval: CBCheckInterval,
 		config:        cfg,
 		onBurned:      nil,
+		stopCh:        make(chan struct{}),
 	}
 	circuitBreaker = cb
 	return cb
@@ -96,10 +98,19 @@ func (cb *CircuitBreaker) Start() {
 	go cb.probeLoop()
 }
 
+func (cb *CircuitBreaker) Stop() {
+	close(cb.stopCh)
+}
+
 func (cb *CircuitBreaker) probeLoop() {
 	for {
-		cb.probeAll()
-		time.Sleep(cb.checkInterval)
+		select {
+		case <-cb.stopCh:
+			return
+		default:
+			cb.probeAll()
+			time.Sleep(cb.checkInterval)
+		}
 	}
 }
 
@@ -126,7 +137,7 @@ func (cb *CircuitBreaker) probeTarget(target ProbeTarget) ProbeResult {
 
 	// TCP check
 	addr := fmt.Sprintf("%s:%d", target.Host, target.Port)
-	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", addr, &tls.Config{
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: CBDialTimeout}, "tcp", addr, &tls.Config{
 		InsecureSkipVerify: true,
 	})
 	if err != nil {
@@ -145,7 +156,7 @@ func (cb *CircuitBreaker) probeTarget(target ProbeTarget) ProbeResult {
 			proto = "https"
 		}
 		url := fmt.Sprintf("%s://%s:%d/health", proto, target.Host, target.Port)
-		client := &http.Client{Timeout: 5 * time.Second}
+		client := &http.Client{Timeout: CBHealthCheckTimeout}
 		resp, err := client.Get(url)
 		if err == nil {
 			result.HTTPStatus = resp.StatusCode

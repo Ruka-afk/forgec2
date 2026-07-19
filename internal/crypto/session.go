@@ -98,6 +98,19 @@ func (sm *SessionManager) GetSession(agentID string) *Session {
 	return sm.sessions[agentID]
 }
 
+// RotateKeyPair generates a new server ECDH key pair for PFS rotation
+func (sm *SessionManager) RotateKeyPair() error {
+	curve := ecdh.X25519()
+	privateKey, err := curve.GenerateKey(rand.Reader)
+	if err != nil {
+		return err
+	}
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.privateKey = privateKey
+	return nil
+}
+
 // NeedsRotation checks if a session needs key rotation
 func (sm *SessionManager) NeedsRotation(agentID string) bool {
 	session := sm.GetSession(agentID)

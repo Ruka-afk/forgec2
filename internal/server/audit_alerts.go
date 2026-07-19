@@ -1,9 +1,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"log/slog"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -21,6 +24,30 @@ type loginLockoutTracker struct {
 
 func newLoginLockoutTracker() *loginLockoutTracker {
 	return &loginLockoutTracker{entries: make(map[string]*loginLockoutState)}
+}
+
+// startCleanup periodically removes expired lockout entries to prevent unbounded memory growth.
+func (t *loginLockoutTracker) startCleanup(ctx context.Context) {
+	go func() {
+		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				t.mu.Lock()
+				now := time.Now()
+				for ip, entry := range t.entries {
+					if entry.lockedUntil.IsZero() || now.After(entry.lockedUntil.Add(5*time.Minute)) {
+						delete(t.entries, ip)
+					}
+				}
+				t.mu.Unlock()
+			}
+		}
+	}()
 }
 
 func (t *loginLockoutTracker) isLocked(ip string, now time.Time) (bool, int) {
@@ -120,15 +147,15 @@ func (s *Server) recordLoginFailure(ip, username string) (locked bool, retryAfte
 
 	maxAttempts := s.cfg.RateLimit.Login.MaxAttempts
 	if maxAttempts < 1 {
-		maxAttempts = 5
+		maxAttempts = DefaultMaxLoginAttempts
 	}
 	windowSec := s.cfg.RateLimit.Login.Window
 	if windowSec < 1 {
-		windowSec = 60
+		windowSec = DefaultLoginWindowSec
 	}
 	lockoutSec := s.cfg.RateLimit.Login.LockoutTime
 	if lockoutSec < 1 {
-		lockoutSec = 900
+		lockoutSec = DefaultLockoutTimeSec
 	}
 
 	locked, retryAfter = s.loginLockout.recordFailure(ip, maxAttempts, windowSec, lockoutSec, time.Now())

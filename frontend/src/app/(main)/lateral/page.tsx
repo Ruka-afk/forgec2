@@ -1,15 +1,28 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { API_BASE } from "@/lib/constants";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { PageHeader, PageSpinner, Spinner } from "@/components/UI";
+import { useI18n } from "@/lib/i18n";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Bot, Code, Crosshair, FolderTree, GitBranch, History, IdCard, Inbox, Key, Lock, Network, Rocket, Route, Share2, Terminal, Ticket, Wallet } from "lucide-react";
 
 interface LateralStats {
   online_agents?: number;
-  OnlineAgents?: number;
   total_creds?: number;
-  TotalCreds?: number;
   total_tasks?: number;
-  TotalTasks?: number;
 }
 
 interface Credential {
@@ -19,14 +32,7 @@ interface Credential {
   target?: string;
 }
 
-interface Agent {
-  id?: string;
-  ID?: string;
-  hostname?: string;
-  Hostname?: string;
-  ip?: string;
-  IP?: string;
-}
+import type { Agent } from "@/types/agent";
 
 interface MovementHistory {
   id?: string;
@@ -70,11 +76,11 @@ const defaultForm: FormData = {
 };
 
 const methods = [
-  { key: "smb", label: "SMB", desc: "PsExec / Service Creation", icon: "fa-share-nodes" },
-  { key: "winrm", label: "WinRM", desc: "PowerShell Remoting", icon: "fa-terminal" },
-  { key: "wmi", label: "WMI", desc: "Process Creation", icon: "fa-gears" },
-  { key: "ssh", label: "SSH", desc: "Linux/Unix Remote", icon: "fa-key" },
-  { key: "pth", label: "Pass-the-Hash", desc: "NTLM Hash Auth", icon: "fa-ticket" },
+  { key: "smb", label: "SMB", desc: "PsExec / Service Creation", icon: <Share2 className="w-4 h-4" /> },
+  { key: "winrm", label: "WinRM", desc: "PowerShell Remoting", icon: <Terminal className="w-4 h-4" /> },
+  { key: "wmi", label: "WMI", desc: "Process Creation", icon: <Network className="w-4 h-4" /> },
+  { key: "ssh", label: "SSH", desc: "Linux/Unix Remote", icon: <Key className="w-4 h-4" /> },
+  { key: "pth", label: "Pass-the-Hash", desc: "NTLM Hash Auth", icon: <Ticket className="w-4 h-4" /> },
 ];
 
 export default function LateralPage() {
@@ -86,36 +92,29 @@ export default function LateralPage() {
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [history, setHistory] = useState<MovementHistory[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const { t } = useI18n();
 
   const loadData = useCallback(async () => {
     try {
-      const resp = await fetch(`${API_BASE}?p=/lateral&format=json`);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      setStats(data);
-    } catch (e) { console.error("Lateral: load stats failed", e); }
+      const data = await api.get(`/api/lateral/history/all`).catch(() => ({ lateral: [] }));
+      setStats(data as LateralStats);
+    } catch { toast.error("Failed to load stats"); }
     try {
-      const agentRes = await fetch(`${API_BASE}?p=/agents&format=json`);
-      if (!agentRes.ok) throw new Error(`HTTP ${agentRes.status}`);
-      const agentData = await agentRes.json();
-      setAgents(agentData.Agents || agentData.agents || []);
+      const agentData = await api.get(`/agents`);
+      setAgents((agentData.agents || []) as Agent[]);
     } catch { setAgents([]); }
     try {
-      const credRes = await fetch(`${API_BASE}?p=/credentials&format=json`);
-      if (!credRes.ok) throw new Error(`HTTP ${credRes.status}`);
-      const credData = await credRes.json();
-      setCredentials(credData.VaultEntries || credData.vault_entries || []);
+      const credData = await api.get(`/credentials`);
+      setCredentials((credData.vault_entries || []) as Credential[]);
     } catch { setCredentials([]); }
     try {
-      const histRes = await fetch(`${API_BASE}?p=/api/v1/tasks?type=lateral&limit=50&format=json`);
-      if (!histRes.ok) throw new Error(`HTTP ${histRes.status}`);
-      const histData = await histRes.json();
-      setHistory(histData.data || histData.Data || []);
+      const histData = await api.get(`/api/v1/tasks?type=lateral&limit=50`);
+      setHistory((histData.data || []) as MovementHistory[]);
     } catch { setHistory([]); }
     setLoading(false);
   }, []);
 
-  useEffect(() => { Promise.resolve().then(() => loadData()); }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const updateForm = (key: keyof FormData, value: string) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -152,22 +151,16 @@ export default function LateralPage() {
         if (form.hash) payload.hash = form.hash;
       }
 
-      await fetch(`${API_BASE}?p=/api/lateral/execute&format=json`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      await api.postJson(`/api/lateral/execute`, payload);
       loadData();
-    } catch (e) { console.error("Lateral: execute command failed", e); }
+    } catch { toast.error("Failed to execute lateral movement"); }
     setSubmitting(false);
   };
 
   const getStatusBadge = (status: string) => {
     const s = status?.toLowerCase() ?? "";
-    if (s === "success" || s === "completed") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
-    if (s === "failed") return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
-    if (s === "running") return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
-    return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
+    const variant = s === "success" || s === "completed" ? "success" : s === "failed" ? "destructive" : s === "running" ? "default" : "warning";
+    return variant;
   };
 
   const renderMethodForm = () => {
@@ -177,23 +170,23 @@ export default function LateralPage() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                  <i className="fa-solid fa-folder-tree mr-1.5 text-slate-400"></i>Share
-                </label>
-                <input type="text" placeholder="ADMIN$" className="ui-input font-mono" value={form.share} onChange={e => updateForm("share", e.target.value)} />
+                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  <FolderTree className="w-4 h-4" />Share
+                </span>
+                <Input aria-label="ADMIN$" name="admin-0" type="text" placeholder="ADMIN$" className="font-mono" value={form.share} onChange={e => updateForm("share", e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                  <i className="fa-solid fa-id-card mr-1.5 text-slate-400"></i>Username
-                </label>
-                <input type="text" placeholder="DOMAIN\username" className="ui-input font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
+                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  <IdCard className="w-4 h-4" />Username
+                </span>
+                <Input aria-label="DOMAIN\username" name="domain-username-1" type="text" placeholder="DOMAIN\username" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                <i className="fa-solid fa-lock mr-1.5 text-slate-400"></i>Password
-              </label>
-              <input type="password" placeholder="Password" className="ui-input font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <Lock className="w-4 h-4" />Password
+              </span>
+              <Input aria-label="Password" name="password-2" type="password" placeholder="Password" className="font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
             </div>
           </>
         );
@@ -202,23 +195,23 @@ export default function LateralPage() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                  <i className="fa-solid fa-network-wired mr-1.5 text-slate-400"></i>Port
-                </label>
-                <input type="text" placeholder="5985" className="ui-input font-mono" value={form.port} onChange={e => updateForm("port", e.target.value)} />
+                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  <Network className="w-4 h-4" />Port
+                </span>
+                <Input aria-label="5985" name="5985-3" type="text" placeholder="5985" className="font-mono" value={form.port} onChange={e => updateForm("port", e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                  <i className="fa-solid fa-id-card mr-1.5 text-slate-400"></i>Username
-                </label>
-                <input type="text" placeholder="Administrator" className="ui-input font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
+                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  <IdCard className="w-4 h-4" />Username
+                </span>
+                <Input aria-label="Administrator" name="administrator-4" type="text" placeholder="Administrator" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                <i className="fa-solid fa-lock mr-1.5 text-slate-400"></i>Password
-              </label>
-              <input type="password" placeholder="Password" className="ui-input font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <Lock className="w-4 h-4" />Password
+              </span>
+              <Input aria-label="Password" name="password-5" type="password" placeholder="Password" className="font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
             </div>
           </>
         );
@@ -227,23 +220,23 @@ export default function LateralPage() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                  <i className="fa-solid fa-code mr-1.5 text-slate-400"></i>Namespace
-                </label>
-                <input type="text" placeholder="root\cimv2" className="ui-input font-mono" value={form.namespace} onChange={e => updateForm("namespace", e.target.value)} />
+                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  <Code className="w-4 h-4" />Namespace
+                </span>
+                <Input aria-label="root\cimv2" name="root-cimv2-6" type="text" placeholder="root\cimv2" className="font-mono" value={form.namespace} onChange={e => updateForm("namespace", e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                  <i className="fa-solid fa-id-card mr-1.5 text-slate-400"></i>Username
-                </label>
-                <input type="text" placeholder="DOMAIN\username" className="ui-input font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
+                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  <IdCard className="w-4 h-4" />Username
+                </span>
+                <Input aria-label="DOMAIN\username" name="domain-username-7" type="text" placeholder="DOMAIN\username" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                <i className="fa-solid fa-lock mr-1.5 text-slate-400"></i>Password
-              </label>
-              <input type="password" placeholder="Password" className="ui-input font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <Lock className="w-4 h-4" />Password
+              </span>
+              <Input aria-label="Password" name="password-8" type="password" placeholder="Password" className="font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
             </div>
           </>
         );
@@ -252,30 +245,30 @@ export default function LateralPage() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                  <i className="fa-solid fa-network-wired mr-1.5 text-slate-400"></i>Port
-                </label>
-                <input type="text" placeholder="22" className="ui-input font-mono" value={form.port} onChange={e => updateForm("port", e.target.value)} />
+                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  <Network className="w-4 h-4" />Port
+                </span>
+                <Input aria-label="22" name="22-9" type="text" placeholder="22" className="font-mono" value={form.port} onChange={e => updateForm("port", e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                  <i className="fa-solid fa-id-card mr-1.5 text-slate-400"></i>Username
-                </label>
-                <input type="text" placeholder="root" className="ui-input font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
+                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  <IdCard className="w-4 h-4" />Username
+                </span>
+                <Input aria-label="root" name="root-10" type="text" placeholder="root" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                  <i className="fa-solid fa-lock mr-1.5 text-slate-400"></i>Password
-                </label>
-                <input type="password" placeholder="Password" className="ui-input font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
+                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  <Lock className="w-4 h-4" />Password
+                </span>
+                <Input aria-label="Password" name="password-11" type="password" placeholder="Password" className="font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                  <i className="fa-solid fa-key mr-1.5 text-slate-400"></i>Key Path (optional)
-                </label>
-                <input type="text" placeholder="/path/to/key.pem" className="ui-input font-mono" value={form.key_path} onChange={e => updateForm("key_path", e.target.value)} />
+                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  <Key className="w-4 h-4" />Key Path (optional)
+                </span>
+                <Input aria-label="/path/to/key.pem" name="path-to-key-pem-12" type="text" placeholder="/path/to/key.pem" className="font-mono" value={form.key_path} onChange={e => updateForm("key_path", e.target.value)} />
               </div>
             </div>
           </>
@@ -284,16 +277,16 @@ export default function LateralPage() {
         return (
           <>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                <i className="fa-solid fa-id-card mr-1.5 text-slate-400"></i>Username
-              </label>
-              <input type="text" placeholder="Administrator" className="ui-input font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <IdCard className="w-4 h-4" />Username
+              </span>
+              <Input aria-label="Administrator" name="administrator-13" type="text" placeholder="Administrator" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                <i className="fa-solid fa-ticket mr-1.5 text-slate-400"></i>NTLM Hash
-              </label>
-              <input type="text" placeholder="aad3b435b51404eeaad3b435b51404ee:..." className="ui-input font-mono" value={form.hash} onChange={e => updateForm("hash", e.target.value)} />
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <Ticket className="w-4 h-4" />NTLM Hash
+              </span>
+              <Input aria-label="aad3b435b51404eeaad3b435b51404ee:..." name="aad3b435b51404eeaad3b435b51404ee-14" type="text" placeholder="aad3b435b51404eeaad3b435b51404ee:..." className="font-mono" value={form.hash} onChange={e => updateForm("hash", e.target.value)} />
             </div>
           </>
         );
@@ -303,83 +296,74 @@ export default function LateralPage() {
   };
 
   if (loading)
-    return (
-      <div className="flex items-center justify-center h-64">
-        <i className="fa-solid fa-circle-notch fa-spin text-3xl text-indigo-500"></i>
-      </div>
-    );
+    return <PageSpinner />;
 
   return (
-    <div className="max-w-7xl mx-auto mb-20 md:mb-0">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">横向移动</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm mt-1">SMB/WinRM/WMI/PsExec 远程执行 / Pass-the-Hash</p>
-        </div>
-      </div>
+    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title={t("lateral.title")} subtitle={`SMB/WinRM/WMI/PsExec ${t("lateral.subtitle_exec")} / Pass-the-Hash`} />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="ui-card p-5 shadow-sm hover:shadow-md transition-shadow">
+        <Card className=" hover:shadow-lg dark:hover:shadow-black/30 transition-shadow px-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">在线 Implant</div>
-              <div className="text-3xl font-bold mt-2 text-emerald-600">{stats.OnlineAgents || stats.online_agents || 0}</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">可用于跳板</div>
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("lateral.online_implant")}</div>
+              <div className="text-2xl font-bold mt-2 text-emerald-600">{stats.online_agents || 0}</div>
+              <div className="text-xs text-muted-foreground mt-1">{t("lateral.pivot_available")}</div>
             </div>
             <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center">
-              <i className="fa-solid fa-robot text-xl text-emerald-400"></i>
+              <Bot className="w-4 h-4" />
             </div>
           </div>
-        </div>
-        <div className="ui-card p-5 shadow-sm hover:shadow-md transition-shadow">
+        </Card>
+        <Card className=" hover:shadow-lg dark:hover:shadow-black/30 transition-shadow px-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">可用凭据</div>
-              <div className="text-3xl font-bold mt-2 text-amber-600">{stats.TotalCreds || stats.total_creds || 0}</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">凭据保险库</div>
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("lateral.available_creds")}</div>
+              <div className="text-2xl font-bold mt-2 text-amber-600">{stats.total_creds || 0}</div>
+              <div className="text-xs text-muted-foreground mt-1">{t("lateral.cred_vault")}</div>
             </div>
             <div className="w-12 h-12 bg-amber-50 dark:bg-amber-900/20 rounded-xl flex items-center justify-center">
-              <i className="fa-solid fa-key text-xl text-amber-400"></i>
+              <Key className="w-4 h-4" />
             </div>
           </div>
-        </div>
-        <div className="ui-card p-5 shadow-sm hover:shadow-md transition-shadow">
+        </Card>
+        <Card className=" hover:shadow-lg dark:hover:shadow-black/30 transition-shadow px-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">历史任务</div>
-              <div className="text-3xl font-bold mt-2 text-blue-600">{stats.TotalTasks || stats.total_tasks || 0}</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">横向移动记录</div>
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("lateral.history_tasks")}</div>
+              <div className="text-2xl font-bold mt-2 text-primary">{stats.total_tasks || 0}</div>
+              <div className="text-xs text-muted-foreground mt-1">{t("lateral.lateral_records")}</div>
             </div>
-            <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center">
-              <i className="fa-solid fa-network-wired text-xl text-blue-400"></i>
+            <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+              <Network className="w-4 h-4" />
             </div>
           </div>
-        </div>
+        </Card>
       </div>
 
-      <div className="ui-card p-6 shadow-sm mb-6">
+      <Card className=" mb-6 px-4">
         <div className="flex items-center gap-x-3 mb-5">
           <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/20 rounded-xl flex items-center justify-center">
-            <i className="fa-solid fa-arrows-split-up-and-left text-indigo-600 dark:text-indigo-400"></i>
+            <GitBranch className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">新建横向移动任务</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">选择 Implant、目标主机和执行方式</div>
+            <div className="text-sm font-semibold text-foreground">{t("lateral.new_task")}</div>
+            <div className="text-xs text-muted-foreground">{t("lateral.select_target_method")}</div>
           </div>
         </div>
 
         <div className="mb-6">
           <div className="flex gap-1 overflow-x-auto pb-1">
             {methods.map((m) => (
-              <button key={m.key} onClick={() => setActiveMethod(m.key)}
+              <Button key={m.key} onClick={() => setActiveMethod(m.key)} variant="outline"
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${
                   activeMethod === m.key
-                    ? "bg-indigo-50 text-indigo-600 border border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-400 dark:border-indigo-700"
-                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 dark:hover:text-slate-300 border border-transparent"
+                    ? "bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-400 dark:border-indigo-700"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted dark:hover:text-muted-foreground border-transparent"
                 }`}>
-                <i className={`fa-solid ${m.icon}`}></i>
+                {m.icon}
                 {m.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -387,127 +371,138 @@ export default function LateralPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                <i className="fa-solid fa-robot mr-1.5 text-slate-400"></i>源 Implant
-              </label>
-              <select className="ui-select" value={form.source} onChange={e => updateForm("source", e.target.value)}>
-                <option value="">选择在线 Implant...</option>
-                {agents.map(a => {
-                  const aid = a.ID || a.id || "";
-                  const host = a.Hostname || a.hostname || "";
-                  return <option key={aid} value={aid}>{host}</option>;
-                })}
-              </select>
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <Bot className="w-4 h-4" />{t("lateral.source_implant")}
+              </span>
+              <Select value={form.source || undefined} onValueChange={v => updateForm("source", v ?? "")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t("lateral.select_online_implant")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {agents.map(a => {
+                    const aid = a.id || "";
+                    const host = a.hostname || "";
+                    return <SelectItem key={aid} value={aid}>{host}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                <i className="fa-solid fa-crosshairs mr-1.5 text-slate-400"></i>目标主机
-              </label>
-              <input type="text" placeholder="IP 或主机名" className="ui-input font-mono" value={form.target} onChange={e => updateForm("target", e.target.value)} />
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <Crosshair className="w-4 h-4" />{t("lateral.target_host")}
+              </span>
+              <Input aria-label={t("lateral.ip_or_hostname")} name="ip-16" type="text" placeholder={t("lateral.ip_or_hostname")} className="font-mono" value={form.target} onChange={e => updateForm("target", e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                <i className="fa-solid fa-route mr-1.5 text-slate-400"></i>跳板 Agent
-              </label>
-              <select className="ui-select" value={form.pivot} onChange={e => updateForm("pivot", e.target.value)}>
-                <option value="">直接连接 (无跳板)</option>
-                {agents.map(a => {
-                  const aid = a.ID || a.id || "";
-                  const host = a.Hostname || a.hostname || "";
-                  return <option key={aid} value={aid}>通过 {host}</option>;
-                })}
-              </select>
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <Route className="w-4 h-4" />{t("lateral.pivot_agent")}
+              </span>
+              <Select value={form.pivot || undefined} onValueChange={v => updateForm("pivot", v ?? "")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t("lateral.direct_connect")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {agents.map(a => {
+                    const aid = a.id || "";
+                    const host = a.hostname || "";
+                    return <SelectItem key={aid} value={aid}>{t("lateral.via")} {host}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-              <i className="fa-solid fa-wallet mr-1.5 text-slate-400"></i>凭据            </label>
-            <select className="ui-select" value={form.credential} onChange={e => updateForm("credential", e.target.value)}>
-              <option value="">-- 手动输入凭据 --</option>
-              {credentials.map(c => {
-                const cid = c.id || "";
-                const cuser = c.username || "";
-                const cdomain = c.domain || "";
-                const ctarget = c.target || "";
-                return <option key={cid} value={cid}>{cdomain ? `${cdomain}\\` : ""}{cuser} ({ctarget})</option>;
-              })}
-            </select>
+            <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+              <Wallet className="w-4 h-4" />{t("lateral.credential")}            </span>
+            <Select value={form.credential || undefined} onValueChange={v => updateForm("credential", v ?? "")}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t("lateral.manual_cred")} />
+              </SelectTrigger>
+              <SelectContent>
+                {credentials.map(c => {
+                  const cid = c.id || "";
+                  const cuser = c.username || "";
+                  const cdomain = c.domain || "";
+                  const ctarget = c.target || "";
+                  return <SelectItem key={cid} value={cid}>{cdomain ? `${cdomain}\\` : ""}{cuser} ({ctarget})</SelectItem>;
+                })}
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="border-t border-[var(--border)] pt-4">
-            <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-3">
-              <i className={`fa-solid ${methods.find(m => m.key === activeMethod)?.icon} mr-1.5`}></i>
-              {methods.find(m => m.key === activeMethod)?.label} 配置
+          <div className="border-t border-border pt-4">
+            <div className="text-xs font-semibold text-muted-foreground mb-3">
+              {(() => { const m = methods.find(m => m.key === activeMethod); return m ? <span className="mr-1.5">{m.icon}</span> : null; })()}
+              {methods.find(m => m.key === activeMethod)?.label} {t("lateral.config")}
             </div>
             {renderMethodForm()}
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-              <i className="fa-solid fa-terminal mr-1.5 text-slate-400"></i>执行命令
-            </label>
-            <input type="text" placeholder="whoami /all | powershell -enc ..." className="ui-input font-mono" value={form.command} onChange={e => updateForm("command", e.target.value)} />
+            <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
+              <Terminal className="w-4 h-4" />{t("lateral.exec_command")}
+            </span>
+            <Input aria-label="whoami /all | powershell -enc ..." name="whoami-all-powershell-enc-19" type="text" placeholder="whoami /all | powershell -enc ..." className="font-mono" value={form.command} onChange={e => updateForm("command", e.target.value)} />
           </div>
 
-          <div className="flex gap-3 pt-4 border-t border-[var(--border)]">
-            <button onClick={handleSubmit} disabled={submitting || !form.source || !form.target}
-              className="flex-1 h-11 ui-btn ui-btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
-              <i className={`fa-solid ${submitting ? "fa-circle-notch fa-spin" : "fa-rocket"}`}></i>
-              <span>{submitting ? "执行中..." : "执行横向移动"}</span>
-            </button>
+          <div className="flex gap-3 pt-4 border-t border-border">
+            <Button onClick={handleSubmit} disabled={submitting || !form.source || !form.target}
+              className="flex-1 h-11 disabled:opacity-50 disabled:cursor-not-allowed">
+              {submitting ? <Spinner size="xs" /> : <Rocket className="w-4 h-4" />}
+              <span>{submitting ? t("lateral.executing") : t("lateral.execute_lateral")}</span>
+            </Button>
           </div>
         </div>
-      </div>
+      </Card>
 
-      <div className="ui-card shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-5 border-b border-[var(--border)]">
+      <Card className=" overflow-hidden">
+        <div className="flex items-center justify-between p-5 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
-              <i className="fa-solid fa-clock-rotate-left text-blue-600 dark:text-blue-400 text-sm"></i>
+            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+              <History className="w-4 h-4" />
             </div>
-            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">移动历史</span>
+            <span className="text-sm font-semibold text-foreground">{t("lateral.move_history")}</span>
           </div>
-            <span className="text-xs text-slate-500">{history.length} 条记录</span>
+          <span className="text-xs text-muted-foreground">{history.length} {t("lateral.records")}</span>
         </div>
         {history.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)] bg-slate-50 dark:bg-slate-800/50">
-                  <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300"></th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">目标</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">方式</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">跳板</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">状态</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-300">时间</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {history.map((h, i) => (
-                  <tr key={h.id || i} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                    <td className="py-3 px-4 font-mono text-[var(--text-secondary)]">{h.source || "-"}</td>
-                    <td className="py-3 px-4 font-mono text-[var(--text-secondary)]">{h.target || "-"}</td>
-                    <td className="py-3 px-4">
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">{h.method || "-"}</span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-500 text-xs">{h.pivot || "直连"}</td>
-                    <td className="py-3 px-4">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${getStatusBadge(h.status || "")}`}>{h.status || "-"}</span>
-                    </td>
-                    <td className="py-3 px-4 text-xs text-slate-500">{h.created_at || "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted">
+                <TableHead className="font-semibold"></TableHead>
+                <TableHead className="font-semibold">{t("lateral.target")}</TableHead>
+                <TableHead className="font-semibold">{t("lateral.method")}</TableHead>
+                <TableHead className="font-semibold">{t("lateral.pivot")}</TableHead>
+                <TableHead className="font-semibold">{t("lateral.status")}</TableHead>
+                <TableHead className="font-semibold">{t("lateral.time")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {history.map((h, i) => (
+                <TableRow key={h.id || i}>
+                  <TableCell className="font-mono text-muted-foreground">{h.source || "-"}</TableCell>
+                  <TableCell className="font-mono text-muted-foreground">{h.target || "-"}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-[10px]">{h.method || "-"}</Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs">{h.pivot || t("lateral.direct")}</TableCell>
+                  <TableCell>
+                    <Badge variant={getStatusBadge(h.status || "")}>{h.status || "-"}</Badge>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{h.created_at || "-"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         ) : (
-          <div className="text-center py-12 text-slate-400 dark:text-slate-500">
-            <i className="fa-solid fa-inbox text-3xl mb-2 text-slate-300 dark:text-slate-600"></i>
-            <p>暂无横向移动记录</p>
+          <div className="text-center py-12 text-muted-foreground">
+            <Inbox className="w-4 h-4" />
+            <p>{t("lateral.empty")}</p>
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
+
