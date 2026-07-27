@@ -57,11 +57,11 @@ export default function CommandTemplatesPage() {
       setTemplates(Array.isArray(data) ? data : data.templates || []);
     } catch {
       setTemplates([]);
-      toast.error("Failed to load templates");
+      toast.error(t("templates.toast.load_failed"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { loadTemplates(); }, [loadTemplates]);
 
@@ -71,7 +71,7 @@ export default function CommandTemplatesPage() {
       setShowAdd(false);
       setForm({ name: "", category: "recon", command: "", description: "" });
       loadTemplates();
-    } catch { toast.error("Failed to save template"); }
+    } catch { toast.error(t("templates.toast.save_failed")); }
   };
 
   const handleDelete = (id: string) => {
@@ -79,7 +79,7 @@ export default function CommandTemplatesPage() {
       try {
         await api.del(`/api/templates/${id}`);
         loadTemplates();
-      } catch { toast.error("Failed to delete template"); }
+      } catch { toast.error(t("templates.toast.delete_failed")); }
     }});
   };
 
@@ -98,7 +98,7 @@ export default function CommandTemplatesPage() {
     );
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("templates.title")} subtitle={t("templates.subtitle")}>
         <Button onClick={() => setShowAdd(true)}>
           <Plus className="w-4 h-4" />
@@ -142,7 +142,7 @@ export default function CommandTemplatesPage() {
                       <div className="bg-muted border border-border rounded-xl p-3 mb-3">
                         <code className="text-xs font-mono text-foreground break-all">{cmd}</code>
                       </div>
-                      <Button className="w-full" variant="outline" onClick={() => { navigator.clipboard.writeText(cmd); toast.success("Command copied to clipboard"); }}>
+                       <Button className="w-full" variant="outline" onClick={() => { navigator.clipboard.writeText(cmd); toast.success(t("templates.toast.copied")); }}>
                         <Play className="w-4 h-4" />{t("templates.use_template")}
                       </Button>
                     </Card>

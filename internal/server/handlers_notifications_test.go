@@ -43,7 +43,7 @@ func TestHandleListNotifications_Contract(t *testing.T) {
 	}
 	var resp struct {
 		Notifications []db.Notification `json:"notifications"`
-		Total         int64              `json:"total"`
+		Total         int64             `json:"total"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())

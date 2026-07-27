@@ -9,17 +9,17 @@ import (
 type RiskLevel int
 
 const (
-	RiskLow     RiskLevel = 1
-	RiskMedium  RiskLevel = 2
-	RiskHigh    RiskLevel = 3
+	RiskLow      RiskLevel = 1
+	RiskMedium   RiskLevel = 2
+	RiskHigh     RiskLevel = 3
 	RiskCritical RiskLevel = 4
 )
 
 type Action int
 
 const (
-	ActionBlock Action = 0
-	ActionWarn  Action = 1
+	ActionBlock  Action = 0
+	ActionWarn   Action = 1
 	ActionBypass Action = 2
 )
 
@@ -43,17 +43,17 @@ type OpsecContext struct {
 }
 
 type ProcessInfo struct {
-	Name     string
-	PID      int
-	Path     string
+	Name string
+	PID  int
+	Path string
 }
 
 type Rule struct {
-	Name        string
-	Description string
-	RiskLevel   RiskLevel
+	Name          string
+	Description   string
+	RiskLevel     RiskLevel
 	DefaultAction Action
-	Check       func(*OpsecContext) *OpsecResult
+	Check         func(*OpsecContext) *OpsecResult
 }
 
 var (
@@ -129,7 +129,7 @@ func defaultRules() []Rule {
 					for _, prot := range protected {
 						if strings.Contains(lower, prot) {
 							return &OpsecResult{Allowed: true, RuleName: "inject_safe_check",
-								Message: fmt.Sprintf("Warning: injecting into '%s' may trigger alerts", p.Name),
+								Message:   fmt.Sprintf("Warning: injecting into '%s' may trigger alerts", p.Name),
 								RiskLevel: RiskHigh, ActionTaken: ActionWarn}
 						}
 					}

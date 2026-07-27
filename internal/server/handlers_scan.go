@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"fmt"
@@ -141,13 +141,17 @@ func (s *Server) handleProcessScanResult(c *gin.Context) {
 	}
 
 	// Parse and store results
+	var results []db.ScanResult
 	for _, resultStr := range req.Results {
 		parts := strings.Split(resultStr, ":")
 		if len(parts) < 3 {
 			continue
 		}
 
-		port, _ := strconv.Atoi(parts[0])
+		port, err := strconv.Atoi(parts[0])
+		if err != nil || port < 1 || port > 65535 {
+			continue
+		}
 		protocol := parts[1]
 		state := parts[2]
 		service := ""
@@ -164,20 +168,22 @@ func (s *Server) handleProcessScanResult(c *gin.Context) {
 			banner = strings.Join(parts[5:], ":")
 		}
 
-		result := db.ScanResult{
+		results = append(results, db.ScanResult{
 			AgentID:  req.AgentID,
 			TaskID:   req.TaskID,
-			TargetIP: "", // Will be extracted from task
+			TargetIP: "",
 			Port:     port,
 			Protocol: protocol,
 			State:    state,
 			Service:  service,
 			Version:  version,
 			Banner:   banner,
-		}
+		})
+	}
 
-		if err := s.db.Create(&result).Error; err != nil {
-			slog.Error("Failed to save scan result", "agent", req.AgentID, "task", req.TaskID, "err", err)
+	if len(results) > 0 {
+		if err := s.db.CreateInBatches(results, 500).Error; err != nil {
+			slog.Error("Failed to save scan results", "agent", req.AgentID, "task", req.TaskID, "count", len(results), "err", err)
 		}
 	}
 
@@ -255,4 +261,3 @@ func getTopPorts(n int) []int {
 	}
 	return topPorts[:n]
 }
-

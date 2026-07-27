@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -18,70 +19,88 @@ import (
 type Config struct {
 	mu         sync.Mutex `yaml:"-"`
 	ConfigPath string     `yaml:"-"` // absolute path to the config file, set on Load
-	Server struct {
-		Port                  int    `yaml:"port"`
-		Host                  string `yaml:"host"`
-		TLSEnabled            bool   `yaml:"tls_enabled"`
-		CertFile              string `yaml:"cert_file"`
-		KeyFile               string `yaml:"key_file"`
-		JWTSecret             string `yaml:"jwt_secret"`
-		TCPEnabled            bool   `yaml:"tcp_enabled"`
-		TCPAddr              string `yaml:"tcp_addr"`
-		SMBEnabled           bool   `yaml:"smb_enabled"`
-		SMBPipe              string `yaml:"smb_pipe"`
-		DataDir              string `yaml:"data_dir"`
-		DNSEnabled           bool   `yaml:"dns_enabled"`
-		DNSDomain            string `yaml:"dns_domain"`
-		DNSAddr              string `yaml:"dns_addr"`
-		GRPCEnabled          bool   `yaml:"grpc_enabled"`
-		GRPCAddr             string `yaml:"grpc_addr"`
-		ICMPEnabled          bool   `yaml:"icmp_enabled"`
-		ICMPAddr             string `yaml:"icmp_addr"`
-		DNSDoHEnabled        bool   `yaml:"dns_doh_enabled"`
-		DNSDoHURL            string `yaml:"dns_doh_url"`
-		DNSDoTEnabled        bool   `yaml:"dns_dot_enabled"`
-		DNSDoTAddr           string `yaml:"dns_dot_addr"`
-		DNSIPv6Enabled       bool   `yaml:"dns_ipv6_enabled"`
-		OfflineThreshold     int    `yaml:"offline_threshold"`      // seconds
-		SessionMaxAgeHours   int    `yaml:"session_max_age_hours"`  // JWT expiry
+	Server     struct {
+		Port                 int      `yaml:"port"`
+		Host                 string   `yaml:"host"`
+		TLSEnabled           bool     `yaml:"tls_enabled"`
+		CertFile             string   `yaml:"cert_file"`
+		KeyFile              string   `yaml:"key_file"`
+		ClientCAFile         string   `yaml:"client_ca_file"`    // mTLS: CA cert file for client verification
+		RequireClientCert    bool     `yaml:"require_client_cert"` // mTLS: require client certificate for beacon auth
+		JWTSecret            string   `yaml:"jwt_secret"`
+		TCPEnabled           bool     `yaml:"tcp_enabled"`
+		TCPAddr              string   `yaml:"tcp_addr"`
+		SMBEnabled           bool     `yaml:"smb_enabled"`
+		SMBPipe              string   `yaml:"smb_pipe"`
+		DataDir              string   `yaml:"data_dir"`
+		DNSEnabled           bool     `yaml:"dns_enabled"`
+		DNSDomain            string   `yaml:"dns_domain"`
+		DNSAddr              string   `yaml:"dns_addr"`
+		GRPCEnabled          bool     `yaml:"grpc_enabled"`
+		GRPCAddr             string   `yaml:"grpc_addr"`
+		ICMPEnabled          bool     `yaml:"icmp_enabled"`
+		ICMPAddr             string   `yaml:"icmp_addr"`
+		DNSDoHEnabled        bool     `yaml:"dns_doh_enabled"`
+		DNSDoHURL            string   `yaml:"dns_doh_url"`
+		DNSDoTEnabled        bool     `yaml:"dns_dot_enabled"`
+		DNSDoTAddr           string   `yaml:"dns_dot_addr"`
+		DNSIPv6Enabled       bool     `yaml:"dns_ipv6_enabled"`
+		OfflineThreshold     int      `yaml:"offline_threshold"`      // seconds
+		SessionMaxAgeHours   int      `yaml:"session_max_age_hours"`  // JWT expiry
 		CleanupRetentionDays int      `yaml:"cleanup_retention_days"` // auto-purge cutoff
 		UpdateCheckRepo      string   `yaml:"update_check_repo"`      // GitHub repo for update checks (e.g. "owner/repo")
 		VantagePoints        []string `yaml:"vantage_points"`         // external proxy URLs for circuit breaker probing
-		SSHEnabled           bool     `yaml:"ssh_enabled"`             // enable SSH transport listener
-		SSHPort              int      `yaml:"ssh_port"`                // SSH listener port (default 2222)
-		SSHAddr              string   `yaml:"ssh_addr"`                // SSH listener addr (default :ssh_port)
-		SSHHostKey           string   `yaml:"ssh_host_key"`            // path to SSH host key (auto-generated if missing)
-		SSHUser              string   `yaml:"ssh_user"`                // SSH user for agent auth
-		SSHPassword          string   `yaml:"ssh_password"`            // SSH password (empty = any password or key-only)
-		SSHKeyAuth           bool     `yaml:"ssh_key_auth"`            // allow public key authentication
-		GeoIPEnabled         bool     `yaml:"geoip_enabled"`           // enable GeoIP lookup via ip-api.com (opt-in)
-		FrontDomains         []string `yaml:"front_domains"`           // CDN front domains for domain fronting auto-failover
-		FrontCheckInterval   int      `yaml:"front_check_interval"`    // seconds between domain front health checks (default 60)
-		AllowedOrigins       []string `yaml:"allowed_origins"`         // allowed WebSocket/CORS origins (default: localhost,127.0.0.1,::1)
-		CookieDomain         string   `yaml:"cookie_domain"`           // domain for session/CSRF cookies (for cross-origin deployments)
+		SSHEnabled           bool     `yaml:"ssh_enabled"`            // enable SSH transport listener
+		SSHPort              int      `yaml:"ssh_port"`               // SSH listener port (default 2222)
+		SSHAddr              string   `yaml:"ssh_addr"`               // SSH listener addr (default :ssh_port)
+		SSHHostKey           string   `yaml:"ssh_host_key"`           // path to SSH host key (auto-generated if missing)
+		SSHUser              string   `yaml:"ssh_user"`               // SSH user for agent auth
+		SSHPassword          string   `yaml:"ssh_password"`           // SSH password (empty = any password or key-only)
+		SSHKeyAuth           bool     `yaml:"ssh_key_auth"`           // allow public key authentication
+		GeoIPEnabled         bool     `yaml:"geoip_enabled"`          // enable GeoIP lookup via ip-api.com (opt-in)
+		FrontDomains         []string `yaml:"front_domains"`          // CDN front domains for domain fronting auto-failover
+		FrontCheckInterval   int      `yaml:"front_check_interval"`   // seconds between domain front health checks (default 60)
+		AllowedOrigins       []string `yaml:"allowed_origins"`        // allowed WebSocket/CORS origins (default: localhost,127.0.0.1,::1)
+		CookieDomain         string   `yaml:"cookie_domain"`          // domain for session/CSRF cookies (for cross-origin deployments)
+		BeaconKey            string   `yaml:"beacon_key"`             // optional pre-shared key for agent beacon auth (X-Beacon-Key header)
+		RequireTLSForAuth    bool     `yaml:"require_tls_for_auth"`   // require TLS before issuing session cookies (strongly recommended in production)
+		EnablePprof          bool     `yaml:"enable_pprof"`           // expose /debug/pprof (default false; requires auth when enabled)
+		EnableMetrics        bool     `yaml:"enable_metrics"`         // expose /metrics (default false; requires auth when enabled)
+		SocksListenHost      string   `yaml:"socks_listen_host"`      // bind host for SOCKS/rportfwd (default 127.0.0.1)
 	} `yaml:"server"`
 
 	Database struct {
-		Path string `yaml:"path"`
+		Path  string `yaml:"path"`
+		Driver string `yaml:"driver"` // "sqlite" (default) or "postgres"
+		DSN    string `yaml:"dsn"`    // PostgreSQL connection string (e.g. "host=localhost user=forgec2 password=... dbname=forgec2 port=5432 sslmode=disable")
 	} `yaml:"database"`
 
 	Implant struct {
-		DefaultInterval    int    `yaml:"default_interval"`    // seconds
-		DefaultJitter      int    `yaml:"default_jitter"`      // percent
-		DefaultUA          string `yaml:"default_user_agent"`
-		DefaultSkipTLS     bool   `yaml:"default_skip_tls"`
+		DefaultInterval     int    `yaml:"default_interval"` // seconds
+		DefaultJitter       int    `yaml:"default_jitter"`   // percent
+		DefaultUA           string `yaml:"default_user_agent"`
+		DefaultSkipTLS      bool   `yaml:"default_skip_tls"`
 		DefaultWorkingStart string `yaml:"default_working_start"` // HH:MM local time (empty = disabled)
 		DefaultWorkingEnd   string `yaml:"default_working_end"`   // HH:MM local time (empty = disabled)
 		DefaultWorkingTZ    string `yaml:"default_working_tz"`    // IANA timezone (e.g. "America/New_York"), empty = UTC
-		DNSDoHURL          string `yaml:"dns_doh_url"`          // DNS-over-HTTPS endpoint
-		DNSDoTAddr         string `yaml:"dns_dot_addr"`         // DNS-over-TLS address:port
-		DNSIPv6            bool   `yaml:"dns_ipv6"`             // enable IPv6 AAAA tunneling
+		DNSDoHURL           string `yaml:"dns_doh_url"`           // DNS-over-HTTPS endpoint
+		DNSDoTAddr          string `yaml:"dns_dot_addr"`          // DNS-over-TLS address:port
+		DNSIPv6             bool   `yaml:"dns_ipv6"`              // enable IPv6 AAAA tunneling
 	} `yaml:"implant"`
 
 	Auth struct {
-		PasswordHash  string `yaml:"password_hash"`  // bcrypt hash, set on first run
+		PasswordHash  string `yaml:"password_hash"`    // bcrypt hash, set on first run
 		DefaultPasswd string `yaml:"default_password"` // plaintext; used only on first boot if password_hash is empty
 	} `yaml:"auth"`
+
+	PasswordPolicy struct {
+		MinLength     int  `yaml:"min_length"`      // minimum password length (default 8)
+		RequireUpper  bool `yaml:"require_upper"`   // require uppercase letter (default true)
+		RequireLower  bool `yaml:"require_lower"`   // require lowercase letter (default true)
+		RequireDigit  bool `yaml:"require_digit"`   // require digit (default true)
+		RequireSymbol bool `yaml:"require_symbol"`  // require special character (default false)
+		MaxAge        int  `yaml:"max_age_days"`    // force password rotation every N days (0 = disabled)
+	} `yaml:"password_policy"`
 
 	Crypto struct {
 		Key string `yaml:"key"` // 32-byte hex key for XOR encryption, or "ecdh:" for ECDH+AES-256-GCM (empty=disabled)
@@ -104,15 +123,22 @@ type Config struct {
 		Model                 string `yaml:"model"`
 		Endpoint              string `yaml:"endpoint"` // optional, override default
 		SystemPrompt          string `yaml:"system_prompt"`
-		MaxConversationTurns  int    `yaml:"max_conversation_turns"`  // 0 = unlimited (default)
-		MaxToolRounds         int    `yaml:"max_tool_rounds"`         // 0 = unlimited (default)
+		MaxConversationTurns  int    `yaml:"max_conversation_turns"`   // 0 = unlimited (default)
+		MaxToolRounds         int    `yaml:"max_tool_rounds"`          // 0 = unlimited (default)
 		MaxDuplicateToolCalls int    `yaml:"max_duplicate_tool_calls"` // 0 = unlimited; else cap identical tool+args repeats
-		AllowExecute          bool   `yaml:"allow_execute"`           // permit AI to run commands on agents (default false = safe)
+		AllowExecute          bool   `yaml:"allow_execute"`            // permit AI to run commands on agents (default false = safe)
 	} `yaml:"ai"`
 
 	Logging struct {
 		Level string `yaml:"level"` // debug, info, warn, error
 	} `yaml:"logging"`
+
+	SIEM struct {
+		Enabled bool   `yaml:"enabled"`
+		URL     string `yaml:"url"`     // webhook URL for SIEM event forwarding
+		Token   string `yaml:"token"`   // optional bearer token for SIEM webhook
+		Actions string `yaml:"actions"` // comma-separated action filters (empty = all)
+	} `yaml:"siem"`
 
 	SSO SSOConfig `yaml:"sso"`
 
@@ -120,30 +146,29 @@ type Config struct {
 		Slack SlackConfig `yaml:"slack"`
 	} `yaml:"integrations"`
 
-
 	Listeners ListenersConfig `yaml:"listeners"`
 
 	// Allow external programs to write plain SOCKS5 operations server -> agent
 	Socks struct {
-		Enabled           bool     `yaml:"enabled"`
-		AuthRequired      bool     `yaml:"auth_required"`
-		Users             []SocksUser `yaml:"users"`
-		AllowedDests      []string `yaml:"allowed_destinations"`
+		Enabled      bool        `yaml:"enabled"`
+		AuthRequired bool        `yaml:"auth_required"`
+		Users        []SocksUser `yaml:"users"`
+		AllowedDests []string    `yaml:"allowed_destinations"`
 	} `yaml:"socks"`
 
 	TLSFingerprint TLSFingerprintConfig `yaml:"tls_fingerprint"`
 
 	RateLimit struct {
 		Login struct {
-			MaxAttempts int    `yaml:"max_attempts"` // max login attempts per window
-			Window      int    `yaml:"window"`       // window in seconds
-			LockoutTime int    `yaml:"lockout_time"` // lockout duration in seconds
-			Whitelist   []string `yaml:"whitelist"`   // whitelisted IPs
+			MaxAttempts int      `yaml:"max_attempts"` // max login attempts per window
+			Window      int      `yaml:"window"`       // window in seconds
+			LockoutTime int      `yaml:"lockout_time"` // lockout duration in seconds
+			Whitelist   []string `yaml:"whitelist"`    // whitelisted IPs
 		} `yaml:"login"`
 		API struct {
-			Capacity  float64  `yaml:"capacity"`   // token bucket capacity (max burst)
-			Rate      float64  `yaml:"rate"`       // tokens per second per user
-			Whitelist []string `yaml:"whitelist"`   // whitelisted IPs
+			Capacity  float64  `yaml:"capacity"`  // token bucket capacity (max burst)
+			Rate      float64  `yaml:"rate"`      // tokens per second per user
+			Whitelist []string `yaml:"whitelist"` // whitelisted IPs
 		} `yaml:"api"`
 		Beacon struct {
 			Limit  int `yaml:"limit"`  // requests per window
@@ -151,6 +176,7 @@ type Config struct {
 		} `yaml:"beacon"`
 		ExtC2 struct {
 			Enabled    bool    `yaml:"enabled"`
+			APIToken   string  `yaml:"api_token"`   // shared secret for extc2 API auth (empty = no auth)
 			Rate       float64 `yaml:"rate"`        // requests per second per beacon ID
 			Burst      int     `yaml:"burst"`       // max burst size
 			CleanupAge int     `yaml:"cleanup_age"` // minutes to keep idle entries
@@ -161,9 +187,9 @@ type Config struct {
 // DefaultConfig returns sensible defaults
 func DefaultConfig() *Config {
 	cfg := &Config{}
-	cfg.Server.Port = 8080
+	cfg.Server.Port = 8000
 	cfg.Server.Host = "0.0.0.0"
-	cfg.Server.TLSEnabled = true
+	cfg.Server.TLSEnabled = false
 	cfg.Server.TCPEnabled = false
 	cfg.Server.TCPAddr = ""
 	cfg.Server.SMBEnabled = false
@@ -191,12 +217,23 @@ func DefaultConfig() *Config {
 	cfg.Server.CleanupRetentionDays = 30
 	cfg.Server.UpdateCheckRepo = "forgec2/forgec2"
 	cfg.Server.FrontCheckInterval = 60
+	cfg.Server.EnablePprof = false
+	cfg.Server.EnableMetrics = false
+	cfg.Server.SocksListenHost = "127.0.0.1"
 
 	cfg.Database.Path = filepath.Join(cfg.Server.DataDir, "db/forgec2.db")
+	cfg.Database.Driver = "sqlite"
 	cfg.Server.CertFile = filepath.Join(cfg.Server.DataDir, "server.crt")
 	cfg.Server.KeyFile = filepath.Join(cfg.Server.DataDir, "server.key")
 
 	cfg.Implant.DefaultInterval = 5
+
+	cfg.PasswordPolicy.MinLength = 8
+	cfg.PasswordPolicy.RequireUpper = true
+	cfg.PasswordPolicy.RequireLower = true
+	cfg.PasswordPolicy.RequireDigit = true
+	cfg.PasswordPolicy.RequireSymbol = false
+	cfg.PasswordPolicy.MaxAge = 0
 	cfg.Implant.DefaultJitter = 20
 	cfg.Implant.DefaultUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 	cfg.Implant.DefaultWorkingStart = ""
@@ -215,13 +252,13 @@ func DefaultConfig() *Config {
 	cfg.AI.Enabled = false
 	cfg.AI.Provider = "deepseek"
 	cfg.AI.Model = "deepseek-chat"
-	cfg.AI.MaxConversationTurns = 20
-	cfg.AI.MaxToolRounds = 10
-	cfg.AI.MaxDuplicateToolCalls = 3
+	cfg.AI.MaxConversationTurns = 0 // 0 = unlimited
+	cfg.AI.MaxToolRounds = 0        // 0 = unlimited
+	cfg.AI.MaxDuplicateToolCalls = 0 // 0 = unlimited
 	cfg.AI.SystemPrompt = "You are the ForgeC2 red team operations assistant, running on the C2 server. You can list online agents, view target details, execute commands, view credentials, manage listeners, and more."
-	cfg.TLSFingerprint.JARMEnabled = false
+	cfg.TLSFingerprint.JARMEnabled = true
 	cfg.TLSFingerprint.JARMRotate = "24h"
-	cfg.TLSFingerprint.JA3Enabled = false
+	cfg.TLSFingerprint.JA3Enabled = true
 	cfg.TLSFingerprint.JA3Profile = "random"
 	cfg.TLSFingerprint.JA3Rotate = "24h"
 
@@ -255,7 +292,7 @@ func DefaultConfig() *Config {
 
 	// Listener defaults
 	cfg.Listeners.MTLS.Enabled = false
-	cfg.Listeners.MTLS.Addr = ":8000"
+	cfg.Listeners.MTLS.Addr = ":8443"
 	cfg.Listeners.MTLS.CertFile = filepath.Join(cfg.Server.DataDir, "server.crt")
 	cfg.Listeners.MTLS.KeyFile = filepath.Join(cfg.Server.DataDir, "server.key")
 	cfg.Listeners.MTLS.ClientCAFile = filepath.Join(cfg.Server.DataDir, "ca.crt")
@@ -301,7 +338,7 @@ func Load(path string) (*Config, error) {
 				return nil, err
 			}
 			out, _ := yaml.Marshal(cfg)
-			if err := os.WriteFile(path, out, 0644); err != nil {
+			if err := os.WriteFile(path, out, 0600); err != nil {
 				return nil, err
 			}
 			cfg.ConfigPath = path
@@ -333,6 +370,19 @@ func Load(path string) (*Config, error) {
 		slog.Warn("JWT secret auto-generated. To use a custom secret, set FORGEC2_JWT_SECRET env var or edit server.jwt_secret in config.yaml")
 	}
 
+	// Auto-generate ExtC2 API token if using default/insecure value
+	if cfg.RateLimit.ExtC2.APIToken == "" || isWeakSecret(cfg.RateLimit.ExtC2.APIToken) {
+		key := make([]byte, 32)
+		if _, err := rand.Read(key); err != nil {
+			return nil, err
+		}
+		cfg.RateLimit.ExtC2.APIToken = hex.EncodeToString(key)
+		if err := cfg.Save(path); err != nil {
+			return nil, err
+		}
+		slog.Warn("ExtC2 API token auto-generated. To use a custom token, edit rate_limit.extc2.api_token in config.yaml")
+	}
+
 	// Env override for AI API key (takes precedence over config file)
 	if envAIKey := os.Getenv("FORGEC2_AI_API_KEY"); envAIKey != "" {
 		cfg.AI.APIKey = envAIKey
@@ -341,6 +391,12 @@ func Load(path string) (*Config, error) {
 	// Env overrides for critical settings
 	if envDBPath := os.Getenv("FORGEC2_DB_PATH"); envDBPath != "" {
 		cfg.Database.Path = envDBPath
+	}
+	if envDBDriver := os.Getenv("FORGEC2_DB_DRIVER"); envDBDriver != "" {
+		cfg.Database.Driver = envDBDriver
+	}
+	if envDBDSN := os.Getenv("FORGEC2_DB_DSN"); envDBDSN != "" {
+		cfg.Database.DSN = envDBDSN
 	}
 	if envHost := os.Getenv("FORGEC2_HOST"); envHost != "" {
 		cfg.Server.Host = envHost
@@ -393,14 +449,26 @@ func (c *Config) Validate() error {
 	if c.Server.OfflineThreshold < 1 {
 		errs = append(errs, errors.New("server.offline_threshold must be >= 1 second"))
 	}
+	if c.Server.OfflineThreshold > 86400 {
+		errs = append(errs, errors.New("server.offline_threshold must be <= 86400 (24h)"))
+	}
 	if c.Server.SessionMaxAgeHours < 1 {
 		errs = append(errs, errors.New("server.session_max_age_hours must be >= 1"))
+	}
+	if c.Server.SessionMaxAgeHours > 8760 {
+		errs = append(errs, errors.New("server.session_max_age_hours must be <= 8760 (1 year)"))
 	}
 	if c.Server.CleanupRetentionDays < 0 {
 		errs = append(errs, errors.New("server.cleanup_retention_days must be >= 0"))
 	}
+	if c.Server.CleanupRetentionDays > 3650 {
+		errs = append(errs, errors.New("server.cleanup_retention_days must be <= 3650 (10 years)"))
+	}
 	if c.Implant.DefaultInterval < 1 {
 		errs = append(errs, errors.New("implant.default_interval must be >= 1 second"))
+	}
+	if c.Implant.DefaultInterval > 86400 {
+		errs = append(errs, errors.New("implant.default_interval must be <= 86400 (24h)"))
 	}
 	if c.Implant.DefaultJitter < 0 || c.Implant.DefaultJitter > 100 {
 		errs = append(errs, errors.New("implant.default_jitter must be between 0 and 100"))
@@ -449,6 +517,15 @@ func (c *Config) Validate() error {
 	if c.AI.Enabled && c.AI.APIKey == "" && os.Getenv("FORGEC2_AI_API_KEY") == "" {
 		slog.Warn("ai.api_key is empty — AI features will fail at runtime unless set via env FORGEC2_AI_API_KEY")
 	}
+	if c.AI.MaxConversationTurns < 0 {
+		errs = append(errs, errors.New("ai.max_conversation_turns must be >= 0 (0 = unlimited)"))
+	}
+	if c.AI.MaxToolRounds < 0 {
+		errs = append(errs, errors.New("ai.max_tool_rounds must be >= 0 (0 = unlimited)"))
+	}
+	if c.AI.MaxDuplicateToolCalls < 0 {
+		errs = append(errs, errors.New("ai.max_duplicate_tool_calls must be >= 0 (0 = unlimited)"))
+	}
 	if c.AI.Enabled && c.AI.Provider != "" {
 		validProviders := map[string]bool{"openai": true, "anthropic": true, "claude": true, "google": true, "deepseek": true, "qianwen": true, "longcat": true, "local": true, "custom": true}
 		if !validProviders[c.AI.Provider] {
@@ -474,11 +551,58 @@ func (c *Config) Validate() error {
 		if c.Server.KeyFile == "" {
 			errs = append(errs, errors.New("server.key_file is required when server.tls_enabled is true"))
 		}
+		if c.Server.CertFile != "" {
+			if _, err := os.Stat(c.Server.CertFile); err != nil {
+				errs = append(errs, fmt.Errorf("server.cert_file: %w", err))
+			}
+		}
+		if c.Server.KeyFile != "" {
+			if _, err := os.Stat(c.Server.KeyFile); err != nil {
+				errs = append(errs, fmt.Errorf("server.key_file: %w", err))
+			}
+		}
+	}
+	if c.Server.RequireTLSForAuth && !c.Server.TLSEnabled {
+		slog.Warn("server.require_tls_for_auth is enabled but server.tls_enabled is false — session cookies will NOT be secure over plain HTTP")
 	}
 
 	// Rate limit validation
 	if c.RateLimit.API.Capacity <= 0 {
 		errs = append(errs, errors.New("rate_limit.api.capacity must be > 0"))
+	}
+	if c.RateLimit.ExtC2.Rate < 0 {
+		errs = append(errs, errors.New("rate_limit.extc2.rate must be >= 0"))
+	}
+	if c.RateLimit.ExtC2.Burst < 1 {
+		errs = append(errs, errors.New("rate_limit.extc2.burst must be >= 1 (burst=0 blocks all requests)"))
+	}
+	if c.RateLimit.ExtC2.CleanupAge < 0 {
+		errs = append(errs, errors.New("rate_limit.extc2.cleanup_age must be >= 0"))
+	}
+	if c.RateLimit.ExtC2.APIToken == "" {
+		slog.Warn("rate_limit.extc2.api_token is empty — a random token will be auto-generated on startup")
+	}
+	if c.Malleable.Enabled && c.Malleable.StatusCode != 0 && (c.Malleable.StatusCode < 100 || c.Malleable.StatusCode > 599) {
+		errs = append(errs, errors.New("malleable.status_code must be between 100 and 599 or 0 for default"))
+	}
+	if c.Server.FrontCheckInterval < 1 {
+		errs = append(errs, errors.New("server.front_check_interval must be >= 1 second"))
+	}
+	if c.PasswordPolicy.MinLength < 4 {
+		errs = append(errs, errors.New("password_policy.min_length must be >= 4"))
+	}
+	if c.PasswordPolicy.MinLength > 128 {
+		errs = append(errs, errors.New("password_policy.min_length must be <= 128"))
+	}
+	if c.PasswordPolicy.MaxAge < 0 {
+		errs = append(errs, errors.New("password_policy.max_age_days must be >= 0"))
+	}
+	if c.Socks.Enabled {
+		for _, dest := range c.Socks.AllowedDests {
+			if !strings.Contains(dest, ":") {
+				errs = append(errs, fmt.Errorf("socks.allowed_destinations entry %q must be in host:port format", dest))
+			}
+		}
 	}
 
 	if c.Listeners.MTLS.Enabled {
@@ -542,6 +666,8 @@ func (c *Config) CopyFrom(src *Config) {
 	c.SSO = src.SSO
 	c.Integrations = src.Integrations
 	c.Listeners = src.Listeners
+	c.Socks = src.Socks
+	c.TLSFingerprint = src.TLSFingerprint
 }
 
 // SSOConfig holds enterprise SSO/OIDC/SAML authentication settings
@@ -552,12 +678,12 @@ type SSOConfig struct {
 	ClientID     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
 	RedirectURL  string `yaml:"redirect_url"`
-	AuthURL      string `yaml:"auth_url"`      // authorization endpoint
-	TokenURL     string `yaml:"token_url"`     // token exchange endpoint
-	UserInfoURL  string `yaml:"userinfo_url"`  // userinfo endpoint
-	Scopes       string `yaml:"scopes"`        // space-separated (default: "openid profile email")
-	Domains      string `yaml:"domains"`       // comma-separated allowed email domains
-	DefaultRole  string `yaml:"default_role"`  // role for auto-provisioned users (admin/user)
+	AuthURL      string `yaml:"auth_url"`     // authorization endpoint
+	TokenURL     string `yaml:"token_url"`    // token exchange endpoint
+	UserInfoURL  string `yaml:"userinfo_url"` // userinfo endpoint
+	Scopes       string `yaml:"scopes"`       // space-separated (default: "openid profile email")
+	Domains      string `yaml:"domains"`      // comma-separated allowed email domains
+	DefaultRole  string `yaml:"default_role"` // role for auto-provisioned users (admin/user)
 }
 
 // SocksUser holds SOCKS5 username/password auth credentials.
@@ -568,11 +694,11 @@ type SocksUser struct {
 
 // TLSFingerprintConfig holds JARM/JA3 fingerprint randomization settings
 type TLSFingerprintConfig struct {
-	JARMEnabled    bool   `yaml:"jarm_randomize"`
-	JARMRotate     string `yaml:"jarm_rotate_interval"`
-	JA3Enabled     bool   `yaml:"ja3_randomize"`
-	JA3Profile     string `yaml:"ja3_profile"`
-	JA3Rotate      string `yaml:"ja3_rotate_interval"`
+	JARMEnabled bool   `yaml:"jarm_randomize"`
+	JARMRotate  string `yaml:"jarm_rotate_interval"`
+	JA3Enabled  bool   `yaml:"ja3_randomize"`
+	JA3Profile  string `yaml:"ja3_profile"`
+	JA3Rotate   string `yaml:"ja3_rotate_interval"`
 }
 
 // SlackConfig holds Slack integration settings
@@ -621,12 +747,12 @@ func (c *Config) LoadFromData(data []byte) error {
 }
 
 // AllowedOrigin checks if the given origin hostname is in the configured allow list.
-// Returns true if allowedOrigins is empty (allow all) or the hostname matches.
+// Returns false (deny) when no origins are configured.
 func (c *Config) AllowedOrigin(hostname string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if len(c.Server.AllowedOrigins) == 0 {
-		return true
+		return false
 	}
 	for _, allowed := range c.Server.AllowedOrigins {
 		if hostname == allowed {

@@ -13,9 +13,12 @@ import (
 // handleOpsecHistory returns the OPSEC evaluation history.
 // GET /opsec/history
 func (s *Server) handleOpsecHistory(c *gin.Context) {
+	p := parsePagination(c, 50, 200)
+	var total int64
+	s.db.Model(&db.OpsecHistory{}).Count(&total)
 	var history []db.OpsecHistory
-	s.db.Order("created_at desc").Limit(200).Find(&history)
-	respond(c, gin.H{"history": history})
+	s.db.Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&history)
+	respond(c, gin.H{"history": history, "total": total, "page": p.Page, "page_size": p.PageSize})
 }
 
 // handleOpsecRuleCreate persists a new OPSEC rule and injects it into the engine.
@@ -31,7 +34,7 @@ func (s *Server) handleOpsecRuleCreate(c *gin.Context) {
 		Enabled     *bool  `json:"enabled"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
 
@@ -111,6 +114,6 @@ func (s *Server) handleOpsecRuleDelete(c *gin.Context) {
 // GET /api/opsec/rules (or /opsec/rules)
 func (s *Server) handleOpsecRulesList(c *gin.Context) {
 	var rules []db.OpsecRule
-	s.db.Order("risk_level desc, name").Find(&rules)
+	s.db.Order("risk_level desc, name").Limit(200).Find(&rules)
 	respond(c, gin.H{"rules": rules})
 }

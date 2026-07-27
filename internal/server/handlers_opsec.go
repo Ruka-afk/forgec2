@@ -1,7 +1,6 @@
-﻿package server
+package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -17,13 +16,13 @@ import (
 // Body: { agent_id, task_type, username, hostname, ip, domain, is_da, processes }
 func (s *Server) handleOpsecCheck(c *gin.Context) {
 	var req struct {
-		AgentID  string   `json:"agent_id"`
-		TaskType string   `json:"task_type"`
-		Username string   `json:"username"`
-		Hostname string   `json:"hostname"`
-		IP       string   `json:"ip"`
-		Domain   string   `json:"domain"`
-		IsDA     bool     `json:"is_da"`
+		AgentID   string   `json:"agent_id"`
+		TaskType  string   `json:"task_type"`
+		Username  string   `json:"username"`
+		Hostname  string   `json:"hostname"`
+		IP        string   `json:"ip"`
+		Domain    string   `json:"domain"`
+		IsDA      bool     `json:"is_da"`
 		Processes []string `json:"processes"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -59,14 +58,14 @@ func (s *Server) handleOpsecCheck(c *gin.Context) {
 
 		// Persist evaluation history
 		if err := s.db.Create(&db.OpsecHistory{
-			AgentID:  req.AgentID,
-			TaskType: req.TaskType,
-			RuleName: r.RuleName,
-			Allowed:  r.Allowed,
-			Message:  r.Message,
+			AgentID:   req.AgentID,
+			TaskType:  req.TaskType,
+			RuleName:  r.RuleName,
+			Allowed:   r.Allowed,
+			Message:   r.Message,
 			RiskLevel: int(r.RiskLevel),
-			Username: req.Username,
-			Hostname: req.Hostname,
+			Username:  req.Username,
+			Hostname:  req.Hostname,
 		}).Error; err != nil {
 			slog.Error("Failed to record opsec history", "err", err)
 		}
@@ -77,27 +76,6 @@ func (s *Server) handleOpsecCheck(c *gin.Context) {
 		"blocked":  blocked,
 		"results":  results,
 		"messages": strings.Join(messages, "; "),
-	})
-}
-
-// handleOpsecRules returns the current OPSEC rule set.
-// GET /api/opsec/rules
-func (s *Server) handleOpsecRules(c *gin.Context) {
-	type ruleResponse struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		RiskLevel   int    `json:"risk_level"`
-		Action      int    `json:"default_action"`
-	}
-
-	// We can't access opsec.rules directly (unexported), so return a summary
-	c.JSON(http.StatusOK, gin.H{
-		"rules": []ruleResponse{
-			{Name: "mimikatz_da_check", Description: "Block mimikatz when running as Domain Admin", RiskLevel: 4, Action: 0},
-			{Name: "lsass_edr_check", Description: "Block LSASS operations when EDR processes are detected", RiskLevel: 4, Action: 0},
-			{Name: "inject_safe_check", Description: "Warn when injecting into protected processes", RiskLevel: 3, Action: 1},
-			{Name: "net_ad_check", Description: "Warn when running recon as high-privilege user", RiskLevel: 2, Action: 1},
-		},
 	})
 }
 
@@ -150,7 +128,11 @@ func (s *Server) handleProfileRotate(c *gin.Context) {
 	}
 
 	// Create a task that will be picked up by the agent on next beacon
-	taskData, _ := json.Marshal(req)
+	taskData, ok := marshalJSONSafe(req)
+	if !ok {
+		respondError(c, http.StatusInternalServerError, "failed to marshal request")
+		return
+	}
 
 	task := db.Task{
 		AgentID:   agentID,
@@ -202,7 +184,11 @@ func (s *Server) rotateAgentsOnBurnedListener(listenerID string) {
 			UserAgent:    defaultUA,
 			Encoding:     "json",
 		}
-		data, _ := json.Marshal(rotation)
+		data, ok := marshalJSONSafe(rotation)
+		if !ok {
+			slog.Error("Failed to marshal rotation data", "agent_id", agent.ID)
+			continue
+		}
 
 		task := db.Task{
 			AgentID:   agent.ID,

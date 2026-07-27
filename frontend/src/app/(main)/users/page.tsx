@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
-import { ConfirmModal, EmptyState, PageHeader, StatusBadge, PageSpinner } from "@/components/UI";
+import { ConfirmModal, EmptyState, PageHeader, StatCard, StatusBadge, PageSpinner } from "@/components/UI";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,19 +16,12 @@ import { Ban, Check, Crown, Key, LogOut, Pencil, Plus, Trash2, User as UserIcon,
 import { useI18n } from "@/lib/i18n";
 
 interface User {
-  ID?: string;
   id?: string;
-  Username?: string;
   username?: string;
-  Role?: string;
   role?: string;
-  IsActive?: boolean | string;
   is_active?: boolean;
-  LastActivity?: string;
   last_activity?: string;
-  LastLogin?: string;
   last_login?: string;
-  CreatedAt?: string;
   created_at?: string;
 }
 
@@ -66,14 +59,14 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadUsers();
     api.get("/api/roles")
       .then((d: Record<string, unknown>) => { if (d.success) setCustomRoles(((d.data as unknown[]) || []).map((r: unknown) => (r as { name: string }).name as string)); })
       .catch(() => toast.error(t("users.toast.load_roles_failed")));
-  }, [loadUsers]);
+  }, [loadUsers, t]);
 
   const filtered = users.filter((u) => {
     const name = (u.username || "").toLowerCase();
@@ -169,7 +162,7 @@ export default function UsersPage() {
     return <PageSpinner />;
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={<><Users className="w-4 h-4" />{t("users.title")}</>} subtitle={t("users.subtitle")}>
         <div className="flex items-center gap-2">
           <Input placeholder={t("users.search_placeholder")} value={search} onChange={(e) => setSearch(e.target.value)} className="w-48" />
@@ -182,22 +175,10 @@ export default function UsersPage() {
       </PageHeader>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <Card className="p-4 sm:p-5 text-center opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30" style={{ animationDelay: "0ms" }}>
-          <div className="text-2xl font-bold text-foreground">{totalUsers}</div>
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{t("users.stat_total")}</div>
-        </Card>
-        <Card className="p-4 sm:p-5 text-center opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30" style={{ animationDelay: "40ms" }}>
-          <div className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{adminCount}</div>
-          <div className="text-[10px] text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">{t("users.stat_admins")}</div>
-        </Card>
-        <Card className="p-4 sm:p-5 text-center opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30" style={{ animationDelay: "80ms" }}>
-          <div className="text-2xl font-bold text-sky-700 dark:text-sky-300">{userCount}</div>
-          <div className="text-[10px] text-sky-600 dark:text-sky-400 uppercase tracking-wider">{t("users.stat_users")}</div>
-        </Card>
-        <Card className="p-4 sm:p-5 text-center opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30" style={{ animationDelay: "120ms" }}>
-          <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{activeCount}</div>
-          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">{t("users.stat_active")}</div>
-        </Card>
+        <StatCard label={t("users.stat_total")} value={totalUsers} color="indigo" style={{ animationDelay: "0ms" }} className="opacity-0 animate-fade-slide-up" />
+        <StatCard label={t("users.stat_admins")} value={adminCount} color="indigo" style={{ animationDelay: "40ms" }} className="opacity-0 animate-fade-slide-up" />
+        <StatCard label={t("users.stat_users")} value={userCount} color="blue" style={{ animationDelay: "80ms" }} className="opacity-0 animate-fade-slide-up" />
+        <StatCard label={t("users.stat_active")} value={activeCount} color="emerald" style={{ animationDelay: "120ms" }} className="opacity-0 animate-fade-slide-up" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

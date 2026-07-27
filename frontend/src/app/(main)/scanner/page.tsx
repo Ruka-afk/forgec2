@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -140,7 +141,7 @@ export default function ScannerPage() {
       await api.post("/api/scan", body);
       setActiveTab("active");
       loadData();
-    } catch { toast.error("Failed to start scan"); }
+    } catch { toast.error(t("scanner.toast.start_scan_failed")); }
     setScanning(false);
   };
 
@@ -174,8 +175,13 @@ export default function ScannerPage() {
   };
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={<><Radar className="w-4 h-4" />{t("scanner.title")}</>} subtitle={t("scanner.subtitle")} />
+
+      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+        <div className="font-semibold">{t("scanner.honesty_title")}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{t("scanner.honesty_desc")}</div>
+      </Card>
 
       <Card className="p-4 sm:p-5 mb-6 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
@@ -287,9 +293,7 @@ export default function ScannerPage() {
                     </div>
                     <span className="text-xs text-muted-foreground">{status} via {agent}</span>
                   </div>
-                  <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
-                  </div>
+                  <Progress value={progress} />
                   <div className="text-xs text-muted-foreground mt-1 text-right">{progress}%</div>
                 </div>
               );
@@ -382,9 +386,7 @@ export default function ScannerPage() {
                         <span className="text-sm font-medium font-mono text-foreground">{scan.target}</span>
                         <span className="text-xs text-muted-foreground">{progress}%</span>
                       </div>
-                      <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
-                      </div>
+                      <Progress value={progress} />
                       <div className="flex items-center justify-between mt-2">
                         <Badge variant="outline">{scan.type}</Badge>
                         <span className="text-xs text-muted-foreground">{scan.started_at || ""}</span>

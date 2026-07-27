@@ -1,12 +1,12 @@
-﻿package server
+package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,8 +19,7 @@ func (s *Server) handleAgents(c *gin.Context) {
 	search := c.Query("search")
 	statusFilter := c.Query("status")
 	osFilter := c.Query("os")
-	pageStr := c.DefaultQuery("page", "1")
-	pageSizeStr := c.DefaultQuery("pageSize", "20")
+	p := parsePagination(c, DefaultPageSize, MaxPageSize)
 
 	query := s.db.Model(&db.Implant{})
 	if search != "" {
@@ -28,7 +27,7 @@ func (s *Server) handleAgents(c *gin.Context) {
 			"%"+escapeLike(search)+"%", "%"+escapeLike(search)+"%", "%"+escapeLike(search)+"%")
 	}
 	offlineCutoff := time.Now().Add(-s.offlineThreshold())
-	staleCutoff := time.Now().Add(-StaleThreshold)
+	staleCutoff := time.Now().Add(-s.staleThreshold())
 	if statusFilter == "online" {
 		query = query.Where("last_seen > ?", offlineCutoff)
 	} else if statusFilter == "stale" {
@@ -41,31 +40,22 @@ func (s *Server) handleAgents(c *gin.Context) {
 	}
 
 	var total int64
-	query.Count(&total)
-
-	pageNum, _ := strconv.Atoi(pageStr)
-	if pageNum < 1 {
-		pageNum = 1
-	}
-	pageSize, _ := strconv.Atoi(pageSizeStr)
-	if pageSize < 1 {
-		pageSize = DefaultPageSize
-	}
-	if pageSize > MaxPageSize {
-		pageSize = MaxPageSize
+	if err := query.Count(&total).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to count agents")
+		return
 	}
 
 	var agents []db.Implant
-	query.Order("last_seen desc").Offset((pageNum - 1) * pageSize).Limit(pageSize).Find(&agents)
+	query.Order("last_seen desc").Offset(p.Offset).Limit(p.PageSize).Find(&agents)
 
 	for i := range agents {
 		agents[i].Status = s.agentStatus(agents[i]).Status
 	}
 
 	stats := s.getNavStats()
-	totalPages := (int(total) + pageSize - 1) / pageSize
-	prevPage := pageNum - 1
-	nextPage := pageNum + 1
+	totalPages := (int(total) + p.PageSize - 1) / p.PageSize
+	prevPage := p.Page - 1
+	nextPage := p.Page + 1
 	data := gin.H{
 		"Title":      "ForgeC2 - Agents",
 		"ActiveNav":  "agents",
@@ -73,10 +63,10 @@ func (s *Server) handleAgents(c *gin.Context) {
 		"Search":     search,
 		"Status":     statusFilter,
 		"FilterOS":   osFilter,
-		"Page":       pageNum,
+		"Page":       p.Page,
 		"PrevPage":   prevPage,
 		"NextPage":   nextPage,
-		"PageSize":   pageSize,
+		"PageSize":   p.PageSize,
 		"Total":      int(total),
 		"TotalPages": totalPages,
 	}
@@ -91,7 +81,7 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 	id := c.Param("id")
 	var agent db.Implant
 	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		c.String(http.StatusNotFound, "Agent not found")
+		respondError(c, http.StatusNotFound, "Agent not found")
 		return
 	}
 
@@ -103,19 +93,22 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 		Order("created_at desc").Limit(AgentDetailTaskLimit).Find(&tasks)
 
 	var screenshots []string
-	screenshotDir := filepath.Join(s.cfg.Server.DataDir, "screenshots", id)
-	if files, err := os.ReadDir(screenshotDir); err == nil {
-		for _, f := range files {
-			if !f.IsDir() && strings.HasSuffix(f.Name(), ".png") {
-				screenshots = append(screenshots, f.Name())
-			}
-		}
+	if c.Query("include_screenshots") != "false" {
+		screenshots, _ = s.listAgentScreenshots(id)
 	}
 
-	totalTasks := len(tasks)
-	completedTasks := 0
-	pendingTasks := 0
-	failedTasks := 0
+	var totalTaskCount int64
+	if err := s.db.Model(&db.Task{}).Where("agent_id = ?", id).Count(&totalTaskCount).Error; err != nil {
+		slog.Error("Failed to count agent tasks", "agent_id", id, "error", err)
+	}
+	taskStats := computeTaskStats(s.db, []string{id})[id]
+	if taskStats == nil {
+		taskStats = &db.TaskStats{}
+	}
+	totalTasks := int(totalTaskCount)
+	completedTasks := taskStats.Completed
+	pendingTasks := taskStats.Pending
+	failedTasks := taskStats.Failed
 	totalResponseTime := time.Duration(0)
 	shellTasks := 0
 	screenshotTasks := 0
@@ -125,12 +118,7 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 	for _, t := range tasks {
 		switch t.Status {
 		case "completed":
-			completedTasks++
 			totalResponseTime += t.UpdatedAt.Sub(t.CreatedAt)
-		case "pending":
-			pendingTasks++
-		case "failed":
-			failedTasks++
 		}
 
 		switch t.Type {
@@ -146,8 +134,9 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 	}
 
 	successRate := 0
-	if totalTasks > 0 {
-		successRate = (completedTasks * 100) / totalTasks
+	terminalTasks := completedTasks + failedTasks
+	if terminalTasks > 0 {
+		successRate = (completedTasks * 100) / terminalTasks
 	}
 
 	avgResponseTime := "N/A"
@@ -181,12 +170,14 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 
 	// Fetch children for P2P chain
 	var children []db.Implant
-	s.db.Where("parent_id = ?", id).Find(&children)
+	s.db.Where("parent_id = ?", id).Limit(500).Find(&children)
 
 	// Fetch unlinked agents (for linking dropdown) - optimized
 	var unlinkedAgents []db.Implant
-	s.db.Select("id", "hostname", "ip", "os").
-		Where("(parent_id = '' OR parent_id IS NULL) AND id != ?", id).Order("hostname asc").Find(&unlinkedAgents)
+	if err := s.db.Select("id", "hostname", "ip", "os").
+		Where("(parent_id = '' OR parent_id IS NULL) AND id != ?", id).Order("hostname asc").Limit(500).Find(&unlinkedAgents).Error; err != nil {
+		slog.Error("Failed to query unlinked agents", "error", err)
+	}
 
 	data := gin.H{
 		"Title":             fmt.Sprintf("ForgeC2 - Agent %s", agent.Hostname),
@@ -211,7 +202,6 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 		"UnlinkedAgents":    unlinkedAgents,
 	}
 
-
 	stats := s.getNavStats()
 	for k, v := range stats {
 		data[k] = v
@@ -220,13 +210,63 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 	s.renderPageOrJSON(c, data)
 }
 
-func (s *Server) handleKillAgent(c *gin.Context) {
+func (s *Server) listAgentScreenshots(agentID string) ([]string, error) {
+	screenshotDir := filepath.Join(s.cfg.Server.DataDir, "screenshots", agentID)
+	files, err := os.ReadDir(screenshotDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	screenshots := make([]string, 0, len(files))
+	for _, f := range files {
+		if !f.IsDir() && strings.HasSuffix(f.Name(), ".png") {
+			screenshots = append(screenshots, f.Name())
+		}
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(screenshots)))
+	return screenshots, nil
+}
+
+func (s *Server) handleListAgentScreenshots(c *gin.Context) {
 	id := c.Param("id")
-	role, _ := c.Get("user_role")
-	if role == "viewer" {
-		respondError(c, http.StatusForbidden, "viewers cannot issue agent commands")
+	var agent db.Implant
+	if err := s.db.Select("id").First(&agent, "id = ?", id).Error; err != nil {
+		respondError(c, http.StatusNotFound, "Agent not found")
 		return
 	}
+
+	screenshots, err := s.listAgentScreenshots(id)
+	if err != nil {
+		slog.Error("Failed to list agent screenshots", "agent_id", id, "error", err)
+		respondError(c, http.StatusInternalServerError, "Failed to list screenshots")
+		return
+	}
+
+	p := parsePagination(c, DefaultPageSize, MaxPageSize)
+	start := p.Offset
+	if start > len(screenshots) {
+		start = len(screenshots)
+	}
+	end := start + p.PageSize
+	if end > len(screenshots) {
+		end = len(screenshots)
+	}
+	respondSuccess(c, gin.H{
+		"screenshots": screenshots[start:end],
+		"total":       len(screenshots),
+		"page":        p.Page,
+		"page_size":   p.PageSize,
+	})
+}
+
+func (s *Server) handleKillAgent(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
@@ -288,11 +328,16 @@ func (s *Server) handleDeleteAgent(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
+	var agent db.Implant
+	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
+		respondError(c, http.StatusNotFound, "Agent not found")
+		return
+	}
+	s.LogAuditRecord(c, "agent_delete", "agent", id, fmt.Sprintf("Deleted agent %s", agent.Hostname), true, nil)
 	if !s.deleteAgentRecord(id) {
 		respondError(c, http.StatusInternalServerError, "failed to delete agent")
 		return
 	}
-	s.LogAuditRecord(c, "delete_agent", "agent", id, "", true, nil)
 	slog.Warn("Agent deleted", "id", id)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
@@ -334,15 +379,37 @@ func (s *Server) deleteAgentRecord(id string) bool {
 		slog.Error("Failed to delete agent", "agent_id", id, "err", err)
 		return false
 	}
-	tx.Commit()
-	os.RemoveAll(filepath.Join(s.cfg.Server.DataDir, "screenshots", id))
+	if err := tx.Commit().Error; err != nil {
+		slog.Error("Failed to commit agent deletion", "agent_id", id, "err", err)
+		return false
+	}
+	if err := os.RemoveAll(filepath.Join(s.cfg.Server.DataDir, "screenshots", id)); err != nil {
+		slog.Warn("Failed to remove agent screenshots", "agent_id", id, "err", err)
+	}
 	return true
 }
 
 // handleListAgents returns all agents as JSON for dropdowns
 func (s *Server) handleListAgents(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "0"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > MaxPageSize {
+		pageSize = DefaultPageSize
+	}
+
+	var total int64
+	s.db.Model(&db.Implant{}).Count(&total)
+
 	var agents []db.Implant
-	s.db.Order("hostname asc").Limit(AgentQueryLimit).Find(&agents)
+	offset := (page - 1) * pageSize
+	if err := s.db.Order("hostname asc").Offset(offset).Limit(pageSize).Find(&agents).Error; err != nil {
+		slog.Error("Failed to list agents", "error", err)
+		respondError(c, http.StatusInternalServerError, "Failed to list agents")
+		return
+	}
 	type agentBrief struct {
 		ID       string `json:"id"`
 		Hostname string `json:"hostname"`
@@ -360,13 +427,22 @@ func (s *Server) handleListAgents(c *gin.Context) {
 			OS:       a.OS,
 		})
 	}
-	c.JSON(http.StatusOK, gin.H{"agents": results})
+	c.JSON(http.StatusOK, gin.H{
+		"agents":   results,
+		"total":    total,
+		"page":     page,
+		"pageSize": pageSize,
+	})
 }
 
 // handleListUnlinkedAgents returns agents without a parent for linking dropdown
 func (s *Server) handleListUnlinkedAgents(c *gin.Context) {
 	var agents []db.Implant
-	s.db.Where("parent_id = '' OR parent_id IS NULL").Order("hostname asc").Find(&agents)
+	if err := s.db.Where("parent_id = '' OR parent_id IS NULL").Order("hostname asc").Limit(500).Find(&agents).Error; err != nil {
+		slog.Error("Failed to list unlinked agents", "error", err)
+		respondError(c, http.StatusInternalServerError, "Failed to list agents")
+		return
+	}
 	c.JSON(http.StatusOK, agents)
 }
 
@@ -477,7 +553,11 @@ func (s *Server) handlePushAgentConfig(c *gin.Context) {
 		}
 	}
 
-	taskData, _ := json.Marshal(req)
+	taskData, ok := marshalJSONSafe(req)
+	if !ok {
+		respondError(c, http.StatusInternalServerError, "failed to marshal request")
+		return
+	}
 	task := db.Task{
 		AgentID:   id,
 		Type:      "config_push",

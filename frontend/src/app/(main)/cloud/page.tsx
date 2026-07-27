@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { EmptyState, PageHeader, Spinner } from "@/components/UI";
 import { useAgentList } from "@/lib/hooks/useAgentList";
@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Cloud, CloudUpload, Copy, List } from "lucide-react";
@@ -42,26 +43,60 @@ export default function CloudPage() {
   const [stealing, setStealing] = useState(false);
   const [results, setResults] = useState<CloudCred[]>([]);
   const [selectedAgentResults, setSelectedAgentResults] = useState("");
+  const [pollNote, setPollNote] = useState("");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { refreshAgents(); }, [refreshAgents]);
 
-  const loadResults = useCallback(async (agentId: string) => {
-    if (!agentId) return;
+  const loadResults = useCallback(async (agentId: string, quiet = false): Promise<number> => {
+    if (!agentId) return 0;
     try {
-      const data: CloudResultsResponse = await api.json<CloudResultsResponse>(`/cloud/${agentId}/results`);
-      setResults(data.results || []);
-    } catch { toast.error(t("cloud.load_results_failed")); }
-  }, []);
+      const data: CloudResultsResponse = await api.get<CloudResultsResponse>(`/cloud/${agentId}/results`);
+      const list = data.results || [];
+      setResults(list);
+      return list.length;
+    } catch {
+      if (!quiet) toast.error(t("cloud.load_results_failed"));
+      return -1;
+    }
+  }, [t]);
 
   useEffect(() => {
     if (selectedAgentResults) loadResults(selectedAgentResults);
   }, [selectedAgentResults, loadResults]);
 
+  useEffect(() => () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+  }, []);
+
   const handleSteal = async () => {
     if (!selectedAgent) return;
     setStealing(true);
+    setPollNote("");
     try {
       await api.postJson("/cloud/steal", { agent_id: selectedAgent, provider });
+      toast.success(t("cloud.steal_dispatched"));
+      setSelectedAgentResults(selectedAgent);
+      const baselineRaw = await loadResults(selectedAgent, true);
+      const baseline = baselineRaw >= 0 ? baselineRaw : 0;
+      let attempts = 0;
+      if (pollRef.current) clearInterval(pollRef.current);
+      setPollNote(t("cloud.poll_waiting"));
+      pollRef.current = setInterval(async () => {
+        attempts += 1;
+        const n = await loadResults(selectedAgent, true);
+        const count = n >= 0 ? n : 0;
+        if (count > baseline) {
+          setPollNote(t("cloud.poll_updated"));
+          if (pollRef.current) clearInterval(pollRef.current);
+          pollRef.current = null;
+          toast.success(t("cloud.poll_updated"));
+        } else if (attempts >= 30) {
+          setPollNote(t("cloud.poll_timeout"));
+          if (pollRef.current) clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+      }, 3000);
     } catch { toast.error(t("cloud.steal_failed")); }
     setStealing(false);
   };
@@ -70,8 +105,13 @@ export default function CloudPage() {
   const getHostname = (a: Agent) => a.hostname || "";
   const getIP = (a: Agent) => a.ip || "";
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("cloud.title")} subtitle={t("cloud.subtitle")} />
+
+      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+        <div className="font-semibold">{t("cloud.experimental_title")}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{t("cloud.experimental_desc")}</div>
+      </Card>
 
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex items-center gap-x-3 mb-5">
@@ -116,11 +156,12 @@ export default function CloudPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-end">
+          <div className="flex flex-col justify-end gap-1">
             <Button onClick={handleSteal} disabled={stealing || !selectedAgent}>
               {stealing ? <Spinner size="xs" /> : <CloudUpload className="w-4 h-4" />}
               <span>{stealing ? t("cloud.dispatching") : t("cloud.steal_btn")}</span>
             </Button>
+            {pollNote && <span className="text-(--font-size-xs-sm) text-muted-foreground">{pollNote}</span>}
           </div>
         </div>
       </Card>
@@ -163,14 +204,14 @@ export default function CloudPage() {
               {results.map((cred) => (
                 <TableRow key={cred.id}>
                   <TableCell>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                    <Badge variant="secondary" className={`text-(--font-size-micro-sm) px-2 py-0.5 rounded-full font-medium ${
                       cred.provider === "aws" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
                       cred.provider === "gcp" ? "bg-primary/10 text-primary" :
                       cred.provider === "azure" ? "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400" :
-                      "bg-secondary text-muted-foreground"
+                      ""
                     }`}>
                       {cred.provider.toUpperCase()}
-                    </span>
+                    </Badge>
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
                     {cred.access_key_id || "(raw)"}

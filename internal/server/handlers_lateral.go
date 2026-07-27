@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"encoding/json"
@@ -157,4 +157,3 @@ func (s *Server) handleAPILateralExecute(c *gin.Context) {
 	s.broadcastTaskUpdate(req.Source, *task)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
 }
-

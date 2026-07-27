@@ -1,7 +1,6 @@
-﻿package server
+package server
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -41,11 +40,13 @@ func (m *MonitorCollector) Start() {
 	m.mu.Unlock()
 
 	// Start periodic collection
+	m.server.wg.Add(2)
 	go m.collectMetrics()
 	go m.checkAlerts()
 }
 
 func (m *MonitorCollector) collectMetrics() {
+	defer m.server.wg.Done()
 	ticker := time.NewTicker(MonitorMetricsInterval)
 	defer ticker.Stop()
 
@@ -63,7 +64,9 @@ func (m *MonitorCollector) collectMetrics() {
 			}
 			m.mu.Unlock()
 
-			go m.server.db.Create(&metrics)
+			if err := m.server.db.Create(&metrics).Error; err != nil {
+				slog.Error("Failed to persist system metrics", "error", err)
+			}
 		}
 	}
 }
@@ -93,6 +96,7 @@ func (m *MonitorCollector) getMemoryStats() struct{ used, total float64 } {
 }
 
 func (m *MonitorCollector) checkAlerts() {
+	defer m.server.wg.Done()
 	ticker := time.NewTicker(MonitorAlertInterval)
 	defer ticker.Stop()
 
@@ -113,7 +117,7 @@ func (m *MonitorCollector) checkSystemAlerts() {
 	m.mu.Unlock()
 
 	var rules []db.AlertRule
-	m.server.db.Where("enabled = ? AND type IN ?", true, []string{"cpu_high", "memory_high", "disk_high"}).Find(&rules)
+	m.server.db.Where("enabled = ? AND type IN ?", true, []string{"cpu_high", "memory_high", "disk_high"}).Limit(200).Find(&rules)
 
 	for _, rule := range rules {
 		var trigger bool
@@ -145,29 +149,28 @@ func (m *MonitorCollector) checkSystemAlerts() {
 
 func (m *MonitorCollector) checkAgentAlerts() {
 	var rules []db.AlertRule
-	m.server.db.Where("enabled = ? AND type = ?", true, "agent_offline").Find(&rules)
-
-	if len(rules) == 0 {
-		return
-	}
+	m.server.db.Where("enabled = ? AND type = ?", true, "agent_offline").Limit(200).Find(&rules)
 
 	var agents []db.Implant
-	m.server.db.Where("status != ?", "offline").Find(&agents)
+	m.server.db.Where("status IN ?", []string{"online", "stale"}).Limit(5000).Find(&agents)
 
-	thresholdSeconds := int64(DefaultOfflineThresholdSec)
+	alertThreshold := m.server.offlineThreshold()
 	for _, rule := range rules {
 		if rule.Threshold > 0 {
-			thresholdSeconds = int64(rule.Threshold)
+			alertThreshold = time.Duration(rule.Threshold) * time.Second
 		}
 	}
 
-	threshold := time.Duration(thresholdSeconds) * time.Second
-
+	now := time.Now()
+	var staleIDs []string
 	var offlineIDs []string
 	for _, agent := range agents {
-		if time.Since(agent.LastSeen) > threshold && agent.Status != "offline" {
+		offlineFor := now.Sub(agent.LastSeen)
+		switch {
+		case offlineFor > m.server.staleThreshold():
 			offlineIDs = append(offlineIDs, agent.ID)
 			m.server.broadcastAgentOffline(agent)
+			m.server.recordAgentStatusEvent(agent.ID, "offline")
 			if m.server.pluginManager != nil {
 				go func(a db.Implant) {
 					defer func() {
@@ -175,24 +178,32 @@ func (m *MonitorCollector) checkAgentAlerts() {
 							slog.Error("Plugin hook panicked (agent offline)", "agent", a.ID, "recover", r)
 						}
 					}()
-					m.server.pluginManager.ExecuteHook(context.Background(), plugin.Event{
+					m.server.pluginManager.ExecuteHook(m.server.ctx, plugin.Event{
 						Type:      plugin.EventAgentDisconnect,
 						Timestamp: time.Now(),
 						AgentID:   a.ID,
 						Payload: map[string]interface{}{
-							"hostname":            a.Hostname,
-							"ip":                  a.IP,
-							"offline_for_seconds": time.Since(a.LastSeen).Seconds(),
-						},
-					})
-				}(agent)
-			}
-			for _, rule := range rules {
+						"hostname":            a.Hostname,
+						"ip":                  a.IP,
+						"offline_for_seconds": now.Sub(a.LastSeen).Seconds(),
+					},
+				})
+			}(agent)
+		}
+		for _, rule := range rules {
+			if offlineFor > alertThreshold {
 				m.triggerAlert(&rule, agent.ID, agent.Hostname,
-					time.Since(agent.LastSeen).String(),
+					offlineFor.String(),
 					map[string]interface{}{"agent_id": agent.ID, "hostname": agent.Hostname})
 			}
 		}
+		case offlineFor > m.server.offlineThreshold() && agent.Status == "online":
+			staleIDs = append(staleIDs, agent.ID)
+			m.server.recordAgentStatusEvent(agent.ID, "stale")
+		}
+	}
+	if len(staleIDs) > 0 {
+		m.server.db.Model(&db.Implant{}).Where("id IN ?", staleIDs).Update("status", "stale")
 	}
 	if len(offlineIDs) > 0 {
 		m.server.db.Model(&db.Implant{}).Where("id IN ?", offlineIDs).Update("status", "offline")
@@ -207,7 +218,11 @@ func (m *MonitorCollector) triggerAlert(rule *db.AlertRule, source, sourceName, 
 		return
 	}
 
-	detailsJSON, _ := json.Marshal(details)
+	detailsJSON, ok := marshalJSONSafe(details)
+	if !ok {
+		slog.Error("Failed to marshal alert details")
+		return
+	}
 
 	alert := db.Alert{
 		RuleID:     rule.ID,
@@ -346,9 +361,12 @@ func (s *Server) handleGetAlertStats(c *gin.Context) {
 }
 
 func (s *Server) handleGetAlertRules(c *gin.Context) {
+	p := parsePagination(c, 50, 200)
+	var total int64
+	s.db.Model(&db.AlertRule{}).Count(&total)
 	var rules []db.AlertRule
-	s.db.Order("created_at DESC").Find(&rules)
-	c.JSON(http.StatusOK, gin.H{"rules": rules})
+	s.db.Order("created_at DESC").Offset(p.Offset).Limit(p.PageSize).Find(&rules)
+	c.JSON(http.StatusOK, gin.H{"rules": rules, "total": total, "page": p.Page, "page_size": p.PageSize})
 }
 
 func (s *Server) handleCreateAlertRule(c *gin.Context) {
@@ -380,9 +398,7 @@ func (s *Server) handleUpdateAlertRule(c *gin.Context) {
 	}
 	id := c.Param("id")
 	var rule db.AlertRule
-
-	if err := s.db.First(&rule, id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "rule not found")
+	if !s.findOrFail(c, &rule, id, "rule") {
 		return
 	}
 
@@ -435,9 +451,7 @@ func (s *Server) handleAcknowledgeAlert(c *gin.Context) {
 	}
 	id := c.Param("id")
 	var alert db.Alert
-
-	if err := s.db.First(&alert, id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "alert not found")
+	if !s.findOrFail(c, &alert, id, "alert") {
 		return
 	}
 
@@ -456,9 +470,7 @@ func (s *Server) handleResolveAlert(c *gin.Context) {
 	}
 	id := c.Param("id")
 	var alert db.Alert
-
-	if err := s.db.First(&alert, id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "alert not found")
+	if !s.findOrFail(c, &alert, id, "alert") {
 		return
 	}
 
@@ -482,7 +494,7 @@ func (s *Server) handleGetAgentStatus(c *gin.Context) {
 	s.db.Model(&db.Implant{}).Count(&stats.Total)
 
 	threshold := s.offlineThreshold()
-	staleThreshold := StaleThreshold
+	staleThreshold := s.staleThreshold()
 	s.db.Model(&db.Implant{}).Where("last_seen > ?", time.Now().Add(-threshold)).Count(&stats.Online)
 	s.db.Model(&db.Implant{}).Where("last_seen <= ? AND last_seen > ?", time.Now().Add(-threshold), time.Now().Add(-staleThreshold)).Count(&stats.Stale)
 	s.db.Model(&db.Implant{}).Where("last_seen <= ?", time.Now().Add(-staleThreshold)).Count(&stats.Offline)
@@ -498,11 +510,11 @@ func (s *Server) TriggerAlertForEvent(evt Event) {
 	var rules []db.AlertRule
 	switch evt.Type {
 	case EventCredentialFound:
-		s.db.Where("enabled = ? AND type = ?", true, "credential_found").Find(&rules)
+		s.db.Where("enabled = ? AND type = ?", true, "credential_found").Limit(200).Find(&rules)
 	case EventImplantCheckin:
-		s.db.Where("enabled = ? AND type = ?", true, "agent_online").Find(&rules)
+		s.db.Where("enabled = ? AND type = ?", true, "agent_online").Limit(200).Find(&rules)
 	case EventImplantDisconnect:
-		s.db.Where("enabled = ? AND type = ?", true, "agent_offline").Find(&rules)
+		s.db.Where("enabled = ? AND type = ?", true, "agent_offline").Limit(200).Find(&rules)
 	}
 
 	for _, rule := range rules {
@@ -545,6 +557,11 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 	}
 
 	s.screenMonitorMu.Lock()
+	if len(s.screenMonitorImplants) >= MaxScreenMonitors {
+		s.screenMonitorMu.Unlock()
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "screen monitor limit reached"})
+		return
+	}
 	s.screenMonitorImplants[strings.ToLower(id)] = time.Now()
 	s.screenMonitorMu.Unlock()
 
@@ -654,9 +671,15 @@ func (s *Server) handleAgentRemoteInput(c *gin.Context) {
 		return
 	}
 
-	payload, _ := json.Marshal(req)
+	payload, ok := marshalJSONSafe(req)
+	if !ok {
+		slog.Error("Remote input: failed to marshal request", "agent_id", id, "type", req.Type)
+		respondError(c, http.StatusInternalServerError, "failed to marshal request")
+		return
+	}
 	task, err := s.createTask(id, "remote_input", string(payload), "", "", "", 0, 0)
 	if err != nil {
+		slog.Error("Remote input: failed to create task", "agent_id", id, "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
@@ -686,4 +709,3 @@ func (s *Server) handleScreenFrame(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
-

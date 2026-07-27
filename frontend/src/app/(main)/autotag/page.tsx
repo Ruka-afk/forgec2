@@ -66,14 +66,14 @@ export default function AutoTagPage() {
     setLoading(true);
     try {
       const [r, t] = await Promise.all([
-        api.json<{ rules: AutoTagRule[] }>("/api/autotag/rules"),
+        api.get<{ rules: AutoTagRule[] }>("/api/autotag/rules"),
         api.get<{ tags: AgentTag[] }>("/api/tags"),
       ]);
       setRules(r.rules || []);
       setTags(t.tags || []);
     } catch { setMessage(t("autotag.load_failed")); }
     finally { setLoading(false); }
-  }, []);
+  }, [t]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -88,7 +88,7 @@ export default function AutoTagPage() {
     const body = { name, enabled: true, condition: conditions, tag_id: tagId, priority };
     try {
       if (editingId) {
-        await api.putJson(`/autotag/rules/${editingId}`, body);
+        await api.putJson(`/api/autotag/rules/${editingId}`, body);
       } else {
         await api.postJson("/api/autotag/rules", body);
       }
@@ -97,13 +97,13 @@ export default function AutoTagPage() {
   }
 
   async function handleToggle(id: string) {
-      try { await api.postJson(`/autotag/rules/${id}/toggle`, {}); fetchData(); }
+      try { await api.postJson(`/api/autotag/rules/${id}/toggle`, {}); fetchData(); }
     catch { setMessage(t("autotag.toggle_failed")); }
   }
 
   function handleDelete(id: string) {
     setCfm({msg: t("autotag.delete_confirm"), cb: async () => {
-      try { await api.del(`/autotag/rules/${id}`); fetchData(); }
+      try { await api.del(`/api/autotag/rules/${id}`); fetchData(); }
       catch { setMessage(t("autotag.delete_failed")); }
     }});
   }
@@ -141,7 +141,7 @@ export default function AutoTagPage() {
   }
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       {message && (
         <div className="mb-4 px-4 py-2 rounded-xl bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 text-sm border border-indigo-500/20 flex items-center justify-between">
           <span>{message}</span>
@@ -221,7 +221,7 @@ export default function AutoTagPage() {
                 </Button>
               </div>
             ))}
-            <Button variant="ghost" size="sm" onClick={addCondition} className="text-indigo-600 dark:text-indigo-400 mt-1">
+            <Button variant="ghost" size="sm" onClick={addCondition} className="text-primary mt-1">
               <Plus className="w-4 h-4" /> {t("autotag.add_condition")}
             </Button>
           </div>
@@ -269,7 +269,7 @@ export default function AutoTagPage() {
                         {rule.tag.name}
                       </Badge>
                     )}
-                    <span className="text-[11px] text-muted-foreground">{t("autotag.priority_label")} {rule.priority}</span>
+                    <span className="text-(--font-size-xs-sm) text-muted-foreground">{t("autotag.priority_label")} {rule.priority}</span>
                   </div>
                   <div className="text-[12px] text-muted-foreground mt-0.5 font-mono truncate">
                     {(() => { try { const c = JSON.parse(rule.condition); return c.map((cc: TagCondition) => `${cc.field} ${cc.op} "${cc.value}"`).join(" AND "); } catch { return rule.condition; } })()}
@@ -288,7 +288,7 @@ export default function AutoTagPage() {
           ))}
         </div>
       )}
-      <ConfirmModal open={!!cfm} title="Confirm" message={cfm?.msg || ""} confirmText="Confirm" cancelText="Cancel" danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
     </div>
   );
 }

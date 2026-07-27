@@ -15,7 +15,7 @@ func (s *Server) handleConfigureDiscordC2(c *gin.Context) {
 		ChannelID string `json:"channel_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "bot_token and channel_id are required"})
+		respondError(c, http.StatusBadRequest, "bot_token and channel_id are required")
 		return
 	}
 
@@ -26,13 +26,13 @@ func (s *Server) handleConfigureDiscordC2(c *gin.Context) {
 		Enabled:   true,
 	}
 	if err := s.db.Create(&channel).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeError(err, "Save config")})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Save config"))
 		return
 	}
 
 	discord := NewDiscordExternalC2(s, req.BotToken, req.ChannelID)
 	if err := discord.Start(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeError(err, "Start Discord C2")})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Start Discord C2"))
 		return
 	}
 
@@ -46,7 +46,7 @@ func (s *Server) handleConfigureSlackC2(c *gin.Context) {
 		ChannelID string `json:"channel_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "bot_token and channel_id are required"})
+		respondError(c, http.StatusBadRequest, "bot_token and channel_id are required")
 		return
 	}
 
@@ -57,13 +57,13 @@ func (s *Server) handleConfigureSlackC2(c *gin.Context) {
 		Enabled:   true,
 	}
 	if err := s.db.Create(&channel).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeError(err, "Save config")})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Save config"))
 		return
 	}
 
 	slackC2 := NewSlackExternalC2(s, req.BotToken, req.ChannelID)
 	if err := slackC2.Start(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeError(err, "Start Slack C2")})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Start Slack C2"))
 		return
 	}
 
@@ -73,7 +73,7 @@ func (s *Server) handleConfigureSlackC2(c *gin.Context) {
 
 func (s *Server) handleListExtC2Configs(c *gin.Context) {
 	var channels []db.ExtC2Channel
-	s.db.Find(&channels)
+	s.db.Limit(500).Find(&channels)
 	for i := range channels {
 		channels[i].BotToken = "***REDACTED***"
 	}
@@ -84,7 +84,7 @@ func (s *Server) handleDeleteExtC2Config(c *gin.Context) {
 	id := c.Param("id")
 	var channel db.ExtC2Channel
 	if err := s.db.First(&channel, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Channel not found"})
+		respondError(c, http.StatusNotFound, "Channel not found")
 		return
 	}
 
@@ -94,7 +94,7 @@ func (s *Server) handleDeleteExtC2Config(c *gin.Context) {
 	s.extC2ChannelsMu.Unlock()
 
 	if err := s.db.Delete(&channel).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeError(err, "External C2 delete")})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "External C2 delete"))
 		return
 	}
 	s.LogAuditRecord(c, "extc2_config_delete", "extc2", channel.ChannelID, fmt.Sprintf("Deleted %s External C2 config", channel.Type), true, nil)
@@ -103,7 +103,7 @@ func (s *Server) handleDeleteExtC2Config(c *gin.Context) {
 
 func (s *Server) restoreExtC2Channels() {
 	var channels []db.ExtC2Channel
-	s.db.Where("enabled = ?", true).Find(&channels)
+	s.db.Where("enabled = ?", true).Limit(500).Find(&channels)
 
 	for _, ch := range channels {
 		switch ch.Type {

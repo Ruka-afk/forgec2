@@ -14,7 +14,7 @@ func (s *Server) handleAISessionsList(c *gin.Context) {
 	username, _ := c.Get("user")
 
 	var sessions []db.AIChatSession
-	s.db.Where("owner = ?", username).Order("updated_at desc").Find(&sessions)
+	s.db.Where("owner = ?", username).Order("updated_at desc").Limit(100).Find(&sessions)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": sessions})
 }
 
@@ -62,7 +62,7 @@ func (s *Server) handleAISessionsGet(c *gin.Context) {
 	}
 
 	var messages []db.AIChatMessage
-	s.db.Where("session_id = ?", sessionID).Order("created_at asc").Find(&messages)
+	s.db.Where("session_id = ?", sessionID).Order("created_at asc").Limit(1000).Find(&messages)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": messages})
 }
 
@@ -82,8 +82,8 @@ func (s *Server) handleAISessionsMessages(c *gin.Context) {
 	}
 
 	var req struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
+		Role     string `json:"role"`
+		Content  string `json:"content"`
 		ToolName string `json:"tool_name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {

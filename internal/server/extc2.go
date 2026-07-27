@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -36,7 +37,28 @@ type extC2SendResponse struct {
 	Error   string `json:"error,omitempty"`
 }
 
+func (s *Server) checkExtC2Token(c *gin.Context) bool {
+	token := s.cfg.RateLimit.ExtC2.APIToken
+	if token == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "extc2 token not configured"})
+		return false
+	}
+	headerToken := c.GetHeader("X-ExtC2-Token")
+	if headerToken == "" {
+		headerToken = c.GetHeader("Authorization")
+	}
+	if subtle.ConstantTimeCompare([]byte(headerToken), []byte(token)) != 1 {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "unauthorized"})
+		return false
+	}
+	return true
+}
+
 func (s *Server) handleExtC2Receive(c *gin.Context) {
+	if !s.checkExtC2Token(c) {
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxJSONBodySize)
 	var req extC2ReceiveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, extC2ReceiveResponse{Error: "Invalid request"})
@@ -75,6 +97,10 @@ func (s *Server) handleExtC2Receive(c *gin.Context) {
 }
 
 func (s *Server) handleExtC2Send(c *gin.Context) {
+	if !s.checkExtC2Token(c) {
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxJSONBodySize)
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, extC2SendResponse{Error: sanitizeError(err, "Read request")})
@@ -87,7 +113,32 @@ func (s *Server) handleExtC2Send(c *gin.Context) {
 		return
 	}
 
+	if req.BeaconID == "" {
+		c.JSON(http.StatusBadRequest, extC2SendResponse{Error: "beacon_id is required"})
+		return
+	}
+
 	slog.Info("External C2 send", "beacon_id", req.BeaconID, "data_len", len(req.Data))
+
+	s.extC2ChannelsMu.Lock()
+	var channelID string
+	for id := range s.extC2Channels {
+		channelID = id
+		break
+	}
+	s.extC2ChannelsMu.Unlock()
+
+	if channelID == "" {
+		c.JSON(http.StatusServiceUnavailable, extC2SendResponse{Error: "no active extc2 channels"})
+		return
+	}
+
+	s.QueueExtC2Task(channelID, extC2Task{
+		AgentID: req.BeaconID,
+		Type:    "send",
+		Command: req.Data,
+	})
+
 	c.JSON(http.StatusOK, extC2SendResponse{Success: true})
 }
 
@@ -107,6 +158,7 @@ func (ch *extC2WSChannel) SendJSON(v interface{}) error {
 	if ch.Conn == nil {
 		return fmt.Errorf("connection closed")
 	}
+	ch.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	return ch.Conn.WriteJSON(v)
 }
 
@@ -130,6 +182,9 @@ type extC2Task struct {
 }
 
 func (s *Server) handleExternalC2WebSocket(c *gin.Context) {
+	if !s.checkExtC2Token(c) {
+		return
+	}
 	conn, err := s.wsUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		slog.Error("External C2 WebSocket upgrade failed", "error", err)
@@ -147,41 +202,51 @@ func (s *Server) handleExternalC2WebSocket(c *gin.Context) {
 	s.extC2ChannelsMu.Lock()
 	s.extC2Channels[channelID] = ch
 	s.extC2ChannelsMu.Unlock()
+
+	s.extC2TaskMu.Lock()
+	s.extC2Notify[channelID] = make(chan struct{}, 1)
+	s.extC2TaskMu.Unlock()
+
 	defer func() {
 		s.extC2ChannelsMu.Lock()
 		delete(s.extC2Channels, channelID)
 		s.extC2ChannelsMu.Unlock()
+		s.extC2TaskMu.Lock()
+		delete(s.extC2Notify, channelID)
+		s.extC2TaskMu.Unlock()
 	}()
 
 	slog.Info("External C2 WebSocket connected", "channel_id", channelID)
 
-	// Send task queue reader in a goroutine
+	// Send task queue reader in a goroutine (push-based via notify channel)
 	done := make(chan struct{})
 	go func() {
-		defer close(done)
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-done:
 				return
+			case <-s.extC2Notify[channelID]:
 			case <-ticker.C:
-				s.extC2TaskMu.Lock()
-				tasks := s.extC2TaskQueue[channelID]
-				s.extC2TaskQueue[channelID] = nil
-				s.extC2TaskMu.Unlock()
-				for _, task := range tasks {
-					msg, _ := json.Marshal(task)
-					ch.mu.Lock()
-					conn.WriteMessage(websocket.TextMessage, msg)
-					ch.mu.Unlock()
+			}
+			s.extC2TaskMu.Lock()
+			tasks := s.extC2TaskQueue[channelID]
+			s.extC2TaskQueue[channelID] = nil
+			s.extC2TaskMu.Unlock()
+			for _, task := range tasks {
+				msg, ok := marshalJSONSafe(task)
+				if !ok {
+					continue
 				}
+				ch.SendJSON(json.RawMessage(msg))
 			}
 		}
 	}()
 
 	// Read loop: receive results from external agent
 	for {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			slog.Info("External C2 WebSocket disconnected", "channel_id", channelID, "error", err)
@@ -209,13 +274,14 @@ func (s *Server) handleExternalC2WebSocket(c *gin.Context) {
 			}
 		}
 	}
+	close(done)
 }
 
 func (s *Server) processExternalC2Result(agentID string, taskID uint, result string) {
 	if taskID == 0 {
 		return
 	}
-	s.db.Model(&db.Task{}).Where("id = ?", taskID).Updates(map[string]interface{}{
+	s.db.Model(&db.Task{}).Where("id = ? AND agent_id = ?", taskID, agentID).Updates(map[string]interface{}{
 		"status":     "completed",
 		"result":     result,
 		"updated_at": time.Now(),
@@ -241,6 +307,16 @@ func (s *Server) handleListExtC2Channels(c *gin.Context) {
 func (s *Server) QueueExtC2Task(channelID string, task extC2Task) {
 	s.extC2TaskMu.Lock()
 	defer s.extC2TaskMu.Unlock()
-	s.extC2TaskQueue[channelID] = append(s.extC2TaskQueue[channelID], task)
+	queue := s.extC2TaskQueue[channelID]
+	if len(queue) >= MaxExtC2QueuePerChan {
+		slog.Warn("ExtC2 task queue full, dropping oldest task", "channel", channelID, "limit", MaxExtC2QueuePerChan)
+		queue = queue[1:]
+	}
+	s.extC2TaskQueue[channelID] = append(queue, task)
+	if ch, ok := s.extC2Notify[channelID]; ok {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
 }
-

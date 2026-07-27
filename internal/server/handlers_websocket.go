@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -33,13 +32,14 @@ type batchedMessage struct {
 }
 
 var upgrader = websocket.Upgrader{
-	ReadBufferSize:  4096,
-	WriteBufferSize: 4096,
+	ReadBufferSize:  WSReadBufSize,
+	WriteBufferSize: WSWriteBufSize,
+	// Agent beacon WebSocket — agents are non-browser clients (no Origin header).
+	// Accept empty origin unconditionally; if Origin IS present (browser), restrict.
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
 		if origin == "" {
-			host := r.Host
-			return strings.HasPrefix(host, "127.0.0.1") || strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "[::1]")
+			return true
 		}
 		u, err := url.Parse(origin)
 		if err != nil {
@@ -52,15 +52,15 @@ var upgrader = websocket.Upgrader{
 
 // WebSocketBeacon represents an active WebSocket beacon connection
 type WebSocketBeacon struct {
-	Conn         *websocket.Conn
-	AgentID      string
-	LastSeen     time.Time
-	Send         chan []byte
-	BatchQueue   [][]byte
-	BatchMutex   sync.Mutex
-	BatchTimer   *time.Timer
-	closeOnce    sync.Once
-	compress     bool
+	Conn       *websocket.Conn
+	AgentID    string
+	LastSeen   time.Time
+	Send       chan []byte
+	BatchQueue [][]byte
+	BatchMutex sync.Mutex
+	BatchTimer *time.Timer
+	closeOnce  sync.Once
+	compress   bool
 }
 
 // WebSocketHub manages all active WebSocket beacon connections
@@ -118,18 +118,15 @@ func (s *Server) handleWebSocketBeacon(c *gin.Context) {
 		return
 	}
 
-	agentID := c.Query("agent_id")
-	if agentID == "" {
-		agentID = uuid.New().String()
-	}
+	agentID := uuid.New().String()
 
 	slog.Info("WebSocket beacon connected", "agent_id", agentID, "remote_addr", conn.RemoteAddr())
 
 	beacon := &WebSocketBeacon{
-		Conn:     conn,
-		AgentID:  agentID,
-		LastSeen: time.Now(),
-		Send:     make(chan []byte, 256),
+		Conn:       conn,
+		AgentID:    agentID,
+		LastSeen:   time.Now(),
+		Send:       make(chan []byte, 256),
 		BatchQueue: make([][]byte, 0, 16),
 		compress:   true,
 	}
@@ -275,6 +272,7 @@ func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
 	defer func() {
 		s.wsHub.Unregister(beacon.AgentID)
 		beacon.Conn.Close()
+		s.handleWSBeaconDisconnect(beacon.AgentID)
 	}()
 
 	beacon.Conn.SetReadLimit(WSMaxMessageSize)
@@ -320,4 +318,3 @@ func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
 		}
 	}
 }
-

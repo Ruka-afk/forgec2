@@ -28,9 +28,9 @@ type KillChainStep struct {
 
 // KillChainTemplate is a pre-built attack path template.
 type KillChainTemplate struct {
-	Name        string           `json:"name"`
-	Description string           `json:"description"`
-	Steps       []KillChainStep  `json:"steps"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Steps       []KillChainStep `json:"steps"`
 }
 
 // AttackTechnique maps a task type to MITRE ATT&CK technique.

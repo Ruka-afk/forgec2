@@ -47,7 +47,7 @@ interface BinaryPanelProps {
 }
 
 const VARIANT_CONFIG: Record<BinaryVariant, { bg: string; icon: string; title: string; subtitle: string; btnColor: string; btnLabel: string; showP2P: boolean }> = {
-  exe: { bg: "bg-amber-500/10", icon: "\u{1F5A5}\uFE0F", title: "Windows EXE", subtitle: "Native Go payload", btnColor: "bg-amber-500 hover:bg-amber-600 text-white", btnLabel: "Generate EXE", showP2P: true },
+  exe: { bg: "bg-amber-500/10", icon: "\u{1F5A5}\uFE0F", title: "Windows EXE", subtitle: "Native Go payload", btnColor: "bg-warning hover:bg-warning/80 text-white", btnLabel: "Generate EXE", showP2P: true },
   dll: { bg: "bg-destructive/10", icon: "🧩", title: "Windows DLL", subtitle: "rundll32 / regsvr32 / LoadLibrary", btnColor: "bg-destructive hover:bg-destructive/90", btnLabel: "Generate DLL", showP2P: false },
 };
 
@@ -133,7 +133,7 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
           <Checkbox id={`${id}-evasion`} aria-label="EDR Evasion" checked={form.evasion} onCheckedChange={(checked) => setForm({ ...form, evasion: checked === true })} />
           <Label htmlFor={`${id}-evasion`} className="text-sm text-muted-foreground">
             EDR Evasion (random sleep)
-            <span className="block text-[10px] text-muted-foreground font-normal">Set FORGEC2_EVASION=1 at runtime</span>
+            <span className="block text-(--font-size-micro-sm) text-muted-foreground font-normal">Set FORGEC2_EVASION=1 at runtime</span>
           </Label>
         </div>
         {variant === "exe" && (
@@ -141,7 +141,7 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
             <Checkbox id={`${id}-obfuscate`} aria-label="Obfuscate" checked={form.obfuscate} onCheckedChange={(checked) => setForm({ ...form, obfuscate: checked === true })} />
             <Label htmlFor={`${id}-obfuscate`} className="text-sm text-muted-foreground">
               Obfuscate (garble)
-              <span className="block text-[10px] text-muted-foreground font-normal">Strip symbols + build ID, hide literals</span>
+              <span className="block text-(--font-size-micro-sm) text-muted-foreground font-normal">Strip symbols + build ID, hide literals</span>
             </Label>
           </div>
         )}
@@ -311,7 +311,7 @@ export const ShellcodePanel = React.memo(function ShellcodePanel({
           <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Filename</span>
           <Input aria-label="Output filename" name="shellcode-filename" value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
         </div>
-        <Button type="button" onClick={onGenerate} disabled={busy} className="w-full h-10 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
+        <Button type="button" onClick={onGenerate} disabled={busy} className="w-full h-10 bg-warning hover:bg-warning/80 disabled:opacity-50 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
           {busy ? <><Spinner /> Generating...</> : <><Download className="w-4 h-4" /> Generate Shellcode</>}
         </Button>
       </div>
@@ -368,7 +368,7 @@ export const DonutPanel = React.memo(function DonutPanel({
           <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Output Filename</span>
           <Input aria-label="Output filename" name="donut-filename" value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
         </div>
-        <Button type="button" onClick={onGenerate} disabled={busy} className="w-full h-10 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
+        <Button type="button" onClick={onGenerate} disabled={busy} className="w-full h-10 bg-warning hover:bg-warning/80 disabled:opacity-50 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
           {busy ? <><Spinner /> Generating...</> : <><Download className="w-4 h-4" /> Generate Donut</>}
         </Button>
       </div>

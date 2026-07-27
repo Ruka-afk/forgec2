@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"crypto/sha256"
@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -37,9 +36,9 @@ type updateCheckState struct {
 
 // GitHubRelease is a minimal representation of a GitHub release
 type GitHubRelease struct {
-	TagName string `json:"tag_name"`
-	HTMLURL string `json:"html_url"`
-	Prerelease bool `json:"prerelease"`
+	TagName    string `json:"tag_name"`
+	HTMLURL    string `json:"html_url"`
+	Prerelease bool   `json:"prerelease"`
 }
 
 // initUpdateChecker starts the background version check goroutine
@@ -110,39 +109,55 @@ func (s *Server) checkForUpdate() {
 func fetchLatestVersion(repo string) (string, error) {
 	url := fmt.Sprintf(defaultUpdateCheckURLFmt, repo)
 	client := &http.Client{Timeout: GitHubAPITimeout}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "ForgeC2/"+ServerVersion)
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("github api: %w", err)
-	}
-	defer resp.Body.Close()
+	backoff := []time.Duration{time.Second, 3 * time.Second}
+	var lastErr error
+	for attempt := 0; attempt <= 2; attempt++ {
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return "", fmt.Errorf("create request: %w", err)
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "ForgeC2/"+ServerVersion)
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
-	if err != nil {
-		return "", fmt.Errorf("read response: %w", err)
-	}
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("github api: %w", err)
+			if attempt < 2 {
+				time.Sleep(backoff[attempt])
+				continue
+			}
+			return "", lastErr
+		}
 
-	if resp.StatusCode == http.StatusNotFound {
-		return "", nil
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("github api status %d", resp.StatusCode)
-	}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+		if err != nil {
+			return "", fmt.Errorf("read response: %w", err)
+		}
 
-	var release GitHubRelease
-	if err := json.Unmarshal(body, &release); err != nil {
-		return "", fmt.Errorf("parse release: %w", err)
+		if resp.StatusCode == http.StatusNotFound {
+			return "", nil
+		}
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("github api status %d", resp.StatusCode)
+			if attempt < 2 && resp.StatusCode >= 500 {
+				time.Sleep(backoff[attempt])
+				continue
+			}
+			return "", lastErr
+		}
+
+		var release GitHubRelease
+		if err := json.Unmarshal(body, &release); err != nil {
+			return "", fmt.Errorf("parse release: %w", err)
+		}
+		if release.TagName == "" {
+			return "", fmt.Errorf("empty tag_name in response")
+		}
+		return release.TagName, nil
 	}
-	if release.TagName == "" {
-		return "", fmt.Errorf("empty tag_name in response")
-	}
-	return release.TagName, nil
+	return "", lastErr
 }
 
 // compareVersions compares two semver strings.
@@ -160,12 +175,19 @@ func compareVersions(v1, v2 string) int {
 	}
 
 	for i := 0; i < maxLen; i++ {
-		var n1, n2 int
+		n1, err1 := 0, error(nil)
+		n2, err2 := 0, error(nil)
 		if i < len(parts1) {
-			n1, _ = strconv.Atoi(parts1[i])
+			n1, err1 = strconv.Atoi(parts1[i])
 		}
 		if i < len(parts2) {
-			n2, _ = strconv.Atoi(parts2[i])
+			n2, err2 = strconv.Atoi(parts2[i])
+		}
+		if err1 != nil && err2 == nil {
+			return -1
+		}
+		if err1 == nil && err2 != nil {
+			return 1
 		}
 		if n1 > n2 {
 			return 1
@@ -235,7 +257,11 @@ func (s *Server) handleHotUpdate(c *gin.Context) {
 
 	// Trigger async hot-update
 	go func() {
-		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
 		if err := s.performHotUpdate(latest); err != nil {
 			slog.Error("Hot update failed", "err", err)
 		}
@@ -243,7 +269,7 @@ func (s *Server) handleHotUpdate(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":        true,
-		"message": "Downloading and applying update, server will restart...",
+		"message":        "Downloading and applying update, server will restart...",
 		"latest_version": latest,
 	})
 }
@@ -359,7 +385,10 @@ exec "%s" "$@"
 		"message": "Server is hot-reloading and restarting...",
 		"version": latest,
 	}
-	msg, _ := json.Marshal(payload)
+	msg, ok := marshalJSONSafe(payload)
+	if !ok {
+		return nil
+	}
 	s.broadcastToClients(msg)
 
 	slog.Info("Starting hot update, server will restart", "version", latest)
@@ -383,33 +412,49 @@ exec "%s" "$@"
 func fetchReleaseAssets(repo, tag string) ([]GitHubAsset, error) {
 	url := fmt.Sprintf(defaultReleaseAssetsURLFmt, repo, tag)
 	client := &http.Client{Timeout: GitHubAPITimeout}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "ForgeC2/"+ServerVersion)
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("github api: %w", err)
-	}
-	defer resp.Body.Close()
+	backoff := []time.Duration{time.Second, 3 * time.Second}
+	var lastErr error
+	for attempt := 0; attempt <= 2; attempt++ {
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("create request: %w", err)
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "ForgeC2/"+ServerVersion)
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("github api: %w", err)
+			if attempt < 2 {
+				time.Sleep(backoff[attempt])
+				continue
+			}
+			return nil, lastErr
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("github api status %d", resp.StatusCode)
-	}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
+		if err != nil {
+			return nil, fmt.Errorf("read response: %w", err)
+		}
 
-	var release GitHubReleaseFull
-	if err := json.Unmarshal(body, &release); err != nil {
-		return nil, fmt.Errorf("parse release: %w", err)
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("github api status %d", resp.StatusCode)
+			if attempt < 2 && resp.StatusCode >= 500 {
+				time.Sleep(backoff[attempt])
+				continue
+			}
+			return nil, lastErr
+		}
+
+		var release GitHubReleaseFull
+		if err := json.Unmarshal(body, &release); err != nil {
+			return nil, fmt.Errorf("parse release: %w", err)
+		}
+		return release.Assets, nil
 	}
-	return release.Assets, nil
+	return nil, lastErr
 }
 
 // downloadFile downloads a URL to a local file path
@@ -455,10 +500,10 @@ func (s *Server) releaseURL(version string) string {
 // broadcastUpdateNotification sends a new-version alert via WebSocket
 func (s *Server) broadcastUpdateNotification(latest string) {
 	payload := map[string]interface{}{
-		"type":          "update_available",
-		"current":       ServerVersion,
-		"latest":        latest,
-		"download_url":  s.releaseURL(latest),
+		"type":         "update_available",
+		"current":      ServerVersion,
+		"latest":       latest,
+		"download_url": s.releaseURL(latest),
 	}
 	msg, err := json.Marshal(payload)
 	if err != nil {
@@ -496,8 +541,8 @@ func (s *Server) handleUpdateCheck(c *gin.Context) {
 	defer s.updateState.mu.RUnlock()
 
 	resp := gin.H{
-		"current_version": ServerVersion,
-		"checked_at":      s.updateState.CheckedAt,
+		"current_version":  ServerVersion,
+		"checked_at":       s.updateState.CheckedAt,
 		"update_available": s.updateState.Available,
 	}
 	if s.updateState.Available {

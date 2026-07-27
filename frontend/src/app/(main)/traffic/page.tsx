@@ -118,7 +118,7 @@ export default function TrafficPage() {
   };
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("traffic.title")} subtitle={`${t("traffic.request_log")} · C2 Beacon ${t("traffic.comm_record")}`}>
         <div className="flex items-center gap-2 flex-wrap">
           <Label className="flex items-center gap-x-2 text-sm text-muted-foreground cursor-pointer">

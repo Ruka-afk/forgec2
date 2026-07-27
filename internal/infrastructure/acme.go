@@ -24,10 +24,10 @@ const (
 )
 
 type ACMEClient struct {
-	config  ACMEConfig
-	client  *acme.Client
+	config     ACMEConfig
+	client     *acme.Client
 	accountKey interface{}
-	domain   string
+	domain     string
 }
 
 func NewACMEClient(cfg ACMEConfig) *ACMEClient {

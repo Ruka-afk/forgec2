@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"fmt"
@@ -57,22 +57,9 @@ func (s *Server) handleReadyCheck(c *gin.Context) {
 }
 
 func (s *Server) handleBuildLogs(c *gin.Context) {
-	pageStr := c.DefaultQuery("page", "1")
-	pageSizeStr := c.DefaultQuery("pageSize", "20")
+	p := parsePagination(c, DefaultPageSize, MaxPageSize)
 	filterStatus := c.Query("status")
 	filterPlatform := c.Query("platform")
-
-	pageNum, _ := parseInt(pageStr)
-	if pageNum < 1 {
-		pageNum = 1
-	}
-	pageSize, _ := parseInt(pageSizeStr)
-	if pageSize < 1 {
-		pageSize = DefaultPageSize
-	}
-	if pageSize > MaxPageSize {
-		pageSize = MaxPageSize
-	}
 
 	query := s.db.Model(&db.BuildLog{})
 	if filterStatus != "" {
@@ -86,27 +73,27 @@ func (s *Server) handleBuildLogs(c *gin.Context) {
 	query.Count(&total)
 
 	var logs []db.BuildLog
-	query.Order("created_at desc").Offset((pageNum - 1) * pageSize).Limit(pageSize).Find(&logs)
+	query.Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&logs)
 
 	var successCount, failedCount int64
 	s.db.Model(&db.BuildLog{}).Where("status = ?", "success").Count(&successCount)
 	s.db.Model(&db.BuildLog{}).Where("status = ?", "failed").Count(&failedCount)
 
-	totalPages := (int(total) + pageSize - 1) / pageSize
+	totalPages := (int(total) + p.PageSize - 1) / p.PageSize
 	if totalPages < 1 {
 		totalPages = 1
 	}
-	prevPage := pageNum - 1
-	nextPage := pageNum + 1
+	prevPage := p.Page - 1
+	nextPage := p.Page + 1
 	stats := s.getNavStats()
 	data := gin.H{
 		"Title":          "ForgeC2 - Build Logs",
 		"ActiveNav":      "builds",
 		"Logs":           logs,
-		"Page":           pageNum,
+		"Page":           p.Page,
 		"PrevPage":       prevPage,
 		"NextPage":       nextPage,
-		"PageSize":       pageSize,
+		"PageSize":       p.PageSize,
 		"TotalPages":     totalPages,
 		"Total":          int(total),
 		"SuccessCount":   successCount,
@@ -150,4 +137,3 @@ func parseInt(s string) (int, error) {
 	}
 	return r, nil
 }
-

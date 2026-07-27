@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"fmt"
@@ -69,10 +69,10 @@ func (s *Server) handleTimelineData(c *gin.Context) {
 		// Skip audit logs if filtering by other types
 	} else {
 		if filterUser != "" {
-		query = query.Where("user LIKE ? ESCAPE '\\'", "%"+escapeLike(filterUser)+"%")
+			query = query.Where("user LIKE ? ESCAPE '\\'", "%"+escapeLike(filterUser)+"%")
 		}
 		if filterAgent != "" {
-		query = query.Where("agent_id LIKE ? ESCAPE '\\'", "%"+escapeLike(filterAgent)+"%")
+			query = query.Where("agent_id LIKE ? ESCAPE '\\'", "%"+escapeLike(filterAgent)+"%")
 		}
 		if dateFrom != "" {
 			query = query.Where("created_at >= ?", dateFrom)
@@ -235,4 +235,3 @@ func (s *Server) handleTimelineExport(c *gin.Context) {
 		))
 	}
 }
-

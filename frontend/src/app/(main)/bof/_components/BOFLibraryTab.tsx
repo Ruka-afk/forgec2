@@ -124,7 +124,7 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
                     <TableCell className="px-5 py-3 font-medium text-foreground">{item.name || "Unnamed"}</TableCell>
                     <TableCell className="px-5 py-3 text-muted-foreground max-w-xs truncate">{item.description || "-"}</TableCell>
                     <TableCell className="px-5 py-3">
-                      <Badge variant="secondary" className="text-[10px] font-mono">{item.arch || "x64"}</Badge>
+                      <Badge variant="secondary" className="text-(--font-size-micro-sm) font-mono">{item.arch || "x64"}</Badge>
                     </TableCell>
                     <TableCell className="px-5 py-3 text-muted-foreground">{item.author || "-"}</TableCell>
                     <TableCell className="px-5 py-3 text-muted-foreground">{formatBytes(item.size)}</TableCell>

@@ -1,16 +1,19 @@
 "use client";
 
-import { Suspense, useState, useCallback, useEffect } from "react";
+import { Suspense, useState, useCallback, useEffect, memo, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { downloadText } from "@/lib/download";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
-import { EmptyState, PageHeader, Pagination, Spinner, StatusBadge } from "@/components/UI";
+import { PageHeader, Pagination, Spinner, StatusBadge } from "@/components/UI";
+import { DataState } from "@/components/ui/data-state";
 import OperatorBadge from "@/components/OperatorBadge";
 import { useAppStore } from "@/lib/store";
-import { NormalizedAgent as Agent } from "@/types/agent";
+import type { Agent } from "@/types/agent";
+import { normalizeAgentList } from "@/lib/agents";
 import { formatTime } from "@/lib/utils";
+import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,21 +34,7 @@ import {
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Ban, ChevronDown, ChevronUp, FileSpreadsheet, Hand, Inbox, Maximize2, RotateCw } from "lucide-react";
-
-interface Task {
-  id: number;
-  agent_id: string;
-  type: string;
-  command: string;
-  status: string;
-  result: string;
-  error: string;
-  created_by: string;
-  claimed_by: string;
-  claimed_at: string;
-  created_at: string;
-  updated_at: string;
-}
+import type { Task } from "@/types/task";
 
 function TasksPage() {
   const { t } = useI18n();
@@ -54,6 +43,7 @@ function TasksPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
   const [agentFilter, setAgentFilter] = useState(searchParams.get("agent_id") || "");
@@ -67,13 +57,14 @@ function TasksPage() {
 
   const loadAgents = useCallback(async () => {
     try {
-      const data = await api.get("/agents?page=1&pageSize=200") as Record<string, unknown>;
-      setAgents((data.agents || data || []) as Agent[]);
+      const data = await api.get("/agents?page=1&pageSize=200");
+      setAgents(normalizeAgentList(data));
     } catch { toast.error(t("tasks.toast_load_agents_failed")); }
-  }, []);
+  }, [t]);
 
   const loadTasks = useCallback(() => {
     setLoading(true);
+    setError(null);
     const params = new URLSearchParams({ page: String(page), pageSize: "50" });
     if (statusFilter) params.set("status", statusFilter);
     if (agentFilter) params.set("agentId", agentFilter);
@@ -81,11 +72,17 @@ function TasksPage() {
     api.get(`/tasks?${params}`)
       .then((data: Record<string, unknown>) => {
         setTasks((data.tasks || data || []) as Task[]);
-        setTotal(Number(data.Total) || 0);
+        setTotal(Number(data.Total) || Number(data.total) || 0);
       })
-      .catch(() => { setTasks([]); setTotal(0); })
+      .catch((e) => {
+        setTasks([]);
+        setTotal(0);
+        const msg = e instanceof Error ? e.message : t("tasks.toast_load_failed");
+        setError(msg);
+        toast.error(msg);
+      })
       .finally(() => setLoading(false));
-  }, [page, statusFilter, agentFilter, typeFilter]);
+  }, [page, statusFilter, agentFilter, typeFilter, t]);
 
   useEffect(() => { loadAgents(); }, [loadAgents]);
   useEffect(() => { loadTasks(); }, [loadTasks]);
@@ -142,6 +139,22 @@ function TasksPage() {
     } catch { toast.error(t("tasks.toast_release_failed")); }
   };
 
+  const TASK_ROW_H = 52;
+  const {
+    scrollRef,
+    onScroll,
+    virtualized,
+    start: virtStart,
+    end: virtEnd,
+    offsetTop,
+    totalHeight,
+  } = useVirtualWindow({ count: tasks.length, rowHeight: TASK_ROW_H, threshold: 25 });
+
+  const visibleTasks = useMemo(
+    () => (virtualized ? tasks.slice(virtStart, virtEnd) : tasks),
+    [tasks, virtualized, virtStart, virtEnd],
+  );
+
   const getStatusBadge = (status: string): React.ReactNode => {
     return <StatusBadge status={status} />;
   };
@@ -157,7 +170,7 @@ function TasksPage() {
   };
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("tasks.title")} subtitle={`${t("tasks.subtitle_prefix")} \u00b7 ${total} total`}>
         <Button onClick={handleExportCSV} variant="secondary">
           <FileSpreadsheet className="w-4 h-4" /> {t("tasks.export_csv")}
@@ -184,8 +197,8 @@ function TasksPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("tasks.all_agents")}</SelectItem>
-              {agents.map((a) => (
-                <SelectItem key={a.id} value={a.id}>{a.hostname || a.id.substring(0, 8)}</SelectItem>
+              {agents.filter((a) => a.id).map((a) => (
+                <SelectItem key={a.id} value={a.id!}>{a.hostname || a.id!.substring(0, 8)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -207,31 +220,60 @@ function TasksPage() {
         </div>
       </Card>
 
-      <Card className="sm:rounded-xl">
-        <div className="overflow-x-auto">
-        <Table>
-          <TableHeader className="bg-muted/50 sticky top-0 z-10">
-            <TableRow>
-              <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[140px]">{t("tasks.col_time")}</TableHead>
-              <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[120px]">{t("tasks.col_agent")}</TableHead>
-              <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[100px]">{t("tasks.col_type")}</TableHead>
-              <TableHead className="text-left py-3 px-4 font-normal min-w-[180px]">{t("tasks.col_command")}</TableHead>
-              <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[200px]">{t("tasks.col_result")}</TableHead>
-              <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[80px]">{t("tasks.col_claimed_by")}</TableHead>
-              <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[90px]">{t("tasks.col_duration")}</TableHead>
-              <TableHead className="text-center py-3 px-4 font-normal min-w-[90px]">{t("tasks.col_status")}</TableHead>
-              <TableHead className="text-center py-3 px-4 font-normal min-w-[160px]">{t("tasks.col_actions")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody className="divide-y divide-border">
-            {!loading && tasks.map((task) => (
-              <TaskRow key={task.id} task={task} expanded={expandedRows.has(task.id)} onToggle={() => toggleRow(task.id)} onDetail={() => setDetailTask(task)} onCancel={() => handleCancel(task)} onRerun={() => handleRerun(task)} onClaim={() => handleClaim(task.id)} onRelease={() => handleRelease(task.id)} getAgentName={getAgentName} getTypeBadge={getTypeBadge} getStatusBadge={getStatusBadge} />
-            ))}
-            {loading && Array.from({ length: 5 }).map((_, i) => (<TableRow key={i}><TableCell colSpan={9} className="py-3 px-4"><Skeleton className="h-8" /></TableCell></TableRow>))}
-            {!loading && tasks.length === 0 && (<TableRow><TableCell colSpan={9} className="py-20 text-center text-muted-foreground"><EmptyState icon={Inbox} title={t("tasks.empty_title")} message={t("tasks.empty_message")} /></TableCell></TableRow>)}
-          </TableBody>
-        </Table>
-        </div>
+      <Card className="sm:rounded-2xl">
+        <DataState
+          loading={loading}
+          error={error}
+          empty={tasks.length === 0}
+          emptyIcon={Inbox}
+          emptyTitle={t("tasks.empty_title")}
+          emptyMessage={t("tasks.empty_message")}
+          onRetry={loadTasks}
+          loadingSkeleton={
+            <div className="overflow-x-auto p-4 space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-8 w-full" />
+              ))}
+            </div>
+          }
+        >
+          <div
+            ref={scrollRef}
+            onScroll={onScroll}
+            className={virtualized ? "overflow-auto max-h-[min(70vh,720px)]" : "overflow-x-auto"}
+          >
+          <Table>
+            <TableHeader className="bg-muted/50 sticky top-0 z-10">
+              <TableRow>
+                <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[140px]">{t("tasks.col_time")}</TableHead>
+                <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[120px]">{t("tasks.col_agent")}</TableHead>
+                <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[100px]">{t("tasks.col_type")}</TableHead>
+                <TableHead className="text-left py-3 px-4 font-normal min-w-[180px]">{t("tasks.col_command")}</TableHead>
+                <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[200px]">{t("tasks.col_result")}</TableHead>
+                <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[80px]">{t("tasks.col_claimed_by")}</TableHead>
+                <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[90px]">{t("tasks.col_duration")}</TableHead>
+                <TableHead className="text-center py-3 px-4 font-normal min-w-[90px]">{t("tasks.col_status")}</TableHead>
+                <TableHead className="text-center py-3 px-4 font-normal min-w-[160px]">{t("tasks.col_actions")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="divide-y divide-border">
+              {virtualized && offsetTop > 0 && (
+                <TableRow aria-hidden className="hover:bg-transparent">
+                  <TableCell colSpan={9} style={{ height: offsetTop, padding: 0, border: 0 }} />
+                </TableRow>
+              )}
+              {visibleTasks.map((task) => (
+                <TaskRow key={task.id} task={task} expanded={expandedRows.has(task.id)} onToggle={() => toggleRow(task.id)} onDetail={() => setDetailTask(task)} onCancel={() => handleCancel(task)} onRerun={() => handleRerun(task)} onClaim={() => handleClaim(task.id)} onRelease={() => handleRelease(task.id)} getAgentName={getAgentName} getTypeBadge={getTypeBadge} getStatusBadge={getStatusBadge} />
+              ))}
+              {virtualized && totalHeight - offsetTop - visibleTasks.length * TASK_ROW_H > 0 && (
+                <TableRow aria-hidden className="hover:bg-transparent">
+                  <TableCell colSpan={9} style={{ height: totalHeight - offsetTop - visibleTasks.length * TASK_ROW_H, padding: 0, border: 0 }} />
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+          </div>
+        </DataState>
       </Card>
 
       <Pagination page={page} pageSize={50} total={total} onPageChange={setPage} />
@@ -250,7 +292,7 @@ export default function TasksPageWrapper() {
   );
 }
 
-function TaskRow({ task, expanded, onToggle, onDetail, onCancel, onRerun, onClaim, onRelease, getAgentName, getTypeBadge, getStatusBadge }: {
+const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCancel, onRerun, onClaim, onRelease, getAgentName, getTypeBadge, getStatusBadge }: {
   task: Task;
   expanded: boolean;
   onToggle: () => void;
@@ -334,7 +376,7 @@ function TaskRow({ task, expanded, onToggle, onDetail, onCancel, onRerun, onClai
       )}
     </>
   );
-}
+});
 
 function TaskDetailModal({ task, onClose, getAgentName, getStatusBadge, getTypeBadge }: {
   task: Task;

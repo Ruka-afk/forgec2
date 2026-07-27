@@ -1,8 +1,7 @@
-﻿package server
+package server
 
 import (
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -52,6 +51,10 @@ func (s *Server) handleRPortFwdRelayStart(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "rportfwd already active for this agent:port")
 		return
 	}
+	if len(s.rportfwdListeners) >= MaxRPortFwdListeners {
+		respondError(c, http.StatusTooManyRequests, "reverse port forward limit reached")
+		return
+	}
 
 	relay := newRPortFwdRelay(s, id, lport, forwardTarget)
 	s.rportfwdListeners[key] = relay
@@ -92,17 +95,20 @@ func (s *Server) handleRPortFwdGlobalStatus(c *gin.Context) {
 	defer s.rportfwdMu.Unlock()
 
 	type fwdInfo struct {
-		AgentID     string `json:"agent_id"`
-		LocalPort   int    `json:"local_port"`
-		RemoteHost  string `json:"remote_host"`
-		RemotePort  int    `json:"remote_port"`
-		Protocol    string `json:"protocol"`
-		Active      bool   `json:"active"`
+		AgentID    string `json:"agent_id"`
+		LocalPort  int    `json:"local_port"`
+		RemoteHost string `json:"remote_host"`
+		RemotePort int    `json:"remote_port"`
+		Protocol   string `json:"protocol"`
+		Active     bool   `json:"active"`
 	}
 	forwards := make([]fwdInfo, 0, len(s.rportfwdListeners))
 	for _, relay := range s.rportfwdListeners {
 		host, portStr, _ := strings.Cut(relay.forwardTarget, ":")
-		rport, _ := strconv.Atoi(portStr)
+		rport, err := strconv.Atoi(portStr)
+		if err != nil || rport < 1 || rport > 65535 {
+			continue
+		}
 		forwards = append(forwards, fwdInfo{
 			AgentID:    relay.agentID,
 			LocalPort:  relay.localPort,
@@ -171,7 +177,11 @@ func newRPortFwdRelay(s *Server, agentID string, lport int, target string) *rpor
 }
 
 func (r *rportfwdRelay) start() {
-	addr := fmt.Sprintf("0.0.0.0:%d", r.localPort)
+	listenHost := "127.0.0.1"
+	if r.server != nil && r.server.cfg != nil && r.server.cfg.Server.SocksListenHost != "" {
+		listenHost = r.server.cfg.Server.SocksListenHost
+	}
+	addr := fmt.Sprintf("%s:%d", listenHost, r.localPort)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		slog.Error("rportfwd relay listen failed", "addr", addr, "err", err)
@@ -182,7 +192,11 @@ func (r *rportfwdRelay) start() {
 		connMap: make(map[uint64]net.Conn),
 	}
 	go func() {
-		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
 		<-r.stopCh
 		ln.Close()
 	}()
@@ -233,6 +247,14 @@ func (r *rportfwdRelay) handleConn(operatorConn net.Conn) {
 
 func (r *rportfwdRelay) stop() {
 	close(r.stopCh)
+	if r.listener != nil {
+		r.listener.mu.Lock()
+		for id, conn := range r.listener.connMap {
+			conn.Close()
+			delete(r.listener.connMap, id)
+		}
+		r.listener.mu.Unlock()
+	}
 }
 
 // sendRPortFwdFrame enqueues a frame for the agent to pick up on next beacon.
@@ -251,7 +273,7 @@ func (s *Server) processRPortFwdData(agentID string, frame socksFrame) {
 	defer s.rportfwdMu.Unlock()
 	for key, relay := range s.rportfwdListeners {
 		if strings.HasPrefix(key, agentID+":") {
-	// Write data to the operator's TCP connection
+			// Write data to the operator's TCP connection
 			if relay.listener != nil {
 				relay.listener.mu.Lock()
 				conn, ok := relay.listener.connMap[frame.ConnID]
@@ -268,9 +290,26 @@ func (s *Server) processRPortFwdData(agentID string, frame socksFrame) {
 func (s *Server) cleanupStaleRPortFwd() {
 	s.rportfwdMu.Lock()
 	defer s.rportfwdMu.Unlock()
+
+	agentIDs := make([]string, 0, len(s.rportfwdListeners))
+	for _, relay := range s.rportfwdListeners {
+		agentIDs = append(agentIDs, relay.agentID)
+	}
+	agentMap := make(map[string]*db.Implant, len(agentIDs))
+	if len(agentIDs) > 0 {
+		var agents []db.Implant
+		if err := s.db.Where("id IN ?", agentIDs).Limit(len(agentIDs)).Find(&agents).Error; err != nil {
+			slog.Error("Failed to batch-load agents for rportfwd cleanup", "error", err)
+			return
+		}
+		for i := range agents {
+			agentMap[agents[i].ID] = &agents[i]
+		}
+	}
+
 	for key, relay := range s.rportfwdListeners {
-		var agent db.Implant
-		if err := s.db.First(&agent, "id = ?", relay.agentID).Error; err != nil {
+		agent, ok := agentMap[relay.agentID]
+		if !ok {
 			relay.stop()
 			delete(s.rportfwdListeners, key)
 			continue

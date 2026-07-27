@@ -2,7 +2,8 @@ package server
 
 import (
 	"encoding/csv"
-	"strconv"
+	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -10,24 +11,11 @@ import (
 )
 
 func (s *Server) handleTaskHistory(c *gin.Context) {
-	pageStr := c.DefaultQuery("page", "1")
-	pageSizeStr := c.DefaultQuery("pageSize", "50")
+	p := parsePagination(c, DefaultTaskPageSize, MaxTaskPageSize)
 	filterType := c.Query("type")
 	filterStatus := c.Query("status")
 	filterAgent := c.Query("agent")
 	filterQuery := c.Query("q")
-
-	pageNum, _ := strconv.Atoi(pageStr)
-	if pageNum < 1 {
-		pageNum = 1
-	}
-	pageSize, _ := strconv.Atoi(pageSizeStr)
-	if pageSize < 1 {
-		pageSize = DefaultTaskPageSize
-	}
-	if pageSize > MaxTaskPageSize {
-		pageSize = MaxTaskPageSize
-	}
 
 	// Build query with filters
 	silentTypes := []string{"screen_stream_start", "screen_stream_stop", "ls"}
@@ -47,11 +35,14 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 	}
 
 	var total int64
-	query.Count(&total)
+	if err := query.Count(&total).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to count tasks")
+		return
+	}
 
 	var tasks []db.Task
 	query.Preload("Agent").
-		Order("created_at desc").Offset((pageNum - 1) * pageSize).Limit(pageSize).Find(&tasks)
+		Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&tasks)
 
 	// Collect distinct task types for filter dropdown
 	var taskTypes []string
@@ -61,14 +52,14 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 
 	// Collect agents for filter dropdown
 	var agents []db.Implant
-	s.db.Select("id, hostname, ip").Order("hostname").Find(&agents)
+	s.db.Select("id, hostname, ip").Order("hostname").Limit(500).Find(&agents)
 
 	// Count failed tasks for "retry all" button
 	var failedCount int64
 	s.db.Model(&db.Task{}).Where("status = ?", "failed").Count(&failedCount)
 
-	totalPages := int(total) / pageSize
-	if int(total)%pageSize > 0 {
+	totalPages := int(total) / p.PageSize
+	if int(total)%p.PageSize > 0 {
 		totalPages++
 	}
 
@@ -77,8 +68,8 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 		"Title":          "ForgeC2 - Task History",
 		"ActiveNav":      "tasks",
 		"Tasks":          tasks,
-		"Page":           pageNum,
-		"PageSize":       pageSize,
+		"Page":           p.Page,
+		"PageSize":       p.PageSize,
 		"Total":          total,
 		"TotalPages":     totalPages,
 		"FilterType":     filterType,
@@ -125,4 +116,28 @@ func (s *Server) handleExportTasks(c *gin.Context) {
 		})
 	}
 	writer.Flush()
+	if err := writer.Error(); err != nil {
+		slog.Error("Failed to flush CSV export", "error", err)
+	}
+}
+
+func (s *Server) apiBulkTaskStatus(c *gin.Context) {
+	var req struct {
+		TaskIDs []uint `json:"task_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "task_ids required")
+		return
+	}
+	if len(req.TaskIDs) > 200 {
+		respondError(c, http.StatusBadRequest, "max 200 task IDs per request")
+		return
+	}
+	var tasks []db.Task
+	s.db.Where("id IN ?", req.TaskIDs).Select("id, status, result, error, updated_at").Find(&tasks)
+	result := make(map[uint]db.Task, len(tasks))
+	for i := range tasks {
+		result[tasks[i].ID] = tasks[i]
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
 }

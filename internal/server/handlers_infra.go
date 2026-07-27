@@ -1,9 +1,10 @@
-﻿package server
+package server
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -28,16 +29,16 @@ type infraGenerateRequest struct {
 }
 
 type acmeProvisionRequest struct {
-	Domain    string `json:"domain"`
-	Email     string `json:"email"`
-	Port      int    `json:"port"`
-	UseStaging bool  `json:"use_staging"`
+	Domain     string `json:"domain"`
+	Email      string `json:"email"`
+	Port       int    `json:"port"`
+	UseStaging bool   `json:"use_staging"`
 }
 
 func (s *Server) handleInfrastructurePage(c *gin.Context) {
 	listeners := s.getListeners()
 	s.renderPageOrJSON(c, gin.H{
-		"Title": "Infrastructure Automation",
+		"Title":     "Infrastructure Automation",
 		"ActiveNav": "infrastructure",
 		"Listeners": listeners,
 	})
@@ -46,7 +47,7 @@ func (s *Server) handleInfrastructurePage(c *gin.Context) {
 func (s *Server) handleGenerateNginx(c *gin.Context) {
 	var req infraGenerateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request: " + err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "invalid request")
 		return
 	}
 	rc := toRedirectorConfig(req, "nginx")
@@ -57,7 +58,7 @@ func (s *Server) handleGenerateNginx(c *gin.Context) {
 func (s *Server) handleGenerateApache(c *gin.Context) {
 	var req infraGenerateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request: " + err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "invalid request")
 		return
 	}
 	rc := toRedirectorConfig(req, "apache")
@@ -68,7 +69,7 @@ func (s *Server) handleGenerateApache(c *gin.Context) {
 func (s *Server) handleGenerateHAProxy(c *gin.Context) {
 	var req infraGenerateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request: " + err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "invalid request")
 		return
 	}
 	rc := toRedirectorConfig(req, "haproxy")
@@ -79,7 +80,7 @@ func (s *Server) handleGenerateHAProxy(c *gin.Context) {
 func (s *Server) handleACMECertProvision(c *gin.Context) {
 	var req acmeProvisionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request: " + err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "invalid request")
 		return
 	}
 	if req.Domain == "" || req.Email == "" {
@@ -151,7 +152,12 @@ func (s *Server) handleProfileExport(c *gin.Context) {
 	var content string
 	switch format {
 	case "json":
-		data, _ := json.MarshalIndent(profile, "", "  ")
+		data, err := json.MarshalIndent(profile, "", "  ")
+		if err != nil {
+			slog.Error("json.MarshalIndent failed", "error", err)
+			respondError(c, http.StatusInternalServerError, "failed to marshal profile")
+			return
+		}
 		content = string(data)
 	case "nginx":
 		content = fmt.Sprintf(`# ForgeC2 Malleable Profile 鈥?Nginx map
@@ -172,7 +178,7 @@ FORGEC2_STATUS_CODE=%d
 FORGEC2_CONTENT_TYPE=%s
 `, profile.ProfileName, profile.StatusCode, profile.ContentType)
 	default:
-		respondError(c, http.StatusBadRequest, "unsupported format: " + format)
+		respondError(c, http.StatusBadRequest, "unsupported format: "+format)
 		return
 	}
 
@@ -200,4 +206,3 @@ func toRedirectorConfig(req infraGenerateRequest, rtype string) infrastructure.R
 		Profile:    req.Profile,
 	}
 }
-

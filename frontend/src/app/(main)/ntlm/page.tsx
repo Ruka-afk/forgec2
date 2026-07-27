@@ -37,8 +37,8 @@ export default function NtlmPage() {
     try {
       const data = await api.get(`/agents`);
       setAgents((data.agents || data || []) as Agent[]);
-    } catch { toast.error("NTLM: load agents failed"); }
-  }, []);
+    } catch { toast.error(t("ntlm.toast.load_agents_failed")); }
+  }, [t]);
 
   useEffect(() => { loadAgents(); }, [loadAgents]);
 
@@ -46,8 +46,8 @@ export default function NtlmPage() {
     try {
       const data = await api.get<{ active: Record<string, unknown>[]; count: number; running: boolean }>("/ntlm/relay_status");
       setRelayStatus(data);
-    } catch { toast.error("NTLM: relay status failed"); }
-  }, []);
+    } catch { toast.error(t("ntlm.toast.relay_status_failed")); }
+  }, [t]);
 
   useEffect(() => {
     if (activeTab === "status") loadRelayStatus();
@@ -59,44 +59,44 @@ export default function NtlmPage() {
 
   const handleCoerce = async () => {
     if (!selectedAgent || !target) {
-      toast.error("Select an agent and enter a target");
+      toast.error(t("ntlm.toast.select_agent_target"));
       return;
     }
     setLoading(true);
     try {
       const body = new URLSearchParams({ target, listen_addr: listenAddr });
       const data = await api.post(`/agents/${selectedAgent}/coerce/${coerceType}`, Object.fromEntries(body));
-      if (data.success) toast.success(`Coerce dispatched (task #${data.task_id})`);
-      else toast.error((data.error as string) || "Coerce failed");
+      if (data.success) toast.success(t("ntlm.toast.coerce_dispatched", { task_id: String(data.task_id) }));
+      else toast.error((data.error as string) || t("ntlm.toast.coerce_failed"));
     } catch (e) { toast.error(String(e)); }
     setLoading(false);
   };
 
   const handleRelayStart = async () => {
     if (!selectedAgent || !relayTarget) {
-      toast.error("Select an agent and enter a relay target");
+      toast.error(t("ntlm.toast.select_agent_relay"));
       return;
     }
     setLoading(true);
     try {
       const body = new URLSearchParams({ target: relayTarget, listener: relayListener, flags: relayFlags });
       const data = await api.post(`/agents/${selectedAgent}/relay/start`, Object.fromEntries(body));
-      if (data.success) toast.success(`Relay started (task #${data.task_id})`);
-      else toast.error((data.error as string) || "Start failed");
+      if (data.success) toast.success(t("ntlm.toast.relay_started", { task_id: String(data.task_id) }));
+      else toast.error((data.error as string) || t("ntlm.toast.start_failed"));
     } catch (e) { toast.error(String(e)); }
     setLoading(false);
   };
 
   const handleRelayStop = async () => {
     if (!selectedAgent) {
-      toast.error("Select an agent first");
+      toast.error(t("ntlm.toast.select_agent_first"));
       return;
     }
     setLoading(true);
     try {
       const data = await api.post(`/agents/${selectedAgent}/relay/stop`, {});
-      if (data.success) toast.success("Relay stopped");
-      else toast.error((data.error as string) || "Stop failed");
+      if (data.success) toast.success(t("ntlm.toast.relay_stopped"));
+      else toast.error((data.error as string) || t("ntlm.toast.stop_failed"));
     } catch (e) { toast.error(String(e)); }
     setLoading(false);
   };
@@ -108,8 +108,13 @@ export default function NtlmPage() {
   ];
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={<><Zap className="w-4 h-4" />{t("ntlm.title")}</>} subtitle={t("ntlm.subtitle")} />
+
+      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+        <div className="font-semibold">{t("ntlm.experimental_title")}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{t("ntlm.experimental_desc")}</div>
+      </Card>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>

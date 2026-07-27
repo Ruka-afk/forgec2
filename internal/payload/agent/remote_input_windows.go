@@ -11,10 +11,10 @@ import (
 )
 
 var (
-	user32Input        = syscall.NewLazyDLL("user32.dll")
-	procSetCursorPos   = user32Input.NewProc("SetCursorPos")
-	procMouseEvent     = user32Input.NewProc("mouse_event")
-	procKeybdEvent     = user32Input.NewProc("keybd_event")
+	user32Input      = syscall.NewLazyDLL("user32.dll")
+	procSetCursorPos = user32Input.NewProc("SetCursorPos")
+	procMouseEvent   = user32Input.NewProc("mouse_event")
+	procKeybdEvent   = user32Input.NewProc("keybd_event")
 )
 
 type remoteInputEvent struct {

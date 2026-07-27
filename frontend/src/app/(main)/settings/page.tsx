@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { downloadBlob } from "@/lib/download";
@@ -8,9 +8,11 @@ import { useI18n } from "@/lib/i18n";
 import { PageHeader, PageSpinner } from "@/components/UI";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Bell, Bot, CloudUpload, Cpu, Database, Globe, Lock, LogIn, Palette, Server, Shield, User, Wrench, Archive, Radio } from "lucide-react";
-import { SettingsData, AgentForm, ServerForm, MalleableForm, PasswordForm } from "./_components/types";
+import { Bell, Bot, CloudUpload, Cpu, Database, FileCode, Globe, Lock, LogIn, Palette, Server, Shield, User, Wrench, Archive, Radio } from "lucide-react";
+import { useTOTP } from "./_components/useTOTP";
+import { useSettingsData } from "./_components/useSettingsData";
 import ProfileSection from "./_components/ProfileSection";
 import ThemeSection from "./_components/ThemeSection";
 import LanguageSection from "./_components/LanguageSection";
@@ -26,82 +28,41 @@ import SyncSection from "./_components/SyncSection";
 import SIEMSection from "./_components/SIEMSection";
 import BackupSection from "./_components/BackupSection";
 import ExtC2Section from "./_components/ExtC2Section";
+import CertificatesSection from "./_components/CertificatesSection";
+import ModulesSection from "./_components/ModulesSection";
 
 export default function SettingsPage() {
   const router = useRouter();
   const { t } = useI18n();
-  const [data, setData] = useState<SettingsData>({});
-  const [loading, setLoading] = useState(true);
+  const {
+    data,
+    loading,
+    loadSettings,
+    agentForm,
+    setAgentForm,
+    serverForm,
+    setServerForm,
+    malleableForm,
+    setMalleableForm,
+    passwordForm,
+    setPasswordForm,
+    theme,
+    setTheme,
+    language,
+    setLanguage,
+  } = useSettingsData();
   const [activeSection, setActiveSection] = useState("profile");
   const [saving, setSaving] = useState(false);
-  const [agentForm, setAgentForm] = useState<AgentForm>({ interval: 5, jitter: 10, skip_tls: false, user_agent: "", working_start: "", working_end: "", working_tz: "" });
-  const [serverForm, setServerForm] = useState<ServerForm>({ log_level: "info", tcp_enabled: false, tcp_addr: "", offline_threshold: 60, session_max_age: 24, cleanup_retention: 30 });
-  const [malleableForm, setMalleableForm] = useState<MalleableForm>({ enabled: false, status_code: 200, content_type: "application/json", headers_text: "", prepend: "", append: "" });
-  const [passwordForm, setPasswordForm] = useState<PasswordForm>({ current: "", next: "", confirm: "" });
-  const [theme, setTheme] = useState<string>("system");
-  const [language, setLanguage] = useState<string>("en");
   const [purgeDays, setPurgeDays] = useState({ tasks: "30", audit: "30" });
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
   const [cfmInline, setCfmInline] = useState<{msg: string; cb: () => void} | null>(null);
-  const [totpStatus, setTotpStatus] = useState<boolean | null>(null);
-  const [totpSecret, setTotpSecret] = useState("");
-  const [totpQR, setTotpQR] = useState("");
-  const [totpBackupCodes, setTotpBackupCodes] = useState("");
-  const [totpCode, setTotpCode] = useState("");
-  const [showTotpSetup, setShowTotpSetup] = useState(false);
-  const [totpDisablePassword, setTotpDisablePassword] = useState("");
 
-  const loadSettings = useCallback(async () => {
-    try {
-      const d = await api.get("/settings") as unknown as SettingsData;
-      setData(d);
-      setAgentForm({
-        interval: d.default_interval ?? 5,
-        jitter: d.default_jitter ?? 10,
-        skip_tls: d.default_skip_tls ?? false,
-        user_agent: d.default_ua ?? "",
-        working_start: d.working_start ?? "",
-        working_end: d.working_end ?? "",
-        working_tz: d.working_tz ?? "",
-      });
-      setServerForm({
-        log_level: d.log_level ?? "info",
-        tcp_enabled: d.tcp_enabled ?? false,
-        tcp_addr: d.tcp_addr ?? "",
-        offline_threshold: d.offline_threshold ?? 60,
-        session_max_age: d.session_max_age ?? 24,
-        cleanup_retention: d.cleanup_retention ?? 30,
-      });
-      setMalleableForm({
-        enabled: d.malleable_enabled ?? false,
-        status_code: d.malleable_status ?? 200,
-        content_type: d.malleable_ct ?? "application/json",
-        headers_text: "",
-        prepend: d.malleable_prepend ?? "",
-        append: d.malleable_append ?? "",
-      });
-      try {
-        const storedTheme = localStorage.getItem("forgec2_theme");
-        if (storedTheme) setTheme(storedTheme);
-        const storedLang = document.cookie.match(/forgec2_lang=([^;]+)/);
-        if (storedLang) setLanguage(storedLang[1]);
-      } catch { /* silent */ }
-    } catch {
-      toast.error(t("settings.toast.load_failed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => { loadSettings(); }, [loadSettings]);
-
-  useEffect(() => {
-    if (activeSection === "security") {
-      api.get("/settings/totp/status")
-        .then((d: Record<string, unknown>) => setTotpStatus((d.enabled ?? false) as boolean))
-        .catch(() => setTotpStatus(false));
-    }
-  }, [activeSection]);
+  const {
+    totpStatus, totpSecret, totpQR, totpBackupCodes,
+    totpCode, setTotpCode, showTotpSetup,
+    totpDisablePassword, setTotpDisablePassword,
+    handleGenerateTOTP, handleEnableTOTP, handleDisableTOTP,
+  } = useTOTP(t, saving, setSaving, activeSection);
 
   const withSaveTimeout = useCallback(<T extends unknown[]>(fn: (...args: T) => Promise<void>) => {
     return async (...args: T) => {
@@ -223,38 +184,6 @@ export default function SettingsPage() {
     }});
   };
 
-  const handleGenerateTOTP = async () => {
-    try {
-      const d = await api.post("/settings/totp/generate");
-      setTotpSecret((d.secret || "") as string);
-      setTotpQR((d.qr || d.qr_code || "") as string);
-      setTotpBackupCodes(((d.backup_codes || []) as string[]).join("\n"));
-      setShowTotpSetup(true);
-    } catch { toast.error(t("settings.toast.totp_generate_failed")); }
-  };
-
-  const handleEnableTOTP = async () => {
-    if (!totpCode) { toast.error(t("settings.toast.totp_enter_code")); return; }
-    setSaving(true);
-    try {
-      await api.post("/settings/totp/enable", { code: totpCode, secret: totpSecret });
-      toast.success(t("settings.toast.totp_enabled"));
-      setTotpStatus(true); setShowTotpSetup(false); setTotpCode("");
-    } catch { toast.error(t("settings.toast.totp_enable_failed")); }
-    finally { setSaving(false); }
-  };
-
-  const handleDisableTOTP = async () => {
-    if (!totpDisablePassword) { toast.error(t("settings.toast.totp_enter_password")); return; }
-    setSaving(true);
-    try {
-      await api.post("/settings/totp/disable", { password: totpDisablePassword });
-      toast.success(t("settings.toast.totp_disabled"));
-      setTotpStatus(false); setTotpDisablePassword("");
-    } catch { toast.error(t("settings.toast.totp_disable_failed")); }
-    finally { setSaving(false); }
-  };
-
   const handleCheckUpdate = async () => {
     try {
       const d = await api.get("/api/update-check");
@@ -280,67 +209,72 @@ export default function SettingsPage() {
     { key: "siem", label: t("settings.siem"), icon: <LogIn className="w-4 h-4" /> },
     { key: "sync", label: t("settings.sync"), icon: <CloudUpload className="w-4 h-4" /> },
     { key: "extc2", label: t("settings.extc2"), icon: <Radio className="w-4 h-4" /> },
+    { key: "certificates", label: t("settings.certificates.label"), icon: <Lock className="w-4 h-4" /> },
+    { key: "modules", label: t("settings.modules.title"), icon: <FileCode className="w-4 h-4" /> },
     { key: "about", label: t("settings.about"), icon: <Cpu className="w-4 h-4" /> },
   ];
 
-  const inputCls = "w-full bg-background border border-border text-foreground focus-visible:border-ring rounded-xl px-4 py-3 text-sm";
-  const textareaCls = "w-full bg-background border border-border text-foreground focus-visible:border-ring rounded-xl px-4 py-3 text-sm font-mono";
-
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("settings.title")} subtitle={t("settings.subtitle")} />
 
-      <div className="flex flex-col lg:flex-row gap-4">
-        <div className="w-48 shrink-0 hidden lg:block">
-          <div className="sticky top-6 space-y-1">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-3 mb-2 font-semibold">{t("settings.sidebar_header")}</div>
-            {sections.map((s) => (
-              <Button key={s.key} variant="ghost" onClick={() => setActiveSection(s.key)}
-                className={`block w-full text-left px-3 py-2 text-xs rounded-xl transition-colors ${activeSection === s.key ? "bg-primary/10 text-primary" : "hover:bg-primary/5 text-muted-foreground"}`}>
-                {s.icon}{s.label}
-              </Button>
-            ))}
+      <Tabs value={activeSection} onValueChange={setActiveSection}>
+        <div className="flex flex-col lg:flex-row gap-4">
+          <div className="w-48 shrink-0 hidden lg:block">
+            <div className="sticky top-6 space-y-1">
+              <div className="text-(--font-size-micro-sm) uppercase tracking-wider text-muted-foreground px-3 mb-2 font-semibold">{t("settings.sidebar_header")}</div>
+              <TabsList className="flex-col bg-transparent p-0 gap-1 w-full h-auto">
+                {sections.map((s) => (
+                  <TabsTrigger key={s.key} value={s.key}
+                    className="flex items-center gap-2 w-full justify-start px-3 py-2 text-xs rounded-xl transition-colors data-[selected]:bg-primary/10 data-[selected]:text-primary hover:bg-primary/5 text-muted-foreground">
+                    {s.icon}{s.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <TabsList className="lg:hidden mb-4 overflow-x-auto flex gap-2 pb-2 bg-transparent p-0 h-auto">
+              {sections.map((s) => (
+                <TabsTrigger key={s.key} value={s.key}
+                  className="shrink-0 px-3 py-1.5 text-xs rounded-xl transition-colors data-[selected]:bg-primary/10 data-[selected]:text-primary bg-muted text-muted-foreground">
+                  {s.icon}{s.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            <div className="space-y-6">
+              <TabsContent value="profile" className="mt-0"><ProfileSection data={data} /></TabsContent>
+              <TabsContent value="theme" className="mt-0"><ThemeSection theme={theme} onApplyTheme={handleApplyTheme} /></TabsContent>
+              <TabsContent value="language" className="mt-0"><LanguageSection language={language} onSetLanguage={handleSetLanguage} /></TabsContent>
+              <TabsContent value="security" className="mt-0">
+                <SecuritySection
+                  data={data} passwordForm={passwordForm} setPasswordForm={setPasswordForm}
+                  totpStatus={totpStatus} totpSecret={totpSecret} totpQR={totpQR} totpBackupCodes={totpBackupCodes}
+                  totpCode={totpCode} setTotpCode={setTotpCode} showTotpSetup={showTotpSetup}
+                  totpDisablePassword={totpDisablePassword} setTotpDisablePassword={setTotpDisablePassword}
+                  saving={saving} onChangePassword={handleChangePassword} onRegenerateJWT={handleRegenerateJWT}
+                  onGenerateTOTP={handleGenerateTOTP} onEnableTOTP={handleEnableTOTP} onDisableTOTP={handleDisableTOTP}
+                />
+              </TabsContent>
+              <TabsContent value="server" className="mt-0"><ServerSection data={data} form={serverForm} setForm={setServerForm} saving={saving} onSave={handleSaveServer} /></TabsContent>
+              <TabsContent value="agent" className="mt-0"><AgentSection form={agentForm} setForm={setAgentForm} saving={saving} onSave={handleSaveAgent} /></TabsContent>
+              <TabsContent value="malleable" className="mt-0"><MalleableSection form={malleableForm} setForm={setMalleableForm} saving={saving} onSave={handleSaveMalleable} /></TabsContent>
+              <TabsContent value="database" className="mt-0"><DatabaseSection data={data} saving={saving} onVacuum={handleVacuum} onBackup={handleBackup} onDownloadDB={handleDownloadDB} /></TabsContent>
+              <TabsContent value="backup" className="mt-0"><BackupSection /></TabsContent>
+              <TabsContent value="maintenance" className="mt-0"><MaintenanceSection purgeDays={purgeDays} setPurgeDays={setPurgeDays} saving={saving} onPurge={handlePurge} onPurgeScreenshots={() => setCfmInline({msg: t("settings.confirm.purge_screenshots"), cb: () => handlePurge("screenshots") })} /></TabsContent>
+              <TabsContent value="notifications" className="mt-0"><NotificationsSection /></TabsContent>
+              <TabsContent value="siem" className="mt-0"><SIEMSection /></TabsContent>
+              <TabsContent value="sync" className="mt-0"><SyncSection /></TabsContent>
+              <TabsContent value="about" className="mt-0"><AboutSection data={data} onCheckUpdate={handleCheckUpdate} /></TabsContent>
+              <TabsContent value="extc2" className="mt-0"><ExtC2Section /></TabsContent>
+              <TabsContent value="certificates" className="mt-0"><CertificatesSection data={data} saving={saving} onRefresh={loadSettings} /></TabsContent>
+              <TabsContent value="modules" className="mt-0"><ModulesSection /></TabsContent>
+            </div>
           </div>
         </div>
-
-        <div className="flex-1 min-w-0">
-          <nav className="lg:hidden mb-4 overflow-x-auto flex gap-2 pb-2">
-            {sections.map((s) => (
-              <Button key={s.key} variant="ghost" size="sm" onClick={() => setActiveSection(s.key)}
-                className={`shrink-0 px-3 py-1.5 text-xs rounded-xl transition-colors ${activeSection === s.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
-                {s.icon}{s.label}
-              </Button>
-            ))}
-          </nav>
-
-          <div className="space-y-6">
-            {activeSection === "profile" && <ProfileSection data={data} />}
-            {activeSection === "theme" && <ThemeSection theme={theme} onApplyTheme={handleApplyTheme} />}
-            {activeSection === "language" && <LanguageSection language={language} onSetLanguage={handleSetLanguage} />}
-            {activeSection === "security" && (
-              <SecuritySection
-                data={data} passwordForm={passwordForm} setPasswordForm={setPasswordForm}
-                totpStatus={totpStatus} totpSecret={totpSecret} totpQR={totpQR} totpBackupCodes={totpBackupCodes}
-                totpCode={totpCode} setTotpCode={setTotpCode} showTotpSetup={showTotpSetup}
-                totpDisablePassword={totpDisablePassword} setTotpDisablePassword={setTotpDisablePassword}
-                saving={saving} onChangePassword={handleChangePassword} onRegenerateJWT={handleRegenerateJWT}
-                onGenerateTOTP={handleGenerateTOTP} onEnableTOTP={handleEnableTOTP} onDisableTOTP={handleDisableTOTP} inputCls={inputCls}
-              />
-            )}
-            {activeSection === "server" && <ServerSection data={data} form={serverForm} setForm={setServerForm} saving={saving} inputCls={inputCls} onSave={handleSaveServer} />}
-            {activeSection === "agent" && <AgentSection form={agentForm} setForm={setAgentForm} saving={saving} inputCls={inputCls} onSave={handleSaveAgent} />}
-            {activeSection === "malleable" && <MalleableSection form={malleableForm} setForm={setMalleableForm} saving={saving} inputCls={inputCls} textareaCls={textareaCls} onSave={handleSaveMalleable} />}
-            {activeSection === "database" && <DatabaseSection data={data} saving={saving} onVacuum={handleVacuum} onBackup={handleBackup} onDownloadDB={handleDownloadDB} />}
-            {activeSection === "backup" && <BackupSection />}
-            {activeSection === "maintenance" && <MaintenanceSection purgeDays={purgeDays} setPurgeDays={setPurgeDays} saving={saving} onPurge={handlePurge} onPurgeScreenshots={() => setCfmInline({msg: t("settings.confirm.purge_screenshots"), cb: () => handlePurge("screenshots") })} />}
-            {activeSection === "notifications" && <NotificationsSection inputCls={inputCls} />}
-            {activeSection === "siem" && <SIEMSection inputCls={inputCls} />}
-            {activeSection === "sync" && <SyncSection inputCls={inputCls} />}
-            {activeSection === "about" && <AboutSection data={data} onCheckUpdate={handleCheckUpdate} />}
-            {activeSection === "extc2" && <ExtC2Section />}
-          </div>
-        </div>
-      </div>
+      </Tabs>
 
       <Dialog open={!!cfm} onOpenChange={(open) => { if (!open) setCfm(null); }}>
         <DialogContent showCloseButton={false}>

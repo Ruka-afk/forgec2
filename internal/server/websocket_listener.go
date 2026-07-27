@@ -36,10 +36,10 @@ func InitWebSocketListener(s *Server) *WebSocketListener {
 	wsListener = &WebSocketListener{
 		server: s,
 		upgrader: websocket.Upgrader{
-			ReadBufferSize:  4096,
-			WriteBufferSize: 4096,
+			ReadBufferSize:  WSReadBufSize,
+			WriteBufferSize: WSWriteBufSize,
 			CheckOrigin: func(r *http.Request) bool {
-				return true
+				return allowedOrigin(s.cfg, r)
 			},
 		},
 		sessions: make(map[string]*WSOperatorSession),
@@ -157,6 +157,13 @@ func (wl *WebSocketListener) handleOperatorWS(c *gin.Context) {
 		conn.Close()
 	}()
 
+	readDeadline := 90 * time.Second
+	conn.SetReadDeadline(time.Now().Add(readDeadline))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(readDeadline))
+		return nil
+	})
+
 	// Read loop
 	for {
 		var msg map[string]interface{}
@@ -181,14 +188,23 @@ func (wl *WebSocketListener) handleOperatorWS(c *gin.Context) {
 }
 
 // BroadcastToOperators sends a message to all connected operator sessions.
+// Takes a snapshot of sessions under the lock, then writes without holding it.
 func (wl *WebSocketListener) BroadcastToOperators(msg []byte) {
 	wl.mu.Lock()
-	defer wl.mu.Unlock()
-
+	sessions := make([]*WSOperatorSession, 0, len(wl.sessions))
 	for _, session := range wl.sessions {
+		sessions = append(sessions, session)
+	}
+	wl.mu.Unlock()
+
+	for _, session := range sessions {
 		session.Conn.SetWriteDeadline(time.Now().Add(OperatorWriteDeadline))
 		if err := session.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-			slog.Debug("Failed to send to operator", "user", session.UserID, "error", err)
+			slog.Warn("Failed to send to operator, dropping connection", "user", session.UserID, "error", err)
+			session.Conn.Close()
+			wl.mu.Lock()
+			delete(wl.sessions, session.UserID)
+			wl.mu.Unlock()
 		}
 	}
 }

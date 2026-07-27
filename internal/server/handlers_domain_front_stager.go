@@ -50,10 +50,7 @@ func (s *Server) frontCheckDomain(domain string) frontDomainState {
 		}
 	}
 
-	client := &http.Client{
-		Timeout: DomainHealthCheckTimeout,
-	}
-	resp, err := client.Get("https://" + domain)
+	resp, err := s.httpClient.Get("https://" + domain)
 	if err != nil {
 		st.Error = sanitizeError(err, "Domain front operation")
 		st.Healthy = false
@@ -161,7 +158,7 @@ func (s *Server) handleAPIRPortFwdStatus(c *gin.Context) {
 
 func (s *Server) handleAPIStagerTokens(c *gin.Context) {
 	var tokens []db.StagerToken
-	if err := s.db.Order("created_at desc").Find(&tokens).Error; err != nil {
+	if err := s.db.Order("created_at desc").Limit(500).Find(&tokens).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Domain front operation"))
 		return
 	}
@@ -235,11 +232,11 @@ func (s *Server) handleAPIStagerRegister(c *gin.Context) {
 	stagerURL := fmt.Sprintf("%s://%s:%d/stage/%s", scheme, listener.Host, listener.Port, tokenHex)
 
 	respond(c, gin.H{
-		"token":      tokenHex,
-		"stager_url": stagerURL,
+		"token":       tokenHex,
+		"stager_url":  stagerURL,
 		"stage2_size": 0,
-		"expires_at": expiresAt.Format(time.RFC3339),
-		"token_id":   st.ID,
+		"expires_at":  expiresAt.Format(time.RFC3339),
+		"token_id":    st.ID,
 	})
 }
 

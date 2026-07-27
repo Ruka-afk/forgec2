@@ -36,6 +36,7 @@ func newContractDB(t *testing.T) *gorm.DB {
 		&db.CircuitBreakerEvent{}, &db.CustomRole{}, &db.SessionRecording{},
 		&db.PhishingTemplate{}, &db.PhishingCampaign{}, &db.PhishingEvent{},
 		&db.AgentTag{}, &db.AutoTagRule{}, &db.Notification{},
+		&db.UserSession{}, &db.BackupCode{}, &db.AgentStatusEvent{},
 	)
 	if err != nil {
 		t.Fatalf("migrate: %v", err)
@@ -136,7 +137,6 @@ func TestContract_Envelope_ConvertedRoutes(t *testing.T) {
 		isCSV   bool
 	}
 	cases := []endpoint{
-		{"opsec-rules", s.handleOpsecRules, "/api/opsec/rules", false},
 		{"timeline-data", s.handleTimelineData, "/api/timeline/data", false},
 		{"timeline-export", s.handleTimelineExport, "/api/timeline/export", true},
 		{"automation-rules", s.handleListAutomationRules, "/api/automation/rules", false},

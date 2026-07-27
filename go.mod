@@ -10,6 +10,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.9.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/glebarez/sqlite v1.11.0
+	github.com/go-gormigrate/gormigrate/v2 v2.1.6
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
@@ -26,14 +27,14 @@ require (
 	golang.org/x/sys v0.46.0
 	golang.org/x/text v0.38.0
 	google.golang.org/grpc v1.82.0
-	gopkg.in/lumberjack.v2 v2.0.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
-	gorm.io/gorm v1.30.0
+	gorm.io/driver/postgres v1.6.0
+	gorm.io/gorm v1.31.1
 	modernc.org/sqlite v1.52.0
 )
 
 require (
-	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/andybalholm/brotli v1.0.6 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
@@ -54,6 +55,10 @@ require (
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/google/pprof v0.0.0-20250317173921-a4b03ec1a45e // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgx/v5 v5.6.0 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -81,8 +86,6 @@ require (
 	golang.org/x/tools v0.45.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	modernc.org/libc v1.72.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

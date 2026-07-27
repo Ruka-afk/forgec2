@@ -8,122 +8,105 @@
 
 ForgeC2 is a modern, single-binary command-and-control framework written in pure Go. It ships with a full Next.js web console, multi-transport beaconing, AI assistant, plugin system, OPSEC guard, scripting engine, circuit breaker, and 50+ implant task types — built for authorized red team engagements and security research.
 
-**v2.3.0** — Frontend-Backend Separation · Cross-Domain Deployment · Panic Recovery · 40+ New Modules · CSRF Protection
+**v2.4.0** — Single-Binary Deployment · Frontend Embedded · Docker 3-Stage Build · SPA Fallback
+
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Features](#features)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+- [API Documentation](#api-documentation)
+- [Development](#development)
+- [Deployment](#deployment)
+- [Troubleshooting](#troubleshooting)
+- [Changelog](#changelog)
+- [Contributing](#contributing)
+- [Legal](#legal)
 
 ---
 
-## Architecture
+## Prerequisites
 
-ForgeC2 uses a **split-stack** layout with full frontend-backend separation:
+| Tool | Version | Purpose |
+|------|---------|---------|
+| **Go** | 1.22+ | Backend compilation |
+| **Node.js** | 20+ | Frontend build |
+| **PowerShell** | 5.1+ (Windows) or **Bash** (Linux/macOS) | Build scripts |
+| **Docker** | 24+ (optional) | Containerized deployment |
+| **Git** | 2.30+ | Source control |
 
-| Component | Tech | Default Port | Path |
-|-----------|------|------|------|
-| **Web UI** | Next.js 16 + React 19 + Tailwind 4 + shadcn/ui | **3000** | `frontend/` |
-| **API & C2** | Go (Gin, SQLite, WebSocket) | **8000** | `cmd/server/` |
+---
 
-- The browser talks to Next.js on `:3000`. API calls go through `/api/go/path` (proxy in Next.js rewrites).
-- WebSocket connects directly to Go at `ws://host:8000/ws` with token-based auth.
-- **Frontend and backend can run independently** on separate hosts/domains (see [Cross-Domain Deployment](#cross-domain-deployment)).
+## Quick Start
 
-### One-command start (Windows)
+### Single binary (recommended)
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1
+```bash
+git clone https://github.com/Ruka-afk/forgec2.git
+cd forgec2
 ```
 
-Opens **http://localhost:3000** (UI) and **http://localhost:8000** (API/health).
+**Option A — Build script** (requires Node.js + Go):
 
-### Manual start
+```powershell
+powershell -File scripts\build-embedded.ps1
+```
+
+**Option B — Docker**:
+
+```bash
+docker compose up -d
+```
+
+Open **http://localhost:8000**. On first run a random admin password is generated and printed to the console — **check the server output for your credentials**.
+
+### Manual build
+
+```powershell
+# 1. Build frontend
+cd frontend
+npm install
+npm run build
+
+# 2. Copy to embed directory
+Remove-Item -Recurse -Force ..\internal\webdist\dist -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path ..\internal\webdist\dist | Out-Null
+Copy-Item -Recurse -Path "out\*" -Destination "..\internal\webdist\dist\"
+
+# 3. Build Go binary
+cd ..
+go build -o forgec2-server.exe ./cmd/server
+.\forgec2-server.exe -config config.yaml
+```
+
+### Development (separate frontend/backend)
 
 ```powershell
 # Terminal 1 — Go API
 go build -o forgec2-server.exe ./cmd/server
 .\forgec2-server.exe -config config.yaml
 
-# Terminal 2 — Next.js dev server
+# Terminal 2 — Next.js dev server (connects to Go on :8000)
 cd frontend
 npm install
 npm run dev
 ```
 
-For production UI: `cd frontend && npm run build && npm start`
+Opens **http://localhost:3000** (Next.js UI) with API on **http://localhost:8000**.
 
----
+### Backend only (no frontend changes)
 
-## What's New in v2.3.0
-
-### Frontend-Backend Separation
-
-Frontend and backend can now run independently on different hosts/domains:
-
-```bash
-# Frontend (.env.local)
-NEXT_PUBLIC_API_BASE=https://api.example.com
-NEXT_PUBLIC_WS_URL=wss://api.example.com
-
-# Backend (config.yaml)
-server:
-  allowed_origins:
-    - "app.example.com"
-  cookie_domain: ".example.com"
-  tls_enabled: true
+```powershell
+powershell -File scripts\dev-backend.ps1
 ```
-
-| Config | Purpose | Default |
-|--------|---------|---------|
-| `NEXT_PUBLIC_API_BASE` | Frontend API base URL | `/api/go` (proxy) |
-| `NEXT_PUBLIC_WS_URL` | WebSocket base URL | `ws://hostname:PORT` |
-| `server.allowed_origins` | CORS/WebSocket origin allowlist | all (empty = permissive) |
-| `server.cookie_domain` | Session cookie domain attribute | empty (same host) |
-
-### Security Hardening
-
-| Feature | Details |
-|---------|---------|
-| **CSRF Protection** | Double-submit cookie pattern (`forgec2_csrf` + `X-CSRF-Token` header) |
-| **SameSite Cookies** | All session/CSRF cookies use `SameSite=Lax` for cross-origin safety |
-| **Configurable CORS** | `allowed_origins` config controls WebSocket and HTTP CORS |
-| **Cookie Domain** | `cookie_domain` config for cross-origin cookie sharing |
-| **Request Body Limits** | 2MB max JSON body size, prevents payload flooding |
-| **Panic Recovery** | All fire-and-forget goroutines wrapped with `recover()` |
-
-### Bug Fixes
-
-| Issue | Fix |
-|-------|-----|
-| WebSocket hub race condition | `sync.Once` initialization |
-| Rate limiter goroutine leak | Context-cancellable cleanup goroutine |
-| Circuit breaker goroutine leak | `Stop()` method with `stopCh` channel |
-| SOCKS relay DB thrashing | In-memory byte accumulation, flush every 100 packets |
-| SOCKS relay lock contention | Per-connection snapshot-and-drain under individual locks |
-| Agent broadcast race | `broadcastAgentOnline` called synchronously |
-| Login lockout memory leak | Periodic cleanup goroutine with context cancellation |
-| Unbounded query cache | Replaced `sync.Map` with bounded `TTLCache` (1000 entries, 5min TTL) |
-
-### 40+ New Modules
-
-See [Features](#features) for the full list of new capabilities.
-
----
-
-## Highlights (v2.2.0 → v2.3.0)
-
-| Area | What's New |
-|------|------------|
-| **Deployment** | Frontend-backend fully separable; CDN/origin deployment support |
-| **Security** | CSRF protection, SameSite cookies, request body limits, configurable CORS/origins |
-| **Stability** | Panic recovery, goroutine leak fixes, bounded cache, reduced lock contention |
-| **External C2** | Discord and Slack external C2 channels |
-| **Operations** | Campaigns, phishing, BloodHound, NTLM relay, container escape, domain fronting |
-| **Automation** | Task scheduler, workflow engine, auto-tagging, scheduled reports |
-| **RBAC** | Custom roles, per-resource permission gates, collaboration with task claiming |
-| **Monitoring** | Prometheus metrics, log rotation, traffic profiling, agent health plugins |
-| **Plugins** | 40+ plugins (recon, hooks, reports, credential analysis) |
-| **Frontend** | 60+ new pages, shadcn/ui component library, i18n (en/zh/ja/ko/ar), vitest |
 
 ---
 
 ## Features
+
+Capability depth varies by task and OS — see **[docs/CAPABILITY_MATRIX.md](./docs/CAPABILITY_MATRIX.md)** for Core / Hardened / Scripted / Experimental status. Advanced transport lab checklist: **[docs/TRANSPORT_E2E.md](./docs/TRANSPORT_E2E.md)**.
 
 ### AI Assistant
 - **Models**: DeepSeek, OpenAI, Claude, Qianwen, custom OpenAI-compatible endpoints
@@ -170,11 +153,9 @@ See [Features](#features) for the full list of new capabilities.
 - **60+ pages** — dashboard, agents, shell, files, AI, OPSEC, circuit breaker, scripting, plugins, campaigns, phishing, BloodHound, workflows, scheduler, and more
 - Dashboard charts (heatmap, OS dist, task status, traffic, geo, attack path, Gantt)
 - Batch agent ops, kill/delete, agent detail with lock/notes/sleep/spawn/trust/kill-date
-- Theme (light/dark/system), i18n (en/zh/ja/ko/ar), Ctrl+K search
+- Theme (light/dark/system), i18n (en/zh), Ctrl+K search
 - WebSocket live notifications, online operators panel
 - Generate page: cross-platform builds (EXE/DLL/PS1/Linux/macOS), malleable profile lock
-- Agent components: health ring, stats grid, task list, screenshots, traffic profile
-- Loading/error states for every page (90+ boundary components)
 
 ### Plugins
 - Drop-in plugins under `plugins/` with `manifest.yaml`
@@ -185,7 +166,6 @@ See [Features](#features) for the full list of new capabilities.
 - JavaScript-based server-side automation (goja runtime)
 - `forgec2.*` API: execute tasks, query agents, manage listeners
 - Timeout-controlled execution (30s default)
-- Web UI editor and output panel
 
 ### Security
 - JWT + bcrypt, HttpOnly secure session cookies with SameSite=Lax
@@ -202,57 +182,45 @@ See [Features](#features) for the full list of new capabilities.
 
 ---
 
-## Quick Start
+## Architecture
 
-```bash
-git clone https://github.com/Ruka-afk/forgec2.git
-cd forgec2
-go mod tidy
-go build -o forgec2-server ./cmd/server
-./forgec2-server -config config.yaml
+ForgeC2 ships as a **single binary** with the full Next.js web console embedded via Go's `//go:embed`:
+
+| Component | Tech | Port |
+|-----------|------|------|
+| **Web UI + API & C2** | Go (Gin, SQLite, WebSocket) with embedded Next.js static export | **8000** |
+
+- The Go binary serves the SPA frontend directly — no separate frontend server needed.
+- All API, WebSocket, and beacon endpoints live under the same port.
+- SPA client-side routing is handled by a fallback middleware (any unmatched GET/HEAD serves `index.html`).
+
+```mermaid
+graph TD
+    B[Gin :8000]
+    B --> C[JWT Auth + TOTP + CSRF]
+    B --> D[Beacon API]
+    B --> E[Task Queue]
+    B --> F[SQLite]
+    B --> G[WebSocket]
+    B --> H[AI SSE /ai/chat]
+    B --> I[Plugin Runtime]
+    B --> J[Scripting Engine]
+    B --> K[OPSEC Guard]
+    B --> L[Circuit Breaker]
+    B --> M[Workflow Engine]
+    B --> N[Prometheus Metrics]
+    B --> P[SPA Middleware] --> Q[Embedded Frontend]
+    O[HTTP Listener] -->|HTTPS| D
+    R[TCP Listener] --> D
+    S[DNS :53] --> D
+    T[gRPC Listener] --> D
+    U[SSH Listener] --> D
+    V[Parent Implant] -->|SMB/TCP| W[Child] --> V --> D
+    X[Discord C2] --> D
+    Y[Slack C2] --> D
 ```
 
-Open **http://localhost:3000** (Next.js UI). On first run a random admin password is generated and printed to the console — **check the server output for your credentials**.
-
-> API-only mode: `http://localhost:8000`
-
-### Windows Build
-
-```powershell
-go build -o forgec2-server.exe ./cmd/server
-.\forgec2-server.exe -config config.yaml
-```
-
-### Cross-Domain Deployment
-
-To deploy the frontend and backend on separate domains:
-
-1. **Backend** — configure allowed origins and cookie domain:
-
-```yaml
-server:
-  tls_enabled: true
-  cert_file: data/server.crt
-  key_file: data/server.key
-  allowed_origins:
-    - "app.example.com"
-  cookie_domain: ".example.com"
-```
-
-2. **Frontend** — point to the backend:
-
-```bash
-# .env.local
-NEXT_PUBLIC_API_BASE=https://api.example.com
-NEXT_PUBLIC_WS_URL=wss://api.example.com
-```
-
-3. **Reverse proxy** (Nginx/Caddy) — route traffic:
-
-```
-app.example.com  → frontend static files (CDN or server)
-api.example.com  → Go backend :8000
-```
+For detailed architecture, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
@@ -268,7 +236,7 @@ server:
   allowed_origins: []         # CORS/WebSocket origins (empty = all)
   cookie_domain: ""           # session cookie domain
 implant:
-  default_interval: 0        # 0 = real-time shell mode
+  default_interval: 5        # seconds between beacon check-ins
   default_jitter: 20
 ai:
   enabled: true
@@ -299,9 +267,147 @@ The assistant queues implant commands immediately and does **not** block on beac
 
 Interactive docs: **http://localhost:8000/api/docs**
 
-OpenAPI spec: `api/openapi.yaml` (also served at `/api/docs/openapi.yaml`)
+OpenAPI spec: [`api/openapi.yaml`](api/openapi.yaml) (also served at `/api/docs/openapi.yaml`)
 
 Authentication via session cookie (`forgec2_session`) from `POST /login`.
+
+### Endpoints overview
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/login` | Authenticate (returns session cookie) |
+| POST | `/logout` | End session |
+| GET | `/api/me` | Current user info |
+| GET | `/api/agents` | List all agents |
+| GET | `/api/agents/:id` | Agent detail |
+| POST | `/api/v1/beacon` | Agent check-in (no auth) |
+| GET | `/api/dashboard/*` | Dashboard chart data |
+| GET | `/api/listeners` | List listeners |
+| GET | `/health` | Health check |
+| GET | `/ready` | Readiness check |
+| GET | `/metrics` | Prometheus metrics |
+| GET | `/debug/pprof/` | Go profiling (pprof) |
+
+---
+
+## Development
+
+### Full rebuild (frontend + backend + restart)
+
+```powershell
+powershell -File scripts\build-embedded.ps1
+```
+
+### Backend only (no frontend changes)
+
+```powershell
+powershell -File scripts\dev-backend.ps1
+```
+
+### Go commands
+
+```bash
+go build ./...           # build all packages
+go test ./...            # run all Go tests
+go vet ./...             # static analysis
+go mod tidy              # clean dependencies
+```
+
+### Frontend Development (hot-reload)
+
+```bash
+cd frontend
+npm install
+npm run dev              # dev server on :3000 (proxies API to Go on :8000)
+npm run build            # production build
+npx tsc --noEmit         # type check
+```
+
+### Cross-Domain Deployment
+
+For development with separate frontend and backend on different domains:
+
+1. **Backend** — configure allowed origins and cookie domain:
+
+```yaml
+server:
+  tls_enabled: true
+  cert_file: data/server.crt
+  key_file: data/server.key
+  allowed_origins:
+    - "app.example.com"
+  cookie_domain: ".example.com"
+```
+
+2. **Frontend** — point to the backend:
+
+```bash
+# .env.local
+NEXT_PUBLIC_API_BASE=https://api.example.com
+NEXT_PUBLIC_WS_URL=wss://api.example.com
+```
+
+3. **Reverse proxy** (Nginx/Caddy) — route traffic:
+
+```
+app.example.com  → frontend static files (CDN or server)
+api.example.com  → Go backend :8000
+```
+
+---
+
+## Deployment
+
+### Docker
+
+```bash
+docker compose up -d
+```
+
+The 3-stage Dockerfile builds the frontend (Node 20), compiles the Go binary with embedded assets (Golang 1.25), and produces a minimal Alpine runtime image (~20 MB). Config is at `config.yaml` in the mounted volume.
+
+### Hardening checklist
+- Use a reverse proxy (Nginx/Caddy) to terminate TLS in production
+- Set `allowed_origins` to restrict WebSocket/CORS access
+- Enable TOTP 2FA for all users
+- Rotate JWT secret via `/api/settings/jwt/regenerate`
+- Review audit logs regularly (`AuditLog` table)
+- Use `VACUUM` and DB backups via Settings UI
+- Set `require_tls_for_auth: true` in production
+
+---
+
+## Troubleshooting
+
+### First-run password
+On first start, a random admin password is generated and printed to the console. Check the server output or `config.yaml` for the actual value.
+
+### Port already in use
+If port 8000 is occupied, change `server.port` in `config.yaml` or stop the conflicting process.
+
+### Docker volume issues
+Ensure `config.yaml` and `data/` directory are mounted correctly:
+```bash
+docker compose up -d -v ./config.yaml:/app/config.yaml -v ./data:/app/data
+```
+
+### Frontend not loading
+If the embedded frontend is not served, ensure the `internal/webdist/dist/` directory exists and contains the built frontend files.
+
+### Database locked
+SQLite supports one writer at a time. Reduce `MaxOpenConns` if experiencing lock contention under heavy load.
+
+---
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full version history.
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on submitting pull requests, code style, and testing.
 
 ---
 
@@ -319,103 +425,20 @@ forgec2/
 │   ├── config/          # Configuration loader
 │   ├── malleable/       # C2 profile engine (compiler, presets, transforms)
 │   ├── crypto/          # Encryption, signing, loot encryption
-│   └── infrastructure/  # Auto-generated redirector configs (Nginx, Apache, HAProxy, Caddy)
+│   ├── infrastructure/  # Auto-generated redirector configs (Nginx, Apache, HAProxy, Caddy)
+│   └── webdist/         # Embedded frontend static files (//go:embed all:dist)
 ├── frontend/            # Next.js web UI (60+ pages)
+├── scripts/             # Build/deploy scripts (dev-backend.ps1, build-embedded.ps1)
 ├── api/openapi.yaml     # REST API specification
 ├── plugins/             # 40+ plugins (recon, hooks, reports)
 ├── extensions/          # Chrome extension
-├── locales/             # i18n files (en, zh, ja, ko, ar)
+├── locales/             # i18n files (en, zh)
 ├── docs/                # Design docs, Python API
 ├── pkg/                 # Shared protocol types, gRPC service
+├── Dockerfile           # 3-stage build (Node → Go → Alpine)
+├── docker-compose.yml   # Single service, volume-mounted config
 └── config.yaml          # Configuration template
 ```
-
----
-
-## Architecture
-
-```mermaid
-graph TD
-    A[Web UI :3000] -->|/api/go| B[Gin :8000]
-    B --> C[JWT Auth + TOTP + CSRF]
-    B --> D[Beacon API]
-    B --> E[Task Queue]
-    B --> F[SQLite]
-    B --> G[WebSocket]
-    B --> H[AI SSE /ai/chat]
-    B --> I[Plugin Runtime]
-    B --> J[Scripting Engine]
-    B --> K[OPSEC Guard]
-    B --> L[Circuit Breaker]
-    B --> M[Workflow Engine]
-    B --> N[Prometheus Metrics]
-    O[HTTP Listener] -->|HTTPS| D
-    P[TCP Listener] --> D
-    Q[DNS :53] --> D
-    R[gRPC Listener] --> D
-    S[SSH Listener] --> D
-    T[Parent Implant] -->|SMB/TCP| U[Child] --> T --> D
-    V[Discord C2] --> D
-    W[Slack C2] --> D
-```
-
----
-
-## Development
-
-```bash
-go build ./...           # build all packages
-go test ./...            # run all Go tests
-go vet ./...             # static analysis
-go mod tidy              # clean dependencies
-```
-
-### Frontend Development
-
-```bash
-cd frontend
-npm install
-npm run dev              # dev server on :3000
-npm run build            # production build
-npm run check:css        # CSS architecture validation
-npm run check:i18n       # i18n key consistency check
-```
-
-### Agent Skills (Grok / Cursor / OpenCode)
-
-All skills live in `.grok/skills/` and `.opencode/skills/` — invoke via slash command or auto-trigger:
-
-| Category | Skills |
-|----------|--------|
-| **Daily dev** | `rebuild-deploy`, `fix-ui-page`, `fix-ui-style`, `debug-forgec2`, `ci-fix`, `e2e-smoke-test`, `release-github`, `agent-build` |
-| **Features** | `add-task-type`, `add-model`, `add-test`, `add-plugin-task`, `add-api-endpoint`, `add-sidebar-item` |
-| **C2 & listeners** | `listener-type`, `add-malleable-profile`, `dns-tunneling`, `socks-proxy-setup`, `port-forward-setup` |
-| **Implant** | `bypass-module`, `persistence-module`, `lateral-movement-module`, `reverse-shell-handler` |
-| **Ops modules** | `campaign-wizard`, `phishing-template`, `credential-guardian`, `mass-ops`, `session-replay` |
-| **Security** | `go-vet-lint`, `opsec-check`, `rbac-architect`, `credential-parser` |
-| **Deployment** | `docker-deploy`, `https-cert-setup`, `domain-fronter`, `reverse-proxy-config` |
-| **Realtime & reports** | `internal-event`, `report-section`, `auto-notify`, `timeline-analysis` |
-| **Integrations** | `slack-bot-integration`, `telegram-bot-integration`, `jira-integration`, `thehive-integration` |
-
----
-
-## Deployment
-
-### Docker
-
-```yaml
-docker compose up -d
-```
-
-The compose file creates `forgec2-server`, pulls the frontend image, and auto-generates TLS + JWT secrets on first run. Config is at `config.yaml` in the mounted volume.
-
-### Hardening checklist
-- Use a reverse proxy (Nginx/Caddy) to terminate TLS in production
-- Set `allowed_origins` to restrict WebSocket/CORS access
-- Enable TOTP 2FA for all users
-- Rotate JWT secret via `/api/settings/jwt/regenerate`
-- Review audit logs regularly (`AuditLog` table)
-- Use `VACUUM` and DB backups via Settings UI
 
 ---
 
@@ -434,8 +457,15 @@ The compose file creates `forgec2-server`, pulls the frontend image, and auto-ge
 - [x] **v2.3.0**: Frontend-backend separation, cross-domain deployment, CSRF, SameSite cookies
 - [x] **v2.3.0**: Campaigns, phishing, BloodHound, NTLM relay, container escape, workflows
 - [x] **v2.3.0**: 40+ plugins, Prometheus metrics, log rotation, task scheduler
+- [x] **v2.4.0**: Single-binary deployment, frontend embedded via `//go:embed`, Docker 3-stage build
 - [ ] Interactive remote desktop (v2)
 - [ ] Form grabber · IM steal
+
+---
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for the security policy and responsible disclosure process.
 
 ---
 

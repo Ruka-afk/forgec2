@@ -27,7 +27,10 @@ func parsePermissions(raw string) []string {
 }
 
 func marshalPermissions(perms []string) string {
-	b, _ := json.Marshal(perms)
+	b, ok := marshalJSONSafe(perms)
+	if !ok {
+		return "[]"
+	}
 	return string(b)
 }
 
@@ -35,7 +38,7 @@ func marshalPermissions(perms []string) string {
 // GET /api/roles
 func (s *Server) handleRolesList(c *gin.Context) {
 	var roles []db.CustomRole
-	s.db.Order("created_at desc").Find(&roles)
+	s.db.Order("created_at desc").Limit(100).Find(&roles)
 
 	type roleResp struct {
 		ID          uint     `json:"id"`
@@ -62,10 +65,12 @@ func (s *Server) handleRolesList(c *gin.Context) {
 // handleRolesCreate creates a new custom role (admin only).
 // POST /api/roles
 func (s *Server) handleRolesCreate(c *gin.Context) {
-	if !s.requireAdmin(c) { return }
+	if !s.requireAdmin(c) {
+		return
+	}
 	var req roleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
 	if req.Name == "" {
@@ -78,7 +83,7 @@ func (s *Server) handleRolesCreate(c *gin.Context) {
 		Permissions: marshalPermissions(req.Permissions),
 	}
 	if err := s.db.Create(&newRole).Error; err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
 	respond(c, gin.H{"success": true, "data": newRole})
@@ -87,7 +92,9 @@ func (s *Server) handleRolesCreate(c *gin.Context) {
 // handleRolesUpdate updates an existing custom role (admin only).
 // POST /api/roles/:id
 func (s *Server) handleRolesUpdate(c *gin.Context) {
-	if !s.requireAdmin(c) { return }
+	if !s.requireAdmin(c) {
+		return
+	}
 	id := c.Param("id")
 	var existingRole db.CustomRole
 	if !s.findOrFail(c, &existingRole, id, "role") {
@@ -95,7 +102,7 @@ func (s *Server) handleRolesUpdate(c *gin.Context) {
 	}
 	var req roleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
 	if req.Name != "" {
@@ -104,7 +111,7 @@ func (s *Server) handleRolesUpdate(c *gin.Context) {
 	existingRole.Description = req.Description
 	existingRole.Permissions = marshalPermissions(req.Permissions)
 	if err := s.db.Save(&existingRole).Error; err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
 	respond(c, gin.H{"success": true, "data": existingRole})
@@ -113,7 +120,9 @@ func (s *Server) handleRolesUpdate(c *gin.Context) {
 // handleRolesDelete deletes a custom role (admin only, cannot delete builtin roles).
 // DELETE /api/roles/:id
 func (s *Server) handleRolesDelete(c *gin.Context) {
-	if !s.requireAdmin(c) { return }
+	if !s.requireAdmin(c) {
+		return
+	}
 	id := c.Param("id")
 	// Prevent deletion of builtin roles by name
 	var r db.CustomRole

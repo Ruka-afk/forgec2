@@ -102,7 +102,10 @@ func BuildArtifact(req BuildArtifactRequest, dataDir string) ([]byte, string, er
 		}
 		var encKey []byte
 		if req.EncodeKeyHex != "" {
-			encKey, _ = hex.DecodeString(req.EncodeKeyHex)
+			encKey, err = hex.DecodeString(req.EncodeKeyHex)
+			if err != nil {
+				return nil, "", fmt.Errorf("invalid encode key hex: %w", err)
+			}
 		}
 		if encKey == nil || len(encKey) == 0 {
 			encKey = []byte(randomHex(8))
@@ -247,7 +250,7 @@ func main() {
 }
 `
 	data := map[string]string{
-		"EncType": encType,
+		"EncType":    encType,
 		"EntryPoint": ep,
 	}
 	t := template.Must(template.New("loader").Parse(tmplSource))

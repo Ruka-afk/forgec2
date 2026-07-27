@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"fmt"
@@ -22,8 +22,8 @@ func (s *Server) handleSearchPage(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("q"))
 	stats := s.getNavStats()
 	data := gin.H{
-		"Title":       "ForgeC2 - Search",
-		"ActiveNav":   "search",
+		"Title":        "ForgeC2 - Search",
+		"ActiveNav":    "search",
 		"search_query": q,
 	}
 	for k, v := range stats {

@@ -1,12 +1,20 @@
 package protocol
 
+// CurrentProtocolVersion is the supported protocol version.
+// Increment when making breaking changes to the wire format.
+const CurrentProtocolVersion uint = 1
+
 // BeaconRequest is sent by agent to server on each check-in.
 type BeaconRequest struct {
-	UUID      string            `json:"uuid"`
-	Info      map[string]string `json:"info,omitempty"`
-	Results   []TaskResult      `json:"results,omitempty"`
-	SocksData []SocksFrame      `json:"socks_data,omitempty"`
-	Relayed   []RelayedData     `json:"relayed,omitempty"`
+	UUID            string            `json:"uuid"`
+	ProtocolVersion uint              `json:"pv,omitempty"`
+	AgentVersion    string            `json:"av,omitempty"`
+	Info            map[string]string `json:"info,omitempty"`
+	Results         []TaskResult      `json:"results,omitempty"`
+	AckTaskIDs      []uint            `json:"acks,omitempty"`
+	TaskCapacity    *int              `json:"task_capacity,omitempty"`
+	SocksData       []SocksFrame      `json:"socks_data,omitempty"`
+	Relayed         []RelayedData     `json:"relayed,omitempty"`
 
 	ECDHPub   string `json:"ecdh_pub,omitempty"`
 	CipherB64 string `json:"c,omitempty"`
@@ -14,8 +22,9 @@ type BeaconRequest struct {
 
 // RelayedData carries child agent results forwarded by parent (P2P).
 type RelayedData struct {
-	AgentID string       `json:"agent_id"`
-	Results []TaskResult `json:"results"`
+	AgentID    string       `json:"agent_id"`
+	Results    []TaskResult `json:"results"`
+	AckTaskIDs []uint       `json:"acks,omitempty"`
 }
 
 // TaskResult is the result output from a completed agent task.
@@ -33,11 +42,12 @@ type TaskResult struct {
 
 // BeaconResponse is sent by server to agent in reply to a check-in.
 type BeaconResponse struct {
-	Tasks         []Task         `json:"tasks"`
-	SocksFrames   []SocksFrame   `json:"socks_frames,omitempty"`
-	SocksFastMode bool           `json:"socks_fast,omitempty"`
-	Relayed       []RelayedTask  `json:"relayed,omitempty"`
-	ExtC2Data     []string       `json:"extc2_data,omitempty"`
+	Tasks         []Task        `json:"tasks"`
+	ProtocolVersion uint        `json:"pv,omitempty"`
+	SocksFrames   []SocksFrame  `json:"socks_frames,omitempty"`
+	SocksFastMode bool          `json:"socks_fast,omitempty"`
+	Relayed       []RelayedTask `json:"relayed,omitempty"`
+	ExtC2Data     []string      `json:"extc2_data,omitempty"`
 
 	ECDHPub   string `json:"ecdh_pub,omitempty"`
 	CipherB64 string `json:"c,omitempty"`

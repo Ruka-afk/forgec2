@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"encoding/base64"
@@ -319,15 +319,15 @@ func (s *Server) processTokenResult(agentID string, taskType string, output stri
 		}
 
 		entry := db.TokenEntry{
-			AgentID:     agentID,
-			PID:         uint32(pid64),
-			Domain:      m["domain"],
-			Username:    m["username"],
-			Integrity:   m["integrity"],
-			Source:      "steal",
-			TokenType:   "Impersonation",
-			Active:      true,
-			CreatedAt:   time.Now(),
+			AgentID:   agentID,
+			PID:       uint32(pid64),
+			Domain:    m["domain"],
+			Username:  m["username"],
+			Integrity: m["integrity"],
+			Source:    "steal",
+			TokenType: "Impersonation",
+			Active:    true,
+			CreatedAt: time.Now(),
 		}
 		if err := s.db.Create(&entry).Error; err != nil {
 			slog.Error("Failed to save stolen token", "agent_id", agentID, "err", err)
@@ -440,4 +440,3 @@ func FormatTokenProcsFromJSON(jsonStr string) string {
 	}
 	return sb.String()
 }
-

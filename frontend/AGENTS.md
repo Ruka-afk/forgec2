@@ -17,9 +17,9 @@ This project uses **Tailwind CSS via PostCSS** with **shadcn/ui** (base-nova sty
 
 ## CSS Architecture
 
-- `globals.css` contains: shadcn imports, CSS custom properties (`:root`/`.dark` for both shadcn oklch vars and legacy hex vars), custom component classes (`.ui-card`, `.nav-active`, `.page-title`, etc.), and animations
+- `globals.css` contains: shadcn imports, CSS custom properties (`:root`/`.dark` for both shadcn oklch vars and legacy hex vars), custom component classes (`.nav-active`, `.page-title`, etc.), and animations
 - shadcn/ui components live in `src/components/ui/` (button, card, input, select, dialog, badge, etc.)
-- Legacy custom classes (`.ui-card`, `.btn`, `.ui-input`, etc.) are still in use — gradually being replaced by shadcn components
+- All components use shadcn/ui primitives and Tailwind CSS utility classes — no legacy custom CSS classes remain
 - Font Awesome 6.5.1 via CDN, Google Fonts (Inter + JetBrains Mono) via CDN
 - Dark mode via `.dark` class on `<html>`, toggled by theme provider
 
@@ -30,7 +30,7 @@ This project uses **Tailwind CSS via PostCSS** with **shadcn/ui** (base-nova sty
 
 ## Reference Repository
 
-No external reference repository is used for layout or styling. Styling combines the shadcn design system with legacy custom CSS classes. Prefer shadcn components for new features; gradually migrate existing pages.
+No external reference repository is used for layout or styling. Styling is based entirely on the shadcn design system and Tailwind CSS utility classes.
 
 ## Forbidden Patterns
 

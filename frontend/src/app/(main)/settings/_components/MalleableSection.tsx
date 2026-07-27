@@ -7,13 +7,11 @@ import Toggle from "./Toggle";
 import { AlertTriangle, Save, Shield } from "lucide-react";
 
 export default function MalleableSection({
-  form, setForm, saving, inputCls, textareaCls, onSave,
+  form, setForm, saving, onSave,
 }: {
   form: MalleableForm;
   setForm: React.Dispatch<React.SetStateAction<MalleableForm>>;
   saving: boolean;
-  inputCls: string;
-  textareaCls: string;
   onSave: (e: React.FormEvent) => void;
 }) {
   return (
@@ -34,28 +32,28 @@ export default function MalleableSection({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">HTTP Status Code</span>
-              <Input aria-label="HTTP status code" name="input-0" type="number" min={100} max={599} value={form.status_code} onChange={(e) => setForm({ ...form, status_code: Number(e.target.value) })} className={inputCls} />
+              <Input aria-label="HTTP status code" name="input-0" type="number" min={100} max={599} value={form.status_code} onChange={(e) => setForm({ ...form, status_code: Number(e.target.value) })}  />
             </div>
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">Content-Type</span>
-              <Input aria-label="application/json" name="application-json-1" type="text" placeholder="application/json" value={form.content_type} onChange={(e) => setForm({ ...form, content_type: e.target.value })} className={`${inputCls} font-mono`} />
+              <Input aria-label="application/json" name="application-json-1" type="text" placeholder="application/json" value={form.content_type} onChange={(e) => setForm({ ...form, content_type: e.target.value })} className="font-mono" />
             </div>
           </div>
           <div>
             <span className="block text-xs text-muted-foreground mb-1.5">Custom Headers (one per line)</span>
-            <Textarea rows={3} value={form.headers_text} onChange={(e) => setForm({ ...form, headers_text: e.target.value })} placeholder={"Server: nginx/1.24.0\nX-Powered-By: ASP.NET"} className={textareaCls} />
+            <Textarea rows={3} value={form.headers_text} onChange={(e) => setForm({ ...form, headers_text: e.target.value })} placeholder={"Server: nginx/1.24.0\nX-Powered-By: ASP.NET"}  />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">Prepend Content</span>
-              <Textarea rows={2} value={form.prepend} onChange={(e) => setForm({ ...form, prepend: e.target.value })} placeholder="<html><body><!--" className={textareaCls} />
+              <Textarea rows={2} value={form.prepend} onChange={(e) => setForm({ ...form, prepend: e.target.value })} placeholder="<html><body><!--"  />
             </div>
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">Append Content</span>
-              <Textarea rows={2} value={form.append} onChange={(e) => setForm({ ...form, append: e.target.value })} placeholder="--></body></html>" className={textareaCls} />
+              <Textarea rows={2} value={form.append} onChange={(e) => setForm({ ...form, append: e.target.value })} placeholder="--></body></html>"  />
             </div>
           </div>
-          <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400">
+          <div className="p-3 bg-warning/10 rounded-xl border border-warning/20 text-xs text-warning-foreground">
             <AlertTriangle className="w-4 h-4" />
             Enabling profile requires compatible agents. Prepend/append is for traffic camouflage only.
           </div>

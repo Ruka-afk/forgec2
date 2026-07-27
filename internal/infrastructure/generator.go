@@ -91,8 +91,7 @@ func GenerateNginxConfig(rc RedirectorConfig) string {
 	b.WriteString("    add_header Strict-Transport-Security \"max-age=63072000; includeSubDomains; preload\" always;\n")
 	b.WriteString("    add_header X-Content-Type-Options nosniff;\n")
 	b.WriteString("    add_header X-Frame-Options SAMEORIGIN;\n")
-	b.WriteString("    add_header X-XSS-Protection \"1; mode=block\";\n")
-	b.WriteString("    add_header Referrer-Policy \"no-referrer-when-downgrade\";\n\n")
+	b.WriteString("    add_header Referrer-Policy \"same-origin\";\n\n")
 
 	// Blocked IPs
 	if len(rc.BlockedIPs) > 0 {
@@ -250,7 +249,7 @@ func GenerateApacheConfig(rc RedirectorConfig) string {
 	b.WriteString("    Header always set Strict-Transport-Security \"max-age=63072000; includeSubDomains; preload\"\n")
 	b.WriteString("    Header always set X-Content-Type-Options nosniff\n")
 	b.WriteString("    Header always set X-Frame-Options SAMEORIGIN\n")
-	b.WriteString("    Header always set X-XSS-Protection \"1; mode=block\"\n\n")
+	b.WriteString("    Header always set Referrer-Policy \"same-origin\"\n\n")
 
 	// Proxy settings
 	b.WriteString("    # Proxy configuration\n")
@@ -430,7 +429,7 @@ func GenerateCaddyConfig(rc RedirectorConfig) string {
 	b.WriteString("        Strict-Transport-Security \"max-age=63072000; includeSubDomains; preload\"\n")
 	b.WriteString("        X-Content-Type-Options nosniff\n")
 	b.WriteString("        X-Frame-Options SAMEORIGIN\n")
-	b.WriteString("        Referrer-Policy \"no-referrer-when-downgrade\"\n")
+		b.WriteString("        Referrer-Policy \"same-origin\"\n")
 	b.WriteString("    }\n")
 	b.WriteString("    \n")
 

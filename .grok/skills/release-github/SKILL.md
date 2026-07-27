@@ -17,7 +17,7 @@ Ship a version to GitHub with tag + Release asset (`forgec2-server.exe`).
 | Step | Command / action |
 |------|------------------|
 | 1 | `go test ./...` |
-| 2 | `powershell -File build_js.ps1` (if JS/CSS changed) |
+| 2 | `powershell -File scripts\build-embedded.ps1` (full frontend + Go build) |
 | 3 | `go build -o forgec2-server.exe ./cmd/server/` |
 | 4 | Update `README.md` / `README.zh.md` version line if needed |
 

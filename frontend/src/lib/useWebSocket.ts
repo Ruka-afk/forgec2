@@ -6,7 +6,7 @@ import { useWS, type WSMessage } from "@/lib/wsContext";
 export type { WSMessage };
 
 export function useWebSocket(onMessage?: (msg: WSMessage) => void) {
-  const { connected, subscribe, lastMessage } = useWS();
+  const { connected, reconnectFailed, subscribe, reconnect } = useWS();
   const onMessageRef = useRef(onMessage);
 
   useEffect(() => {
@@ -18,5 +18,5 @@ export function useWebSocket(onMessage?: (msg: WSMessage) => void) {
     return subscribe(handler);
   }, [subscribe]);
 
-  return { connected, lastMessage };
+  return { connected, reconnectFailed, subscribe, reconnect };
 }

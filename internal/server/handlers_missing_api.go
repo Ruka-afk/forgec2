@@ -16,12 +16,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (s *Server) handleAPITokens(c *gin.Context) {
-	var tokens []db.TokenEntry
-	s.db.Order("created_at desc").Limit(500).Find(&tokens)
-	respond(c, gin.H{"tokens": tokens})
-}
-
 func (s *Server) handleAPIPackerTemplates(c *gin.Context) {
 	templates := payload.BuiltinTemplates()
 	respond(c, gin.H{"templates": templates})
@@ -78,8 +72,8 @@ func (s *Server) handleAPISettings(c *gin.Context) {
 				"total_tokens":      totalTokens,
 				"total_audits":      totalAudits,
 				"database_size":     dbSize,
-				"database_path":     s.cfg.Database.Path,
-				"data_dir":          s.cfg.Server.DataDir,
+				"database_path":     "***",
+				"data_dir":          "***",
 				"uptime":            uptime.String(),
 				"go_version":        runtime.Version(),
 				"goos":              runtime.GOOS,
@@ -101,7 +95,7 @@ func (s *Server) handleAPISettings(c *gin.Context) {
 
 func (s *Server) handleAPIMeshTopology(c *gin.Context) {
 	var peers []db.MeshPeer
-	s.db.Find(&peers)
+	s.db.Limit(500).Find(&peers)
 	type topoNode struct {
 		ID        string `json:"id"`
 		Label     string `json:"label"`
@@ -167,10 +161,6 @@ func (s *Server) handleAPIPrivesc(c *gin.Context) {
 	respond(c, gin.H{"results": results})
 }
 
-func (s *Server) handleAPITraffic(c *gin.Context) {
-	respond(c, gin.H{"traffic": []interface{}{}})
-}
-
 func (s *Server) handleAPITimelineData(c *gin.Context) {
 	type timelineEntry struct {
 		ID        uint      `json:"id"`
@@ -223,7 +213,7 @@ func (s *Server) handleAPITimelineData(c *gin.Context) {
 	for _, t := range tasks {
 		events = append(events, timelineEntry{
 			ID: t.ID, Timestamp: t.CreatedAt, Type: "task",
-			Action: fmt.Sprintf("[%s] %s %s", t.Status, t.Type, t.Command),
+			Action:  fmt.Sprintf("[%s] %s %s", t.Status, t.Type, t.Command),
 			AgentID: t.AgentID, Success: t.Status == "completed",
 		})
 	}
@@ -248,42 +238,30 @@ func (s *Server) handleAPIChatChannels(c *gin.Context) {
 	var rows []channelRow
 	s.db.Model(&db.ChatMessage{}).
 		Select("channel, COUNT(*) as message_count, MAX(message) as last_message, MAX(created_at) as last_time").
-		Group("channel").Order("MAX(created_at) DESC").Find(&rows)
+		Group("channel").Order("MAX(created_at) DESC").Limit(500).Find(&rows)
 	respond(c, gin.H{"channels": rows})
 }
 
-func (s *Server) handleAPIChainGraph(c *gin.Context) {
+func (s *Server) buildChainEntries() []gin.H {
 	var agents []db.Implant
-	s.db.Find(&agents)
-	type chainNode struct {
-		ID       string `json:"id"`
-		Hostname string `json:"hostname"`
-		ParentID string `json:"parent_id"`
-	}
-	nodes := make([]chainNode, 0, len(agents))
+	s.db.Select("id, hostname, parent_agent_id").Limit(5000).Find(&agents)
+	entries := make([]gin.H, 0, len(agents))
 	for _, a := range agents {
-		nodes = append(nodes, chainNode{ID: a.ID, Hostname: a.Hostname, ParentID: a.ParentAgentID})
+		entries = append(entries, gin.H{
+			"id":        a.ID,
+			"hostname":  a.Hostname,
+			"parent_id": a.ParentAgentID,
+		})
 	}
-	respond(c, gin.H{"nodes": nodes})
+	return entries
+}
+
+func (s *Server) handleAPIChainGraph(c *gin.Context) {
+	respond(c, gin.H{"nodes": s.buildChainEntries()})
 }
 
 func (s *Server) handleAPIChainList(c *gin.Context) {
-	var agents []db.Implant
-	s.db.Select("id, hostname, parent_agent_id").Find(&agents)
-	type chainEntry struct {
-		ID       string `json:"id"`
-		Hostname string `json:"hostname"`
-		ParentID string `json:"parent_id"`
-	}
-	chains := make([]chainEntry, 0, len(agents))
-	for _, a := range agents {
-		chains = append(chains, chainEntry{
-			ID:       a.ID,
-			Hostname: a.Hostname,
-			ParentID: a.ParentAgentID,
-		})
-	}
-	respond(c, gin.H{"chains": chains})
+	respond(c, gin.H{"chains": s.buildChainEntries()})
 }
 
 func (s *Server) handleAPISendChatMessage(c *gin.Context) {
@@ -336,8 +314,7 @@ func (s *Server) handleDownloadBuild(c *gin.Context) {
 		respondError(c, http.StatusForbidden, "Access denied")
 		return
 	}
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", logEntry.Filename))
-	c.File(logEntry.OutputPath)
+	serveFileSafe(c, logEntry.OutputPath, allowedDir, logEntry.Filename)
 }
 
 func (s *Server) handleConfigReload(c *gin.Context) {
@@ -359,7 +336,7 @@ func (s *Server) handleConfigReload(c *gin.Context) {
 func (s *Server) handlePackerArtifact(c *gin.Context) {
 	var req payload.BuildArtifactRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request: "+err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "invalid request")
 		return
 	}
 
@@ -388,42 +365,6 @@ func (s *Server) handlePackerArtifact(c *gin.Context) {
 		"filename": filename,
 		"size":     len(artifact),
 	})
-}
-
-// ── Settings Sync stubs ────────────────────────────────────────────────
-
-func (s *Server) handleSettingsSyncGet(c *gin.Context) {
-	respond(c, gin.H{"sync": nil})
-}
-
-func (s *Server) handleSettingsSyncStatus(c *gin.Context) {
-	respond(c, gin.H{"status": "disconnected"})
-}
-
-func (s *Server) handleSettingsSyncSave(c *gin.Context) {
-	respond(c, gin.H{"success": true})
-}
-
-func (s *Server) handleSettingsSyncTest(c *gin.Context) {
-	respond(c, gin.H{"success": true, "message": "Sync test not configured"})
-}
-
-func (s *Server) handleSettingsSyncTrigger(c *gin.Context) {
-	respond(c, gin.H{"success": true})
-}
-
-// ── Settings SIEM stubs ───────────────────────────────────────────────
-
-func (s *Server) handleSettingsSIEMGet(c *gin.Context) {
-	respond(c, gin.H{"siem": nil})
-}
-
-func (s *Server) handleSettingsSIEMSave(c *gin.Context) {
-	respond(c, gin.H{"success": true})
-}
-
-func (s *Server) handleSettingsSIEMTest(c *gin.Context) {
-	respond(c, gin.H{"success": true, "message": "SIEM test not configured"})
 }
 
 // ── Settings Maintenance Purge ────────────────────────────────────────
@@ -469,22 +410,7 @@ func (s *Server) handleSettingsMaintenancePurge(c *gin.Context) {
 // ── Agent Chain ──────────────────────────────────────────────────────
 
 func (s *Server) handleAgentChainGet(c *gin.Context) {
-	var agents []db.Implant
-	s.db.Select("id, hostname, parent_agent_id").Find(&agents)
-	type chainEntry struct {
-		ID       string `json:"id"`
-		Hostname string `json:"hostname"`
-		ParentID string `json:"parent_id"`
-	}
-	chains := make([]chainEntry, 0, len(agents))
-	for _, a := range agents {
-		chains = append(chains, chainEntry{
-			ID:       a.ID,
-			Hostname: a.Hostname,
-			ParentID: a.ParentAgentID,
-		})
-	}
-	respond(c, gin.H{"chain": chains})
+	respond(c, gin.H{"chain": s.buildChainEntries()})
 }
 
 func (s *Server) handleAgentChainSet(c *gin.Context) {
@@ -541,7 +467,7 @@ func (s *Server) handleAgentRecordingGet(c *gin.Context) {
 	if agentID != "" {
 		q = q.Where("agent_id = ?", agentID)
 	}
-	q.Find(& recordings)
+	q.Find(&recordings)
 	respond(c, gin.H{"recordings": recordings})
 }
 
@@ -568,26 +494,26 @@ func (s *Server) handleMeshRoute(c *gin.Context) {
 		return
 	}
 	var peers []db.MeshPeer
-	s.db.Where("agent_id = ? OR peer_id = ?", agentID, agentID).Find(&peers)
+	s.db.Where("agent_id = ? OR peer_id = ?", agentID, agentID).Limit(500).Find(&peers)
 	respond(c, gin.H{"success": true, "peers": peers})
 }
 
 func (s *Server) handlePackerBundle(c *gin.Context) {
 	var req struct {
-		AgentEXEB64   string `json:"agent_exe"`
-		EncodeType    string `json:"encode_type"`
-		PESectionText string `json:"pe_section_text"`
-		PESectionData string `json:"pe_section_data"`
+		AgentEXEB64    string `json:"agent_exe"`
+		EncodeType     string `json:"encode_type"`
+		PESectionText  string `json:"pe_section_text"`
+		PESectionData  string `json:"pe_section_data"`
 		PESectionRdata string `json:"pe_section_rdata"`
 		PESectionReloc string `json:"pe_section_reloc"`
-		EntryPoint    string `json:"entry_point"`
-		Timestamp     string `json:"timestamp"`
-		TimestampDate string `json:"timestamp_date"`
-		CertOption    string `json:"cert_option"`
-		ImportDLLs    string `json:"import_dlls"`
+		EntryPoint     string `json:"entry_point"`
+		Timestamp      string `json:"timestamp"`
+		TimestampDate  string `json:"timestamp_date"`
+		CertOption     string `json:"cert_option"`
+		ImportDLLs     string `json:"import_dlls"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid request: "+err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "invalid request")
 		return
 	}
 
@@ -598,7 +524,7 @@ func (s *Server) handlePackerBundle(c *gin.Context) {
 
 	artifact, err := base64.StdEncoding.DecodeString(req.AgentEXEB64)
 	if err != nil {
-		respondError(c, http.StatusBadRequest, "invalid agent_exe base64: "+err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "invalid agent_exe base64")
 		return
 	}
 

@@ -12,8 +12,10 @@ import (
 )
 
 var (
-	lootKey     []byte
-	lootKeyOnce sync.Once
+	lootKey       []byte
+	lootKeyOnce   sync.Once
+	extc2Key      []byte
+	extc2KeyOnce  sync.Once
 )
 
 // InitLootEncryption initializes the loot encryption key from the JWT secret.
@@ -21,6 +23,15 @@ func InitLootEncryption(jwtSecret string) {
 	lootKeyOnce.Do(func() {
 		h := sha256.Sum256([]byte(jwtSecret))
 		lootKey = h[:32]
+	})
+}
+
+// InitExtC2Encryption initializes a separate encryption key for ExtC2 channels,
+// derived independently from the JWT secret to limit key compromise blast radius.
+func InitExtC2Encryption(jwtSecret string) {
+	extc2KeyOnce.Do(func() {
+		h := sha256.Sum256([]byte("extc2:" + jwtSecret))
+		extc2Key = h[:32]
 	})
 }
 
@@ -83,6 +94,64 @@ func DecryptLoot(s string) (string, error) {
 	plaintext, err := aead.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
 		return s, nil // decryption failed — legacy plaintext
+	}
+	return string(plaintext), nil
+}
+
+func EncryptExtC2(plaintext string) (string, error) {
+	if plaintext == "" {
+		return "", nil
+	}
+	if extc2Key == nil {
+		return "", errors.New("extc2 encryption not initialized")
+	}
+	block, err := aes.NewCipher(extc2Key)
+	if err != nil {
+		return "", err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, aead.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", err
+	}
+	ciphertext := aead.Seal(nil, nonce, []byte(plaintext), nil)
+	return "FC2EXT:" + base64.StdEncoding.EncodeToString(append(nonce, ciphertext...)), nil
+}
+
+func DecryptExtC2(s string) (string, error) {
+	if s == "" {
+		return "", nil
+	}
+	if extc2Key == nil {
+		return "", errors.New("extc2 encryption not initialized")
+	}
+	const marker = "FC2EXT:"
+	if len(s) < len(marker) || s[:len(marker)] != marker {
+		return s, nil
+	}
+	data, err := base64.StdEncoding.DecodeString(s[len(marker):])
+	if err != nil {
+		return s, nil
+	}
+	block, err := aes.NewCipher(extc2Key)
+	if err != nil {
+		return "", err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	nonceSize := aead.NonceSize()
+	if len(data) < nonceSize {
+		return s, nil
+	}
+	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
+	plaintext, err := aead.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return s, nil
 	}
 	return string(plaintext), nil
 }

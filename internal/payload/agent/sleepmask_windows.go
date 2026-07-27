@@ -51,6 +51,7 @@ func InitSleepMask() bool {
 	}
 
 	smState.bufferPtr = ptr
+	// Create a byte slice backed by the VirtualAlloc'd memory region
 	sh := (*[maskBufferSize]byte)(unsafe.Pointer(ptr))
 	smState.buffer = sh[:]
 

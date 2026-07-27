@@ -9,6 +9,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
+import { DEFAULT_WS_HOST, DEFAULT_WS_PORT } from "./constants";
 
 export interface WSMessage {
   type: string;
@@ -18,7 +19,6 @@ export interface WSMessage {
 type WSListener = (msg: WSMessage) => void;
 
 // Module-level listeners so non-React code (e.g. the task poller in api.ts)
-// can react to WS frames without being inside a component/hook.
 const globalListeners = new Set<WSListener>();
 
 // activeWS is the current operator WebSocket, used to send control frames
@@ -57,8 +57,10 @@ export function onWSMessage(listener: WSListener): () => void {
 
 interface WSContextValue {
   connected: boolean;
+  reconnectFailed: boolean;
   subscribe: (listener: WSListener) => () => void;
-  lastMessage: WSMessage | null;
+  send: (data: unknown) => void;
+  reconnect: () => void;
 }
 
 const WSContext = createContext<WSContextValue | null>(null);
@@ -73,21 +75,28 @@ export function getWSURL(path = "/ws"): string {
   const envURL = process.env.NEXT_PUBLIC_WS_URL;
   if (envURL) return envURL + path;
   const proto = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss:" : "ws:";
-  const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
-  const port = process.env.NEXT_PUBLIC_GO_BACKEND_PORT || "8443";
+  const host = typeof window !== "undefined" ? window.location.hostname : DEFAULT_WS_HOST;
+  let port = process.env.NEXT_PUBLIC_GO_BACKEND_PORT || (typeof window !== "undefined" ? window.location.port : DEFAULT_WS_PORT);
+  if (!port) port = proto === "wss:" ? "443" : "80";
   return `${proto}//${host}:${port}${path}`;
 }
 
 const MAX_RECONNECT_DELAY = 30000;
 const MAX_RECONNECT_ATTEMPTS = 20;
+const HEARTBEAT_INTERVAL_MS = 30000;
+const HEARTBEAT_TIMEOUT_MS = 60000;
+const MAX_BUFFER_SIZE = 50;
 
 export function WebSocketProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
-  const [lastMessage, setLastMessage] = useState<WSMessage | null>(null);
+  const [reconnectFailed, setReconnectFailed] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastPongRef = useRef(0);
   const listenersRef = useRef<Set<WSListener>>(new Set());
   const reconnectAttemptRef = useRef(0);
+  const sendBufferRef = useRef<string[]>([]);
 
   const subscribe = useCallback((listener: WSListener) => {
     listenersRef.current.add(listener);
@@ -96,7 +105,37 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const send = useCallback((data: unknown) => {
+    const raw = JSON.stringify(data);
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(raw);
+    } else {
+      if (sendBufferRef.current.length >= MAX_BUFFER_SIZE) {
+        sendBufferRef.current.shift();
+      }
+      sendBufferRef.current.push(raw);
+    }
+  }, []);
+
   useEffect(() => {
+    const startHeartbeat = () => {
+      lastPongRef.current = Date.now();
+      heartbeatRef.current = setInterval(() => {
+        const ws = wsRef.current;
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        if (Date.now() - lastPongRef.current > HEARTBEAT_TIMEOUT_MS) {
+          ws.close();
+          return;
+        }
+        ws.send(JSON.stringify({ type: "ping" }));
+      }, HEARTBEAT_INTERVAL_MS);
+    };
+
+    const stopHeartbeat = () => {
+      if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+    };
+
     const connect = () => {
       if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
@@ -106,29 +145,44 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
       ws.onopen = () => {
         reconnectAttemptRef.current = 0;
+        setReconnectFailed(false);
         const token = getCookie("forgec2_session");
         if (token) {
           ws.send(JSON.stringify({ type: "auth", token }));
         }
-        // Re-subscribe to previously subscribed agents
         for (const agentID of subscribedAgents) {
           ws.send(JSON.stringify({ type: "subscribe", agent_id: agentID }));
         }
+        while (sendBufferRef.current.length > 0) {
+          const buffered = sendBufferRef.current.shift()!;
+          ws.send(buffered);
+        }
         setConnected(true);
+        startHeartbeat();
       };
       ws.onclose = () => {
+        stopHeartbeat();
         setConnected(false);
+        if (!getCookie("forgec2_session")) {
+          setReconnectFailed(true);
+          if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+            window.location.href = "/login";
+          }
+          return;
+        }
         if (reconnectAttemptRef.current < MAX_RECONNECT_ATTEMPTS) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttemptRef.current), MAX_RECONNECT_DELAY);
           reconnectAttemptRef.current++;
           reconnectRef.current = setTimeout(connect, delay);
+        } else {
+          setReconnectFailed(true);
         }
       };
-      ws.onerror = () => ws.close();
+      ws.onerror = (e) => { console.error("[WS] error", e); ws.close(); };
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data) as WSMessage;
-          setLastMessage(msg);
+          if (msg.type === "pong") { lastPongRef.current = Date.now(); return; }
           listenersRef.current.forEach((fn) => fn(msg));
           globalListeners.forEach((fn) => fn(msg));
         } catch {
@@ -140,14 +194,21 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     connect();
 
     return () => {
+      stopHeartbeat();
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
       activeWS = null;
       wsRef.current?.close();
     };
   }, []);
 
+  const reconnect = useCallback(() => {
+    setReconnectFailed(false);
+    reconnectAttemptRef.current = 0;
+    if (wsRef.current) wsRef.current.close();
+  }, []);
+
   return (
-    <WSContext.Provider value={{ connected, subscribe, lastMessage }}>
+    <WSContext.Provider value={{ connected, reconnectFailed, subscribe, send, reconnect }}>
       {children}
     </WSContext.Provider>
   );

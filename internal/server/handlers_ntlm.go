@@ -13,13 +13,13 @@ import (
 
 // ntlmRelaySession tracks a single active NTLM relay session.
 type ntlmRelaySession struct {
-	ID              string    `json:"id"`
-	AgentID         string    `json:"agent_id"`
-	Target          string    `json:"target"`
-	Listener        string    `json:"listener"`
-	Flags           string    `json:"flags,omitempty"`
-	StartedAt       time.Time `json:"started_at"`
-	HashesCaptured  int       `json:"hashes_captured"`
+	ID             string    `json:"id"`
+	AgentID        string    `json:"agent_id"`
+	Target         string    `json:"target"`
+	Listener       string    `json:"listener"`
+	Flags          string    `json:"flags,omitempty"`
+	StartedAt      time.Time `json:"started_at"`
+	HashesCaptured int       `json:"hashes_captured"`
 }
 
 // ntlmRelayStore manages active NTLM relay sessions in memory.

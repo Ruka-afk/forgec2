@@ -1,12 +1,14 @@
-﻿package server
+package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -16,9 +18,9 @@ import (
 func (s *Server) handleAutomationPage(c *gin.Context) {
 	rules := s.loadAutomationRules()
 	var webhooks []db.WebhookConfig
-	s.db.Find(&webhooks)
+	s.db.Limit(500).Find(&webhooks)
 	s.renderPageOrJSON(c, gin.H{
-		"Title": "Automation",
+		"Title":     "Automation",
 		"ActiveNav": "automation",
 		"Rules":     rules,
 		"Webhooks":  webhooks,
@@ -26,8 +28,36 @@ func (s *Server) handleAutomationPage(c *gin.Context) {
 }
 
 func (s *Server) handleListAutomationRules(c *gin.Context) {
-	rules := s.loadAutomationRules()
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": rules})
+	p := parsePagination(c, 50, 200)
+	var total int64
+	s.db.Model(&db.AutomationRule{}).Count(&total)
+	var dbRules []db.AutomationRule
+	s.db.Offset(p.Offset).Limit(p.PageSize).Find(&dbRules)
+	var rules []AutomationRule
+	for _, dr := range dbRules {
+		var conditions []RuleCondition
+		if dr.Conditions != "" {
+			if err := json.Unmarshal([]byte(dr.Conditions), &conditions); err != nil {
+				slog.Warn("automation: unmarshal conditions", "rule", dr.Name, "error", err)
+			}
+		}
+		var actions []RuleAction
+		if dr.Actions != "" {
+			if err := json.Unmarshal([]byte(dr.Actions), &actions); err != nil {
+				slog.Warn("automation: unmarshal actions", "rule", dr.Name, "error", err)
+			}
+		}
+		rules = append(rules, AutomationRule{
+			ID:         dr.ID,
+			Name:       dr.Name,
+			Enabled:    dr.Enabled,
+			EventType:  dr.EventType,
+			Conditions: conditions,
+			Actions:    actions,
+			CreatedAt:  dr.CreatedAt.Format(time.RFC3339),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": rules, "total": total, "page": p.Page, "page_size": p.PageSize})
 }
 
 func (s *Server) handleSaveAutomationRule(c *gin.Context) {
@@ -88,13 +118,17 @@ func (s *Server) handleToggleAutomationRule(c *gin.Context) {
 
 func (s *Server) handleListWebhooks(c *gin.Context) {
 	var webhooks []db.WebhookConfig
-	s.db.Find(&webhooks)
+	s.db.Limit(500).Find(&webhooks)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": webhooks})
 }
 
 func (s *Server) handleCreateWebhook(c *gin.Context) {
 	var wh db.WebhookConfig
 	if err := c.ShouldBindJSON(&wh); err != nil {
+		respondError(c, http.StatusBadRequest, sanitizeError(err, "Webhook operation"))
+		return
+	}
+	if err := validateWebhookURL(wh.URL); err != nil {
 		respondError(c, http.StatusBadRequest, sanitizeError(err, "Webhook operation"))
 		return
 	}
@@ -166,16 +200,9 @@ func (s *Server) handlePluginList(c *gin.Context) {
 		query = query.Where("type = ?", pluginType)
 	}
 
-	query.Find(&plugins)
+	query.Limit(200).Find(&plugins)
 
-	for i := range plugins {
-		summary, _ := s.marketplace.GetRatingSummary(plugins[i].ID)
-		plugins[i].RatingOverall = summary.Overall
-		plugins[i].RatingCount = summary.Count
-
-		status, _ := s.marketplace.GetUpdateStatus(plugins[i].ID)
-		plugins[i].UpdateAvailable = status.UpdateAvailable
-	}
+	s.marketplace.BatchEnrichPlugins(plugins)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": plugins})
 }
@@ -250,7 +277,10 @@ func (s *Server) handlePluginGet(c *gin.Context) {
 func (s *Server) handlePluginRating(c *gin.Context) {
 	id := c.Param("id")
 	var pluginID uint
-	fmt.Sscanf(id, "%d", &pluginID)
+	if _, err := fmt.Sscanf(id, "%d", &pluginID); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid plugin id")
+		return
+	}
 
 	summary, err := s.marketplace.GetRatingSummary(pluginID)
 	if err != nil {
@@ -263,7 +293,10 @@ func (s *Server) handlePluginRating(c *gin.Context) {
 func (s *Server) handlePluginReviews(c *gin.Context) {
 	id := c.Param("id")
 	var pluginID uint
-	fmt.Sscanf(id, "%d", &pluginID)
+	if _, err := fmt.Sscanf(id, "%d", &pluginID); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid plugin id")
+		return
+	}
 
 	reviews, err := s.marketplace.GetReviews(pluginID)
 	if err != nil {
@@ -276,7 +309,10 @@ func (s *Server) handlePluginReviews(c *gin.Context) {
 func (s *Server) handlePluginAddReview(c *gin.Context) {
 	id := c.Param("id")
 	var pluginID uint
-	fmt.Sscanf(id, "%d", &pluginID)
+	if _, err := fmt.Sscanf(id, "%d", &pluginID); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid plugin id")
+		return
+	}
 
 	userID, _ := c.Get("user_id")
 	uid, _ := userID.(uint)
@@ -303,7 +339,10 @@ func (s *Server) handlePluginAddReview(c *gin.Context) {
 func (s *Server) handlePluginRate(c *gin.Context) {
 	id := c.Param("id")
 	var pluginID uint
-	fmt.Sscanf(id, "%d", &pluginID)
+	if _, err := fmt.Sscanf(id, "%d", &pluginID); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid plugin id")
+		return
+	}
 
 	userID, _ := c.Get("user_id")
 	uid, _ := userID.(uint)
@@ -332,7 +371,10 @@ func (s *Server) handlePluginRate(c *gin.Context) {
 func (s *Server) handlePluginDependencies(c *gin.Context) {
 	id := c.Param("id")
 	var pluginID uint
-	fmt.Sscanf(id, "%d", &pluginID)
+	if _, err := fmt.Sscanf(id, "%d", &pluginID); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid plugin id")
+		return
+	}
 
 	deps, err := s.marketplace.GetDependencies(pluginID)
 	if err != nil {
@@ -345,7 +387,10 @@ func (s *Server) handlePluginDependencies(c *gin.Context) {
 func (s *Server) handlePluginUpdateStatus(c *gin.Context) {
 	id := c.Param("id")
 	var pluginID uint
-	fmt.Sscanf(id, "%d", &pluginID)
+	if _, err := fmt.Sscanf(id, "%d", &pluginID); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid plugin id")
+		return
+	}
 
 	status, err := s.marketplace.GetUpdateStatus(pluginID)
 	if err != nil {
@@ -354,23 +399,29 @@ func (s *Server) handlePluginUpdateStatus(c *gin.Context) {
 	}
 
 	var plugin db.Plugin
-	s.db.First(&plugin, pluginID)
+	if err := s.db.First(&plugin, pluginID).Error; err != nil {
+		respondError(c, http.StatusNotFound, "plugin not found")
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
-		"plugin_id":       status.PluginID,
-		"latest_version":  status.LatestVersion,
-		"current_version": plugin.Version,
+		"plugin_id":        status.PluginID,
+		"latest_version":   status.LatestVersion,
+		"current_version":  plugin.Version,
 		"update_available": status.UpdateAvailable,
-		"update_url":      status.UpdateURL,
-		"release_notes":   status.ReleaseNotes,
-		"last_checked_at": status.LastCheckedAt,
+		"update_url":       status.UpdateURL,
+		"release_notes":    status.ReleaseNotes,
+		"last_checked_at":  status.LastCheckedAt,
 	}})
 }
 
 func (s *Server) handlePluginUpdate(c *gin.Context) {
 	id := c.Param("id")
 	var pluginID uint
-	fmt.Sscanf(id, "%d", &pluginID)
+	if _, err := fmt.Sscanf(id, "%d", &pluginID); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid plugin id")
+		return
+	}
 
 	if err := s.marketplace.UpdatePlugin(pluginID); err != nil {
 		respondError(c, http.StatusBadRequest, sanitizeError(err, "Plugin operation"))
@@ -382,7 +433,10 @@ func (s *Server) handlePluginUpdate(c *gin.Context) {
 func (s *Server) handlePluginExport(c *gin.Context) {
 	id := c.Param("id")
 	var pluginID uint
-	fmt.Sscanf(id, "%d", &pluginID)
+	if _, err := fmt.Sscanf(id, "%d", &pluginID); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid plugin id")
+		return
+	}
 
 	data, err := s.marketplace.ExportPlugin(pluginID)
 	if err != nil {
@@ -431,7 +485,7 @@ func (s *Server) handlePluginCheckUpdates(c *gin.Context) {
 
 func (s *Server) handlePluginUpdateSummary(c *gin.Context) {
 	var plugins []db.Plugin
-	s.db.Find(&plugins)
+	s.db.Limit(200).Find(&plugins)
 
 	var availableCount int
 	var lastChecked time.Time
@@ -449,10 +503,10 @@ func (s *Server) handlePluginUpdateSummary(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":          true,
-		"available_count":  availableCount,
-		"total_plugins":    len(plugins),
-		"last_checked":     lastChecked,
+		"success":         true,
+		"available_count": availableCount,
+		"total_plugins":   len(plugins),
+		"last_checked":    lastChecked,
 	})
 }
 
@@ -498,8 +552,7 @@ func (s *Server) handleBOFRepoImport(c *gin.Context) {
 		return
 	}
 
-	client := &http.Client{Timeout: AutomationDownloadTimeout}
-	resp, err := client.Get(req.URL)
+	resp, err := s.httpClient.Get(req.URL)
 	if err != nil {
 		respondError(c, http.StatusBadRequest, sanitizeError(err, "BOF operation"))
 		return
@@ -546,7 +599,10 @@ func (s *Server) handleBOFRepoImport(c *gin.Context) {
 }
 
 // bofRatings stores in-memory ratings for BOF repo items
-var bofRatings = map[string]int{}
+var (
+	bofRatings   = map[string]int{}
+	bofRatingsMu sync.RWMutex
+)
 
 // handleBOFRepoRate rates a BOF repo item.
 func (s *Server) handleBOFRepoRate(c *gin.Context) {
@@ -568,7 +624,8 @@ func (s *Server) handleBOFRepoRate(c *gin.Context) {
 		return
 	}
 
+	bofRatingsMu.Lock()
 	bofRatings[itemID] = req.Rating
+	bofRatingsMu.Unlock()
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
-

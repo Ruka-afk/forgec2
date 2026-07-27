@@ -39,7 +39,7 @@ export default function GroupsPage() {
   const fetchGroups = useCallback(async () => {
     setLoading(true);
     try {
-      const data: { groups?: AgentGroup[] } = await api.json("/groups");
+      const data: { groups?: AgentGroup[] } = await api.get("/groups");
       setGroups(data.groups || []);
     } catch { setGroups([]); toast.error(t("groups.toast.load_failed")); }
     setLoading(false);
@@ -96,7 +96,7 @@ export default function GroupsPage() {
           <div className="flex flex-col gap-0.5">
             <span className="text-sm font-semibold text-foreground">{g.name}</span>
             {g.description && <span className="text-xs text-muted-foreground">{g.description}</span>}
-            <span className="text-[11px] text-muted-foreground">{g.agent_count} {t("groups.agent_count")}, {g.child_count} sub-groups</span>
+            <span className="text-(--font-size-xs-sm) text-muted-foreground">{g.agent_count} {t("groups.agent_count")}, {g.child_count} sub-groups</span>
           </div>
           <div className="flex gap-1.5">
                 <Button variant="outline" size="sm" onClick={() => openEdit(g)}>{t("groups.edit")}</Button>
@@ -110,7 +110,7 @@ export default function GroupsPage() {
   }
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("groups.title")} subtitle={t("groups.subtitle")}>
         <Button onClick={openCreate}><Plus className="w-4 h-4" /> {t("groups.new")}</Button>
       </PageHeader>

@@ -7,13 +7,12 @@ import Toggle from "./Toggle";
 import { Info, Lock, Save, Server, Unlock } from "lucide-react";
 
 export default function ServerSection({
-  data, form, setForm, saving, inputCls, onSave,
+  data, form, setForm, saving, onSave,
 }: {
   data: SettingsData;
   form: ServerForm;
   setForm: React.Dispatch<React.SetStateAction<ServerForm>>;
   saving: boolean;
-  inputCls: string;
   onSave: (e: React.FormEvent) => void;
 }) {
   return (
@@ -29,11 +28,11 @@ export default function ServerSection({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">HTTP Port</span>
-              <Input aria-label="HTTP port" name="input-0" type="number" defaultValue={data.server_port} readOnly className={`${inputCls} bg-muted cursor-not-allowed text-muted-foreground`} />
+              <Input aria-label="HTTP port" name="input-0" type="number" defaultValue={data.server_port} readOnly className="bg-muted cursor-not-allowed text-muted-foreground" />
             </div>
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">Listen Address</span>
-              <Input aria-label="Listen address" name="input-1" type="text" defaultValue={data.server_address ?? ""} readOnly className={`${inputCls} bg-muted cursor-not-allowed text-muted-foreground font-mono`} />
+              <Input aria-label="Listen address" name="input-1" type="text" defaultValue={data.server_address ?? ""} readOnly className="bg-muted cursor-not-allowed text-muted-foreground font-mono" />
             </div>
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">Log Level</span>
@@ -67,22 +66,22 @@ export default function ServerSection({
             </div>
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">TCP Address</span>
-              <Input aria-label="0.0.0.0:4444" name="0-0-0-0-4444-3" type="text" placeholder="0.0.0.0:4444" value={form.tcp_addr} onChange={(e) => setForm({ ...form, tcp_addr: e.target.value })} className={`${inputCls} font-mono`} />
+              <Input aria-label="0.0.0.0:4444" name="0-0-0-0-4444-3" type="text" placeholder="0.0.0.0:4444" value={form.tcp_addr} onChange={(e) => setForm({ ...form, tcp_addr: e.target.value })} className="font-mono" />
             </div>
           </div>
           <div className="border-t border-border pt-4 mt-2">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <span className="block text-xs text-muted-foreground mb-1.5">Offline Threshold (sec)</span>
-                <Input aria-label="Offline threshold in seconds" name="input-4" type="number" min={5} max={3600} value={form.offline_threshold} onChange={(e) => setForm({ ...form, offline_threshold: Number(e.target.value) })} className={inputCls} />
+                <Input aria-label="Offline threshold in seconds" name="input-4" type="number" min={5} max={3600} value={form.offline_threshold} onChange={(e) => setForm({ ...form, offline_threshold: Number(e.target.value) })} />
               </div>
               <div>
                 <span className="block text-xs text-muted-foreground mb-1.5">Session Timeout (hours)</span>
-                <Input aria-label="Session timeout in hours" name="input-5" type="number" min={1} max={720} value={form.session_max_age} onChange={(e) => setForm({ ...form, session_max_age: Number(e.target.value) })} className={inputCls} />
+                <Input aria-label="Session timeout in hours" name="input-5" type="number" min={1} max={720} value={form.session_max_age} onChange={(e) => setForm({ ...form, session_max_age: Number(e.target.value) })} />
               </div>
               <div>
                 <span className="block text-xs text-muted-foreground mb-1.5">Cleanup Retention (days)</span>
-                <Input aria-label="Cleanup retention in days" name="input-6" type="number" min={1} max={365} value={form.cleanup_retention} onChange={(e) => setForm({ ...form, cleanup_retention: Number(e.target.value) })} className={inputCls} />
+                <Input aria-label="Cleanup retention in days" name="input-6" type="number" min={1} max={365} value={form.cleanup_retention} onChange={(e) => setForm({ ...form, cleanup_retention: Number(e.target.value) })} />
               </div>
             </div>
           </div>

@@ -54,11 +54,30 @@ func (s *Server) handleDNSStart(c *gin.Context) {
 		return
 	}
 
-	domain := s.cfg.Server.DNSDomain
-	addr := s.cfg.Server.DNSAddr
+	var req struct {
+		Domain    string `json:"domain"`
+		Addr      string `json:"addr"`
+		Server    string `json:"server"`
+		TxtPrefix string `json:"txt_prefix"`
+	}
+	_ = c.ShouldBindJSON(&req)
+
+	domain := req.Domain
+	if domain == "" {
+		domain = s.cfg.Server.DNSDomain
+	}
+	addr := req.Addr
+	if addr == "" {
+		addr = s.cfg.Server.DNSAddr
+	}
 	if addr == "" {
 		addr = ":53"
 	}
+	if domain != "" {
+		s.cfg.Server.DNSDomain = domain
+	}
+	s.cfg.Server.DNSAddr = addr
+	s.cfg.Server.DNSEnabled = true
 
 	dl := NewDNSBeaconListener(domain, s.cfg.Server.Host, 0, addr)
 	dl.SetHandler(func(agentID string, reqJSON []byte) []byte {
@@ -72,12 +91,15 @@ func (s *Server) handleDNSStart(c *gin.Context) {
 			req.UUID = agentID
 		}
 		resp := s.processBeacon(req, "")
-		respJSON, _ := json.Marshal(resp)
+		respJSON, ok := marshalJSONSafe(resp)
+		if !ok {
+			return nil
+		}
 		return respJSON
 	})
 
 	if err := dl.Start(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeError(err, "DNS")})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "DNS"))
 		return
 	}
 	s.dnsListener = dl
@@ -91,7 +113,7 @@ func (s *Server) handleDNSStop(c *gin.Context) {
 	}
 
 	if err := s.dnsListener.Stop(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeError(err, "DNS")})
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "DNS"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "stopped"})

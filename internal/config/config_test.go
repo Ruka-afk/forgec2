@@ -10,11 +10,14 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
-	if cfg.Server.Port != 8080 {
-		t.Errorf("expected port 8080, got %d", cfg.Server.Port)
+	if cfg.Server.Port != 8000 {
+		t.Errorf("expected port 8000, got %d", cfg.Server.Port)
 	}
 	if cfg.Server.Host != "0.0.0.0" {
 		t.Errorf("expected host 0.0.0.0, got %s", cfg.Server.Host)
+	}
+	if cfg.Server.TLSEnabled != false {
+		t.Errorf("expected tls_enabled false, got %v", cfg.Server.TLSEnabled)
 	}
 	if cfg.Implant.DefaultInterval != 5 {
 		t.Errorf("expected interval 5, got %d", cfg.Implant.DefaultInterval)
@@ -24,6 +27,18 @@ func TestDefaultConfig(t *testing.T) {
 	}
 	if cfg.Logging.Level != "info" {
 		t.Errorf("expected level info, got %s", cfg.Logging.Level)
+	}
+	if cfg.Listeners.MTLS.Addr != ":8443" {
+		t.Errorf("expected mTLS addr :8443, got %s", cfg.Listeners.MTLS.Addr)
+	}
+	if cfg.AI.MaxConversationTurns != 0 {
+		t.Errorf("expected AI max_conversation_turns 0 (unlimited), got %d", cfg.AI.MaxConversationTurns)
+	}
+	if cfg.AI.MaxToolRounds != 0 {
+		t.Errorf("expected AI max_tool_rounds 0 (unlimited), got %d", cfg.AI.MaxToolRounds)
+	}
+	if cfg.AI.MaxDuplicateToolCalls != 0 {
+		t.Errorf("expected AI max_duplicate_tool_calls 0 (unlimited), got %d", cfg.AI.MaxDuplicateToolCalls)
 	}
 }
 
@@ -38,8 +53,8 @@ func TestLoadNonExistentFile(t *testing.T) {
 	if cfg == nil {
 		t.Fatal("Load() returned nil config")
 	}
-	if cfg.Server.Port != 8080 {
-		t.Error("default port should be 8080")
+	if cfg.Server.Port != 8000 {
+		t.Error("default port should be 8000")
 	}
 }
 
@@ -156,4 +171,74 @@ func TestAutoGenerateJWTSecret(t *testing.T) {
 	if len(loaded.Server.JWTSecret) != 64 { // 32 bytes hex
 		t.Fatalf("expected 64-char hex secret, got %d chars", len(loaded.Server.JWTSecret))
 	}
+}
+
+func TestValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		modify  func(*Config)
+		wantErr bool
+		errMsg  string
+	}{
+		{"valid defaults", func(c *Config) {}, false, ""},
+		{"port too low", func(c *Config) { c.Server.Port = 0 }, true, "server.port"},
+		{"port too high", func(c *Config) { c.Server.Port = 99999 }, true, "server.port"},
+		{"offline threshold zero", func(c *Config) { c.Server.OfflineThreshold = 0 }, true, "offline_threshold"},
+		{"session max age zero", func(c *Config) { c.Server.SessionMaxAgeHours = 0 }, true, "session_max_age"},
+		{"interval zero", func(c *Config) { c.Implant.DefaultInterval = 0 }, true, "default_interval"},
+		{"jitter negative", func(c *Config) { c.Implant.DefaultJitter = -1 }, true, "default_jitter"},
+		{"jitter over 100", func(c *Config) { c.Implant.DefaultJitter = 101 }, true, "default_jitter"},
+		{"invalid log level", func(c *Config) { c.Logging.Level = "verbose" }, true, "logging.level"},
+		{"login attempts zero", func(c *Config) { c.RateLimit.Login.MaxAttempts = 0 }, true, "max_attempts"},
+		{"tcp enabled without addr", func(c *Config) { c.Server.TCPEnabled = true; c.Server.TCPAddr = "" }, true, "tcp_addr"},
+		{"smb enabled without pipe", func(c *Config) { c.Server.SMBEnabled = true; c.Server.SMBPipe = "" }, true, "smb_pipe"},
+		{"dns enabled without domain", func(c *Config) { c.Server.DNSEnabled = true; c.Server.DNSDomain = "" }, true, "dns_domain"},
+		{"icmp enabled without addr", func(c *Config) { c.Server.ICMPEnabled = true; c.Server.ICMPAddr = "" }, true, "icmp_addr"},
+		{"grpc enabled without addr", func(c *Config) { c.Server.GRPCEnabled = true; c.Server.GRPCAddr = "" }, true, "grpc_addr"},
+		{"ssh enabled with zero port", func(c *Config) { c.Server.SSHEnabled = true; c.Server.SSHPort = 0 }, true, "ssh_port"},
+		{"tls enabled without cert", func(c *Config) { c.Server.TLSEnabled = true; c.Server.CertFile = "" }, true, "cert_file"},
+		{"tls enabled without key", func(c *Config) { c.Server.TLSEnabled = true; c.Server.KeyFile = "" }, true, "key_file"},
+		{"sso enabled without client_id", func(c *Config) { c.SSO.Enabled = true; c.SSO.ClientID = "" }, true, "client_id"},
+		{"api capacity zero", func(c *Config) { c.RateLimit.API.Capacity = 0 }, true, "capacity"},
+		{"invalid socks dest", func(c *Config) { c.Socks.Enabled = true; c.Socks.AllowedDests = []string{"nocolon"} }, true, "host:port"},
+		{"valid socks dest", func(c *Config) { c.Socks.Enabled = true; c.Socks.AllowedDests = []string{"10.0.0.1:443"} }, false, ""},
+		{"mtls enabled without addr", func(c *Config) { c.Listeners.MTLS.Enabled = true; c.Listeners.MTLS.Addr = "" }, true, "mtls.addr"},
+		{"mtls enabled without cert", func(c *Config) { c.Listeners.MTLS.Enabled = true; c.Listeners.MTLS.CertFile = "" }, true, "mtls.cert_file"},
+		{"h2c enabled without addr", func(c *Config) { c.Listeners.H2C.Enabled = true; c.Listeners.H2C.Addr = "" }, true, "h2c.addr"},
+		{"wg enabled without addr", func(c *Config) { c.Listeners.WG.Enabled = true; c.Listeners.WG.Addr = "" }, true, "wg.addr"},
+		{"wg enabled without private key", func(c *Config) { c.Listeners.WG.Enabled = true; c.Listeners.WG.Addr = ":51820"; c.Listeners.WG.PrivateKey = "" }, true, "wg.private_key"},
+		{"negative AI max_conversation_turns", func(c *Config) { c.AI.MaxConversationTurns = -1 }, true, "max_conversation_turns"},
+		{"negative AI max_tool_rounds", func(c *Config) { c.AI.MaxToolRounds = -1 }, true, "max_tool_rounds"},
+		{"negative AI max_duplicate_tool_calls", func(c *Config) { c.AI.MaxDuplicateToolCalls = -1 }, true, "max_duplicate_tool_calls"},
+		{"zero AI limits (unlimited)", func(c *Config) { c.AI.MaxConversationTurns = 0; c.AI.MaxToolRounds = 0; c.AI.MaxDuplicateToolCalls = 0 }, false, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			tt.modify(cfg)
+			err := cfg.Validate()
+			if tt.wantErr && err == nil {
+				t.Errorf("expected error containing %q, got nil", tt.errMsg)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if tt.wantErr && err != nil && !containsStr(err.Error(), tt.errMsg) {
+				t.Errorf("error %q does not contain %q", err.Error(), tt.errMsg)
+			}
+		})
+	}
+}
+
+func containsStr(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub || len(s) > 0 && containsSubstr(s, sub))
+}
+
+func containsSubstr(s, sub string) bool {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
 }

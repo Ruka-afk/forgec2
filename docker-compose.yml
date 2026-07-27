@@ -6,7 +6,9 @@ services:
     container_name: forgec2
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8000:8000"
+      - "443:443"
+      - "8443:8443"
       - "53:53/udp"
     volumes:
       - ./config.yaml:/data/config.yaml:ro
@@ -14,9 +16,49 @@ services:
     environment:
       - FORGEC2_JWT_SECRET=${FORGEC2_JWT_SECRET:-}
       - FORGEC2_AI_API_KEY=${FORGEC2_AI_API_KEY:-}
+      - FORGEC2_HOST=${FORGEC2_HOST:-0.0.0.0}
+      - FORGEC2_PORT=${FORGEC2_PORT:-8000}
+      - FORGEC2_DB_PATH=${FORGEC2_DB_PATH:-/data/db/forgec2.db}
+      - FORGEC2_DB_DRIVER=${FORGEC2_DB_DRIVER:-postgres}
+      - FORGEC2_DB_DSN=${FORGEC2_DB_DSN:-host=postgres user=forgec2 password=forgec2_pass dbname=forgec2 port=5432 sslmode=disable}
+      - DB_PASSWORD=${DB_PASSWORD:-forgec2_pass}
+      - TZ=${TZ:-UTC}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: forgec2-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: forgec2
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-forgec2_pass}
+      POSTGRES_DB: forgec2
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    cap_drop:
+      - ALL
     cap_add:
-      - NET_ADMIN
-      - NET_RAW
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
+      - FOWNER
+      - CHOWN
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "forgec2"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   forgec2_data:
+  postgres_data:

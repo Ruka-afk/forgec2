@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"runtime/debug"
@@ -18,7 +17,7 @@ import (
 // DNSBeaconListener runs a DNS C2 server on a configurable UDP port.
 // It handles TXT-type DNS queries for agent beaconing and A-type queries for stub resolution.
 type DNSBeaconListener struct {
-	sync.Mutex
+	sync.RWMutex
 	Domain  string // e.g. "c2.example.com"
 	ID      uint   // listener DB ID
 	Addr    string // e.g. ":53" or ":5353"
@@ -66,7 +65,11 @@ func (dl *DNSBeaconListener) Start() error {
 	dl.running = true
 	slog.Info("DNS C2 listener starting", "domain", dl.Domain, "addr", dl.Addr)
 	go func() {
-		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
 		if err := dl.server.ListenAndServe(); err != nil {
 			slog.Error("DNS C2 listener failed", "error", err)
 			dl.Lock()
@@ -88,10 +91,15 @@ func (dl *DNSBeaconListener) Stop() error {
 	return dl.server.Shutdown()
 }
 
+// Close implements io.Closer for use with extraListeners map.
+func (dl *DNSBeaconListener) Close() error {
+	return dl.Stop()
+}
+
 // IsRunning returns whether the listener is active
 func (dl *DNSBeaconListener) IsRunning() bool {
-	dl.Lock()
-	defer dl.Unlock()
+	dl.RLock()
+	defer dl.RUnlock()
 	return dl.running
 }
 
@@ -209,7 +217,13 @@ func (dl *DNSBeaconListener) processBeacon(agentID string, requestData []byte, m
 		reqJSON = requestData
 	} else {
 		reqMap := map[string]string{"uuid": agentID}
-		reqJSON, _ = json.Marshal(reqMap) // minimal static map cannot fail
+		var err error
+		reqJSON, err = json.Marshal(reqMap)
+		if err != nil {
+			slog.Error("Failed to marshal DNS request", "agent", agentID, "err", err)
+			addTXTRecord(m, r.Question[0].Name, "")
+			return
+		}
 	}
 
 	respJSON := dl.handler(agentID, reqJSON)
@@ -227,7 +241,11 @@ func addTXTRecord(m *dns.Msg, name string, value string) {
 			end = len(value)
 		}
 		chunk := value[i:end]
-		rr, _ := dns.NewRR(fmt.Sprintf("%s TXT \"%s\"", name, chunk))
+		rr, err := dns.NewRR(fmt.Sprintf("%s TXT \"%s\"", name, chunk))
+		if err != nil {
+			slog.Error("DNS NewRR failed", "err", err)
+			continue
+		}
 		m.Answer = append(m.Answer, rr)
 	}
 }
@@ -241,5 +259,3 @@ func decodeBase32NoPad(s string) ([]byte, error) {
 	}
 	return base32.StdEncoding.DecodeString(s)
 }
-
-

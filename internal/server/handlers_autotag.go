@@ -15,7 +15,7 @@ import (
 // GET /api/autotag/rules
 func (s *Server) handleAutoTagRules(c *gin.Context) {
 	var rules []db.AutoTagRule
-	s.db.Preload("Tag").Order("priority desc, created_at desc").Find(&rules)
+	s.db.Preload("Tag").Order("priority desc, created_at desc").Limit(200).Find(&rules)
 	respond(c, gin.H{"rules": rules})
 }
 
@@ -24,7 +24,7 @@ func (s *Server) handleAutoTagRules(c *gin.Context) {
 func (s *Server) handleAutoTagCreate(c *gin.Context) {
 	var rule db.AutoTagRule
 	if err := c.ShouldBindJSON(&rule); err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
 	if rule.Name == "" || rule.TagID == "" {
@@ -40,12 +40,15 @@ func (s *Server) handleAutoTagCreate(c *gin.Context) {
 		return
 	}
 	var created db.AutoTagRule
-	s.db.Preload("Tag").First(&created, "id = ?", rule.ID)
+	if err := s.db.Preload("Tag").First(&created, "id = ?", rule.ID).Error; err != nil {
+		respondError(c, http.StatusNotFound, "rule not found after create")
+		return
+	}
 	respond(c, gin.H{"rule": created})
 }
 
 // handleAutoTagUpdate updates an existing auto-tag rule.
-// PUT /autotag/rules/:id
+// PUT /api/autotag/rules/:id
 func (s *Server) handleAutoTagUpdate(c *gin.Context) {
 	id := c.Param("id")
 	var rule db.AutoTagRule
@@ -53,7 +56,7 @@ func (s *Server) handleAutoTagUpdate(c *gin.Context) {
 		return
 	}
 	if err := c.ShouldBindJSON(&rule); err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
 	rule.ID = id
@@ -62,12 +65,15 @@ func (s *Server) handleAutoTagUpdate(c *gin.Context) {
 		return
 	}
 	var updated db.AutoTagRule
-	s.db.Preload("Tag").First(&updated, "id = ?", id)
+	if err := s.db.Preload("Tag").First(&updated, "id = ?", id).Error; err != nil {
+		respondError(c, http.StatusNotFound, "rule not found after update")
+		return
+	}
 	respond(c, gin.H{"rule": updated})
 }
 
 // handleAutoTagToggle enables or disables a rule.
-// POST /autotag/rules/:id/toggle
+// POST /api/autotag/rules/:id/toggle
 func (s *Server) handleAutoTagToggle(c *gin.Context) {
 	id := c.Param("id")
 	var rule db.AutoTagRule
@@ -83,7 +89,7 @@ func (s *Server) handleAutoTagToggle(c *gin.Context) {
 }
 
 // handleAutoTagDelete removes a rule.
-// DELETE /autotag/rules/:id
+// DELETE /api/autotag/rules/:id
 func (s *Server) handleAutoTagDelete(c *gin.Context) {
 	id := c.Param("id")
 	if err := s.db.Delete(&db.AutoTagRule{}, "id = ?", id).Error; err != nil {

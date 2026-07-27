@@ -17,6 +17,7 @@ import { Alert } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { Bug, Calendar, Clock, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { fetchTaskTypes, type TaskTypeInfo } from "@/lib/taskTypes";
 
 interface ScheduledTask {
   id: string;
@@ -34,8 +35,6 @@ interface ScheduledTask {
   created_at: string;
 }
 
-const TASK_TYPES = ["shell", "powershell", "command", "script", "bof", "custom"];
-
 export default function SchedulerPage() {
   const { t } = useI18n();
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
@@ -49,6 +48,7 @@ export default function SchedulerPage() {
   const [command, setCommand] = useState("");
   const [params, setParams] = useState("");
   const [schedule, setSchedule] = useState("");
+  const [taskTypes, setTaskTypes] = useState<TaskTypeInfo[]>([]);
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
   const [message, setMessage] = useState("");
 
@@ -63,9 +63,11 @@ export default function SchedulerPage() {
       setAgents((a.agents || a.data || []) as Agent[]);
     } catch { setMessage(t("scheduler.load_failed")); }
     finally { setLoading(false); }
-  }, []);
+  }, [t]);
 
   useEffect(() => { Promise.resolve().then(() => fetchData()); }, [fetchData]);
+
+  useEffect(() => { fetchTaskTypes().then(setTaskTypes); }, []);
 
   function resetForm() {
     setName(""); setAgentId(""); setTaskType("shell"); setCommand(""); setParams(""); setSchedule("");
@@ -105,7 +107,7 @@ export default function SchedulerPage() {
   }
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       {message && (
         <Alert className="mb-4 flex items-center justify-between">
           <span>{message}</span>
@@ -152,15 +154,15 @@ export default function SchedulerPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TASK_TYPES.map(tt => <SelectItem key={tt} value={tt}>{tt}</SelectItem>)}
+                    {taskTypes.map(tt => <SelectItem key={tt.type} value={tt.type}>{tt.name || tt.type}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-xs mb-1">{t("scheduler.schedule")}</Label>
                 <Input value={schedule} onChange={e => setSchedule(e.target.value)} placeholder={t("scheduler.schedule_ph")} aria-label="Schedule expression" />
-                <p className="text-[11px] text-muted-foreground mt-1 space-y-0.5">
-                  <code className="px-1 bg-muted rounded text-[10px]">every N minutes</code> · <code className="px-1 bg-muted rounded text-[10px]">daily HH:MM</code> · <code className="px-1 bg-muted rounded text-[10px]">hourly</code>
+                <p className="text-(--font-size-xs-sm) text-muted-foreground mt-1 space-y-0.5">
+                  <code className="px-1 bg-muted rounded text-(--font-size-micro-sm)">every N minutes</code> · <code className="px-1 bg-muted rounded text-(--font-size-micro-sm)">daily HH:MM</code> · <code className="px-1 bg-muted rounded text-(--font-size-micro-sm)">hourly</code>
                 </p>
               </div>
             </div>
@@ -200,7 +202,7 @@ export default function SchedulerPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm">{task.name}</span>
                     <Badge variant="secondary">{task.task_type}</Badge>
-                    <span className="text-[11px] text-muted-foreground">{t("scheduler.run_count")} {task.run_count}x</span>
+                    <span className="text-(--font-size-xs-sm) text-muted-foreground">{t("scheduler.run_count")} {task.run_count}x</span>
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-muted-foreground mt-0.5">
                     <span><Bug className="w-4 h-4" />{agents.find(a => a.id === task.agent_id)?.hostname || task.agent_id.slice(0, 8)}</span>
@@ -222,7 +224,7 @@ export default function SchedulerPage() {
           ))}
         </div>
       )}
-      <ConfirmModal open={!!cfm} title="Confirm" message={cfm?.msg || ""} confirmText="Confirm" cancelText="Cancel" danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
     </div>
   );
 }

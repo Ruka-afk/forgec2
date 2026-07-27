@@ -81,7 +81,7 @@ func blockDllsPEBInternal() string {
 		return "PEB address is nil"
 	}
 
-	// Read ProcessParameters pointer from PEB
+	// PEB offset 0x20: ProcessParameters pointer (PEB64 layout)
 	ppPtr := *(*uintptr)(unsafe.Pointer(pbi.PebBaseAddress + ppOffset))
 	if ppPtr == 0 {
 		return "ProcessParameters is nil"
@@ -90,8 +90,10 @@ func blockDllsPEBInternal() string {
 	// Flags field is at offset 0x70 (Win10) or 0x74 (Win11) in RTL_USER_PROCESS_PARAMETERS
 	// Set bit 0x20 (BlockDlls) to enable non-Microsoft DLL blocking
 	flagsOffset := uintptr(0x70)
+	// RTL_USER_PROCESS_PARAMETERS offset 0x70: Flags field (Win10+)
 	flags := *(*uint32)(unsafe.Pointer(ppPtr + flagsOffset))
 	flags |= 0x20
+	// Set PROCESS_CREATION_MITIGATION_POLICY_BLOCK_NON_MICROSOFT_BINARIES_ALWAYS_ON
 	*(*uint32)(unsafe.Pointer(ppPtr + flagsOffset)) = flags
 	return fmt.Sprintf("PEB BlockDlls flag set (old flags: 0x%x)", flags)
 }

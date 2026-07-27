@@ -43,6 +43,12 @@ export interface SettingsData {
   working_start?: string;
   working_end?: string;
   working_tz?: string;
+  cert_subject?: string;
+  cert_issuer?: string;
+  cert_expires_at?: string;
+  cert_expires_in?: number;
+  cert_dns_names?: string[];
+  cert_self_signed?: boolean;
 }
 
 export interface AgentForm {

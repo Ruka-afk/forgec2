@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/gin-gonic/gin"
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // handleCollabAgents returns the list of agents along with their current
@@ -17,7 +17,7 @@ func (s *Server) handleCollabAgents(c *gin.Context) {
 	s.db.Select("id").Order("last_seen desc").Limit(5000).Find(&agents)
 
 	var locks []db.AgentLock
-	s.db.Find(&locks)
+	s.db.Limit(1000).Find(&locks)
 	lockMap := make(map[string]string, len(locks))
 	for _, l := range locks {
 		lockMap[l.AgentID] = l.LockedBy
@@ -57,8 +57,8 @@ func (s *Server) handleCollabLock(c *gin.Context) {
 		if err := s.db.Create(&db.AgentLock{
 			ID:       uuid.New().String(),
 			AgentID:  id,
-			LockedBy:  username,
-			LockedAt:  time.Now(),
+			LockedBy: username,
+			LockedAt: time.Now(),
 		}).Error; err != nil {
 			respondError(c, http.StatusInternalServerError, "failed to create collaboration lock")
 			return
@@ -138,9 +138,9 @@ func (s *Server) broadcastCollabEvent(eventType, agentID, username string) {
 		return
 	}
 	payload, err := json.Marshal(map[string]interface{}{
-		"type":      eventType,
-		"agent_id":  agentID,
-		"username":  username,
+		"type":     eventType,
+		"agent_id": agentID,
+		"username": username,
 	})
 	if err != nil {
 		return

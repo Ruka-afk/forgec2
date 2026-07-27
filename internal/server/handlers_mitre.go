@@ -63,7 +63,7 @@ var attackTacticMap = []struct {
 	{
 		Tactic: "Discovery",
 		Techniques: []attackTechnique{
-			{ID: "T1057", Name: "Process Discovery", Tactic: "Discovery", TaskTypes: []string{"ps"}},
+			{ID: "T1057", Name: "Process Discovery", Tactic: "Discovery", TaskTypes: []string{"ps", "process_tree"}},
 			{ID: "T1083", Name: "File and Directory Discovery", Tactic: "Discovery", TaskTypes: []string{"ls", "find"}},
 			{ID: "T1016", Name: "System Network Configuration Discovery", Tactic: "Discovery", TaskTypes: []string{"ipconfig", "arp", "net"}},
 			{ID: "T1033", Name: "System Owner/User Discovery", Tactic: "Discovery", TaskTypes: []string{"whoami"}},

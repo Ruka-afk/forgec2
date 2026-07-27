@@ -39,9 +39,9 @@ type HTTPPost struct {
 // JitterCfg configures various jitter settings.
 type JitterCfg struct {
 	ContentLength  int      `json:"content_length"`  // max random padding bytes (0=disabled)
-	URI            bool     `json:"uri"`              // random URI selection
-	Parameter      bool     `json:"parameter"`        // random parameter names
-	ParameterNames []string `json:"parameter_names"`  // pool of param names for jitter
+	URI            bool     `json:"uri"`             // random URI selection
+	Parameter      bool     `json:"parameter"`       // random parameter names
+	ParameterNames []string `json:"parameter_names"` // pool of param names for jitter
 }
 
 // TransformBlock defines a chain of data transforms.
@@ -212,11 +212,11 @@ func extractWord(line string) string {
 // PredefinedProfiles returns the built-in profile presets.
 func PredefinedProfiles() map[string]*Profile {
 	return map[string]*Profile{
-		"default":           DefaultProfile(),
-		"microsoft":         MicrosoftProfile(),
-		"google_analytics":  GoogleAnalyticsProfile(),
-		"cloudflare_cdn":    CloudflareProfile(),
-		"akamai":            AkamaiProfile(),
+		"default":          DefaultProfile(),
+		"microsoft":        MicrosoftProfile(),
+		"google_analytics": GoogleAnalyticsProfile(),
+		"cloudflare_cdn":   CloudflareProfile(),
+		"akamai":           AkamaiProfile(),
 	}
 }
 
@@ -251,8 +251,8 @@ func MicrosoftProfile() *Profile {
 			URI:  []string{"/common/oauth2/token", "/login.srf", "/api/healthcheck"},
 			Verb: "GET",
 			Headers: map[string]string{
-				"User-Agent":      "Microsoft Office/16.0 (Windows NT 10.0; Microsoft Windows 10 Pro; en-US)",
-				"Accept":          "application/json",
+				"User-Agent":        "Microsoft Office/16.0 (Windows NT 10.0; Microsoft Windows 10 Pro; en-US)",
+				"Accept":            "application/json",
 				"Client-Request-Id": "{{guid}}",
 			},
 			Metadata: &TransformBlock{
@@ -273,9 +273,9 @@ func MicrosoftProfile() *Profile {
 			URI:  []string{"/common/oauth2/token", "/api/telemetry"},
 			Verb: "POST",
 			Headers: map[string]string{
-				"User-Agent":      "Microsoft Office/16.0 (Windows NT 10.0; Microsoft Windows 10 Pro; en-US)",
-				"Content-Type":    "application/x-www-form-urlencoded",
-				"Accept":          "application/json",
+				"User-Agent":   "Microsoft Office/16.0 (Windows NT 10.0; Microsoft Windows 10 Pro; en-US)",
+				"Content-Type": "application/x-www-form-urlencoded",
+				"Accept":       "application/json",
 			},
 			Parameter: "data",
 			ID: &TransformBlock{
@@ -315,8 +315,8 @@ func GoogleAnalyticsProfile() *Profile {
 			URI:  []string{"/batch", "/collect"},
 			Verb: "POST",
 			Headers: map[string]string{
-				"User-Agent":    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-				"Content-Type":  "text/plain",
+				"User-Agent":   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+				"Content-Type": "text/plain",
 			},
 		},
 		Jitter: JitterCfg{
@@ -335,9 +335,9 @@ func CloudflareProfile() *Profile {
 			URI:  []string{"/cdn-cgi/trace", "/cdn-cgi/rum", "/cdn-cgi/performance"},
 			Verb: "GET",
 			Headers: map[string]string{
-				"User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+				"User-Agent":       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 				"CF-Connecting-IP": "{{ip}}",
-				"CDN-Loop":        "cloudflare",
+				"CDN-Loop":         "cloudflare",
 			},
 		},
 		HttpPost: HTTPPost{
@@ -360,7 +360,7 @@ func AkamaiProfile() *Profile {
 			URI:  []string{"/akamai/collect", "/akamai/pixel"},
 			Verb: "GET",
 			Headers: map[string]string{
-				"User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+				"User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 				"X-Akamai-Config": "true",
 			},
 		},
@@ -376,5 +376,3 @@ func AkamaiProfile() *Profile {
 		},
 	}
 }
-
-

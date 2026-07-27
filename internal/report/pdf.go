@@ -130,7 +130,7 @@ func GenerateEngagementReport(database *gorm.DB, outputPath, operator string) er
 	}
 	report.Sections = append(report.Sections, ReportSection{
 		Title: "Compromised Hosts",
-		Table:  agentTable,
+		Table: agentTable,
 	})
 
 	// Tasks section
@@ -144,7 +144,7 @@ func GenerateEngagementReport(database *gorm.DB, outputPath, operator string) er
 	}
 	report.Sections = append(report.Sections, ReportSection{
 		Title: "Task Execution Log",
-		Table:  taskTable,
+		Table: taskTable,
 	})
 
 	// Credentials section
@@ -154,7 +154,7 @@ func GenerateEngagementReport(database *gorm.DB, outputPath, operator string) er
 	}
 	report.Sections = append(report.Sections, ReportSection{
 		Title: "Collected Credentials",
-		Table:  credTable,
+		Table: credTable,
 	})
 
 	// MITRE ATT&CK Mapping section
@@ -171,7 +171,7 @@ func GenerateEngagementReport(database *gorm.DB, outputPath, operator string) er
 	}
 	report.Sections = append(report.Sections, ReportSection{
 		Title: "MITRE ATT&CK Mapping",
-		Table:  attackTable,
+		Table: attackTable,
 	})
 
 	return report.Generate(outputPath)
@@ -199,19 +199,19 @@ func mapTaskToATTCK(taskType string) string {
 
 func getTacticForTechnique(technique string) string {
 	tacticMap := map[string]string{
-		"T1059":       "Execution",
-		"T1113":       "Collection",
-		"T1056.001":   "Collection",
-		"T1003":       "Credential Access",
-		"T1041":       "Exfiltration",
-		"T1105":       "Command and Control",
-		"T1068":       "Privilege Escalation",
-		"T1057":       "Discovery",
-		"T1083":       "Discovery",
-		"T1134.001":   "Defense Evasion",
-		"T1029":       "Command and Control",
-		"T1055":       "Defense Evasion",
-		"T1539":       "Credential Access",
+		"T1059":     "Execution",
+		"T1113":     "Collection",
+		"T1056.001": "Collection",
+		"T1003":     "Credential Access",
+		"T1041":     "Exfiltration",
+		"T1105":     "Command and Control",
+		"T1068":     "Privilege Escalation",
+		"T1057":     "Discovery",
+		"T1083":     "Discovery",
+		"T1134.001": "Defense Evasion",
+		"T1029":     "Command and Control",
+		"T1055":     "Defense Evasion",
+		"T1539":     "Credential Access",
 	}
 	for k, v := range tacticMap {
 		if len(technique) >= len(k) && technique[:len(k)] == k {

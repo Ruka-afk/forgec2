@@ -17,24 +17,24 @@ import (
 )
 
 type AutomationRule struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Enabled     bool              `json:"enabled"`
-	Priority    int               `json:"priority"` // higher = runs first
-	EventType   string            `json:"event_type"`
-	Conditions  []RuleCondition   `json:"conditions"`
-	Actions     []RuleAction      `json:"actions"`
-	Cooldown    int               `json:"cooldown"` // seconds between triggers
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Description   string          `json:"description"`
+	Enabled       bool            `json:"enabled"`
+	Priority      int             `json:"priority"` // higher = runs first
+	EventType     string          `json:"event_type"`
+	Conditions    []RuleCondition `json:"conditions"`
+	Actions       []RuleAction    `json:"actions"`
+	Cooldown      int             `json:"cooldown"` // seconds between triggers
 	LastTriggered time.Time       `json:"last_triggered"`
-	RunCount    int               `json:"run_count"`
-	CreatedAt   string            `json:"created_at"`
+	RunCount      int             `json:"run_count"`
+	CreatedAt     string          `json:"created_at"`
 }
 
 // Action types for automation rules
 const (
-	ActionRunCommand  = "command"
-	ActionWebhook     = "webhook"
+	ActionRunCommand = "command"
+	ActionWebhook    = "webhook"
 	ActionNotify     = "notify"
 	ActionRunScript  = "script"
 	ActionCreateTask = "create_task"
@@ -48,7 +48,7 @@ type RuleCondition struct {
 }
 
 type RuleAction struct {
-	Type   string          `json:"type"`   // "command", "webhook", "notify"
+	Type   string          `json:"type"` // "command", "webhook", "notify"
 	Params json.RawMessage `json:"params"`
 }
 
@@ -165,14 +165,11 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 			}
 			if targetAgent != "" && params.Type != "" {
 				expanded := s.expandTemplate(params.Command, evt)
-				if err := s.db.Create(&db.Task{
-					AgentID:   targetAgent,
-					Type:      params.Type,
-					Command:   expanded,
-					Status:    "pending",
-					CreatedBy: "automation",
-				}).Error; err != nil {
+				task, err := s.createTask(targetAgent, params.Type, expanded, "", "", "", 0, 0)
+				if err != nil {
 					slog.Error("automation: failed to create task", "error", err)
+				} else {
+					s.db.Model(task).Update("created_by", "automation")
 				}
 			}
 		}
@@ -255,33 +252,41 @@ func (s *Server) executeWebhook(params struct {
 		req.Header.Set("X-ForgeC2-Signature", hex.EncodeToString(h.Sum(nil)))
 	}
 
-	client := &http.Client{Timeout: WebhookHTTPTimeout}
-	if resp, err := client.Do(req); err != nil {
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
 		slog.Error("automation: webhook request failed", "url", params.URL, "error", err)
-	} else {
-		resp.Body.Close()
+		return
 	}
+	defer resp.Body.Close()
 }
 
 func (s *Server) loadAutomationRules() []AutomationRule {
+	s.automationRulesMu.RLock()
+	cached := s.automationRules
+	age := time.Since(s.automationRulesAt)
+	s.automationRulesMu.RUnlock()
+	if cached != nil && age < 30*time.Second {
+		return cached
+	}
+
 	var dbRules []db.AutomationRule
 	if err := s.db.Limit(AutomationRuleLimit).Find(&dbRules).Error; err != nil {
 		slog.Error("automation: failed to load rules", "error", err)
 	}
-	
+
 	var rules []AutomationRule
 	for _, dr := range dbRules {
 		var conditions []RuleCondition
 		if dr.Conditions != "" {
 			if err := json.Unmarshal([]byte(dr.Conditions), &conditions); err != nil {
-			slog.Warn("automation: unmarshal conditions", "rule", dr.Name, "error", err)
-		}
+				slog.Warn("automation: unmarshal conditions", "rule", dr.Name, "error", err)
+			}
 		}
 		var actions []RuleAction
 		if dr.Actions != "" {
 			if err := json.Unmarshal([]byte(dr.Actions), &actions); err != nil {
-			slog.Warn("automation: unmarshal actions", "rule", dr.Name, "error", err)
-		}
+				slog.Warn("automation: unmarshal actions", "rule", dr.Name, "error", err)
+			}
 		}
 		rules = append(rules, AutomationRule{
 			ID:         dr.ID,
@@ -293,7 +298,20 @@ func (s *Server) loadAutomationRules() []AutomationRule {
 			CreatedAt:  dr.CreatedAt.Format(time.RFC3339),
 		})
 	}
+
+	s.automationRulesMu.Lock()
+	s.automationRules = rules
+	s.automationRulesAt = time.Now()
+	s.automationRulesMu.Unlock()
+
 	return rules
+}
+
+func (s *Server) invalidateAutomationCache() {
+	s.automationRulesMu.Lock()
+	s.automationRules = nil
+	s.automationRulesAt = time.Time{}
+	s.automationRulesMu.Unlock()
 }
 
 func (s *Server) saveAutomationRule(rule AutomationRule) error {
@@ -305,7 +323,7 @@ func (s *Server) saveAutomationRule(rule AutomationRule) error {
 	if err != nil {
 		return fmt.Errorf("marshal actions: %w", err)
 	}
-	
+
 	dbRule := db.AutomationRule{
 		ID:         rule.ID,
 		Name:       rule.Name,
@@ -314,18 +332,26 @@ func (s *Server) saveAutomationRule(rule AutomationRule) error {
 		Conditions: string(conditionsData),
 		Actions:    string(actionsData),
 	}
-	
+
 	if rule.CreatedAt != "" {
 		if t, err := time.Parse(time.RFC3339, rule.CreatedAt); err == nil {
 			dbRule.CreatedAt = t
 		}
 	}
-	
-	return s.db.Save(&dbRule).Error
+
+	if err := s.db.Save(&dbRule).Error; err != nil {
+		return err
+	}
+	s.invalidateAutomationCache()
+	return nil
 }
 
 func (s *Server) deleteAutomationRule(id string) error {
-	return s.db.Delete(&db.AutomationRule{}, "id = ?", id).Error
+	err := s.db.Delete(&db.AutomationRule{}, "id = ?", id).Error
+	if err == nil {
+		s.invalidateAutomationCache()
+	}
+	return err
 }
 
 func (s *Server) migrateAutomationRules() {
@@ -336,17 +362,17 @@ func (s *Server) migrateAutomationRules() {
 	if count > 0 {
 		return
 	}
-	
+
 	raw := s.getConfigJSON("automation_rules")
 	if raw == "" {
 		return
 	}
-	
+
 	var rules []AutomationRule
 	if err := json.Unmarshal([]byte(raw), &rules); err != nil {
 		return
 	}
-	
+
 	for _, rule := range rules {
 		if err := s.saveAutomationRule(rule); err != nil {
 			slog.Warn("automation: failed to import rule", "id", rule.ID, "error", err)
@@ -383,11 +409,11 @@ func (s *Server) registerBuiltinAutomations() {
 		},
 		Actions: []RuleAction{
 			{
-				Type: "command",
+				Type:   "command",
 				Params: json.RawMessage(`{"command": "ldap_users"}`),
 			},
 			{
-				Type: "webhook",
+				Type:   "webhook",
 				Params: json.RawMessage(`{"url": "", "method": "POST"}`),
 			},
 		},

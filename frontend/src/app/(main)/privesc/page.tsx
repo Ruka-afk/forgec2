@@ -15,34 +15,25 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Bot, ChevronDown, ChevronUp, CircleAlert, Info, CircleQuestionMark, Eye, FileCode, FileSpreadsheet, History, Lightbulb, Play, Settings, ShieldAlert, ShieldCheck, TriangleAlert, TrendingUp, Zap } from "lucide-react";
+import { Bot, ChevronDown, CircleAlert, Info, CircleQuestionMark, Eye, FileCode, FileSpreadsheet, History, Lightbulb, Play, Settings, ShieldAlert, ShieldCheck, TriangleAlert, TrendingUp, Zap } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
 interface PrivescAgent {
   id?: string;
-  ID?: string;
   hostname?: string;
-  Hostname?: string;
   ip?: string;
-  IP?: string;
   os?: string;
-  OS?: string;
 }
 
 interface PrivescHistory {
   id?: string;
-  ID?: string;
   agent_id?: string;
-  AgentID?: string;
   check_type?: string;
-  CheckType?: string;
   status?: string;
-  Status?: string;
   result?: string;
-  Result?: string;
   created_at?: string;
-  CreatedAt?: string;
   findings_count?: number;
-  FindingsCount?: number;
 }
 
 interface PrivescFinding {
@@ -131,7 +122,7 @@ export default function PrivescPage() {
     try {
       await api.postJson(`/privesc/run`, { agent_id: selectedAgent, check_type: checkType });
       setTimeout(loadData, 2000);
-    } catch { toast.error("Failed to start privilege check"); }
+    } catch { toast.error(t("privesc.toast.start_check_failed")); }
     setRunning(false);
   };
 
@@ -139,21 +130,21 @@ export default function PrivescPage() {
     try {
       const data = await api.get(`/api/privesc/history/${historyId}`);
       setFindings((data.findings || data.tasks || []) as PrivescFinding[]);
-    } catch { toast.error("Failed to load history"); }
+    } catch { toast.error(t("privesc.toast.load_history_failed")); }
   };
 
   const handleProcessResult = async (historyId: string) => {
     try {
       await api.postJson(`/api/privesc/result`, { history_id: historyId });
       loadData();
-    } catch { toast.error("Failed to process result"); }
+    } catch { toast.error(t("privesc.toast.process_result_failed")); }
   };
 
   const handleExecuteExploit = (finding: PrivescFinding) => {
     setCfm({msg: `${t("privesc.confirm_exploit")}\n\n${finding.title || t("privesc.unknown")}`, cb: async () => {
       try {
         await api.postJson(`/privesc/execute`, { agent_id: selectedAgent, check_type: checkType, exploit_command: finding.exploit_command });
-      } catch { toast.error("Failed to execute exploit"); }
+      } catch { toast.error(t("privesc.toast.execute_exploit_failed")); }
     }});
   };
 
@@ -177,7 +168,7 @@ export default function PrivescPage() {
   const lowCount = findings.filter((f) => f.severity === "low").length;
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={<><TrendingUp className="w-4 h-4" />{t("privesc.title")}</>} subtitle={t("privesc.subtitle")}>
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" onClick={handleExportJSON}>
@@ -188,6 +179,11 @@ export default function PrivescPage() {
           </Button>
         </div>
       </PageHeader>
+
+      <Card className="p-3 mb-4 border-amber-500/40 bg-amber-500/10 text-sm text-amber-800 dark:text-amber-200">
+        <div className="font-semibold">{t("privesc.honesty_title")}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{t("privesc.honesty_desc")}</div>
+      </Card>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
         <Card className="p-4">
@@ -291,41 +287,43 @@ export default function PrivescPage() {
             const isExpanded = expandedFinding === fid;
             return (
               <div key={fid} className="p-4 hover:bg-muted/50 transition-colors">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 flex-1">
-                    {severityIcon(f.severity || "low")}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium">{f.title || "-"}</span>
-                        <span className={`px-2 py-0.5 text-[10px] rounded-full border font-medium ${severityBadge(f.severity || "low")}`}>
-                          {(f.severity || "unknown").toUpperCase()}
-                        </span>
-                        {f.cve_id && <Badge variant="secondary" className="font-mono text-[10px]">{f.cve_id}</Badge>}
-                      </div>
-                      {isExpanded && (
-                        <div className="mt-3 space-y-2">
-                          {f.description && <p className="text-sm text-muted-foreground">{f.description}</p>}
-                          {f.recommendation && (
-                            <p className="text-sm text-indigo-600 dark:text-indigo-400">
-                              <Lightbulb className="w-4 h-4" />{t("privesc.recommendation_label")} {f.recommendation}
-                            </p>
-                          )}
-                          {f.exploit_command && (
-                            <div className="flex items-center gap-2">
-                              <code className="text-xs font-mono bg-card text-emerald-400 px-3 py-1.5 rounded-lg flex-1 overflow-x-auto">{f.exploit_command}</code>
-                              <Button variant="destructive" size="sm" onClick={() => handleExecuteExploit(f)} className="shrink-0">
-                                <Zap className="w-4 h-4" /> {t("privesc.execute")}
-                              </Button>
-                            </div>
-                          )}
+                <Collapsible open={isExpanded} onOpenChange={(open) => setExpandedFinding(open ? fid : null)}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 flex-1">
+                      {severityIcon(f.severity || "low")}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium">{f.title || "-"}</span>
+                          <Badge variant="secondary" className={`px-2 py-0.5 text-(--font-size-micro-sm) rounded-full border font-medium ${severityBadge(f.severity || "low")}`}>
+                            {(f.severity || "unknown").toUpperCase()}
+                          </Badge>
+                          {f.cve_id && <Badge variant="secondary" className="font-mono text-(--font-size-micro-sm)">{f.cve_id}</Badge>}
                         </div>
-                      )}
+                        <CollapsibleContent>
+                          <div className="mt-3 space-y-2">
+                            {f.description && <p className="text-sm text-muted-foreground">{f.description}</p>}
+                            {f.recommendation && (
+                              <p className="text-sm text-indigo-600 dark:text-indigo-400">
+                                <Lightbulb className="w-4 h-4" />{t("privesc.recommendation_label")} {f.recommendation}
+                              </p>
+                            )}
+                            {f.exploit_command && (
+                              <div className="flex items-center gap-2">
+                                <code className="text-xs font-mono bg-card text-emerald-400 px-3 py-1.5 rounded-lg flex-1 overflow-x-auto">{f.exploit_command}</code>
+                                <Button variant="destructive" size="sm" onClick={() => handleExecuteExploit(f)} className="shrink-0">
+                                  <Zap className="w-4 h-4" /> {t("privesc.execute")}
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </CollapsibleContent>
+                      </div>
                     </div>
+                    <CollapsibleTrigger render={<Button variant="ghost" size="icon-xs" aria-label="Expand" />}>
+                      <ChevronDown className="w-4 h-4" />
+                    </CollapsibleTrigger>
                   </div>
-                  <Button variant="ghost" size="icon-xs" onClick={() => setExpandedFinding(isExpanded ? null : fid)} aria-label="Expand">
-                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </Button>
-                </div>
+                </Collapsible>
               </div>
             );
           })}
@@ -373,13 +371,19 @@ export default function PrivescPage() {
                     <TableCell className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">{item.findings_count ?? 0}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                         <Button variant="ghost" size="icon-xs" onClick={() => handleViewHistory(hid)} title={t("privesc.view_result")} aria-label="View history">
-                          <Eye className="w-4 h-4" />
-                        </Button>
+                         <Tooltip>
+                           <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleViewHistory(hid)} aria-label="View history" />}>
+                              <Eye className="w-4 h-4" />
+                            </TooltipTrigger>
+                           <TooltipContent>{t("privesc.view_result")}</TooltipContent>
+                         </Tooltip>
                         {(item.status) === "completed" && (
-                           <Button variant="ghost" size="icon-xs" onClick={() => handleProcessResult(hid)} title={t("privesc.process_result")} aria-label="View result">
-                            <Settings className="w-4 h-4" />
-                          </Button>
+                           <Tooltip>
+                             <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleProcessResult(hid)} aria-label="View result" />}>
+                                <Settings className="w-4 h-4" />
+                              </TooltipTrigger>
+                             <TooltipContent>{t("privesc.process_result")}</TooltipContent>
+                           </Tooltip>
                         )}
                       </div>
                     </TableCell>
@@ -391,7 +395,7 @@ export default function PrivescPage() {
         )}
       </Card>
 
-      <ConfirmModal open={!!cfm} title="Confirm" message={cfm?.msg || ""} confirmText="Execute" cancelText="Cancel" onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.execute")} cancelText={t("common.cancel")} onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
     </div>
   );
 }

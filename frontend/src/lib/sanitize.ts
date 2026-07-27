@@ -18,10 +18,13 @@ export function esc(s: string): string {
     .replace(/\//g, "&#x2F;");
 }
 
+const SAFE_URI_REGEXP = /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i;
+
 export async function sanitizeHtml(html: string): Promise<string> {
   const DOMPurify = await getDOMPurify();
   return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: ["b", "i", "em", "strong", "a", "code", "pre", "span", "br", "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td", "h1", "h2", "h3", "h4", "h5", "h6", "p", "div", "blockquote", "hr"],
-    ALLOWED_ATTR: ["href", "target", "class", "id"],
+    ALLOWED_ATTR: ["href", "target", "class", "id", "rel"],
+    ALLOWED_URI_REGEXP: SAFE_URI_REGEXP,
   });
 }

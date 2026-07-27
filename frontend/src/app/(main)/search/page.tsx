@@ -54,7 +54,7 @@ function SearchContent() {
   }, [query, doSearch]);
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("search.title")} />
       <p className="text-sm text-muted-foreground mb-6">
         {query ? (
@@ -91,7 +91,7 @@ function SearchContent() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="text-sm font-medium text-foreground">{r.title}</span>
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 rounded capitalize">{r.type}</Badge>
+                  <Badge variant="secondary" className="text-(--font-size-micro-sm) px-1.5 py-0.5 rounded capitalize">{r.type}</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground truncate">{r.subtitle}</p>
               </div>
@@ -107,7 +107,7 @@ function SearchContent() {
 export default function SearchPage() {
   return (
     <Suspense fallback={
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
           <div className="text-xl font-semibold tracking-tight text-foreground leading-tight mb-1">Search Results</div>
         <div className="flex items-center gap-3 p-4 text-muted-foreground">
           <Spinner />

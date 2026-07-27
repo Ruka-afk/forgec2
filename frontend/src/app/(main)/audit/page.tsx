@@ -14,29 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download, FileText, Filter } from "lucide-react";
-
-interface AuditLog {
-  id?: string;
-  ID?: string;
-  timestamp?: string;
-  Timestamp?: string;
-  username?: string;
-  Username?: string;
-  action?: string;
-  Action?: string;
-  resource?: string;
-  Resource?: string;
-  target?: string;
-  Target?: string;
-  status?: string;
-  Status?: string;
-  details?: string;
-  Details?: string;
-  ip?: string;
-  IP?: string;
-  severity?: string;
-  Severity?: string;
-}
+import type { AuditLog } from "@/types/audit";
 
 const ACTION_BADGES: Record<string, string> = {
   login: "success",
@@ -70,15 +48,19 @@ export default function AuditPage() {
   const { t } = useI18n();
 
   useEffect(() => {
-    api.get("/users")
+    const controller = new AbortController();
+    api.get("/users", { signal: controller.signal })
       .then((data) => {
         const list = (data.users || data.data || []) as { username: string }[];
         setUsers(list);
       })
-      .catch(() => { /* silent: filter still works with manual entry */ });
+      .catch(() => {
+        // Non-fatal: user filter can still use free text
+      });
+    return () => controller.abort();
   }, []);
 
-  const loadLogs = useCallback(async () => {
+  const loadLogs = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -88,19 +70,23 @@ export default function AuditPage() {
       if (search) params.set("search", search);
       if (userFilter) params.set("user", userFilter);
       if (actionFilter) params.set("action", actionFilter);
-      const data = await api.get(`/audit/logs?${params}`);
+      const data = await api.get(`/audit/logs?${params}`, { signal });
       setLogs((data.data as AuditLog[]) || []);
       setTotal((data.total as number) || 0);
     } catch {
       setLogs([]);
       setTotal(0);
-      toast.error("Failed to load audit logs");
+      toast.error(t("audit.toast.load_failed"));
     } finally {
       setLoading(false);
     }
-  }, [page, perPage, search, userFilter, actionFilter]);
+  }, [page, perPage, search, userFilter, actionFilter, t]);
 
-  useEffect(() => { loadLogs(); }, [loadLogs]);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadLogs(controller.signal);
+    return () => controller.abort();
+  }, [loadLogs]);
 
   const applyFilters = () => { setPage(1); };
   const resetFilters = () => {
@@ -158,7 +144,7 @@ export default function AuditPage() {
   };
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("audit.title")} subtitle={t("audit.subtitle")}>
         <Button onClick={handleExport}>
           <Download className="w-4 h-4" />

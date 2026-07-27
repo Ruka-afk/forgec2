@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    name: Cross-compile and release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, windows]
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Build forgec2-server (${{ matrix.goos }}/${{ matrix.goarch }})
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          ext=""
+          if [ "${{ matrix.goos }}" = "windows" ]; then ext=".exe"; fi
+          go build -o "forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}${ext}" ./cmd/server
+          sha256sum "forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}${ext}" > "forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}${ext}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: forgec2-server-${{ matrix.goos }}-${{ matrix.goarch }}*
+
+  create-release:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: forgec2-server-*
+          merge-multiple: true
+
+      - name: Generate release notes
+        run: |
+          echo "## ForgeC2 Server" > release-notes.md
+          echo "" >> release-notes.md
+          echo "Prebuilt binaries for \`${{ github.ref_name }}\`:" >> release-notes.md
+          ls forgec2-server-* | grep -v '.sha256$' | sed 's/^/- /' >> release-notes.md
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: forgec2-server-*
+          body_path: release-notes.md
+          draft: false
+          prerelease: false

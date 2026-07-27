@@ -10,19 +10,19 @@ import (
 )
 
 var (
-	kernel32                    = syscall.NewLazyDLL("kernel32.dll")
-	ntdll                       = syscall.NewLazyDLL("ntdll.dll")
-	procVirtualAlloc            = kernel32.NewProc("VirtualAlloc")
-	procVirtualFree             = kernel32.NewProc("VirtualFree")
-	procVirtualProtect          = kernel32.NewProc("VirtualProtect")
-	procLoadLibraryA            = kernel32.NewProc("LoadLibraryA")
-	procGetProcAddress          = kernel32.NewProc("GetProcAddress")
-	procGetModuleHandleA        = kernel32.NewProc("GetModuleHandleA")
-	procFlushInstructionCache   = kernel32.NewProc("FlushInstructionCache")
-	procGetCurrentProcess       = kernel32.NewProc("GetCurrentProcess")
-	procWaitForSingleObject     = kernel32.NewProc("WaitForSingleObject")
-	procCreateThread            = kernel32.NewProc("CreateThread")
-	procRtlMoveMemory           = kernel32.NewProc("RtlMoveMemory")
+	kernel32                  = syscall.NewLazyDLL("kernel32.dll")
+	ntdll                     = syscall.NewLazyDLL("ntdll.dll")
+	procVirtualAlloc          = kernel32.NewProc("VirtualAlloc")
+	procVirtualFree           = kernel32.NewProc("VirtualFree")
+	procVirtualProtect        = kernel32.NewProc("VirtualProtect")
+	procLoadLibraryA          = kernel32.NewProc("LoadLibraryA")
+	procGetProcAddress        = kernel32.NewProc("GetProcAddress")
+	procGetModuleHandleA      = kernel32.NewProc("GetModuleHandleA")
+	procFlushInstructionCache = kernel32.NewProc("FlushInstructionCache")
+	procGetCurrentProcess     = kernel32.NewProc("GetCurrentProcess")
+	procWaitForSingleObject   = kernel32.NewProc("WaitForSingleObject")
+	procCreateThread          = kernel32.NewProc("CreateThread")
+	procRtlMoveMemory         = kernel32.NewProc("RtlMoveMemory")
 )
 
 // IMAGE_DOS_HEADER
@@ -220,6 +220,7 @@ func reflectDLL(dllData []byte) (uintptr, error) {
 		return 0, fmt.Errorf("PE too small")
 	}
 
+	// Map raw PE bytes to IMAGE_DOS_HEADER struct (starts at offset 0)
 	dos := (*imageDOSHeader)(unsafe.Pointer(&dllData[0]))
 	if dos.eMagic != 0x5A4D {
 		return 0, fmt.Errorf("invalid DOS header magic")
@@ -229,6 +230,7 @@ func reflectDLL(dllData []byte) (uintptr, error) {
 	}
 
 	ntOffset := uintptr(dos.eLfanew)
+	// Map PE bytes at e_lfanew offset to IMAGE_NT_HEADERS (signature + file/optional headers)
 	nt32 := (*imageNTHeaders32)(unsafe.Pointer(&dllData[ntOffset]))
 	if nt32.signature != 0x00004550 {
 		return 0, fmt.Errorf("invalid NT signature")
@@ -245,6 +247,7 @@ func reflectDLL(dllData []byte) (uintptr, error) {
 
 	if nt32.optionalHeader.magic == 0x10B {
 		is64Bit = false
+		// Map 32-bit Optional Header for PE32 images
 		oh := (*imageOptionalHeader32)(unsafe.Pointer(&dllData[ntOffset+24]))
 		imageBase = uint64(oh.imageBase)
 		sizeOfImage = oh.sizeOfImage
@@ -254,6 +257,7 @@ func reflectDLL(dllData []byte) (uintptr, error) {
 		sectionOffset = ntOffset + 24 + uintptr(nt32.fileHeader.sizeOfOptionalHeader)
 	} else if nt32.optionalHeader.magic == 0x20B {
 		is64Bit = true
+		// Map 64-bit Optional Header for PE32+ images
 		oh := (*imageOptionalHeader64)(unsafe.Pointer(&dllData[ntOffset+24]))
 		imageBase = oh.imageBase
 		sizeOfImage = oh.sizeOfImage
@@ -283,6 +287,7 @@ func reflectDLL(dllData []byte) (uintptr, error) {
 
 	procRtlMoveMemory.Call(allocAddr, uintptr(unsafe.Pointer(&dllData[0])), uintptr(sizeOfHeaders))
 
+	// Walk section headers array (starts right after optional header in PE)
 	for i := uint16(0); i < numberOfSections; i++ {
 		sec := (*imageSectionHeader)(unsafe.Pointer(&dllData[sectionOffset+uintptr(i)*uintptr(unsafe.Sizeof(imageSectionHeader{}))]))
 		if sec.sizeOfRawData == 0 {
@@ -319,7 +324,8 @@ func reflectDLL(dllData []byte) (uintptr, error) {
 		relocAddr := allocAddr + uintptr(dataDirAddr)
 		sizeOfBlock := ^uint32(0)
 		for sizeOfBlock > 0 {
-			reloc := (*imageBaseRelocation)(unsafe.Pointer(relocAddr))
+		// Map IMAGE_BASE_RELOCATION block in the loaded image memory
+	reloc := (*imageBaseRelocation)(unsafe.Pointer(relocAddr))
 			if reloc.virtualAddress == 0 {
 				break
 			}
@@ -332,7 +338,8 @@ func reflectDLL(dllData []byte) (uintptr, error) {
 			entriesStart := relocAddr + 8
 
 			for j := uint32(0); j < numEntries; j++ {
-				entry := *(*uint16)(unsafe.Pointer(entriesStart + uintptr(j)*2))
+				// Read 16-bit relocation entry: top 4 bits = type, bottom 12 bits = offset
+			entry := *(*uint16)(unsafe.Pointer(entriesStart + uintptr(j)*2))
 				typ := uint8((entry >> 12) & 0x0F)
 				offset := uint32(entry & 0x0FFF)
 
@@ -343,11 +350,13 @@ func reflectDLL(dllData []byte) (uintptr, error) {
 				relocPtr := allocAddr + uintptr(reloc.virtualAddress) + uintptr(offset)
 
 				if is64Bit && typ == relBasedDir64 {
-					oldVal := *(*uint64)(unsafe.Pointer(relocPtr))
+					// Apply 64-bit base relocation: read old value, add delta, write back
+				oldVal := *(*uint64)(unsafe.Pointer(relocPtr))
 					newVal := oldVal + imageBaseDelta
 					*(*uint64)(unsafe.Pointer(relocPtr)) = newVal
 				} else if !is64Bit && typ == relBasedHighlow {
-					oldVal := *(*uint32)(unsafe.Pointer(relocPtr))
+					// Apply 32-bit highlow relocation: adjust 32-bit address with delta
+				oldVal := *(*uint32)(unsafe.Pointer(relocPtr))
 					newVal := uint32(uint64(oldVal) + imageBaseDelta)
 					*(*uint32)(unsafe.Pointer(relocPtr)) = newVal
 				}
@@ -426,7 +435,8 @@ func resolveImports(imageBase uintptr, dd imageDataDirectory) {
 	importStart := imageBase + uintptr(dd.virtualAddress)
 	idx := uint32(0)
 	for {
-		impDesc := (*imageImportDescriptor)(unsafe.Pointer(importStart + uintptr(idx)*uintptr(unsafe.Sizeof(imageImportDescriptor{}))))
+	// Walk IMAGE_IMPORT_DESCRIPTOR array for each imported DLL
+	impDesc := (*imageImportDescriptor)(unsafe.Pointer(importStart + uintptr(idx)*uintptr(unsafe.Sizeof(imageImportDescriptor{}))))
 		if impDesc.name == 0 {
 			break
 		}
@@ -457,7 +467,8 @@ func resolveImports(imageBase uintptr, dd imageDataDirectory) {
 
 		i := uint32(0)
 		for {
-			thunkVal := *(*uint64)(unsafe.Pointer(thunkAddr + uintptr(i)*8))
+		// Read 64-bit IMAGE_THUNK_DATA entry (RVA or ordinal)
+		thunkVal := *(*uint64)(unsafe.Pointer(thunkAddr + uintptr(i)*8))
 			if thunkVal == 0 {
 				break
 			}
@@ -475,6 +486,7 @@ func resolveImports(imageBase uintptr, dd imageDataDirectory) {
 				}
 			}
 
+		// Write resolved function address into IAT (first thunk)
 			if funcAddr != 0 {
 				*(*uint64)(unsafe.Pointer(firstThunkAddr + uintptr(i)*8)) = uint64(funcAddr)
 			}
@@ -490,6 +502,7 @@ func goStringFromPtr(ptr uintptr) string {
 	}
 	var buf []byte
 	for i := 0; ; i++ {
+		// Read byte at raw pointer for null-terminated C string traversal
 		b := *(*byte)(unsafe.Pointer(ptr + uintptr(i)))
 		if b == 0 {
 			break

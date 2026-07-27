@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pencil, Plus, Tag, Trash2, X } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Tag {
   id: string;
@@ -22,7 +23,7 @@ interface Tag {
 }
 
 async function fetchTags() {
-  return api.json("/api/tags");
+  return api.get("/api/tags");
 }
 
 const TAG_COLORS = [
@@ -69,7 +70,7 @@ export default function TagsPage() {
     if (!formName.trim()) return;
     try {
       if (modal?.mode === "create") {
-        const data = await api.postJson<{ success?: boolean; tag?: Tag; error?: string }>("/tags", { name: formName.trim(), color: formColor });
+        const data = await api.postJson<{ success?: boolean; tag?: Tag; error?: string }>("/api/tags", { name: formName.trim(), color: formColor });
         if (data.success) {
           setActionMsg(t("tags.toast.created"));
           setModal(null);
@@ -78,7 +79,7 @@ export default function TagsPage() {
           setActionMsg(data.error || t("tags.toast.create_failed"));
         }
       } else if (modal?.mode === "edit" && modal.tag) {
-        const data = await api.put<{ success?: boolean; error?: string }>("/tags/" + modal.tag.id, { name: formName.trim(), color: formColor });
+        const data = await api.put<{ success?: boolean; error?: string }>("/api/tags/" + modal.tag.id, { name: formName.trim(), color: formColor });
         if (data.success) {
           setActionMsg(t("tags.toast.updated"));
           setModal(null);
@@ -95,7 +96,7 @@ export default function TagsPage() {
   const handleDelete = async () => {
     if (!deleteConfirm) return;
     try {
-      const data = await api.del<{ success?: boolean; error?: string }>("/tags/" + deleteConfirm.id);
+      const data = await api.del<{ success?: boolean; error?: string }>("/api/tags/" + deleteConfirm.id);
       if (data.success) {
         setActionMsg(t("tags.toast.deleted"));
         setDeleteConfirm(null);
@@ -109,9 +110,9 @@ export default function TagsPage() {
   };
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       {actionMsg && (
-        <div className="mb-3 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl text-sm text-indigo-700 dark:text-indigo-300 flex items-center justify-between">
+        <div className="mb-3 px-4 py-2 bg-primary/10 dark:bg-indigo-900/20 border border-primary/20 dark:border-indigo-800 rounded-xl text-sm text-primary dark:text-indigo-300 flex items-center justify-between">
           <span>{actionMsg}</span>
           <Button variant="ghost" size="icon-sm" onClick={() => setActionMsg(null)} className="text-indigo-400 hover:text-indigo-600" aria-label="Dismiss"><X className="w-4 h-4" /></Button>
         </div>
@@ -156,26 +157,30 @@ export default function TagsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => openEdit(tag)}
-                  className="w-8 h-8 text-muted-foreground hover:text-primary min-w-[2.75rem] min-h-[2.75rem]"
-                  title="Edit"
-                  aria-label="Edit tag"
-                >
-                  <Pencil className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setDeleteConfirm(tag)}
-                  className="w-8 h-8 text-muted-foreground hover:text-destructive min-w-[2.75rem] min-h-[2.75rem]"
-                  title="Delete"
-                  aria-label="Delete tag"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger render={<Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openEdit(tag)}
+                      className="w-8 h-8 text-muted-foreground hover:text-primary min-w-[2.75rem] min-h-[2.75rem]"
+                      aria-label="Edit tag"
+                    />}>
+                    <Pencil className="w-4 h-4" />
+                  </TooltipTrigger>
+                  <TooltipContent>Edit</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger render={<Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setDeleteConfirm(tag)}
+                      className="w-8 h-8 text-muted-foreground hover:text-destructive min-w-[2.75rem] min-h-[2.75rem]"
+                      aria-label="Delete tag"
+                    />}>
+                    <Trash2 className="w-4 h-4" />
+                  </TooltipTrigger>
+                  <TooltipContent>Delete</TooltipContent>
+                </Tooltip>
               </div>
             </div>
             <div className="text-xs text-muted-foreground">

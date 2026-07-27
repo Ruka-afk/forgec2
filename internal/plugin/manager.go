@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"gorm.io/gorm"
@@ -132,9 +133,9 @@ func (m *Manager) registerAtDir(manifest *Manifest, pluginDir string) error {
 	p := &externalPlugin{
 		manifest: manifest,
 		dir:      pluginDir,
-		enabled:  record.Enabled,
 		exec:     m.exec,
 	}
+	p.enabled.Store(record.Enabled)
 	if err := p.Init(context.Background(), config); err != nil {
 		return fmt.Errorf("failed to initialise plugin %q: %w", manifest.Name, err)
 	}
@@ -213,7 +214,7 @@ func (m *Manager) SetEnabled(name string, enabled bool) error {
 
 	if p, ok := m.plugins[name]; ok {
 		if ep, ok := p.(*externalPlugin); ok {
-			ep.enabled = enabled
+			ep.enabled.Store(enabled)
 		}
 	}
 	return nil
@@ -308,7 +309,7 @@ func (m *Manager) pluginDirFor(name string) string {
 type externalPlugin struct {
 	manifest *Manifest
 	dir      string
-	enabled  bool
+	enabled  atomic.Bool
 	config   map[string]interface{}
 	exec     *executor
 }
@@ -317,7 +318,7 @@ func (p *externalPlugin) Name() string        { return p.manifest.Name }
 func (p *externalPlugin) Version() string     { return p.manifest.Version }
 func (p *externalPlugin) Type() string        { return p.manifest.Type }
 func (p *externalPlugin) Description() string { return p.manifest.Description }
-func (p *externalPlugin) IsEnabled() bool     { return p.enabled }
+func (p *externalPlugin) IsEnabled() bool     { return p.enabled.Load() }
 func (p *externalPlugin) Manifest() *Manifest { return p.manifest }
 
 func (p *externalPlugin) Init(ctx context.Context, config map[string]interface{}) error {

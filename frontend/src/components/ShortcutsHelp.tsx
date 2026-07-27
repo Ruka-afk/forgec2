@@ -2,19 +2,22 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DEFAULT_SHORTCUTS, loadShortcuts, formatShortcut, matchShortcut } from "@/lib/shortcuts";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Keyboard } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 const groups = [
-  { title: "Navigation", keys: ["global_search", "refresh"] },
-  { title: "Actions", keys: ["new_item", "save", "toggle_lock"] },
-  { title: "General", keys: ["show_shortcuts", "close_modal"] },
+  { titleKey: "shortcuts.group_nav", keys: ["global_search", "refresh"] },
+  { titleKey: "shortcuts.group_actions", keys: ["new_item", "save", "toggle_lock"] },
+  { titleKey: "shortcuts.group_general", keys: ["show_shortcuts", "close_modal"] },
 ];
 
 function ShortcutsHelpPanel({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { t } = useI18n();
   const [shortcuts, setShortcuts] = useState(DEFAULT_SHORTCUTS);
   const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 
@@ -24,17 +27,17 @@ function ShortcutsHelpPanel({ open, onOpenChange }: { open: boolean; onOpenChang
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg" aria-label="Keyboard shortcuts">
+      <DialogContent className="max-w-lg" aria-label={t("a11y.shortcuts")}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Keyboard className="w-4 h-4" />
-            Keyboard Shortcuts
+            {t("a11y.shortcuts")}
           </DialogTitle>
         </DialogHeader>
         <ScrollArea className="space-y-5 max-h-[60vh]">
           {groups.map((g) => (
-            <div key={g.title}>
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{g.title}</h3>
+            <div key={g.titleKey}>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t(g.titleKey)}</h3>
               <div className="space-y-2">
                 {g.keys.map((key) => {
                   const s = shortcuts[key];
@@ -86,16 +89,13 @@ export function ShortcutsHelpButton() {
 
   return (
     <>
-      <Button
-        onClick={() => setOpen(true)}
-        variant="ghost"
-        size="sm"
-        className="hidden md:flex text-xs"
-        title="Keyboard shortcuts (Ctrl+/)"
-      >
-        <Keyboard className="w-4 h-4" />
-        <span>Shortcuts</span>
-      </Button>
+      <Tooltip>
+        <TooltipTrigger render={<Button onClick={() => setOpen(true)} variant="ghost" size="sm" className="hidden md:flex text-xs" />}>
+          <Keyboard className="w-4 h-4" />
+          <span>Shortcuts</span>
+        </TooltipTrigger>
+        <TooltipContent>Keyboard shortcuts (Ctrl+/)</TooltipContent>
+      </Tooltip>
       <ShortcutsHelpPanel open={open} onOpenChange={setOpen} />
     </>
   );

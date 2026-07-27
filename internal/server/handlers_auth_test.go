@@ -19,10 +19,11 @@ func newLoginTestServer(t *testing.T) *Server {
 	gin.SetMode(gin.TestMode)
 	cfg := config.DefaultConfig()
 	cfg.Server.JWTSecret = "test-jwt-secret-for-login"
-	middleware.InitJWTSecret(cfg)
+	middleware.InitJWTSecret(cfg, "")
 	return &Server{
-		db:  newContractDB(t),
-		cfg: cfg,
+		db:           newContractDB(t),
+		cfg:          cfg,
+		loginLockout: newLoginLockoutTracker(),
 	}
 }
 
@@ -36,8 +37,8 @@ func TestHandleLogin_MissingCredentials(t *testing.T) {
 
 	s.handleLogin(c)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d; body=%s", w.Code, w.Body.String())
 	}
 
 	var resp map[string]interface{}
@@ -67,8 +68,8 @@ func TestHandleLogin_UserNotFound(t *testing.T) {
 
 	s.handleLogin(c)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d; body=%s", w.Code, w.Body.String())
 	}
 
 	var resp map[string]interface{}
@@ -159,8 +160,8 @@ func TestHandleLogin_InactiveUser(t *testing.T) {
 
 	s.handleLogin(c)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d; body=%s", w.Code, w.Body.String())
 	}
 
 	var resp map[string]interface{}

@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"fmt"
@@ -27,7 +27,7 @@ func (s *Server) handleToolkitPage(c *gin.Context) {
 		Order("created_at desc").Limit(10).Find(&agentTasks)
 
 	data := gin.H{
-		"Title": "ForgeC2 - Post-Exploitation Toolkit",
+		"Title":       "ForgeC2 - Post-Exploitation Toolkit",
 		"ActiveNav":   "toolkit",
 		"Stats":       stats,
 		"Agents":      agents,
@@ -222,4 +222,3 @@ func (s *Server) handleToolkitAgentTasks(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
 }
-

@@ -14,7 +14,7 @@ import (
 // GET /campaigns
 func (s *Server) handleCampaignsList(c *gin.Context) {
 	var campaigns []db.Campaign
-	s.db.Preload("Agents").Order("created_at desc").Find(&campaigns)
+	s.db.Preload("Agents").Order("created_at desc").Limit(200).Find(&campaigns)
 	respond(c, gin.H{"success": true, "data": campaigns})
 }
 
@@ -27,11 +27,8 @@ func (s *Server) handleCampaignGet(c *gin.Context) {
 		return
 	}
 
-	var agents []db.Implant
-	s.db.Model(&campaign).Association("Agents").Find(&agents)
-
-	agentIDs := make([]string, 0, len(agents))
-	for _, a := range agents {
+	agentIDs := make([]string, 0, len(campaign.Agents))
+	for _, a := range campaign.Agents {
 		agentIDs = append(agentIDs, a.ID)
 	}
 
@@ -40,7 +37,7 @@ func (s *Server) handleCampaignGet(c *gin.Context) {
 		s.db.Where("agent_id IN ?", agentIDs).Limit(CampaignTaskLimit).Find(&tasks)
 	}
 
-	stats := computeCampaignStats(agents, tasks)
+	stats := computeCampaignStats(campaign.Agents, tasks)
 	respond(c, gin.H{"campaign": campaign, "stats": stats})
 }
 
@@ -129,10 +126,8 @@ func (s *Server) handleCampaignMitre(c *gin.Context) {
 		return
 	}
 
-	var agents []db.Implant
-	s.db.Model(&campaign).Association("Agents").Find(&agents)
-	agentIDs := make([]string, 0, len(agents))
-	for _, a := range agents {
+	agentIDs := make([]string, 0, len(campaign.Agents))
+	for _, a := range campaign.Agents {
 		agentIDs = append(agentIDs, a.ID)
 	}
 	var tasks []db.Task
@@ -288,13 +283,13 @@ func computeCampaignStats(agents []db.Implant, tasks []db.Task) map[string]inter
 	}
 
 	return map[string]interface{}{
-		"total_agents":      len(agents),
-		"total_tasks":       totalTasks,
-		"completed_tasks":   completed,
-		"failed_tasks":      failed,
+		"total_agents":       len(agents),
+		"total_tasks":        totalTasks,
+		"completed_tasks":    completed,
+		"failed_tasks":       failed,
 		"kill_chain_summary": phaseCounts,
-		"phase_timeline":    buildPhaseTimeline(tasks),
-		"agent_breakdown":   agentBreakdown,
+		"phase_timeline":     buildPhaseTimeline(tasks),
+		"agent_breakdown":    agentBreakdown,
 	}
 }
 

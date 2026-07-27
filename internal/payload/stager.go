@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -24,33 +26,45 @@ type StagerTokenData struct {
 }
 
 type StagerConfig struct {
-	ListenerID   uint
-	C2URL        string
-	Architecture string
-	OS           string
-	Format       string // exe, dll, shellcode
-	UserAgent    string
-	Profile      string
+	ListenerID    uint
+	C2URL         string
+	Architecture  string
+	OS            string
+	Format        string // exe, dll, shellcode
+	UserAgent     string
+	Profile       string
 	SkipTLSVerify bool
-	DNSDomain    string
-	DNSServer    string
+	DNSDomain     string
+	DNSServer     string
 }
 
 type StagerResult struct {
-	Token        string // encrypted token (base64)
-	TokenKeyHex  string // 32-byte hex key for AES-256-GCM
-	Stage2Path   string // path to generated stage-2 payload
-	Stage2Size   int64
+	Token       string // encrypted token (base64)
+	TokenKeyHex string // 32-byte hex key for AES-256-GCM
+	Stage2Path  string // path to generated stage-2 payload
+	Stage2Size  int64
 }
 
-var stagerKey []byte
+var (
+	stagerKey     []byte
+	stagerKeyOnce sync.Once
+)
 
-func init() {
-	stagerKey = make([]byte, 32)
-	_, _ = rand.Read(stagerKey)
+func ensureStagerKey() {
+	stagerKeyOnce.Do(func() {
+		key := make([]byte, 32)
+		if _, err := rand.Read(key); err != nil {
+			slog.Error("crypto/rand.Read failed for stager key, using zeros (insecure)", "error", err)
+			stagerKey = make([]byte, 32)
+			return
+		}
+		stagerKey = key
+		slog.Info("Stager key initialized")
+	})
 }
 
 func GetStagerKey() []byte {
+	ensureStagerKey()
 	return stagerKey
 }
 
@@ -175,8 +189,8 @@ func GenerateStagerStage2(cfg StagerConfig, outputDir string) (string, error) {
 	switch strings.ToLower(cfg.Format) {
 	case "dll":
 		return GenerateWindowsDLL(implantCfg, outputDir)
-	case "shellcode":
-		return "", fmt.Errorf("raw shellcode generation not implemented, use exe format")
+	case "shellcode", "raw":
+		return "", fmt.Errorf("raw shellcode stager format is not implemented; use exe or dll")
 	default:
 		return GenerateWindowsEXE(implantCfg, outputDir)
 	}

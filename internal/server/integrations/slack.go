@@ -3,7 +3,6 @@ package integrations
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"runtime/debug"
 	"strings"
@@ -50,7 +49,11 @@ func NewSlackBot(cfg config.SlackConfig, database *gorm.DB, srv interface{}) *Sl
 
 func (b *SlackBot) Start() {
 	go func() {
-		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
 		err := b.socketClient.RunContext(b.ctx)
 		if err != nil {
 			slog.Error("SlackBot RunEventLoop error", "err", err)
@@ -58,7 +61,11 @@ func (b *SlackBot) Start() {
 	}()
 
 	go func() {
-		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
 		for {
 			select {
 			case <-b.ctx.Done():

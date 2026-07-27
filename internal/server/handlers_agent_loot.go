@@ -28,22 +28,31 @@ func (s *Server) handleLootPage(c *gin.Context) {
 		Path     string // relative for URL
 	}
 	var allScreenshots []Screenshot
+	lootLimit := 500
 	screenshotRoot := filepath.Join(dataDir, "screenshots")
 	if entries, err := os.ReadDir(screenshotRoot); err == nil {
 		for _, e := range entries {
-			if e.IsDir() {
-				agentDir := filepath.Join(screenshotRoot, e.Name())
-				if files, err := os.ReadDir(agentDir); err == nil {
-					for _, f := range files {
-						if !f.IsDir() && (strings.HasSuffix(f.Name(), ".png") || strings.HasSuffix(f.Name(), ".jpg") || strings.HasSuffix(f.Name(), ".jpeg")) {
-							allScreenshots = append(allScreenshots, Screenshot{
-								AgentID:  e.Name(),
-								Filename: f.Name(),
-								Path:     e.Name() + "/" + f.Name(),
-							})
-						}
+			if !e.IsDir() {
+				continue
+			}
+			agentDir := filepath.Join(screenshotRoot, e.Name())
+			if files, err := os.ReadDir(agentDir); err == nil {
+				for _, f := range files {
+					if f.IsDir() || !(strings.HasSuffix(f.Name(), ".png") || strings.HasSuffix(f.Name(), ".jpg") || strings.HasSuffix(f.Name(), ".jpeg")) {
+						continue
+					}
+					allScreenshots = append(allScreenshots, Screenshot{
+						AgentID:  e.Name(),
+						Filename: f.Name(),
+						Path:     e.Name() + "/" + f.Name(),
+					})
+					if len(allScreenshots) >= lootLimit {
+						break
 					}
 				}
+			}
+			if len(allScreenshots) >= lootLimit {
+				break
 			}
 		}
 	}

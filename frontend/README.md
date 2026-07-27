@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ForgeC2 Frontend
 
-## Getting Started
+Next.js 16 前端，使用 Tailwind CSS 和 shadcn/ui 构建。
 
-First, run the development server:
+## 开发
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+访问 `http://localhost:8000` 查看结果（Go 服务器托管的嵌入式前端）。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 构建
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+```
 
-## Learn More
+输出目录: `out/`
 
-To learn more about Next.js, take a look at the following resources:
+## 技术栈
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Next.js 16.2 (App Router)
+- React 19
+- TypeScript 5
+- Tailwind CSS 4 (PostCSS)
+- shadcn/ui (base-nova, `@base-ui/react`)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 项目结构
 
-## Deploy on Vercel
+```
+src/app/          — 页面路由
+src/components/   — React 组件
+src/components/ui/ — shadcn/ui 原语
+src/lib/          — 工具函数、API 客户端、i18n、hooks
+src/types/        — TypeScript 类型定义
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 关键特性
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 静态导出 (`output: "export"`)，由 Go 服务器通过 `spaFS` 提供服务
+- 暗色模式 (`.dark` class on `<html>`)
+- 国际化 (`useI18n()` hook)
+- WebSocket 实时更新
+
+## 禁止模式
+
+- 使用 CDN 版 Tailwind (`public/js/tailwind.min.js`)
+- `@tailwind base;` / `@tailwind components;` / `@tailwind utilities;`
+- 使用 `next/font`（使用 Google Fonts CDN 链接）

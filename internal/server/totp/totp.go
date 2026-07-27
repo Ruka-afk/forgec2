@@ -10,12 +10,13 @@ import (
 	"time"
 
 	"github.com/pquerna/otp/totp"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
-	Issuer      = "ForgeC2"
-	SecretSize  = 16
-	BackupCodeCount = 8
+	Issuer           = "ForgeC2"
+	SecretSize       = 16
+	BackupCodeCount  = 8
 	BackupCodeLength = 6
 )
 
@@ -38,16 +39,16 @@ func GenerateQRCodeURL(username, secret string) string {
 func VerifyCode(secret, code string) bool {
 	code = strings.ReplaceAll(code, " ", "")
 	code = strings.ReplaceAll(code, "-", "")
-	
+
 	_, err := strconv.ParseUint(code, 10, 64)
 	if err != nil {
 		return false
 	}
 
 	opts := totp.ValidateOpts{
-		Period:    30,
-		Skew:      1,
-		Digits:    6,
+		Period: 30,
+		Skew:   1,
+		Digits: 6,
 	}
 
 	_, err = totp.ValidateCustom(code, secret, time.Now(), opts)
@@ -63,4 +64,15 @@ func GenerateBackupCodes() []string {
 		codes[i] = code[:3] + " " + code[3:]
 	}
 	return codes
+}
+
+func HashBackupCode(code string) (string, error) {
+	code = strings.ReplaceAll(code, " ", "")
+	hash, err := bcrypt.GenerateFromPassword([]byte(code), 10)
+	return string(hash), err
+}
+
+func VerifyBackupCode(hash, code string) bool {
+	code = strings.ReplaceAll(code, " ", "")
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(code)) == nil
 }

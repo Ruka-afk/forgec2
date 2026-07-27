@@ -1,0 +1,10 @@
+{
+  "version": "2.0.0",
+  "go_version": "go1.25.4",
+  "build_os": "windows",
+  "build_arch": "amd64",
+  "config_hash": "4ce2661accebe7b2",
+  "start_time": "2026-07-27T20:20:37.7570915+08:00",
+  "hostname": "张剑飞",
+  "protocol_version": 1
+}

@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/gin-gonic/gin"
 )
 
 type redirectorRequest struct {
@@ -47,18 +47,19 @@ func (s *Server) handleRedirectorCreate(c *gin.Context) {
 		req.SSHPort = DefaultSSHPort
 	}
 
+	encPassword, _ := encryptSecret(req.SSHPassword, s.cfg.Server.JWTSecret)
 	rd := db.Redirector{
-		Name:      req.Name,
-		Host:      req.Host,
-		Type:      req.Type,
-		Config:    req.Config,
-		SSHUser:   req.SSHUser,
-		SSHPort:   req.SSHPort,
-		SSHKey:    req.SSHKey,
-		SSHPassword: req.SSHPassword,
-		Status:    "inactive",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		Name:        req.Name,
+		Host:        req.Host,
+		Type:        req.Type,
+		Config:      req.Config,
+		SSHUser:     req.SSHUser,
+		SSHPort:     req.SSHPort,
+		SSHKey:      req.SSHKey,
+		SSHPassword: encPassword,
+		Status:      "inactive",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 	if err := s.db.Create(&rd).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Redirector operation"))
@@ -101,7 +102,8 @@ func (s *Server) handleRedirectorUpdate(c *gin.Context) {
 		rd.SSHKey = req.SSHKey
 	}
 	if req.SSHPassword != "" {
-		rd.SSHPassword = req.SSHPassword
+		encPassword, _ := encryptSecret(req.SSHPassword, s.cfg.Server.JWTSecret)
+		rd.SSHPassword = encPassword
 	}
 	if req.Status != "" {
 		rd.Status = req.Status
@@ -127,10 +129,10 @@ func (s *Server) handleRedirectorDelete(c *gin.Context) {
 // handleRedirectorTestSSH verifies TCP reachability of the SSH endpoint.
 func (s *Server) handleRedirectorTestSSH(c *gin.Context) {
 	var req struct {
-		Host   string `json:"host"`
-		Port   int    `json:"port"`
-		User   string `json:"user"`
-		Key    string `json:"ssh_key"`
+		Host     string `json:"host"`
+		Port     int    `json:"port"`
+		User     string `json:"user"`
+		Key      string `json:"ssh_key"`
 		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -143,7 +145,7 @@ func (s *Server) handleRedirectorTestSSH(c *gin.Context) {
 	addr := net.JoinHostPort(req.Host, strconv.Itoa(req.Port))
 	conn, err := net.DialTimeout("tcp", addr, ReachabilityDialTimeout)
 	if err != nil {
-		respond(c, gin.H{"success": false, "reachable": false, "error": sanitizeError(err, "Redirector operation")})
+		respondError(c, http.StatusServiceUnavailable, "SSH endpoint unreachable")
 		return
 	}
 	conn.Close()
@@ -154,9 +156,9 @@ func (s *Server) handleRedirectorTestSSH(c *gin.Context) {
 func (s *Server) handleRedirectorGenerate(c *gin.Context) {
 	rdType := c.Param("type")
 	var req struct {
-		Domain    string `json:"domain"`
-		Listener  string `json:"listener"`
-		Protocol  string `json:"protocol"`
+		Domain     string `json:"domain"`
+		Listener   string `json:"listener"`
+		Protocol   string `json:"protocol"`
 		TargetHost string `json:"target_host"`
 		TargetPort int    `json:"target_port"`
 	}
@@ -230,7 +232,7 @@ func (s *Server) handleRedirectorDeploySSH(c *gin.Context) {
 	addr := net.JoinHostPort(req.Host, strconv.Itoa(req.Port))
 	conn, err := net.DialTimeout("tcp", addr, ReachabilityDialTimeout)
 	if err != nil {
-		respond(c, gin.H{"success": false, "error": sanitizeError(err, "Redirector operation")})
+		respondError(c, http.StatusServiceUnavailable, sanitizeError(err, "Redirector operation"))
 		return
 	}
 	conn.Close()
@@ -244,7 +246,7 @@ func (s *Server) handleRedirectorDeploySSH(c *gin.Context) {
 		s.db.Model(&db.Redirector{}).Where("host = ?", req.Host).Update("status", "active")
 	}
 	respond(c, gin.H{
-		"success":  true,
+		"success": true,
 		"message": "Redirector reachable. Push the generated config via your SSH client.",
 		"config":  req.Config,
 	})

@@ -45,7 +45,7 @@ func (s *Server) handleServeStage(c *gin.Context) {
 		return
 	}
 
-	c.File(stagePath)
+	serveFileSafe(c, stagePath, allowedDir, "")
 }
 
 func isPathWithin(base, target string) bool {

@@ -42,16 +42,16 @@ export default function ToolkitPage() {
   const [agentInfo, setAgentInfo] = useState<Record<string, unknown> | null>(null);
   const runAction = async (action: string, param = "") => {
     if (!selectedAgent) {
-      toast.error("Select an agent first");
+      toast.error(t("toolkit.toast.select_agent_first"));
       return;
     }
     try {
       const data = await api.post(`/toolkit/agents/${selectedAgent}/action`, { action, param });
       if (data.success) {
-        toast.success(`Dispatched ${action} (task #${data.task_id})`);
+        toast.success(t("toolkit.toast.action_dispatched", { action: action, task_id: String(data.task_id) }));
         loadData();
       } else {
-        toast.error((data.error as string) || "Failed to execute action");
+        toast.error((data.error as string) || t("toolkit.toast.action_failed"));
       }
     } catch (e) {
       toast.error(String(e));
@@ -73,9 +73,9 @@ export default function ToolkitPage() {
       ]);
       setToolkitAgents((agentsData.agents || []) as ToolkitAgent[]);
       setRecentTasks((tasksData.tasks || tasksData.results || tasksData.data || []) as RecentTask[]);
-    } catch { toast.error("Toolkit: load data failed"); }
+    } catch { toast.error(t("toolkit.toast.load_failed")); }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -158,7 +158,7 @@ export default function ToolkitPage() {
   };
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("toolkit.title")} subtitle={t("toolkit.subtitle")}>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">{t("toolkit.target_agent")}</span>
@@ -205,7 +205,7 @@ export default function ToolkitPage() {
                       <span className="text-xs font-bold">{cat.name[0]}</span>
                     </div>
                     <span className="font-semibold text-sm text-foreground">{cat.name}</span>
-                    <Badge variant="secondary" className="text-[10px] px-2 py-0.5">{cat.commands.length}</Badge>
+                    <Badge variant="secondary" className="text-(--font-size-micro-sm) px-2 py-0.5">{cat.commands.length}</Badge>
                   </div>
                 </div>
                 <div className="px-5 pb-4 space-y-1">
@@ -213,7 +213,7 @@ export default function ToolkitPage() {
                     <Button key={c.cmd} variant="ghost" onClick={() => runAction(c.cmd)} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl justify-start text-left border border-transparent hover:border-border transition-all">
                       <span className={`text-xs font-mono font-medium w-28 shrink-0 ${colorMap[cat.color]?.split(" ")[1] || "text-blue-600 dark:text-blue-400"}`}>{c.cmd}</span>
                       <span className="text-xs text-muted-foreground">{c.desc}</span>
-                      <span className="ml-auto text-[10px] text-muted-foreground">{t("toolkit.run")}</span>
+                      <span className="ml-auto text-(--font-size-micro-sm) text-muted-foreground">{t("toolkit.run")}</span>
                     </Button>
                   ))}
                 </div>
@@ -235,7 +235,7 @@ export default function ToolkitPage() {
           <Card className="overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
               <span className="text-sm font-semibold text-muted-foreground">{t("toolkit.recent_results")}</span>
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">{recentTasks.length}</Badge>
+              <Badge variant="secondary" className="text-(--font-size-micro-sm) px-1.5 py-0.5">{recentTasks.length}</Badge>
             </div>
             <div className="max-h-[600px] overflow-y-auto">
               {recentTasks.length === 0 ? (
@@ -244,7 +244,7 @@ export default function ToolkitPage() {
                 recentTasks.map((t, i) => (
                   <div key={i} className="px-4 py-3 border-b border-border last:border-0 hover:bg-muted transition-colors">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-mono text-muted-foreground">{(t.agent_id || "").toString().slice(0, 8)}</span>
+                      <span className="text-(--font-size-micro-sm) font-mono text-muted-foreground">{(t.agent_id || "").toString().slice(0, 8)}</span>
                       <StatusBadge status={t.status || ""} />
                     </div>
                     <div className="text-xs font-medium text-muted-foreground truncate">{t.type}: {t.command}</div>

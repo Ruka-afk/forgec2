@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useState, useEffect, useRef } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PageHeader, PageSpinner } from "@/components/UI";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
@@ -43,7 +44,7 @@ export default function GeneratePage() {
       next[key] = g.states[key as keyof typeof g.states].busy;
     }
     prevBusyRef.current = next;
-  }, [g.states]);
+  }, [g.states]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dismissBanner = () => {
     setShowBanner(false);
@@ -57,32 +58,35 @@ export default function GeneratePage() {
         return { ...prev, [key]: next };
       });
     };
-  }, [g.setForms]);
+  }, [g.setForms]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (g.loading) return <PageSpinner />;
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("generate.title")} subtitle={t("generate.subtitle")} />
 
       {showBanner && (
-        <div className="mt-3 flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl">
+        <div className="mt-3 flex items-center gap-2 px-4 py-2 bg-warning/10 border border-warning/20 rounded-xl">
           <Info className="w-4 h-4" />
-          <span className="flex-1 text-xs text-amber-700 dark:text-amber-300">{t("generate.banner_text")} <a href="https://go.dev/dl/" target="_blank" className="underline hover:text-amber-800 dark:hover:text-amber-200 transition-colors">{t("generate.banner_download")}</a></span>
-          <Button variant="ghost" size="icon-sm" onClick={dismissBanner} className="text-amber-500 hover:text-amber-700 dark:hover:text-amber-200" title={t("generate.dismiss")} aria-label={t("generate.dismiss")}>
+          <span className="flex-1 text-xs text-warning-foreground">{t("generate.banner_text")} <a href="https://go.dev/dl/" target="_blank" className="underline hover:text-amber-800 dark:hover:text-amber-200 transition-colors">{t("generate.banner_download")}</a></span>
+          <Tooltip>
+            <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={dismissBanner} className="text-amber-500 hover:text-amber-700 dark:hover:text-amber-200" aria-label={t("generate.dismiss")} />}>
             <X className="w-4 h-4" />
-          </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("generate.dismiss")}</TooltipContent>
+          </Tooltip>
         </div>
       )}
 
       <div className="flex items-center gap-3 mt-5 mb-3 text-xs">
         <div className="flex items-center gap-1.5">
-          <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-semibold">1</span>
+          <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-(--font-size-micro-sm) font-semibold">1</span>
           <span className="text-foreground font-medium">{t("generate.step_config")}</span>
         </div>
         <ChevronRight className="w-4 h-4" />
         <div className="flex items-center gap-1.5">
-          <span className="w-5 h-5 rounded-full bg-muted-foreground text-white flex items-center justify-center text-[10px] font-semibold">2</span>
+          <span className="w-5 h-5 rounded-full bg-muted-foreground text-white flex items-center justify-center text-(--font-size-micro-sm) font-semibold">2</span>
           <span className="text-muted-foreground">{t("generate.step_payload")}</span>
         </div>
       </div>
@@ -103,15 +107,15 @@ export default function GeneratePage() {
         onProfileDeleted={g.deleteProfile}
       />
 
-      <input aria-label="Import profile JSON file" name="profile-import" ref={g.fileInputRef} type="file" accept=".json,application/json" className="hidden" onChange={g.handleProfileImport} />
+      <input aria-label="Import profile JSON file" name="profile-import" ref={g.fileInputRef} type="file" accept=".json,application/json" className="" onChange={g.handleProfileImport} />
 
       {/* Primary Payloads */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-5">
-        <div className="opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]" style={{ animationDelay: "0ms" }}><BinaryPanel variant="exe" form={g.forms.exe} setForm={makeDispatch("exe")} busy={g.states.exe.busy} result={g.states.exe.result} onGenerate={g.handlerMap.exe} /></div>
-        <div className="opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]" style={{ animationDelay: "40ms" }}><BinaryPanel variant="dll" form={g.forms.dll} setForm={makeDispatch("dll")} busy={g.states.dll.busy} result={g.states.dll.result} onGenerate={g.handlerMap.dll} /></div>
-        <div className="opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]" style={{ animationDelay: "80ms" }}><PS1Panel form={g.forms.ps1} setForm={makeDispatch("ps1")} busy={g.states.ps1.busy} result={g.states.ps1.result} code={g.extras.ps1?.code} originalLen={g.extras.ps1?.original_length} obfuscatedLen={g.extras.ps1?.obfuscated_len} onGenerate={g.handlerMap.ps1} onCopy={g.copyToClipboard} /></div>
-        <div className="opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]" style={{ animationDelay: "120ms" }}><UnixPanel variant="linux" form={g.forms.linux} setForm={makeDispatch("linux")} busy={g.states.linux.busy} result={g.states.linux.result} onGenerate={g.handlerMap.linux} /></div>
-        <div className="opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]" style={{ animationDelay: "160ms" }}><UnixPanel variant="macos" form={g.forms.macos} setForm={makeDispatch("macos")} busy={g.states.macos.busy} result={g.states.macos.result} onGenerate={g.handlerMap.macos} /></div>
+        <div className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "0ms" }}><BinaryPanel variant="exe" form={g.forms.exe} setForm={makeDispatch("exe")} busy={g.states.exe.busy} result={g.states.exe.result} onGenerate={g.handlerMap.exe} /></div>
+        <div className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "40ms" }}><BinaryPanel variant="dll" form={g.forms.dll} setForm={makeDispatch("dll")} busy={g.states.dll.busy} result={g.states.dll.result} onGenerate={g.handlerMap.dll} /></div>
+        <div className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "80ms" }}><PS1Panel form={g.forms.ps1} setForm={makeDispatch("ps1")} busy={g.states.ps1.busy} result={g.states.ps1.result} code={g.extras.ps1?.code} originalLen={g.extras.ps1?.original_length} obfuscatedLen={g.extras.ps1?.obfuscated_len} onGenerate={g.handlerMap.ps1} onCopy={g.copyToClipboard} /></div>
+        <div className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "120ms" }}><UnixPanel variant="linux" form={g.forms.linux} setForm={makeDispatch("linux")} busy={g.states.linux.busy} result={g.states.linux.result} onGenerate={g.handlerMap.linux} /></div>
+        <div className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "160ms" }}><UnixPanel variant="macos" form={g.forms.macos} setForm={makeDispatch("macos")} busy={g.states.macos.busy} result={g.states.macos.result} onGenerate={g.handlerMap.macos} /></div>
       </div>
 
       {/* Artifact Kit */}

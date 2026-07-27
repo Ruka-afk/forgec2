@@ -15,5 +15,3 @@ func GenerateCommandLineOneLiner(code string) string {
 	// This method loads the script from base64 decoded string in memory
 	return fmt.Sprintf(`powershell -nop -w hidden -c ([ScriptBlock]::Create([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('%s')))).Invoke()`, b64)
 }
-
-

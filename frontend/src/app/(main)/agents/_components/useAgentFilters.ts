@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useDebounce } from "@/lib/hooks/useDebounce";
 import type { Beacon } from "./types";
 
 export type SortKey = "hostname" | "username" | "os" | "ip" | "last_seen" | "status";
@@ -8,7 +9,7 @@ export type LinkedFilter = "" | "direct" | "chained";
 
 export function useAgentFilters(beacons: Beacon[]) {
   const [searchInput, setSearchInput] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const searchQuery = useDebounce(searchInput, 300);
   const [statusFilter, setStatusFilter] = useState("");
   const [osFilter, setOsFilter] = useState("");
   const [page, setPage] = useState(1);
@@ -20,14 +21,11 @@ export function useAgentFilters(beacons: Beacon[]) {
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [visibleCols, setVisibleCols] = useState<Record<string, boolean>>({
     hostname: true, username: true, os: true, ip: true, last_seen: true,
-    window: true, lock: true, tags: true, tasks: true, status: true, version: true,
+    window: true, lock: true, tasks: true, status: true, version: true,
   });
   const [colMenuOpen, setColMenuOpen] = useState(false);
 
-  useEffect(() => {
-    const t = setTimeout(() => { setSearchQuery(searchInput); setPage(1); }, 300);
-    return () => clearTimeout(t);
-  }, [searchInput]);
+  useEffect(() => { if (searchInput) setPage(1); }, [searchInput]);
 
   useEffect(() => {
     if (!colMenuOpen) return;

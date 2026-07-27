@@ -26,6 +26,8 @@ const eslintConfig = defineConfig([
       "@next/next/no-img-element": "off",
       // Project uses Google Fonts CDN by design (AGENTS.md), not _document.js
       "@next/next/no-page-custom-font": "off",
+      // Enforce type safety: ban `as any` casts
+      "@typescript-eslint/no-explicit-any": "error",
     },
   },
 ]);

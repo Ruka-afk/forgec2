@@ -1,6 +1,7 @@
 package scripting
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -324,39 +325,54 @@ func (e *ScriptEngine) ExecuteCode(code string, context map[string]interface{}) 
 	return e.executeScript(code, context)
 }
 
-func (e *ScriptEngine) executeScript(code string, context map[string]interface{}) ExecutionResult {
+func (e *ScriptEngine) executeScript(code string, scriptCtx map[string]interface{}) ExecutionResult {
 	vm := goja.New()
 	registry := new(require.Registry)
 	registry.Enable(vm)
 	console.Enable(vm)
 
-	for k, v := range context {
+	for k, v := range scriptCtx {
 		vm.Set(k, v)
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	done := make(chan ExecutionResult, 1)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				done <- ExecutionResult{Success: false, Error: fmt.Sprintf("panic: %v", r)}
+				select {
+				case done <- ExecutionResult{Success: false, Error: fmt.Sprintf("panic: %v", r)}:
+				default:
+				}
 			}
 		}()
 		v, err := vm.RunString(code)
 		if err != nil {
-			done <- ExecutionResult{Success: false, Error: err.Error()}
+			select {
+			case done <- ExecutionResult{Success: false, Error: err.Error()}:
+			default:
+			}
 			return
 		}
 		if v != nil {
-			done <- ExecutionResult{Success: true, Output: v.String()}
+			select {
+			case done <- ExecutionResult{Success: true, Output: v.String()}:
+			default:
+			}
 		} else {
-			done <- ExecutionResult{Success: true, Output: ""}
+			select {
+			case done <- ExecutionResult{Success: true, Output: ""}:
+			default:
+			}
 		}
 	}()
 
 	select {
 	case result := <-done:
 		return result
-	case <-time.After(30 * time.Second):
+	case <-ctx.Done():
 		return ExecutionResult{Success: false, Error: "script execution timeout (30s)"}
 	}
 }

@@ -7,20 +7,20 @@ import (
 )
 
 type MalleableProfile struct {
-	Name      string     `yaml:"name"`
-	UserAgent string     `yaml:"user_agent"`
-	Sleep     int        `yaml:"sleep"`
-	Jitter    int        `yaml:"jitter"`
-	HTTPGet   HTTPBlock  `yaml:"http-get"`
-	HTTPPost  HTTPBlock  `yaml:"http-post"`
+	Name      string      `yaml:"name"`
+	UserAgent string      `yaml:"user_agent"`
+	Sleep     int         `yaml:"sleep"`
+	Jitter    int         `yaml:"jitter"`
+	HTTPGet   HTTPBlock   `yaml:"http-get"`
+	HTTPPost  HTTPBlock   `yaml:"http-post"`
 	PostEx    PostExBlock `yaml:"post-ex"`
 }
 
 type HTTPBlock struct {
-	URI    string       `yaml:"uri"`
-	Verb   string       `yaml:"verb"`
-	Client ClientBlock  `yaml:"client"`
-	Server ServerBlock  `yaml:"server"`
+	URI    string      `yaml:"uri"`
+	Verb   string      `yaml:"verb"`
+	Client ClientBlock `yaml:"client"`
+	Server ServerBlock `yaml:"server"`
 }
 
 type ClientBlock struct {

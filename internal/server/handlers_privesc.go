@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"fmt"
@@ -229,4 +229,3 @@ func (s *Server) handlePrivescExecute(c *gin.Context) {
 		fmt.Sprintf("Privesc exploit task created: %s", req.ExploitCommand), true, nil)
 	respond(c, gin.H{"success": true, "task_id": task.ID})
 }
-

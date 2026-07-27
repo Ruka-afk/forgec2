@@ -11,7 +11,7 @@ import { AlertTriangle, Check, CheckCircle, Key, Lock, QrCode, RotateCw, Save, S
 export default function SecuritySection({
   data, passwordForm, setPasswordForm, totpStatus, totpSecret, totpQR, totpBackupCodes,
   totpCode, setTotpCode, showTotpSetup, totpDisablePassword, setTotpDisablePassword,
-  saving, onChangePassword, onRegenerateJWT, onGenerateTOTP, onEnableTOTP, onDisableTOTP, inputCls,
+  saving, onChangePassword, onRegenerateJWT, onGenerateTOTP, onEnableTOTP, onDisableTOTP,
 }: {
   data: SettingsData;
   passwordForm: PasswordForm;
@@ -31,7 +31,6 @@ export default function SecuritySection({
   onGenerateTOTP: () => void;
   onEnableTOTP: () => void;
   onDisableTOTP: () => void;
-  inputCls: string;
 }) {
   const { t } = useI18n();
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
@@ -50,16 +49,16 @@ export default function SecuritySection({
           <form onSubmit={onChangePassword} className="max-w-md space-y-4">
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">Current Password</span>
-              <Input aria-label="password" name="input-0" type="password" required value={passwordForm.current} onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })} className={inputCls} />
+              <Input aria-label="password" name="input-0" type="password" required value={passwordForm.current} onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })}  />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <span className="block text-xs text-muted-foreground mb-1.5">New Password</span>
-                <Input aria-label="password" name="input-1" type="password" required minLength={8} value={passwordForm.next} onChange={(e) => setPasswordForm({ ...passwordForm, next: e.target.value })} className={inputCls} />
+                <Input aria-label="password" name="input-1" type="password" required minLength={8} value={passwordForm.next} onChange={(e) => setPasswordForm({ ...passwordForm, next: e.target.value })}  />
               </div>
               <div>
                 <span className="block text-xs text-muted-foreground mb-1.5">Confirm New Password</span>
-                <Input aria-label="password" name="input-2" type="password" required minLength={8} value={passwordForm.confirm} onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })} className={inputCls} />
+                <Input aria-label="password" name="input-2" type="password" required minLength={8} value={passwordForm.confirm} onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })}  />
               </div>
             </div>
             <Button type="submit" disabled={saving} className="h-11 px-6 rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
@@ -70,7 +69,7 @@ export default function SecuritySection({
 
         <div className="border-t border-border pt-6">
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="w-4 h-4" />JWT Secret</h3>
-          <div className="flex items-center gap-4 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
+          <div className="flex items-center gap-4 p-4 bg-warning/10 rounded-xl border border-warning/20">
             <div className="flex-1">
               <div className="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">Current Key</div>
               <code className="text-sm font-mono text-amber-800 dark:text-amber-300 break-all select-all">{data.jwt_masked ?? "????????"}</code>
@@ -118,10 +117,10 @@ export default function SecuritySection({
                   </div>
                   <div>
                     <span className="block text-xs text-muted-foreground mb-1.5">Verification Code</span>
-                    <Input aria-label="123 456" name="123-456-3" type="text" placeholder="123 456" maxLength={8} value={totpCode} onChange={(e) => setTotpCode(e.target.value)} className={inputCls} />
+                    <Input aria-label="123 456" name="123-456-3" type="text" placeholder="123 456" maxLength={8} value={totpCode} onChange={(e) => setTotpCode(e.target.value)}  />
                   </div>
                   {totpBackupCodes && (
-                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400">
+                    <div className="bg-warning/10 border border-warning/20 rounded-xl p-3 text-xs text-warning-foreground">
                       <AlertTriangle className="w-4 h-4" />
                       Save these backup codes: <div className="mt-2 font-mono font-semibold whitespace-pre-wrap">{totpBackupCodes}</div>
                     </div>
@@ -143,7 +142,7 @@ export default function SecuritySection({
               </div>
               <div>
                 <span className="block text-xs text-muted-foreground mb-1.5">Enter password to disable</span>
-                <Input aria-label="Current password" name="current-password-4" type="password" placeholder="Current password" value={totpDisablePassword} onChange={(e) => setTotpDisablePassword(e.target.value)} className={inputCls} />
+                <Input aria-label="Current password" name="current-password-4" type="password" placeholder="Current password" value={totpDisablePassword} onChange={(e) => setTotpDisablePassword(e.target.value)}  />
               </div>
               <Button onClick={() => setCfm({msg: t("settings.disable_totp"), cb: () => onDisableTOTP()})} disabled={saving} className="h-11 px-6 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
                 <X className="w-4 h-4" />Disable 2FA

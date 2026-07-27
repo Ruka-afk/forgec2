@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/forgec2/forgec2/internal/db"
 )
 
 const bloodHoundDir = "data/bloodhound"
@@ -39,8 +39,8 @@ func (s *Server) handleBloodHoundStatus(c *gin.Context) {
 
 	respond(c, gin.H{
 		"total_collections": total,
-		"last_collection": last.CreatedAt,
-		"last_agent_id":   last.AgentID,
+		"last_collection":   last.CreatedAt,
+		"last_agent_id":     last.AgentID,
 	})
 }
 
@@ -83,7 +83,7 @@ func (s *Server) handleBloodHoundDownload(c *gin.Context) {
 		respondError(c, http.StatusForbidden, "invalid file path")
 		return
 	}
-	c.File(result.FilePath)
+	serveFileSafe(c, result.FilePath, bloodHoundDir, "")
 }
 
 // handleBloodHoundDelete removes a collection result and its file.
@@ -125,11 +125,11 @@ func (s *Server) handleBloodHoundUpload(c *gin.Context) {
 	}
 
 	result := db.BloodHoundResult{
-		AgentID:     agentID,
-		FilePath:    stored,
-		Summary:     c.PostForm("summary"),
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		AgentID:   agentID,
+		FilePath:  stored,
+		Summary:   c.PostForm("summary"),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	if err := s.db.Create(&result).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to save bloodhound result")
@@ -155,8 +155,8 @@ func (s *Server) handleBloodHoundResult(c *gin.Context) {
 		AgentID:          agentID,
 		CollectionMethod: method,
 		Summary:          c.PostForm("summary"),
-		CreatedAt:         time.Now(),
-		UpdatedAt:         time.Now(),
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 
 	if file, err := c.FormFile("file"); err == nil {
@@ -173,7 +173,7 @@ func (s *Server) handleBloodHoundResult(c *gin.Context) {
 		"group_count":        &result.GroupCount,
 		"session_count":      &result.SessionCount,
 		"domain_admin_count": &result.DomainAdminCount,
-		"spn_count":         &result.SPNCount,
+		"spn_count":          &result.SPNCount,
 	} {
 		if v := strings.TrimSpace(c.PostForm(field)); v != "" {
 			var n int

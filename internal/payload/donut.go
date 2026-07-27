@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 )
 
 // DonutConfig holds parameters for Donut shellcode generation.
@@ -52,7 +53,34 @@ func findDonutCLI() string {
 	return ""
 }
 
+var safeArgPattern = regexp.MustCompile(`^[a-zA-Z0-9._\-\[\], ]*$`)
+
+func validateDonutArgs(cfg DonutConfig) error {
+	if cfg.ClassName != "" && !safeArgPattern.MatchString(cfg.ClassName) {
+		return fmt.Errorf("invalid ClassName: contains disallowed characters")
+	}
+	if cfg.MethodName != "" && !safeArgPattern.MatchString(cfg.MethodName) {
+		return fmt.Errorf("invalid MethodName: contains disallowed characters")
+	}
+	if cfg.Args != "" && !safeArgPattern.MatchString(cfg.Args) {
+		return fmt.Errorf("invalid Args: contains disallowed characters")
+	}
+	switch cfg.Arch {
+	case "", "x86", "amd64":
+	default:
+		return fmt.Errorf("invalid Arch: must be x86, amd64, or empty")
+	}
+	if cfg.Entropy != 0 && (cfg.Entropy < 1 || cfg.Entropy > 3) {
+		return fmt.Errorf("invalid Entropy: must be 1-3")
+	}
+	return nil
+}
+
 func generateWithDonutCLI(donutPath string, cfg DonutConfig) ([]byte, error) {
+	if err := validateDonutArgs(cfg); err != nil {
+		return nil, err
+	}
+
 	tmpDir, err := os.MkdirTemp("", "donut_*")
 	if err != nil {
 		return nil, fmt.Errorf("temp dir: %w", err)

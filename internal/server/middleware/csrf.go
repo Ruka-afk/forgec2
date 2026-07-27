@@ -3,6 +3,7 @@ package middleware
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -27,19 +28,17 @@ func CSRFProtect() gin.HandlerFunc {
 
 			if cookieToken == "" || headerToken == "" || headerToken != cookieToken {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-					"error":   "csrf_validation_failed",
-					"message": "Missing or invalid CSRF token",
+					"success": false,
+					"error":   "Missing or invalid CSRF token",
 				})
 				return
 			}
 		}
 
-		// On every GET, ensure a fresh CSRF cookie exists
+		// On every GET/HEAD, rotate the CSRF token to prevent stale cookie injection
 		if method == "GET" || method == "HEAD" {
-			if _, err := c.Cookie(csrfCookieName); err != nil {
-				token := generateCSRFToken()
-				SetCookieWithSameSite(c, csrfCookieName, token, 0, "/", CookieSecure, false, http.SameSiteLaxMode)
-			}
+			token := generateCSRFToken()
+			SetCookieWithSameSite(c, csrfCookieName, token, 0, "/", CookieSecure, false, http.SameSiteLaxMode)
 		}
 
 		c.Next()
@@ -48,6 +47,9 @@ func CSRFProtect() gin.HandlerFunc {
 
 func generateCSRFToken() string {
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		slog.Error("CRNG failed for CSRF token", "error", err)
+		panic("CSRF token generation: crypto/rand failed")
+	}
 	return hex.EncodeToString(b)
 }

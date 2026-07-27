@@ -27,18 +27,18 @@ func (s *Server) handleTrafficProfileGet(c *gin.Context) {
 
 	if len(agentLogs) < 2 {
 		c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
-			"agent_id":              agentID,
-			"sample_count":          len(agentLogs),
-			"baseline_interval":     0,
-			"baseline_jitter":       0,
-			"baseline_packet_size":  0,
-			"mean_interval":         0,
-			"stddev_interval":       0,
-			"mean_packet_size":      0,
-			"cv":                    0,
-			"auto_adapt":            false,
-			"recent_records":        agentLogs,
-			"suggestion":            nil,
+			"agent_id":             agentID,
+			"sample_count":         len(agentLogs),
+			"baseline_interval":    0,
+			"baseline_jitter":      0,
+			"baseline_packet_size": 0,
+			"mean_interval":        0,
+			"stddev_interval":      0,
+			"mean_packet_size":     0,
+			"cv":                   0,
+			"auto_adapt":           false,
+			"recent_records":       agentLogs,
+			"suggestion":           nil,
 		}})
 		return
 	}
@@ -73,18 +73,18 @@ func (s *Server) handleTrafficProfileGet(c *gin.Context) {
 	suggestion := computeAdaptationSuggestion(baselineInterval, baselineJitter, int(meanSize))
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
-		"agent_id":              agentID,
-		"sample_count":          len(agentLogs),
-		"baseline_interval":     baselineInterval,
-		"baseline_jitter":       baselineJitter,
-		"baseline_packet_size":  int(math.Round(meanSize)),
-		"mean_interval":         int(math.Round(meanInterval)),
-		"stddev_interval":       int(math.Round(stddevInterval)),
-		"mean_packet_size":      int(math.Round(meanSize)),
-		"cv":                    math.Round(cv*1000) / 1000,
-		"auto_adapt":            false,
-		"recent_records":        agentLogs,
-		"suggestion":            suggestion,
+		"agent_id":             agentID,
+		"sample_count":         len(agentLogs),
+		"baseline_interval":    baselineInterval,
+		"baseline_jitter":      baselineJitter,
+		"baseline_packet_size": int(math.Round(meanSize)),
+		"mean_interval":        int(math.Round(meanInterval)),
+		"stddev_interval":      int(math.Round(stddevInterval)),
+		"mean_packet_size":     int(math.Round(meanSize)),
+		"cv":                   math.Round(cv*1000) / 1000,
+		"auto_adapt":           false,
+		"recent_records":       agentLogs,
+		"suggestion":           suggestion,
 	}})
 }
 

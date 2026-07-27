@@ -1,17 +1,18 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
-import { PageHeader, Spinner } from "@/components/UI";
+import { EmptyState, PageHeader, Spinner } from "@/components/UI";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bell, Link2, Mail, MessageCircle, Plug, RefreshCw, Shield, Send } from "lucide-react";
+import { Bell, Link2, Mail, MessageCircle, Plug, Power, RefreshCw, Shield, Send, Trash2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 interface Integration {
+  id?: number;
   type: string;
   name: string;
   enabled: boolean;
@@ -19,15 +20,20 @@ interface Integration {
   event_count: number;
   last_trigger: string;
   status: string;
+  configured?: boolean;
+  readonly?: boolean;
 }
 
 export default function IntegrationsPage() {
   const { t } = useI18n();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [testResult, setTestResult] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const [formType, setFormType] = useState("slack");
+  const [formName, setFormName] = useState("");
   const [formUrl, setFormUrl] = useState("");
   const [formSecret, setFormSecret] = useState("");
   const [formTo, setFormTo] = useState("");
@@ -39,24 +45,96 @@ export default function IntegrationsPage() {
 
   const fetchIntegrations = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
-      const data = await api.json("/integrations");
-      setIntegrations((data.integrations as Integration[]) || []);
-    } catch { setIntegrations([]); }
+      const data = await api.get<{ integrations?: Integration[] }>("/integrations");
+      setIntegrations(data.integrations || []);
+    } catch {
+      setIntegrations([]);
+      setLoadError(t("integrations.load_failed"));
+      toast.error(t("integrations.load_failed"));
+    }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => { fetchIntegrations(); }, [fetchIntegrations]);
+
+  function resetForm() {
+    setFormName("");
+    setFormUrl("");
+    setFormSecret("");
+    setFormTo("");
+    setFormSMTPHost("");
+    setFormSMTPPort("587");
+    setFormSMTPUser("");
+    setFormSMTPPass("");
+    setFormFrom("");
+  }
+
+  async function saveIntegration() {
+    if (!formName.trim()) {
+      toast.error(t("integrations.name_required"));
+      return;
+    }
+    if (formType !== "email" && !formUrl.trim()) {
+      toast.error(t("integrations.url_required"));
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.postJson("/integrations", {
+        type: formType,
+        name: formName.trim(),
+        url: formUrl,
+        secret: formSecret,
+        to: formTo,
+        smtp_host: formSMTPHost,
+        smtp_port: parseInt(formSMTPPort) || 587,
+        smtp_user: formSMTPUser,
+        smtp_pass: formSMTPPass,
+        from: formFrom,
+        enabled: true,
+        event_type: "all",
+      });
+      toast.success(t("integrations.toast.saved"));
+      resetForm();
+      fetchIntegrations();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("integrations.toast.save_failed"));
+    }
+    setSaving(false);
+  }
+
+  async function toggleIntegration(id?: number) {
+    if (!id) return;
+    try {
+      await api.postJson(`/integrations/${id}/toggle`, {});
+      fetchIntegrations();
+    } catch {
+      toast.error(t("integrations.toast.toggle_failed"));
+    }
+  }
+
+  async function deleteIntegration(id?: number) {
+    if (!id) return;
+    try {
+      await api.del(`/integrations/${id}`);
+      toast.success(t("integrations.toast.deleted"));
+      fetchIntegrations();
+    } catch {
+      toast.error(t("integrations.toast.delete_failed"));
+    }
+  }
 
   async function testNotification() {
     setTestResult(t("integrations.sending"));
     try {
-      const data = await api.postJson("/settings/webhooks/test", {
+      const data = await api.postJson<{ success?: boolean; error?: string }>("/settings/webhooks/test", {
         type: formType, url: formUrl, secret: formSecret, to: formTo,
         smtp_host: formSMTPHost, smtp_port: parseInt(formSMTPPort) || 587,
         smtp_user: formSMTPUser, smtp_pass: formSMTPPass, from: formFrom,
       });
-      if (data.success) { setTestResult(""); toast.success("Test sent successfully!"); }
+      if (data.success) { setTestResult(""); toast.success(t("integrations.toast.test_sent")); }
       else { setTestResult((data.error as string) || t("integrations.test_failed")); }
     } catch { setTestResult(t("integrations.network_error")); }
   }
@@ -76,7 +154,7 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("integrations.title")} subtitle={t("integrations.subtitle")}>
         <Button variant="ghost" onClick={fetchIntegrations}><RefreshCw className="w-4 h-4" /> {t("integrations.refresh")}</Button>
       </PageHeader>
@@ -86,36 +164,50 @@ export default function IntegrationsPage() {
         </div>
       ) : (
         <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 mb-6">
+          {loadError && (
+            <Card className="p-3 mb-4 border-destructive/40 text-sm text-destructive">{loadError}</Card>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 mb-6">
             {integrations.length === 0 ? (
               <Card className="col-span-full p-12 text-center">
-                <Plug className="w-4 h-4" />
-                <h3 className="text-base font-semibold text-foreground mb-1">{t("integrations.empty_title")}</h3>
-                <p className="text-sm text-muted-foreground">{t("integrations.empty_desc")}</p>
+                <EmptyState icon={Plug} title={t("integrations.empty_title")} message={t("integrations.empty_desc")} />
               </Card>
             ) : (
               integrations.map((intg, i) => (
-                <Card key={i} className="p-3.5 flex items-center gap-3">
-                   <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-secondary text-lg text-indigo-500">{getIcon(intg.type)}</div>
+                <Card key={intg.id ?? `ro-${i}`} className="p-3.5 flex items-center gap-3">
+                  <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-secondary text-lg text-indigo-500">{getIcon(intg.type)}</div>
                   <div className="flex-1 flex flex-col min-w-0">
                     <span className="text-sm font-semibold text-foreground">{intg.name}</span>
-                    <span className="text-[11px] uppercase text-muted-foreground">{intg.type}</span>
+                    <span className="text-(--font-size-xs-sm) uppercase text-muted-foreground">{intg.type}</span>
                     {intg.endpoint && <span className="text-xs text-muted-foreground truncate">{intg.endpoint}</span>}
                   </div>
-                  <Badge variant={intg.enabled ? "success" : "secondary"}>
-                    {intg.enabled ? t("integrations.active") : t("integrations.disabled")}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge variant={intg.enabled ? "success" : "secondary"}>
+                      {intg.enabled ? t("integrations.active") : t("integrations.disabled")}
+                    </Badge>
+                    {!intg.readonly && intg.id ? (
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon-sm" onClick={() => toggleIntegration(intg.id)} aria-label="Toggle">
+                          <Power className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => deleteIntegration(intg.id)} aria-label="Delete">
+                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
                 </Card>
               ))
             )}
           </div>
-<Card className="p-4 sm:p-5">
-            <h3 className="text-sm font-semibold text-foreground m-0">{t("integrations.test_title")}</h3>
-            <p className="text-xs text-muted-foreground mt-1 mb-0">{t("integrations.test_desc")}</p>
-            <div className="mt-3 space-y-2">
-              <div className="flex gap-2">
+
+          <Card className="p-4 sm:p-5 mb-6">
+            <h3 className="text-sm font-semibold text-foreground m-0">{t("integrations.save_title")}</h3>
+            <p className="text-xs text-muted-foreground mt-1 mb-3">{t("integrations.save_desc")}</p>
+            <div className="space-y-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Select value={formType} onValueChange={(v) => setFormType(v ?? "slack")}>
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-full sm:w-48">
                     <SelectValue placeholder="Slack" />
                   </SelectTrigger>
                   <SelectContent>
@@ -124,31 +216,42 @@ export default function IntegrationsPage() {
                     <SelectItem value="email">Email</SelectItem>
                     <SelectItem value="telegram">Telegram</SelectItem>
                     <SelectItem value="generic">Generic Webhook</SelectItem>
+                    <SelectItem value="webhook">Webhook</SelectItem>
                     <SelectItem value="jira">JIRA</SelectItem>
                     <SelectItem value="thehive">TheHive</SelectItem>
                   </SelectContent>
                 </Select>
-                <Input aria-label="Webhook URL" name="input-1" value={formUrl} onChange={e => setFormUrl(e.target.value)} placeholder={t("integrations.webhook_url")} />
+                <Input aria-label="Name" name="int-name" value={formName} onChange={e => setFormName(e.target.value)} placeholder={t("integrations.name_placeholder")} />
+                <Input aria-label="Webhook URL" name="int-url" value={formUrl} onChange={e => setFormUrl(e.target.value)} placeholder={t("integrations.webhook_url")} />
               </div>
-              <div className="flex gap-2">
-                <Input aria-label="Email To (for email)" name="input-2" value={formTo} onChange={e => setFormTo(e.target.value)} placeholder={t("integrations.email_to")} />
-                <Input aria-label="Secret / Token" name="input-3" value={formSecret} onChange={e => setFormSecret(e.target.value)} placeholder={t("integrations.secret_token")} />
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input aria-label="Email To" name="int-to" value={formTo} onChange={e => setFormTo(e.target.value)} placeholder={t("integrations.email_to")} />
+                <Input aria-label="Secret" name="int-secret" value={formSecret} onChange={e => setFormSecret(e.target.value)} placeholder={t("integrations.secret_token")} />
               </div>
               {formType === "email" && (
                 <div className="flex flex-wrap gap-2">
-                  <Input aria-label="SMTP Host" name="input-4" value={formSMTPHost} onChange={e => setFormSMTPHost(e.target.value)} placeholder="SMTP Host" />
-                  <Input aria-label="SMTP Port" name="input-5" value={formSMTPPort} onChange={e => setFormSMTPPort(e.target.value)} placeholder="SMTP Port" />
-                  <Input aria-label="SMTP User" name="input-6" value={formSMTPUser} onChange={e => setFormSMTPUser(e.target.value)} placeholder="SMTP User" />
-                  <Input aria-label="SMTP Pass" name="input-7" type="password" value={formSMTPPass} onChange={e => setFormSMTPPass(e.target.value)} placeholder="SMTP Pass" />
-                  <Input aria-label="From Address" name="input-8" value={formFrom} onChange={e => setFormFrom(e.target.value)} placeholder="From Address" />
+                  <Input aria-label="SMTP Host" name="smtp-host" value={formSMTPHost} onChange={e => setFormSMTPHost(e.target.value)} placeholder="SMTP Host" />
+                  <Input aria-label="SMTP Port" name="smtp-port" value={formSMTPPort} onChange={e => setFormSMTPPort(e.target.value)} placeholder="SMTP Port" />
+                  <Input aria-label="SMTP User" name="smtp-user" value={formSMTPUser} onChange={e => setFormSMTPUser(e.target.value)} placeholder="SMTP User" />
+                  <Input aria-label="SMTP Pass" name="smtp-pass" type="password" value={formSMTPPass} onChange={e => setFormSMTPPass(e.target.value)} placeholder="SMTP Pass" />
+                  <Input aria-label="From Address" name="smtp-from" value={formFrom} onChange={e => setFormFrom(e.target.value)} placeholder="From Address" />
                 </div>
               )}
-              <div className="flex items-center gap-3">
-                <Button onClick={testNotification}>{t("integrations.send_test")}</Button>
-                {testResult && (
-                  <span className={`text-xs ${testResult === "Sending..." ? "text-muted-foreground" : testResult.includes("success") ? "text-emerald-600" : "text-destructive"}`}>{testResult}</span>
-                )}
-              </div>
+              <Button onClick={saveIntegration} disabled={saving}>
+                {saving ? <Spinner size="xs" /> : null}
+                {t("integrations.save_btn")}
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="p-4 sm:p-5">
+            <h3 className="text-sm font-semibold text-foreground m-0">{t("integrations.test_title")}</h3>
+            <p className="text-xs text-muted-foreground mt-1 mb-0">{t("integrations.test_desc")}</p>
+            <div className="mt-3 flex items-center gap-3">
+              <Button variant="outline" onClick={testNotification}>{t("integrations.send_test")}</Button>
+              {testResult && (
+                <span className="text-xs text-muted-foreground">{testResult}</span>
+              )}
             </div>
           </Card>
         </>
@@ -156,4 +259,3 @@ export default function IntegrationsPage() {
     </div>
   );
 }
-

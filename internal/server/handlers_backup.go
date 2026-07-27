@@ -1,9 +1,9 @@
 package server
 
 import (
+	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -22,8 +22,45 @@ type backupEntry struct {
 	ModTime string `json:"mod_time"`
 }
 
+// sqliteMagic is the file header signature for SQLite database files.
+var sqliteMagic = []byte("SQLite format 3\x00")
+
+// isSQLiteFile peeks at the first 16 bytes to check the SQLite magic header.
+// The caller must use a bufio.Reader to avoid consuming bytes.
+func isSQLiteFile(br *bufio.Reader) bool {
+	header, err := br.Peek(16)
+	if err != nil {
+		return false
+	}
+	return string(header) == string(sqliteMagic)
+}
+
 func (s *Server) backupDir() string {
 	return filepath.Join(s.cfg.Server.DataDir, "backups")
+}
+
+// verifyRestoredDB performs post-restore integrity checks on the SQLite database.
+func verifyRestoredDB(dbPath string) error {
+	f, err := os.Open(dbPath)
+	if err != nil {
+		return fmt.Errorf("cannot open restored file: %w", err)
+	}
+	defer f.Close()
+
+	br := bufio.NewReader(f)
+	if !isSQLiteFile(br) {
+		return fmt.Errorf("restored file is not a valid SQLite database")
+	}
+
+	fi, err := f.Stat()
+	if err != nil {
+		return fmt.Errorf("cannot stat restored file: %w", err)
+	}
+	if fi.Size() < 1024 {
+		return fmt.Errorf("restored file too small (%d bytes) — likely truncated", fi.Size())
+	}
+
+	return nil
 }
 
 func (s *Server) handleDBBackupList(c *gin.Context) {
@@ -155,6 +192,12 @@ func (s *Server) handleRestoreFromUpload(c *gin.Context) {
 		return
 	}
 
+	br := bufio.NewReader(file)
+	if !isSQLiteFile(br) {
+		respondError(c, http.StatusBadRequest, "Uploaded file is not a valid SQLite database")
+		return
+	}
+
 	dbPath := s.cfg.Database.Path
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {
 		respondError(c, http.StatusInternalServerError, "Failed to prepare database directory")
@@ -168,8 +211,15 @@ func (s *Server) handleRestoreFromUpload(c *gin.Context) {
 	}
 	defer dstFile.Close()
 
-	if _, err := io.Copy(dstFile, file); err != nil {
+	if _, err := io.Copy(dstFile, br); err != nil {
 		respondError(c, http.StatusInternalServerError, "Failed to write database file")
+		return
+	}
+	dstFile.Close()
+
+	if err := verifyRestoredDB(dbPath); err != nil {
+		slog.Error("Restored database failed integrity check", "error", err)
+		respondError(c, http.StatusInternalServerError, fmt.Sprintf("Restore failed verification: %v", err))
 		return
 	}
 
@@ -182,7 +232,11 @@ func (s *Server) handleRestoreFromUpload(c *gin.Context) {
 	})
 
 	go func() {
-		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
 		time.Sleep(500 * time.Millisecond)
 		s.Shutdown()
 	}()
@@ -223,6 +277,12 @@ func (s *Server) handleRestoreFromFile(c *gin.Context) {
 	}
 	defer srcFile.Close()
 
+	br := bufio.NewReader(srcFile)
+	if !isSQLiteFile(br) {
+		respondError(c, http.StatusBadRequest, "Backup file is not a valid SQLite database")
+		return
+	}
+
 	dstFile, err := os.OpenFile(dbPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "Failed to open database for writing")
@@ -230,9 +290,16 @@ func (s *Server) handleRestoreFromFile(c *gin.Context) {
 	}
 	defer dstFile.Close()
 
-	n, err := io.Copy(dstFile, srcFile)
+	n, err := io.Copy(dstFile, br)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "Failed to restore database")
+		return
+	}
+	dstFile.Close()
+
+	if err := verifyRestoredDB(dbPath); err != nil {
+		slog.Error("Restored database failed integrity check", "error", err)
+		respondError(c, http.StatusInternalServerError, fmt.Sprintf("Restore failed verification: %v", err))
 		return
 	}
 
@@ -240,13 +307,37 @@ func (s *Server) handleRestoreFromFile(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Database restored from " + name + ". Server will restart to apply changes.",
+		"message": "Database restored. Server will restart to apply changes.",
 		"restart": true,
 	})
 
 	go func() {
-		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
 		time.Sleep(500 * time.Millisecond)
 		s.Shutdown()
 	}()
+}
+
+func (s *Server) handleDBBackupDownload(c *gin.Context) {
+	name := c.Query("name")
+	if name == "" {
+		respondError(c, http.StatusBadRequest, "Backup name is required")
+		return
+	}
+	name = filepath.Base(name)
+	ext := strings.ToLower(filepath.Ext(name))
+	if ext != ".db" && ext != ".fbk" {
+		respondError(c, http.StatusBadRequest, "Invalid backup file type")
+		return
+	}
+	backupPath := filepath.Join(s.backupDir(), name)
+	if _, err := os.Stat(backupPath); err != nil {
+		respondError(c, http.StatusNotFound, "Backup file not found")
+		return
+	}
+	serveFileSafe(c, backupPath, s.backupDir(), name)
 }

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"sync"
 	"time"
@@ -16,7 +17,7 @@ const (
 	EventTaskComplete      EventType = "task.complete"
 	EventTaskFail          EventType = "task.fail"
 	EventCredentialFound   EventType = "credential.found"
-	_                     EventType = "alert.triggered" // reserved
+	_                      EventType = "alert.triggered" // reserved
 )
 
 type Event struct {
@@ -35,18 +36,27 @@ type EventHandler func(Event)
 const maxConcurrentEventHandlers = 32
 
 type EventManager struct {
-	mu          sync.RWMutex
-	handlers    map[EventType][]EventHandler
-	db          *gorm.DB
-	workerSem   chan struct{}
+	mu        sync.RWMutex
+	handlers  map[EventType][]EventHandler
+	db        *gorm.DB
+	workerSem chan struct{}
+	ctx       context.Context
+	cancel    context.CancelFunc
 }
 
 func NewEventManager(database *gorm.DB) *EventManager {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &EventManager{
 		handlers:  make(map[EventType][]EventHandler),
 		db:        database,
 		workerSem: make(chan struct{}, maxConcurrentEventHandlers),
+		ctx:       ctx,
+		cancel:    cancel,
 	}
+}
+
+func (em *EventManager) Shutdown() {
+	em.cancel()
 }
 
 func (em *EventManager) On(et EventType, handler EventHandler) {
@@ -62,15 +72,19 @@ func (em *EventManager) Emit(evt Event) {
 	em.mu.RUnlock()
 
 	for _, h := range handlers {
-		em.workerSem <- struct{}{}
-		go func(handler EventHandler) {
-			defer func() {
-				<-em.workerSem
-				if r := recover(); r != nil {
-					slog.Error("event handler panic", "panic", r)
-				}
-			}()
-			handler(evt)
-		}(h)
+		select {
+		case <-em.ctx.Done():
+			return
+		case em.workerSem <- struct{}{}:
+			go func(handler EventHandler) {
+				defer func() {
+					<-em.workerSem
+					if r := recover(); r != nil {
+						slog.Error("event handler panic", "panic", r)
+					}
+				}()
+				handler(evt)
+			}(h)
+		}
 	}
 }

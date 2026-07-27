@@ -53,14 +53,16 @@ export default function BloodHoundPage() {
 
   const loadData = useCallback(async () => {
     try {
+      let failed = 0;
       const [resultsRes, statusRes] = await Promise.all([
-        api.get("/bloodhound/list").catch(() => null),
-        api.json<{ uploaded: boolean; filename: string }>("/bloodhound/status").catch(() => null),
+        api.get("/bloodhound/list").catch(() => { failed++; return null; }),
+        api.get<{ uploaded: boolean; filename: string }>("/bloodhound/status").catch(() => { failed++; return null; }),
       ]);
       if (resultsRes) setResults((resultsRes.data || []) as BHResult[]);
       if (statusRes) setBinaryStatus(statusRes);
-    } catch { toast.error("Failed to load BloodHound data"); }
-  }, []);
+      if (failed > 0 && !resultsRes && !statusRes) toast.error(t("bloodhound.toast.load_failed"));
+    } catch { toast.error(t("bloodhound.toast.load_failed")); }
+  }, [t]);
 
   useEffect(() => { loadData(); refreshAgents(); }, [loadData, refreshAgents]);
 
@@ -72,9 +74,9 @@ export default function BloodHoundPage() {
       const form = new FormData();
       form.append("file", file);
       await api.postFormData("/bloodhound/upload", form);
-      toast.success("SharpHound binary uploaded");
+      toast.success(t("bloodhound.toast.sharp_hound_uploaded"));
       loadData();
-    } catch { toast.error("Failed to upload SharpHound binary"); }
+    } catch { toast.error(t("bloodhound.toast.upload_sharp_hound_failed")); }
     setUploading(false);
   };
 
@@ -83,9 +85,9 @@ export default function BloodHoundPage() {
     setCollecting(true);
     try {
       await api.post("/bloodhound/collect", { agent_id: selectedAgent, method });
-      toast.success("Collection started");
+      toast.success(t("bloodhound.toast.collection_started"));
       loadData();
-    } catch { toast.error("Failed to start collection"); }
+    } catch { toast.error(t("bloodhound.toast.start_collection_failed")); }
     setCollecting(false);
   };
 
@@ -94,7 +96,7 @@ export default function BloodHoundPage() {
       const res = await fetch(`${API_BASE}/bloodhound/${id}/download`, { credentials: "include", headers: { "X-CSRF-Token": getCsrfToken() } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await downloadFromResponse(res, `bloodhound-${id}.zip`);
-    } catch { toast.error("Failed to download report"); }
+    } catch { toast.error(t("bloodhound.toast.download_report_failed")); }
   };
 
   const handleDelete = (id: number) => {
@@ -102,7 +104,7 @@ export default function BloodHoundPage() {
       try {
         await api.del(`/bloodhound/${id}`);
         loadData();
-      } catch { toast.error("Failed to delete report"); }
+      } catch { toast.error(t("bloodhound.toast.delete_report_failed")); }
     }});
   };
 
@@ -115,8 +117,8 @@ export default function BloodHoundPage() {
   };
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title="BloodHound" subtitle="Active Directory attack path analysis via SharpHound data collection" />
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title={t("bloodhound.title")} subtitle={t("bloodhound.subtitle")} />
 
       <Card className="px-4 sm:px-5 mb-6 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
@@ -134,7 +136,7 @@ export default function BloodHoundPage() {
         </div>
         <div className="flex items-center gap-3">
           <Label className="relative cursor-pointer">
-            <input aria-label="Upload SharpHound executable" name="input-0" type="file" accept=".exe" onChange={handleUpload} className="sr-only" />
+            <input aria-label="Upload SharpHound executable" name="input-0" type="file" accept=".exe" onChange={handleUpload} className="" />
             <span className="inline-flex shrink-0 items-center justify-center rounded-xl bg-primary px-2.5 py-1.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/80 disabled:pointer-events-none disabled:opacity-50 gap-1.5 cursor-pointer">
               {uploading ? <Spinner size="xs" /> : <Upload className="w-4 h-4" />}
               <span>{uploading ? "Uploading..." : "Upload SharpHound.exe"}</span>
@@ -246,7 +248,7 @@ export default function BloodHoundPage() {
                       <TableCell className="py-3 px-4 font-mono text-xs text-muted-foreground">{id}</TableCell>
                       <TableCell className="py-3 px-4 text-muted-foreground font-medium">{agent}</TableCell>
                       <TableCell className="py-3 px-4">
-                        <Badge variant="outline" className="text-[10px]">{methodVal}</Badge>
+                        <Badge variant="outline" className="text-(--font-size-micro-sm)">{methodVal}</Badge>
                       </TableCell>
                        <TableCell className="py-3 px-4 font-mono text-primary">{users}</TableCell>
                        <TableCell className="py-3 px-4 font-mono text-primary">{computers}</TableCell>
@@ -275,7 +277,7 @@ export default function BloodHoundPage() {
             </Table>
           ) : (
             <div className="text-center py-12 text-muted-foreground">
-              <EmptyState icon={PawPrint} title="No collection results yet" message="Upload SharpHound.exe and run a collection task to see results here." />
+              <EmptyState icon={PawPrint} title={t("bloodhound.empty_title")} message={t("bloodhound.empty_message")} />
             </div>
           )}
         </div>

@@ -28,7 +28,7 @@ function renderStars(rating: number | undefined, interactive: boolean, onRate?: 
           size="icon-xs"
           key={star}
           onClick={() => interactive && onRate?.(star)}
-          className={`${interactive ? "cursor-pointer hover:scale-110 transition-transform" : "cursor-default"} text-xs ${star <= r ? "text-amber-500" : "text-muted-foreground"}`}
+          className={`${interactive ? "cursor-pointer hover:scale-110 transition-transform" : "cursor-default"} text-xs ${star <= r ? "text-warning" : "text-muted-foreground"}`}
           aria-label="Rate"
         >
           <Star className="w-4 h-4" />
@@ -114,7 +114,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
 
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/20 rounded-lg flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+          <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/20 rounded-lg flex items-center justify-center text-primary">
             <Link className="w-4 h-4" />
           </div>
           <span className="text-sm font-semibold text-foreground">Import from URL</span>

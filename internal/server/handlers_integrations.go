@@ -1,77 +1,300 @@
 package server
 
 import (
+	"encoding/json"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
 
-// handleIntegrationsList returns the set of integrations the server supports
-// along with their enabled/configured status.
-func (s *Server) handleIntegrationsList(c *gin.Context) {
-	slackCfg := s.cfg.Integrations.Slack
-	integrations := []map[string]interface{}{
-		{
-			"type":        "slack",
-			"name":        "Slack",
-			"enabled":     slackCfg.Enabled,
-			"configured":  slackCfg.BotToken != "" && slackCfg.AppToken != "",
-			"description": "Manage agents and dispatch tasks from Slack via Socket Mode.",
-		},
-		{
-			"type":        "webhook",
-			"name":        "Webhook",
-			"enabled":     true,
-			"configured":  true,
-			"description": "Generic webhook delivery for events and notifications.",
-		},
-		{
-			"type":        "email",
-			"name":        "Email",
-			"enabled":     false,
-			"configured":  false,
-			"description": "Send notifications and scheduled reports via SMTP.",
-		},
-		{
-			"type":        "telegram",
-			"name":        "Telegram",
-			"enabled":     false,
-			"configured":  false,
-			"description": "Control agents and receive alerts via Telegram bot.",
-		},
-		{
-			"type":        "discord",
-			"name":        "Discord",
-			"enabled":     false,
-			"configured":  false,
-			"description": "Send alerts and reports to a Discord channel.",
-		},
-		{
-			"type":        "jira",
-			"name":        "JIRA",
-			"enabled":     false,
-			"configured":  false,
-			"description": "Auto-create JIRA tickets from alerts and findings.",
-		},
-		{
-			"type":        "thehive",
-			"name":        "TheHive",
-			"enabled":     false,
-			"configured":  false,
-			"description": "Create TheHive alerts from C2 events.",
-		},
+// integrationConfig stores type-specific secrets in WebhookConfig.Headers as JSON.
+type integrationConfig struct {
+	Type      string `json:"type"`
+	Secret    string `json:"secret,omitempty"`
+	To        string `json:"to,omitempty"`
+	SMTPHost  string `json:"smtp_host,omitempty"`
+	SMTPPort  int    `json:"smtp_port,omitempty"`
+	SMTPUser  string `json:"smtp_user,omitempty"`
+	SMTPPass  string `json:"smtp_pass,omitempty"`
+	From      string `json:"from,omitempty"`
+	EventType string `json:"event_type,omitempty"`
+}
+
+func parseIntegrationConfig(headers string) integrationConfig {
+	var cfg integrationConfig
+	if headers == "" {
+		return cfg
 	}
+	_ = json.Unmarshal([]byte(headers), &cfg)
+	return cfg
+}
+
+func marshalIntegrationConfig(cfg integrationConfig) string {
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}
+
+func integrationToMap(wh db.WebhookConfig) map[string]interface{} {
+	cfg := parseIntegrationConfig(wh.Headers)
+	typ := cfg.Type
+	if typ == "" {
+		typ = wh.EventType
+	}
+	if typ == "" {
+		typ = "webhook"
+	}
+	status := "ok"
+	if !wh.Enabled {
+		status = "disabled"
+	}
+	return map[string]interface{}{
+		"id":           wh.ID,
+		"type":         typ,
+		"name":         wh.Name,
+		"enabled":      wh.Enabled,
+		"endpoint":     wh.URL,
+		"event_count":  0,
+		"last_trigger": "",
+		"status":       status,
+		"event_type":   wh.EventType,
+		"method":       wh.Method,
+		"created_at":   wh.CreatedAt,
+		"updated_at":   wh.UpdatedAt,
+		"configured":   wh.URL != "" || cfg.SMTPHost != "",
+	}
+}
+
+// handleIntegrationsList returns configured integrations from DB plus capability catalog.
+func (s *Server) handleIntegrationsList(c *gin.Context) {
+	var webhooks []db.WebhookConfig
+	s.db.Order("updated_at desc").Limit(200).Find(&webhooks)
+
+	integrations := make([]map[string]interface{}, 0, len(webhooks)+1)
+	for _, wh := range webhooks {
+		integrations = append(integrations, integrationToMap(wh))
+	}
+
+	// Surface Slack from server config if present and not already stored
+	slackCfg := s.cfg.Integrations.Slack
+	if slackCfg.Enabled || slackCfg.BotToken != "" {
+		found := false
+		for _, it := range integrations {
+			if it["type"] == "slack" && it["name"] == "Slack (config)" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			integrations = append(integrations, map[string]interface{}{
+				"id":          0,
+				"type":        "slack",
+				"name":        "Slack (config)",
+				"enabled":     slackCfg.Enabled,
+				"endpoint":    "",
+				"event_count": 0,
+				"last_trigger": "",
+				"status":      map[bool]string{true: "ok", false: "disabled"}[slackCfg.Enabled],
+				"configured":  slackCfg.BotToken != "" && slackCfg.AppToken != "",
+				"readonly":    true,
+			})
+		}
+	}
+
 	respond(c, gin.H{"integrations": integrations})
+}
+
+func (s *Server) handleIntegrationsCreate(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	var req struct {
+		Type      string `json:"type" binding:"required"`
+		Name      string `json:"name" binding:"required"`
+		URL       string `json:"url"`
+		Secret    string `json:"secret"`
+		To        string `json:"to"`
+		SMTPHost  string `json:"smtp_host"`
+		SMTPPort  int    `json:"smtp_port"`
+		SMTPUser  string `json:"smtp_user"`
+		SMTPPass  string `json:"smtp_pass"`
+		From      string `json:"from"`
+		EventType string `json:"event_type"`
+		Enabled   *bool  `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid request")
+		return
+	}
+	req.Type = strings.ToLower(strings.TrimSpace(req.Type))
+	if req.EventType == "" {
+		req.EventType = "all"
+	}
+	if req.Type != "email" && req.URL != "" {
+		if err := validateWebhookURL(req.URL); err != nil {
+			respondError(c, http.StatusBadRequest, sanitizeError(err, "Integration"))
+			return
+		}
+	}
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+	cfg := integrationConfig{
+		Type:      req.Type,
+		Secret:    req.Secret,
+		To:        req.To,
+		SMTPHost:  req.SMTPHost,
+		SMTPPort:  req.SMTPPort,
+		SMTPUser:  req.SMTPUser,
+		SMTPPass:  req.SMTPPass,
+		From:      req.From,
+		EventType: req.EventType,
+	}
+	wh := db.WebhookConfig{
+		Name:      req.Name,
+		URL:       req.URL,
+		EventType: req.EventType,
+		Method:    "POST",
+		Headers:   marshalIntegrationConfig(cfg),
+		Enabled:   enabled,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := s.db.Create(&wh).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Integration"))
+		return
+	}
+	s.LogAuditRecord(c, "create_integration", "integration", strconv.FormatUint(uint64(wh.ID), 10), req.Name, true, nil)
+	respond(c, gin.H{"success": true, "integration": integrationToMap(wh)})
+}
+
+func (s *Server) handleIntegrationsUpdate(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	var wh db.WebhookConfig
+	if !s.findOrFail(c, &wh, id, "integration") {
+		return
+	}
+	var req struct {
+		Type      string `json:"type"`
+		Name      string `json:"name"`
+		URL       string `json:"url"`
+		Secret    string `json:"secret"`
+		To        string `json:"to"`
+		SMTPHost  string `json:"smtp_host"`
+		SMTPPort  int    `json:"smtp_port"`
+		SMTPUser  string `json:"smtp_user"`
+		SMTPPass  string `json:"smtp_pass"`
+		From      string `json:"from"`
+		EventType string `json:"event_type"`
+		Enabled   *bool  `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid request")
+		return
+	}
+	cfg := parseIntegrationConfig(wh.Headers)
+	if req.Type != "" {
+		cfg.Type = strings.ToLower(req.Type)
+	}
+	if req.Secret != "" {
+		cfg.Secret = req.Secret
+	}
+	if req.To != "" {
+		cfg.To = req.To
+	}
+	if req.SMTPHost != "" {
+		cfg.SMTPHost = req.SMTPHost
+	}
+	if req.SMTPPort > 0 {
+		cfg.SMTPPort = req.SMTPPort
+	}
+	if req.SMTPUser != "" {
+		cfg.SMTPUser = req.SMTPUser
+	}
+	if req.SMTPPass != "" {
+		cfg.SMTPPass = req.SMTPPass
+	}
+	if req.From != "" {
+		cfg.From = req.From
+	}
+	if req.EventType != "" {
+		cfg.EventType = req.EventType
+		wh.EventType = req.EventType
+	}
+	if req.Name != "" {
+		wh.Name = req.Name
+	}
+	if req.URL != "" {
+		if err := validateWebhookURL(req.URL); err != nil {
+			respondError(c, http.StatusBadRequest, sanitizeError(err, "Integration"))
+			return
+		}
+		wh.URL = req.URL
+	}
+	if req.Enabled != nil {
+		wh.Enabled = *req.Enabled
+	}
+	wh.Headers = marshalIntegrationConfig(cfg)
+	wh.UpdatedAt = time.Now()
+	if err := s.db.Save(&wh).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Integration"))
+		return
+	}
+	s.LogAuditRecord(c, "update_integration", "integration", id, wh.Name, true, nil)
+	respond(c, gin.H{"success": true, "integration": integrationToMap(wh)})
+}
+
+func (s *Server) handleIntegrationsDelete(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	if err := s.db.Delete(&db.WebhookConfig{}, "id = ?", id).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Integration"))
+		return
+	}
+	s.LogAuditRecord(c, "delete_integration", "integration", id, "", true, nil)
+	respond(c, gin.H{"success": true})
+}
+
+func (s *Server) handleIntegrationsToggle(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	var wh db.WebhookConfig
+	if !s.findOrFail(c, &wh, id, "integration") {
+		return
+	}
+	wh.Enabled = !wh.Enabled
+	wh.UpdatedAt = time.Now()
+	if err := s.db.Save(&wh).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Integration"))
+		return
+	}
+	respond(c, gin.H{"success": true, "integration": integrationToMap(wh)})
 }
 
 // handleActiveMalleable returns the currently active malleable C2 profile.
 func (s *Server) handleActiveMalleable(c *gin.Context) {
 	mp := s.cfg.Malleable
 	respond(c, gin.H{
-		"success":     true,
-		"enabled":     mp.Enabled,
-		"status_code": mp.StatusCode,
+		"success":      true,
+		"enabled":      mp.Enabled,
+		"status_code":  mp.StatusCode,
 		"content_type": mp.ContentType,
-		"headers":     mp.Headers,
-		"prepend":     mp.Prepend,
-		"append":      mp.Append,
+		"headers":      mp.Headers,
+		"prepend":      mp.Prepend,
+		"append":       mp.Append,
 	})
 }

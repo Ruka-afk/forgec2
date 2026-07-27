@@ -73,5 +73,3 @@ func (s *Server) applyProfilePreset(c *gin.Context, body []byte, profile *mallea
 	c.Status(http.StatusOK)
 	c.Writer.WriteString(wrapped)
 }
-
-

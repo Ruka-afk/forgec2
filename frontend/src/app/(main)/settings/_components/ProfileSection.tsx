@@ -1,14 +1,14 @@
 ﻿import { SettingsData } from "./types";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown, User, User as UserIcon } from "lucide-react";
+import { Crown, User } from "lucide-react";
 
 export default function ProfileSection({ data }: { data: SettingsData }) {
   const currentUsername = data.current_username || "";
   const currentRole = data.current_user_role || "user";
   const getRoleBadge = () => {
     if (currentRole === "admin") return { icon: <Crown className="w-2.5 h-2.5" />, text: "Admin", cls: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300" };
-    return { icon: <UserIcon className="w-2.5 h-2.5" />, text: "User", cls: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300" };
+    return { icon: <User className="w-2.5 h-2.5" />, text: "User", cls: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300" };
   };
   const roleBadge = getRoleBadge();
 

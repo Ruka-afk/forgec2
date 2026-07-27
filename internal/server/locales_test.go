@@ -11,9 +11,9 @@ func TestIsLanguageSupported(t *testing.T) {
 	}{
 		{"en", true},
 		{"zh", true},
-		{"ja", true},
-		{"ko", true},
-		{"ar", true},
+		{"ja", false},
+		{"ko", false},
+		{"ar", false},
 		{"fr", false},
 		{"de", false},
 		{"", false},
@@ -36,9 +36,7 @@ func TestGetTranslation(t *testing.T) {
 	}{
 		{"en", "common.save", "Save"},
 		{"zh", "common.save", "保存"},
-		{"ja", "common.save", "保存"},
-		{"ko", "common.save", "저장"},
-		{"ar", "common.save", "حفظ"},
+		{"ja", "common.save", "Save"},
 		{"en", "nonexistent.key", "nonexistent.key"},
 		{"fr", "common.save", "Save"},
 	}
@@ -67,11 +65,9 @@ func TestTranslatef(t *testing.T) {
 }
 
 func TestGetMissingTranslations(t *testing.T) {
-	missing := GetMissingTranslations("ja")
-	if len(missing) == 0 {
-		t.Log("No missing translations for ja (may be complete)")
-	} else {
-		t.Logf("Found %d missing translations for ja", len(missing))
+	missingZh := GetMissingTranslations("zh")
+	if len(missingZh) > 0 {
+		t.Logf("Found %d missing translations for zh", len(missingZh))
 	}
 
 	missingEn := GetMissingTranslations("en")
@@ -158,12 +154,9 @@ func TestGetLanguageInfo(t *testing.T) {
 		t.Error("English should not be RTL")
 	}
 
-	infoAr, okAr := GetLanguageInfo("ar")
-	if !okAr {
-		t.Fatal("Expected Arabic language info to exist")
-	}
-	if !infoAr.RTL {
-		t.Error("Arabic should be RTL")
+	_, okAr := GetLanguageInfo("ar")
+	if okAr {
+		t.Error("Arabic should not be supported")
 	}
 
 	_, okFr := GetLanguageInfo("fr")

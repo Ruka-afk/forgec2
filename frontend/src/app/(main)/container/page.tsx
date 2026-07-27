@@ -4,14 +4,15 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { PageHeader, Spinner } from "@/components/UI";
 import { useAgentList } from "@/lib/hooks/useAgentList";
+import { useTaskResult } from "@/lib/hooks/useTaskResult";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Box, Check, Cpu, PersonStanding, Search } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { Agent } from "@/types/agent";
-
 
 export default function ContainerPage() {
   const { t } = useI18n();
@@ -20,7 +21,8 @@ export default function ContainerPage() {
   const [escapeMethod, setEscapeMethod] = useState("generic");
   const [activeTab, setActiveTab] = useState("detect");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
+  const [dispatchMsg, setDispatchMsg] = useState<string | null>(null);
+  const taskPoll = useTaskResult(selectedAgent);
 
   useEffect(() => { refreshAgents(); }, [refreshAgents]);
 
@@ -31,12 +33,15 @@ export default function ContainerPage() {
   const handleDetect = async () => {
     if (!selectedAgent) return;
     setLoading(true);
-    setResult(null);
+    setDispatchMsg(null);
+    taskPoll.reset();
     try {
-      const data = await api.postJson(`/agents/${selectedAgent}/container_detect`, {});
-      setResult(`Task dispatched successfully. Task ID: ${data.task_id}\n\nCheck the Tasks page for agent results.`);
+      const data = await api.postJson<{ task_id?: string | number }>(`/agents/${selectedAgent}/container_detect`, {});
+      const tid = data.task_id;
+      setDispatchMsg(t("container.task_dispatched", { id: String(tid ?? "") }));
+      if (tid != null) taskPoll.start(tid);
     } catch (e) {
-      setResult(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      setDispatchMsg(`${t("common.error")}: ${e instanceof Error ? e.message : String(e)}`);
     }
     setLoading(false);
   };
@@ -44,25 +49,42 @@ export default function ContainerPage() {
   const handleEscape = async () => {
     if (!selectedAgent) return;
     setLoading(true);
-    setResult(null);
+    setDispatchMsg(null);
+    taskPoll.reset();
     let endpoint = "/container_escape";
     if (escapeMethod === "docker") endpoint = "/container_docker";
     else if (escapeMethod === "k8s") endpoint = "/container_k8s";
     try {
-      const data = await api.postJson(`/agents/${selectedAgent}${endpoint}`, {});
-      setResult(`Task dispatched successfully. Task ID: ${data.task_id}\n\nCheck the Tasks page for agent results.`);
+      const data = await api.postJson<{ task_id?: string | number }>(`/agents/${selectedAgent}${endpoint}`, {});
+      const tid = data.task_id;
+      setDispatchMsg(t("container.task_dispatched", { id: String(tid ?? "") }));
+      if (tid != null) taskPoll.start(tid);
     } catch (e) {
-      setResult(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      setDispatchMsg(`${t("common.error")}: ${e instanceof Error ? e.message : String(e)}`);
     }
     setLoading(false);
   };
 
+  const statusLabel = () => {
+    switch (taskPoll.status) {
+      case "pending": return t("container.poll_pending");
+      case "running": return t("container.poll_running");
+      case "completed": return t("container.poll_completed");
+      case "failed": return t("container.poll_failed");
+      case "timeout": return t("container.poll_timeout");
+      default: return "";
+    }
+  };
+
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("container.title")} subtitle={t("container.subtitle")} />
 
+      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+        <div className="font-semibold">{t("container.experimental_title")}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{t("container.experimental_desc")}</div>
+      </Card>
 
-      {/* Agent Selector */}
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex items-center gap-x-3 mb-5">
           <div className="w-10 h-10 bg-cyan-100 dark:bg-cyan-900/30 rounded-xl flex items-center justify-center">
@@ -76,7 +98,7 @@ export default function ContainerPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("container.agent")}</span>
-            <Select value={selectedAgent} onValueChange={(v) => setSelectedAgent(v ?? "")}>
+            <Select value={selectedAgent} onValueChange={(v) => { setSelectedAgent(v ?? ""); taskPoll.reset(); setDispatchMsg(null); }}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder={t("container.select_agent")} />
               </SelectTrigger>
@@ -91,7 +113,6 @@ export default function ContainerPage() {
         </div>
       </Card>
 
-      {/* Tabs: Detect | Escape */}
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex items-center gap-x-3 mb-5">
           <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
@@ -102,79 +123,59 @@ export default function ContainerPage() {
             <div className="text-xs text-muted-foreground">{t("container.operations_desc")}</div>
           </div>
         </div>
-
-        {/* Tab Buttons */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v ?? "detect")}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="detect" className="gap-2">
-              <Search className="w-4 h-4" />{t("container.detection")}
-            </TabsTrigger>
-            <TabsTrigger value="escape" className="gap-2">
-              <PersonStanding className="w-4 h-4" />{t("container.escape")}
-            </TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="detect"><Search className="w-3.5 h-3.5" />{t("container.detection")}</TabsTrigger>
+            <TabsTrigger value="escape"><PersonStanding className="w-3.5 h-3.5" />{t("container.escape")}</TabsTrigger>
           </TabsList>
-
-        {/* Detection Tab */}
-        <TabsContent value="detect">
-          <div>
-            <p className="text-sm text-muted-foreground mb-4">
-              {t("container.detect_desc")}
-            </p>
-            <Button onClick={handleDetect} disabled={loading || !selectedAgent}>
-              {loading ? <Spinner size="xs" /> : <Box className="w-4 h-4" />}
-              <span>{loading ? t("container.dispatching") : t("container.detect_btn")}</span>
+          <TabsContent value="detect" className="space-y-3 mt-4">
+            <p className="text-xs text-muted-foreground">{t("container.detect_desc")}</p>
+            <Button onClick={handleDetect} disabled={loading || !selectedAgent || taskPoll.polling}>
+              {loading || taskPoll.polling ? <Spinner size="xs" /> : <Check className="w-4 h-4" />}
+              {loading || taskPoll.polling ? t("container.dispatching") : t("container.detect_btn")}
             </Button>
-          </div>
-        </TabsContent>
-
-        {/* Escape Tab */}
-        <TabsContent value="escape">
-          <div>
-            <p className="text-sm text-muted-foreground mb-4">
-              {t("container.escape_desc")}
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div>
-                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("container.escape_method")}</span>
-                <Select value={escapeMethod} onValueChange={(v) => setEscapeMethod(v ?? "")}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="generic">Generic Escape</SelectItem>
-                    <SelectItem value="docker">Docker Socket Escape</SelectItem>
-                    <SelectItem value="k8s">K8s Service Account Abuse</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <Button variant="destructive" onClick={handleEscape} disabled={loading || !selectedAgent}>
-              {loading ? <Spinner size="xs" /> : <PersonStanding className="w-4 h-4" />}
-              <span>{loading ? t("container.dispatching") : t("container.escape_btn")}</span>
+          </TabsContent>
+          <TabsContent value="escape" className="space-y-3 mt-4">
+            <p className="text-xs text-muted-foreground">{t("container.escape_desc")}</p>
+            <Select value={escapeMethod} onValueChange={(v) => setEscapeMethod(v ?? "generic")}>
+              <SelectTrigger className="w-full max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="generic">Generic</SelectItem>
+                <SelectItem value="docker">Docker</SelectItem>
+                <SelectItem value="k8s">Kubernetes</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={handleEscape} disabled={loading || !selectedAgent || taskPoll.polling}>
+              {loading || taskPoll.polling ? <Spinner size="xs" /> : <PersonStanding className="w-4 h-4" />}
+              {loading || taskPoll.polling ? t("container.dispatching") : t("container.escape_btn")}
             </Button>
-          </div>
-        </TabsContent>
+          </TabsContent>
         </Tabs>
       </Card>
 
-      {/* Results Viewer */}
-      {result && (
-        <Card className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
-          <div className="flex items-center gap-x-3 mb-4">
-            <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
-              <Check className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-foreground">{t("container.result")}</div>
-              <div className="text-xs text-muted-foreground">{t("container.result_desc")}</div>
-            </div>
+      {(dispatchMsg || taskPoll.status !== "idle") && (
+        <Card className="p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-semibold text-foreground">{t("container.result")}</div>
+            {taskPoll.status !== "idle" && (
+              <Badge variant={taskPoll.status === "completed" ? "success" : taskPoll.status === "failed" || taskPoll.status === "timeout" ? "destructive" : "secondary"}>
+                {statusLabel()}
+              </Badge>
+            )}
           </div>
-          <pre className="bg-card text-foreground p-4 rounded-xl text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-            {result}
-          </pre>
+          {dispatchMsg && <pre className="text-xs text-muted-foreground whitespace-pre-wrap mb-2 font-mono">{dispatchMsg}</pre>}
+          {taskPoll.polling && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+              <Spinner size="xs" /> {t("container.poll_waiting")}
+            </div>
+          )}
+          {taskPoll.result && (
+            <pre className="text-xs bg-muted/50 p-3 rounded-xl whitespace-pre-wrap max-h-96 overflow-auto font-mono">{taskPoll.result}</pre>
+          )}
         </Card>
       )}
     </div>
   );
 }
-

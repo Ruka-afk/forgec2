@@ -114,8 +114,8 @@ type threadContext struct {
 }
 
 const (
-	CONTEXT_FULL           = 0x10007
+	CONTEXT_FULL            = 0x10007
 	CONTEXT_DEBUG_REGISTERS = 0x00010
-	THREAD_GET_CONTEXT     = 0x0008
-	THREAD_SET_CONTEXT     = 0x0010
+	THREAD_GET_CONTEXT      = 0x0008
+	THREAD_SET_CONTEXT      = 0x0010
 )

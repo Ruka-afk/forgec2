@@ -3,23 +3,31 @@ info:
   title: ForgeC2 Command & Control API
   description: |
     ForgeC2 is a professional-grade command and control framework for red team operations.
-    
+
     ## Authentication
-    All API endpoints require authentication unless otherwise noted.
-    Authentication is done via session cookie (`forgec2_session`) obtained from the login endpoint.
-    
+    Most endpoints require a session cookie (`forgec2_session`) from `POST /login`.
+    Unauthenticated access to `/api/*` returns **JSON 401** (`{success:false,error:...}`), not HTML.
+
+    ## CSRF
+    State-changing requests need double-submit CSRF: cookie `forgec2_csrf` + header `X-CSRF-Token`.
+
+    ## Spec quality (honest)
+    - Route inventory is kept near-complete (CI coverage ≥90%, stale=0).
+    - **Core operator paths** (health, agents, modules, listeners, dashboard, deploy)
+      include request/response schemas; many secondary routes remain summary-only.
+    - Dual-use paths (e.g. `GET /agents`) serve SPA HTML or JSON depending on Accept/auth.
+    - `/debug/pprof/*` is intentionally omitted (disabled by default).
+
     ## Rate Limiting
     - Login: Limited attempts with lockout
     - API: Token bucket rate limiting per user
-    
+
     ## Permissions
-    Role-based access control:
-    - **admin**: Full control
-    - **operator**: Can interact with agents, listeners, tasks, credentials
-    - **viewer**: Read-only access
-    - **guest**: Limited read access (agents, listeners, tasks only)
-    
-  version: 2.0.0
+    Role-based access control (custom roles supported):
+    - **admin**: Full control (all permissions)
+    - **user**: Standard operator permissions (agents, tasks, credentials, limited settings)
+
+  version: 2.4.1
   contact:
     name: ForgeC2 Support
     email: support@forgec2.io
@@ -28,8 +36,8 @@ info:
     url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: http://localhost:8080
-    description: Local development server
+  - url: http://localhost:8000
+    description: Local development server (default port)
   - url: https://c2.example.com
     description: Production server
 
@@ -84,9 +92,22 @@ tags:
     description: Command templates
   - name: Collaboration
     description: Multi-user collaboration
+  - name: Phishing
+    description: Phishing templates, campaigns, and capture
+  - name: Intel
+    description: BloodHound and intelligence integrations
+  - name: Integrations
+    description: External integrations (Slack, Discord, Email, webhooks)
 
 paths:
   /login:
+    get:
+      tags: [Authentication]
+      summary: Login page (SPA)
+      operationId: loginPage
+      responses:
+        '200':
+          description: Login HTML shell
     post:
       tags: [Authentication]
       summary: User login
@@ -143,9 +164,9 @@ paths:
 
   /health:
     get:
-      tags: [Authentication]
+      tags: [Monitor]
       summary: Health check
-      description: Check if server is healthy
+      description: Liveness probe — no authentication required
       operationId: healthCheck
       responses:
         '200':
@@ -153,17 +174,9 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-                  version:
-                    type: string
-                  uptime:
-                    type: string
-                  goroutine:
-                    type: integer
+                $ref: '#/components/schemas/HealthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /api/agents:
     get:
@@ -314,52 +327,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskResponse'
-
-  /agents/{id}/lock:
-    post:
-      tags: [Agents]
-      summary: Lock agent
-      description: Lock agent for exclusive use by current operator
-      operationId: lockAgent
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Agent locked
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-
-  /agents/{id}/unlock:
-    post:
-      tags: [Agents]
-      summary: Unlock agent
-      description: Release agent lock
-      operationId: unlockAgent
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Agent unlocked
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
 
   /agents/{id}/note:
     post:
@@ -593,6 +560,22 @@ paths:
                 $ref: '#/components/schemas/TaskResponse'
 
   /agents/{id}/screenshot:
+    get:
+      tags: [Agents]
+      summary: Get latest agent screenshot
+      operationId: getAgentScreenshot
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Screenshot image or metadata
     post:
       tags: [Agents]
       summary: Take screenshot
@@ -730,7 +713,7 @@ paths:
               properties:
                 path:
                   type: string
-                  description: Directory path (default: C:\)
+                  description: "Directory path (default: C:\\)"
       responses:
         '200':
           description: Directory list task created
@@ -1781,167 +1764,6 @@ paths:
               schema:
                 type: string
 
-  /settings/rate-limit/status:
-    get:
-      tags: [Settings]
-      summary: Get rate limit status
-      description: Get current rate limiting status
-      operationId: getRateLimitStatus
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: Rate limit status
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  login:
-                    type: object
-                  api:
-                    type: object
-
-  /settings/rate-limit/unlock:
-    post:
-      tags: [Settings]
-      summary: Unlock IP
-      description: Unlock an IP from rate limiting
-      operationId: unlockIP
-      security:
-        - SessionCookie: []
-      requestBody:
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              required: [ip]
-              properties:
-                ip:
-                  type: string
-      responses:
-        '200':
-          description: IP unlocked
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-
-  /settings/rate-limit/reset:
-    post:
-      tags: [Settings]
-      summary: Reset IP rate limit
-      description: Reset rate limit counters for an IP
-      operationId: resetIPRateLimit
-      security:
-        - SessionCookie: []
-      requestBody:
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              required: [ip]
-              properties:
-                ip:
-                  type: string
-      responses:
-        '200':
-          description: Rate limit reset
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-
-  /settings/rate-limit/config:
-    post:
-      tags: [Settings]
-      summary: Update rate limit config
-      description: Update rate limiting configuration
-      operationId: updateRateLimitConfig
-      security:
-        - SessionCookie: []
-      requestBody:
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              properties:
-                login_max_attempts:
-                  type: integer
-                login_window:
-                  type: integer
-                login_lockout_time:
-                  type: integer
-                api_capacity:
-                  type: number
-                api_rate:
-                  type: number
-      responses:
-        '200':
-          description: Config updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-
-  /settings/rate-limit/whitelist/add:
-    post:
-      tags: [Settings]
-      summary: Add whitelist IP
-      description: Add an IP to the rate limit whitelist
-      operationId: addWhitelistIP
-      security:
-        - SessionCookie: []
-      requestBody:
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              required: [ip]
-              properties:
-                ip:
-                  type: string
-                type:
-                  type: string
-                  enum: [login, api, both]
-      responses:
-        '200':
-          description: IP added to whitelist
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-
-  /settings/rate-limit/whitelist/remove:
-    post:
-      tags: [Settings]
-      summary: Remove whitelist IP
-      description: Remove an IP from the rate limit whitelist
-      operationId: removeWhitelistIP
-      security:
-        - SessionCookie: []
-      requestBody:
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              required: [ip]
-              properties:
-                ip:
-                  type: string
-                type:
-                  type: string
-                  enum: [login, api, both]
-      responses:
-        '200':
-          description: IP removed from whitelist
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-
   /settings/totp/status:
     get:
       tags: [Settings]
@@ -2839,6 +2661,21 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
 
   /api/plugins/{id}:
+    get:
+      tags: [Plugins]
+      summary: Get plugin detail
+      operationId: getPlugin
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Plugin detail
     delete:
       tags: [Plugins]
       summary: Delete plugin
@@ -2855,77 +2692,6 @@ paths:
       responses:
         '200':
           description: Plugin deleted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-
-  /api/chat/messages:
-    get:
-      tags: [Chat]
-      summary: Get chat messages
-      description: Get operator chat messages
-      operationId: getChatMessages
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 100
-      responses:
-        '200':
-          description: Chat messages
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ChatMessage'
-
-  /api/chat/send:
-    post:
-      tags: [Chat]
-      summary: Send chat message
-      description: Send a message to the operator chat
-      operationId: sendChatMessage
-      security:
-        - SessionCookie: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [message]
-              properties:
-                message:
-                  type: string
-      responses:
-        '200':
-          description: Message sent
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChatMessage'
-
-  /api/chat/{id}:
-    delete:
-      tags: [Chat]
-      summary: Delete chat message
-      description: Delete a chat message
-      operationId: deleteChatMessage
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: Message deleted
           content:
             application/json:
               schema:
@@ -3150,6 +2916,15 @@ paths:
                 $ref: '#/components/schemas/TaskResponse'
 
   /api/templates:
+    get:
+      tags: [Templates]
+      summary: List command templates
+      operationId: listTemplates
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Template list
     post:
       tags: [Templates]
       summary: Create template
@@ -3171,6 +2946,21 @@ paths:
                 $ref: '#/components/schemas/CommandTemplate'
 
   /api/templates/{id}:
+    put:
+      tags: [Templates]
+      summary: Update template
+      operationId: updateTemplate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Template updated
     delete:
       tags: [Templates]
       summary: Delete template
@@ -3437,88 +3227,6 @@ paths:
                 items:
                   $ref: '#/components/schemas/Task'
 
-  /api/collab/locks:
-    get:
-      tags: [Collaboration]
-      summary: Get agent locks
-      description: Get all agent lock statuses
-      operationId: getLocks
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: Agent locks
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AgentLock'
-
-  /api/collab/online:
-    get:
-      tags: [Collaboration]
-      summary: Online users
-      description: Get list of currently online users
-      operationId: getOnlineUsers
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: Online users
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    username:
-                      type: string
-                    role:
-                      type: string
-
-  /api/collab/pages:
-    get:
-      tags: [Collaboration]
-      summary: Page presence
-      description: Get which users are on which pages
-      operationId: getPagePresence
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: Page presence data
-          content:
-            application/json:
-              schema:
-                type: object
-
-  /api/collab/agent-viewers/{id}:
-    get:
-      tags: [Collaboration]
-      summary: Agent viewers
-      description: Get users currently viewing an agent
-      operationId: getAgentViewers
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Agent viewers list
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: string
-
   /api/topology/data:
     get:
       tags: [Agents]
@@ -3568,18 +3276,5839 @@ paths:
         '101':
           description: Switching protocols
 
-  /ws/chat:
+  /phishing/templates:
     get:
-      tags: [WebSocket]
-      summary: Chat WebSocket
-      description: WebSocket for real-time operator chat
-      operationId: webSocketChat
+      tags: [Phishing]
+      summary: List phishing templates
+      operationId: listPhishingTemplates
       security:
         - SessionCookie: []
       responses:
-        '101':
-          description: Switching protocols
+        '200':
+          description: Template list
+          content:
+            application/json:
+              schema:
+                type: object
+    post:
+      tags: [Phishing]
+      summary: Create phishing template
+      operationId: createPhishingTemplate
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                subject: { type: string }
+                body: { type: string }
+                from_name: { type: string }
+                from_email: { type: string }
+                type: { type: string, enum: [html, text] }
+      responses:
+        '200':
+          description: Created
+  /phishing/campaigns:
+    get:
+      tags: [Phishing]
+      summary: List phishing campaigns
+      operationId: listPhishingCampaigns
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Campaign list
+    post:
+      tags: [Phishing]
+      summary: Create phishing campaign
+      operationId: createPhishingCampaign
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                template_id: { type: integer }
+                target_list: { type: string, description: "JSON array or newline-separated emails" }
+                smtp_host: { type: string }
+                smtp_port: { type: integer }
+                smtp_user: { type: string }
+                smtp_pass: { type: string }
+      responses:
+        '200':
+          description: Created
+  /phishing/campaigns/{id}/launch:
+    post:
+      tags: [Phishing]
+      summary: Launch campaign (SMTP bulk send)
+      operationId: launchPhishingCampaign
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Campaign queued for SMTP delivery
+  /phishing/campaigns/{id}/stop:
+    post:
+      tags: [Phishing]
+      summary: Stop phishing campaign
+      operationId: stopPhishingCampaign
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Stopped
+  /phishing/captures:
+    get:
+      tags: [Phishing]
+      summary: List captured credentials
+      operationId: listPhishingCaptures
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Captures
+  /phishing/l/{token}:
+    get:
+      tags: [Phishing]
+      summary: Public landing page (no auth)
+      operationId: phishingLandingGet
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: HTML landing form
+    post:
+      tags: [Phishing]
+      summary: Capture credentials from landing form
+      operationId: phishingLandingPost
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Capture accepted
+  /integrations:
+    get:
+      tags: [Integrations]
+      summary: List integrations
+      operationId: listIntegrations
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Integrations list
+    post:
+      tags: [Integrations]
+      summary: Create integration
+      operationId: createIntegration
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, name]
+              properties:
+                type: { type: string }
+                name: { type: string }
+                url: { type: string }
+                secret: { type: string }
+                enabled: { type: boolean }
+      responses:
+        '200':
+          description: Created
+  /integrations/{id}:
+    put:
+      tags: [Integrations]
+      summary: Update integration
+      operationId: updateIntegration
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [Integrations]
+      summary: Delete integration
+      operationId: deleteIntegration
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Deleted
+  /integrations/{id}/toggle:
+    post:
+      tags: [Integrations]
+      summary: Toggle integration enabled
+      operationId: toggleIntegration
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Toggled
 
+  /api/modules:
+    get:
+      tags: [Settings]
+      summary: List OPSEC modules
+      description: Files under data/modules (e.g. Invoke-Mimikatz.ps1). Requires session.
+      operationId: listModules
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Module list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModulesListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Settings]
+      summary: Upload module file
+      operationId: uploadModule
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                  description: Optional override filename
+      responses:
+        '200':
+          description: Uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModuleUploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/modules/{name}:
+    delete:
+      tags: [Settings]
+      summary: Delete module
+      operationId: deleteModule
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /agents/{id}/modules/deploy:
+    post:
+      tags: [Agents]
+      summary: Deploy server module to agent via upload task
+      operationId: deployModule
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModuleDeployRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ModuleDeployRequest'
+      responses:
+        '200':
+          description: Deploy task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/dns/status:
+    get:
+      tags: [Infrastructure]
+      summary: DNS listener status
+      operationId: dnsStatus
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Status
+  /api/dns/start:
+    post:
+      tags: [Infrastructure]
+      summary: Start DNS listener
+      operationId: dnsStart
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                domain: { type: string }
+                addr: { type: string }
+      responses:
+        '200':
+          description: Started
+  /api/dns/stop:
+    post:
+      tags: [Infrastructure]
+      summary: Stop DNS listener
+      operationId: dnsStop
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Stopped
+
+  /attack/coverage:
+    get:
+      tags: [Intel]
+      summary: MITRE ATT&CK coverage map from executed task types
+      operationId: attackCoverage
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: agent_id
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Coverage by tactic/technique
+  /api/container/status:
+    get:
+      tags: [Agents]
+      summary: Container feature status
+      operationId: containerStatus
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Status
+  /api/container/agents:
+    get:
+      tags: [Agents]
+      summary: Agents with container context
+      operationId: containerAgents
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Agent list
+  /agents/{id}/container_detect:
+    post:
+      tags: [Agents]
+      summary: Detect container environment on agent
+      operationId: containerDetect
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Task created
+  /agents/{id}/container_escape:
+    post:
+      tags: [Agents]
+      summary: Generic container escape attempt
+      operationId: containerEscape
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Task created
+  /agents/{id}/container_docker:
+    post:
+      tags: [Agents]
+      summary: Docker-specific container operations
+      operationId: containerDocker
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Task created
+  /agents/{id}/container_k8s:
+    post:
+      tags: [Agents]
+      summary: Kubernetes-specific container operations
+      operationId: containerK8s
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Task created
+  /cloud/steal:
+    post:
+      tags: [Intel]
+      summary: Dispatch cloud credential steal task
+      operationId: cloudSteal
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent_id: { type: string }
+                provider: { type: string, description: aws|gcp|azure }
+      responses:
+        '200':
+          description: Task dispatched
+  /cloud/{agentId}/results:
+    get:
+      tags: [Intel]
+      summary: Cloud credential steal results for agent
+      operationId: cloudResults
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Results list
+  /ntlm/relay_status:
+    get:
+      tags: [Lateral Movement]
+      summary: NTLM relay listener status
+      operationId: ntlmRelayStatus
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Status
+  /agents/{id}/coerce/{type}:
+    post:
+      tags: [Lateral Movement]
+      summary: Coerce authentication (printerbug, petitpotam, etc.)
+      operationId: ntlmCoerce
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: type
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Task created
+  /agents/{id}/relay/start:
+    post:
+      tags: [Lateral Movement]
+      summary: Start NTLM relay on agent
+      operationId: ntlmRelayStart
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Started
+  /agents/{id}/relay/stop:
+    post:
+      tags: [Lateral Movement]
+      summary: Stop NTLM relay on agent
+      operationId: ntlmRelayStop
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Stopped
+  /circuit-breaker/detail:
+    get:
+      tags: [Monitor]
+      summary: Circuit breaker listener detail
+      operationId: circuitBreakerDetail
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Detail
+  /circuit-breaker/config:
+    get:
+      tags: [Monitor]
+      summary: Circuit breaker config
+      operationId: circuitBreakerConfigGet
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Config
+    post:
+      tags: [Monitor]
+      summary: Save circuit breaker config
+      operationId: circuitBreakerConfigSave
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Saved
+  /circuit-breaker/events:
+    get:
+      tags: [Monitor]
+      summary: Circuit breaker state events
+      operationId: circuitBreakerEvents
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Events
+  /circuit-breaker/reset/{id}:
+    post:
+      tags: [Monitor]
+      summary: Reset circuit breaker for listener
+      operationId: circuitBreakerReset
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Reset
+  /circuit-breaker/toggle/{id}:
+    post:
+      tags: [Monitor]
+      summary: Toggle circuit breaker for listener
+      operationId: circuitBreakerToggle
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Toggled
+  /api/circuit-breaker/status:
+    get:
+      tags: [Monitor]
+      summary: Circuit breaker status summary
+      operationId: circuitBreakerStatus
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Status
+  /chat/history:
+    get:
+      tags: [Chat]
+      summary: Operator chat history
+      operationId: chatHistory
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Messages
+  /chat/channels:
+    get:
+      tags: [Chat]
+      summary: Chat channels
+      operationId: chatChannels
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Channels
+  /chat/send:
+    post:
+      tags: [Chat]
+      summary: Send chat message
+      operationId: chatSend
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Sent
+  /extc2/channels:
+    get:
+      tags: [Integrations]
+      summary: External C2 channels
+      operationId: extc2Channels
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Channels
+  /extc2/configs:
+    get:
+      tags: [Integrations]
+      summary: External C2 configs
+      operationId: extc2Configs
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Configs
+  /extc2/discord:
+    post:
+      tags: [Integrations]
+      summary: Configure Discord ExtC2
+      operationId: extc2Discord
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Configured
+  /extc2/slack:
+    post:
+      tags: [Integrations]
+      summary: Configure Slack ExtC2
+      operationId: extc2Slack
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Configured
+  /extc2/configs/{id}:
+    delete:
+      tags: [Integrations]
+      summary: Delete ExtC2 config
+      operationId: extc2DeleteConfig
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted
+  /chain:
+    get:
+      tags: [Agents]
+      summary: Proxy chain list
+      operationId: chainList
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Chains
+  /chain/graph:
+    get:
+      tags: [Agents]
+      summary: Proxy chain graph
+      operationId: chainGraph
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Graph
+  /mesh/topology:
+    get:
+      tags: [Agents]
+      summary: P2P mesh topology
+      operationId: meshTopology
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Topology
+  /api/settings:
+    get:
+      tags: [Settings]
+      summary: API settings snapshot
+      operationId: apiSettings
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Settings
+  /domain-fronting:
+    get:
+      tags: [Infrastructure]
+      summary: Domain fronting status
+      operationId: domainFronting
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Status
+  /stager/tokens:
+    get:
+      tags: [Generate]
+      summary: Stager tokens list
+      operationId: stagerTokens
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Tokens
+  /stager/register:
+    post:
+      tags: [Generate]
+      summary: Register stager token
+      operationId: stagerRegister
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Registered
+  /stager/{id}:
+    delete:
+      tags: [Generate]
+      summary: Delete stager token
+      operationId: stagerDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted
+  /rportfwd/sessions:
+    get:
+      tags: [SOCKS]
+      summary: Reverse port-forward sessions
+      operationId: rportfwdSessions
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Sessions
+  /api/privesc/results:
+    get:
+      tags: [Privilege Escalation]
+      summary: Privilege escalation results
+      operationId: privescResults
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Results
+  /packer/templates:
+    get:
+      tags: [Generate]
+      summary: Packer templates
+      operationId: packerTemplates
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Templates
+  /packer/info:
+    get:
+      tags: [Generate]
+      summary: Packer capability info
+      operationId: packerInfo
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Info
+  /timeline/events:
+    get:
+      tags: [Timeline]
+      summary: Timeline events
+      operationId: timelineEvents
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Events
+  /workflows:
+    get:
+      tags: [Automation]
+      summary: List workflows
+      operationId: workflowsList
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Workflows
+    post:
+      tags: [Automation]
+      summary: Create workflow
+      operationId: workflowsCreate
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Created
+  /workflows/{id}:
+    get:
+      tags: [Automation]
+      summary: Workflow detail
+      operationId: workflowsGet
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Detail
+    put:
+      tags: [Automation]
+      summary: Update workflow
+      operationId: workflowsUpdate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [Automation]
+      summary: Delete workflow
+      operationId: workflowsDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted
+  /workflows/{id}/toggle:
+    post:
+      tags: [Automation]
+      summary: Toggle workflow enabled
+      operationId: workflowsToggle
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Toggled
+  /workflows/{id}/execute:
+    post:
+      tags: [Automation]
+      summary: Execute workflow
+      operationId: workflowsExecute
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Execution started
+  /workflows/{id}/executions:
+    get:
+      tags: [Automation]
+      summary: Workflow execution history
+      operationId: workflowsExecutions
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Executions
+
+
+  /api/lateral/execute:
+    post:
+      tags: [Lateral Movement]
+      summary: Execute lateral movement task
+      operationId: lateralExecute
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/lateral/result:
+    post:
+      tags: [Lateral Movement]
+      summary: Lateral movement task result
+      operationId: lateralResult
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/privesc/execute:
+    post:
+      tags: [Privilege Escalation]
+      summary: Execute privesc checks
+      operationId: privescExecute
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/privesc/result:
+    post:
+      tags: [Privilege Escalation]
+      summary: Privesc result
+      operationId: privescResult
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/privesc/run:
+    post:
+      tags: [Privilege Escalation]
+      summary: Run privesc suite
+      operationId: privescRun
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/scan/result:
+    post:
+      tags: [Scanner]
+      summary: Scan result callback
+      operationId: scanResult
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/scan/export/{taskId}:
+    get:
+      tags: [Scanner]
+      summary: Export scan results
+      operationId: scanExport
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/kill_date:
+    post:
+      tags: [Agents]
+      summary: Set agent kill date
+      operationId: agentSetKillDate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags: [Agents]
+      summary: Clear agent kill date
+      operationId: agentClearKillDate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /settings/db/backups:
+    get:
+      tags: [Settings]
+      summary: List DB backups
+      operationId: dbBackupsList
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /settings/db/backups/download:
+    get:
+      tags: [Settings]
+      summary: Download DB backup
+      operationId: dbBackupsDownload
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /settings/totp/backup-codes/count:
+    get:
+      tags: [Settings]
+      summary: Backup codes remaining count
+      operationId: totpBackupCount
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /groups/{id}:
+    put:
+      tags: [Agents]
+      summary: Update group
+      operationId: groupsUpdate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags: [Agents]
+      summary: Delete group
+      operationId: groupsDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /campaigns:
+    get:
+      tags: [Intel]
+      summary: List campaigns
+      operationId: campaignsList
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Intel]
+      summary: Create campaign
+      operationId: campaignsCreate
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /campaigns/{id}:
+    get:
+      tags: [Intel]
+      summary: Campaign detail
+      operationId: campaignsGet
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Intel]
+      summary: Update campaign
+      operationId: campaignsUpdate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags: [Intel]
+      summary: Delete campaign
+      operationId: campaignsDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /campaigns/{id}/mitre:
+    get:
+      tags: [Intel]
+      summary: Campaign MITRE mapping
+      operationId: campaignsMitre
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /campaigns/{id}/killchain:
+    post:
+      tags: [Intel]
+      summary: Campaign killchain
+      operationId: campaignsKillchain
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /scheduler/tasks/{id}:
+    put:
+      tags: [Automation]
+      summary: Update scheduled task
+      operationId: schedulerUpdate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags: [Automation]
+      summary: Delete scheduled task
+      operationId: schedulerDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /scheduler/tasks/{id}/toggle:
+    post:
+      tags: [Automation]
+      summary: Toggle scheduled task
+      operationId: schedulerToggle
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /token/revert:
+    post:
+      tags: [Tokens]
+      summary: Revert token
+      operationId: tokenRevert
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /tokens:
+    get:
+      tags: [Tokens]
+      summary: List tokens
+      operationId: tokensList
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /screenshots/{agent_id}/{filename}:
+    get:
+      tags: [Monitor]
+      summary: Get screenshot file
+      operationId: screenshotGet
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: filename
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/roles/{id}:
+    post:
+      tags: [Users]
+      summary: Update role
+      operationId: rolesUpdate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags: [Users]
+      summary: Delete role
+      operationId: rolesDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/autotag/apply:
+    post:
+      tags: [Agents]
+      summary: Apply autotag rules
+      operationId: autotagApply
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/autotag/rules/{id}:
+    put:
+      tags: [Agents]
+      summary: Update autotag rule
+      operationId: autotagRuleUpdate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags: [Agents]
+      summary: Delete autotag rule
+      operationId: autotagRuleDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/autotag/rules/{id}/toggle:
+    post:
+      tags: [Agents]
+      summary: Toggle autotag rule
+      operationId: autotagRuleToggle
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/report/findings:
+    get:
+      tags: [Report]
+      summary: Report findings
+      operationId: reportFindings
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/report/network:
+    get:
+      tags: [Report]
+      summary: Report network section
+      operationId: reportNetwork
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/report/export/pdf:
+    get:
+      tags: [Report]
+      summary: Export report PDF
+      operationId: reportExportPdf
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/report/{id}:
+    delete:
+      tags: [Report]
+      summary: Delete report
+      operationId: reportDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /bof:
+    get:
+      tags: [BOF]
+      summary: BOF management page (SPA shell / list entry)
+      operationId: bofPage
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/bof/quick:
+    post:
+      tags: [BOF]
+      summary: Quick run BOF on agent
+      operationId: bofQuick
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+
+  /agents/batch/delete:
+    post:
+      tags: [Agents]
+      summary: Batch delete agents
+      operationId: agentsBatchDelete
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /agents/batch/tags:
+    post:
+      tags: [Agents]
+      summary: Batch tag agents
+      operationId: agentsBatchTags
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /agents/bulk/task:
+    post:
+      tags: [Agents]
+      summary: Bulk task dispatch
+      operationId: agentsBulkTask
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /agents/bulk/results:
+    get:
+      tags: [Agents]
+      summary: Bulk task results
+      operationId: agentsBulkResults
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/config:
+    get:
+      tags: [Agents]
+      summary: Agent config
+      operationId: agentConfigGet
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Agents]
+      summary: Update agent config
+      operationId: agentConfigSet
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/trust:
+    post:
+      tags: [Agents]
+      summary: Trust agent
+      operationId: agentTrust
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/link:
+    post:
+      tags: [Agents]
+      summary: Link agent
+      operationId: agentLink
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/unlink:
+    post:
+      tags: [Agents]
+      summary: Unlink agent
+      operationId: agentUnlink
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/chain/set:
+    post:
+      tags: [Agents]
+      summary: Set proxy chain
+      operationId: agentChainSet
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/chain/clear:
+    post:
+      tags: [Agents]
+      summary: Clear proxy chain
+      operationId: agentChainClear
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/traffic-profile:
+    get:
+      tags: [Agents]
+      summary: Traffic profile
+      operationId: agentTrafficProfile
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/traffic-profile/adapt:
+    post:
+      tags: [Agents]
+      summary: Adapt traffic profile
+      operationId: agentTrafficAdapt
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/traffic-profile/auto-adapt:
+    post:
+      tags: [Agents]
+      summary: Auto-adapt traffic profile
+      operationId: agentTrafficAutoAdapt
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/shell:
+    get:
+      tags: [Agents]
+      summary: Shell session info
+      operationId: agentShell
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/token:
+    get:
+      tags: [Agents]
+      summary: Agent token page data
+      operationId: agentToken
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/recording:
+    get:
+      tags: [Agents]
+      summary: Recording status
+      operationId: agentRecording
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/recording/replay:
+    get:
+      tags: [Agents]
+      summary: Recording replay
+      operationId: agentRecordingReplay
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /ai/chat:
+    post:
+      tags: [AI]
+      summary: AI chat
+      operationId: aiChat
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /ai/config:
+    post:
+      tags: [AI]
+      summary: AI config
+      operationId: aiConfig
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /ai/sessions/{id}/messages:
+    get:
+      tags: [AI]
+      summary: AI session messages
+      operationId: aiSessionMessages
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [AI]
+      summary: Post AI message
+      operationId: aiSessionPostMessage
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /ai/sessions/{id}:
+    put:
+      tags: [AI]
+      summary: Update AI session
+      operationId: aiSessionUpdate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [AI]
+      summary: Delete AI session
+      operationId: aiSessionDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /generate/builds:
+    get:
+      tags: [Generate]
+      summary: List generate builds
+      operationId: generateBuilds
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /generate/builds/{id}:
+    get:
+      tags: [Generate]
+      summary: Generate build detail
+      operationId: generateBuildGet
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /generate/builds/{id}/download:
+    get:
+      tags: [Generate]
+      summary: Download generate build
+      operationId: generateBuildDownload
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /generate/stager:
+    post:
+      tags: [Generate]
+      summary: Generate stager
+      operationId: generateStager
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /generate/stager_linux:
+    post:
+      tags: [Generate]
+      summary: Generate Linux stager
+      operationId: generateStagerLinux
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /generate/donut:
+    post:
+      tags: [Generate]
+      summary: Generate Donut payload
+      operationId: generateDonut
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /generate/one-liner:
+    post:
+      tags: [Generate]
+      summary: Generate one-liner
+      operationId: generateOneLiner
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/generate/profile/import:
+    post:
+      tags: [Generate]
+      summary: Import malleable profile
+      operationId: generateProfileImport
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/generate/profile/{name}:
+    delete:
+      tags: [Generate]
+      summary: Delete malleable profile
+      operationId: generateProfileDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/traffic:
+    get:
+      tags: [Monitor]
+      summary: Traffic log
+      operationId: apiTraffic
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/translations:
+    get:
+      tags: [Settings]
+      summary: Translations
+      operationId: apiTranslations
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/translations/check:
+    get:
+      tags: [Settings]
+      summary: Translations check
+      operationId: apiTranslationsCheck
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/translations/stats:
+    get:
+      tags: [Settings]
+      summary: Translations stats
+      operationId: apiTranslationsStats
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/update-check:
+    get:
+      tags: [Settings]
+      summary: Update check
+      operationId: apiUpdateCheck
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/update-check/version:
+    get:
+      tags: [Settings]
+      summary: Update version info
+      operationId: apiUpdateVersion
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/update-check/refresh:
+    post:
+      tags: [Settings]
+      summary: Refresh update check
+      operationId: apiUpdateRefresh
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/update-check/hot-update:
+    post:
+      tags: [Settings]
+      summary: Hot update
+      operationId: apiHotUpdate
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /redirectors:
+    get:
+      tags: [Infrastructure]
+      summary: List redirectors
+      operationId: redirectorsList
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Infrastructure]
+      summary: Create redirector
+      operationId: redirectorsCreate
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /redirectors/{id}:
+    put:
+      tags: [Infrastructure]
+      summary: Update redirector
+      operationId: redirectorsUpdate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags: [Infrastructure]
+      summary: Delete redirector
+      operationId: redirectorsDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /redirectors/deploy-ssh:
+    post:
+      tags: [Infrastructure]
+      summary: Deploy redirector via SSH
+      operationId: redirectorsDeploySSH
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /redirectors/test-ssh:
+    post:
+      tags: [Infrastructure]
+      summary: Test redirector SSH
+      operationId: redirectorsTestSSH
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /redirectors/generate/{type}:
+    post:
+      tags: [Infrastructure]
+      summary: Generate redirector config
+      operationId: redirectorsGenerate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /settings/certs:
+    get:
+      tags: [Settings]
+      summary: List certificates
+      operationId: settingsCerts
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /settings/certs/regenerate:
+    post:
+      tags: [Settings]
+      summary: Regenerate certificates
+      operationId: settingsCertsRegen
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /settings/certs/upload:
+    post:
+      tags: [Settings]
+      summary: Upload certificate
+      operationId: settingsCertsUpload
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /settings/webhooks:
+    get:
+      tags: [Settings]
+      summary: Settings webhooks
+      operationId: settingsWebhooks
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Settings]
+      summary: Save settings webhooks
+      operationId: settingsWebhooksSave
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Saved
+
+  /settings/db/restore:
+    post:
+      tags: [Settings]
+      summary: Restore DB backup
+      operationId: settingsDBRestore
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /settings/maintenance/purge:
+    post:
+      tags: [Settings]
+      summary: Maintenance purge
+      operationId: settingsPurge
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /notifications/{id}:
+    delete:
+      tags: [Monitor]
+      summary: Delete notification
+      operationId: notificationsDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /notifications/{id}/read:
+    put:
+      tags: [Monitor]
+      summary: Mark notification read
+      operationId: notificationsRead
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /notifications/read-all:
+    put:
+      tags: [Monitor]
+      summary: Mark all notifications read
+      operationId: notificationsReadAll
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /opsec/rules:
+    post:
+      tags: [Monitor]
+      summary: Create OPSEC rule
+      operationId: opsecRulesCreate
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /opsec/rules/{name}:
+    delete:
+      tags: [Monitor]
+      summary: Delete OPSEC rule
+      operationId: opsecRulesDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /bloodhound/collect:
+    post:
+      tags: [Intel]
+      summary: BloodHound collect
+      operationId: bloodhoundCollect
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /bloodhound/upload:
+    post:
+      tags: [Intel]
+      summary: BloodHound upload
+      operationId: bloodhoundUpload
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /bloodhound/result:
+    post:
+      tags: [Intel]
+      summary: BloodHound result
+      operationId: bloodhoundResult
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /bloodhound/{id}/download:
+    get:
+      tags: [Intel]
+      summary: BloodHound download
+      operationId: bloodhoundDownload
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /bloodhound/{id}:
+    delete:
+      tags: [Intel]
+      summary: Delete BloodHound data
+      operationId: bloodhoundDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /phishing/campaigns/{id}:
+    delete:
+      tags: [Phishing]
+      summary: Delete phishing campaign
+      operationId: phishingCampaignDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /phishing/templates/{id}:
+    delete:
+      tags: [Phishing]
+      summary: Delete phishing template
+      operationId: phishingTemplateDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    put:
+      tags: [Phishing]
+      summary: Update phishing template
+      operationId: phishingTemplateUpdate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /scheduled-reports:
+    get:
+      tags: [Report]
+      summary: List scheduled reports
+      operationId: scheduledReportsList
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Report]
+      summary: Create scheduled report
+      operationId: scheduledReportsCreate
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /scheduled-reports/{id}:
+    put:
+      tags: [Report]
+      summary: Update scheduled report
+      operationId: scheduledReportsUpdate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags: [Report]
+      summary: Delete scheduled report
+      operationId: scheduledReportsDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /scheduled-reports/{id}/toggle:
+    post:
+      tags: [Report]
+      summary: Toggle scheduled report
+      operationId: scheduledReportsToggle
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/tags/{id}:
+    put:
+      tags: [Agents]
+      summary: Update tag
+      operationId: tagsUpdate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [Agents]
+      summary: Delete tag
+      operationId: tagsDelete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/scripts/execute:
+    post:
+      tags: [Automation]
+      summary: Execute script
+      operationId: scriptsExecute
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/bof/repos/import:
+    post:
+      tags: [BOF]
+      summary: Import BOF repo
+      operationId: bofReposImport
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/bof/repos/{id}/rate:
+    post:
+      tags: [BOF]
+      summary: Rate BOF repo
+      operationId: bofReposRate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /users/{id}/sessions:
+    get:
+      tags: [Users]
+      summary: User sessions
+      operationId: userSessions
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /workflows/{id}/executions/{executionId}:
+    get:
+      tags: [Automation]
+      summary: Workflow execution detail
+      operationId: workflowExecutionGet
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: executionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /mitre/phases:
+    get:
+      tags: [Intel]
+      summary: MITRE phases
+      operationId: mitrePhases
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /mitre/templates:
+    get:
+      tags: [Intel]
+      summary: MITRE templates
+      operationId: mitreTemplates
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /mitre/timeline:
+    get:
+      tags: [Intel]
+      summary: MITRE timeline
+      operationId: mitreTimeline
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /rportfwd/status:
+    get:
+      tags: [SOCKS]
+      summary: rportfwd status
+      operationId: rportfwdStatus
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /collab/agents:
+    get:
+      tags: [Collaboration]
+      summary: Collab agent locks
+      operationId: collabAgents
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/agents/{id}/input:
+    post:
+      tags: [Monitor]
+      summary: Remote desktop input
+      operationId: agentRemoteInput
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/agents/{id}/profile-rotate:
+    post:
+      tags: [Agents]
+      summary: Rotate malleable profile
+      operationId: agentProfileRotate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+
+  /api/login:
+    post:
+      tags: [Authentication]
+      summary: Login (API alias)
+      operationId: apiLogin
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/docs/:
+    get:
+      tags: [Settings]
+      summary: Embedded API docs
+      operationId: apiDocs
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/browser/result:
+    post:
+      tags: [Intel]
+      summary: Browser steal result callback
+      operationId: browserResult
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/wifi/result:
+    post:
+      tags: [Intel]
+      summary: WiFi cred result callback
+      operationId: wifiResult
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /listeners/{id}:
+    get:
+      tags: [Listeners]
+      summary: Listener detail
+      operationId: listenerGet
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /builds/{id}/download:
+    get:
+      tags: [Generate]
+      summary: Download build artifact
+      operationId: buildsDownload
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /toolkit/agents/{id}/info:
+    get:
+      tags: [Agents]
+      summary: Toolkit agent info
+      operationId: toolkitAgentInfo
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /toolkit/agents/{id}/tasks:
+    get:
+      tags: [Agents]
+      summary: Toolkit agent tasks
+      operationId: toolkitAgentTasks
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /toolkit/results:
+    get:
+      tags: [Agents]
+      summary: Toolkit results
+      operationId: toolkitResults
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /translations/stats:
+    get:
+      tags: [Settings]
+      summary: Translation stats alias
+      operationId: translationsStatsAlias
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /lang/set:
+    get:
+      tags: [Settings]
+      summary: Set language
+      operationId: langSetGet
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Settings]
+      summary: Set language POST
+      operationId: langSetPost
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /infrastructure/profile/export:
+    get:
+      tags: [Infrastructure]
+      summary: Export infra profile
+      operationId: infraProfileExport
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /integrations/malleable:
+    get:
+      tags: [Integrations]
+      summary: Malleable integrations
+      operationId: integrationsMalleable
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /infra/front/list:
+    post:
+      tags: [Infrastructure]
+      summary: Domain front list
+      operationId: infraFrontList
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /infra/front/check:
+    post:
+      tags: [Infrastructure]
+      summary: Domain front check
+      operationId: infraFrontCheck
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /infra/front/config:
+    post:
+      tags: [Infrastructure]
+      summary: Domain front config
+      operationId: infraFrontConfig
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /infrastructure/acme/provision:
+    post:
+      tags: [Infrastructure]
+      summary: ACME provision
+      operationId: infraAcmeProvision
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /infrastructure/generate/nginx:
+    post:
+      tags: [Infrastructure]
+      summary: Generate nginx config
+      operationId: infraGenNginx
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /infrastructure/generate/apache:
+    post:
+      tags: [Infrastructure]
+      summary: Generate apache config
+      operationId: infraGenApache
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /infrastructure/generate/haproxy:
+    post:
+      tags: [Infrastructure]
+      summary: Generate haproxy config
+      operationId: infraGenHaproxy
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /packer/artifact:
+    post:
+      tags: [Generate]
+      summary: Packer artifact
+      operationId: packerArtifact
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /payload/bundle:
+    post:
+      tags: [Generate]
+      summary: Payload bundle
+      operationId: payloadBundle
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /mesh/route/{agentId}:
+    post:
+      tags: [Agents]
+      summary: Set mesh route
+      operationId: meshRoute
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /loot/bulk-delete:
+    post:
+      tags: [Intel]
+      summary: Bulk delete loot
+      operationId: lootBulkDelete
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /collab/agents/{id}/lock:
+    post:
+      tags: [Collaboration]
+      summary: Lock agent
+      operationId: collabAgentLock
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /collab/agents/{id}/unlock:
+    post:
+      tags: [Collaboration]
+      summary: Unlock agent
+      operationId: collabAgentUnlock
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /collab/tasks/{taskId}/claim:
+    post:
+      tags: [Collaboration]
+      summary: Claim task
+      operationId: collabTaskClaim
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /collab/tasks/{taskId}/release:
+    post:
+      tags: [Collaboration]
+      summary: Release task
+      operationId: collabTaskRelease
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /chrome/agents/{uuid}/tasks:
+    post:
+      tags: [Agents]
+      summary: Chrome agent tasks
+      operationId: chromeAgentTasks
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /config/reload:
+    post:
+      tags: [Settings]
+      summary: Reload config
+      operationId: configReload
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /payloads/{id}/{filename}:
+    get:
+      tags: [Generate]
+      summary: Download payload file
+      operationId: payloadsDownload
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: filename
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /stage/{xorKey}:
+    get:
+      tags: [Generate]
+      summary: Stage download
+      operationId: stageDownload
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: xorKey
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /rd/{id}/frame:
+    get:
+      tags: [Monitor]
+      summary: Remote desktop frame
+      operationId: rdFrame
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /ws/agent:
+    get:
+      tags: [Collaboration]
+      summary: Agent websocket
+      operationId: wsAgent
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /ws/operator:
+    get:
+      tags: [Collaboration]
+      summary: Operator websocket
+      operationId: wsOperator
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /ws/remote-desktop:
+    get:
+      tags: [Monitor]
+      summary: Remote desktop websocket
+      operationId: wsRemoteDesktop
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /extc2/ws:
+    get:
+      tags: [Integrations]
+      summary: ExtC2 websocket
+      operationId: extc2Ws
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/agents/{id}:
+    delete:
+      tags: [API]
+      summary: DELETE /api/v1/agents/{id}
+      operationId: delete_api_v1_agents_id
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    get:
+      tags: [API]
+      summary: GET /api/v1/agents/{id}
+      operationId: get_api_v1_agents_id
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/rportfwd/status:
+    get:
+      tags: [Agents]
+      summary: GET /agents/{id}/rportfwd/status
+      operationId: get_agents_id_rportfwd_status
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/plugins/{id}/dependencies:
+    get:
+      tags: [Plugins]
+      summary: GET /api/plugins/{id}/dependencies
+      operationId: get_api_plugins_id_dependencies
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/plugins/{id}/execute:
+    get:
+      tags: [Plugins]
+      summary: GET /api/plugins/{id}/execute
+      operationId: get_api_plugins_id_execute
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Plugins]
+      summary: POST /api/plugins/{id}/execute
+      operationId: post_api_plugins_id_execute
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/plugins/{id}/export:
+    get:
+      tags: [Plugins]
+      summary: GET /api/plugins/{id}/export
+      operationId: get_api_plugins_id_export
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/plugins/{id}/rating:
+    get:
+      tags: [Plugins]
+      summary: GET /api/plugins/{id}/rating
+      operationId: get_api_plugins_id_rating
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Plugins]
+      summary: POST /api/plugins/{id}/rating
+      operationId: post_api_plugins_id_rating
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/plugins/{id}/reviews:
+    get:
+      tags: [Plugins]
+      summary: GET /api/plugins/{id}/reviews
+      operationId: get_api_plugins_id_reviews
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Plugins]
+      summary: POST /api/plugins/{id}/reviews
+      operationId: post_api_plugins_id_reviews
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/plugins/{id}/update-status:
+    get:
+      tags: [Plugins]
+      summary: GET /api/plugins/{id}/update-status
+      operationId: get_api_plugins_id_update_status
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/plugins/update-summary:
+    get:
+      tags: [Plugins]
+      summary: GET /api/plugins/update-summary
+      operationId: get_api_plugins_update_summary
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/audit:
+    get:
+      tags: [API]
+      summary: GET /api/v1/audit
+      operationId: get_api_v1_audit
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/bulk/results:
+    get:
+      tags: [API]
+      summary: GET /api/v1/bulk/results
+      operationId: get_api_v1_bulk_results
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/generate_204:
+    get:
+      tags: [API]
+      summary: GET /api/v1/generate_204
+      operationId: get_api_v1_generate_204
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [API]
+      summary: POST /api/v1/generate_204
+      operationId: post_api_v1_generate_204
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/health:
+    get:
+      tags: [API]
+      summary: GET /api/v1/health
+      operationId: get_api_v1_health
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/task-types:
+    get:
+      tags: [API]
+      summary: GET /api/v1/task-types
+      operationId: get_api_v1_task_types
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/tasks/{id}:
+    get:
+      tags: [API]
+      summary: GET /api/v1/tasks/{id}
+      operationId: get_api_v1_tasks_id
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/th:
+    get:
+      tags: [API]
+      summary: GET /api/v1/th
+      operationId: get_api_v1_th
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [API]
+      summary: POST /api/v1/th
+      operationId: post_api_v1_th
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/amsi_bypass:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/amsi_bypass
+      operationId: post_agents_id_amsi_bypass
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/amsi_hardware_bp:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/amsi_hardware_bp
+      operationId: post_agents_id_amsi_hardware_bp
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/av:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/av
+      operationId: post_agents_id_av
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/beacon_now:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/beacon_now
+      operationId: post_agents_id_beacon_now
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/bof:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/bof
+      operationId: post_agents_id_bof
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/browser_steal:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/browser_steal
+      operationId: post_agents_id_browser_steal
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/clipboard/get:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/clipboard/get
+      operationId: post_agents_id_clipboard_get
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/clipboard/set:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/clipboard/set
+      operationId: post_agents_id_clipboard_set
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/cookie_export:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/cookie_export
+      operationId: post_agents_id_cookie_export
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/download_url:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/download_url
+      operationId: post_agents_id_download_url
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/drives:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/drives
+      operationId: post_agents_id_drives
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/elevate:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/elevate
+      operationId: post_agents_id_elevate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/elevate/printnightmare:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/elevate/printnightmare
+      operationId: post_agents_id_elevate_printnightmare
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/etw_bypass:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/etw_bypass
+      operationId: post_agents_id_etw_bypass
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/etw_hardware_bp:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/etw_hardware_bp
+      operationId: post_agents_id_etw_hardware_bp
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/execute_assembly:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/execute_assembly
+      operationId: post_agents_id_execute_assembly
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/files/upload:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/files/upload
+      operationId: post_agents_id_files_upload
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/find:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/find
+      operationId: post_agents_id_find
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/inject:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/inject
+      operationId: post_agents_id_inject
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/kerberoast:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/kerberoast
+      operationId: post_agents_id_kerberoast
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/keylogger/dump:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/keylogger/dump
+      operationId: post_agents_id_keylogger_dump
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/keylogger/start:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/keylogger/start
+      operationId: post_agents_id_keylogger_start
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/keylogger/stop:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/keylogger/stop
+      operationId: post_agents_id_keylogger_stop
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/kill_av:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/kill_av
+      operationId: post_agents_id_kill_av
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/killproc:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/killproc
+      operationId: post_agents_id_killproc
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/lateral:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/lateral
+      operationId: post_agents_id_lateral
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/net:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/net
+      operationId: post_agents_id_net
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/netstat:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/netstat
+      operationId: post_agents_id_netstat
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/persistence:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/persistence
+      operationId: post_agents_id_persistence
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/portscan:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/portscan
+      operationId: post_agents_id_portscan
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/powerpick:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/powerpick
+      operationId: post_agents_id_powerpick
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/prank/cdrom:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/prank/cdrom
+      operationId: post_agents_id_prank_cdrom
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/prank/cursor:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/prank/cursor
+      operationId: post_agents_id_prank_cursor
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/prank/lock:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/prank/lock
+      operationId: post_agents_id_prank_lock
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/prank/msgbox:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/prank/msgbox
+      operationId: post_agents_id_prank_msgbox
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/prank/notepad:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/prank/notepad
+      operationId: post_agents_id_prank_notepad
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/prank/open_url:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/prank/open_url
+      operationId: post_agents_id_prank_open_url
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/prank/screen_rotate:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/prank/screen_rotate
+      operationId: post_agents_id_prank_screen_rotate
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/prank/sound:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/prank/sound
+      operationId: post_agents_id_prank_sound
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/prank/volume:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/prank/volume
+      operationId: post_agents_id_prank_volume
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/prank/wallpaper:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/prank/wallpaper
+      operationId: post_agents_id_prank_wallpaper
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/privesc_check:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/privesc_check
+      operationId: post_agents_id_privesc_check
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/reboot:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/reboot
+      operationId: post_agents_id_reboot
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/reg/delete:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/reg/delete
+      operationId: post_agents_id_reg_delete
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/reg/get:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/reg/get
+      operationId: post_agents_id_reg_get
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/reg/set:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/reg/set
+      operationId: post_agents_id_reg_set
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/resume:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/resume
+      operationId: post_agents_id_resume
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/rportfwd/start:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/rportfwd/start
+      operationId: post_agents_id_rportfwd_start
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/rportfwd/stop:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/rportfwd/stop
+      operationId: post_agents_id_rportfwd_stop
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/run_evasion:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/run_evasion
+      operationId: post_agents_id_run_evasion
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/sandbox_detect_advanced:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/sandbox_detect_advanced
+      operationId: post_agents_id_sandbox_detect_advanced
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/screen/start:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/screen/start
+      operationId: post_agents_id_screen_start
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/screen/stop:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/screen/stop
+      operationId: post_agents_id_screen_stop
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/screenshot_window:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/screenshot_window
+      operationId: post_agents_id_screenshot_window
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/self_update:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/self_update
+      operationId: post_agents_id_self_update
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/services:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/services
+      operationId: post_agents_id_services
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/set_sleep:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/set_sleep
+      operationId: post_agents_id_set_sleep
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/set_sleep_mask_advanced:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/set_sleep_mask_advanced
+      operationId: post_agents_id_set_sleep_mask_advanced
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/shutdown:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/shutdown
+      operationId: post_agents_id_shutdown
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/socks:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/socks
+      operationId: post_agents_id_socks
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/spawn:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/spawn
+      operationId: post_agents_id_spawn
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/suspend:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/suspend
+      operationId: post_agents_id_suspend
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/token/{token_id}/note:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/token/{token_id}/note
+      operationId: post_agents_id_token_token_id_note
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: token_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/uac_bypass:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/uac_bypass
+      operationId: post_agents_id_uac_bypass
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/uninstall:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/uninstall
+      operationId: post_agents_id_uninstall
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/users:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/users
+      operationId: post_agents_id_users
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/vpn_creds:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/vpn_creds
+      operationId: post_agents_id_vpn_creds
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /agents/{id}/wifi_creds:
+    post:
+      tags: [Agents]
+      summary: POST /agents/{id}/wifi_creds
+      operationId: post_agents_id_wifi_creds
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/plugins/{id}/disable:
+    post:
+      tags: [Plugins]
+      summary: POST /api/plugins/{id}/disable
+      operationId: post_api_plugins_id_disable
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/plugins/{id}/enable:
+    post:
+      tags: [Plugins]
+      summary: POST /api/plugins/{id}/enable
+      operationId: post_api_plugins_id_enable
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/plugins/{id}/install:
+    post:
+      tags: [Plugins]
+      summary: POST /api/plugins/{id}/install
+      operationId: post_api_plugins_id_install
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/plugins/{id}/report:
+    post:
+      tags: [Plugins]
+      summary: POST /api/plugins/{id}/report
+      operationId: post_api_plugins_id_report
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/plugins/{id}/update:
+    post:
+      tags: [Plugins]
+      summary: POST /api/plugins/{id}/update
+      operationId: post_api_plugins_id_update
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /api/plugins/check-updates:
+    post:
+      tags: [Plugins]
+      summary: POST /api/plugins/check-updates
+      operationId: post_api_plugins_check_updates
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/plugins/import:
+    post:
+      tags: [Plugins]
+      summary: POST /api/plugins/import
+      operationId: post_api_plugins_import
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/beacon:
+    post:
+      tags: [API]
+      summary: POST /api/v1/beacon
+      operationId: post_api_v1_beacon
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/screen_frame:
+    post:
+      tags: [API]
+      summary: POST /api/v1/screen_frame
+      operationId: post_api_v1_screen_frame
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/tasks/status:
+    post:
+      tags: [API]
+      summary: POST /api/v1/tasks/status
+      operationId: post_api_v1_tasks_status
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /extc2/v1/receive:
+    post:
+      tags: [Misc]
+      summary: POST /extc2/v1/receive
+      operationId: post_extc2_v1_receive
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /extc2/v1/send:
+    post:
+      tags: [Misc]
+      summary: POST /extc2/v1/send
+      operationId: post_extc2_v1_send
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /generate_204:
+    get:
+      tags: [API]
+      summary: Malleable beacon GET alias
+      operationId: get_generate_204
+      responses:
+        '200':
+          description: Beacon response
+    post:
+      tags: [API]
+      summary: Malleable beacon POST alias
+      operationId: post_generate_204
+      responses:
+        '200':
+          description: Beacon response
+
+  /rd/{id}/screenshot:
+    post:
+      tags: [Misc]
+      summary: POST /rd/{id}/screenshot
+      operationId: post_rd_id_screenshot
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /settings/webhooks/test:
+    post:
+      tags: [Misc]
+      summary: POST /settings/webhooks/test
+      operationId: post_settings_webhooks_test
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+
+  /th:
+    get:
+      tags: [API]
+      summary: Malleable beacon GET alias
+      operationId: get_th
+      responses:
+        '200':
+          description: Beacon response
+    post:
+      tags: [API]
+      summary: Malleable beacon POST alias
+      operationId: post_th
+      responses:
+        '200':
+          description: Beacon response
+
+  /toolkit/agents/{id}/action:
+    post:
+      tags: [Agents]
+      summary: POST /toolkit/agents/{id}/action
+      operationId: post_toolkit_agents_id_action
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /users/{id}/sessions/{sessionId}/revoke:
+    post:
+      tags: [Misc]
+      summary: POST /users/{id}/sessions/{sessionId}/revoke
+      operationId: post_users_id_sessions_sessionId_revoke
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+  /users/{id}/sessions/revoke-all:
+    post:
+      tags: [Misc]
+      summary: POST /users/{id}/sessions/revoke-all
+      operationId: post_users_id_sessions_revoke_all
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+
+
+  /dashboard:
+    get:
+      tags: [Agents]
+      summary: Dashboard SPA
+      operationId: get_dashboard
+      responses:
+        '200':
+          description: OK
+
+  /:
+    get:
+      tags: [Agents]
+      summary: Root SPA / dashboard
+      operationId: get_root
+      responses:
+        '200':
+          description: OK
+
+  /generate:
+    get:
+      tags: [Generate]
+      summary: Payload generate SPA
+      operationId: get_generate
+      responses:
+        '200':
+          description: OK
+
+  /search:
+    get:
+      tags: [Agents]
+      summary: Search SPA
+      operationId: get_search
+      responses:
+        '200':
+          description: OK
+
+  /ai:
+    get:
+      tags: [AI]
+      summary: AI assistant SPA
+      operationId: get_ai
+      responses:
+        '200':
+          description: OK
+
+  /automation:
+    get:
+      tags: [Automation]
+      summary: Automation SPA
+      operationId: get_automation
+      responses:
+        '200':
+          description: OK
+
+  /bof_repo:
+    get:
+      tags: [BOF]
+      summary: BOF repo SPA
+      operationId: get_bof_repo
+      responses:
+        '200':
+          description: OK
+
+  /dns:
+    get:
+      tags: [Infrastructure]
+      summary: DNS SPA
+      operationId: get_dns
+      responses:
+        '200':
+          description: OK
+
+  /docs:
+    get:
+      tags: [Settings]
+      summary: Docs SPA
+      operationId: get_docs
+      responses:
+        '200':
+          description: OK
+
+  /infrastructure:
+    get:
+      tags: [Infrastructure]
+      summary: Infrastructure SPA
+      operationId: get_infrastructure
+      responses:
+        '200':
+          description: OK
+
+  /lateral:
+    get:
+      tags: [Lateral Movement]
+      summary: Lateral SPA
+      operationId: get_lateral
+      responses:
+        '200':
+          description: OK
+
+  /pivoting:
+    get:
+      tags: [SOCKS]
+      summary: Pivoting SPA
+      operationId: get_pivoting
+      responses:
+        '200':
+          description: OK
+
+  /plugins:
+    get:
+      tags: [Plugins]
+      summary: Plugins SPA
+      operationId: get_plugins
+      responses:
+        '200':
+          description: OK
+
+  /privesc:
+    get:
+      tags: [Privilege Escalation]
+      summary: Privesc SPA
+      operationId: get_privesc
+      responses:
+        '200':
+          description: OK
+
+  /report:
+    get:
+      tags: [Report]
+      summary: Report SPA
+      operationId: get_report
+      responses:
+        '200':
+          description: OK
+
+  /scanner:
+    get:
+      tags: [Scanner]
+      summary: Scanner SPA
+      operationId: get_scanner
+      responses:
+        '200':
+          description: OK
+
+  /scripting:
+    get:
+      tags: [Automation]
+      summary: Scripting SPA
+      operationId: get_scripting
+      responses:
+        '200':
+          description: OK
+
+  /templates:
+    get:
+      tags: [Templates]
+      summary: Templates SPA
+      operationId: get_templates
+      responses:
+        '200':
+          description: OK
+
+  /toolkit:
+    get:
+      tags: [Agents]
+      summary: Toolkit SPA
+      operationId: get_toolkit
+      responses:
+        '200':
+          description: OK
+
+  /topology:
+    get:
+      tags: [Agents]
+      summary: Topology SPA
+      operationId: get_topology
+      responses:
+        '200':
+          description: OK
+
+  /traffic:
+    get:
+      tags: [Monitor]
+      summary: Traffic SPA
+      operationId: get_traffic
+      responses:
+        '200':
+          description: OK
+
+  /translations:
+    get:
+      tags: [Settings]
+      summary: Translations SPA
+      operationId: get_translations
+      responses:
+        '200':
+          description: OK
+
+  /metrics:
+    get:
+      tags: [Monitor]
+      summary: Prometheus metrics (optional enable)
+      operationId: get_metrics
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/dashboard:
+    get:
+      tags: [Agents]
+      summary: Dashboard stats (REST v1)
+      operationId: apiV1Dashboard
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Dashboard payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/agents:
+    get:
+      tags: [Agents]
+      summary: List agents (REST v1)
+      operationId: apiV1ListAgents
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Agent list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/tasks:
+    get:
+      tags: [Tasks]
+      summary: List tasks (REST v1)
+      operationId: apiV1ListTasks
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Task list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  tasks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Tasks]
+      summary: Create task (REST v1)
+      operationId: apiV1CreateTask
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent_id: { type: string }
+                type: { type: string }
+                command: { type: string }
+      responses:
+        '200':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+  /api/scripts:
+    get:
+      tags: [Settings]
+      summary: List server-side scripts
+      operationId: listScripts
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Scripts
+    post:
+      tags: [Settings]
+      summary: Save script
+      operationId: saveScript
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Saved
+  /api/scripts/{id}:
+    delete:
+      tags: [Settings]
+      summary: Delete script
+      operationId: deleteScript
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted
+  /notifications:
+    get:
+      tags: [Monitor]
+      summary: List notifications
+      operationId: listNotifications
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Notifications
+    delete:
+      tags: [Monitor]
+      summary: Clear all notifications
+      operationId: clearNotifications
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Cleared
+  /api/autotag/rules:
+    get:
+      tags: [Agents]
+      summary: List auto-tag rules
+      operationId: listAutoTagRules
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Rules
+    post:
+      tags: [Agents]
+      summary: Create auto-tag rule
+      operationId: createAutoTagRule
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Created
+
+  /agents:
+    get:
+      tags: [Agents]
+      summary: List agents (dual-use SPA/API path)
+      description: |
+        With `Accept: application/json` returns agent list JSON.
+        Browser navigation may receive SPA HTML. Unauthenticated JSON requests return 401.
+      operationId: listAgentsLegacy
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [online, stale, offline]
+      responses:
+        '200':
+          description: Agent list (JSON) or SPA shell
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /agents/{id}/mimikatz:
+    post:
+      tags: [Agents]
+      summary: Run mimikatz (module auto-attached if present)
+      description: Requires Invoke-Mimikatz.ps1 (or equivalent) under data/modules for full OPSEC path
+      operationId: agentMimikatz
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /loot:
+    get:
+      tags: [Files]
+      summary: List loot (screenshots, keylogs, downloads)
+      operationId: listLoot
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Loot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  loot:
+                    type: array
+                    items:
+                      type: object
+  /api/tags:
+    get:
+      tags: [Agents]
+      summary: List tags
+      operationId: listTags
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Tags
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  tags:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        name: { type: string }
+                        color: { type: string }
+    post:
+      tags: [Agents]
+      summary: Create tag
+      operationId: createTag
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                color: { type: string }
+      responses:
+        '200':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+  /bloodhound/list:
+    get:
+      tags: [Intel]
+      summary: List BloodHound results
+      operationId: bloodhoundList
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Results
+  /bloodhound/status:
+    get:
+      tags: [Intel]
+      summary: SharpHound binary status
+      operationId: bloodhoundStatus
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Status
+
+  /ready:
+    get:
+      tags: [Monitor]
+      summary: Readiness probe
+      description: Readiness for load balancers — no authentication required
+      operationId: ready
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadyResponse'
+  /api/v1/listeners:
+    get:
+      tags: [Listeners]
+      summary: List listeners (REST v1)
+      operationId: apiV1ListListeners
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Listeners
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Listener'
+  /api/v1/credentials:
+    get:
+      tags: [Credentials]
+      summary: List credentials (REST v1)
+      operationId: apiV1ListCredentials
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Credentials
+  /api/me:
+    get:
+      tags: [Authentication]
+      summary: Current user
+      operationId: get__api_me
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/docs:
+    get:
+      tags: [Settings]
+      summary: API docs page
+      operationId: get__api_docs
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/docs/openapi.yaml:
+    get:
+      tags: [Settings]
+      summary: Download OpenAPI YAML
+      operationId: get__api_docs_openapi_yaml
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/search:
+    get:
+      tags: [Agents]
+      summary: Global search
+      operationId: get__api_search
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/roles:
+    get:
+      tags: [Users]
+      summary: List roles
+      operationId: get__api_roles
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Users]
+      summary: Create role
+      operationId: post__api_roles
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Created
+  /api/generate/profiles:
+    get:
+      tags: [Generate]
+      summary: List generate profiles
+      operationId: get__api_generate_profiles
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/opsec/rules:
+    get:
+      tags: [Settings]
+      summary: List OPSEC rules
+      operationId: get__api_opsec_rules
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/opsec/check:
+    post:
+      tags: [Settings]
+      summary: OPSEC check
+      operationId: post__api_opsec_check
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/scripts/history:
+    get:
+      tags: [Settings]
+      summary: Script run history
+      operationId: get__api_scripts_history
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/chrome/agents:
+    get:
+      tags: [Intel]
+      summary: List Chrome extension agents
+      operationId: get__api_chrome_agents
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/dashboard/os-distribution:
+    get:
+      tags: [Agents]
+      summary: Dashboard OS distribution
+      operationId: get__api_dashboard_os_distribution
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/dashboard/task-status:
+    get:
+      tags: [Agents]
+      summary: Dashboard task status
+      operationId: get__api_dashboard_task_status
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/dashboard/listener-traffic:
+    get:
+      tags: [Agents]
+      summary: Dashboard listener traffic
+      operationId: get__api_dashboard_listener_traffic
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/dashboard/activity-heatmap:
+    get:
+      tags: [Agents]
+      summary: Dashboard activity heatmap
+      operationId: get__api_dashboard_activity_heatmap
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/dashboard/agent-geo:
+    get:
+      tags: [Agents]
+      summary: Dashboard agent geo
+      operationId: get__api_dashboard_agent_geo
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/dashboard/task-gantt:
+    get:
+      tags: [Agents]
+      summary: Dashboard task gantt
+      operationId: get__api_dashboard_task_gantt
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/dashboard/credential-types:
+    get:
+      tags: [Credentials]
+      summary: Dashboard credential types
+      operationId: get__api_dashboard_credential_types
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/dashboard/attack-path:
+    get:
+      tags: [Agents]
+      summary: Dashboard attack path
+      operationId: get__api_dashboard_attack_path
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/bof/repos:
+    get:
+      tags: [BOF]
+      summary: BOF repositories
+      operationId: get__api_bof_repos
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/report/history:
+    get:
+      tags: [Report]
+      summary: Report history
+      operationId: get__api_report_history
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/report/agents:
+    get:
+      tags: [Report]
+      summary: Report agents section
+      operationId: get__api_report_agents
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/report/tasks:
+    get:
+      tags: [Report]
+      summary: Report tasks section
+      operationId: get__api_report_tasks
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/report/credentials:
+    get:
+      tags: [Report]
+      summary: Report credentials section
+      operationId: get__api_report_credentials
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /api/agents/{id}/processes:
+    get:
+      tags: [Agents]
+      summary: Agent process list
+      operationId: get__api_agents_id_processes
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /api/agents/{id}/process-tree:
+    get:
+      tags: [Agents]
+      summary: Agent process tree
+      operationId: get__api_agents_id_process_tree
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /api/agents/{id}/tags:
+    get:
+      tags: [Agents]
+      summary: Agent tags
+      operationId: get__api_agents_id_tags
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /agents/{id}/chain:
+    get:
+      tags: [Agents]
+      summary: Agent chain
+      operationId: get__agents_id_chain
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /agents/{id}/status-history:
+    get:
+      tags: [Agents]
+      summary: Agent status history
+      operationId: get__agents_id_status_history
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /agents/{id}/files:
+    get:
+      tags: [Agents]
+      summary: Agent files page
+      operationId: get__agents_id_files
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /agents/{id}/screen:
+    get:
+      tags: [Agents]
+      summary: Agent screen page
+      operationId: get__agents_id_screen
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /agents/{id}/creds:
+    post:
+      tags: [Credentials]
+      summary: Request cred dump
+      operationId: post__agents_id_creds
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+  /builds:
+    get:
+      tags: [Generate]
+      summary: Build history
+      operationId: get__builds
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /ai/sessions:
+    get:
+      tags: [Settings]
+      summary: AI sessions
+      operationId: get__ai_sessions
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Settings]
+      summary: Create AI session
+      operationId: post__ai_sessions
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Created
+  /admin/emergency-status:
+    get:
+      tags: [Settings]
+      summary: Emergency stop status
+      operationId: get__admin_emergency_status
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /admin/emergency-stop:
+    post:
+      tags: [Settings]
+      summary: Emergency stop
+      operationId: post__admin_emergency_stop
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /scheduler/tasks:
+    get:
+      tags: [Settings]
+      summary: List scheduled tasks
+      operationId: get__scheduler_tasks
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Settings]
+      summary: Create scheduled task
+      operationId: post__scheduler_tasks
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Created
+  /listeners:
+    get:
+      tags: [Listeners]
+      summary: Listeners page list
+      operationId: get__listeners
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /generate/exe:
+    post:
+      tags: [Generate]
+      summary: Generate Windows EXE
+      operationId: post__generate_exe
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /generate/dll:
+    post:
+      tags: [Generate]
+      summary: Generate Windows DLL
+      operationId: post__generate_dll
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /generate/linux:
+    post:
+      tags: [Generate]
+      summary: Generate Linux ELF
+      operationId: post__generate_linux
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /generate/macos:
+    post:
+      tags: [Generate]
+      summary: Generate macOS binary
+      operationId: post__generate_macos
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /generate/ps1:
+    post:
+      tags: [Generate]
+      summary: Generate PowerShell
+      operationId: post__generate_ps1
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /generate/shellcode:
+    post:
+      tags: [Generate]
+      summary: Generate shellcode
+      operationId: post__generate_shellcode
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /opsec/history:
+    get:
+      tags: [Settings]
+      summary: OPSEC history
+      operationId: get__opsec_history
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /groups:
+    get:
+      tags: [Agents]
+      summary: List groups
+      operationId: get__groups
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+    post:
+      tags: [Agents]
+      summary: Create group
+      operationId: post__groups
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Created
+  /timeline:
+    get:
+      tags: [Agents]
+      summary: Timeline page data
+      operationId: get__timeline
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
 components:
   securitySchemes:
     SessionCookie:
@@ -3591,6 +9120,7 @@ components:
   schemas:
     SuccessResponse:
       type: object
+      required: [success]
       properties:
         success:
           type: boolean
@@ -3600,6 +9130,7 @@ components:
 
     TaskResponse:
       type: object
+      required: [success, task_id]
       properties:
         success:
           type: boolean
@@ -3609,13 +9140,130 @@ components:
 
     Error:
       type: object
+      required: [success, error]
       properties:
+        success:
+          type: boolean
+          example: false
         error:
           type: string
         code:
           type: string
         details:
           type: string
+
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+        version:
+          type: string
+        uptime:
+          type: string
+
+    ReadyResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: ok or not ready
+          example: ok
+        checks:
+          type: object
+          additionalProperties: true
+          description: Component readiness (database, listeners, …)
+
+    ModuleInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Invoke-Mimikatz.ps1
+        size:
+          type: integer
+          format: int64
+        updated_at:
+          type: string
+          format: date-time
+
+    ModulesListResponse:
+      type: object
+      required: [success, modules]
+      properties:
+        success:
+          type: boolean
+        modules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModuleInfo'
+        hint:
+          type: string
+          description: Operator guidance (e.g. upload mimikatz script)
+
+    ModuleUploadResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        name: { type: string }
+        size: { type: integer }
+
+    ModuleDeployRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Module filename under data/modules
+        path:
+          type: string
+          description: Remote path on agent (default C:/Windows/Temp/<name>)
+
+    AgentListResponse:
+      type: object
+      description: |
+        Envelope varies by handler. Common JSON forms include
+        `{ agents: [...] }` or paginated `{ Agents|agents, Total, Page }`.
+      properties:
+        success:
+          type: boolean
+        agents:
+          type: array
+          items:
+            $ref: '#/components/schemas/Agent'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+
+    DashboardStats:
+      type: object
+      description: Aggregate agent/task counters for the operator dashboard
+      properties:
+        success:
+          type: boolean
+        total_agents:
+          type: integer
+        online_agents:
+          type: integer
+        stale_agents:
+          type: integer
+        offline_agents:
+          type: integer
+        total_tasks:
+          type: integer
+        tasks_today:
+          type: integer
+        pending_tasks:
+          type: integer
+        failed_tasks:
+          type: integer
+        total_listeners:
+          type: integer
 
     User:
       type: object

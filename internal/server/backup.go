@@ -6,7 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -30,9 +30,11 @@ type BackupManager struct {
 	dbPath    string
 	backupDir string
 	key       []byte
+	keyID     string
 	running   bool
 	mu        sync.Mutex
 	ticker    *time.Ticker
+	stopCh    chan struct{}
 }
 
 func NewBackupManager(db *gorm.DB, dbPath, backupDir, key string) (*BackupManager, error) {
@@ -63,6 +65,7 @@ func NewBackupManager(db *gorm.DB, dbPath, backupDir, key string) (*BackupManage
 		dbPath:    dbPath,
 		backupDir: backupDir,
 		key:       backupKey,
+		keyID:     fmt.Sprintf("k%s", time.Now().Format("20060102")),
 	}, nil
 }
 
@@ -83,11 +86,22 @@ func (bm *BackupManager) Start(cronSchedule string) error {
 	slog.Info("Backup manager started", "schedule", cronSchedule, "interval", duration)
 
 	bm.ticker = time.NewTicker(duration)
+	stopCh := make(chan struct{})
+	bm.stopCh = stopCh
 	go func() {
-		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
 		bm.PerformBackup()
-		for range bm.ticker.C {
-			bm.PerformBackup()
+		for {
+			select {
+			case <-bm.ticker.C:
+				bm.PerformBackup()
+			case <-stopCh:
+				return
+			}
 		}
 	}()
 
@@ -100,6 +114,10 @@ func (bm *BackupManager) Stop() {
 	if bm.ticker != nil {
 		bm.ticker.Stop()
 		bm.ticker = nil
+	}
+	if bm.stopCh != nil {
+		close(bm.stopCh)
+		bm.stopCh = nil
 	}
 	bm.mu.Unlock()
 	slog.Info("Backup manager stopped")
@@ -140,16 +158,27 @@ func (bm *BackupManager) PerformBackup() error {
 
 	if err := bm.db.Exec("VACUUM INTO ?", backupPath).Error; err != nil {
 		slog.Warn("VACUUM INTO backup failed, falling back to file copy", "error", err)
-		data, err := os.ReadFile(bm.dbPath)
+		dbFile, err := os.Open(bm.dbPath)
 		if err != nil {
-			slog.Error("Failed to read database file", "error", err)
+			slog.Error("Failed to open database file", "error", err)
 			return err
 		}
-		if err := os.WriteFile(backupPath, data, 0600); err != nil {
-			slog.Error("Failed to write temp backup file", "error", err)
+		defer dbFile.Close()
+		tmpFile, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+		if err != nil {
+			slog.Error("Failed to create temp backup file", "error", err)
 			return err
 		}
+		if _, err := io.Copy(tmpFile, dbFile); err != nil {
+			tmpFile.Close()
+			slog.Error("Failed to copy database file", "error", err)
+			return err
+		}
+		tmpFile.Close()
 	}
+
+	timestamp := time.Now().Format(backupTimestamp)
+	backupFile := filepath.Join(bm.backupDir, fmt.Sprintf("forgec2_backup_%s.fbk", timestamp))
 
 	data, err := os.ReadFile(backupPath)
 	if err != nil {
@@ -162,9 +191,6 @@ func (bm *BackupManager) PerformBackup() error {
 		slog.Error("Failed to encrypt backup", "error", err)
 		return err
 	}
-
-	timestamp := time.Now().Format(backupTimestamp)
-	backupFile := filepath.Join(bm.backupDir, fmt.Sprintf("forgec2_backup_%s.fbk", timestamp))
 
 	if err := os.WriteFile(backupFile, encryptedData, 0600); err != nil {
 		slog.Error("Failed to write backup file", "error", err)
@@ -266,3 +292,100 @@ func (bm *BackupManager) cleanupOldBackups() {
 	slog.Info("Cleaned up old backups", "remaining", keepCount)
 }
 
+func (bm *BackupManager) RotateKey(newKeyHex string) error {
+	parsedKey, err := hex.DecodeString(newKeyHex)
+	if err != nil {
+		return fmt.Errorf("invalid hex key: %w", err)
+	}
+	if len(parsedKey) != backupKeySize {
+		return fmt.Errorf("key must be %d bytes", backupKeySize)
+	}
+
+	files, err := os.ReadDir(bm.backupDir)
+	if err != nil {
+		return err
+	}
+
+	oldKey := bm.key
+	reencrypted := 0
+	for _, file := range files {
+		if file.IsDir() || filepath.Ext(file.Name()) != ".fbk" {
+			continue
+		}
+		path := filepath.Join(bm.backupDir, file.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			slog.Warn("Failed to read backup for re-encryption", "file", file.Name(), "error", err)
+			continue
+		}
+		plaintext, err := bm.decryptWithKey(data, oldKey)
+		if err != nil {
+			slog.Warn("Failed to decrypt backup with old key", "file", file.Name(), "error", err)
+			continue
+		}
+		enc, err := bm.encryptWithKey(plaintext, parsedKey)
+		if err != nil {
+			slog.Warn("Failed to re-encrypt backup", "file", file.Name(), "error", err)
+			continue
+		}
+		if err := os.WriteFile(path, enc, 0600); err != nil {
+			slog.Warn("Failed to write re-encrypted backup", "file", file.Name(), "error", err)
+			continue
+		}
+		reencrypted++
+	}
+
+	bm.key = parsedKey
+	bm.keyID = fmt.Sprintf("k%s", time.Now().Format("20060102"))
+	slog.Info("Backup key rotated", "reencrypted", reencrypted)
+	return nil
+}
+
+func (bm *BackupManager) encryptWithKey(data []byte, key []byte) ([]byte, error) {
+	salt := make([]byte, backupSaltSize)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, err
+	}
+	iv := make([]byte, backupIVSize)
+	if _, err := rand.Read(iv); err != nil {
+		return nil, err
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	plaintext := append(salt, data...)
+	ciphertext := aead.Seal(nil, iv, plaintext, nil)
+	result := make([]byte, 0, len(iv)+len(ciphertext))
+	result = append(result, iv...)
+	result = append(result, ciphertext...)
+	return result, nil
+}
+
+func (bm *BackupManager) decryptWithKey(encryptedData []byte, key []byte) ([]byte, error) {
+	if len(encryptedData) < backupIVSize+backupTagSize {
+		return nil, fmt.Errorf("backup data too short")
+	}
+	iv := encryptedData[:backupIVSize]
+	ciphertext := encryptedData[backupIVSize:]
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	plaintext, err := aead.Open(nil, iv, ciphertext, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(plaintext) < backupSaltSize {
+		return nil, fmt.Errorf("invalid backup format")
+	}
+	return plaintext[backupSaltSize:], nil
+}

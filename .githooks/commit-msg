@@ -1,0 +1,7 @@
+#!/bin/sh
+MSG=$(cat "$1")
+LEN=${#MSG}
+if [ "$LEN" -lt 3 ]; then
+  echo "ERROR: Commit message must be at least 3 characters (got $LEN)."
+  exit 1
+fi

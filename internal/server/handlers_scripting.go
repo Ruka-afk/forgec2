@@ -1,8 +1,8 @@
-﻿package server
+package server
 
 import (
-	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -10,14 +10,24 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// handleScriptingPage renders the scripting console page
+func (s *Server) loadScriptsFromDB() {
+	var rows []db.Script
+	if err := s.db.Where("enabled = ?", true).Find(&rows).Error; err != nil {
+		return
+	}
+	engine := scripting.GetEngine()
+	for _, row := range rows {
+		_ = engine.LoadScript(row.ID, row.Name, row.Code)
+	}
+}
+
 func (s *Server) handleScriptingPage(c *gin.Context) {
 	stats := s.getNavStats()
 	data := gin.H{
 		"Title":     "ForgeC2 - Scripting Console",
 		"ActiveNav": "scripting",
 		"Stats":     stats,
-		"Scripts":   scripting.GetEngine().ListScripts(),
+		"Scripts":   s.listScriptsFromDB(),
 	}
 	for k, v := range stats {
 		data[k] = v
@@ -25,13 +35,29 @@ func (s *Server) handleScriptingPage(c *gin.Context) {
 	s.renderPageOrJSON(c, data)
 }
 
-// handleAPIGetScripts returns all scripts
-func (s *Server) handleAPIGetScripts(c *gin.Context) {
-	scripts := scripting.GetEngine().ListScripts()
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": scripts})
+func (s *Server) listScriptsFromDB() []scripting.Script {
+	var rows []db.Script
+	s.db.Order("updated_at desc").Limit(200).Find(&rows)
+	out := make([]scripting.Script, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, scripting.Script{
+			ID:          strconv.FormatUint(uint64(row.ID), 10),
+			Name:        row.Name,
+			Description: row.Description,
+			Code:        row.Code,
+			CreatedAt:   row.CreatedAt,
+			UpdatedAt:   row.UpdatedAt,
+			RunCount:    row.RunCount,
+			LastRun:     row.LastRun,
+		})
+	}
+	return out
 }
 
-// handleAPISaveScript saves a new or updated script
+func (s *Server) handleAPIGetScripts(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": s.listScriptsFromDB()})
+}
+
 func (s *Server) handleAPISaveScript(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
@@ -47,44 +73,80 @@ func (s *Server) handleAPISaveScript(c *gin.Context) {
 		return
 	}
 
-	engine := scripting.GetEngine()
-	if req.ID == "" {
-		req.ID = generateID()
+	var row db.Script
+	now := time.Now()
+	if req.ID != "" {
+		if id, err := strconv.ParseUint(req.ID, 10, 64); err == nil {
+			if err := s.db.First(&row, id).Error; err == nil {
+				row.Name = req.Name
+				row.Description = req.Description
+				row.Code = req.Code
+				row.UpdatedAt = now
+				if err := s.db.Save(&row).Error; err != nil {
+					respondError(c, http.StatusInternalServerError, sanitizeError(err, "script"))
+					return
+				}
+			}
+		}
+	}
+	if row.ID == 0 {
+		row = db.Script{
+			Name:        req.Name,
+			Description: req.Description,
+			Code:        req.Code,
+			Enabled:     true,
+			CreatedBy:   c.GetString("username"),
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		if err := s.db.Create(&row).Error; err != nil {
+			respondError(c, http.StatusInternalServerError, sanitizeError(err, "script"))
+			return
+		}
 	}
 
-	script := &scripting.Script{
-		ID:          req.ID,
-		Name:        req.Name,
-		Description: req.Description,
-		Code:        req.Code,
-	}
-	engine.SaveScript(script)
+	_ = scripting.GetEngine().LoadScript(row.ID, row.Name, row.Code)
 
-	s.LogAuditRecord(c, "save_script", "scripting", req.ID, "Script saved: "+req.Name, true, nil)
+	script := scripting.Script{
+		ID:          strconv.FormatUint(uint64(row.ID), 10),
+		Name:        row.Name,
+		Description: row.Description,
+		Code:        row.Code,
+		CreatedAt:   row.CreatedAt,
+		UpdatedAt:   row.UpdatedAt,
+		RunCount:    row.RunCount,
+		LastRun:     row.LastRun,
+	}
+	s.LogAuditRecord(c, "save_script", "scripting", script.ID, "Script saved: "+req.Name, true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": script})
 }
 
-// handleAPIDeleteScript deletes a script
 func (s *Server) handleAPIDeleteScript(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
 	id := c.Param("id")
-	if scripting.GetEngine().DeleteScript(id) {
-		s.LogAuditRecord(c, "delete_script", "scripting", id, "Script deleted", true, nil)
-		c.JSON(http.StatusOK, gin.H{"success": true})
-	} else {
-		respondError(c, http.StatusNotFound, "script not found")
-	}
-}
-
-// handleAPIExecuteScript executes a script
-func (s *Server) handleAPIExecuteScript(c *gin.Context) {
-	if !s.requireOperator(c) {
+	uid, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "invalid script id")
 		return
 	}
-	if role, _ := c.Get("user_role"); fmt.Sprintf("%v", role) != "admin" {
-		respondError(c, http.StatusForbidden, "Admin only")
+	var row db.Script
+	if err := s.db.First(&row, uid).Error; err != nil {
+		respondError(c, http.StatusNotFound, "script not found")
+		return
+	}
+	if err := s.db.Delete(&row).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "script"))
+		return
+	}
+	scripting.GetEngine().UnloadScript(row.Name)
+	s.LogAuditRecord(c, "delete_script", "scripting", id, "Script deleted", true, nil)
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func (s *Server) handleAPIExecuteScript(c *gin.Context) {
+	if !s.requireAdmin(c) {
 		return
 	}
 	var req struct {
@@ -97,10 +159,9 @@ func (s *Server) handleAPIExecuteScript(c *gin.Context) {
 		return
 	}
 
-	// Build context from database
 	context := map[string]interface{}{
-		"agents":    []interface{}{},
-		"tasks":     []interface{}{},
+		"agents":      []interface{}{},
+		"tasks":       []interface{}{},
 		"credentials": []interface{}{},
 	}
 
@@ -120,6 +181,15 @@ func (s *Server) handleAPIExecuteScript(c *gin.Context) {
 	var result scripting.ExecutionResult
 
 	if req.ScriptID != "" {
+		if uid, err := strconv.ParseUint(req.ScriptID, 10, 64); err == nil {
+			var row db.Script
+			if err := s.db.First(&row, uid).Error; err == nil {
+				_ = engine.LoadScript(row.ID, row.Name, row.Code)
+				row.RunCount++
+				row.LastRun = time.Now()
+				s.db.Save(&row)
+			}
+		}
 		result = engine.Execute(req.ScriptID, context)
 	} else if req.Code != "" {
 		result = engine.ExecuteCode(req.Code, context)
@@ -139,34 +209,30 @@ func (s *Server) handleAPIScriptsHistory(c *gin.Context) {
 		Limit(50).
 		Find(&tasks)
 
-		type historyEntry struct {
-			ID        uint      `json:"id"`
-			AgentID   string    `json:"agent_id"`
-			Type      string    `json:"type"`
-			Command   string    `json:"command"`
-			Status    string    `json:"status"`
-			Result    string    `json:"result"`
-			CreatedAt time.Time `json:"created_at"`
-			UpdatedAt time.Time `json:"updated_at"`
-		}
+	type historyEntry struct {
+		ID        uint      `json:"id"`
+		AgentID   string    `json:"agent_id"`
+		Type      string    `json:"type"`
+		Command   string    `json:"command"`
+		Status    string    `json:"status"`
+		Result    string    `json:"result"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+	}
 
-		entries := make([]historyEntry, len(tasks))
-		for i, t := range tasks {
-			entries[i] = historyEntry{
-				ID:        t.ID,
-				AgentID:   t.AgentID,
-				Type:      t.Type,
-				Command:   t.Command,
-				Status:    t.Status,
-				Result:    t.Result,
-				CreatedAt: t.CreatedAt,
-				UpdatedAt: t.UpdatedAt,
-			}
+	entries := make([]historyEntry, len(tasks))
+	for i, t := range tasks {
+		entries[i] = historyEntry{
+			ID:        t.ID,
+			AgentID:   t.AgentID,
+			Type:      t.Type,
+			Command:   t.Command,
+			Status:    t.Status,
+			Result:    t.Result,
+			CreatedAt: t.CreatedAt,
+			UpdatedAt: t.UpdatedAt,
 		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "history": entries})
-}
-
-func generateID() string {
-	return "script_" + time.Now().Format("20060102150405")
 }

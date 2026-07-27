@@ -97,10 +97,10 @@ func TestErrorTracker(t *testing.T) {
 
 	t.Run("get top errors", func(t *testing.T) {
 		et := NewErrorTracker()
-		et.Track(NewAppError("A", "a", nil))               // count 1
-		et.Track(NewAppError("B", "b", nil))               // count 1
-		et.Track(NewAppError("C", "c", nil))               // count 1
-		et.Track(NewAppError("B", "b", nil))               // count 2
+		et.Track(NewAppError("A", "a", nil)) // count 1
+		et.Track(NewAppError("B", "b", nil)) // count 1
+		et.Track(NewAppError("C", "c", nil)) // count 1
+		et.Track(NewAppError("B", "b", nil)) // count 2
 
 		top := et.GetTopErrors(2)
 		if len(top) != 2 {

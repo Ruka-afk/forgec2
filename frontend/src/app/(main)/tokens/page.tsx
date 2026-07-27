@@ -1,7 +1,8 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState, PageHeader } from "@/components/UI";
 import { formatTime } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,7 +46,7 @@ export default function TokensPage() {
     setLoading(true);
     try {
       const [tokenData, agentData] = await Promise.all([
-        api.json("/tokens"),
+        api.get("/tokens"),
         api.get("/agents?page=1&pageSize=200"),
       ]) as Record<string, unknown>[];
       setTokens((tokenData.tokens || tokenData.data || tokenData || []) as Token[]);
@@ -72,7 +73,7 @@ export default function TokensPage() {
 
   const handleRevert = async (tokenId: string) => {
     try {
-      await api.post("/token/revert");
+      await api.post(`/agents/${tokenId}/token/revert`);
       loadData();
     } catch { toast.error(t("tokens.revert_failed")); }
   };
@@ -96,8 +97,8 @@ export default function TokensPage() {
   };
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={<><BadgeInfo className="w-4 h-4" />{t("tokens.title")}</>} subtitle={`${t("tokens.subtitle")} · ${filtered.length} ${t("tokens.count")}`}>
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title={<><BadgeInfo className="w-4 h-4" />{t("tokens.title")}</>} subtitle={`${t("tokens.subtitle")} ${filtered.length} ${t("tokens.count")}`}>
         <Button onClick={loadData} className="gap-2">
           <RotateCw className="w-4 h-4" /> {t("tokens.refresh")}
         </Button>
@@ -189,9 +190,12 @@ export default function TokensPage() {
                     </TableCell>
                     <TableCell className="text-xs font-mono text-muted-foreground">{createdAt ? formatTime(createdAt) : "-"}</TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => handleRevert(tid)} title="Revert to Self" aria-label="Revert token to self">
+                      <Tooltip>
+                        <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleRevert(tid)} aria-label="Revert token to self" />}>
                         <RotateCcw className="w-4 h-4" />
-                      </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Revert to Self</TooltipContent>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 );

@@ -81,13 +81,13 @@ func (s *Server) handleContainerStatus(c *gin.Context) {
 // GET /api/container/agents
 func (s *Server) handleContainerAgents(c *gin.Context) {
 	var agents []db.Implant
-	if err := s.db.Where("os LIKE ? OR os LIKE ?", "%container%", "%docker%").Find(&agents).Error; err != nil {
+	if err := s.db.Where("os LIKE ? OR os LIKE ?", "%container%", "%docker%").Limit(500).Find(&agents).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to query agents")
 		return
 	}
 	// Also match agents with container-related hostnames or notes
 	var extra []db.Implant
-	if err := s.db.Where("hostname LIKE ? OR note LIKE ?", "%container%", "%docker%").Find(&extra).Error; err == nil {
+	if err := s.db.Where("hostname LIKE ? OR note LIKE ?", "%container%", "%docker%").Limit(500).Find(&extra).Error; err == nil {
 		seen := make(map[string]struct{}, len(agents))
 		for i := range agents {
 			seen[agents[i].ID] = struct{}{}

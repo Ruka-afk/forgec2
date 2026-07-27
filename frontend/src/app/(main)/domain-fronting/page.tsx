@@ -1,9 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { ConfirmModal, PageHeader, Spinner } from "@/components/UI";
+import { ConfirmModal, DataSpinner, EmptyState, PageHeader } from "@/components/UI";
 import { toast } from "sonner";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Cloud, HeartPulse, Info, Plus, RotateCw, Trash2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface FrontDomain {
   domain: string;
@@ -41,11 +42,11 @@ export default function DomainFrontingPage() {
       setAutoFailover((data.auto_failover ?? true) as boolean);
     } catch {
       setDomains([]);
-      toast.error("Failed to fetch domain status");
+      toast.error(t("domain_fronting.toast.fetch_status_failed"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { fetchStatus(); }, [fetchStatus]);
 
@@ -54,9 +55,9 @@ export default function DomainFrontingPage() {
     try {
       const data = await api.postJson("/infra/front/check", {});
       setDomains((data.domains as FrontDomain[]) || []);
-      toast.success("Health check completed");
+      toast.success(t("domain_fronting.toast.health_check_ok"));
     } catch {
-      toast.error("Health check failed");
+      toast.error(t("domain_fronting.toast.health_check_failed"));
     } finally {
       setChecking(false);
     }
@@ -68,9 +69,9 @@ export default function DomainFrontingPage() {
       const data = await api.postJson("/infra/front/config", { domains: cfgDomains, auto_failover: cfgAuto });
       setDomains((data.domains as FrontDomain[]) || []);
       setAutoFailover(cfgAuto);
-      toast.success("Configuration saved");
+      toast.success(t("domain_fronting.toast.config_saved"));
     } catch {
-      toast.error("Failed to save configuration");
+      toast.error(t("domain_fronting.toast.config_save_failed"));
     } finally {
       setSaving(false);
     }
@@ -80,7 +81,7 @@ export default function DomainFrontingPage() {
     const d = newDomain.trim();
     if (!d) return;
     if (domains.some((x) => x.domain === d)) {
-      toast.error("Domain already in list");
+      toast.error(t("domain_fronting.toast.already_in_list"));
       return;
     }
     const updated = [...domains.map((x) => x.domain), d];
@@ -100,8 +101,8 @@ export default function DomainFrontingPage() {
   };
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={<><Cloud className="w-4 h-4" />Domain Fronting</>} subtitle="CDN front domains with automatic failover and health monitoring">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title={<><Cloud className="w-4 h-4" />{t("domain_fronting.title")}</>} subtitle={t("domain_fronting.subtitle")}>
         <Button onClick={handleCheck} disabled={checking || loading} size="sm">
           <HeartPulse className={`w-4 h-4 ${checking ? "animate-pulse" : ""}`} />
           {checking ? "Checking..." : "Health Check"}
@@ -149,16 +150,11 @@ export default function DomainFrontingPage() {
         </div>
 
         {loading ? (
-          <div className="p-4 sm:p-5 text-center text-muted-foreground">
-            <Spinner size="md" />
-            <div>Loading...</div>
+          <div className="p-4 sm:p-5">
+            <DataSpinner message="Loading..." />
           </div>
         ) : domains.length === 0 ? (
-          <div className="p-4 sm:p-5 text-center text-muted-foreground">
-            <Cloud className="w-4 h-4" />
-            <div className="text-sm">No front domains configured</div>
-            <div className="text-xs mt-1">Add a CDN domain below to get started</div>
-          </div>
+          <EmptyState icon={Cloud} title={t("domain_fronting.empty_title")} message={t("domain_fronting.empty_message")} />
         ) : (
           <Table>
             <TableHeader>
@@ -173,17 +169,21 @@ export default function DomainFrontingPage() {
                 <TableRow key={d.domain}>
                   <TableCell>
                     <div className="flex items-center gap-3 min-w-0">
-                      <span
-                        className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                          d.healthy ? "bg-emerald-500" : "bg-destructive"
-                        } ${d.active ? "animate-pulse" : ""}`}
-                        title={d.healthy ? "Healthy" : "Unhealthy"}
-                      />
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                              d.healthy ? "bg-emerald-500" : "bg-destructive"
+                            } ${d.active ? "animate-pulse" : ""}`}
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent>{d.healthy ? "Healthy" : "Unhealthy"}</TooltipContent>
+                      </Tooltip>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-foreground truncate">{d.domain}</span>
                           {d.active && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-px font-medium">
+                            <Badge variant="outline" className="text-(--font-size-micro-sm) px-1.5 py-px font-medium">
                               Active
                             </Badge>
                           )}
@@ -211,15 +211,17 @@ export default function DomainFrontingPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeDomain(d.domain)}
-                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      title="Remove domain"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger render={<Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeDomain(d.domain)}
+                          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        />}>
+                        <Trash2 className="w-4 h-4" />
+                      </TooltipTrigger>
+                      <TooltipContent>Remove domain</TooltipContent>
+                    </Tooltip>
                   </TableCell>
                 </TableRow>
               ))}

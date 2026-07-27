@@ -2,14 +2,17 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
-	"log"
 	"log/slog"
 	"net"
+	"os"
 	"runtime/debug"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
@@ -76,6 +79,7 @@ type GRPCListener struct {
 	addr      string
 	server    *grpc.Server
 	beaconSrv *grpcBeaconServer
+	tlsCreds  credentials.TransportCredentials // optional TLS for grpcs://
 }
 
 func NewGRPCListener(addr string) *GRPCListener {
@@ -86,18 +90,33 @@ func (l *GRPCListener) SetHandler(h func(agentID string, reqJSON []byte) []byte)
 	l.beaconSrv = &grpcBeaconServer{handler: h}
 }
 
+// SetTLS enables TLS credentials (for grpcs://). Pass nil for plain lab grpc://.
+func (l *GRPCListener) SetTLS(creds credentials.TransportCredentials) {
+	l.tlsCreds = creds
+}
+
 func (l *GRPCListener) Start() error {
 	lis, err := net.Listen("tcp", l.addr)
 	if err != nil {
 		return err
 	}
 
-	l.server = grpc.NewServer(grpc.MaxRecvMsgSize(GRPCMaxRecvMsgSize))
+	opts := []grpc.ServerOption{grpc.MaxRecvMsgSize(GRPCMaxRecvMsgSize)}
+	mode := "insecure"
+	if l.tlsCreds != nil {
+		opts = append(opts, grpc.Creds(l.tlsCreds))
+		mode = "tls"
+	}
+	l.server = grpc.NewServer(opts...)
 	l.server.RegisterService(&grpcServiceDesc, l.beaconSrv)
 
 	go func() {
-		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
-		slog.Info("gRPC listener started", "addr", l.addr)
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
+		slog.Info("gRPC listener started", "addr", l.addr, "mode", mode)
 		if err := l.server.Serve(lis); err != nil {
 			slog.Error("gRPC server error", "err", err)
 		}
@@ -112,10 +131,48 @@ func (l *GRPCListener) Stop() error {
 	return nil
 }
 
-// startGRPCListener registers the gRPC listener in server startup
+// Close implements io.Closer for use with extraListeners map.
+func (l *GRPCListener) Close() error {
+	return l.Stop()
+}
+
+// startGRPCListener registers the gRPC listener in server startup.
+// When TLS is enabled and cert/key exist, serves grpcs://; otherwise plain grpc:// (lab).
 func (s *Server) startGRPCListener() {
 	addr := s.cfg.Server.GRPCAddr
 	listener := NewGRPCListener(addr)
+	if s.cfg.Server.TLSEnabled && s.cfg.Server.CertFile != "" && s.cfg.Server.KeyFile != "" {
+		if _, err := os.Stat(s.cfg.Server.CertFile); err == nil {
+			if cert, err := tls.LoadX509KeyPair(s.cfg.Server.CertFile, s.cfg.Server.KeyFile); err == nil {
+				tlsCfg := &tls.Config{
+					Certificates: []tls.Certificate{cert},
+					MinVersion:   tls.VersionTLS12,
+				}
+
+				// mTLS: load client CA for mutual TLS verification
+				if s.cfg.Server.ClientCAFile != "" && s.cfg.Server.RequireClientCert {
+					caCert, caErr := os.ReadFile(s.cfg.Server.ClientCAFile)
+					if caErr != nil {
+						slog.Warn("gRPC mTLS: failed to load client CA", "err", caErr)
+					} else {
+						caPool := x509.NewCertPool()
+						if !caPool.AppendCertsFromPEM(caCert) {
+							slog.Warn("gRPC mTLS: failed to parse client CA")
+						} else {
+							tlsCfg.ClientCAs = caPool
+							tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
+							slog.Info("gRPC mTLS enabled", "client_ca", s.cfg.Server.ClientCAFile)
+						}
+					}
+				}
+
+				listener.SetTLS(credentials.NewTLS(tlsCfg))
+				slog.Info("gRPC TLS credentials loaded", "cert", s.cfg.Server.CertFile)
+			} else {
+				slog.Warn("gRPC TLS load failed; using insecure", "err", err)
+			}
+		}
+	}
 	listener.SetHandler(func(agentID string, reqJSON []byte) []byte {
 		var req beaconRequest
 		if len(reqJSON) > 0 {

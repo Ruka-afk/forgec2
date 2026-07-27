@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
@@ -46,12 +46,12 @@ export default function ChainPage() {
 
   const fetchGraph = useCallback(async () => {
     try {
-      const data = await       api.json<{ nodes: ChainNode[] }>("/chain/graph");
+      const data = await api.get<{ nodes: ChainNode[] }>("/chain/graph");
       setGraph(data.nodes || []);
     } catch {
       toast.error(t("chain.load_failed"));
     }
-  }, []);
+  }, [t]);
 
   const loadChain = useCallback(async (agentId: string) => {
     if (!agentId) {
@@ -65,7 +65,7 @@ export default function ChainPage() {
       setChain([]);
       toast.error(t("chain.load_proxy_failed"));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     Promise.all([refreshAgents(), fetchGraph()]).finally(() => setLoading(false));
@@ -118,7 +118,7 @@ export default function ChainPage() {
   }
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader
         title={<span><Link className="w-4 h-4" />Multi-Hop Proxy Chain</span>}
         subtitle={t("chain.subtitle")}
@@ -221,7 +221,7 @@ export default function ChainPage() {
                       <Bug className="w-4 h-4" />
                       <span className="font-medium text-foreground">{a.hostname}</span>
                       <span className="text-muted-foreground/70 ml-1">({a.ip})</span>
-                      <span className="text-[10px] text-muted-foreground/70 font-mono ml-auto">{(a.id || "").substring(0, 8)}...</span>
+                      <span className="text-(--font-size-micro-sm) text-muted-foreground/70 font-mono ml-auto">{(a.id || "").substring(0, 8)}...</span>
                     </Button>
                   ))
                 )}
@@ -264,7 +264,7 @@ export default function ChainPage() {
                         ) : (
                           <>
                             <ArrowRight className="w-4 h-4" />
-                            <Badge variant="success" className="text-[10px] font-medium">
+                            <Badge variant="success" className="text-(--font-size-micro-sm) font-medium">
                               C2
                             </Badge>
                           </>

@@ -5,8 +5,24 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
 )
+
+var chromeTaskTypes = map[string]bool{
+	protocol.TaskTypeChromeC2:         true,
+	protocol.TaskTypeChromeExec:       true,
+	protocol.TaskTypeChromeScript:     true,
+	protocol.TaskTypeChromeCookies:    true,
+	protocol.TaskTypeChromeBookmarks:  true,
+	protocol.TaskTypeChromeHistory:    true,
+	protocol.TaskTypeChromeTabs:       true,
+	protocol.TaskTypeChromeDownload:   true,
+	protocol.TaskTypeChromeStorage:    true,
+	protocol.TaskTypeChromeScreenshot: true,
+	protocol.TaskTypeChromeClipboard:  true,
+	protocol.TaskTypeChromeIdle:       true,
+}
 
 // chromeAgent is the JSON shape expected by the Chrome C2 frontend page.
 type chromeAgent struct {
@@ -76,6 +92,11 @@ func (s *Server) handleChromeAgentTask(c *gin.Context) {
 	taskType := req.Type
 	if taskType == "" {
 		taskType = "chrome_exec"
+	}
+
+	if !chromeTaskTypes[taskType] {
+		respondError(c, http.StatusBadRequest, "invalid chrome task type: "+taskType)
+		return
 	}
 
 	task, err := s.createTask(uuid, taskType, req.Command, "", req.Path, req.Data, 0, 0)

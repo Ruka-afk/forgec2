@@ -96,10 +96,10 @@ func (sc *streamCipher) generateKeystream(nonce []byte, length int) []byte {
 
 // ecdhSession manages a single ECDH session with the server
 type ecdhSession struct {
-	privateKey       *ecdh.PrivateKey
-	sessionKey       []byte // AES-256-GCM key derived from ECDH shared secret
-	msgCount         int
-	rotationPending  bool   // agent key was rotated; include new pub key in next beacon
+	privateKey        *ecdh.PrivateKey
+	sessionKey        []byte // AES-256-GCM key derived from ECDH shared secret
+	msgCount          int
+	rotationPending   bool   // agent key was rotated; include new pub key in next beacon
 	rotationPubKeyB64 string // new public key to send
 }
 

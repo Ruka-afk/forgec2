@@ -46,7 +46,7 @@ func (s *Server) handleTopologyPage(c *gin.Context) {
 // handleTopologyData returns JSON nodes and edges for the topology graph
 func (s *Server) handleTopologyData(c *gin.Context) {
 	var listeners []db.Listener
-	s.db.Where("enabled = ?", true).Find(&listeners)
+	s.db.Where("enabled = ?", true).Limit(500).Find(&listeners)
 
 	var agents []db.Implant
 	s.db.Select("id, hostname, os, ip, user, status, last_seen, listener_id, parent_id").Limit(TopologyAgentLimit).Find(&agents)

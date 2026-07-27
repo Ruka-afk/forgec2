@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { toast } from "sonner";
@@ -47,7 +47,7 @@ export default function BOFPage() {
     if (bofFile) {
       runBOF(String(bofFile.id || ""), agents[0]?.id || "", bof.args);
     } else {
-      toast.error(`BOF "${bof.name}" not uploaded. Import from BOF Repo first.`);
+      toast.error(t("bof.toast.not_uploaded", { name: bof.name }));
     }
   };
 
@@ -59,8 +59,8 @@ export default function BOFPage() {
     );
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title="BOF Management" subtitle="Beacon Object Files - upload, execute, and manage BOF tools" />
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title={t("bof.title")} subtitle={t("bof.subtitle")} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5 mb-6">
         <Card className="p-4 sm:p-5 flex items-center gap-3">
@@ -141,13 +141,13 @@ export default function BOFPage() {
               <Card key={bof.name} className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-medium text-foreground font-mono">{bof.name}</div>
-                  <Badge variant={isUploaded ? "default" : "secondary"} className="text-[10px]">
+                  <Badge variant={isUploaded ? "default" : "secondary"} className="text-(--font-size-micro-sm)">
                     {isUploaded ? "Ready" : "Not Installed"}
                   </Badge>
                 </div>
                 <div className="text-xs text-muted-foreground mb-1">{bof.desc}</div>
                 <div className="flex items-center justify-between mt-3">
-                  <Badge variant="secondary" className="text-[10px] font-mono">{bof.arch}</Badge>
+                  <Badge variant="secondary" className="text-(--font-size-micro-sm) font-mono">{bof.arch}</Badge>
                   <Button size="sm" onClick={() => handleQuickRun(bof)} disabled={!isUploaded}>
                     <Zap className="w-4 h-4" />Quick Run
                   </Button>

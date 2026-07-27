@@ -46,15 +46,16 @@ type CircuitBreaker struct {
 	config        *config.Config
 	onBurned      func(targetID string) // callback to rotate agents
 	stopCh        chan struct{}
+	done          chan struct{} // closed when probeLoop exits
 }
 
 type TargetHealth struct {
-	Target      ProbeTarget
-	Status      ListenerHealth
-	LastProbe   time.Time
+	Target           ProbeTarget
+	Status           ListenerHealth
+	LastProbe        time.Time
 	ConsecutiveFails int
-	Results     []ProbeResult // ring buffer, keep last 10
-	FailReasons []string
+	Results          []ProbeResult // ring buffer, keep last 10
+	FailReasons      []string
 }
 
 var (
@@ -63,16 +64,18 @@ var (
 )
 
 func NewCircuitBreaker(cfg *config.Config) *CircuitBreaker {
-	cb := &CircuitBreaker{
-		targets:       make(map[string]*TargetHealth),
-		vantagePoints: cfg.Server.VantagePoints,
-		checkInterval: CBCheckInterval,
-		config:        cfg,
-		onBurned:      nil,
-		stopCh:        make(chan struct{}),
-	}
-	circuitBreaker = cb
-	return cb
+	circuitBreakerOnce.Do(func() {
+		cb := &CircuitBreaker{
+			targets:       make(map[string]*TargetHealth),
+			vantagePoints: cfg.Server.VantagePoints,
+			checkInterval: CBCheckInterval,
+			config:        cfg,
+			onBurned:      nil,
+			stopCh:        make(chan struct{}),
+		}
+		circuitBreaker = cb
+	})
+	return circuitBreaker
 }
 
 func GetCircuitBreaker() *CircuitBreaker {
@@ -95,21 +98,27 @@ func (cb *CircuitBreaker) UnregisterTarget(id string) {
 }
 
 func (cb *CircuitBreaker) Start() {
-	go cb.probeLoop()
+	cb.done = make(chan struct{})
+	go func() {
+		defer close(cb.done)
+		cb.probeLoop()
+	}()
 }
 
 func (cb *CircuitBreaker) Stop() {
 	close(cb.stopCh)
+	if cb.done != nil {
+		<-cb.done
+	}
 }
 
 func (cb *CircuitBreaker) probeLoop() {
 	for {
+		cb.probeAll()
 		select {
 		case <-cb.stopCh:
 			return
-		default:
-			cb.probeAll()
-			time.Sleep(cb.checkInterval)
+		case <-time.After(cb.checkInterval):
 		}
 	}
 }
@@ -137,9 +146,7 @@ func (cb *CircuitBreaker) probeTarget(target ProbeTarget) ProbeResult {
 
 	// TCP check
 	addr := fmt.Sprintf("%s:%d", target.Host, target.Port)
-	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: CBDialTimeout}, "tcp", addr, &tls.Config{
-		InsecureSkipVerify: true,
-	})
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: CBDialTimeout}, "tcp", addr, &tls.Config{})
 	if err != nil {
 		result.Error = fmt.Sprintf("TCP/TLS dial failed: %v", err)
 		result.ResponseTime = time.Since(start)
@@ -159,8 +166,8 @@ func (cb *CircuitBreaker) probeTarget(target ProbeTarget) ProbeResult {
 		client := &http.Client{Timeout: CBHealthCheckTimeout}
 		resp, err := client.Get(url)
 		if err == nil {
+			defer resp.Body.Close()
 			result.HTTPStatus = resp.StatusCode
-			resp.Body.Close()
 		} else {
 			result.Error = fmt.Sprintf("HTTP check failed: %v", err)
 		}
@@ -206,7 +213,7 @@ func (cb *CircuitBreaker) recordResult(targetID string, result ProbeResult) {
 
 	// Determine health status
 	switch {
-	case th.ConsecutiveFails >= 3:
+	case th.ConsecutiveFails >= 5:
 		th.Status = HealthBurned
 		if cb.onBurned != nil {
 			go cb.onBurned(targetID)

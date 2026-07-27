@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"bytes"
@@ -6,9 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
+	"net"
 	"net/http"
+	urlpkg "net/url"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -22,12 +23,12 @@ import (
 func (s *Server) handleAIPage(c *gin.Context) {
 	stats := s.getNavStats()
 	data := gin.H{
-		"Title":         "ForgeC2 - AI Assistant",
-		"ActiveNav":     "ai",
-		"IsFullPage":    true,
-		"AIConfig":      s.cfg.AI,
-		"AIConfigured":  s.cfg.AI.Enabled && s.cfg.AI.APIKey != "",
-		"AIHasAPIKey":   s.cfg.AI.APIKey != "",
+		"Title":        "ForgeC2 - AI Assistant",
+		"ActiveNav":    "ai",
+		"IsFullPage":   true,
+		"AIConfig":     s.cfg.AI,
+		"AIConfigured": s.cfg.AI.Enabled && s.cfg.AI.APIKey != "",
+		"AIHasAPIKey":  s.cfg.AI.APIKey != "",
 	}
 	s.addUserToData(c, data)
 	for k, v := range stats {
@@ -40,8 +41,7 @@ func (s *Server) handleAIPage(c *gin.Context) {
 // 鈹€鈹€ AI Config Save 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 func (s *Server) handleAIConfig(c *gin.Context) {
-	if role, _ := c.Get("user_role"); fmt.Sprintf("%v", role) != "admin" {
-		respondError(c, http.StatusForbidden, "Admin only")
+	if !s.requireAdmin(c) {
 		return
 	}
 	var req struct {
@@ -136,7 +136,11 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 	ch := make(chan sseEvent, 10)
 
 	go func() {
-		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
 		defer close(ch)
 
 		// Send immediate thinking indicator
@@ -173,10 +177,14 @@ func (s *Server) converse(model, systemPrompt string, userMessages []chatMessage
 				body.ToolChoice = "auto"
 			}
 
-			payload, _ := json.Marshal(body)
-			resp, err := s.aiDoRequest(payload)
+			payload, ok := marshalJSONSafe(body)
+			if !ok {
+				ch <- sseEvent{"error", "failed to marshal request"}
+				return
+			}
+			resp, err := s.aiDoRequest(ctx, payload)
 			if err != nil {
-				ch <- sseEvent{"error", err.Error()}
+				ch <- sseEvent{"error", "AI request failed"}
 				return
 			}
 
@@ -310,9 +318,9 @@ func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent) (too
 				// Forward text in real-time (cap at 8000 chars to prevent runaway generation)
 				if delta.Content != "" {
 					content += delta.Content
-	if len(content) > AIResponseTruncLen {
-			content = content[:AIResponseTruncLen] + "\n\n[Response truncated]"
-					return
+					if len(content) > AIResponseTruncLen {
+						content = content[:AIResponseTruncLen] + "\n\n[Response truncated]"
+						return
 					}
 					ch <- sseEvent{"text", content}
 				}
@@ -340,7 +348,7 @@ func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent) (too
 			break
 		}
 		if err != nil {
-			ch <- sseEvent{"error", "stream read error: " + err.Error()}
+			ch <- sseEvent{"error", "stream read error"}
 			return
 		}
 	}
@@ -374,7 +382,7 @@ func (s *Server) logParseError(bodyBytes []byte, ch chan<- sseEvent) {
 		base += "/v1"
 	}
 	slog.Error("AI response parse error", "url", base+"/chat/completions", "body", preview)
-	ch <- sseEvent{"error", fmt.Sprintf("API returned non-JSON\nURL: %s/chat/completions\nResponse: %s", base, preview)}
+	ch <- sseEvent{"error", fmt.Sprintf("API returned non-JSON response: %s", preview)}
 }
 
 type sseEvent struct {
@@ -382,7 +390,7 @@ type sseEvent struct {
 	Data string
 }
 
-func (s *Server) aiDoRequest(payload []byte) (*http.Response, error) {
+func (s *Server) aiDoRequest(ctx context.Context, payload []byte) (*http.Response, error) {
 	baseURL := strings.TrimRight(s.cfg.AIEndpoint(), "/")
 	hostAndPath := baseURL
 	hostAndPath = strings.TrimPrefix(hostAndPath, "https://")
@@ -391,21 +399,26 @@ func (s *Server) aiDoRequest(payload []byte) (*http.Response, error) {
 		baseURL += "/v1"
 	}
 
-	var url string
-	if s.cfg.AI.Provider == "claude" {
-		// Claude uses /v1/messages (baseURL already includes /v1)
-		// But our auto-append adds /v1, and Anthropic's base is https://api.anthropic.com
-		// So baseURL is https://api.anthropic.com/v1, need /messages 鈫?https://api.anthropic.com/v1/messages
-		url = baseURL + "/messages"
-		// Rebuild payload for Claude format (Anthropic API)
-		payload = s.buildClaudeRequest(payload)
-	} else {
-		url = baseURL + "/chat/completions"
+	parsedURL, err := urlpkg.Parse(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid AI endpoint URL: %w", err)
+	}
+	hostname := parsedURL.Hostname()
+	if ip := net.ParseIP(hostname); ip != nil && isPrivateIP(hostname) {
+		return nil, fmt.Errorf("AI endpoint targets private/internal IP: %s", hostname)
 	}
 
-	slog.Info("AI API request", "url", url, "model", s.cfg.AI.Model, "provider", s.cfg.AI.Provider)
+	var urlStr string
+	if s.cfg.AI.Provider == "claude" {
+		urlStr = baseURL + "/messages"
+		payload = s.buildClaudeRequest(payload)
+	} else {
+		urlStr = baseURL + "/chat/completions"
+	}
 
-	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(payload))
+	slog.Info("AI API request", "url", urlStr, "model", s.cfg.AI.Model, "provider", s.cfg.AI.Provider)
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", urlStr, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err
 	}
@@ -420,22 +433,40 @@ func (s *Server) aiDoRequest(payload []byte) (*http.Response, error) {
 		httpReq.Header.Set("Accept", "application/json")
 	}
 
-	client := &http.Client{Timeout: AIAPITimeout}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %v", err)
-	}
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		bodyStr := string(body)
-		if len(bodyStr) > AIErrorBodyTruncLen {
-			bodyStr = bodyStr[:AIErrorBodyTruncLen] + "..."
+	backoff := []time.Duration{time.Second, 3 * time.Second, 7 * time.Second}
+	var lastErr error
+	for attempt := 0; attempt <= aiRetryMax; attempt++ {
+		resp, err := s.httpClient.Do(httpReq)
+		if err != nil {
+			lastErr = fmt.Errorf("request failed: %w", err)
+			if attempt < aiRetryMax {
+				slog.Warn("AI API request failed, retrying", "attempt", attempt+1, "error", err)
+				time.Sleep(backoff[attempt])
+				continue
+			}
+			return nil, lastErr
 		}
-		slog.Error("AI API error", "status", resp.StatusCode, "url", url, "body", bodyStr)
-		return nil, fmt.Errorf("API %d from %s: %s", resp.StatusCode, url, bodyStr)
+		if resp.StatusCode != 200 {
+			body, readErr := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if readErr != nil {
+				slog.Warn("Failed to read AI error response body", "status", resp.StatusCode, "read_error", readErr)
+			}
+			bodyStr := string(body)
+			if len(bodyStr) > AIErrorBodyTruncLen {
+				bodyStr = bodyStr[:AIErrorBodyTruncLen] + "..."
+			}
+			if attempt < aiRetryMax && (resp.StatusCode == 429 || resp.StatusCode >= 500) {
+				slog.Warn("AI API retryable error", "status", resp.StatusCode, "attempt", attempt+1)
+				time.Sleep(backoff[attempt])
+				continue
+			}
+			slog.Error("AI API error", "status", resp.StatusCode, "url", urlStr, "body", bodyStr)
+			return nil, fmt.Errorf("API %d from %s: %s", resp.StatusCode, urlStr, bodyStr)
+		}
+		return resp, nil
 	}
-	return resp, nil
+	return nil, lastErr
 }
 
 func (s *Server) writeSSE(c *gin.Context, flusher http.Flusher, event string, data string) {
@@ -452,16 +483,16 @@ func (s *Server) writeSSE(c *gin.Context, flusher http.Flusher, event string, da
 // 鈹€鈹€ JSON structures 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 type chatMessage struct {
-	Role       string      `json:"role"`
-	Content    string      `json:"content,omitempty"`
-	ToolCalls  []toolCall  `json:"tool_calls,omitempty"`
-	ToolCallID string      `json:"tool_call_id,omitempty"`
+	Role       string     `json:"role"`
+	Content    string     `json:"content,omitempty"`
+	ToolCalls  []toolCall `json:"tool_calls,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
 }
 
 type toolCall struct {
-	ID       string        `json:"id"`
-	Type     string        `json:"type"`
-	Function toolCallFunc  `json:"function"`
+	ID       string       `json:"id"`
+	Type     string       `json:"type"`
+	Function toolCallFunc `json:"function"`
 }
 
 type toolCallFunc struct {
@@ -478,8 +509,8 @@ type chatRequest struct {
 }
 
 type toolDef struct {
-	Type     string       `json:"type"`
-	Function toolFuncDef  `json:"function"`
+	Type     string      `json:"type"`
+	Function toolFuncDef `json:"function"`
 }
 
 type toolFuncDef struct {
@@ -615,7 +646,9 @@ func buildTools() []toolDef {
 
 func (s *Server) executeTool(name string, argsJSON string) string {
 	var args map[string]string
-	json.Unmarshal([]byte(argsJSON), &args)
+	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+		return fmt.Sprintf(`{"error":"invalid arguments JSON: %s"}`, err.Error())
+	}
 
 	switch name {
 	case "list_agents":
@@ -629,7 +662,10 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 				"last_seen": a.LastSeen.Format(time.RFC3339),
 			})
 		}
-		b, _ := json.Marshal(out)
+		b, ok := marshalJSONSafe(out)
+		if !ok {
+			return `{"error":"failed to marshal agents"}`
+		}
 		return string(b)
 
 	case "get_agent_detail":
@@ -645,13 +681,16 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 		s.db.Model(&db.Task{}).Where("agent_id = ?", agent.ID).Count(&taskCount)
 		type detail struct {
 			ID, Hostname, IP, OS, Arch, Username, Domain, Status string
-			Integrity string
-			PID       int
-			Elevated  bool
-			TaskCount int64
+			Integrity                                            string
+			PID                                                  int
+			Elevated                                             bool
+			TaskCount                                            int64
 		}
 		d := detail{agent.ID, agent.Hostname, agent.IP, agent.OS, agent.Arch, agent.Username, agent.Domain, agent.Status, agent.Integrity, agent.PID, agent.Elevated, taskCount}
-		b, _ := json.Marshal(d)
+		b, ok := marshalJSONSafe(d)
+		if !ok {
+			return `{"error":"failed to marshal agent detail"}`
+		}
 		return string(b)
 
 	case "execute_command":
@@ -674,11 +713,14 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 		if ecArgs.WaitForResult {
 			return s.waitForTaskResult(task.ID, aid)
 		}
-		b, _ := json.Marshal(map[string]interface{}{
+		b, ok := marshalJSONSafe(map[string]interface{}{
 			"task_id": task.ID,
 			"status":  "pending",
 			"message": "Command queued. Use get_agent_tasks to fetch the result when ready.",
 		})
+		if !ok {
+			return `{"error":"failed to marshal task result"}`
+		}
 		return string(b)
 
 	case "get_agent_tasks":
@@ -702,12 +744,15 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 			}
 			out = append(out, r)
 		}
-		b, _ := json.Marshal(out)
+		b, ok := marshalJSONSafe(out)
+		if !ok {
+			return `{"error":"failed to marshal tasks"}`
+		}
 		return string(b)
 
 	case "list_listeners":
 		var listeners []db.Listener
-		s.db.Order("created_at desc").Find(&listeners)
+		s.db.Order("created_at desc").Limit(500).Find(&listeners)
 		var out []map[string]interface{}
 		for _, l := range listeners {
 			out = append(out, map[string]interface{}{
@@ -715,7 +760,10 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 				"host": l.Host, "port": l.Port, "enabled": l.Enabled,
 			})
 		}
-		b, _ := json.Marshal(out)
+		b, ok := marshalJSONSafe(out)
+		if !ok {
+			return `{"error":"failed to marshal listeners"}`
+		}
 		return string(b)
 
 	case "list_credentials":
@@ -730,11 +778,17 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 			}
 			out = append(out, entry)
 		}
-		b, _ := json.Marshal(out)
+		b, ok := marshalJSONSafe(out)
+		if !ok {
+			return `{"error":"failed to marshal credentials"}`
+		}
 		return string(b)
 
 	case "get_online_operators":
-		b, _ := json.Marshal([]map[string]string{})
+		b, ok := marshalJSONSafe([]map[string]string{})
+		if !ok {
+			return `{"error":"failed to marshal operators"}`
+		}
 		return string(b)
 
 	default:
@@ -821,7 +875,10 @@ func marshalTaskResult(task db.Task, extra map[string]interface{}) string {
 	if task.Error != "" {
 		result["error"] = task.Error
 	}
-	b, _ := json.Marshal(result)
+	b, ok := marshalJSONSafe(result)
+	if !ok {
+		return `{"error":"failed to marshal task result"}`
+	}
 	return string(b)
 }
 
@@ -872,7 +929,10 @@ func (s *Server) buildClaudeRequest(openAIPayload []byte) []byte {
 		Stream   bool          `json:"stream"`
 		Tools    []toolDef     `json:"tools,omitempty"`
 	}
-	json.Unmarshal(openAIPayload, &req)
+	if err := json.Unmarshal(openAIPayload, &req); err != nil {
+		slog.Warn("Failed to parse OpenAI payload for Claude conversion", "error", err)
+		return openAIPayload
+	}
 
 	// Build Claude-format messages (system is top-level, not a message)
 	var claudeMessages []map[string]interface{}
@@ -904,7 +964,7 @@ func (s *Server) buildClaudeRequest(openAIPayload []byte) []byte {
 			claudeMsg["content"] = []map[string]interface{}{{
 				"type":        "tool_result",
 				"tool_use_id": msg.ToolCallID,
-				"content":      msg.Content,
+				"content":     msg.Content,
 			}}
 		}
 		claudeMessages = append(claudeMessages, claudeMsg)
@@ -933,7 +993,10 @@ func (s *Server) buildClaudeRequest(openAIPayload []byte) []byte {
 		claudeReq["tools"] = claudeTools
 	}
 
-	b, _ := json.Marshal(claudeReq)
+	b, ok := marshalJSONSafe(claudeReq)
+	if !ok {
+		return nil
+	}
 	return b
 }
 
@@ -977,10 +1040,10 @@ func (s *Server) parseClaudeStream(resp *http.Response, ch chan<- sseEvent) (too
 					Type  string `json:"type"`
 					Index int    `json:"index"`
 					Delta struct {
-						Type         string `json:"type"`
-						Text         string `json:"text"`
-						PartialJSON  string `json:"partial_json"`
-						StopReason   string `json:"stop_reason"`
+						Type        string `json:"type"`
+						Text        string `json:"text"`
+						PartialJSON string `json:"partial_json"`
+						StopReason  string `json:"stop_reason"`
 					} `json:"delta"`
 					ContentBlock struct {
 						Type string `json:"type"`
@@ -1058,4 +1121,3 @@ func (s *Server) resolveAgentID(idOrHost string) string {
 	}
 	return agent.ID
 }
-

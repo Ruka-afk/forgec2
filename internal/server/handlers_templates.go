@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"net/http"
@@ -123,4 +123,3 @@ func (s *Server) handleListTemplatesJSON(c *gin.Context) {
 		"total":     len(templates),
 	})
 }
-

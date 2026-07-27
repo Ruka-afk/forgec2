@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
@@ -13,28 +13,30 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { DataError } from "@/components/ui/data-state";
 import { useI18n } from "@/lib/i18n";
-import { AlertCircle, AlertTriangle, Calendar, Cpu, Globe, Inbox, Key, PieChart, Route, Shield, X } from "lucide-react";
-import {
-  HeatmapGrid,
-  OSDistChart,
-  TaskStatusChart,
-  CredentialTypes,
-  AgentGeo,
-  AttackPath,
-  MonitorAlertsSection,
-  ListenerTrafficSection,
-  TaskGanttSection,
-} from "./charts";
+import { AlertTriangle, Calendar, Cpu, Globe, Inbox, Key, PieChart, Route, Shield } from "lucide-react";
+
+const LazyHeatmapGrid = React.lazy(() => import("./charts/heatmap-grid"));
+const LazyOSDistChart = React.lazy(() => import("./charts/os-dist"));
+const LazyTaskStatusChart = React.lazy(() => import("./charts/task-status"));
+const LazyCredentialTypes = React.lazy(() => import("./charts/credential-types"));
+const LazyListenerTrafficSection = React.lazy(() => import("./charts/listener-traffic"));
+const LazyAgentGeo = React.lazy(() => import("./charts/agent-geo"));
+const LazyAttackPath = React.lazy(() => import("./charts/attack-path"));
+const LazyTaskGanttSection = React.lazy(() => import("./charts/task-gantt"));
+const LazyMonitorAlertsSection = React.lazy(() => import("./charts/monitor-alerts"));
 
 /* ── Audit Strip ── */
 function AuditStrip() {
   const { t } = useI18n();
   const [logs, setLogs] = useState<{ action?: string; username?: string; created_at?: string; details?: string }[]>([]);
   useEffect(() => {
-    api.get<{ success?: boolean; data?: { action?: string; username?: string; created_at?: string; details?: string }[]; logs?: { action?: string; username?: string; created_at?: string; details?: string }[] }>("/audit/logs?page=1&pageSize=6")
+    const controller = new AbortController();
+    api.get<{ success?: boolean; data?: { action?: string; username?: string; created_at?: string; details?: string }[]; logs?: { action?: string; username?: string; created_at?: string; details?: string }[] }>("/audit/logs?page=1&pageSize=6", { signal: controller.signal })
       .then((d) => setLogs(d.data || d.logs || []))
       .catch(() => setLogs([]));
+    return () => controller.abort();
   }, []);
   if (logs.length === 0) return null;
   return (
@@ -49,7 +51,7 @@ function AuditStrip() {
         {logs.map((log, i) => (
           <div key={i} className="flex items-center justify-between px-5 py-2.5 text-xs">
             <div className="flex items-center gap-2 min-w-0">
-              <Badge variant="secondary" className="text-[10px] font-mono shrink-0">{log.action || "-"}</Badge>
+              <Badge variant="secondary" className="text-(--font-size-micro-sm) font-mono shrink-0">{log.action || "-"}</Badge>
               <span className="text-foreground truncate">{log.details || log.username || ""}</span>
             </div>
             <span className="text-muted-foreground/70 shrink-0 ml-2">
@@ -97,12 +99,14 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
     Promise.all([
-      api.get<DashboardPageStats>("/api/v1/dashboard").catch(() => { setError(t("dashboard.load_failed")); return {}; }),
+      api.get<DashboardPageStats>("/api/v1/dashboard", { signal: controller.signal }).catch(() => { setError(t("dashboard.load_failed")); return {}; }),
     ]).then(([d]) => setStats(d)).finally(() => setLoading(false));
-  }, [timeRange]);
+    return () => controller.abort();
+  }, [timeRange, t]);
 
   useVisibleInterval(() => {
     api.get<DashboardPageStats>("/api/v1/dashboard")
@@ -113,7 +117,7 @@ export default function DashboardPage() {
   const s = stats;
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("dashboard.title")} subtitle={`${t("dashboard.subtitle")} · ${s.total_tasks || 0} ${t("dashboard.total_tasks_suffix")}`}>
           <div className="flex gap-1">
             {["24h", "7d", "30d"].map((r) => (
@@ -127,24 +131,22 @@ export default function DashboardPage() {
       </PageHeader>
 
       {error && (
-        <div className="mb-4 px-4 py-3 bg-destructive/10 border border-destructive/20 rounded-xl flex items-center gap-3 text-sm text-destructive">
-          <AlertCircle className="w-4 h-4" />
-          <span>{error}</span>
-           <Button variant="outline" size="xs" className="ml-auto mr-2" onClick={() => { setError(null); setLoading(true); api.get<DashboardPageStats>("/api/v1/dashboard").then((d) => setStats(d)).catch(() => setError(t("dashboard.refresh_failed"))).finally(() => setLoading(false)); }}>{t("dashboard.retry")}</Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => setError(null)} className="text-muted-foreground hover:text-destructive" aria-label={t("dashboard.dismiss_error")}>
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
+        <DataError
+          message={error}
+          onRetry={() => { setError(null); setLoading(true); api.get<DashboardPageStats>("/api/v1/dashboard").then((d) => setStats(d)).catch(() => setError(t("dashboard.refresh_failed"))).finally(() => setLoading(false)); }}
+          onDismiss={() => setError(null)}
+          className="mb-4"
+        />
       )}
 
       <AuditStrip />
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-7">
         {loading ? (
           <>
             {[...Array(4)].map((_, i) => (
-              <Card key={i} className="p-4 sm:p-5 opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]" style={{ animationDelay: `${i * 40}ms` }}>
+              <Card key={i} className="p-5 opacity-0 animate-fade-slide-up" style={{ animationDelay: `${i * 40}ms` }}>
                 <Skeleton className="h-3 w-20 mb-3" />
                 <Skeleton className="h-7 w-16 mb-2" />
                 <Skeleton className="h-3 w-24" />
@@ -153,38 +155,40 @@ export default function DashboardPage() {
           </>
         ) : (
           <>
-            <StatCard label={t("dashboard.beacons")} value={s.total_agents || 0} color="emerald" sub={`${s.online_agents || 0} ${t("dashboard.online_suffix")}`} className="opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]" style={{ animationDelay: "0ms" }} />
-            <StatCard label={t("dashboard.tasks_today")} value={s.today_tasks || 0} color="indigo" sub={`${s.pending_tasks || 0} ${t("dashboard.pending_suffix")}`} subColor="text-muted-foreground" className="opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]" style={{ animationDelay: "40ms" }} />
-            <StatCard label={t("dashboard.credentials")} value={s.total_creds || 0} color="purple" sub={`${s.total_tokens || 0} ${t("dashboard.tokens")}`} subColor="text-muted-foreground" className="opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]" style={{ animationDelay: "80ms" }} />
-            <StatCard label={t("dashboard.listeners")} value={s.total_listeners || 0} color="cyan" sub={t("dashboard.active")} subColor="text-muted-foreground" className="opacity-0 animate-[fadeSlideUp_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]" style={{ animationDelay: "120ms" }} />
+            <StatCard label={t("dashboard.beacons")} value={s.total_agents || 0} color="emerald" sub={`${s.online_agents || 0} ${t("dashboard.online_suffix")}`} className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "0ms" }} />
+            <StatCard label={t("dashboard.tasks_today")} value={s.today_tasks || 0} color="indigo" sub={`${s.pending_tasks || 0} ${t("dashboard.pending_suffix")}`} subColor="text-muted-foreground" className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "40ms" }} />
+            <StatCard label={t("dashboard.credentials")} value={s.total_creds || 0} color="purple" sub={`${s.total_tokens || 0} ${t("dashboard.tokens")}`} subColor="text-muted-foreground" className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "80ms" }} />
+            <StatCard label={t("dashboard.listeners")} value={s.total_listeners || 0} color="cyan" sub={t("dashboard.active")} subColor="text-muted-foreground" className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "120ms" }} />
           </>
         )}
       </div>
 
-      {/* Charts Row 1 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
-        <ChartCard title={t("dashboard.heatmap")} icon={Calendar} iconColor="text-emerald-500 dark:text-emerald-400" exportFilename="activity-heatmap.png" className="animate-fade-slide-up"><HeatmapGrid /></ChartCard>
-        <ChartCard title={t("dashboard.os_dist")} icon={Cpu} iconColor="text-blue-500 dark:text-blue-400" exportFilename="os-distribution.png"><OSDistChart /></ChartCard>
-        <ChartCard title={t("dashboard.task_status")} icon={PieChart} iconColor="text-amber-500 dark:text-amber-400" exportFilename="task-status.png"><TaskStatusChart /></ChartCard>
-        <ChartCard title={t("dashboard.cred_types")} icon={Key} iconColor="text-purple-500 dark:text-purple-400" exportFilename="credential-types.png"><CredentialTypes /></ChartCard>
-      </div>
+      <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded" />}>
+        {/* Charts Row 1 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-5">
+          <ChartCard title={t("dashboard.heatmap")} icon={Calendar} iconColor="text-emerald-500 dark:text-emerald-400" exportFilename="activity-heatmap.png" className="animate-fade-slide-up"><LazyHeatmapGrid /></ChartCard>
+          <ChartCard title={t("dashboard.os_dist")} icon={Cpu} iconColor="text-blue-500 dark:text-blue-400" exportFilename="os-distribution.png"><LazyOSDistChart /></ChartCard>
+          <ChartCard title={t("dashboard.task_status")} icon={PieChart} iconColor="text-amber-500 dark:text-amber-400" exportFilename="task-status.png"><LazyTaskStatusChart /></ChartCard>
+          <ChartCard title={t("dashboard.cred_types")} icon={Key} iconColor="text-purple-500 dark:text-purple-400" exportFilename="credential-types.png"><LazyCredentialTypes /></ChartCard>
+        </div>
 
-      {/* Charts Row 2 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
-        <ListenerTrafficSection range={timeRange} className="animate-fade-slide-up" />
-        <ChartCard title={t("dashboard.beacon_geo")} icon={Globe} iconColor="text-rose-500 dark:text-rose-400" exportFilename="agent-geo.png"><AgentGeo /></ChartCard>
-        <ChartCard title={t("dashboard.attack_path")} icon={Route} iconColor="text-orange-500 dark:text-orange-400" exportFilename="attack-path.png"><AttackPath /></ChartCard>
-      </div>
+        {/* Charts Row 2 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-7">
+          <LazyListenerTrafficSection range={timeRange} className="animate-fade-slide-up" />
+          <ChartCard title={t("dashboard.beacon_geo")} icon={Globe} iconColor="text-rose-500 dark:text-rose-400" exportFilename="agent-geo.png"><LazyAgentGeo /></ChartCard>
+          <ChartCard title={t("dashboard.attack_path")} icon={Route} iconColor="text-orange-500 dark:text-orange-400" exportFilename="attack-path.png"><LazyAttackPath /></ChartCard>
+        </div>
 
-      {/* Gantt + Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <TaskGanttSection range={timeRange} />
-        <ChartCard title={t("dashboard.active_alerts")} icon={AlertTriangle} iconColor="text-amber-500"><MonitorAlertsSection /></ChartCard>
-      </div>
+        {/* Gantt + Alerts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-7">
+          <LazyTaskGanttSection range={timeRange} />
+          <ChartCard title={t("dashboard.active_alerts")} icon={AlertTriangle} iconColor="text-amber-500"><LazyMonitorAlertsSection /></ChartCard>
+        </div>
+      </Suspense>
 
       {/* Recent Tasks */}
       <Card className="overflow-hidden animate-fade-slide-up">
-        <CardHeader className="px-5 py-3 border-b border-border">
+        <CardHeader className="px-5 py-3.5 border-b border-border">
           <CardTitle className="text-sm font-semibold text-foreground">{t("dashboard.recent_tasks")}</CardTitle>
         </CardHeader>
         <div className="divide-y divide-border">

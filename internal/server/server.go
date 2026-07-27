@@ -2,20 +2,21 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strconv"
 	"sync"
 	"time"
 
@@ -24,6 +25,8 @@ import (
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/plugin"
 	"github.com/forgec2/forgec2/internal/server/middleware"
+	"github.com/forgec2/forgec2/internal/server/opsec"
+	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/prometheus/client_golang/prometheus"
@@ -34,7 +37,7 @@ type Server struct {
 	cfg            *config.Config
 	db             *gorm.DB
 	router         *gin.Engine
-	wsClients      map[*websocket.Conn]UserSession
+	wsClients      map[*websocket.Conn]*wsClientConn
 	wsMutex        sync.RWMutex
 	wsUpgrader     websocket.Upgrader
 	rateLimiter    *middleware.RateLimiter
@@ -72,8 +75,7 @@ type Server struct {
 	// Event system
 	eventManager *EventManager
 
-	// Beacon payload cipher (nil = disabled)
-	beaconCipher *crypto.StreamCipher
+	// Beacon cipher removed, use ECDH session encryption (cfg.Crypto.Key = "ecdh:")
 
 	// ECDH session manager (nil = disabled / old XOR mode)
 	sessionManager *crypto.SessionManager
@@ -85,6 +87,9 @@ type Server struct {
 
 	// Plugin execution manager
 	pluginManager *plugin.Manager
+
+	// Circuit breaker for listener health
+	circuitBreaker *CircuitBreaker
 
 	// Optimizations
 	configReloader *ConfigReloader
@@ -101,6 +106,13 @@ type Server struct {
 
 	metrics *MetricsCollector
 
+	// GeoIP lookup concurrency limiter
+	geoIPSem chan struct{}
+
+	// Task result background worker pool: limits concurrent goroutines spawned
+	// for callbacks, plugin hooks, and token processing to prevent OOM under load.
+	taskWorkerSem chan struct{}
+
 	// NTLM relay session tracking
 	ntlmRelays *ntlmRelayStore
 
@@ -112,15 +124,80 @@ type Server struct {
 	agentPendingTasks   map[string]int
 	agentPendingTasksMu sync.Mutex
 
+	// Beacon deduplication: track recently processed beacon fingerprints
+	beaconDedupMu    sync.Mutex
+	beaconDedupCache map[string]time.Time
+
 	// External C2 channels (WebSocket relay, Discord, Slack)
 	extC2Channels   map[string]*extC2WSChannel
 	extC2ChannelsMu sync.Mutex
 	extC2TaskQueue  map[string][]extC2Task
 	extC2TaskMu     sync.Mutex
+	extC2Notify     map[string]chan struct{} // per-channel notification for push-based task delivery
 
 	// Async build job tracking
 	buildJobs   map[string]*BuildJob
 	buildJobsMu sync.RWMutex
+
+	// Embedded frontend static files (nil = API-only mode)
+	staticFS fs.FS
+
+	// Main HTTP server (for graceful shutdown)
+	httpServer *http.Server
+
+	// In-flight request tracker for graceful shutdown
+	inFlight *middleware.InFlightTracker
+
+	// Flapping suppression: track last status event time per agent
+	agentStatusCooldown   map[string]time.Time
+	agentStatusCooldownMu sync.Mutex
+
+	// Pending TOTP setup state (between generate and enable)
+	pendingTOTP   *pendingTOTPState
+	pendingTOTPMu sync.Mutex
+
+	// Reusable HTTP clients with connection pooling
+	httpClient     *http.Client
+	httpClientLong *http.Client
+
+	// Cached automation rules
+	automationRules   []AutomationRule
+	automationRulesMu sync.RWMutex
+	automationRulesAt time.Time
+
+	// Nav stats cache
+	navStatsCache   gin.H
+	navStatsCacheAt time.Time
+	navStatsCacheMu sync.RWMutex
+
+	// SIEM webhook for security event forwarding
+	siem *SIEMWebhook
+
+	// TLS fingerprint randomization (JARM/JA3)
+	tlsFingerprint *TLSFingerprintManager
+
+	// Server-side task handler registry
+	taskHandlerRegistry *TaskHandlerRegistry
+
+	// Dynamic malleable C2 profile manager
+	profileManager *ProfileManager
+
+	// Subsystem containers (grouped fields for decomposition)
+	transport *TransportManager
+	agents    *AgentTracker
+
+	// Password change rate limiter (userID → last change time)
+	pwdChangeTimes   map[uint]time.Time
+	pwdChangeTimesMu sync.Mutex
+
+	// JARM/JA3 continuous validation
+	jarmValidator *JARMValidator
+
+	// OPSEC adaptive threat manager
+	opsecAdaptive *opsec.AdaptiveManager
+
+	// Transport obfuscation (DNS/ICMP)
+	transportObfuscation *TransportObfuscationManager
 }
 
 // BulkResult tracks a batch command operation.
@@ -140,10 +217,17 @@ const maxBulkHistory = 50
 func New(cfg *config.Config, database *gorm.DB) *Server {
 	gin.SetMode(gin.ReleaseMode)
 
-	middleware.InitJWTSecret(cfg)
+	middleware.InitJWTSecret(cfg, "")
+	crypto.InitLootEncryption(cfg.Server.JWTSecret)
+	crypto.InitExtC2Encryption(cfg.Server.JWTSecret)
+
+	inFlight := middleware.NewInFlightTracker()
 
 	r := gin.New()
+	r.RedirectTrailingSlash = false
 	r.Use(gin.Recovery())
+	r.Use(inFlight.Middleware())
+	r.Use(middleware.RequestID())
 	r.Use(middleware.SecurityHeaders(cfg.Server.TLSEnabled))
 	r.Use(middleware.NoCache())
 	r.Use(middleware.ErrorHandler())
@@ -152,7 +236,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		cfg:                   cfg,
 		db:                    database,
 		router:                r,
-		wsClients:             make(map[*websocket.Conn]UserSession),
+		wsClients:             make(map[*websocket.Conn]*wsClientConn),
 		loginLockout:          newLoginLockoutTracker(),
 		socksEngine:           newSocksRelayEngine(),
 		startTime:             time.Now(),
@@ -163,39 +247,64 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		extraListeners:        make(map[string]io.Closer),
 		domainFrontStatus:     make(map[string]*frontDomainState),
 		agentPendingTasks:     make(map[string]int),
+		beaconDedupCache:      make(map[string]time.Time),
+		agentStatusCooldown:   make(map[string]time.Time),
 		ntlmRelays:            newNTLMRelayStore(),
 		extC2Channels:         make(map[string]*extC2WSChannel),
 		extC2TaskQueue:        make(map[string][]extC2Task),
+		extC2Notify:           make(map[string]chan struct{}),
 		buildJobs:             make(map[string]*BuildJob),
+		geoIPSem:              make(chan struct{}, 10),
+		taskWorkerSem:         make(chan struct{}, 32),
 		wsUpgrader: websocket.Upgrader{
-			ReadBufferSize:  1024,
-			WriteBufferSize: 1024,
+			ReadBufferSize:  16384,
+			WriteBufferSize: 16384,
 			CheckOrigin: func(r *http.Request) bool {
-				origin := r.Header.Get("Origin")
-				if origin == "" {
-					return true
-				}
-				u, err := url.Parse(origin)
-				if err != nil {
-					return false
-				}
-				// Frontend runs on localhost:3000, backend on localhost:8080
-				// — compare only hostname, since ports always differ.
-				originHost := u.Hostname()
-				if len(cfg.Server.AllowedOrigins) == 0 {
-					return true
-				}
-				for _, allowed := range cfg.Server.AllowedOrigins {
-					if originHost == allowed {
-						return true
-					}
-				}
-				return false
+				return allowedOrigin(cfg, r)
+			},
+		},
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        20,
+				MaxIdleConnsPerHost: 5,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		},
+		httpClientLong: &http.Client{
+			Timeout: 5 * time.Minute,
+			Transport: &http.Transport{
+				MaxIdleConns:        10,
+				MaxIdleConnsPerHost: 3,
+				IdleConnTimeout:     90 * time.Second,
 			},
 		},
 	}
 
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
+
+	// Beacon dedup cache cleanup
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				s.beaconDedupMu.Lock()
+				now := time.Now()
+				for k, t := range s.beaconDedupCache {
+					if now.Sub(t) > 30*time.Second {
+						delete(s.beaconDedupCache, k)
+					}
+				}
+				s.beaconDedupMu.Unlock()
+			case <-s.ctx.Done():
+				return
+			}
+		}
+	}()
+
+	s.inFlight = inFlight
 
 	// Initialize rate limiters with context for graceful shutdown
 	s.rateLimiter = middleware.NewRateLimiter(s.ctx, cfg.RateLimit.Beacon.Limit, time.Duration(cfg.RateLimit.Beacon.Window)*time.Second)
@@ -204,16 +313,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	// Start periodic cleanup for login lockout entries
 	s.loginLockout.startCleanup(s.ctx)
 
-	// Initialize beacon payload cipher if configured
-	if cfg.Crypto.Key != "" {
-		key, err := hex.DecodeString(cfg.Crypto.Key)
-		if err == nil && len(key) == 32 {
-			s.beaconCipher = crypto.NewStreamCipher(key)
-			slog.Info("Beacon payload encryption enabled")
-		} else {
-			slog.Warn("Invalid crypto key (must be 32-byte hex), beacon encryption disabled", "err", err)
-		}
-	}
+	// Beacon payload encryption via ECDH session (cfg.Crypto.Key = "ecdh:")
 
 	s.apiRateLimiter.SetWhitelist(cfg.RateLimit.API.Whitelist)
 
@@ -221,7 +321,35 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	s.metrics.Register(prometheus.DefaultRegisterer)
 	r.Use(metricsMiddleware(s.metrics))
 
-	s.setupRoutes()
+	if cfg.SIEM.Enabled && cfg.SIEM.URL != "" {
+		s.siem = NewSIEMWebhook(cfg.SIEM.URL, cfg.SIEM.Token, cfg.SIEM.Actions)
+		slog.Info("SIEM webhook enabled", "url", cfg.SIEM.URL)
+	}
+
+	// TLS fingerprint randomization (JARM/JA3)
+	s.initTLSFingerprint()
+
+	// Server-side task handler registry
+	s.taskHandlerRegistry = NewTaskHandlerRegistry()
+
+	// Dynamic malleable C2 profile manager
+	s.profileManager = NewProfileManager()
+
+	// Password change rate limiter
+	s.pwdChangeTimes = make(map[uint]time.Time)
+
+	// JARM/JA3 continuous validation
+	s.jarmValidator = NewJARMValidator(s.cfg.TLSFingerprint.JARMEnabled)
+
+	// OPSEC adaptive threat manager
+	s.opsecAdaptive = opsec.NewAdaptiveManager()
+	s.opsecAdaptive.StartDecayLoop()
+
+	// Transport obfuscation (DNS/ICMP)
+	s.transportObfuscation = NewTransportObfuscationManager()
+
+	// NOTE: setupRoutes() is NOT called here. Call SetupRoutes() after
+	// SetStaticFS() to ensure the static file middleware runs before route handlers.
 
 	// Initialize plugin marketplace
 	s.marketplace = plugin.NewMarketplace(database)
@@ -243,52 +371,19 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 
 	// Register event handlers
 	s.eventManager.On(EventImplantCheckin, func(evt Event) {
-		s.triggerWebhooks(evt)
-		s.TriggerAlertForEvent(evt)
-		rules := s.loadAutomationRules()
-		for _, rule := range rules {
-			if rule.Enabled && rule.EventType == string(evt.Type) {
-				s.evaluateRule(evt, rule)
-			}
-		}
+		s.dispatchEvent(evt, true)
 	})
 	s.eventManager.On(EventImplantDisconnect, func(evt Event) {
-		s.triggerWebhooks(evt)
-		s.TriggerAlertForEvent(evt)
-		rules := s.loadAutomationRules()
-		for _, rule := range rules {
-			if rule.Enabled && rule.EventType == string(evt.Type) {
-				s.evaluateRule(evt, rule)
-			}
-		}
+		s.dispatchEvent(evt, true)
 	})
 	s.eventManager.On(EventTaskComplete, func(evt Event) {
-		s.triggerWebhooks(evt)
-		rules := s.loadAutomationRules()
-		for _, rule := range rules {
-			if rule.Enabled && rule.EventType == string(evt.Type) {
-				s.evaluateRule(evt, rule)
-			}
-		}
+		s.dispatchEvent(evt, false)
 	})
 	s.eventManager.On(EventTaskFail, func(evt Event) {
-		s.triggerWebhooks(evt)
-		rules := s.loadAutomationRules()
-		for _, rule := range rules {
-			if rule.Enabled && rule.EventType == string(evt.Type) {
-				s.evaluateRule(evt, rule)
-			}
-		}
+		s.dispatchEvent(evt, false)
 	})
 	s.eventManager.On(EventCredentialFound, func(evt Event) {
-		s.triggerWebhooks(evt)
-		s.TriggerAlertForEvent(evt)
-		rules := s.loadAutomationRules()
-		for _, rule := range rules {
-			if rule.Enabled && rule.EventType == string(evt.Type) {
-				s.evaluateRule(evt, rule)
-			}
-		}
+		s.dispatchEvent(evt, true)
 	})
 	s.migrateAutomationRules()
 	s.registerBuiltinAutomations()
@@ -296,13 +391,42 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	s.monitorCollector = NewMonitorCollector(s)
 	s.monitorCollector.Start()
 
+	s.loadScriptsFromDB()
+
 	return s
+}
+
+// dispatchEvent dispatches webhooks, notifications, alerts, and automation rules for an event.
+func (s *Server) dispatchEvent(evt Event, includeAlert bool) {
+	s.triggerWebhooks(evt)
+	s.triggerEmailNotifications(evt)
+	if includeAlert {
+		s.TriggerAlertForEvent(evt)
+	}
+	rules := s.loadAutomationRules()
+	for _, rule := range rules {
+		if rule.Enabled && rule.EventType == string(evt.Type) {
+			s.evaluateRule(evt, rule)
+		}
+	}
 }
 
 func (s *Server) InitOptimizations(configPath string) {
 	s.configPath = configPath
 	s.configReloader = NewConfigReloader(s.cfg, configPath, func(cfg *config.Config) {
-		slog.Info("Config reloaded, applying changes")
+		slog.Info("Config reloaded, applying runtime changes")
+
+		// Invalidate automation rule cache so next request fetches fresh rules
+		s.automationRulesMu.Lock()
+		s.automationRulesAt = time.Time{}
+		s.automationRulesMu.Unlock()
+
+		// Invalidate nav stats cache
+		s.navStatsCacheMu.Lock()
+		s.navStatsCacheAt = time.Time{}
+		s.navStatsCacheMu.Unlock()
+
+		slog.Info("Config reload applied successfully")
 	})
 	if err := s.configReloader.Start(); err != nil {
 		slog.Warn("Failed to start config reloader", "error", err)
@@ -326,7 +450,7 @@ func (s *Server) InitOptimizations(configPath string) {
 	}
 }
 
-func (s *Server) setupRoutes() {
+func (s *Server) SetupRoutes() {
 	// Request logging middleware
 	s.router.Use(middleware.RequestLogger())
 
@@ -355,11 +479,13 @@ func (s *Server) setupRoutes() {
 		s.registerListenerRoutes(auth)
 		s.registerReconRoutes(auth)
 		s.registerSettingsRoutes(auth)
+		s.registerDebugRoutes(auth)
 		s.registerUserRoutes(auth)
 		s.registerCampaignRoutes(auth)
 		s.registerIntegrationRoutes(auth)
 		s.registerDNSRoutes(auth)
-		s.registerStubRoutes(auth)
+		s.registerExtendedRoutes(auth)
+		s.registerAPIKeyRoutes(auth)
 	}
 
 	// Agent Beacon API (no auth — agents check in unauthenticated)
@@ -380,6 +506,7 @@ func (s *Server) setupRoutes() {
 	// Protected REST API (authentication required)
 	restAPI := s.router.Group("/api/v1")
 	restAPI.Use(middleware.AuthRequired(s.db))
+	restAPI.Use(middleware.CSRFProtect())
 	restAPI.Use(middleware.RequestBodyLimit(MaxJSONBodySize))
 	restAPI.Use(s.apiRateLimiter.LimitByUser())
 	{
@@ -393,19 +520,23 @@ func (s *Server) setupRoutes() {
 	// Catch-all for profile-defined beacon URIs (e.g. bing /th?id=...)
 	s.router.GET("/th", s.handleBeacon)
 	s.router.POST("/th", s.handleBeacon)
-	s.router.NoRoute(func(c *gin.Context) {
-		// Only forward POST without Accept: application/json to beacon handler
-		// (implants send POST without JSON accept header)
-		if c.Request.Method == "POST" && c.GetHeader("Accept") != "application/json" {
-			s.rateLimiter.Limit()(c)
-			if c.IsAborted() {
+	if s.cfg.Malleable.Enabled {
+		s.router.NoRoute(func(c *gin.Context) {
+			if c.Request.Method == "POST" && c.GetHeader("Accept") != "application/json" {
+				s.rateLimiter.Limit()(c)
+				if c.IsAborted() {
+					return
+				}
+				s.handleBeacon(c)
 				return
 			}
-			s.handleBeacon(c)
-			return
-		}
-		respondError(c, http.StatusNotFound, "not found")
-	})
+			respondError(c, http.StatusNotFound, "not found")
+		})
+	} else {
+		s.router.NoRoute(func(c *gin.Context) {
+			respondError(c, http.StatusNotFound, "not found")
+		})
+	}
 
 	// External C2 (redirector-facing, no auth, rate-limited)
 	extc2 := s.router.Group("/extc2/v1")
@@ -423,13 +554,29 @@ func (s *Server) setupRoutes() {
 }
 
 
+
 // handleWebSocket handles WebSocket connections for real-time notifications
+// Auth is validated inside the handler (from cookie or query token) so this
+// endpoint does NOT need to be behind the AuthRequired middleware.
 func (s *Server) handleWebSocket(c *gin.Context) {
 	origin := c.GetHeader("Origin")
 	if origin != "" && !s.wsUpgrader.CheckOrigin(c.Request) {
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "origin not allowed"})
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "error": "origin not allowed"})
 		return
 	}
+
+	tokenStr, err := c.Cookie("forgec2_session")
+	if err != nil || tokenStr == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "no session token"})
+		return
+	}
+	claims, err := middleware.ParseToken(tokenStr)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "invalid token"})
+		return
+	}
+	username := claims.Username
+
 	conn, err := s.wsUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		slog.Error("Failed to upgrade WebSocket", "err", err)
@@ -442,13 +589,52 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 		return nil
 	})
 
-	user, _ := c.Get("user")
-	username := fmt.Sprintf("%v", user)
 	session := UserSession{Username: username, ConnectedAt: time.Now()}
+	client := &wsClientConn{
+		conn:    conn,
+		session: session,
+		ch:      make(chan []byte, wsWriteChanSize),
+		done:    make(chan struct{}),
+	}
 
 	s.wsMutex.Lock()
-	s.wsClients[conn] = session
+	if len(s.wsClients) >= MaxWSConnections {
+		s.wsMutex.Unlock()
+		slog.Warn("WebSocket connection limit reached", "current", len(s.wsClients), "limit", MaxWSConnections)
+		conn.Close()
+		return
+	}
+	s.wsClients[conn] = client
 	s.wsMutex.Unlock()
+
+	// Writer goroutine: drains the buffered channel and writes to the socket.
+	go func() {
+		defer func() {
+			close(client.done)
+		}()
+		ticker := time.NewTicker(WSPingInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case msg, ok := <-client.ch:
+				if !ok {
+					return
+				}
+				conn.SetWriteDeadline(time.Now().Add(WSWriteDeadline))
+				if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+					slog.Debug("Failed to send WebSocket message", "user", username, "err", err)
+					return
+				}
+			case <-ticker.C:
+				conn.SetWriteDeadline(time.Now().Add(WSWriteDeadline))
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return
+				}
+			}
+		}
+	}()
 
 	slog.Info("WebSocket client connected", "user", username)
 	s.broadcastUserEvent("user_online", username, session)
@@ -461,36 +647,17 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 			s.wsMutex.Lock()
 			delete(s.wsClients, conn)
 			s.wsMutex.Unlock()
+			close(client.ch)
 			s.broadcastUserEvent("user_offline", username, session)
 			conn.Close()
 			slog.Info("WebSocket client disconnected", "user", username)
 		}()
 
-		ticker := time.NewTicker(WSPingInterval)
-		defer ticker.Stop()
-
-		readDone := make(chan struct{})
-		go func() {
-			defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
-			defer close(readDone)
-			for {
-				conn.SetReadDeadline(time.Now().Add(WSReadDeadline))
-				_, _, err := conn.ReadMessage()
-				if err != nil {
-					return
-				}
-			}
-		}()
-
 		for {
-			select {
-			case <-readDone:
+			conn.SetReadDeadline(time.Now().Add(WSReadDeadline))
+			_, _, err := conn.ReadMessage()
+			if err != nil {
 				return
-			case <-ticker.C:
-				conn.SetWriteDeadline(time.Now().Add(WSWriteDeadline))
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					return
-				}
 			}
 		}
 	}()
@@ -502,16 +669,27 @@ type UserSession struct {
 	ConnectedAt time.Time `json:"connected_at"`
 }
 
+// wsClientConn wraps a WebSocket connection with a buffered write channel
+// so that broadcastToClients never blocks on slow readers.
+type wsClientConn struct {
+	conn    *websocket.Conn
+	session UserSession
+	ch      chan []byte
+	done    chan struct{}
+}
+
+const wsWriteChanSize = 64
+
 // getOnlineUsers returns the list of currently connected operator sessions.
 func (s *Server) getOnlineUsers() []UserSession {
 	s.wsMutex.RLock()
 	defer s.wsMutex.RUnlock()
 	users := make([]UserSession, 0, len(s.wsClients))
 	seen := make(map[string]bool)
-	for _, session := range s.wsClients {
-		if !seen[session.Username] {
-			seen[session.Username] = true
-			users = append(users, session)
+	for _, client := range s.wsClients {
+		if !seen[client.session.Username] {
+			seen[client.session.Username] = true
+			users = append(users, client.session)
 		}
 	}
 	return users
@@ -519,47 +697,44 @@ func (s *Server) getOnlineUsers() []UserSession {
 
 // broadcastUserEvent sends a user online/offline event to all WebSocket clients.
 func (s *Server) broadcastUserEvent(eventType, username string, session UserSession) {
-	msg, _ := json.Marshal(map[string]interface{}{
+	msg, ok := marshalJSONSafe(map[string]interface{}{
 		"type":         eventType,
 		"username":     username,
 		"connected_at": session.ConnectedAt,
 		"online_users": s.getOnlineUsers(),
 	})
+	if !ok {
+		return
+	}
 	s.broadcastToClients(msg)
 }
 
 // broadcastToClients sends a message to all connected WebSocket clients.
-// Iterates over a snapshot of the map to avoid holding the lock during writes.
+// Uses buffered channels so the caller never blocks on slow readers.
 func (s *Server) broadcastToClients(message []byte) {
-	s.wsMutex.Lock()
-	clients := make([]*websocket.Conn, 0, len(s.wsClients))
-	for conn := range s.wsClients {
-		clients = append(clients, conn)
+	s.wsMutex.RLock()
+	clients := make([]*wsClientConn, 0, len(s.wsClients))
+	for _, client := range s.wsClients {
+		clients = append(clients, client)
 	}
-	s.wsMutex.Unlock()
+	s.wsMutex.RUnlock()
 
-	for _, conn := range clients {
+	for _, client := range clients {
 		select {
 		case <-s.ctx.Done():
 			return
+		case client.ch <- message:
 		default:
-		}
-		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
-			if s.ctx.Err() != nil {
-				return
-			}
-			slog.Debug("Failed to send WebSocket message", "err", err)
-			s.wsMutex.Lock()
-			conn.Close()
-			delete(s.wsClients, conn)
-			s.wsMutex.Unlock()
+			slog.Debug("WebSocket write channel full, dropping message", "user", client.session.Username)
 		}
 	}
 }
 
 // broadcastAgentOnline pushes agent online events to all WebSocket clients.
 func (s *Server) broadcastAgentOnline(agent db.Implant, isNew bool) {
+	if !isNew && !s.suppressAgentStatusEvent(agent.ID) {
+		return
+	}
 	payload := map[string]interface{}{
 		"type":     "agent_online",
 		"agent_id": agent.ID,
@@ -578,6 +753,9 @@ func (s *Server) broadcastAgentOnline(agent db.Implant, isNew bool) {
 
 // broadcastAgentOffline pushes agent offline events to all WebSocket clients.
 func (s *Server) broadcastAgentOffline(agent db.Implant) {
+	if !s.suppressAgentStatusEvent(agent.ID) {
+		return
+	}
 	payload := map[string]string{
 		"type":     "agent_offline",
 		"agent_id": agent.ID,
@@ -590,6 +768,35 @@ func (s *Server) broadcastAgentOffline(agent db.Implant) {
 		return
 	}
 	s.broadcastToClients(notification)
+}
+
+// suppressAgentStatusEvent ensures at most one status event per agent every 60 seconds.
+// Returns true if the event should proceed, false if it should be suppressed.
+func (s *Server) suppressAgentStatusEvent(agentID string) bool {
+	s.agentStatusCooldownMu.Lock()
+	defer s.agentStatusCooldownMu.Unlock()
+	last, ok := s.agentStatusCooldown[agentID]
+	now := time.Now()
+	if ok && now.Sub(last) < 60*time.Second {
+		return false
+	}
+	s.agentStatusCooldown[agentID] = now
+	return true
+}
+
+func (s *Server) handleWSBeaconDisconnect(agentID string) {
+	slog.Info("WebSocket beacon disconnected", "agent_id", agentID)
+	var agent db.Implant
+	if err := s.db.Where("id = ?", agentID).First(&agent).Error; err != nil {
+		return
+	}
+	if agent.Status != "offline" {
+		s.db.Model(&agent).Update("status", "stale")
+		s.recordAgentStatusEvent(agentID, "stale")
+		if s.suppressAgentStatusEvent(agentID) {
+			s.broadcastAgentOffline(agent)
+		}
+	}
 }
 
 // broadcastAgentDataUpdate pushes agent data changes to all WebSocket clients.
@@ -662,6 +869,21 @@ func (s *Server) cleanupOldData() {
 		slog.Error("cleanup tasks failed", "err", err)
 	}
 
+	// Periodic SQLite maintenance: VACUUM and ANALYZE to prevent bloat and
+	// keep query planner statistics fresh. Only runs if the DB is SQLite.
+	if sqlDB, err := s.db.DB(); err == nil {
+		if err := sqlDB.Ping(); err == nil {
+			dbName := s.cfg.Database.Driver
+			if dbName == "" || dbName == "sqlite" {
+				go func() {
+					if _, err := sqlDB.Exec("PRAGMA optimize"); err != nil {
+						slog.Debug("SQLite ANALYZE failed", "err", err)
+					}
+				}()
+			}
+		}
+	}
+
 	s.cleanupGhostAgents()
 
 	dataDir := s.cfg.Server.DataDir
@@ -678,7 +900,48 @@ func (s *Server) cleanupOldData() {
 	// Clean old agent binaries
 	s.cleanOldFiles(filepath.Join(dataDir, "agents"), cutoff)
 
+	s.cleanupStaleMapEntries()
+
 	slog.Info("old data cleanup completed")
+}
+
+func (s *Server) cleanupStaleMapEntries() {
+	cutoff := time.Now().Add(-StaleMapCleanupAge)
+	cleaned := 0
+
+	// Clean stale agentStatusCooldown entries
+	s.agentStatusCooldownMu.Lock()
+	for k, v := range s.agentStatusCooldown {
+		if v.Before(cutoff) {
+			delete(s.agentStatusCooldown, k)
+			cleaned++
+		}
+	}
+	s.agentStatusCooldownMu.Unlock()
+
+	// Clean stale screenMonitorImplants entries
+	s.screenMonitorMu.Lock()
+	for k, v := range s.screenMonitorImplants {
+		if v.Before(cutoff) {
+			delete(s.screenMonitorImplants, k)
+			cleaned++
+		}
+	}
+	s.screenMonitorMu.Unlock()
+
+	// Clean empty extC2TaskQueue entries
+	s.extC2TaskMu.Lock()
+	for k, v := range s.extC2TaskQueue {
+		if len(v) == 0 {
+			delete(s.extC2TaskQueue, k)
+			cleaned++
+		}
+	}
+	s.extC2TaskMu.Unlock()
+
+	if cleaned > 0 {
+		slog.Info("Cleaned stale map entries", "count", cleaned)
+	}
 }
 
 func (s *Server) offlineThreshold() time.Duration {
@@ -687,6 +950,10 @@ func (s *Server) offlineThreshold() time.Duration {
 		d = 60
 	}
 	return time.Duration(d) * time.Second
+}
+
+func (s *Server) staleThreshold() time.Duration {
+	return s.offlineThreshold() * 3
 }
 
 // AgentStatusInfo holds display info for an agent's status
@@ -705,7 +972,7 @@ func (s *Server) agentStatus(a db.Implant) AgentStatusInfo {
 	switch {
 	case since < threshold:
 		return AgentStatusInfo{"online", "Online", "bg-emerald-500", "bg-emerald-50", "text-emerald-700", "animate-pulse"}
-	case since < 30*time.Minute:
+	case since < s.staleThreshold():
 		return AgentStatusInfo{"stale", "Timeout", "bg-amber-500", "bg-amber-50", "text-amber-700", ""}
 	default:
 		return AgentStatusInfo{"offline", "Offline", "bg-red-500", "bg-red-50", "text-red-700", ""}
@@ -714,9 +981,9 @@ func (s *Server) agentStatus(a db.Implant) AgentStatusInfo {
 
 // cleanupGhostAgents removes invalid or long-dead implant records.
 func (s *Server) cleanupGhostAgents() {
-	ghostCutoff := time.Now().Add(-1 * time.Hour)
+	ghostCutoff := time.Now().Add(-GhostAgentCutoff)
 	var ghosts []db.Implant
-	if err := s.db.Where("(hostname = '' OR hostname IS NULL) AND (ip = '' OR ip IS NULL) AND last_seen < ?", ghostCutoff).Find(&ghosts).Error; err != nil {
+	if err := s.db.Where("(hostname = '' OR hostname IS NULL) AND (ip = '' OR ip IS NULL) AND last_seen < ?", ghostCutoff).Limit(500).Find(&ghosts).Error; err != nil {
 		return
 	}
 	if len(ghosts) > 0 {
@@ -724,24 +991,41 @@ func (s *Server) cleanupGhostAgents() {
 		for i, a := range ghosts {
 			ghostIDs[i] = a.ID
 		}
-		s.db.Where("agent_id IN ?", ghostIDs).Delete(&db.Task{})
-		s.db.Where("id IN ?", ghostIDs).Delete(&db.Implant{})
-		slog.Info("Removed ghost agents", "count", len(ghosts))
+		if err := s.db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("agent_id IN ?", ghostIDs).Delete(&db.Task{}).Error; err != nil {
+				return err
+			}
+			return tx.Where("id IN ?", ghostIDs).Delete(&db.Implant{}).Error
+		}); err != nil {
+			slog.Error("Failed to remove ghost agents", "err", err)
+		} else {
+			slog.Info("Removed ghost agents", "count", len(ghosts))
+		}
 	}
 
-	offlineCutoff := time.Now().AddDate(0, 0, -30)
+	retention := s.cfg.Server.CleanupRetentionDays
+	if retention < 1 {
+		retention = 30
+	}
+	offlineCutoff := time.Now().AddDate(0, 0, -retention)
 	var stale []db.Implant
-	if err := s.db.Where("last_seen < ?", offlineCutoff).Find(&stale).Error; err != nil {
+	if err := s.db.Where("last_seen < ?", offlineCutoff).Limit(500).Find(&stale).Error; err != nil {
 		return
 	}
 	if len(stale) > 0 {
-		staleIDs := make([]string, len(stale))
+		idStrs := make([]string, len(stale))
 		for i, a := range stale {
-			staleIDs[i] = a.ID
+			idStrs[i] = a.ID
 		}
-		s.db.Where("agent_id IN ?", staleIDs).Delete(&db.Task{})
-		s.db.Where("id IN ?", staleIDs).Delete(&db.Implant{})
-		slog.Info("Removed stale offline agents", "count", len(stale))
+		slog.Info("Removing stale offline agents", "count", len(stale), "age_days", retention)
+		if err := s.db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("agent_id IN ?", idStrs).Delete(&db.Task{}).Error; err != nil {
+				return err
+			}
+			return tx.Where("id IN ?", idStrs).Delete(&db.Implant{}).Error
+		}); err != nil {
+			slog.Error("Failed to remove stale agents", "err", err)
+		}
 	}
 }
 
@@ -754,8 +1038,13 @@ func (s *Server) cleanOldFiles(dir string, cutoff time.Time) {
 	for _, e := range entries {
 		path := filepath.Join(dir, e.Name())
 		if e.IsDir() {
-			s.cleanOldFiles(path, cutoff) // recurse into agent subdirs
-			// optionally remove empty dirs
+			s.cleanOldFiles(path, cutoff)
+			remaining, _ := os.ReadDir(path)
+			if len(remaining) == 0 {
+				if err := os.Remove(path); err != nil {
+					slog.Debug("Failed to remove empty directory", "path", path, "err", err)
+				}
+			}
 			continue
 		}
 		info, err := e.Info()
@@ -763,13 +1052,17 @@ func (s *Server) cleanOldFiles(dir string, cutoff time.Time) {
 			continue
 		}
 		if info.ModTime().Before(cutoff) {
-			_ = os.Remove(path)
+			if err := os.Remove(path); err != nil {
+				slog.Debug("Failed to remove old file", "path", path, "err", err)
+			}
 		}
 	}
 }
 
 func (s *Server) Shutdown() {
 	slog.Info("Shutting down server...")
+
+	// Stop accepting new connections
 	s.extraListenersMu.Lock()
 	for key, srv := range s.extraListeners {
 		slog.Info("Shutting down extra listener", "key", key)
@@ -780,10 +1073,82 @@ func (s *Server) Shutdown() {
 	if s.tcpLn != nil {
 		s.tcpLn.Close()
 	}
+	if s.smbLn != nil {
+		s.smbLn.Close()
+	}
+	if s.icmpListener != nil {
+		s.icmpListener.Close()
+	}
+	if s.dnsListener != nil {
+		slog.Info("Shutting down DNS listener")
+		s.dnsListener.Close()
+	}
+	if s.grpcListener != nil {
+		slog.Info("Shutting down gRPC listener")
+		s.grpcListener.Stop()
+	}
+	if s.httpServer != nil {
+		// Wait briefly for in-flight requests to drain before forced shutdown
+		done := make(chan struct{})
+		go func() {
+			s.inFlight.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+			slog.Info("All in-flight requests completed")
+		case <-time.After(5 * time.Second):
+			slog.Warn("Timed out waiting for in-flight requests, proceeding with shutdown")
+		}
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
+			slog.Error("HTTP server shutdown error", "err", err)
+		}
+	}
+
+	// Close external C2 WebSocket channels
+	s.extC2ChannelsMu.Lock()
+	for _, ch := range s.extC2Channels {
+		if ch.Conn != nil {
+			ch.Conn.Close()
+		}
+	}
+	clear(s.extC2Channels)
+	s.extC2ChannelsMu.Unlock()
+
+	// Stop subsystems
+	if s.circuitBreaker != nil {
+		s.circuitBreaker.Stop()
+	}
+	if s.backupManager != nil {
+		s.backupManager.Stop()
+	}
+	if s.configReloader != nil {
+		s.configReloader.Stop()
+	}
+	if s.marketplace != nil {
+		s.marketplace.StopUpdateChecker()
+	}
+	if s.eventManager != nil {
+		s.eventManager.Shutdown()
+	}
+
+	// Signal all goroutines to stop
 	if s.ctxCancel != nil {
 		s.ctxCancel()
 	}
+
+	// Wait for tracked goroutines to finish
 	s.wg.Wait()
+
+	// Close database connection
+	if s.db != nil {
+		if sqlDB, err := s.db.DB(); err == nil {
+			slog.Info("Closing database connection")
+			sqlDB.Close()
+		}
+	}
 }
 
 func (s *Server) Run() error {
@@ -799,13 +1164,46 @@ func (s *Server) Run() error {
 	}
 
 	// start periodic cleanup
-	go s.runPeriodicCleanup()
-	go s.cleanupStaleSocks()
-	go s.periodicRPortFwdCleanup()
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.runPeriodicCleanup()
+	}()
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.cleanupStaleSocks()
+	}()
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.periodicRPortFwdCleanup()
+	}()
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		ticker := time.NewTicker(StaleTaskRequeueInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case <-ticker.C:
+				s.requeueStaleTasks()
+				s.reconcilePendingTaskCounts()
+			}
+		}
+	}()
 
 	// periodic metrics refresh (same interval as nav stats cache)
+	s.wg.Add(1)
 	go func() {
-		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		defer s.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -819,19 +1217,21 @@ func (s *Server) Run() error {
 	}()
 
 	// Initialize Circuit Breaker
-	cb := NewCircuitBreaker(s.cfg)
-	cb.SetOnBurnedHandler(func(targetID string) {
+	s.circuitBreaker = NewCircuitBreaker(s.cfg)
+	s.circuitBreaker.SetOnBurnedHandler(func(targetID string) {
 		slog.Warn("Circuit breaker triggered: listener BURNED", "listener_id", targetID)
 		// Automatically push profile rotation to agents on this listener
 		s.rotateAgentsOnBurnedListener(targetID)
 	})
-	cb.Start()
+	s.circuitBreaker.Start()
 
 	// start update checker
 	s.initUpdateChecker()
 
 	// periodic cleanup of hosted one-liner payloads
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("Payload cleanup panicked", "recover", r)
@@ -851,29 +1251,24 @@ func (s *Server) Run() error {
 
 	// Start TCP transport layer if enabled (high priority feature)
 	if s.cfg.Server.TCPEnabled && s.cfg.Server.TCPAddr != "" {
-		go s.startTCPListener()
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.startTCPListener()
+		}()
 	}
 	if s.cfg.Server.SMBEnabled && s.cfg.Server.SMBPipe != "" {
-		go s.startSMBListener()
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.startSMBListener()
+		}()
 	}
 
 	// Start ICMP C2 listener if enabled
 	if s.cfg.Server.ICMPEnabled {
 		il := NewICMPBeaconListener(s.cfg.Server.ICMPAddr)
-		il.SetHandler(func(agentID string, reqJSON []byte) []byte {
-			var req beaconRequest
-			if len(reqJSON) > 0 {
-				if err := json.Unmarshal(reqJSON, &req); err != nil {
-					slog.Error("ICMP beacon handler unmarshal error", "err", err)
-				}
-			}
-			if req.UUID == "" {
-				req.UUID = agentID
-			}
-			resp := s.processBeacon(req, "")
-			respJSON, _ := json.Marshal(resp)
-			return respJSON
-		})
+		il.SetHandler(s.makeBeaconHandler())
 		if err := il.Start(); err != nil {
 			slog.Error("Failed to start ICMP listener", "err", err)
 		}
@@ -883,29 +1278,44 @@ func (s *Server) Run() error {
 	// Start DNS C2 listener if enabled
 	if s.cfg.Server.DNSEnabled && s.cfg.Server.DNSDomain != "" {
 		dl := NewDNSBeaconListener(s.cfg.Server.DNSDomain, s.cfg.Server.Host, 0, s.cfg.Server.DNSAddr)
-		dl.SetHandler(func(agentID string, reqJSON []byte) []byte {
-			var req beaconRequest
-			if len(reqJSON) > 0 {
-				if err := json.Unmarshal(reqJSON, &req); err != nil {
-					slog.Error("DNS beacon handler unmarshal error", "err", err)
-				}
-			}
-			if req.UUID == "" {
-				req.UUID = agentID
-			}
-			resp := s.processBeacon(req, "")
-			respJSON, _ := json.Marshal(resp)
-			return respJSON
-		})
+		dl.SetHandler(s.makeBeaconHandler())
 		s.dnsListener = dl
-		go dl.Start()
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			dl.Start()
+		}()
+	}
+
+	// Start gRPC transport layer if enabled
+	if s.cfg.Server.GRPCEnabled && s.cfg.Server.GRPCAddr != "" {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.startGRPCListener()
+		}()
+	}
+
+	// Auto-generate ExtC2 token if empty
+	if s.cfg.RateLimit.ExtC2.APIToken == "" {
+		tokenBytes := make([]byte, 32)
+		if _, err := rand.Read(tokenBytes); err == nil {
+			s.cfg.RateLimit.ExtC2.APIToken = hex.EncodeToString(tokenBytes)
+			if err := s.cfg.Save(s.configPath); err == nil {
+				slog.Info("Auto-generated ExtC2 API token")
+			}
+		}
 	}
 
 	// Restore External C2 channels from DB
 	s.restoreExtC2Channels()
 
 	// Start async build job cleanup goroutine
-	go s.cleanupBuildJobs()
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.cleanupBuildJobs()
+	}()
 
 	// Start extra listeners from DB (created via the UI in previous sessions)
 	s.startExtraListenersFromDB()
@@ -918,21 +1328,14 @@ func (s *Server) Run() error {
 
 	slog.Info("Starting ForgeC2 server", "addr", addr, "tls", s.cfg.Server.TLSEnabled)
 
+	s.httpServer = s.newHTTPServer(addr)
 	if s.cfg.Server.TLSEnabled {
-		tlsCfg := &tls.Config{
-			MinVersion: tls.VersionTLS12,
+		if err := s.configureTLS(s.httpServer); err != nil {
+			return err
 		}
-		server := &http.Server{
-			Addr:         addr,
-			Handler:      s.router,
-			TLSConfig:    tlsCfg,
-			ReadTimeout:  HTTPReadTimeout,
-			WriteTimeout: HTTPWriteTimeout,
-			IdleTimeout:  HTTPIdleTimeout,
-		}
-		return server.ListenAndServeTLS(certPath, keyPath)
+		return s.httpServer.ListenAndServeTLS(certPath, keyPath)
 	}
-	return s.router.Run(addr)
+	return s.httpServer.ListenAndServe()
 }
 
 // startExtraListenersFromDB starts extra listeners for all enabled listeners
@@ -949,62 +1352,96 @@ func (s *Server) startExtraListenersFromDB() {
 		if scheme == "" {
 			scheme = l.Type
 		}
-		addr := l.Host + ":" + itoa(l.Port)
-		key := scheme + "://" + addr
+		key := listenerKey(&l)
 
-		// Skip if this is the main server address (already served)
-		mainAddr := s.cfg.Server.Host + ":" + itoa(s.cfg.Server.Port)
-		if addr == mainAddr {
-			slog.Debug("Skipping extra listener — matches main server address", "key", key)
-			continue
+		// For HTTP/TCP, skip if this is the main server address
+		if scheme == "http" || scheme == "https" || scheme == "tcp" || scheme == "tls" {
+			addr := l.Host + ":" + itoa(l.Port)
+			mainAddr := s.cfg.Server.Host + ":" + itoa(s.cfg.Server.Port)
+			if addr == mainAddr {
+				slog.Debug("Skipping extra listener — matches main server address", "key", key)
+				continue
+			}
+			// Check port availability
+			if !isPortAvailable(l.Host, l.Port) {
+				slog.Warn("Port not available for extra listener, skipping", "key", key, "addr", addr)
+				continue
+			}
 		}
 
-		// Check port availability before starting (skip for DNS/ICMP which may not use TCP port)
-		needsPort := scheme != "dns" && scheme != "icmp"
-		if needsPort && !isPortAvailable(l.Host, l.Port) {
-			slog.Warn("Port not available for extra listener, skipping", "key", key, "addr", addr)
-			continue
-		}
-
-		slog.Info("Restoring extra listener from DB", "key", key, "addr", addr)
-		if err := s.startExtraListener(key, addr, scheme); err != nil {
+		slog.Info("Restoring extra listener from DB", "key", key, "scheme", scheme)
+		if err := s.startExtraListener(key, scheme); err != nil {
 			slog.Error("Failed to start extra listener from DB", "key", key, "err", err)
 		}
 	}
 }
 
-// startExtraListener starts an additional listener on the given addr.
-func (s *Server) startExtraListener(key, addr, scheme string) error {
+// makeBeaconHandler creates a closure that wraps processBeacon for listener callbacks.
+func (s *Server) makeBeaconHandler() func(string, []byte) []byte {
+	return func(agentID string, reqJSON []byte) []byte {
+		var req beaconRequest
+		if len(reqJSON) > 0 {
+			if err := json.Unmarshal(reqJSON, &req); err != nil {
+				slog.Error("beacon handler unmarshal error", "err", err)
+			}
+		}
+		if req.UUID == "" {
+			req.UUID = agentID
+		}
+		resp := s.processBeacon(req, "")
+		respJSON, ok := marshalJSONSafe(resp)
+		if !ok {
+			return nil
+		}
+		return respJSON
+	}
+}
+
+// startExtraListener starts an additional listener for the given scheme and key.
+func (s *Server) startExtraListener(key, scheme string) error {
+	s.extraListenersMu.Lock()
+	if len(s.extraListeners) >= MaxExtraListeners {
+		s.extraListenersMu.Unlock()
+		return fmt.Errorf("extra listener limit reached (%d)", MaxExtraListeners)
+	}
+	s.extraListenersMu.Unlock()
+
 	switch scheme {
 	case "http", "https":
-		return s.startExtraHTTPListener(key, addr, scheme)
+		return s.startExtraHTTPListener(key, scheme)
 	case "tcp", "tls":
-		return s.startExtraTCPListener(key, addr, scheme)
-	case "dns", "icmp":
-		// DNS/ICMP listeners are currently configured via config.yaml, not per-listener in DB.
-		// Future work: support starting DNS/ICMP listeners per DB record.
-		slog.Warn("DNS/ICMP listeners from DB not yet supported, skipping", "scheme", scheme, "key", key)
-		return nil
+		return s.startExtraTCPListener(key, scheme)
+	case "dns":
+		return s.startExtraDNSListener(key)
+	case "icmp":
+		return s.startExtraICMPListener(key)
 	default:
 		slog.Warn("Unknown extra listener scheme, skipping", "scheme", scheme, "key", key)
 		return nil
 	}
 }
 
-func (s *Server) startExtraHTTPListener(key, addr, scheme string) error {
+func (s *Server) startExtraHTTPListener(key, scheme string) error {
+	// Key format: "http://host:port" or "https://host:port"
+	addr := key[len(scheme)+3:] // strip "scheme://"
 	srv := &http.Server{
-		Addr:         addr,
-		Handler:      s.router,
-		ReadTimeout:  HTTPReadTimeout,
-		WriteTimeout: HTTPWriteTimeout,
-		IdleTimeout:  HTTPIdleTimeout,
+		Addr:              addr,
+		Handler:           s.router,
+		ReadTimeout:       HTTPReadTimeout,
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      HTTPWriteTimeout,
+		IdleTimeout:       HTTPIdleTimeout,
 	}
 	s.extraListenersMu.Lock()
 	s.extraListeners[key] = srv
 	s.extraListenersMu.Unlock()
 	s.wg.Add(1)
 	go func() {
-		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
 		defer s.wg.Done()
 		var err error
 		if scheme == "https" {
@@ -1024,7 +1461,9 @@ func (s *Server) startExtraHTTPListener(key, addr, scheme string) error {
 	return nil
 }
 
-func (s *Server) startExtraTCPListener(key, addr, scheme string) error {
+func (s *Server) startExtraTCPListener(key, scheme string) error {
+	// Key format: "tcp://host:port" or "tls://host:port"
+	addr := key[len(scheme)+3:] // strip "scheme://"
 	var ln net.Listener
 	var err error
 	if scheme == "tls" {
@@ -1051,20 +1490,86 @@ func (s *Server) startExtraTCPListener(key, addr, scheme string) error {
 	slog.Info("Extra TCP listener started", "addr", addr, "key", key, "tls", scheme == "tls")
 	s.wg.Add(1)
 	go func() {
-		defer func() { if r := recover(); r != nil { log.Printf("[PANIC RECOVERED] %v\n%s", r, debug.Stack()) } }()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
 		defer s.wg.Done()
 		for {
 			conn, aErr := ln.Accept()
 			if aErr != nil {
 				break
 			}
-			go s.handleTCPConnection(conn)
+			s.wg.Add(1)
+			go func() {
+				defer s.wg.Done()
+				s.handleTCPConnection(conn)
+			}()
 		}
 		ln.Close()
 		s.extraListenersMu.Lock()
 		delete(s.extraListeners, key)
 		s.extraListenersMu.Unlock()
 	}()
+	return nil
+}
+
+func (s *Server) startExtraDNSListener(key string) error {
+	// Key format: "dns://domain" — we need to look up the listener record for full config
+	var l db.Listener
+	if err := s.db.Where("scheme = ? AND dns_domain = ?", "dns", key[6:]).First(&l).Error; err != nil {
+		return fmt.Errorf("DNS listener record not found for domain %s: %w", key[6:], err)
+	}
+	addr := l.DNSListenAddr
+	if addr == "" {
+		addr = s.cfg.Server.DNSAddr
+	}
+	if addr == "" {
+		addr = ":53"
+	}
+
+	dl := NewDNSBeaconListener(l.DNSDomain, l.Host, l.ID, addr)
+	dl.SetHandler(s.makeBeaconHandler())
+
+	s.extraListenersMu.Lock()
+	s.extraListeners[key] = dl
+	s.extraListenersMu.Unlock()
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		dl.Start()
+	}()
+
+	slog.Info("Extra DNS listener started", "domain", l.DNSDomain, "addr", addr)
+	return nil
+}
+
+func (s *Server) startExtraICMPListener(key string) error {
+	// Key format: "icmp://addr" — we need to look up the listener record for full config
+	var l db.Listener
+	addrPart := key[7:] // strip "icmp://"
+	if err := s.db.Where("scheme = ? AND icmp_addr = ?", "icmp", addrPart).First(&l).Error; err != nil {
+		return fmt.Errorf("ICMP listener record not found for addr %s: %w", addrPart, err)
+	}
+	addr := l.ICMPAddr
+	if addr == "" {
+		addr = addrPart
+	}
+
+	il := NewICMPBeaconListener(addr)
+	il.SetHandler(s.makeBeaconHandler())
+
+	if err := il.Start(); err != nil {
+		return fmt.Errorf("starting extra ICMP listener: %w", err)
+	}
+
+	s.extraListenersMu.Lock()
+	s.extraListeners[key] = il
+	s.extraListenersMu.Unlock()
+
+	slog.Info("Extra ICMP listener started", "addr", addr)
 	return nil
 }
 
@@ -1109,8 +1614,55 @@ func (s *Server) periodicRPortFwdCleanup() {
 	}
 }
 
+// requeueStaleTasks retries only tasks whose delivery was never acknowledged.
+// Acknowledged tasks may still be executing and must never be dispatched twice.
+func (s *Server) requeueStaleTasks() {
+	cutoff := time.Now().Add(-StaleRunningTaskTimeout)
+	var staleTasks []db.Task
+	if err := s.db.Where("status = ? AND claimed_at < ? AND acknowledged_at IS NULL", "running", cutoff).Limit(1000).Find(&staleTasks).Error; err != nil {
+		slog.Error("Failed to find stale running tasks", "error", err)
+		return
+	}
+	if len(staleTasks) == 0 {
+		return
+	}
+	taskIDs := make([]uint, len(staleTasks))
+	for i, t := range staleTasks {
+		taskIDs[i] = t.ID
+	}
+	if err := s.db.Model(&db.Task{}).Where("id IN ?", taskIDs).
+		Updates(map[string]interface{}{"status": "pending", "claimed_by": "", "claimed_at": time.Time{}}).Error; err != nil {
+		slog.Error("Failed to requeue stale running tasks", "count", len(taskIDs), "error", err)
+		return
+	}
+	slog.Info("Requeued stale running tasks to pending", "count", len(staleTasks))
+}
+
+// reconcilePendingTaskCounts recomputes the in-memory pending task counter
+// from the DB to fix any drift caused by unusual task completion paths.
+func (s *Server) reconcilePendingTaskCounts() {
+	var results []struct {
+		AgentID string
+		Count   int
+	}
+	if err := s.db.Model(&db.Task{}).
+		Select("agent_id, COUNT(*) as count").
+		Where("status IN ?", []string{"pending", "running"}).
+		Group("agent_id").
+		Find(&results).Error; err != nil {
+		slog.Error("Failed to reconcile pending task counts", "error", err)
+		return
+	}
+	s.agentPendingTasksMu.Lock()
+	clear(s.agentPendingTasks)
+	for _, r := range results {
+		s.agentPendingTasks[r.AgentID] = r.Count
+	}
+	s.agentPendingTasksMu.Unlock()
+}
+
 func itoa(i int) string {
-	return fmt.Sprintf("%d", i)
+	return strconv.Itoa(i)
 }
 
 // isPortAvailable checks whether the given host:port can be listened on.
@@ -1135,8 +1687,6 @@ func (s *Server) startTCPListener() {
 	s.tcpLn = ln
 	slog.Info("TCP transport layer listening", "addr", s.cfg.Server.TCPAddr)
 
-	s.wg.Add(1)
-	defer s.wg.Done()
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -1181,7 +1731,10 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 
 		resp := s.processBeacon(req, "")
 
-		respBytes, _ := json.Marshal(resp)
+		respBytes, ok := marshalJSONSafe(resp)
+		if !ok {
+			return
+		}
 		if err := binary.Write(conn, binary.BigEndian, uint32(len(respBytes))); err != nil {
 			return
 		}
@@ -1195,6 +1748,29 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 func (s *Server) ActivityMiddleware() gin.HandlerFunc {
 	var mu sync.Mutex
 	lastUpdated := make(map[uint]time.Time)
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case <-ticker.C:
+				cutoff := time.Now().Add(-10 * time.Minute)
+				mu.Lock()
+				for uid, t := range lastUpdated {
+					if t.Before(cutoff) {
+						delete(lastUpdated, uid)
+					}
+				}
+				mu.Unlock()
+			}
+		}
+	}()
+
 	return func(c *gin.Context) {
 		userID, exists := c.Get("user_id")
 		if !exists {
@@ -1216,7 +1792,11 @@ func (s *Server) ActivityMiddleware() gin.HandlerFunc {
 		}
 		lastUpdated[uid] = now
 		mu.Unlock()
-		go s.db.Model(&db.User{}).Where("id = ?", uid).Update("last_activity", now)
+		go func() {
+			ctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
+			defer cancel()
+			s.db.WithContext(ctx).Model(&db.User{}).Where("id = ?", uid).Update("last_activity", now)
+		}()
 		c.Next()
 	}
 }
@@ -1234,6 +1814,37 @@ func (s *Server) getAgentOrFail(c *gin.Context, id string) (db.Implant, bool) {
 
 // createTask creates and persists a new pending task. Returns the task or error.
 func (s *Server) createTask(agentID, taskType, command, shell, path, data string, offset, size int64) (*db.Task, error) {
+	// Validate task type against the registry
+	if !IsKnownTaskType(taskType) && !protocol.ValidTaskType(taskType) {
+		return nil, fmt.Errorf("unknown task type: %s", taskType)
+	}
+
+	// Validate required parameters from the registry metadata
+	if info, ok := getTaskTypeInfo(taskType); ok {
+		for _, p := range info.Parameters {
+			if p.Required {
+				switch p.Name {
+				case "command":
+					if command == "" {
+						return nil, fmt.Errorf("task type %s requires 'command' parameter", taskType)
+					}
+				case "shell":
+					if shell == "" {
+						return nil, fmt.Errorf("task type %s requires 'shell' parameter", taskType)
+					}
+				case "path":
+					if path == "" {
+						return nil, fmt.Errorf("task type %s requires 'path' parameter", taskType)
+					}
+				case "data":
+					if data == "" {
+						return nil, fmt.Errorf("task type %s requires 'data' parameter", taskType)
+					}
+				}
+			}
+		}
+	}
+
 	// Per-agent task queue depth limit — prevents a single compromised agent from flooding the queue
 	s.agentPendingTasksMu.Lock()
 	pending := s.agentPendingTasks[agentID]
@@ -1262,16 +1873,20 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		return nil, err
 	}
 	if s.pluginManager != nil {
-		go s.pluginManager.ExecuteHook(context.Background(), plugin.Event{
-			Type:      plugin.EventTaskCreated,
-			Timestamp: time.Now(),
-			AgentID:   agentID,
-			Payload: map[string]interface{}{
-				"task_id":   task.ID,
-				"task_type": taskType,
-				"command":   command,
-			},
-		})
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
+				Type:      plugin.EventTaskCreated,
+				Timestamp: time.Now(),
+				AgentID:   agentID,
+				Payload: map[string]interface{}{
+					"task_id":   task.ID,
+					"task_type": taskType,
+					"command":   command,
+				},
+			})
+		}()
 	}
 	s.metrics.TasksTotal.Inc()
 	return &task, nil
@@ -1299,4 +1914,3 @@ func (s *Server) handleHealthCheck(c *gin.Context) {
 		"uptime":  time.Since(s.startTime).String(),
 	})
 }
-

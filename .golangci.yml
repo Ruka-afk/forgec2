@@ -1,0 +1,46 @@
+version: "2"
+run:
+  timeout: 5m
+linters:
+  default: none
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosec
+    - misspell
+    - unconvert
+  settings:
+    gosec:
+      excludes:
+        - G115
+        - G101
+        - G107
+        - G204
+        - G301
+        - G302
+        - G304
+    errcheck:
+      exclude-functions:
+        - (*os.File).Close
+        - io.Close
+        - (*gorm.DB).Close
+        - (net.Conn).Close
+        - (net.Listener).Close
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 10

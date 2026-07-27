@@ -19,42 +19,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Download, FileUp, Images, Keyboard, Terminal, Trash2, X } from "lucide-react";
-
-interface Screenshot {
-  id: string;
-  agent_id: string;
-  filename: string;
-  path: string;
-  created_at: string;
-}
-
-interface KeylogTask {
-  id: string;
-  agent_id: string;
-  hostname?: string;
-  agent?: { hostname: string };
-  result: string;
-  error: string;
-  status: string;
-  created_at: string;
-}
-
-interface DownloadTask {
-  id: string;
-  agent_id: string;
-  hostname?: string;
-  agent?: { hostname: string };
-  command: string;
-  result: string;
-  status: string;
-  created_at: string;
-}
-
-interface LootData {
-  screenshots: Screenshot[];
-  keylog_tasks: KeylogTask[];
-  download_tasks: DownloadTask[];
-}
+import { Accordion, AccordionItem, AccordionHeader, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
+import type { Screenshot } from "@/types/screenshot";
+import type { KeylogTask, DownloadTask, LootData } from "@/types/loot";
 
 type LootTab = "screenshots" | "keylogs" | "downloads";
 
@@ -80,9 +47,10 @@ export default function LootPage() {
       });
     } catch {
       setData({ screenshots: [], keylog_tasks: [], download_tasks: [] });
+      toast.error(t("loot.toast.load_failed"));
     }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => { loadLoot(); }, [loadLoot]);
 
@@ -114,8 +82,7 @@ export default function LootPage() {
   const toggleSelectAll = () => {
     let items: string[] = [];
     if (activeTab === "screenshots") items = filteredScreenshots.map(s => s.id);
-    else if (activeTab === "keylogs") items = filteredKeylogs.map(k => k.id);
-    else items = filteredDownloads.map(d => d.id);
+    else if (activeTab === "downloads") items = filteredDownloads.map(d => d.id);
     const allSelected = items.every(id => selectedItems.has(id));
     const next = new Set(selectedItems);
     if (allSelected) items.forEach(id => next.delete(id));
@@ -130,7 +97,7 @@ export default function LootPage() {
         await api.postJson("/loot/bulk-delete", { ids: [...selectedItems] });
         setSelectedItems(new Set());
         loadLoot();
-      } catch { toast.error("Failed to delete loot items"); }
+      } catch { toast.error(t("loot.toast.delete_failed")); }
     }});
   };
 
@@ -170,8 +137,8 @@ export default function LootPage() {
   ];
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={<>Screenshot <span className="text-amber-500">Collection</span></>} subtitle={t("loot.subtitle")}>
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageHeader title={t("loot.page_title")} subtitle={t("loot.subtitle")}>
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={agentFilter || "all"} onValueChange={(v) => { setAgentFilter(v === "all" ? "" : v ?? ""); setSelectedItems(new Set()); }}>
             <SelectTrigger className="w-full sm:w-48" aria-label="Filter by agent"><SelectValue placeholder={t("loot.all_agents")} /></SelectTrigger>
@@ -237,17 +204,16 @@ export default function LootPage() {
                     <Checkbox checked={selectedItems.has(s.id)} aria-label={`Select screenshot ${s.filename}`} className="bg-secondary/90" />
                   </div>
                   <img src={`/screenshots/${s.path}`} alt={s.filename} className="w-full h-24 object-contain bg-background" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[10px] text-white px-2 py-1 opacity-0 group-hover:opacity-100 transition flex justify-between items-center">
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-(--font-size-micro-sm) text-white px-2 py-1 opacity-0 group-hover:opacity-100 transition flex justify-between items-center">
                     <span className="truncate">{s.agent_id.substring(0, 8)}</span>
-                    <a href={`/screenshots/${s.path}`} download onClick={e => e.stopPropagation()} className="hover:text-emerald-600 dark:hover:text-emerald-300 px-1 transition-colors"><Download className="w-4 h-4" /></a>
+                    <a href={`/screenshots/${s.path}`} download onClick={e => e.stopPropagation()} className="hover:text-primary dark:hover:text-emerald-300 px-1 transition-colors"><Download className="w-4 h-4" /></a>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
             <div className="text-center py-12 text-muted-foreground">
-              <Images className="w-4 h-4" />
-              <p className="text-sm">{t("loot.empty_screenshots")}</p>
+              <EmptyState icon={Images} title={t("loot.empty_screenshots")} />
             </div>
           )}
         </Card>
@@ -276,38 +242,39 @@ export default function LootPage() {
             </div>
           ) : filteredKeylogs.length > 0 ? (
             <div className="space-y-3">
-              {filteredKeylogs.map(k => {
-                const agentName = k.agent?.hostname || k.hostname || k.agent_id;
-                const initial = k.result ? k.result.substring(0, 200) : "";
-                const full = k.result || k.error;
-                const isExpanded = selectedItems.has(k.id);
-                return (
-                  <div key={k.id} className="border border-border rounded-xl overflow-hidden">
-                    <div className="flex justify-between items-center px-4 py-2 bg-muted/50 border-b border-border">
-                      <div className="flex items-center gap-x-3">
-                        <Terminal className="w-4 h-4" />
-                        <span className="font-medium text-sm">{agentName}</span>
-                      </div>
-                      <div className="flex items-center gap-x-3">
-                        <span className="text-xs text-muted-foreground">{formatTime(k.created_at)}</span>
-                        <Button variant="ghost" size="sm" onClick={() => downloadText(full, `keylog-${agentName}-${k.id}.txt`)} className="text-xs h-auto p-1 text-emerald-600 hover:text-emerald-700"><Download className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="sm" onClick={() => toggleSelect(k.id)} className="text-xs h-auto p-1">
-                          {isExpanded ? t("loot.collapse") : t("loot.expand")}
-                        </Button>
-                      </div>
-                    </div>
-                    <div className={`bg-background text-emerald-700 dark:text-emerald-300 font-mono text-xs ${isExpanded ? "p-4 max-h-[500px]" : "px-4 py-3 max-h-32"} overflow-y-auto whitespace-pre-wrap break-all`}>
-                      {isExpanded ? full : initial}
-                      {!isExpanded && full.length > 200 && <span className="text-emerald-500 ml-1">... (expandable)</span>}
-                    </div>
-                  </div>
-                );
-              })}
+              <Accordion>
+                {filteredKeylogs.map(k => {
+                  const agentName = k.agent?.hostname || k.hostname || k.agent_id;
+                  const full = k.result || k.error;
+                  return (
+                    <AccordionItem key={k.id} value={k.id} className="border border-border rounded-xl overflow-hidden mb-3">
+                      <AccordionHeader className="bg-muted/50">
+                        <AccordionTrigger className="px-4 py-2 hover:bg-muted/80 flex-1">
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center gap-x-3">
+                              <Terminal className="w-4 h-4" />
+                              <span className="font-medium text-sm">{agentName}</span>
+                            </div>
+                            <div className="flex items-center gap-x-3" onClick={e => e.stopPropagation()}>
+                              <span className="text-xs text-muted-foreground">{formatTime(k.created_at)}</span>
+                              <Button variant="ghost" size="sm" onClick={() => downloadText(full, `keylog-${agentName}-${k.id}.txt`)} className="text-xs h-auto p-1 text-primary hover:text-emerald-700"><Download className="w-4 h-4" /></Button>
+                            </div>
+                          </div>
+                        </AccordionTrigger>
+                      </AccordionHeader>
+                      <AccordionPanel>
+                        <div className="bg-background text-emerald-700 dark:text-emerald-300 font-mono text-xs p-4 max-h-[500px] overflow-y-auto whitespace-pre-wrap break-all">
+                          {full}
+                        </div>
+                      </AccordionPanel>
+                    </AccordionItem>
+                  );
+                })}
+              </Accordion>
             </div>
           ) : (
             <div className="text-center py-12 text-muted-foreground">
-              <Keyboard className="w-4 h-4" />
-              <p className="text-sm">{t("loot.empty_keylogs")}</p>
+              <EmptyState icon={Keyboard} title={t("loot.empty_keylogs")} />
             </div>
           )}
         </Card>

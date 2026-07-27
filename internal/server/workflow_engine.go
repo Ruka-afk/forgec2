@@ -121,16 +121,8 @@ func (we *WorkflowEngine) executeStep(wf db.Workflow, step db.WorkflowStep, agen
 	}
 	we.server.db.Create(&stepLog)
 
-	task := db.Task{
-		AgentID:   agentID,
-		Type:      step.TaskType,
-		Command:   step.Command,
-		Shell:     step.Shell,
-		Status:    "pending",
-		CreatedBy: "workflow",
-		CreatedAt: time.Now(),
-	}
-	if err := we.server.db.Create(&task).Error; err != nil {
+	task, err := we.server.createTask(agentID, step.TaskType, step.Command, step.Shell, "", "", 0, 0)
+	if err != nil {
 		slog.Error("workflow: failed to create task", "step", step.StepOrder, "agent", agentID, "error", err)
 		stepLog.Status = "failed"
 		stepLog.Result = err.Error()
@@ -139,6 +131,7 @@ func (we *WorkflowEngine) executeStep(wf db.Workflow, step db.WorkflowStep, agen
 		we.server.db.Save(&stepLog)
 		return 0, "", false
 	}
+	we.server.db.Model(&task).Update("created_by", "workflow")
 	stepLog.TaskID = task.ID
 	we.server.db.Save(&stepLog)
 

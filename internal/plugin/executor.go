@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -35,6 +36,14 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 	args := interpreterArgs(m.Interpreter, m.Entry)
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = pluginDir
+
+	cmd.Env = []string{
+		"HOME=" + os.TempDir(),
+		"TMPDIR=" + os.TempDir(),
+		"PATH=" + os.Getenv("PATH"),
+		"PLUGIN_NAME=" + m.Name,
+		"PLUGIN_VERSION=" + m.Version,
+	}
 
 	stdinData, err := json.Marshal(input)
 	if err != nil {

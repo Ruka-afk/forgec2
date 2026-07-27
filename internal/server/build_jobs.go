@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -132,8 +131,7 @@ func (s *Server) handleBuildDownload(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "Build output file not found")
 		return
 	}
-	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, sanitizeFilename(filepath.Base(cleanPath))))
-	c.File(cleanPath)
+	serveFileSafe(c, cleanPath, s.extractAgentsDir(), sanitizeFilename(filepath.Base(cleanPath)))
 }
 
 // handleBuildList returns all active build jobs for the caller.
@@ -196,13 +194,16 @@ func (s *Server) runBuildAndUpdateJob(job *BuildJob, buildFn func() (string, err
 	}
 	// Broadcast build status via WebSocket
 	if s.wsHub != nil {
-		msg, _ := json.Marshal(gin.H{
+		msg, ok := marshalJSONSafe(gin.H{
 			"type":     "build_complete",
 			"build_id": job.ID,
 			"status":   job.Status,
 			"platform": platform,
 			"format":   format,
 		})
+		if !ok {
+			return
+		}
 		s.wsHub.Broadcast(msg)
 	}
 }

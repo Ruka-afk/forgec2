@@ -18,6 +18,10 @@ interface ExtC2Channel {
   created_at: string;
 }
 
+interface ExtC2ChannelList {
+  channels: ExtC2Channel[];
+}
+
 export default function ExtC2Section() {
   const { t } = useI18n();
   const [channels, setChannels] = useState<ExtC2Channel[]>([]);
@@ -30,8 +34,8 @@ export default function ExtC2Section() {
 
   const fetchChannels = useCallback(async () => {
     try {
-      const data = await api.get("/extc2/configs") as any;
-      setChannels(data?.channels || []);
+      const data: ExtC2ChannelList = await api.get("/extc2/configs");
+      setChannels(data.channels || []);
     } catch { /* ignore */ }
     setLoading(false);
   }, []);
@@ -40,20 +44,20 @@ export default function ExtC2Section() {
 
   const handleSave = async () => {
     if (!botToken || !channelId) {
-      toast.error("Bot token and channel ID are required");
+      toast.error(t("settings.toast.extc2_required"));
       return;
     }
     setSaving(true);
     try {
       const endpoint = formType === "discord" ? "/extc2/discord" : "/extc2/slack";
-      await api.post(endpoint, { bot_token: botToken, channel_id: channelId } as Record<string, string>);
-      toast.success(`${formType.charAt(0).toUpperCase() + formType.slice(1)} External C2 configured`);
+      await api.post(endpoint, { bot_token: botToken, channel_id: channelId });
+      toast.success(t("settings.toast.extc2_configured", { type: formType.charAt(0).toUpperCase() + formType.slice(1) }));
       setBotToken("");
       setChannelId("");
       setShowForm(false);
       fetchChannels();
-    } catch (err) {
-      toast.error("Failed to configure channel");
+    } catch {
+      toast.error(t("settings.toast.channel_config_failed"));
     }
     setSaving(false);
   };
@@ -61,7 +65,7 @@ export default function ExtC2Section() {
   const handleDelete = async (id: number) => {
     try {
       await api.del(`/extc2/configs/${id}`);
-      toast.success("Channel removed");
+      toast.success(t("settings.toast.channel_removed"));
       fetchChannels();
     } catch { /* ignore */ }
   };
@@ -78,13 +82,13 @@ export default function ExtC2Section() {
             <RefreshCw className="w-4 h-4" />
           </Button>
           <Button size="sm" onClick={() => setShowForm(!showForm)} className="rounded-xl">
-            + Add Channel
+            + {t("settings.extc2.addChannel")}
           </Button>
         </div>
       </div>
 
       {channels.length === 0 && !loading && (
-        <p className="text-xs text-muted-foreground text-center py-4">No External C2 channels configured</p>
+        <p className="text-xs text-muted-foreground text-center py-4">{t("settings.extc2.noChannels")}</p>
       )}
 
       {channels.map(ch => (
@@ -96,7 +100,7 @@ export default function ExtC2Section() {
                 <Badge variant="outline" className="text-xs">{ch.type}</Badge>
                 <span className="text-sm font-medium">{ch.channel_id}</span>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">Created {new Date(ch.created_at).toLocaleDateString()}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{t("settings.extc2.created")} {new Date(ch.created_at).toLocaleDateString()}</p>
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={() => handleDelete(ch.id)} className="rounded-xl text-destructive hover:text-destructive">
@@ -126,30 +130,30 @@ export default function ExtC2Section() {
             </Button>
           </div>
           <div className="space-y-2">
-            <Label className="text-xs">Bot Token</Label>
+            <Label className="text-xs">{t("settings.extc2.botToken")}</Label>
             <Input
               type="password"
               value={botToken}
               onChange={e => setBotToken(e.target.value)}
-              placeholder={`${formType === "discord" ? "Discord" : "Slack"} bot token`}
+              placeholder={t("settings.extc2.botTokenPlaceholder", { type: formType === "discord" ? "Discord" : "Slack" })}
               className="h-8 text-xs"
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-xs">Channel ID</Label>
+            <Label className="text-xs">{t("settings.extc2.channelId")}</Label>
             <Input
               value={channelId}
               onChange={e => setChannelId(e.target.value)}
-              placeholder="Channel ID"
+              placeholder={t("settings.extc2.channelId")}
               className="h-8 text-xs"
             />
           </div>
           <div className="flex gap-2">
             <Button size="sm" onClick={handleSave} disabled={saving} className="rounded-xl">
-              {saving ? "Saving..." : "Save"}
+              {saving ? t("settings.extc2.saving") : t("settings.extc2.save")}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setShowForm(false)} className="rounded-xl">
-              Cancel
+              {t("settings.extc2.cancel")}
             </Button>
           </div>
         </div>

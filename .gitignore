@@ -10,6 +10,7 @@ forgec2-server-linux-arm64
 # ForgeC2 specific
 data/
 config.yaml
+!config.example.yaml
 
 # Go
 *.test
@@ -20,6 +21,7 @@ go.work
 .idea/
 .vscode/
 .opencode/
+.opencode/node_modules/
 .qoder/
 opencode.json
 *.swp
@@ -43,6 +45,10 @@ agent
 build/
 dist/
 
+# Embedded frontend (track these)
+!internal/webdist/webdist.go
+!internal/webdist/dist/
+
 # Next.js
 .next/
 node_modules/
@@ -62,3 +68,8 @@ terminals/
 
 # Scripts (local dev only)
 dev_check.ps1
+
+# Session artifacts
+SUMMARY.md
+
+__pycache__/

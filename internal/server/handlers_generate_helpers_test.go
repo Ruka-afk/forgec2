@@ -26,12 +26,12 @@ func TestClampIntervalJitter_BeaconTime(t *testing.T) {
 
 func TestClampIntervalJitter_Range(t *testing.T) {
 	tests := []struct {
-		name           string
-		interval       int
-		jitter         int
-		beaconTime     int
-		wantInterval   int
-		wantJitter     int
+		name         string
+		interval     int
+		jitter       int
+		beaconTime   int
+		wantInterval int
+		wantJitter   int
 	}{
 		{"negative interval clamped to 5", -1, 50, 0, 5, 50},
 		{"interval capped at 86400", 99999, 50, 0, 86400, 50},

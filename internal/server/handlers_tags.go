@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/util"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 func (s *Server) handleAPITagList(c *gin.Context) {
@@ -31,7 +31,7 @@ func (s *Server) handleAPITagCreate(c *gin.Context) {
 		req.Color = "#3498db"
 	}
 	tag := db.AgentTag{
-		ID:        uuid.New().String(),
+		ID:        util.NewString(),
 		Name:      req.Name,
 		Color:     req.Color,
 		CreatedAt: time.Now(),
@@ -114,10 +114,10 @@ func (s *Server) handleBatchAgentTags(c *gin.Context) {
 	}
 
 	type agentTagsRow struct {
-		AgentID string        `gorm:"column:agent_id"`
-		TagID   string        `gorm:"column:tag_id"`
-		Name    string        `gorm:"column:name"`
-		Color   string        `gorm:"column:color"`
+		AgentID string `gorm:"column:agent_id"`
+		TagID   string `gorm:"column:tag_id"`
+		Name    string `gorm:"column:name"`
+		Color   string `gorm:"column:color"`
 	}
 	var rows []agentTagsRow
 	s.db.Table("agent_tag_assignments").

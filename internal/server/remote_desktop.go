@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"encoding/json"
@@ -167,8 +167,8 @@ func (s *Server) handleRDAPIGetFrame(c *gin.Context) {
 
 // frameBuffers stores the latest screen frame for each agent.
 var (
-	frameBuffers   = make(map[string][]byte)
-	frameBufferMu  sync.RWMutex
+	frameBuffers  = make(map[string][]byte)
+	frameBufferMu sync.RWMutex
 )
 
 // getFrameBuffer returns the latest frame for an agent.

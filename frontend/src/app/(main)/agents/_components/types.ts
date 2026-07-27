@@ -1,3 +1,12 @@
+import type { AgentStatus } from "@/types/agent";
+
+export interface TaskStats {
+  pending: number;
+  running: number;
+  completed: number;
+  failed: number;
+}
+
 export interface Beacon {
   id?: string;
   hostname?: string;
@@ -5,7 +14,7 @@ export interface Beacon {
   ip?: string;
   os?: string;
   arch?: string;
-  status?: string;
+  status?: AgentStatus;
   last_seen?: string;
   integrity?: string;
   elevated?: boolean;
@@ -21,6 +30,7 @@ export interface Beacon {
   pid?: number;
   process_name?: string;
   created_at?: string;
+  taskStats?: TaskStats;
 }
 
 export interface BulkResult {
@@ -45,13 +55,14 @@ export const COMMAND_TYPES = [
   { value: "ls", label: "List Directory" },
   { value: "screenshot", label: "Screenshot" },
   { value: "sleep", label: "Sleep" },
+  { value: "netstat", label: "Network Status" },
+  { value: "users", label: "List Users" },
+  { value: "clipboard_get", label: "Clipboard Get" },
+  { value: "creds_dump", label: "Dump Credentials" },
+  { value: "run_evasion", label: "Run Evasion" },
   { value: "kill", label: "Kill" },
   { value: "uninstall", label: "Uninstall" },
 ];
-
-export function avatarInitial(hostname: string) {
-  return (hostname || "?").charAt(0).toUpperCase();
-}
 
 export function avatarColor(hostname: string) {
   const colors = ["bg-indigo-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-cyan-500"];

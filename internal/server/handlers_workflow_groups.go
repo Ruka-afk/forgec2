@@ -12,12 +12,15 @@ import (
 )
 
 func (s *Server) handleAPIWorkflows(c *gin.Context) {
+	p := parsePagination(c, 50, 200)
+	var total int64
+	s.db.Model(&db.Workflow{}).Count(&total)
 	var workflows []db.Workflow
-	if err := s.db.Preload("Steps").Order("created_at desc").Find(&workflows).Error; err != nil {
+	if err := s.db.Preload("Steps").Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&workflows).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to load workflows")
 		return
 	}
-	respond(c, gin.H{"workflows": workflows})
+	respond(c, gin.H{"workflows": workflows, "total": total, "page": p.Page, "page_size": p.PageSize})
 }
 
 func (s *Server) handleAPIWorkflowsDetail(c *gin.Context) {
@@ -31,8 +34,7 @@ func (s *Server) handleAPIWorkflowsDetail(c *gin.Context) {
 
 func (s *Server) handleAPIWorkflowsToggle(c *gin.Context) {
 	var wf db.Workflow
-	if err := s.db.First(&wf, "id = ?", c.Param("id")).Error; err != nil {
-		respondError(c, http.StatusNotFound, "workflow not found")
+	if !s.findOrFail(c, &wf, c.Param("id"), "workflow") {
 		return
 	}
 	wf.Enabled = !wf.Enabled
@@ -64,16 +66,16 @@ func (s *Server) handleAPIWorkflowsExecute(c *gin.Context) {
 			return
 		}
 		if wf.ScopeType == "agents" {
-			s.db.Where("id IN ?", ids).Find(&targetAgents)
+			s.db.Where("id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents)
 		} else if wf.ScopeType == "tags" {
 			s.db.Distinct("implants.*").Joins("JOIN agent_tag_assignments ON agent_tag_assignments.agent_id = implants.id").
-				Where("agent_tag_assignments.tag_id IN ?", ids).Find(&targetAgents)
+				Where("agent_tag_assignments.tag_id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents)
 		} else {
 			s.db.Distinct("implants.*").Joins("JOIN agent_group_assignments ON agent_group_assignments.agent_id = implants.id").
-				Where("agent_group_assignments.group_id IN ?", ids).Find(&targetAgents)
+				Where("agent_group_assignments.group_id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents)
 		}
 	default:
-		s.db.Where("last_seen > ?", time.Now().Add(-30*time.Minute)).Find(&targetAgents)
+		s.db.Where("last_seen > ?", time.Now().Add(-30*time.Minute)).Limit(AgentQueryLimit).Find(&targetAgents)
 	}
 
 	agentIDs := make([]string, len(targetAgents))
@@ -147,8 +149,7 @@ func (s *Server) handleAPICreateWorkflow(c *gin.Context) {
 func (s *Server) handleAPIUpdateWorkflow(c *gin.Context) {
 	id := c.Param("id")
 	var wf db.Workflow
-	if err := s.db.First(&wf, "id = ?", id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "workflow not found")
+	if !s.findOrFail(c, &wf, id, "workflow") {
 		return
 	}
 	var req struct {
@@ -215,8 +216,7 @@ func (s *Server) handleListWorkflowExecutions(c *gin.Context) {
 func (s *Server) handleGetWorkflowExecution(c *gin.Context) {
 	executionID := c.Param("executionId")
 	var exec db.WorkflowExecution
-	if err := s.db.First(&exec, executionID).Error; err != nil {
-		respondError(c, http.StatusNotFound, "Execution not found")
+	if !s.findOrFail(c, &exec, executionID, "execution") {
 		return
 	}
 	var logs []db.WorkflowStepLog
@@ -240,7 +240,7 @@ func (s *Server) handleAPIDeleteWorkflow(c *gin.Context) {
 
 func (s *Server) handleAPIGroups(c *gin.Context) {
 	var groups []db.AgentGroup
-	if err := s.db.Find(&groups).Error; err != nil {
+	if err := s.db.Limit(200).Find(&groups).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to load groups")
 		return
 	}
@@ -249,14 +249,49 @@ func (s *Server) handleAPIGroups(c *gin.Context) {
 		AgentCount int `json:"agent_count"`
 		ChildCount int `json:"child_count"`
 	}
+	if len(groups) == 0 {
+		respond(c, gin.H{"groups": []enrichedGroup{}})
+		return
+	}
+	groupIDs := make([]string, len(groups))
+	for i, g := range groups {
+		groupIDs[i] = g.ID
+	}
+
+	type agentCountRow struct {
+		GroupID string
+		Count   int64
+	}
+	var agentCounts []agentCountRow
+	s.db.Model(&db.Implant{}).Select("agent_group_assignments.group_id, COUNT(*) as count").
+		Joins("JOIN agent_group_assignments ON agent_group_assignments.agent_id = implants.id").
+		Where("agent_group_assignments.group_id IN ?", groupIDs).
+		Group("agent_group_assignments.group_id").Find(&agentCounts)
+	agentCountMap := make(map[string]int64, len(agentCounts))
+	for _, row := range agentCounts {
+		agentCountMap[row.GroupID] = row.Count
+	}
+
+	type childCountRow struct {
+		ParentID string
+		Count    int64
+	}
+	var childCounts []childCountRow
+	s.db.Model(&db.AgentGroup{}).Select("parent_id, COUNT(*) as count").
+		Where("parent_id IN ?", groupIDs).
+		Group("parent_id").Find(&childCounts)
+	childCountMap := make(map[string]int64, len(childCounts))
+	for _, row := range childCounts {
+		childCountMap[row.ParentID] = row.Count
+	}
+
 	result := make([]enrichedGroup, len(groups))
 	for i, g := range groups {
-		var ac int64
-		s.db.Model(&db.Implant{}).Joins("JOIN agent_group_assignments ON agent_group_assignments.agent_id = implants.id").
-			Where("agent_group_assignments.group_id = ?", g.ID).Count(&ac)
-		var cc int64
-		s.db.Model(&db.AgentGroup{}).Where("parent_id = ?", g.ID).Count(&cc)
-		result[i] = enrichedGroup{AgentGroup: g, AgentCount: int(ac), ChildCount: int(cc)}
+		result[i] = enrichedGroup{
+			AgentGroup: g,
+			AgentCount: int(agentCountMap[g.ID]),
+			ChildCount: int(childCountMap[g.ID]),
+		}
 	}
 	respond(c, gin.H{"groups": result})
 }
@@ -298,8 +333,7 @@ func (s *Server) handleAPICreateGroup(c *gin.Context) {
 func (s *Server) handleAPIUpdateGroup(c *gin.Context) {
 	id := c.Param("id")
 	var group db.AgentGroup
-	if err := s.db.First(&group, "id = ?", id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "group not found")
+	if !s.findOrFail(c, &group, id, "group") {
 		return
 	}
 	var req struct {

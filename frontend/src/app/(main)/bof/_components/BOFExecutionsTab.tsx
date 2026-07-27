@@ -1,7 +1,8 @@
-﻿"use client";
+"use client";
 
 import type { Execution } from "./types";
 import { getStatusColor } from "./types";
+import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/UI";
 import { Card } from "@/components/ui/card";
 import { Terminal } from "lucide-react";
@@ -41,9 +42,9 @@ export default function BOFExecutionsTab({ executions, loading }: BOFExecutionsT
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${getStatusColor(ex.status || "")}`}>
+                  <Badge variant="secondary" className={`text-(--font-size-micro-sm) px-2 py-0.5 rounded-full ${getStatusColor(ex.status || "")}`}>
                     {ex.status || "pending"}
-                  </span>
+                  </Badge>
                   <span className="text-xs text-muted-foreground">{ex.created_at || ""}</span>
                 </div>
               </div>

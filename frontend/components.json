@@ -20,5 +20,17 @@
   },
   "menuColor": "default",
   "menuAccent": "subtle",
-  "registries": {}
+  "registries": {},
+  "newComponents": [
+    "avatar",
+    "breadcrumb",
+    "menubar",
+    "toast",
+    "status-indicator",
+    "icon-badge",
+    "animated-stat-card",
+    "page-section",
+    "data-state",
+    "skeletons"
+  ]
 }

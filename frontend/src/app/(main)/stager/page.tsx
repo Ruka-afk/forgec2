@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { downloadText } from "@/lib/download";
-import { ConfirmModal, PageHeader, Spinner } from "@/components/UI";
+import { ConfirmModal, EmptyState, PageHeader, Spinner } from "@/components/UI";
 import { Button } from "@/components/ui/button";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -65,14 +65,15 @@ export default function StagerPage() {
       const res = await api.get<{ success: boolean; data: StagerToken[] }>("/stager/tokens");
       if (res.success) setTokens(res.data);
     } catch { toast.error(t("stager.toast.create_failed")); }
-  }, []);
+  }, [t]);
 
   const fetchListeners = useCallback(async () => {
     try {
-      const res = await api.get<Record<string, unknown>>("/api/listeners");
-      setListeners(Array.isArray(res) ? res as unknown as Listener[] : ((res.data as Listener[]) || (res.listeners as Listener[]) || []));
+      const res = await api.get<unknown>("/api/listeners");
+      const list = Array.isArray(res) ? (res as Listener[]) : ((res as Record<string, unknown>)?.data as Listener[] || (res as Record<string, unknown>)?.listeners as Listener[] || []);
+      setListeners(list);
     } catch { toast.error(t("stager.toast.create_failed")); }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!message) return;
@@ -132,11 +133,11 @@ export default function StagerPage() {
   }
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("stager.title")} subtitle={t("stager.subtitle")} />
 
       {message && (
-        <div className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-xl text-sm text-indigo-700 dark:text-indigo-300">
+        <div className="px-4 py-2 bg-primary/10 dark:bg-indigo-900/30 border border-primary/20 dark:border-indigo-800 rounded-xl text-sm text-primary dark:text-indigo-300">
           {message}
           <Button variant="ghost" size="icon-sm" onClick={() => setMessage("")} className="ml-2 text-indigo-400 hover:text-indigo-600" aria-label="Dismiss">&times;</Button>
         </div>
@@ -148,7 +149,7 @@ export default function StagerPage() {
           <div className="text-xs space-y-1">
             <div><span className="font-medium">{t("stager.stager_url")}</span> <code className="text-indigo-600 dark:text-indigo-400 bg-secondary/80 px-1 rounded">{createdToken.stager_url}</code></div>
             <div><span className="font-medium">{t("stager.token_label")}</span>
-              <code className="block mt-1 p-2 bg-secondary/80 dark:bg-muted/50 rounded text-[10px] break-all font-mono">{createdToken.token}</code>
+              <code className="block mt-1 p-2 bg-secondary/80 dark:bg-muted/50 rounded text-(--font-size-micro-sm) break-all font-mono">{createdToken.token}</code>
             </div>
             <div><span className="font-medium">{t("stager.stage2_size")}</span> {createdToken.stage2_size} bytes</div>
             <div><span className="font-medium">{t("stager.expires")}</span> {formatTime(createdToken.expires_at)}</div>
@@ -269,7 +270,7 @@ export default function StagerPage() {
           {loading ? (
             <div className="text-sm text-muted-foreground"><Spinner size="xs" /> Loading...</div>
           ) : tokens.length === 0 ? (
-            <div className="text-sm text-muted-foreground italic">{t("stager.empty_tokens")}</div>
+            <EmptyState title={t("stager.empty_tokens")} />
           ) : (
             <div className="overflow-x-auto">
               <Table>

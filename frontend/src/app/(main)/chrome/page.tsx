@@ -30,6 +30,7 @@ export default function ChromeC2Page() {
   const { t } = useI18n();
   const [agents, setAgents] = useState<ChromeAgent[]>([]);
   const [loading, setLoading] = useState(true);
+  // Experimental: tasks target the Chrome extension agent only, not the standard Go implant.
   const [selectedAgent, setSelectedAgent] = useState("");
   const [taskType, setTaskType] = useState("chrome_exec");
   const [taskCommand, setTaskCommand] = useState("");
@@ -54,7 +55,7 @@ export default function ChromeC2Page() {
 
   const fetchAgents = useCallback(async () => {
     try {
-      const data = await api.json<{ agents: ChromeAgent[] }>("/api/chrome/agents");
+      const data = await api.get<{ agents: ChromeAgent[] }>("/api/chrome/agents");
       setAgents(data.agents || []);
     } catch {
       setAgents([]);
@@ -101,7 +102,11 @@ export default function ChromeC2Page() {
   };
 
   return (
-      <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up space-y-4">
+      <Card className="p-3 border-amber-500/40 bg-amber-500/10 text-sm text-amber-800 dark:text-amber-200">
+        <div className="font-semibold">{t("chrome.experimental_title")}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{t("chrome.experimental_desc")}</div>
+      </Card>
       <PageHeader
         title={<span><Globe className="w-4 h-4 text-indigo-500 mr-2 inline" />{t("chrome.title")}</span>}
         subtitle={`${agents.length} extension agent${agents.length !== 1 ? "s" : ""} ${t("chrome.connected")}`}
@@ -148,7 +153,7 @@ export default function ChromeC2Page() {
                       </div>
                       <div className="flex items-center gap-2">
                         {statusBadge(a.status)}
-                        <span className="text-[10px] text-muted-foreground/70">
+                        <span className="text-(--font-size-micro-sm) text-muted-foreground/70">
                           {a.last_seen ? timeAgo(a.last_seen) : ""}
                         </span>
                       </div>

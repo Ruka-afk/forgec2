@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"fmt"
@@ -19,11 +19,11 @@ func (s *Server) handleUsersPage(c *gin.Context) {
 
 	stats := s.getNavStats()
 	data := gin.H{
-		"Title":          "ForgeC2 - User Management",
-		"ActiveNav":      "settings",
-		"Users":          users,
-		"AllRoles":       db.GetAllRoles(),
-		"AllPermissions": db.GetAllPermissions(),
+		"Title":           "ForgeC2 - User Management",
+		"ActiveNav":       "settings",
+		"Users":           users,
+		"AllRoles":        db.GetAllRoles(),
+		"AllPermissions":  db.GetAllPermissions(),
 		"RolePermissions": db.RolePermissionsMap,
 	}
 	for k, v := range stats {
@@ -35,9 +35,7 @@ func (s *Server) handleUsersPage(c *gin.Context) {
 
 // handleAddUser creates a new user (admin only)
 func (s *Server) handleAddUser(c *gin.Context) {
-	currentRole, _ := c.Get("user_role")
-	if currentRole != "admin" {
-		respondError(c, http.StatusForbidden, "Admin access required")
+	if !s.requireAdmin(c) {
 		return
 	}
 	username := c.PostForm("username")
@@ -48,8 +46,8 @@ func (s *Server) handleAddUser(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "Username and password required")
 		return
 	}
-	if len(password) < 8 {
-		respondError(c, http.StatusBadRequest, "Password must be at least 8 characters")
+	if err := s.validatePasswordComplexity(password); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	validRoles := map[string]bool{
@@ -93,13 +91,11 @@ func (s *Server) handleAddUser(c *gin.Context) {
 func (s *Server) handleToggleUser(c *gin.Context) {
 	idStr := c.Param("id")
 	var user db.User
-	if err := s.db.First(&user, idStr).Error; err != nil {
-		respondError(c, http.StatusNotFound, "User not found")
+	if !s.findOrFail(c, &user, idStr, "User") {
 		return
 	}
 
 	currentUser, _ := c.Get("user")
-	currentRole, _ := c.Get("user_role")
 
 	// Prevent disabling yourself
 	if currentUser == user.Username {
@@ -107,8 +103,7 @@ func (s *Server) handleToggleUser(c *gin.Context) {
 		return
 	}
 	// Only admins can toggle users
-	if currentRole != "admin" {
-		respondError(c, http.StatusForbidden, "Admin access required")
+	if !s.requireAdmin(c) {
 		return
 	}
 
@@ -133,15 +128,12 @@ func (s *Server) handleKickUser(c *gin.Context) {
 // handleEditUser updates username/role (admin only)
 func (s *Server) handleEditUser(c *gin.Context) {
 	idStr := c.Param("id")
-	currentRole, _ := c.Get("user_role")
-	if currentRole != "admin" {
-		respondError(c, http.StatusForbidden, "Admin access required")
+	if !s.requireAdmin(c) {
 		return
 	}
 
 	var user db.User
-	if err := s.db.First(&user, idStr).Error; err != nil {
-		respondError(c, http.StatusNotFound, "User not found")
+	if !s.findOrFail(c, &user, idStr, "User") {
 		return
 	}
 
@@ -190,16 +182,13 @@ func (s *Server) handleEditUser(c *gin.Context) {
 // handleForceLogoutUser invalidates all sessions for a user (admin only)
 func (s *Server) handleForceLogoutUser(c *gin.Context) {
 	idStr := c.Param("id")
-	currentRole, _ := c.Get("user_role")
-	if currentRole != "admin" {
-		respondError(c, http.StatusForbidden, "Admin access required")
+	if !s.requireAdmin(c) {
 		return
 	}
 
 	currentUser, _ := c.Get("user")
 	var target db.User
-	if err := s.db.First(&target, idStr).Error; err != nil {
-		respondError(c, http.StatusNotFound, "User not found")
+	if !s.findOrFail(c, &target, idStr, "User") {
 		return
 	}
 
@@ -226,16 +215,13 @@ func (s *Server) handleForceLogoutUser(c *gin.Context) {
 func (s *Server) handleDeleteUser(c *gin.Context) {
 	idStr := c.Param("id")
 	currentUser, _ := c.Get("user")
-	currentRole, _ := c.Get("user_role")
 
-	if currentRole != "admin" {
-		respondError(c, http.StatusForbidden, "Admin access required")
+	if !s.requireAdmin(c) {
 		return
 	}
 
 	var user db.User
-	if err := s.db.First(&user, idStr).Error; err != nil {
-		respondError(c, http.StatusNotFound, "User not found")
+	if !s.findOrFail(c, &user, idStr, "User") {
 		return
 	}
 
@@ -275,14 +261,12 @@ func (s *Server) handleDeleteUser(c *gin.Context) {
 func (s *Server) handleSetUserPassword(c *gin.Context) {
 	idStr := c.Param("id")
 	password := c.PostForm("password")
-	currentRole, _ := c.Get("user_role")
 
-	if currentRole != "admin" {
-		respondError(c, http.StatusForbidden, "Admin access required")
+	if !s.requireAdmin(c) {
 		return
 	}
-	if len(password) < 8 {
-		respondError(c, http.StatusBadRequest, "Password must be at least 8 characters")
+	if err := s.validatePasswordComplexity(password); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -304,4 +288,3 @@ func (s *Server) handleSetUserPassword(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Password updated"})
 }
-

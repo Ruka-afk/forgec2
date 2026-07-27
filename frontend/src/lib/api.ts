@@ -5,6 +5,12 @@ import { onWSMessage } from "./wsContext";
 
 const TIMEOUT_MS = 30000;
 
+let rateLimitRetryAfter = 0;
+
+export function getRateLimitRetryAfter(): number {
+  return Math.max(0, rateLimitRetryAfter - Math.floor(Date.now() / 1000));
+}
+
 function readCsrfCookie(): string {
   if (typeof document === "undefined") return "";
   const match = document.cookie.match(/(?:^|;\s*)forgec2_csrf=([^;]*)/);
@@ -19,10 +25,6 @@ function buildUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
-// unwrapBody: if the server returned the standard { success, data } envelope,
-// return the inner `data` payload; otherwise return the raw body unchanged.
-// This lets the backend migrate to the envelope incrementally without breaking
-// existing callers that read bare keys.
 function unwrapBody<T>(body: unknown): T {
   if (body && typeof body === "object" && "success" in body && (body as Record<string, unknown>).success === true && "data" in body) {
     return (body as Record<string, unknown>).data as T;
@@ -40,132 +42,165 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
+let authRedirecting = false;
+let authRedirectTimer: ReturnType<typeof setTimeout> | null = null;
+
 function handleUnauthorized(res: Response): void {
-  if (res.status === 401 && typeof window !== "undefined") {
-    window.location.href = "/login";
-  }
+  if (res.status !== 401 || typeof window === "undefined") return;
+  const p = window.location.pathname;
+  if (p === "/login" || p === "/login/") return;
+  if (authRedirecting) return;
+  authRedirecting = true;
+
+  // Defer so concurrent 401s collapse into one navigation
+  if (authRedirectTimer) clearTimeout(authRedirectTimer);
+  authRedirectTimer = setTimeout(() => {
+    const next = p + (window.location.search || "");
+    const params = new URLSearchParams();
+    params.set("expired", "1");
+    if (next && next !== "/" && next !== "/login") {
+      params.set("next", next);
+    }
+    window.location.href = `/login?${params.toString()}`;
+  }, 80);
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+interface RequestOptions {
+  method?: string;
+  retries?: number;
+  timeout?: number;
+  signal?: AbortSignal;
+  headers?: Record<string, string>;
+}
+
+async function request<T>(path: string, options: RequestOptions & { body?: unknown; raw?: boolean } = {}): Promise<T> {
+  const { retries = 0, timeout = TIMEOUT_MS, signal, headers: extraHeaders } = options;
   const method = options.method || "GET";
   const headers: Record<string, string> = {
     "Accept": "application/json",
-    ...(options.headers as Record<string, string>),
+    ...extraHeaders,
   };
-  if (!headers["Content-Type"] && !(options.body instanceof FormData) && !(options.body instanceof URLSearchParams) && typeof options.body === "string") {
-    headers["Content-Type"] = "application/json";
-  }
+
   if (method !== "GET" && method !== "HEAD") {
     const csrf = readCsrfCookie();
     if (csrf) headers["X-CSRF-Token"] = csrf;
   }
-  try {
-    const res = await withTimeout(fetch(buildUrl(path), { ...options, headers, credentials: "include" }), TIMEOUT_MS);
-    if (!res.ok) { handleUnauthorized(res); throw new Error(`HTTP ${res.status}`); }
-    const body = await res.json();
-    return unwrapBody<T>(body);
-  } catch (e) {
-    if (process.env.NODE_ENV === "development") console.error("api request failed", path, e);
-    throw e;
+
+  const isFormData = options.body instanceof FormData;
+  const isUrlEncoded = options.body instanceof URLSearchParams;
+  const isString = typeof options.body === "string";
+
+  if (!isFormData && !isUrlEncoded && isString && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  } else if (isUrlEncoded && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/x-www-form-urlencoded";
   }
+
+  let body: BodyInit | undefined;
+  if (isFormData) {
+    body = options.body as FormData;
+  } else if (isUrlEncoded) {
+    body = options.body as URLSearchParams;
+  } else if (isString) {
+    body = options.body as string;
+  } else if (options.body && method !== "GET" && method !== "HEAD") {
+    body = JSON.stringify(options.body);
+    if (!headers["Content-Type"]) headers["Content-Type"] = "application/json";
+  }
+
+  const doFetch = async (attempt: number): Promise<T> => {
+    try {
+      const res = await withTimeout(fetch(buildUrl(path), {
+        method,
+        credentials: "include",
+        headers,
+        body,
+        signal,
+      }), timeout);
+
+      if (!res.ok) {
+        handleUnauthorized(res);
+        if (res.status === 429) {
+          const retryAfter = res.headers.get("Retry-After");
+          if (retryAfter) {
+            rateLimitRetryAfter = Math.floor(Date.now() / 1000) + parseInt(retryAfter, 10);
+          }
+        }
+        let errorMsg = `HTTP ${res.status}`;
+        try {
+          const errBody = await res.json();
+          if (errBody && typeof errBody === "object" && "error" in errBody) {
+            errorMsg = String(errBody.error);
+          }
+        } catch { /* ignore parse error */ }
+        throw new Error(errorMsg);
+      }
+
+      if (options.raw) {
+        return res as unknown as T;
+      }
+
+      const respBody = await res.json();
+      return unwrapBody<T>(respBody);
+    } catch (e) {
+      if (process.env.NODE_ENV === "development") console.error("api request failed", path, e);
+      if (attempt >= retries) throw e;
+      return new Promise<T>((resolve) =>
+        setTimeout(() => resolve(doFetch(attempt + 1)), 800 * Math.pow(2, attempt))
+      );
+    }
+  };
+
+  return doFetch(0);
 }
 
-
 export const api = {
-  get<T = Record<string, unknown>>(path: string, retries = 0): Promise<T> {
-    const doFetch = (attempt: number): Promise<T> =>
-      withTimeout(fetch(buildUrl(path), { credentials: "include", headers: { "Accept": "application/json" } }), TIMEOUT_MS)
-        .then(async (res) => {
-          if (!res.ok) { handleUnauthorized(res); throw new Error(`HTTP ${res.status}`); }
-          const body = await res.json();
-          return unwrapBody<T>(body);
-        })
-        .catch((e) => {
-          if (process.env.NODE_ENV === "development") console.error("api.get failed", path, e);
-          if (attempt >= retries) throw e;
-          return new Promise<T>((resolve) =>
-            setTimeout(() => resolve(doFetch(attempt + 1)), 800 * (attempt + 1))
-          );
-        });
-    return doFetch(0);
+  get<T = Record<string, unknown>>(path: string, opts?: { retries?: number; signal?: AbortSignal }): Promise<T> {
+    return request<T>(path, { method: "GET", retries: opts?.retries ?? 0, signal: opts?.signal });
   },
 
   post<T = Record<string, unknown>>(path: string, data?: Record<string, string>): Promise<T> {
+    const body = data ? new URLSearchParams(data).toString() : undefined;
     return request<T>(path, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: data ? new URLSearchParams(data).toString() : undefined,
+      body,
     });
   },
 
   postJson<T = Record<string, unknown>>(path: string, body: unknown): Promise<T> {
-    return request<T>(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    return request<T>(path, { method: "POST", body });
   },
 
-  async postFormData<T = Record<string, unknown>>(path: string, body: FormData): Promise<T> {
-    const headers: Record<string, string> = {};
-    const csrf = readCsrfCookie();
-    if (csrf) headers["X-CSRF-Token"] = csrf;
-    try {
-      const res = await withTimeout(fetch(buildUrl(path), {
-        method: "POST",
-        credentials: "include",
-        headers,
-        body,
-      }), TIMEOUT_MS);
-      if (!res.ok) { handleUnauthorized(res); throw new Error(`HTTP ${res.status}`); }
-      const respBody = await res.json();
-      return unwrapBody<T>(respBody);
-    } catch (e) {
-      if (process.env.NODE_ENV === "development") console.error("api.postFormData failed", path, e);
-      throw e;
-    }
+  postFormData<T = Record<string, unknown>>(path: string, body: FormData): Promise<T> {
+    return request<T>(path, { method: "POST", body, headers: {} });
   },
 
   put<T = Record<string, unknown>>(path: string, data?: Record<string, string>): Promise<T> {
+    const body = data ? new URLSearchParams(data).toString() : undefined;
     return request<T>(path, {
       method: "PUT",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: data ? new URLSearchParams(data).toString() : undefined,
+      body,
     });
   },
 
   putJson<T = Record<string, unknown>>(path: string, body: unknown): Promise<T> {
-    return request<T>(path, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    return request<T>(path, { method: "PUT", body });
   },
 
   del<T = Record<string, unknown>>(path: string): Promise<T> {
     return request<T>(path, { method: "DELETE" });
   },
 
-  // json<T> calls an envelope endpoint and returns the UNWRAPPED `data`
-  // payload (the server's { success, data } envelope is stripped here), so
-  // callers never write `resp.data?.x`. Only use it on endpoints that return
-  // the envelope; bare-shape endpoints should keep using api.get.
-  json<T = Record<string, unknown>>(path: string, retries = 0): Promise<T> {
-    return api.get<T>(path, retries);
-  },
-
   async download(path: string, data?: Record<string, string>): Promise<{ blob: Blob; filename: string }> {
     const body = data ? new URLSearchParams(data).toString() : undefined;
-    const dlHeaders: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
-    const csrf = readCsrfCookie();
-    if (csrf) dlHeaders["X-CSRF-Token"] = csrf;
-    const res = await withTimeout(fetch(buildUrl(path), {
+    const res = await request<Response>(path, {
       method: "POST",
-      credentials: "include",
-      headers: dlHeaders,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
-    }), TIMEOUT_MS);
-    if (!res.ok) { handleUnauthorized(res); throw new Error(`HTTP ${res.status}`); }
+      raw: true,
+    });
     const cd = res.headers.get("Content-Disposition");
     let filename = "download.bin";
     if (cd) {
@@ -178,59 +213,66 @@ export const api = {
 
 export { buildUrl };
 
-// TaskStatus mirrors the JSON returned by GET /agents/:id/tasks/:taskId
-// (handleGetTaskStatus). `result` holds the agent's stdout / listing JSON;
-// `status` is one of pending | running | completed | failed.
-export interface TaskStatus {
+export type TaskStatusBase = {
   id: number;
-  status: string;
   result?: string;
   error?: string;
   command?: string;
   type?: string;
   agent?: string;
   created?: string;
+};
+
+export type TaskRunning = TaskStatusBase & { status: "running" | "pending" };
+export type TaskCompleted = TaskStatusBase & { status: "completed"; result: string };
+export type TaskFailed = TaskStatusBase & { status: "failed"; error: string };
+export type TaskStatus = TaskRunning | TaskCompleted | TaskFailed;
+
+export interface PollTaskHandle {
+  promise: Promise<TaskStatus>;
+  cancel: () => void;
 }
 
-// pollTask waits for an async agent task (shell, file listing, etc.) to finish
-// by repeatedly querying GET /agents/:id/tasks/:taskId, and ALSO subscribes to
-// the WebSocket: when the server broadcasts a `task_update` for this task_id the
-// wait ends immediately (real-time), then a final HTTP fetch returns the FULL
-// result (the WS copy is truncated to 200 chars). C2 is asynchronous: the
-// operator's request only *queues* the task; the agent returns the result on its
-// next beacon, stored in Task.Result. Throws if it does not complete within
-// timeoutMs (e.g. the agent is offline).
 export async function pollTask(
   agentId: string,
   taskId: number,
   opts: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal; onStatus?: (st: TaskStatus) => void } = {},
 ): Promise<TaskStatus> {
+  const h = pollTaskWithCancel(agentId, taskId, opts);
+  return h.promise;
+}
+
+function pollTaskWithCancel(
+  agentId: string,
+  taskId: number,
+  opts: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal; onStatus?: (st: TaskStatus) => void } = {},
+): PollTaskHandle {
   const intervalMs = opts.intervalMs ?? 1500;
   const timeoutMs = opts.timeoutMs ?? 60000;
   const deadline = Date.now() + timeoutMs;
   const ac = new AbortController();
   const signal = opts.signal ?? ac.signal;
 
-  return new Promise<TaskStatus>((resolve, reject) => {
-    let done = false;
-    let unsub: (() => void) | null = null;
-    let timer: ReturnType<typeof setTimeout> | null = null;
+  let done = false;
+  let unsub: (() => void) | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
 
-    const cleanup = () => {
-      done = true;
-      if (unsub) unsub();
-      if (timer) clearTimeout(timer);
-      if (!opts.signal) ac.abort();
-    };
+  const cleanup = () => {
+    done = true;
+    if (unsub) unsub();
+    if (timer) clearTimeout(timer);
+    if (!opts.signal) ac.abort();
+  };
 
-    const finalFetch = async (fallback: TaskStatus): Promise<TaskStatus> => {
-      try {
-        return await api.get<TaskStatus>(`/agents/${agentId}/tasks/${taskId}`);
-      } catch {
-        return fallback;
-      }
-    };
+  const finalFetch = async (fallback: TaskStatus): Promise<TaskStatus> => {
+    try {
+      return await api.get<TaskStatus>(`/agents/${agentId}/tasks/${taskId}`);
+    } catch {
+      return fallback;
+    }
+  };
 
+  const promise = new Promise<TaskStatus>((resolve, reject) => {
     const finish = async (st: TaskStatus) => {
       if (done) return;
       cleanup();
@@ -242,17 +284,16 @@ export async function pollTask(
       reject(err);
     };
 
-    // Real-time completion via WebSocket (no hook needed).
     try {
       unsub = onWSMessage((msg) => {
         if (msg.type !== "task_update" || Number(msg.task_id) !== taskId) return;
-        const status = String(msg.status);
-        const partial: TaskStatus = {
+        const status = String(msg.status) as TaskStatus["status"];
+        const partial = {
           id: taskId,
           status,
           result: msg.result as string | undefined,
           error: msg.error as string | undefined,
-        };
+        } as TaskStatus;
         opts.onStatus?.(partial);
         if (status === "completed" || status === "failed") finish(partial);
       });
@@ -275,39 +316,35 @@ export async function pollTask(
     };
     tick();
   });
+
+  return { promise, cancel: cleanup };
 }
 
-// getAgentStatus returns the live status of an agent ("online" | "offline" |
-// "stale" | ...). Used to give a clear error before queuing a task against an
-// agent that is not connected.
-export async function getAgentStatus(agentId: string): Promise<string> {
+import type { AgentStatus } from "@/types/agent";
+
+const VALID_STATUSES: readonly string[] = ["online", "stale", "offline"];
+
+export async function getAgentStatus(agentId: string): Promise<AgentStatus | "unknown"> {
   const data = await api.get<{
     Agent?: { status?: string };
     status?: string;
     data?: { status?: string };
   }>(`/api/v1/agents/${agentId}`);
   const agent = data.data || data;
-  return (agent?.status || data.status || "unknown") as string;
+  const raw = agent?.status || data.status || "unknown";
+  return (VALID_STATUSES.includes(raw) ? raw : "unknown") as AgentStatus | "unknown";
 }
 
 export interface RunTaskOptions {
-  // "post" sends form-urlencoded; "postJson" sends a JSON body.
   method?: "post" | "postJson";
   body?: Record<string, unknown> | Record<string, string>;
   intervalMs?: number;
   timeoutMs?: number;
-  // When true, refuse to queue if the agent is not "online" (clear error).
   checkOnline?: boolean;
-  // Called on every poll/WS status update (e.g. to show "waiting for agent").
   onStatus?: (st: TaskStatus) => void;
   signal?: AbortSignal;
 }
 
-// runTask is the single entry point for interactive, async agent features
-// (shell, file browser, etc.). It queues the task, waits for the agent's result
-// via pollTask (HTTP + WebSocket), and returns the final TaskStatus. Centralizing
-// this prevents the class of bug where a feature reads the immediate
-// queue-acknowledgement response (which has no output) instead of the result.
 export async function runTask(
   agentId: string,
   path: string,
@@ -337,3 +374,40 @@ export async function runTask(
   });
 }
 
+export function runTaskWithCancel(
+  agentId: string,
+  path: string,
+  opts: RunTaskOptions = {},
+): PollTaskHandle {
+  const ac = new AbortController();
+  const postFn = opts.method === "postJson" ? api.postJson : api.post;
+  let pollCleanup: (() => void) | null = null;
+
+  const promise = postFn<{ success?: boolean; task_id?: number; error?: string }>(
+    path,
+    (opts.body as Record<string, string>) || {},
+  ).then((res) => {
+    if (ac.signal.aborted) throw new Error("cancelled");
+    const taskId = res.task_id;
+    if (!taskId) {
+      const errMsg = (res as Record<string, unknown>).error;
+      throw new Error(typeof errMsg === "string" ? errMsg : "Failed to queue task (no task_id returned)");
+    }
+    const h = pollTaskWithCancel(agentId, taskId, {
+      intervalMs: opts.intervalMs,
+      timeoutMs: opts.timeoutMs,
+      signal: ac.signal,
+      onStatus: opts.onStatus,
+    });
+    pollCleanup = h.cancel;
+    return h.promise;
+  });
+
+  return {
+    promise,
+    cancel: () => {
+      pollCleanup?.();
+      ac.abort();
+    },
+  };
+}

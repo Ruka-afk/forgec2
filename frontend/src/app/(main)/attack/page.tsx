@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
@@ -10,7 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Check, CheckCircle, ChevronDown, CircleX, Zap } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
 interface AttackTechnique {
   id: string;
@@ -93,26 +96,28 @@ export default function AttackPage() {
   const [loading, setLoading] = useState(true);
   const [expandedTactic, setExpandedTactic] = useState<string | null>(null);
 
-  const fetchCoverage = useCallback(async (agentId: string) => {
+  const fetchCoverage = useCallback(async (agentId: string, signal?: AbortSignal) => {
     try {
       const params = new URLSearchParams();
       if (agentId) params.set("agent_id", agentId);
-      const json = await api.get(`/attack/coverage?${params}`);
-      setData(json as unknown as AttackCoverageResponse);
+      const json = await api.get<AttackCoverageResponse>(`/attack/coverage?${params}`, { signal });
+      setData(json);
     } catch {
       toast.error(t("attack.fetch_failed"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     refreshAgents();
   }, [refreshAgents]);
 
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
-    fetchCoverage(selectedAgent);
+    fetchCoverage(selectedAgent, controller.signal);
+    return () => controller.abort();
   }, [selectedAgent, fetchCoverage]);
 
   // Build a set of used task types for quickly checking technique coverage
@@ -135,14 +140,14 @@ export default function AttackPage() {
 
   if (loading && !data) {
     return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
         <PageSpinner />
       </div>
     );
   }
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("attack.title")} subtitle={t("attack.subtitle")}>
         <Select value={selectedAgent || "all"} onValueChange={(v) => setSelectedAgent(v === "all" ? "" : v ?? "")}>
           <SelectTrigger className="max-w-[250px]">
@@ -160,6 +165,11 @@ export default function AttackPage() {
           </SelectContent>
         </Select>
       </PageHeader>
+
+      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+        <div className="font-semibold">{t("attack.honesty_title")}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{t("attack.honesty_desc")}</div>
+      </Card>
 
       {/* Summary Card */}
       <Card className="p-4 sm:p-5 mb-6">
@@ -183,11 +193,11 @@ export default function AttackPage() {
                   className="text-border" />
                 <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3"
                   strokeDasharray={`${percentage * 0.9722} 100`}
-                  className="text-indigo-500"
+                  className="text-primary"
                   strokeLinecap="round" />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-2xl font-bold text-indigo-500">{percentage}%</span>
+                <span className="text-2xl font-bold text-primary">{percentage}%</span>
               </div>
             </div>
             <span className="text-xs text-muted-foreground mt-1">{t("attack.coverage")}</span>
@@ -211,11 +221,8 @@ export default function AttackPage() {
               key={tactic.tactic}
               className={`overflow-hidden shadow-sm ${borderColor} border`}
             >
-              {/* Tactic Header */}
-              <div
-                className="flex items-center justify-between px-4 py-3 cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setExpandedTactic(isExpanded ? null : tactic.tactic)}
-              >
+              <Collapsible open={isExpanded} onOpenChange={(open) => setExpandedTactic(open ? tactic.tactic : null)}>
+              <CollapsibleTrigger className="flex items-center justify-between px-4 py-3 cursor-pointer hover:text-muted-foreground transition-opacity w-full">
                 <div className="flex items-center gap-3">
                   <div className={`w-3 h-3 rounded-full ${headerColor}`}></div>
                   <div>
@@ -223,28 +230,25 @@ export default function AttackPage() {
                       {tactic.tactic}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {tactic.covered}/{tactic.total} techniques
+                      {tactic.covered}/{tactic.total} {t("attack.techniques")}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-20 h-2 bg-secondary rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${tacticPct >= 50 ? "bg-emerald-500" : tacticPct >= 25 ? "bg-amber-500" : "bg-red-500"}`}
-                        style={{ width: `${tacticPct}%` }}
-                      ></div>
-                    </div>
+                    <Progress value={tacticPct} className="w-20" indicatorClassName={cn(
+                      "h-full rounded-full transition-all duration-500",
+                      tacticPct >= 50 ? "bg-primary" : tacticPct >= 25 ? "bg-warning" : "bg-destructive"
+                    )} />
                     <span className="text-xs font-mono text-muted-foreground tabular-nums w-8 text-right">
                       {tacticPct}%
                     </span>
                   </div>
-                   <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                   <ChevronDown className="w-3 h-3 text-muted-foreground" />
                 </div>
-              </div>
+              </CollapsibleTrigger>
 
-              {/* Technique Detail */}
-              {isExpanded && (
+              <CollapsibleContent>
                 <div className="border-t border-border divide-y divide-border">
                   {tactic.techniques.map((tech) => {
                     const covered = isTechniqueCovered(tech);
@@ -280,20 +284,21 @@ export default function AttackPage() {
                             <Badge
                               key={tt}
                               variant={usedTaskTypes.has(tt) ? "success" : "outline"}
-                              className="text-[10px] font-mono"
+                              className="text-(--font-size-micro-sm) font-mono"
                             >
                               {tt}
                             </Badge>
                           ))}
                           {tech.task_types.length > 3 && (
-                            <span className="text-[10px] text-muted-foreground">+{tech.task_types.length - 3}</span>
+                            <span className="text-(--font-size-micro-sm) text-muted-foreground">+{tech.task_types.length - 3}</span>
                           )}
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              )}
+              </CollapsibleContent>
+              </Collapsible>
             </Card>
           );
         })}
@@ -308,14 +313,16 @@ function PhaseCoverageCard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
     (async () => {
       try {
-        const json = await api.get("/mitre/phases");
+        const json = await api.get("/mitre/phases", { signal: controller.signal });
         if (json.success) setPhases(((json.data || []) as PhaseCoverage[]));
       } catch { toast.error(t("attack.load_phases_failed")); }
       setLoading(false);
     })();
-  }, []);
+    return () => controller.abort();
+  }, [t]);
 
   if (loading || phases.length === 0) return null;
 
@@ -347,10 +354,10 @@ function PhaseCoverageCard() {
                 {isCovered ? (
                   <Check className="w-4 h-4" />
                 ) : (
-                  <span className="text-white text-[10px] font-bold">-</span>
+                  <span className="text-white text-(--font-size-micro-sm) font-bold">-</span>
                 )}
               </div>
-              <div className="text-[10px] font-medium text-foreground leading-tight mb-1">
+              <div className="text-(--font-size-micro-sm) font-medium text-foreground leading-tight mb-1">
                 {phase.split(" ").slice(0, 2).join(" ")}
               </div>
               <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
@@ -358,7 +365,7 @@ function PhaseCoverageCard() {
                   style={{ width: `${pct}%` }} />
               </div>
               {found && (
-                <div className="text-[9px] text-muted mt-1">
+                <div className="text-(--font-size-micro) text-muted mt-1">
                   {found.total_tasks} {t("attack.tasks")}
                 </div>
               )}

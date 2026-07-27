@@ -287,10 +287,10 @@ func (sd *SandboxDetector) checkVMMAC() bool {
 		return false
 	}
 	type ipAddressList struct {
-		next     uintptr
+		next      uintptr
 		ipAddress [16]byte
-		ipMask   [16]byte
-		context  uint32
+		ipMask    [16]byte
+		context   uint32
 	}
 	type adapterInfo struct {
 		next                uintptr
@@ -544,10 +544,10 @@ func (sd *SandboxDetector) checkVMMACEnhanced() bool {
 		return false
 	}
 	type ipAddressList struct {
-		next     uintptr
+		next      uintptr
 		ipAddress [16]byte
-		ipMask   [16]byte
-		context  uint32
+		ipMask    [16]byte
+		context   uint32
 	}
 	type adapterInfo struct {
 		next                uintptr
@@ -677,27 +677,27 @@ func (sd *SandboxDetector) checkHardwareBreakpoints() bool {
 	const contextDebugRegisters = 0x00000010
 
 	type context struct {
-		p1Home  uint64
-		p2Home  uint64
-		p3Home  uint64
-		p4Home  uint64
-		p5Home  uint64
-		p6Home  uint64
+		p1Home   uint64
+		p2Home   uint64
+		p3Home   uint64
+		p4Home   uint64
+		p5Home   uint64
+		p6Home   uint64
 		ctxFlags uint32
-		mxCsr   uint32
-		segCs   uint16
-		segDs   uint16
-		segEs   uint16
-		segFs   uint16
-		segGs   uint16
-		segSs   uint16
-		eFlags  uint32
-		dr0     uint64
-		dr1     uint64
-		dr2     uint64
-		dr3     uint64
-		dr6     uint64
-		dr7     uint64
+		mxCsr    uint32
+		segCs    uint16
+		segDs    uint16
+		segEs    uint16
+		segFs    uint16
+		segGs    uint16
+		segSs    uint16
+		eFlags   uint32
+		dr0      uint64
+		dr1      uint64
+		dr2      uint64
+		dr3      uint64
+		dr6      uint64
+		dr7      uint64
 	}
 
 	ctx := &context{}

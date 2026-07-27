@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"gopkg.in/lumberjack.v2"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // SetupLogRotation configures lumberjack-based log rotation and returns

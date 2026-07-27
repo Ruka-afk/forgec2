@@ -3,12 +3,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { formatTime } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState, PageHeader, Spinner } from "@/components/UI";
 import { NormalizedAgent as Agent } from "@/types/agent";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { File, FolderOpen, MousePointerClick, Search } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { toast } from "sonner";
 
 interface FileEntry {
   name: string;
@@ -25,7 +27,6 @@ export default function FilesPage() {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [filesLoading, setFilesLoading] = useState(false);
-  const [agentSearch] = useState("");
 
   const loadAgents = useCallback(() => {
     setLoading(true);
@@ -34,9 +35,12 @@ export default function FilesPage() {
         const list = data.agents || data || [];
         setAgents(list as Agent[]);
       })
-      .catch(() => setAgents([]))
+      .catch(() => {
+        setAgents([]);
+        toast.error(t("files.toast.load_agents_failed"));
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   useEffect(() => { loadAgents(); }, [loadAgents]);
 
@@ -48,9 +52,12 @@ export default function FilesPage() {
         const items: FileEntry[] = (data.files || data.entries || data.data || []) as FileEntry[];
         setFiles(items);
       })
-      .catch(() => setFiles([]))
+      .catch(() => {
+        setFiles([]);
+        toast.error(t("files.toast.load_files_failed"));
+      })
       .finally(() => setFilesLoading(false));
-  }, []);
+  }, [t]);
 
   const selectAgent = (agent: Agent) => {
     setSelectedAgent(agent);
@@ -75,11 +82,7 @@ export default function FilesPage() {
     loadFiles(selectedAgent.id, parent);
   };
 
-  const filteredAgents = agents.filter((a) => {
-    if (!agentSearch) return true;
-    const q = agentSearch.toLowerCase();
-    return a.hostname?.toLowerCase().includes(q) || a.id?.toLowerCase().includes(q) || a.ip?.toLowerCase().includes(q);
-  });
+  const filteredAgents = agents;
 
   const formatSize = (bytes: number): string => {
     if (bytes === 0) return "-";
@@ -91,7 +94,7 @@ export default function FilesPage() {
   };
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("files.title")} subtitle={t("files.subtitle")} />
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -109,7 +112,7 @@ export default function FilesPage() {
                     variant="ghost"
                     onClick={() => selectAgent(a)}
                     className={`w-full justify-start text-left px-3 py-3 hover:bg-muted transition-colors rounded-none ${
-                      selectedAgent?.id === a.id ? "bg-indigo-50 dark:bg-indigo-900/20 border-l-2 border-indigo-500" : ""
+                      selectedAgent?.id === a.id ? "bg-primary/10 dark:bg-indigo-900/20 border-l-2 border-indigo-500" : ""
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -132,9 +135,12 @@ export default function FilesPage() {
           {selectedAgent ? (
             <Card className="">
               <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                <Button variant="ghost" size="icon-sm" onClick={navigateUp} title="Up" aria-label="Navigate to parent directory">
+                <Tooltip>
+                  <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={navigateUp} aria-label="Navigate to parent directory" />}>
                   <FolderOpen className="w-4 h-4" />
-                </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Up</TooltipContent>
+                </Tooltip>
                 <span className="text-sm font-mono text-muted-foreground">{selectedAgent.hostname || selectedAgent.id.substring(0, 8)}</span>
                 <span className="text-xs text-muted-foreground/70">/</span>
                 <span className="text-sm font-mono text-foreground truncate">{currentPath}</span>
@@ -150,7 +156,10 @@ export default function FilesPage() {
                   {files.filter((f) => f.name).map((f, i) => (
                     <div
                       key={i}
+                      role={f.is_dir ? "button" : undefined}
+                      tabIndex={f.is_dir ? 0 : undefined}
                       onClick={() => f.is_dir && navigateDir(f.name)}
+                      onKeyDown={f.is_dir ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigateDir(f.name); } } : undefined}
                       className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
                         f.is_dir ? "cursor-pointer hover:bg-muted" : ""
                       }`}

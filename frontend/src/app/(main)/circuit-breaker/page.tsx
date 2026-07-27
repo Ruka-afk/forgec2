@@ -3,16 +3,18 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
-import { EmptyState, PageHeader, ConfirmModal, TableCard, PageSpinner } from "@/components/UI";
+import { EmptyState, PageHeader, ConfirmModal, PageSpinner } from "@/components/UI";
 import { toast } from "sonner";
 import { formatTime } from "@/lib/utils";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Activity, AlertCircle, AlertTriangle, ArrowLeftRight, ArrowRight, Gauge, Hand, History, Radio, RotateCw, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { Activity, AlertCircle, AlertTriangle, ArrowLeftRight, ArrowRight, Gauge, Hand, History, MoreHorizontal, Radio, RotateCw, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { useI18n } from "@/lib/i18n";
 
 interface ListenerDetail {
@@ -66,10 +68,11 @@ export default function CircuitBreakerPage() {
   const [cfm, setCfm] = useState<{ msg: string; cb: () => void } | null>(null);
 
   const loadData = useCallback(() => {
+    let failed = 0;
     Promise.all([
-      api.get<{ listeners?: ListenerDetail[] }>("/circuit-breaker/detail").catch(() => ({ listeners: [] as ListenerDetail[] })),
-      api.get<{ failure_threshold?: number; cooldown_seconds?: number; half_open_max_reqs?: number; health_check_seconds?: number }>("/circuit-breaker/config").catch((): Partial<BreakerConfig> => ({})),
-      api.get<{ events?: BreakerEvent[] }>("/circuit-breaker/events").catch(() => ({ events: [] as BreakerEvent[] })),
+      api.get<{ listeners?: ListenerDetail[] }>("/circuit-breaker/detail").catch(() => { failed++; return { listeners: [] as ListenerDetail[] }; }),
+      api.get<{ failure_threshold?: number; cooldown_seconds?: number; half_open_max_reqs?: number; health_check_seconds?: number }>("/circuit-breaker/config").catch((): Partial<BreakerConfig> => { failed++; return {}; }),
+      api.get<{ events?: BreakerEvent[] }>("/circuit-breaker/events").catch(() => { failed++; return { events: [] as BreakerEvent[] }; }),
     ]).then(([detData, cfgData, evtData]) => {
       setListeners((detData.listeners || []) as ListenerDetail[]);
       if ((cfgData as Record<string, unknown>).failure_threshold !== undefined) {
@@ -77,8 +80,9 @@ export default function CircuitBreakerPage() {
         setConfigForm(cfgData as BreakerConfig);
       }
       setEvents((evtData.events || []) as BreakerEvent[]);
+      if (failed > 0) toast.error(t("cb.load_failed"));
     }).catch(() => toast.error(t("cb.load_failed"))).finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   useEffect(() => { loadData(); }, [loadData]);
   useVisibleInterval(loadData, 15000);
@@ -117,7 +121,7 @@ export default function CircuitBreakerPage() {
   return (
     <>
 
-      <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
+      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
         <PageHeader title={t("cb.title")} subtitle={t("cb.subtitle")}>
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
@@ -139,6 +143,11 @@ export default function CircuitBreakerPage() {
           </div>
         </PageHeader>
 
+        <Card className="p-3 border-amber-500/40 bg-amber-500/10 text-sm text-amber-800 dark:text-amber-200">
+          <div className="font-semibold">{t("cb.honesty_title")}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{t("cb.honesty_desc")}</div>
+        </Card>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
           <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
             <div className="flex items-center gap-3 mb-2">
@@ -150,7 +159,7 @@ export default function CircuitBreakerPage() {
                 <div className="text-xs text-muted-foreground">{t("cb.closed")}</div>
               </div>
             </div>
-            <div className="text-[10px] text-muted-foreground">{t("cb.closed_desc")}</div>
+            <div className="text-(--font-size-micro-sm) text-muted-foreground">{t("cb.closed_desc")}</div>
           </Card>
           <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
             <div className="flex items-center gap-3 mb-2">
@@ -162,7 +171,7 @@ export default function CircuitBreakerPage() {
                 <div className="text-xs text-muted-foreground">{t("cb.half_open")}</div>
               </div>
             </div>
-            <div className="text-[10px] text-muted-foreground">{t("cb.half_open_desc")}</div>
+            <div className="text-(--font-size-micro-sm) text-muted-foreground">{t("cb.half_open_desc")}</div>
           </Card>
           <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
             <div className="flex items-center gap-3 mb-2">
@@ -174,7 +183,7 @@ export default function CircuitBreakerPage() {
                 <div className="text-xs text-muted-foreground">{t("cb.open")}</div>
               </div>
             </div>
-            <div className="text-[10px] text-muted-foreground">{t("cb.open_desc")}</div>
+            <div className="text-(--font-size-micro-sm) text-muted-foreground">{t("cb.open_desc")}</div>
           </Card>
           <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
             <div className="flex items-center gap-3 mb-2">
@@ -186,19 +195,19 @@ export default function CircuitBreakerPage() {
                 <div className="text-xs text-muted-foreground">{t("cb.check_interval")}</div>
               </div>
             </div>
-            <div className="text-[10px] text-muted-foreground">{t("cb.probes_every", { seconds: config.health_check_seconds })}</div>
+            <div className="text-(--font-size-micro-sm) text-muted-foreground">{t("cb.probes_every", { seconds: config.health_check_seconds })}</div>
           </Card>
         </div>
 
-        <TableCard header={
-          <div className="flex items-center justify-between">
-            <span>{t("cb.monitored_listeners")}</span>
-            <Button variant="ghost" size="sm" onClick={() => { setConfigForm(config); setShowConfigModal(true); }}>
-              <SlidersHorizontal className="w-4 h-4" />{t("cb.config")}
-            </Button>
-          </div>
-        }>
-          <Table>
+        <Card>
+          <CardContent>
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-semibold text-foreground">{t("cb.monitored_listeners")}</span>
+              <Button variant="ghost" size="sm" onClick={() => { setConfigForm(config); setShowConfigModal(true); }}>
+                <SlidersHorizontal className="w-4 h-4" />{t("cb.config")}
+              </Button>
+            </div>
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="text-xs uppercase tracking-wider font-semibold">ID</TableHead>
@@ -241,14 +250,17 @@ export default function CircuitBreakerPage() {
                     </TableCell>
                     <TableCell className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleReset(idStr)} aria-label="Reset to healthy" title="Reset to healthy">
-                          <RotateCw className="w-4 h-4" />
-                        </Button>
-                        <div className="relative group">
-                          <Button variant="ghost" size="icon-sm" aria-label="Force state" title="Force state">
-                            <Hand className="w-4 h-4" />
-                          </Button>
-                          <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-lg py-1 min-w-[120px] hidden group-hover:block z-10">
+                        <Tooltip>
+                          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => handleReset(idStr)} aria-label="Reset to healthy" />}>
+                            <RotateCw className="w-4 h-4" />
+                          </TooltipTrigger>
+                          <TooltipContent>Reset to healthy</TooltipContent>
+                        </Tooltip>
+                        <Popover>
+                          <PopoverTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Force state" />}>
+                            <MoreHorizontal className="w-4 h-4" />
+                          </PopoverTrigger>
+                          <PopoverContent align="end" sideOffset={4} className="w-[120px] p-1">
                             <Button variant="ghost" size="xs" onClick={() => handleToggle(idStr, "closed")} className="w-full justify-start text-xs">
                               <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block mr-2"></span>Close
                             </Button>
@@ -258,8 +270,8 @@ export default function CircuitBreakerPage() {
                             <Button variant="ghost" size="xs" onClick={() => handleToggle(idStr, "open")} className="w-full justify-start text-xs">
                               <span className="w-2 h-2 bg-destructive rounded-full inline-block mr-2"></span>Open
                             </Button>
-                          </div>
-                        </div>
+                          </PopoverContent>
+                        </Popover>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -267,7 +279,8 @@ export default function CircuitBreakerPage() {
               })}
             </TableBody>
           </Table>
-        </TableCard>
+          </CardContent>
+        </Card>
 
         {/* Fail Reasons */}
         {listeners.some(l => l.fail_reasons.length > 0) && (
@@ -310,7 +323,7 @@ export default function CircuitBreakerPage() {
                       </span>
                       {e.reason && <span className="text-muted-foreground">({e.reason})</span>}
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{formatTime(e.created_at)}</p>
+                    <p className="text-(--font-size-micro-sm) text-muted-foreground mt-0.5">{formatTime(e.created_at)}</p>
                   </div>
                 </div>
               ))}
@@ -328,22 +341,22 @@ export default function CircuitBreakerPage() {
             <div>
               <Label>{t("cb.failure_threshold")}</Label>
               <Input aria-label="Failure threshold" name="input-0" type="number" className="mt-1" value={configForm.failure_threshold} onChange={(e) => setConfigForm({ ...configForm, failure_threshold: parseInt(e.target.value) || 3 })} min={1} />
-              <p className="text-[10px] text-muted-foreground mt-1">{t("cb.failure_threshold_desc")}</p>
+              <p className="text-(--font-size-micro-sm) text-muted-foreground mt-1">{t("cb.failure_threshold_desc")}</p>
             </div>
             <div>
               <Label>{t("cb.cooldown")}</Label>
               <Input aria-label="Cooldown period in seconds" name="input-1" type="number" className="mt-1" value={configForm.cooldown_seconds} onChange={(e) => setConfigForm({ ...configForm, cooldown_seconds: parseInt(e.target.value) || 300 })} min={10} />
-              <p className="text-[10px] text-muted-foreground mt-1">{t("cb.cooldown_desc")}</p>
+              <p className="text-(--font-size-micro-sm) text-muted-foreground mt-1">{t("cb.cooldown_desc")}</p>
             </div>
             <div>
               <Label>{t("cb.half_open_max")}</Label>
               <Input aria-label="Half-open max requests" name="input-2" type="number" className="mt-1" value={configForm.half_open_max_reqs} onChange={(e) => setConfigForm({ ...configForm, half_open_max_reqs: parseInt(e.target.value) || 3 })} min={1} />
-              <p className="text-[10px] text-muted-foreground mt-1">{t("cb.half_open_max_desc")}</p>
+              <p className="text-(--font-size-micro-sm) text-muted-foreground mt-1">{t("cb.half_open_max_desc")}</p>
             </div>
             <div>
               <Label>{t("cb.health_check_interval")}</Label>
               <Input aria-label="Health check interval in seconds" name="input-3" type="number" className="mt-1" value={configForm.health_check_seconds} onChange={(e) => setConfigForm({ ...configForm, health_check_seconds: parseInt(e.target.value) || 60 })} min={5} />
-              <p className="text-[10px] text-muted-foreground mt-1">{t("cb.health_check_desc")}</p>
+              <p className="text-(--font-size-micro-sm) text-muted-foreground mt-1">{t("cb.health_check_desc")}</p>
             </div>
           </div>
           <DialogFooter>
@@ -353,7 +366,7 @@ export default function CircuitBreakerPage() {
         </DialogContent>
       </Dialog>
 
-      <ConfirmModal open={!!cfm} title="Confirm" message={cfm?.msg || ""} confirmText="Confirm" cancelText="Cancel" danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
     </>
   );
 }

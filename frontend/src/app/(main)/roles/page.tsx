@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
@@ -39,7 +39,15 @@ const PERM_GROUPS: Record<string, string[]> = {
   "Users": ["users.read", "users.write", "users.delete"],
   "Settings": ["settings.read", "settings.write"],
   "Audit": ["audit.read"],
+  "Groups": ["groups.read", "groups.write"],
+  "Workflows": ["workflows.read", "workflows.write"],
+  "Plugins": ["plugins.read", "plugins.write", "plugins.execute", "plugins.delete"],
+  "Roles": ["roles.read", "roles.write"],
   "Campaigns": ["campaigns.read", "campaigns.write"],
+  "OPSEC": ["opsec.read", "opsec.write"],
+  "Intel": ["intel.read", "intel.write"],
+  "Scheduler": ["scheduler.read", "scheduler.write"],
+  "Notifications": ["notifications.read", "notifications.write"],
 };
 
 export default function RolesPage() {
@@ -62,7 +70,7 @@ export default function RolesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { loadRoles(); }, [loadRoles]);
 
@@ -105,7 +113,7 @@ export default function RolesPage() {
 
   return (
     <>
-      <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
         <PageHeader title={<><ShieldUser className="w-4 h-4" />{t("roles.title")}</>} subtitle={t("roles.subtitle")}>
           <Button onClick={() => setShowCreate(true)}>
             <Plus className="w-4 h-4" />{t("roles.new_role")}
@@ -179,7 +187,7 @@ export default function RolesPage() {
           ))}
         </div>
       </div>
-      <ConfirmModal open={!!cfm} title="Confirm" message={cfm?.msg || ""} confirmText="Confirm" cancelText="Cancel" danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
     </>
   );
 }

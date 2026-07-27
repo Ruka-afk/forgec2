@@ -158,5 +158,3 @@ func getShellcodeFuncName() string {
 	n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(names))))
 	return names[n.Int64()]
 }
-
-

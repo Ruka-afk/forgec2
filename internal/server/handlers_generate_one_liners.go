@@ -300,5 +300,5 @@ func (s *Server) handleServePayload(c *gin.Context) {
 		c.Status(http.StatusNotFound)
 		return
 	}
-	c.FileAttachment(payloadPath, filename)
+	serveFileSafe(c, payloadPath, allowedDir, filename)
 }

@@ -11,19 +11,22 @@ import (
 )
 
 type TokenBucket struct {
-	capacity     float64
-	rate         float64
-	tokens       float64
-	lastRefill   time.Time
-	mu           sync.Mutex
+	capacity   float64
+	rate       float64
+	tokens     float64
+	lastRefill time.Time
+	accessedAt time.Time
+	mu         sync.Mutex
 }
 
 func NewTokenBucket(capacity, rate float64) *TokenBucket {
+	now := time.Now()
 	return &TokenBucket{
 		capacity:   capacity,
 		rate:       rate,
 		tokens:     capacity,
-		lastRefill: time.Now(),
+		lastRefill: now,
+		accessedAt: now,
 	}
 }
 
@@ -38,6 +41,7 @@ func (tb *TokenBucket) Allow() bool {
 		tb.tokens = tb.capacity
 	}
 	tb.lastRefill = now
+	tb.accessedAt = now
 
 	if tb.tokens >= 1 {
 		tb.tokens--
@@ -57,6 +61,8 @@ func (tb *TokenBucket) Tokens() float64 {
 	}
 	return tokens
 }
+
+const maxBuckets = 10000
 
 type APIRateLimiter struct {
 	buckets   map[string]*TokenBucket
@@ -98,15 +104,39 @@ func (rl *APIRateLimiter) GetBucket(key string) *TokenBucket {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	bucket, exists := rl.buckets[key]
-	if !exists {
-		bucket = NewTokenBucket(rl.capacity, rl.rate)
-		rl.buckets[key] = bucket
+	if exists {
+		bucket.mu.Lock()
+		bucket.accessedAt = time.Now()
+		bucket.mu.Unlock()
+		return bucket
 	}
+	if len(rl.buckets) >= maxBuckets {
+		rl.evictOldest()
+	}
+	bucket = NewTokenBucket(rl.capacity, rl.rate)
+	rl.buckets[key] = bucket
 	return bucket
 }
 
+func (rl *APIRateLimiter) evictOldest() {
+	var oldestKey string
+	var oldestTime time.Time
+	for key, bucket := range rl.buckets {
+		bucket.mu.Lock()
+		accessed := bucket.accessedAt
+		bucket.mu.Unlock()
+		if oldestKey == "" || accessed.Before(oldestTime) {
+			oldestKey = key
+			oldestTime = accessed
+		}
+	}
+	if oldestKey != "" {
+		delete(rl.buckets, oldestKey)
+	}
+}
+
 func (rl *APIRateLimiter) cleanup(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
@@ -197,9 +227,9 @@ func (rl *APIRateLimiter) GetStatus() map[string]interface{} {
 	buckets := make(map[string]interface{})
 	for key, bucket := range rl.buckets {
 		buckets[key] = map[string]interface{}{
-			"tokens":     bucket.Tokens(),
-			"capacity":   rl.capacity,
-			"rate":       rl.rate,
+			"tokens":      bucket.Tokens(),
+			"capacity":    rl.capacity,
+			"rate":        rl.rate,
 			"last_refill": bucket.lastRefill,
 		}
 	}
@@ -235,5 +265,3 @@ func toString(v interface{}) string {
 		return ""
 	}
 }
-
-

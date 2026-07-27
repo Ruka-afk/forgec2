@@ -1,11 +1,11 @@
 package server
 
 import (
-	"encoding/json"
 	"html/template"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
@@ -55,18 +55,22 @@ func (s *Server) handleDeleteProfile(c *gin.Context) {
 
 func (s *Server) handleGeneratePage(c *gin.Context) {
 	listeners := s.getListeners()
-	presetsJSON, _ := json.Marshal(payload.ListProfilePresets(s.implantDataDir()))
+	presetsJSON, ok := marshalJSONSafe(payload.ListProfilePresets(s.implantDataDir()))
+	if !ok {
+		respondError(c, http.StatusInternalServerError, "failed to marshal presets")
+		return
+	}
 
 	stats := s.getNavStats()
 	data := gin.H{
-		"Title":               "ForgeC2 - Generate Agent",
-		"ActiveNav":           "generate",
-		"DefaultInt":          s.cfg.Implant.DefaultInterval,
-		"DefaultJitter":       s.cfg.Implant.DefaultJitter,
-		"DefaultUA":           s.cfg.Implant.DefaultUA,
-		"DefaultSkipTLS":      s.cfg.Implant.DefaultSkipTLS,
-		"Listeners":           listeners,
-		"ProfilePresetsJSON":  template.JS(presetsJSON),
+		"Title":              "ForgeC2 - Generate Agent",
+		"ActiveNav":          "generate",
+		"DefaultInt":         s.cfg.Implant.DefaultInterval,
+		"DefaultJitter":      s.cfg.Implant.DefaultJitter,
+		"DefaultUA":          s.cfg.Implant.DefaultUA,
+		"DefaultSkipTLS":     s.cfg.Implant.DefaultSkipTLS,
+		"Listeners":          listeners,
+		"ProfilePresetsJSON": template.JS(strings.ReplaceAll(string(presetsJSON), "</script>", "<\\/script>")),
 	}
 	for k, v := range stats {
 		data[k] = v

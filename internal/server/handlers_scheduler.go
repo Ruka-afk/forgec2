@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -41,7 +42,12 @@ func (s *Server) handleSchedulerCreateTask(c *gin.Context) {
 		return
 	}
 
-	createdBy, _ := c.Get("username")
+	if !IsKnownTaskType(req.TaskType) && !protocol.ValidTaskType(req.TaskType) {
+		respondError(c, http.StatusBadRequest, "unknown task type: "+req.TaskType)
+		return
+	}
+
+	createdBy, _ := c.Get("user")
 
 	task := db.ScheduledTask{
 		ID:        uuid.NewString(),
@@ -81,13 +87,18 @@ func (s *Server) handleSchedulerUpdateTask(c *gin.Context) {
 		return
 	}
 
+	if !IsKnownTaskType(req.TaskType) && !protocol.ValidTaskType(req.TaskType) {
+		respondError(c, http.StatusBadRequest, "unknown task type: "+req.TaskType)
+		return
+	}
+
 	updates := map[string]interface{}{
-		"name":      req.Name,
-		"agent_id":  req.AgentID,
-		"task_type": req.TaskType,
-		"command":   req.Command,
-		"params":    req.Params,
-		"schedule":  req.Schedule,
+		"name":       req.Name,
+		"agent_id":   req.AgentID,
+		"task_type":  req.TaskType,
+		"command":    req.Command,
+		"params":     req.Params,
+		"schedule":   req.Schedule,
 		"updated_at": time.Now(),
 	}
 	if req.Enabled != nil {

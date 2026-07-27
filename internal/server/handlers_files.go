@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"encoding/base64"
@@ -236,4 +236,3 @@ func readFileToBase64(file *multipart.FileHeader) (string, error) {
 
 	return base64.StdEncoding.EncodeToString(data), nil
 }
-

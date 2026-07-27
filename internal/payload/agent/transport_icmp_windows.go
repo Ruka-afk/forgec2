@@ -14,7 +14,7 @@ import (
 
 // Windows ICMP via IcmpSendEcho2 (iphlpapi.dll) — no admin required for sending.
 var (
-	iphlpapi           = syscall.NewLazyDLL("iphlpapi.dll")
+	iphlpapi            = syscall.NewLazyDLL("iphlpapi.dll")
 	procIcmpCreateFile  = iphlpapi.NewProc("IcmpCreateFile")
 	procIcmpSendEcho    = iphlpapi.NewProc("IcmpSendEcho")
 	procIcmpCloseHandle = iphlpapi.NewProc("IcmpCloseHandle")

@@ -39,6 +39,7 @@ func etwNtTraceEvent() string {
 		return "NtTraceEvent bypass: VirtualProtect failed"
 	}
 
+	// Patch NtTraceEvent prologue: overwrite with XOR,INC;RET to return STATUS_SUCCESS
 	for i := 0; i < len(patch); i++ {
 		*(*byte)(unsafe.Pointer(procAddr + uintptr(i))) = patch[i]
 	}

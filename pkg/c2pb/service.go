@@ -22,9 +22,9 @@ const (
 
 type jsonCodec struct{}
 
-func (jsonCodec) Marshal(v any) ([]byte, error)  { return json.Marshal(v) }
+func (jsonCodec) Marshal(v any) ([]byte, error)      { return json.Marshal(v) }
 func (jsonCodec) Unmarshal(data []byte, v any) error { return json.Unmarshal(data, v) }
-func (jsonCodec) Name() string { return "json" }
+func (jsonCodec) Name() string                       { return "json" }
 
 var C2Service_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: ServiceName,

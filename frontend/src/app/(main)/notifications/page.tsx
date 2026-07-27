@@ -1,8 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { toast } from "sonner";
 import { ConfirmModal, EmptyState, PageHeader, Pagination } from "@/components/UI";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BellOff, Check, CheckCheck, CheckCircle, CircleAlert, Info, Trash2, XCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface NotificationItem {
   id: number;
@@ -64,9 +66,13 @@ export default function NotificationsPage() {
         setNotifications(data.notifications || []);
         setTotal(Number(data.total) || 0);
       })
-      .catch(() => { setNotifications([]); setTotal(0); })
+      .catch(() => {
+        setNotifications([]);
+        setTotal(0);
+        toast.error(t("notifications.toast.load_failed"));
+      })
       .finally(() => setLoading(false));
-  }, [page, typeFilter, severityFilter, readFilter]);
+  }, [page, typeFilter, severityFilter, readFilter, t]);
 
   useEffect(() => { loadNotifications(); }, [loadNotifications]);
 
@@ -109,7 +115,7 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("notifications.title")} subtitle={`${total} ${t("notifications.total")}`}>
         <Button onClick={handleMarkAllRead} className="gap-2">
           <CheckCheck className="w-4 h-4" /> {t("notifications.mark_all_read")}
@@ -196,18 +202,24 @@ export default function NotificationsPage() {
                     <span>{n.created_at ? formatTime(n.created_at) : "-"}</span>
                     {n.agent_id && <span>{t("notifications.agent_prefix")} {n.agent_id.substring(0, 8)}</span>}
                     <Badge variant={SEVERITY_VARIANT[n.severity] || "default"}>{n.severity}</Badge>
-                    <span className="font-mono text-[10px]">{n.type}</span>
+                    <span className="font-mono text-(--font-size-micro-sm)">{n.type}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {!n.read && (
-                    <Button variant="ghost" size="sm" onClick={() => handleMarkRead(n.id)} className="w-8 h-8 p-0" title="Mark read" aria-label="Mark as read">
-                      <Check className="w-4 h-4" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleMarkRead(n.id)} className="w-8 h-8 p-0" aria-label="Mark as read" />}>
+                        <Check className="w-4 h-4" />
+                      </TooltipTrigger>
+                      <TooltipContent>Mark read</TooltipContent>
+                    </Tooltip>
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => handleDelete(n.id)} className="w-8 h-8 p-0 text-muted-foreground hover:text-destructive" title="Delete" aria-label="Delete notification">
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleDelete(n.id)} className="w-8 h-8 p-0 text-muted-foreground hover:text-destructive" aria-label="Delete notification" />}>
+                      <Trash2 className="w-4 h-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>Delete</TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
             ))}

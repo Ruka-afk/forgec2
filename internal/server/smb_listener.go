@@ -37,6 +37,8 @@ func (s *Server) startSMBListener() {
 	s.smbLn = ln
 	slog.Info("SMB transport layer listening", "addr", listenAddr)
 
+	s.wg.Add(1)
+	defer s.wg.Done()
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -88,4 +90,3 @@ func (s *Server) handleSMBConnection(conn net.Conn) {
 		}
 	}
 }
-

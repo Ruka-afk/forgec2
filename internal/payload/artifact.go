@@ -27,9 +27,9 @@ const (
 type TimestampOption string
 
 const (
-	TSRandom     TimestampOption = "random"
-	TSKeep       TimestampOption = "keep"
-	TSCustom     TimestampOption = "custom"
+	TSRandom TimestampOption = "random"
+	TSKeep   TimestampOption = "keep"
+	TSCustom TimestampOption = "custom"
 )
 
 type CertOption string
@@ -43,10 +43,10 @@ const (
 type ShellcodeEncode string
 
 const (
-	EncodeNone  ShellcodeEncode = "none"
-	EncodeXOR   ShellcodeEncode = "xor"
-	EncodeAES   ShellcodeEncode = "aes"
-	EncodeSGN   ShellcodeEncode = "sgn"
+	EncodeNone ShellcodeEncode = "none"
+	EncodeXOR  ShellcodeEncode = "xor"
+	EncodeAES  ShellcodeEncode = "aes"
+	EncodeSGN  ShellcodeEncode = "sgn"
 )
 
 type ArtifactTemplate struct {
@@ -67,12 +67,12 @@ type ArtifactTemplate struct {
 }
 
 type ArtifactConfig struct {
-	TargetType  string              `json:"target_type"`
-	Template    ArtifactTemplate    `json:"template"`
-	Shellcode   []byte              `json:"-"`
-	OutputPath  string              `json:"output_path"`
+	TargetType     string            `json:"target_type"`
+	Template       ArtifactTemplate  `json:"template"`
+	Shellcode      []byte            `json:"-"`
+	OutputPath     string            `json:"output_path"`
 	CustomSections []PESectionConfig `json:"custom_sections"`
-	ImportDLLs  []string            `json:"import_dlls"`
+	ImportDLLs     []string          `json:"import_dlls"`
 }
 
 func DefaultPESections() PESectionConfig {

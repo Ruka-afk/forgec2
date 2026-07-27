@@ -11,16 +11,16 @@ import (
 )
 
 type scheduledReportRequest struct {
-	Name           string `json:"name"`
-	Schedule       string `json:"schedule"`
-	Format         string `json:"format"`
-	IncludeAgents  bool   `json:"include_agents"`
-	IncludeTasks   bool   `json:"include_tasks"`
-	IncludeCreds   bool   `json:"include_creds"`
-	IncludeAudit   bool   `json:"include_audit"`
-	DeliveryType   string `json:"delivery_type"`
-	DeliveryTo     string `json:"delivery_to"`
-	Enabled        bool   `json:"enabled"`
+	Name          string `json:"name"`
+	Schedule      string `json:"schedule"`
+	Format        string `json:"format"`
+	IncludeAgents bool   `json:"include_agents"`
+	IncludeTasks  bool   `json:"include_tasks"`
+	IncludeCreds  bool   `json:"include_creds"`
+	IncludeAudit  bool   `json:"include_audit"`
+	DeliveryType  string `json:"delivery_type"`
+	DeliveryTo    string `json:"delivery_to"`
+	Enabled       bool   `json:"enabled"`
 }
 
 // handleScheduledReportList lists scheduled report jobs.

@@ -14,10 +14,10 @@ function OperatorBadgeInner({ username, isCurrentUser, size = "sm", showDot = tr
   return (
     <Badge
       variant={isCurrentUser ? "default" : "secondary"}
-      className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 ${size === "sm" ? "text-[11px]" : "text-xs"} ${
+      className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 ${size === "sm" ? "text-(--font-size-xs-sm)" : "text-xs"} ${
         isCurrentUser
           ? "bg-primary/10 text-primary"
-          : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+          : "bg-primary/10 text-primary"
       }`}
     >
       {showDot && (

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { BookOpen, Code, Eraser, History, Layers, Play, Save, Terminal, Trash2, X } from "lucide-react";
 
 import type { Agent } from "@/types/agent";
@@ -63,17 +64,25 @@ export default function ScriptingPage() {
     try {
       const agentData = await api.get("/agents");
       setAgents((agentData.agents || []) as Agent[]);
-    } catch { setAgents([]); }
+    } catch {
+      setAgents([]);
+      toast.error(t("scripting.toast.load_failed"));
+    }
     try {
       const scriptData = await api.get("/api/scripts");
-      setSavedScripts((scriptData.scripts || []) as SavedScript[]);
-    } catch { setSavedScripts([]); }
+      setSavedScripts((scriptData.scripts || scriptData.data || []) as SavedScript[]);
+    } catch {
+      setSavedScripts([]);
+      toast.error(t("scripting.toast.load_failed"));
+    }
     try {
       const historyData = await api.get("/api/scripts/history");
       setRunHistory((historyData.history || []) as RunHistory[]);
-    } catch { setRunHistory([]); }
+    } catch {
+      setRunHistory([]);
+    }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -82,14 +91,14 @@ export default function ScriptingPage() {
     try {
       await api.postJson("/api/scripts", { name: scriptName, code: scriptCode });
       loadData();
-    } catch { toast.error("Failed to save script"); }
+    } catch { toast.error(t("scripting.toast.save_failed")); }
   };
 
   const handleDeleteScript = async (scriptId: string) => {
     try {
       await api.del(`/api/scripts/${scriptId}`);
       loadData();
-    } catch { toast.error("Failed to delete script"); }
+    } catch { toast.error(t("scripting.toast.delete_failed")); }
   };
 
   const handleLoadScript = (script: SavedScript) => {
@@ -134,7 +143,7 @@ export default function ScriptingPage() {
   }
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("scripting.title")} subtitle={t("scripting.subtitle")}>
         <Button onClick={() => setShowTemplates(!showTemplates)}
           className="bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -301,11 +310,7 @@ export default function ScriptingPage() {
                         <span className="text-xs text-muted-foreground">{run.agent_hostname || "Unknown"}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                          (run.status || "") === "success"
-                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                            : "bg-destructive/10 text-destructive"
-                        }`}>{run.status || "completed"}</span>
+                        <Badge variant={(run.status || "") === "success" ? "success" : "destructive"} className="text-(--font-size-micro-sm) px-2 py-0.5 rounded-full">{run.status || "completed"}</Badge>
                         <span className="text-xs text-muted-foreground">{run.created_at || ""}</span>
                       </div>
                     </div>

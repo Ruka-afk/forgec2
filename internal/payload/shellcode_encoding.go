@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math/bits"
+	"sync"
 )
 
 type EncoderPlugin interface {
@@ -83,7 +84,7 @@ func sgnEncodeChunk(decoder []byte, offset int) []byte {
 	_ = offset
 	seed := uint32(0)
 	for _, b := range decoder {
-		seed = bits.RotateLeft32(seed*0x01000193 ^ uint32(b), 5)
+		seed = bits.RotateLeft32(seed*0x01000193^uint32(b), 5)
 	}
 	return []byte{byte(seed), byte(seed >> 8), byte(seed >> 16), byte(seed >> 24)}
 }
@@ -120,17 +121,22 @@ func (SGNEncoder) Decode(data []byte, key []byte) ([]byte, error) {
 	return decoded, nil
 }
 
-var registeredEncoders = map[ShellcodeEncode]EncoderPlugin{
-	EncodeXOR: XOREncoder{},
-	EncodeAES: AESEncoder{},
-	EncodeSGN: SGNEncoder{},
-}
+var (
+	registeredEncoders   = map[ShellcodeEncode]EncoderPlugin{
+		EncodeXOR: XOREncoder{},
+		EncodeAES: AESEncoder{},
+		EncodeSGN: SGNEncoder{},
+	}
+	registeredEncodersMu sync.RWMutex
+)
 
 func EncodeShellcode(data []byte, method ShellcodeEncode, key []byte) ([]byte, error) {
 	if method == EncodeNone || method == "" {
 		return data, nil
 	}
+	registeredEncodersMu.RLock()
 	enc, ok := registeredEncoders[method]
+	registeredEncodersMu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("unknown encoder: %s", method)
 	}
@@ -141,7 +147,9 @@ func DecodeShellcode(data []byte, method ShellcodeEncode, key []byte) ([]byte, e
 	if method == EncodeNone || method == "" {
 		return data, nil
 	}
+	registeredEncodersMu.RLock()
 	enc, ok := registeredEncoders[method]
+	registeredEncodersMu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("unknown encoder: %s", method)
 	}
@@ -149,5 +157,7 @@ func DecodeShellcode(data []byte, method ShellcodeEncode, key []byte) ([]byte, e
 }
 
 func RegisterEncoder(name ShellcodeEncode, plugin EncoderPlugin) {
+	registeredEncodersMu.Lock()
 	registeredEncoders[name] = plugin
+	registeredEncodersMu.Unlock()
 }

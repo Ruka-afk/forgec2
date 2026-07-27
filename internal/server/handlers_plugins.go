@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"encoding/json"
@@ -43,12 +43,12 @@ func (s *Server) tryRegisterPluginFromDisk(name string) {
 func (s *Server) handlePluginExecuteInfo(c *gin.Context) {
 	p, err := s.resolvePluginRecord(c.Param("id"))
 	if err != nil {
-		respondError(c, http.StatusNotFound, err.Error())
+		respondErrorSafe(c, http.StatusNotFound, err, "")
 		return
 	}
 	runtime, err := s.pluginManager.Get(p.Name)
 	if err != nil {
-		respondError(c, http.StatusNotFound, err.Error())
+		respondErrorSafe(c, http.StatusNotFound, err, "")
 		return
 	}
 
@@ -78,7 +78,7 @@ func (s *Server) handlePluginExecuteInfo(c *gin.Context) {
 func (s *Server) handlePluginExecute(c *gin.Context) {
 	p, err := s.resolvePluginRecord(c.Param("id"))
 	if err != nil {
-		respondError(c, http.StatusNotFound, err.Error())
+		respondErrorSafe(c, http.StatusNotFound, err, "")
 		return
 	}
 	var req struct {
@@ -92,7 +92,7 @@ func (s *Server) handlePluginExecute(c *gin.Context) {
 
 	result, err := s.pluginManager.ExecuteCommand(c.Request.Context(), p.Name, req.AgentID, req.Params)
 	if err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "result": result})
@@ -101,7 +101,7 @@ func (s *Server) handlePluginExecute(c *gin.Context) {
 func (s *Server) handlePluginReport(c *gin.Context) {
 	p, err := s.resolvePluginRecord(c.Param("id"))
 	if err != nil {
-		respondError(c, http.StatusNotFound, err.Error())
+		respondErrorSafe(c, http.StatusNotFound, err, "")
 		return
 	}
 	var req struct {
@@ -114,7 +114,7 @@ func (s *Server) handlePluginReport(c *gin.Context) {
 
 	report, err := s.pluginManager.GenerateReport(c.Request.Context(), p.Name, req.Params)
 	if err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -149,7 +149,7 @@ func (s *Server) handlePluginInstall(c *gin.Context) {
 
 	var manifest plugin.Manifest
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid manifest json: "+err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "invalid manifest json")
 		return
 	}
 
@@ -194,7 +194,7 @@ func (s *Server) handlePluginInstall(c *gin.Context) {
 	}
 
 	if err := s.pluginManager.Register(&manifest); err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
 
@@ -212,11 +212,11 @@ func (s *Server) handlePluginInstall(c *gin.Context) {
 func (s *Server) handlePluginEnable(c *gin.Context) {
 	p, err := s.resolvePluginRecord(c.Param("id"))
 	if err != nil {
-		respondError(c, http.StatusNotFound, err.Error())
+		respondErrorSafe(c, http.StatusNotFound, err, "")
 		return
 	}
 	if err := s.pluginManager.SetEnabled(p.Name, true); err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
 	if err := s.db.Model(p).Update("enabled", true).Error; err != nil {
@@ -229,11 +229,11 @@ func (s *Server) handlePluginEnable(c *gin.Context) {
 func (s *Server) handlePluginDisable(c *gin.Context) {
 	p, err := s.resolvePluginRecord(c.Param("id"))
 	if err != nil {
-		respondError(c, http.StatusNotFound, err.Error())
+		respondErrorSafe(c, http.StatusNotFound, err, "")
 		return
 	}
 	if err := s.pluginManager.SetEnabled(p.Name, false); err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
 	if err := s.db.Model(p).Update("enabled", false).Error; err != nil {

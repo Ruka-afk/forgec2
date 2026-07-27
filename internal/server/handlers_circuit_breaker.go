@@ -18,14 +18,14 @@ func (s *Server) handleAPICircuitBreakerDetail(c *gin.Context) {
 	}
 
 	type listenerDetail struct {
-		Target          string   `json:"target"`
-		Scheme          string   `json:"scheme"`
-		Host            string   `json:"host"`
-		Port            int      `json:"port"`
-		Status          string   `json:"status"`
-		ConsecutiveFails int     `json:"consecutive_fails"`
-		LastProbe       string   `json:"last_probe"`
-		FailReasons     []string `json:"fail_reasons"`
+		Target           string   `json:"target"`
+		Scheme           string   `json:"scheme"`
+		Host             string   `json:"host"`
+		Port             int      `json:"port"`
+		Status           string   `json:"status"`
+		ConsecutiveFails int      `json:"consecutive_fails"`
+		LastProbe        string   `json:"last_probe"`
+		FailReasons      []string `json:"fail_reasons"`
 	}
 
 	cb.mu.RLock()

@@ -1,41 +1,51 @@
 package server
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/ssh"
 )
 
 type binaryGenForm struct {
-	C2URL         string `form:"c2_url"`
-	Protocol      string `form:"protocol"`
-	Interval      int    `form:"interval"`
-	Jitter        int    `form:"jitter"`
-	BeaconTime    int    `form:"beacon_time"`
-	UserAgent     string `form:"user_agent"`
-	Persist       bool   `form:"persist"`
-	SkipTLSVerify bool   `form:"skip_tls_verify"`
-	Filename      string `form:"filename"`
-	Profile       string `form:"profile"`
-	ListenerID    uint   `form:"listener_id"`
-	P2PMode       string `form:"p2p_mode"`
-	P2PParent     string `form:"p2p_parent"`
-	P2PListenAddr string `form:"p2p_listen_addr"`
-	DNSDomain     string `form:"dns_domain"`
-	DNSServer     string `form:"dns_server"`
-	Proxy         string `form:"proxy"`
-	CryptoKey     string `form:"crypto_key"`
-	Architecture  string `form:"architecture"`
-	DomainFront   string `form:"domain_front"`
-	Obfuscate     string `form:"obfuscate"`
-	Evasion       string `form:"evasion"`
-	WorkingStart  string `form:"working_start"`
-	WorkingEnd    string `form:"working_end"`
-	WorkingTZ     string `form:"working_tz"`
+	C2URL           string `form:"c2_url"`
+	Protocol        string `form:"protocol"`
+	BeaconTransport string `form:"beacon_transport"`
+	Interval        int    `form:"interval"`
+	Jitter          int    `form:"jitter"`
+	BeaconTime      int    `form:"beacon_time"`
+	UserAgent       string `form:"user_agent"`
+	Persist         bool   `form:"persist"`
+	SkipTLSVerify   bool   `form:"skip_tls_verify"`
+	Filename        string `form:"filename"`
+	Profile         string `form:"profile"`
+	ListenerID      uint   `form:"listener_id"`
+	P2PMode         string `form:"p2p_mode"`
+	P2PParent       string `form:"p2p_parent"`
+	P2PListenAddr   string `form:"p2p_listen_addr"`
+	DNSDomain       string `form:"dns_domain"`
+	DNSServer       string `form:"dns_server"`
+	DNSDoHURL       string `form:"dns_doh_url"`
+	DNSDoTAddr      string `form:"dns_dot_addr"`
+	Proxy           string `form:"proxy"`
+	CryptoKey       string `form:"crypto_key"`
+	Architecture    string `form:"architecture"`
+	DomainFront     string `form:"domain_front"`
+	Obfuscate       string `form:"obfuscate"`
+	Evasion         string `form:"evasion"`
+	WorkingStart    string `form:"working_start"`
+	WorkingEnd      string `form:"working_end"`
+	WorkingTZ       string `form:"working_tz"`
+	SSHUser         string `form:"ssh_user"`
+	SSHPassword     string `form:"ssh_password"`
+	SSHKey          string `form:"ssh_key"`
+	SSHHostKey      string `form:"ssh_host_key"` // base64 server host public key pin
 }
 
 // parseBinaryForm validates a binary generation request and returns the resolved form.
@@ -63,6 +73,9 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 		}
 		form.C2URL = resolved.C2URL
 		form.Protocol = resolved.Protocol
+		if form.BeaconTransport == "" {
+			form.BeaconTransport = resolved.BeaconTransport
+		}
 		if resolved.DNSDomain != "" {
 			form.DNSDomain = resolved.DNSDomain
 			if form.DNSServer == "" {
@@ -71,6 +84,15 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 		}
 	} else if isDNS && form.Protocol == "" {
 		form.Protocol = "dns"
+		if form.BeaconTransport == "" {
+			form.BeaconTransport = "dns"
+		}
+	}
+	if form.BeaconTransport == "" {
+		form.BeaconTransport = form.Protocol
+	}
+	if form.BeaconTransport == "" {
+		form.BeaconTransport = "http"
 	}
 
 	// Prefix filename with short UUID to prevent concurrent build collisions
@@ -83,7 +105,7 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 }
 
 // buildImplantConfig constructs an ImplantConfig from the parsed binary form.
-func buildImplantConfig(form *binaryGenForm) payload.ImplantConfig {
+func (s *Server) buildImplantConfig(form *binaryGenForm) payload.ImplantConfig {
 	interval, jitter := clampIntervalJitter(form.Interval, form.Jitter, form.BeaconTime)
 	arch := parseArchitecture(form.Architecture)
 
@@ -100,33 +122,66 @@ func buildImplantConfig(form *binaryGenForm) payload.ImplantConfig {
 		form.Protocol = "http"
 	}
 
-	return payload.ImplantConfig{
-		C2URL:         form.C2URL,
-		Protocol:      form.Protocol,
-		Interval:      interval,
-		Jitter:        jitter,
-		UserAgent:     form.UserAgent,
-		Persist:       form.Persist,
-		SkipTLSVerify: form.SkipTLSVerify,
-		Filename:      form.Filename,
-		Debug:         false,
-		Profile:       form.Profile,
-		ListenerID:    form.ListenerID,
-		P2PMode:       p2pMode,
-		P2PParent:     p2pParent,
-		P2PListenAddr: p2pListenAddr,
-		DNSDomain:     form.DNSDomain,
-		DNSServer:     form.DNSServer,
-		Proxy:         form.Proxy,
-		CryptoKey:     form.CryptoKey,
-		Architecture:  arch,
-		DomainFront:   form.DomainFront,
-		Obfuscate:     form.Obfuscate == "true" || form.Obfuscate == "1",
-		Evasion:       form.Evasion == "true" || form.Evasion == "1",
-		WorkingStart:  form.WorkingStart,
-		WorkingEnd:    form.WorkingEnd,
-		WorkingTZ:     form.WorkingTZ,
+	hostKey := form.SSHHostKey
+	if hostKey == "" && s != nil {
+		hostKey = s.loadSSHHostPublicKeyB64()
 	}
+
+	return payload.ImplantConfig{
+		C2URL:           form.C2URL,
+		Protocol:        form.Protocol,
+		BeaconTransport: form.BeaconTransport,
+		Interval:        interval,
+		Jitter:          jitter,
+		UserAgent:       form.UserAgent,
+		Persist:         form.Persist,
+		SkipTLSVerify:   form.SkipTLSVerify,
+		Filename:        form.Filename,
+		Debug:           false,
+		Profile:         form.Profile,
+		ListenerID:      form.ListenerID,
+		P2PMode:         p2pMode,
+		P2PParent:       p2pParent,
+		P2PListenAddr:   p2pListenAddr,
+		DNSDomain:       form.DNSDomain,
+		DNSServer:       form.DNSServer,
+		DNSDoHURL:       form.DNSDoHURL,
+		DNSDoTAddr:      form.DNSDoTAddr,
+		Proxy:           form.Proxy,
+		CryptoKey:       form.CryptoKey,
+		Architecture:    arch,
+		DomainFront:     form.DomainFront,
+		Obfuscate:       form.Obfuscate == "true" || form.Obfuscate == "1",
+		Evasion:         form.Evasion == "true" || form.Evasion == "1",
+		WorkingStart:    form.WorkingStart,
+		WorkingEnd:      form.WorkingEnd,
+		WorkingTZ:       form.WorkingTZ,
+		SSHUser:         form.SSHUser,
+		SSHPassword:     form.SSHPassword,
+		SSHKey:          form.SSHKey,
+		SSHHostKey:      hostKey,
+	}
+}
+
+// loadSSHHostPublicKeyB64 returns base64 of the SSH transport host public key for implant pinning.
+func (s *Server) loadSSHHostPublicKeyB64() string {
+	if s == nil || s.cfg == nil {
+		return ""
+	}
+	path := s.cfg.Server.SSHHostKey
+	if path == "" {
+		return ""
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil || len(raw) == 0 {
+		return ""
+	}
+	signer, err := ssh.ParsePrivateKey(raw)
+	if err != nil {
+		return ""
+	}
+	pub := signer.PublicKey()
+	return base64.StdEncoding.EncodeToString(ssh.MarshalAuthorizedKey(pub))
 }
 
 func (s *Server) handleGenerateEXE(c *gin.Context) {
@@ -137,7 +192,7 @@ func (s *Server) handleGenerateEXE(c *gin.Context) {
 	if !ok {
 		return
 	}
-	cfg := buildImplantConfig(form)
+	cfg := s.buildImplantConfig(form)
 	agentsDir := s.extractAgentsDir()
 	job := s.startBuildJob("windows", "exe", form.C2URL, form.ListenerID, form.Filename)
 
@@ -156,7 +211,7 @@ func (s *Server) handleGenerateDLL(c *gin.Context) {
 	if !ok {
 		return
 	}
-	cfg := buildImplantConfig(form)
+	cfg := s.buildImplantConfig(form)
 	agentsDir := s.extractAgentsDir()
 	job := s.startBuildJob("windows", "dll", form.C2URL, form.ListenerID, form.Filename)
 
@@ -175,7 +230,7 @@ func (s *Server) handleGenerateLinux(c *gin.Context) {
 	if !ok {
 		return
 	}
-	cfg := buildImplantConfig(form)
+	cfg := s.buildImplantConfig(form)
 	agentsDir := s.extractAgentsDir()
 	job := s.startBuildJob("linux", "elf", form.C2URL, form.ListenerID, form.Filename)
 
@@ -194,7 +249,7 @@ func (s *Server) handleGenerateMacOS(c *gin.Context) {
 	if !ok {
 		return
 	}
-	cfg := buildImplantConfig(form)
+	cfg := s.buildImplantConfig(form)
 	agentsDir := s.extractAgentsDir()
 	job := s.startBuildJob("macos", "binary", form.C2URL, form.ListenerID, form.Filename)
 

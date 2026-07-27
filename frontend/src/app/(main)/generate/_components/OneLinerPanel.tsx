@@ -98,7 +98,7 @@ export default function OneLinerPanel({
               <Label htmlFor="persist-oneliner" className="text-sm text-muted-foreground">Persist</Label>
             </div>
           </div>
-          <Button type="button" onClick={onGenerate} disabled={busy} className="w-full h-10 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
+          <Button type="button" onClick={onGenerate} disabled={busy} className="w-full h-10 bg-destructive hover:bg-destructive/80 disabled:opacity-50 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
             {busy ? <><Spinner size="xs" /> Generating...</> : <><Zap className="w-4 h-4" /> Generate One-Liners</>}
           </Button>
         </div>
@@ -114,13 +114,13 @@ export default function OneLinerPanel({
                   <div className="flex items-center justify-between mb-1.5">
                     <div>
                       <span className="text-sm font-medium text-foreground">{item.name}</span>
-                      <span className="text-[10px] text-muted-foreground ml-2">{item.desc}</span>
+                      <span className="text-(--font-size-micro-sm) text-muted-foreground ml-2">{item.desc}</span>
                     </div>
                     <Button variant="outline" size="xs" onClick={() => onCopy(item.command)}>
                       <Copy className="w-4 h-4" />Copy
                     </Button>
                   </div>
-                  <code className="block text-[11px] font-mono bg-muted text-foreground p-2 rounded-xl whitespace-pre-wrap break-all leading-relaxed select-all">{item.command}</code>
+                  <code className="block text-(--font-size-xs-sm) font-mono bg-muted text-foreground p-2 rounded-xl whitespace-pre-wrap break-all leading-relaxed select-all">{item.command}</code>
                 </div>
               ))}
             </div>

@@ -10,7 +10,9 @@ import { highlightOutput } from "@/lib/highlight";
 import { Spinner } from "@/components/UI";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Clock, Type, Trash2, Keyboard } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 const PROMPT_CHARS = ["$", "#", ">", "%"];
 const KEY = "forgec2_shell_fontsize";
@@ -30,6 +32,7 @@ export default function ShellTerminal({
   showHeader?: boolean;
   osType?: string;
 }) {
+  const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -48,6 +51,7 @@ export default function ShellTerminal({
   const execRef = useRef<(cmd: string) => Promise<void>>(async () => {});
   const writePromptRef = useRef<() => void>(() => {});
   const lastCommandRef = useRef<string>("");
+  const abortRef = useRef<AbortController | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const writeln = useCallback(
@@ -60,13 +64,13 @@ export default function ShellTerminal({
   const executeCommand = useCallback(
     async (cmd: string) => {
       if (!cmd.trim() || loadingRef.current || !agentId) return;
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
       loadingRef.current = true;
       setLoading(true);
       lastCommandRef.current = cmd;
       try {
-        // runTask queues the shell task, waits for the agent's beacon result
-        // (HTTP poll + WebSocket), and returns the final TaskStatus. It also
-        // refuses to run when the agent is offline (clear error).
         const st = await runTask(
           agentId,
           `/agents/${agentId}/shell`,
@@ -75,6 +79,7 @@ export default function ShellTerminal({
             body: { command: cmd, shell: shellType },
             checkOnline: true,
             timeoutMs: 60000,
+            signal: ac.signal,
             onStatus: (s) => {
               if (s.status === "pending" || s.status === "running") {
                 writeln("⏳ waiting for agent to return output...", "90");
@@ -105,6 +110,10 @@ export default function ShellTerminal({
 
   useEffect(() => { execRef.current = executeCommand; }, [executeCommand]);
   useEffect(() => { writePromptRef.current = writePrompt; }, [writePrompt]);
+
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -273,7 +282,7 @@ export default function ShellTerminal({
       termRef.current = null;
       fitRef.current = null;
     };
-  }, [agentId, executeCommand, writeln, fontSize, writePrompt]);
+  }, [agentId, executeCommand, writeln, fontSize, writePrompt, osType]);
 
   useEffect(() => {
     if (termRef.current) termRef.current.options.fontSize = fontSize;
@@ -305,10 +314,15 @@ export default function ShellTerminal({
             <span className="w-2 h-2 bg-emerald-500 rounded-full shrink-0"></span>
             <span className="font-semibold text-sm text-foreground truncate">Shell</span>
             <span className="text-xs text-muted-foreground font-mono uppercase">{shellType}</span>
-            <span className="text-xs text-muted-foreground/70" title="Beacon timing">
-               <Clock className="w-3 h-3 mr-1 inline" />
-              {beaconHint || "loading..."}
-            </span>
+            <Tooltip>
+              <TooltipTrigger>
+                <span className="text-xs text-muted-foreground/70">
+                   <Clock className="w-3 h-3 mr-1 inline" />
+                  {beaconHint || "loading..."}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Beacon timing</TooltipContent>
+            </Tooltip>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <div className="flex items-center gap-1 text-xs text-muted-foreground mr-2">
@@ -341,15 +355,17 @@ export default function ShellTerminal({
                 {cmd}
               </Button>
             ))}
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => { clearCommandHistory(); historyRef.current = []; histIdxRef.current = 0; termRef.current?.clear(); writeln("History cleared", "33"); }}
-              title="Clear history"
-              aria-label="Clear history"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger render={<Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => { clearCommandHistory(); historyRef.current = []; histIdxRef.current = 0; termRef.current?.clear(); writeln("History cleared", "33"); }}
+                  aria-label={t("common.clear_history")}
+                />}>
+                <Trash2 className="w-4 h-4" />
+              </TooltipTrigger>
+              <TooltipContent>{t("common.clear_history")}</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       )}
@@ -384,7 +400,7 @@ export default function ShellTerminal({
            <Spinner size="xs" /> Executing...
         </div>
       )}
-      <div className="shrink-0 bg-background border-t border-border px-4 py-1.5 text-[10px] text-muted-foreground/70 flex items-center justify-between">
+      <div className="shrink-0 bg-background border-t border-border px-4 py-1.5 text-(--font-size-micro-sm) text-muted-foreground/70 flex items-center justify-between">
         <span>
            <Keyboard className="w-3 h-3 mr-1 inline" />
           {osType === "linux" ? "Ctrl+D" : "Ctrl+Z"} · Ctrl+C: interrupt

@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { EmptyState, PageHeader, ConfirmModal, TableCard, PageSpinner } from "@/components/UI";
+import { EmptyState, PageHeader, ConfirmModal, PageSpinner } from "@/components/UI";
 import { toast } from "sonner";
 import { formatTime, cn } from "@/lib/utils";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -94,22 +94,25 @@ export default function OpsecPage() {
   ];
 
   useEffect(() => {
+    let failed = 0;
     Promise.all([
-      api.json<{ rules: OpsecRule[] }>("/api/opsec/rules").catch(() => ({ rules: [] as OpsecRule[] })),
-      api.get("/opsec/history").catch(() => ({ history: [] })),
+      api.get<{ rules: OpsecRule[] }>("/api/opsec/rules").catch(() => { failed++; return { rules: [] as OpsecRule[] }; }),
+      api.get("/opsec/history").catch(() => { failed++; return { history: [] }; }),
     ]).then(([rulesData, histData]) => {
       setRules(rulesData.rules || []);
       setHistory((histData.history || []) as OpsecHistoryItem[]);
+      if (failed > 0) toast.error(t("opsec.toast.load_failed"));
     }).catch(() => {
       setRules([]);
       setHistory([]);
+      toast.error(t("opsec.toast.load_failed"));
     }).finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   const handleRunTest = async (taskType: string) => {
     try {
       const processes = testForm.processes.split(",").map(s => s.trim()).filter(Boolean);
-      const data = await api.postJson("/api/opsec/check", {
+      const data = await api.postJson<TestResult>("/api/opsec/check", {
         agent_id: testForm.agent_id,
         task_type: taskType,
         username: testForm.username,
@@ -119,7 +122,7 @@ export default function OpsecPage() {
         is_da: testForm.is_da,
         processes,
       });
-      setTestResult(data as unknown as TestResult);
+      setTestResult(data);
     } catch {
       setTestResult({ allowed: false, blocked: true, messages: "Test failed" });
     }
@@ -132,7 +135,7 @@ export default function OpsecPage() {
       setEditingRule(null);
       setRuleForm({ name: "", description: "", risk_level: 1, default_action: 1, enabled: true });
       toast.success(t("opsec.save_rule"));
-      api.json<{ rules: OpsecRule[] }>("/opsec/rules").then(d => setRules(d.rules || []));
+      api.get<{ rules: OpsecRule[] }>("/opsec/rules").then(d => setRules(d.rules || []));
     } catch {
       toast.error(t("opsec.toast.save_failed"));
     }
@@ -143,7 +146,7 @@ export default function OpsecPage() {
       try {
         await api.del(`/opsec/rules/${name}`);
         toast.success(t("opsec.toast.deleted"));
-      api.json<{ rules: OpsecRule[] }>("/api/opsec/rules").then(d => setRules(d.rules || []));
+      api.get<{ rules: OpsecRule[] }>("/api/opsec/rules").then(d => setRules(d.rules || []));
       } catch { toast.error(t("opsec.toast.delete_failed")); }
     }});
   };
@@ -164,7 +167,7 @@ export default function OpsecPage() {
 
   return (
     <>
-      <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
+      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
         <PageHeader title={t("opsec.title")} subtitle={t("opsec.subtitle")}>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
@@ -174,15 +177,15 @@ export default function OpsecPage() {
           </div>
         </PageHeader>
 
-        <TableCard header={
-          <div className="flex items-center justify-between">
-            <span>{t("opsec.col_actions")}</span>
-            <Button onClick={() => { setEditingRule(null); setRuleForm({ name: "", description: "", risk_level: 1, default_action: 1, enabled: true }); setShowRuleModal(true); }}>
-              <Plus className="w-4 h-4" />{t("opsec.new_rule")}
-            </Button>
-          </div>
-        }>
-          <Table className="w-full text-sm">
+        <Card>
+          <CardContent>
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-semibold text-foreground">{t("opsec.col_actions")}</span>
+              <Button onClick={() => { setEditingRule(null); setRuleForm({ name: "", description: "", risk_level: 1, default_action: 1, enabled: true }); setShowRuleModal(true); }}>
+                <Plus className="w-4 h-4" />{t("opsec.new_rule")}
+              </Button>
+            </div>
+            <Table className="w-full text-sm">
             <TableHeader>
               <TableRow className="text-left text-xs text-muted-foreground border-b border-border">
                 <TableHead className="px-4 py-3 font-medium">{t("opsec.col_name")}</TableHead>
@@ -229,7 +232,8 @@ export default function OpsecPage() {
               })}
             </TableBody>
           </Table>
-        </TableCard>
+          </CardContent>
+        </Card>
 
         <Card className="p-4 sm:p-5">
           <h2 className="text-sm font-semibold text-foreground mb-4">{t("opsec.quick_test")}</h2>
@@ -290,13 +294,13 @@ export default function OpsecPage() {
                 {testResult.allowed ? <CheckCircle className="w-4 h-4" /> : <CircleAlert className="w-4 h-4" />}
                 <span className="font-semibold">{testResult.allowed ? t("opsec.allowed") : t("opsec.blocked")}</span>
               </div>
-              <p className="text-xs opacity-80 mb-2">{testResult.messages || t("opsec.no_rule")}</p>
+              <p className="text-xs text-muted-foreground mb-2">{testResult.messages || t("opsec.no_rule")}</p>
               {testResult.results && testResult.results.length > 0 && (
                 <div className="space-y-1">
                   {testResult.results.map((r, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs">
                       <span className={cn("w-2 h-2 rounded-full", r.allowed ? "bg-emerald-500" : "bg-red-500")}></span>
-                      <code className="opacity-80">{r.rule_name}</code>
+                      <code className="text-muted-foreground">{r.rule_name}</code>
                       <span className="opacity-60">- {r.message}</span>
                     </div>
                   ))}
@@ -322,7 +326,7 @@ export default function OpsecPage() {
                     <div className="flex items-center gap-2 text-xs">
                       <code className="font-semibold text-foreground">{h.rule_name}</code>
                       <span className={cn(
-                        "px-1.5 py-0.5 rounded text-[10px] font-medium",
+                        "px-1.5 py-0.5 rounded text-(--font-size-micro-sm) font-medium",
                         h.risk_level >= 4 ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
                         h.risk_level >= 3 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" :
                         "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
@@ -333,7 +337,7 @@ export default function OpsecPage() {
                       <span className="text-muted-foreground">task: {h.task_type}</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">{h.message}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{formatTime(h.created_at)}</p>
+                    <p className="text-(--font-size-micro-sm) text-muted-foreground mt-0.5">{formatTime(h.created_at)}</p>
                   </div>
                 </div>
               ))}

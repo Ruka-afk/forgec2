@@ -14,6 +14,7 @@ type ICMPBeaconListener struct {
 	handler func(agentID string, reqJSON []byte) []byte
 	conn    *icmp.PacketConn
 	mu      sync.Mutex
+	wg      sync.WaitGroup
 }
 
 func NewICMPBeaconListener(addr string) *ICMPBeaconListener {
@@ -37,7 +38,11 @@ func (l *ICMPBeaconListener) Start() error {
 	l.conn = conn
 	slog.Info("ICMP C2 listener started", "addr", l.addr)
 
-	go l.serve()
+	l.wg.Add(1)
+	go func() {
+		defer l.wg.Done()
+		l.serve()
+	}()
 	return nil
 }
 
@@ -45,6 +50,13 @@ func (l *ICMPBeaconListener) Stop() {
 	if l.conn != nil {
 		l.conn.Close()
 	}
+	l.wg.Wait()
+}
+
+// Close implements io.Closer for use with extraListeners map.
+func (l *ICMPBeaconListener) Close() error {
+	l.Stop()
+	return nil
 }
 
 func (l *ICMPBeaconListener) serve() {
@@ -107,5 +119,3 @@ func (l *ICMPBeaconListener) serve() {
 		}
 	}
 }
-
-

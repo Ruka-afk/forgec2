@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"encoding/csv"
@@ -22,8 +22,10 @@ var (
 	credReNTLM     *regexp.Regexp
 	credReSHA1     *regexp.Regexp
 	credRePassword *regexp.Regexp
-	credReSAM      *regexp.Regexp
-	credOnce       sync.Once
+	credReSAM         *regexp.Regexp
+	credReSplitBlocks *regexp.Regexp
+	credReSimple      *regexp.Regexp
+	credOnce          sync.Once
 )
 
 func initCredRegexps() {
@@ -34,6 +36,8 @@ func initCredRegexps() {
 		credReSHA1 = regexp.MustCompile(`(?i)SHA1?\s*:\s*([a-fA-F0-9]{40})`)
 		credRePassword = regexp.MustCompile(`(?i)Password\s*:\s*(.+?)\s*$`)
 		credReSAM = regexp.MustCompile(`^([^\s:]+):(\d+):([a-fA-F0-9]{32}):([a-fA-F0-9]{32}):::`)
+		credReSplitBlocks = regexp.MustCompile(`\n\s*\n`)
+		credReSimple = regexp.MustCompile(`^(?:([^\s:\\]+)\\)?([^\s:]+):(.+)$`)
 	})
 }
 
@@ -44,20 +48,28 @@ func parseAndStoreCredentials(database *gorm.DB, agentID string, raw string, tas
 	if len(entries) == 0 {
 		return
 	}
-	
+
 	// Optimization: Load existing creds once and use HashSet for O(1) lookup
 	type credKey struct {
 		AgentID, Domain, Username, Hash, Password string
 	}
-	
-	var existing []db.CredentialEntry
-	database.Where("agent_id = ?", agentID).Limit(50000).Find(&existing)
-	
-	existingSet := make(map[credKey]bool, len(existing))
-	for _, e := range existing {
-		existingSet[credKey{e.AgentID, e.Domain, e.Username, e.Hash, e.Password}] = true
+
+	existingSet := make(map[credKey]bool)
+	var lastID uint
+	const batchSize = 1000
+	for {
+		var batch []db.CredentialEntry
+		database.Where("agent_id = ? AND id > ?", agentID, lastID).
+			Order("id ASC").Limit(batchSize).Find(&batch)
+		if len(batch) == 0 {
+			break
+		}
+		for _, e := range batch {
+			existingSet[credKey{e.AgentID, e.Domain, e.Username, e.Hash, e.Password}] = true
+		}
+		lastID = batch[len(batch)-1].ID
 	}
-	
+
 	// Filter duplicates using HashSet
 	var batch []db.CredentialEntry
 	for _, e := range entries {
@@ -67,7 +79,7 @@ func parseAndStoreCredentials(database *gorm.DB, agentID string, raw string, tas
 			existingSet[key] = true // Mark as added to avoid duplicates in batch
 		}
 	}
-	
+
 	if len(batch) > 0 {
 		database.CreateInBatches(batch, 50)
 		slog.Info("Credentials stored in vault", "agent", agentID, "count", len(batch))
@@ -138,7 +150,7 @@ func parseCredentialsFromText(raw string, agentID string, taskID uint) []db.Cred
 	var entries []db.CredentialEntry
 
 	// Pattern 1: mimikatz sekurlsa::logonpasswords style
-	blocks := regexp.MustCompile(`\n\s*\n`).Split(raw, -1)
+	blocks := credReSplitBlocks.Split(raw, -1)
 	for _, block := range blocks {
 		var entry db.CredentialEntry
 		entry.AgentID = agentID
@@ -189,11 +201,10 @@ func parseCredentialsFromText(raw string, agentID string, taskID uint) []db.Cred
 	}
 
 	// Pattern 3: Simple domain\user:password or user:password lines
-	reSimple := regexp.MustCompile(`^(?:([^\s:\\]+)\\)?([^\s:]+):(.+)$`)
 	if len(entries) == 0 {
 		for _, line := range strings.Split(raw, "\n") {
 			line = strings.TrimSpace(line)
-			if m := reSimple.FindStringSubmatch(line); len(m) > 3 {
+			if m := credReSimple.FindStringSubmatch(line); len(m) > 3 {
 				domain := strings.TrimSpace(m[1])
 				user := strings.TrimSpace(m[2])
 				pw := strings.TrimSpace(m[3])
@@ -238,11 +249,11 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 	if expiryFilter != "" {
 		switch expiryFilter {
 		case "expired":
-			query = query.Where("expires_at IS NOT NULL AND expires_at < NOW()")
+			query = query.Where("expires_at IS NOT NULL AND expires_at < datetime('now')")
 		case "expiring":
-			query = query.Where("expires_at IS NOT NULL AND expires_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 7 DAY)")
+			query = query.Where("expires_at IS NOT NULL AND expires_at BETWEEN datetime('now') AND datetime('now', '+7 days')")
 		case "valid":
-			query = query.Where("expires_at IS NULL OR expires_at > NOW()")
+			query = query.Where("expires_at IS NULL OR expires_at > datetime('now')")
 		}
 	}
 
@@ -255,7 +266,7 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 		}
 	}
 
-	query.Find(&creds)
+	query.Limit(5000).Find(&creds)
 
 	var allTags []string
 	var tagStrings []string
@@ -293,7 +304,7 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 		"VaultCount":   len(creds),
 		"AllTags":      allTags,
 		"TagFilter":    tagFilter,
-		"search_query":  searchQuery,
+		"search_query": searchQuery,
 		"ExpiryFilter": expiryFilter,
 	}
 	for k, v := range stats {
@@ -303,9 +314,43 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 	s.renderPageOrJSON(c, data)
 }
 
+// exportRateLimit tracks credential export requests per IP to prevent abuse.
+var (
+	exportRateMu    sync.Mutex
+	exportRateMap   = make(map[string][]time.Time)
+	exportRateLimit = 5           // max exports per window
+	exportRateWindow = time.Minute // sliding window
+)
+
+func checkExportRateLimit(ip string) bool {
+	exportRateMu.Lock()
+	defer exportRateMu.Unlock()
+	now := time.Now()
+	cutoff := now.Add(-exportRateWindow)
+	// Prune old entries
+	timestamps := exportRateMap[ip]
+	valid := timestamps[:0]
+	for _, t := range timestamps {
+		if t.After(cutoff) {
+			valid = append(valid, t)
+		}
+	}
+	if len(valid) >= exportRateLimit {
+		exportRateMap[ip] = valid
+		return false
+	}
+	exportRateMap[ip] = append(valid, now)
+	return true
+}
+
 func (s *Server) handleExportCredentials(c *gin.Context) {
+	if !checkExportRateLimit(c.ClientIP()) {
+		respondError(c, http.StatusTooManyRequests, "export rate limit exceeded, try again later")
+		return
+	}
+
 	var creds []db.CredentialEntry
-	query := s.db.Order("created_at desc")
+	query := s.db.Order("created_at desc").Limit(5000)
 
 	tagFilter := c.Query("tag")
 	expiryFilter := c.Query("expiry")
@@ -317,15 +362,15 @@ func (s *Server) handleExportCredentials(c *gin.Context) {
 	if expiryFilter != "" {
 		switch expiryFilter {
 		case "expired":
-			query = query.Where("expires_at IS NOT NULL AND expires_at < NOW()")
+			query = query.Where("expires_at IS NOT NULL AND expires_at < datetime('now')")
 		case "expiring":
-			query = query.Where("expires_at IS NOT NULL AND expires_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 7 DAY)")
+			query = query.Where("expires_at IS NOT NULL AND expires_at BETWEEN datetime('now') AND datetime('now', '+7 days')")
 		case "valid":
-			query = query.Where("expires_at IS NULL OR expires_at > NOW()")
+			query = query.Where("expires_at IS NULL OR expires_at > datetime('now')")
 		}
 	}
 
-	query.Find(&creds)
+	query.Limit(5000).Find(&creds)
 
 	c.Header("Content-Type", "text/csv")
 	c.Header("Content-Disposition", "attachment; filename=credentials.csv")
@@ -335,8 +380,9 @@ func (s *Server) handleExportCredentials(c *gin.Context) {
 	for _, e := range creds {
 		w.Write([]string{
 			strconv.FormatUint(uint64(e.ID), 10),
-			e.AgentID, e.Domain, e.Username, e.Password, e.Hash,
-			e.Source, e.Type, e.Tags,
+			csvSanitize(e.AgentID), csvSanitize(e.Domain), csvSanitize(e.Username),
+			csvSanitize(e.Password), csvSanitize(e.Hash),
+			csvSanitize(e.Source), csvSanitize(e.Type), csvSanitize(e.Tags),
 			e.ExpiresAt.Format("2006-01-02 15:04:05"),
 			strconv.FormatBool(e.Confirmed),
 			e.CreatedAt.Format("2006-01-02 15:04:05"),
@@ -367,6 +413,7 @@ func (s *Server) handleAddCredential(c *gin.Context) {
 		}
 	}
 	if err := s.db.Create(&entry).Error; err != nil {
+		slog.Error("Failed to create credential entry", "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to add credential")
 		return
 	}
@@ -375,14 +422,12 @@ func (s *Server) handleAddCredential(c *gin.Context) {
 
 func (s *Server) handleGetCredential(c *gin.Context) {
 	idStr := c.Param("cred_id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
+	if _, err := strconv.ParseUint(idStr, 10, 32); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid id")
 		return
 	}
 	var cred db.CredentialEntry
-	if err := s.db.First(&cred, id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "credential not found")
+	if !s.findOrFail(c, &cred, idStr, "credential") {
 		return
 	}
 	c.JSON(http.StatusOK, cred)
@@ -399,6 +444,7 @@ func (s *Server) handleDeleteCredential(c *gin.Context) {
 		return
 	}
 	if err := s.db.Delete(&db.CredentialEntry{}, id).Error; err != nil {
+		slog.Error("Failed to delete credential", "id", id, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to delete")
 		return
 	}
@@ -410,15 +456,13 @@ func (s *Server) handleUpdateCredential(c *gin.Context) {
 		return
 	}
 	idStr := c.Param("cred_id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
+	if _, err := strconv.ParseUint(idStr, 10, 32); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid id")
 		return
 	}
 
 	var cred db.CredentialEntry
-	if err := s.db.First(&cred, id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "credential not found")
+	if !s.findOrFail(c, &cred, idStr, "credential") {
 		return
 	}
 
@@ -436,6 +480,7 @@ func (s *Server) handleUpdateCredential(c *gin.Context) {
 	}
 
 	if err := s.db.Save(&cred).Error; err != nil {
+		slog.Error("Failed to update credential", "id", cred.ID, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to update")
 		return
 	}
@@ -474,26 +519,22 @@ func (s *Server) handleToggleConfirmed(c *gin.Context) {
 		return
 	}
 	idStr := c.Param("cred_id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
+	if _, err := strconv.ParseUint(idStr, 10, 32); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid id")
 		return
 	}
 
 	var cred db.CredentialEntry
-	if err := s.db.First(&cred, id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "credential not found")
+	if !s.findOrFail(c, &cred, idStr, "credential") {
 		return
 	}
 
 	cred.Confirmed = !cred.Confirmed
 
 	if err := s.db.Save(&cred).Error; err != nil {
+		slog.Error("Failed to toggle credential confirm", "id", cred.ID, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to update")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "confirmed": cred.Confirmed})
 }
-
-
-

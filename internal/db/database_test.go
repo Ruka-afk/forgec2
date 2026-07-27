@@ -47,22 +47,56 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	return db
 }
 
+func TestTaskClaimIndexesMigration(t *testing.T) {
+	database := setupTestDB(t)
+	var migrationID int
+	for i, migration := range Migrations {
+		if migration.ID == "2026-07-26-add-task-claim-indexes" {
+			migrationID = i
+			break
+		}
+	}
+	migration := Migrations[migrationID]
+	if err := migration.Migrate(database); err != nil {
+		t.Fatalf("run task claim index migration: %v", err)
+	}
+	for _, name := range []string{"idx_tasks_agent_status_priority_created", "idx_tasks_status_claimed_at"} {
+		if !database.Migrator().HasIndex(&Task{}, name) {
+			t.Fatalf("missing task claim index %q", name)
+		}
+	}
+}
+
+func TestTaskAcknowledgedAtMigration(t *testing.T) {
+	database := setupTestDB(t)
+	migration := Migrations[len(Migrations)-1]
+	if err := migration.Migrate(database); err != nil {
+		t.Fatalf("run task acknowledgement migration: %v", err)
+	}
+	if !database.Migrator().HasColumn(&Task{}, "acknowledged_at") {
+		t.Fatal("missing task acknowledged_at column")
+	}
+	if !database.Migrator().HasIndex(&Task{}, "idx_tasks_status_claimed_acknowledged") {
+		t.Fatal("missing task acknowledgement index")
+	}
+}
+
 func TestImplantCRUD(t *testing.T) {
 	db := setupTestDB(t)
 
 	t.Run("create implant", func(t *testing.T) {
 		implant := &Implant{
-			Hostname: "test-host",
-			Username: "test-user",
-			OS:       "windows",
-			Arch:     "amd64",
-			IP:       "192.168.1.100",
-			Status:   "online",
-			PID:      1234,
+			Hostname:    "test-host",
+			Username:    "test-user",
+			OS:          "windows",
+			Arch:        "amd64",
+			IP:          "192.168.1.100",
+			Status:      "online",
+			PID:         1234,
 			ProcessName: "explorer.exe",
-			Integrity: "High",
-			Elevated:  true,
-			Domain:   "TESTDOMAIN",
+			Integrity:   "High",
+			Elevated:    true,
+			Domain:      "TESTDOMAIN",
 		}
 
 		result := db.Create(implant)
@@ -1066,4 +1100,134 @@ func TestCacheFunctions(t *testing.T) {
 			t.Error("cache should be cleared")
 		}
 	})
+}
+
+func TestSeedRolePermissions(t *testing.T) {
+	t.Run("seeds into empty table", func(t *testing.T) {
+		db := setupTestDB(t)
+		seedRolePermissions(db)
+
+		var count int64
+		db.Model(&RolePermission{}).Count(&count)
+		if count == 0 {
+			t.Error("expected role permissions to be seeded")
+		}
+	})
+
+	t.Run("skips if already seeded", func(t *testing.T) {
+		db := setupTestDB(t)
+		db.Create(&RolePermission{Role: "admin", Permission: "test"})
+		seedRolePermissions(db)
+
+		var count int64
+		db.Model(&RolePermission{}).Count(&count)
+		if count != 1 {
+			t.Errorf("expected 1 permission (pre-existing), got %d", count)
+		}
+	})
+}
+
+func TestMigrateOldRoles(t *testing.T) {
+	db := setupTestDB(t)
+
+	db.Create(&User{Username: "op1", Role: "operator", IsActive: true})
+	db.Create(&User{Username: "viewer1", Role: "viewer", IsActive: true})
+	db.Create(&User{Username: "admin1", Role: "admin", IsActive: true})
+
+	MigrateOldRoles(db)
+
+	var op User
+	db.Where("username = ?", "op1").First(&op)
+	if op.Role != RoleUser {
+		t.Errorf("operator should be migrated to 'user', got %q", op.Role)
+	}
+
+	var viewer User
+	db.Where("username = ?", "viewer1").First(&viewer)
+	if viewer.Role != RoleUser {
+		t.Errorf("viewer should be migrated to 'user', got %q", viewer.Role)
+	}
+
+	var admin User
+	db.Where("username = ?", "admin1").First(&admin)
+	if admin.Role != RoleAdmin {
+		t.Errorf("admin role should be unchanged, got %q", admin.Role)
+	}
+}
+
+func TestRedactString(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"password123", "pa*******23"},
+		{"ab", "**"},
+		{"a", "*"},
+		{"", ""},
+		{"four", "****"},
+		{"five1", "fi*e1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := redactString(tt.input)
+			if got != tt.want {
+				t.Errorf("redactString(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGenerateRandomPassword(t *testing.T) {
+	t.Run("generates correct length", func(t *testing.T) {
+		pwd, err := generateRandomPassword(16)
+		if err != nil {
+			t.Fatalf("generateRandomPassword: %v", err)
+		}
+		if len(pwd) != 16 {
+			t.Errorf("password length = %d, want 16", len(pwd))
+		}
+	})
+
+	t.Run("generates unique passwords", func(t *testing.T) {
+		seen := make(map[string]bool)
+		for i := 0; i < 100; i++ {
+			pwd, err := generateRandomPassword(12)
+			if err != nil {
+				t.Fatalf("generateRandomPassword: %v", err)
+			}
+			if seen[pwd] {
+				t.Fatalf("duplicate password generated: %s", pwd)
+			}
+			seen[pwd] = true
+		}
+	})
+
+	t.Run("minimum length 1", func(t *testing.T) {
+		pwd, err := generateRandomPassword(1)
+		if err != nil {
+			t.Fatalf("generateRandomPassword: %v", err)
+		}
+		if len(pwd) != 1 {
+			t.Errorf("password length = %d, want 1", len(pwd))
+		}
+	})
+}
+
+func TestGetPermissionsForRole(t *testing.T) {
+	perms := GetPermissionsForRole(RoleAdmin)
+	if len(perms) == 0 {
+		t.Error("admin should have permissions")
+	}
+
+	perms = GetPermissionsForRole(RoleUser)
+	userCount := len(perms)
+	if userCount == 0 {
+		t.Error("user should have permissions")
+	}
+
+	adminCount := len(GetPermissionsForRole(RoleAdmin))
+	if adminCount <= userCount {
+		t.Errorf("admin should have more permissions than user (admin=%d, user=%d)", adminCount, userCount)
+	}
 }

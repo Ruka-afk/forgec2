@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -12,36 +11,31 @@ import (
 )
 
 func (s *Server) handleListListeners(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
-	}
-	offset := (page - 1) * pageSize
+	p := parsePagination(c, 20, 100)
 
 	query := s.db.Model(&db.Listener{})
 
 	if tag := c.Query("tag"); tag != "" {
-		query = query.Where("tags LIKE ?", "%"+tag+"%")
+		query = query.Where("tags LIKE ? ESCAPE '\\'", "%"+escapeLike(tag)+"%")
 	}
 	if status := c.Query("status"); status != "" {
 		query = query.Where("status = ?", status)
 	}
 
 	var total int64
-	query.Count(&total)
+	if err := query.Count(&total).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to count listeners")
+		return
+	}
 
 	var listeners []db.Listener
-	query.Order("created_at desc").Offset(offset).Limit(pageSize).Find(&listeners)
+	query.Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&listeners)
 	c.JSON(http.StatusOK, gin.H{
 		"success":   true,
 		"data":      listeners,
 		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
+		"page":      p.Page,
+		"page_size": p.PageSize,
 	})
 }
 
@@ -56,13 +50,8 @@ func (s *Server) handleListenerDetail(c *gin.Context) {
 	var agents []db.Implant
 	s.db.Where("listener_id = ?", listener.ID).Order("last_seen desc").Limit(5000).Find(&agents)
 
-	activeCount := 0
-	now := time.Now()
-	for _, a := range agents {
-		if now.Sub(a.LastSeen) < ListenerActiveThreshold {
-			activeCount++
-		}
-	}
+	var activeCount int64
+	s.db.Model(&db.Implant{}).Where("listener_id = ? AND last_seen > ?", listener.ID, time.Now().Add(-ListenerActiveThreshold)).Count(&activeCount)
 
 	stats := s.getNavStats()
 	data := gin.H{
@@ -80,52 +69,69 @@ func (s *Server) handleListenerDetail(c *gin.Context) {
 	s.renderPageOrJSON(c, data)
 }
 
+// listenerKey returns the key used to identify this listener in the extraListeners map.
+func listenerKey(l *db.Listener) string {
+	scheme := l.Scheme
+	if scheme == "" {
+		scheme = l.Type
+	}
+	switch scheme {
+	case "dns":
+		return "dns://" + l.DNSDomain
+	case "icmp":
+		return "icmp://" + l.ICMPAddr
+	default:
+		return scheme + "://" + l.Host + ":" + itoa(l.Port)
+	}
+}
+
 // startListenerForRecord creates a real network listener for a DB listener record.
-// Handles HTTP/HTTPS/TCP/TLS schemes, port conflict detection, and main server port skip.
+// Handles HTTP/HTTPS/TCP/TLS/DNS/ICMP schemes, port conflict detection, and main server port skip.
 func (s *Server) startListenerForRecord(l *db.Listener, context string) {
 	scheme := l.Scheme
 	if scheme == "" {
 		scheme = l.Type
 	}
-	if scheme != "http" && scheme != "https" && scheme != "tcp" && scheme != "tls" {
+	if scheme != "http" && scheme != "https" && scheme != "tcp" && scheme != "tls" && scheme != "dns" && scheme != "icmp" {
 		return
 	}
 
-	addr := l.Host + ":" + itoa(l.Port)
-	key := scheme + "://" + addr
+	// DNS/ICMP listeners use port-less keys
+	var key string
+	if scheme == "dns" || scheme == "icmp" {
+		if scheme == "dns" {
+			key = "dns://" + l.DNSDomain
+		} else {
+			key = "icmp://" + l.ICMPAddr
+		}
+	} else {
+		addr := l.Host + ":" + itoa(l.Port)
+		key = scheme + "://" + addr
 
-	// Skip if this is the main server address (already served)
-	mainAddr := s.cfg.Server.Host + ":" + itoa(s.cfg.Server.Port)
-	if addr == mainAddr && (scheme == "http" || scheme == "https") {
-		slog.Debug("Listener matches main server address, no extra listener needed",
-			"key", key, "context", context)
-		return
+		// Skip if this is the main server address (already served)
+		mainAddr := s.cfg.Server.Host + ":" + itoa(s.cfg.Server.Port)
+		if addr == mainAddr && (scheme == "http" || scheme == "https") {
+			slog.Debug("Listener matches main server address, no extra listener needed",
+				"key", key, "context", context)
+			return
+		}
+
+		// Check port availability
+		if !isPortAvailable(l.Host, l.Port) {
+			slog.Warn("Port not available for listener, skipping",
+				"key", key, "context", context)
+			return
+		}
 	}
 
-	// Check port availability
-	if !isPortAvailable(l.Host, l.Port) {
-		slog.Warn("Port not available for listener, skipping",
-			"key", key, "context", context)
-		return
-	}
-
-	if err := s.startExtraListener(key, addr, scheme); err != nil {
+	if err := s.startExtraListener(key, scheme); err != nil {
 		slog.Error("Failed to start listener",
 			"key", key, "context", context, "err", err)
 	}
 }
 
-func (s *Server) handleCreateListener(c *gin.Context) {
-	var l db.Listener
-	if err := c.ShouldBindJSON(&l); err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-	if l.Name == "" {
-		l.Name = "Listener " + fmt.Sprintf("%d", l.Port)
-	}
-
-	// Normalize: prefer Scheme, derive Type and Protocol
+// normalizeListenerProtocol derives all protocol fields from whichever one the user provided.
+func normalizeListenerProtocol(l *db.Listener) {
 	if l.Scheme != "" {
 		l.Protocol = l.Scheme
 		switch l.Scheme {
@@ -133,6 +139,8 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 			l.Type = "http"
 		case "dns":
 			l.Type = "dns"
+		case "icmp":
+			l.Type = "icmp"
 		default:
 			l.Type = "tcp"
 		}
@@ -143,6 +151,8 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 			l.Type = "http"
 		case "dns":
 			l.Type = "dns"
+		case "icmp":
+			l.Type = "icmp"
 		default:
 			l.Type = "tcp"
 		}
@@ -154,11 +164,27 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 		case "dns":
 			l.Scheme = "dns"
 			l.Protocol = "dns"
+		case "icmp":
+			l.Scheme = "icmp"
+			l.Protocol = "icmp"
 		default:
 			l.Scheme = "tcp"
 			l.Protocol = "tcp"
 		}
 	}
+}
+
+func (s *Server) handleCreateListener(c *gin.Context) {
+	var l db.Listener
+	if err := c.ShouldBindJSON(&l); err != nil {
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
+		return
+	}
+	if l.Name == "" {
+		l.Name = "Listener " + fmt.Sprintf("%d", l.Port)
+	}
+
+	normalizeListenerProtocol(&l)
 
 	l.Enabled = true
 	l.Status = "running"
@@ -181,60 +207,38 @@ func (s *Server) handleUpdateListener(c *gin.Context) {
 		return
 	}
 	var updates struct {
-		Name     string `json:"name"`
-		Scheme   string `json:"scheme"`
-		Type     string `json:"type"`
-		Host     string `json:"host"`
-		Port     int    `json:"port"`
-		Protocol string `json:"protocol"`
-		Notes    string `json:"notes"`
-		Enabled  *bool  `json:"enabled"`
-		Tags     string `json:"tags"`
-		Color    string `json:"color"`
-		Status   string `json:"status"`
+		Name          string `json:"name"`
+		Scheme        string `json:"scheme"`
+		Type          string `json:"type"`
+		Host          string `json:"host"`
+		Port          int    `json:"port"`
+		Protocol      string `json:"protocol"`
+		Notes         string `json:"notes"`
+		Enabled       *bool  `json:"enabled"`
+		Tags          string `json:"tags"`
+		Color         string `json:"color"`
+		Status        string `json:"status"`
+		DNSDomain     string `json:"dns_domain"`
+		DNSListenAddr string `json:"dns_listen_addr"`
+		ICMPAddr      string `json:"icmp_addr"`
 	}
 	if err := c.ShouldBindJSON(&updates); err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
 	if updates.Name != "" {
 		l.Name = updates.Name
 	}
+	needsNormalize := updates.Scheme != "" || updates.Protocol != "" || updates.Type != ""
 	if updates.Scheme != "" {
 		l.Scheme = updates.Scheme
-		l.Protocol = updates.Scheme
-		switch updates.Scheme {
-		case "http", "https":
-			l.Type = "http"
-		case "dns":
-			l.Type = "dns"
-		default:
-			l.Type = "tcp"
-		}
 	} else if updates.Protocol != "" {
 		l.Protocol = updates.Protocol
-		l.Scheme = updates.Protocol
-		switch updates.Protocol {
-		case "http", "https":
-			l.Type = "http"
-		case "dns":
-			l.Type = "dns"
-		default:
-			l.Type = "tcp"
-		}
 	} else if updates.Type != "" {
 		l.Type = updates.Type
-		switch updates.Type {
-		case "http":
-			l.Scheme = "http"
-			l.Protocol = "http"
-		case "dns":
-			l.Scheme = "dns"
-			l.Protocol = "dns"
-		default:
-			l.Scheme = "tcp"
-			l.Protocol = "tcp"
-		}
+	}
+	if needsNormalize {
+		normalizeListenerProtocol(&l)
 	}
 	if updates.Host != "" {
 		l.Host = updates.Host
@@ -257,14 +261,24 @@ func (s *Server) handleUpdateListener(c *gin.Context) {
 	if updates.Status != "" {
 		l.Status = updates.Status
 	}
+	if updates.DNSDomain != "" {
+		l.DNSDomain = updates.DNSDomain
+	}
+	if updates.DNSListenAddr != "" {
+		l.DNSListenAddr = updates.DNSListenAddr
+	}
+	if updates.ICMPAddr != "" {
+		l.ICMPAddr = updates.ICMPAddr
+	}
 	if err := s.db.Save(&l).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Listener update"))
 		return
 	}
 
 	// Sync extra listener state (start/stop/restart)
-	oldKey := l.Scheme + "://" + l.Host + ":" + itoa(l.Port)
-	changed := updates.Host != "" || updates.Port != 0 || updates.Scheme != "" || updates.Protocol != "" || updates.Type != ""
+	oldKey := listenerKey(&l)
+	changed := updates.Host != "" || updates.Port != 0 || updates.Scheme != "" || updates.Protocol != "" || updates.Type != "" ||
+		updates.DNSDomain != "" || updates.DNSListenAddr != "" || updates.ICMPAddr != ""
 	if changed {
 		s.stopExtraListener(oldKey)
 	}
@@ -294,8 +308,7 @@ func (s *Server) handleDeleteListener(c *gin.Context) {
 	// Load listener to stop any running extra listener
 	var l db.Listener
 	if err := s.db.First(&l, id).Error; err == nil {
-		key := l.Scheme + "://" + l.Host + ":" + itoa(l.Port)
-		s.stopExtraListener(key)
+		s.stopExtraListener(listenerKey(&l))
 	}
 
 	if err := s.db.Delete(&db.Listener{}, id).Error; err != nil {
@@ -307,36 +320,49 @@ func (s *Server) handleDeleteListener(c *gin.Context) {
 
 func (s *Server) handleEnableListener(c *gin.Context) {
 	id := c.Param("id")
-	s.db.Model(&db.Listener{}).Where("id = ?", id).Updates(map[string]interface{}{"enabled": true, "status": "running"})
+	var l db.Listener
+	if err := s.db.First(&l, id).Error; err != nil {
+		respondError(c, http.StatusNotFound, "listener not found")
+		return
+	}
+	l.Enabled = true
+	l.Status = "running"
+	if err := s.db.Save(&l).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Listener enable"))
+		return
+	}
+	s.startListenerForRecord(&l, "enabled")
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Listener enabled"})
 }
 
 func (s *Server) handleDisableListener(c *gin.Context) {
 	id := c.Param("id")
-	s.db.Model(&db.Listener{}).Where("id = ?", id).Updates(map[string]interface{}{"enabled": false, "status": "stopped"})
+	var l db.Listener
+	if err := s.db.First(&l, id).Error; err != nil {
+		respondError(c, http.StatusNotFound, "listener not found")
+		return
+	}
+	l.Enabled = false
+	l.Status = "stopped"
+	if err := s.db.Save(&l).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Listener disable"))
+		return
+	}
+	s.stopExtraListener(listenerKey(&l))
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Listener disabled"})
 }
 
 func (s *Server) handleListenersPage(c *gin.Context) {
 	var listeners []db.Listener
-	s.db.Order("created_at desc").Find(&listeners)
+	s.db.Order("created_at desc").Limit(500).Find(&listeners)
 
-	enabled := 0
-	httpC := 0
-	tcpC := 0
-	dnsC := 0
-	for _, l := range listeners {
-		if l.Enabled {
-			enabled++
-		}
-		if l.Type == "http" {
-			httpC++
-		} else if l.Type == "tcp" {
-			tcpC++
-		} else if l.Type == "dns" {
-			dnsC++
-		}
-	}
+	var total, enabled, httpC, tcpC, dnsC, icmpC int64
+	s.db.Model(&db.Listener{}).Count(&total)
+	s.db.Model(&db.Listener{}).Where("enabled = ?", true).Count(&enabled)
+	s.db.Model(&db.Listener{}).Where("type = ?", "http").Count(&httpC)
+	s.db.Model(&db.Listener{}).Where("type = ?", "tcp").Count(&tcpC)
+	s.db.Model(&db.Listener{}).Where("type = ?", "dns").Count(&dnsC)
+	s.db.Model(&db.Listener{}).Where("type = ?", "icmp").Count(&icmpC)
 
 	stats := s.getNavStats()
 	data := gin.H{
@@ -348,6 +374,7 @@ func (s *Server) handleListenersPage(c *gin.Context) {
 		"HttpCount":    httpC,
 		"TcpCount":     tcpC,
 		"DnsCount":     dnsC,
+		"IcmpCount":    icmpC,
 	}
 	for k, v := range stats {
 		data[k] = v

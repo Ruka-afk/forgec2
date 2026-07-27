@@ -1,0 +1,292 @@
+package server
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+	"time"
+
+	"github.com/forgec2/forgec2/internal/config"
+	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/testutil"
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+)
+
+func newAgentTestServer(t *testing.T) *Server {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{}
+	cfg.Server.OfflineThreshold = 60
+	return &Server{db: testutil.SetupTestDB(t), cfg: cfg, wsClients: make(map[*websocket.Conn]*wsClientConn)}
+}
+
+func TestHandleListAgents(t *testing.T) {
+	tests := []struct {
+		name      string
+		seed      []db.Implant
+		wantCount int
+	}{
+		{
+			name:      "empty",
+			seed:      nil,
+			wantCount: 0,
+		},
+		{
+			name: "with data",
+			seed: []db.Implant{
+				{ID: "a1", Hostname: "DC01", IP: "10.0.0.1", OS: "Windows", LastSeen: time.Now()},
+				{ID: "a2", Hostname: "WEB01", IP: "10.0.0.2", OS: "Linux", LastSeen: time.Now()},
+			},
+			wantCount: 2,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newAgentTestServer(t)
+			for _, a := range tc.seed {
+				if err := s.db.Create(&a).Error; err != nil {
+					t.Fatalf("seed agent: %v", err)
+				}
+			}
+
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request, _ = http.NewRequest(http.MethodGet, "/api/agents", nil)
+
+			s.handleListAgents(c)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+			}
+			var resp struct {
+				Agents []struct {
+					ID       string `json:"id"`
+					Hostname string `json:"hostname"`
+					IP       string `json:"ip"`
+					Status   string `json:"status"`
+					OS       string `json:"os"`
+				} `json:"agents"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+			}
+			if len(resp.Agents) != tc.wantCount {
+				t.Fatalf("expected %d agents, got %d", tc.wantCount, len(resp.Agents))
+			}
+		})
+	}
+}
+
+func TestHandleAgentDetail(t *testing.T) {
+	t.Run("not found", func(t *testing.T) {
+		s := newAgentTestServer(t)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/agents/nonexistent", nil)
+		c.Params = gin.Params{{Key: "id", Value: "nonexistent"}}
+
+		s.handleAgentDetail(c)
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d; body=%s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("found", func(t *testing.T) {
+		s := newAgentTestServer(t)
+		agent := db.Implant{
+			ID:       "agent-found",
+			Hostname: "WORKSTATION01",
+			IP:       "10.0.0.5",
+			OS:       "Windows",
+			Username: "admin",
+			LastSeen: time.Now(),
+		}
+		if err := s.db.Create(&agent).Error; err != nil {
+			t.Fatalf("seed agent: %v", err)
+		}
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/agents/agent-found", nil)
+		c.Params = gin.Params{{Key: "id", Value: "agent-found"}}
+
+		s.handleAgentDetail(c)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+		var resp map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+		}
+		if _, ok := resp["Agent"]; !ok {
+			t.Fatalf("expected 'Agent' key in response; keys=%v", keys(resp))
+		}
+	})
+
+	t.Run("uses all task history for stats", func(t *testing.T) {
+		s := newAgentTestServer(t)
+		agent := db.Implant{ID: "agent-stats", Hostname: "STATS01", LastSeen: time.Now()}
+		if err := s.db.Create(&agent).Error; err != nil {
+			t.Fatalf("seed agent: %v", err)
+		}
+		for i := 0; i < AgentDetailTaskLimit+1; i++ {
+			if err := s.db.Create(&db.Task{AgentID: agent.ID, Type: "shell", Status: "completed"}).Error; err != nil {
+				t.Fatalf("seed completed task: %v", err)
+			}
+		}
+		if err := s.db.Create(&db.Task{AgentID: agent.ID, Type: "shell", Status: "failed"}).Error; err != nil {
+			t.Fatalf("seed failed task: %v", err)
+		}
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/agents/agent-stats?format=json", nil)
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+		s.handleAgentDetail(c)
+
+		var resp struct {
+			TotalTasks     int `json:"TotalTasks"`
+			CompletedTasks int `json:"CompletedTasks"`
+			FailedTasks    int `json:"FailedTasks"`
+			SuccessRate    int `json:"SuccessRate"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+		}
+		if resp.TotalTasks != AgentDetailTaskLimit+2 || resp.CompletedTasks != AgentDetailTaskLimit+1 || resp.FailedTasks != 1 || resp.SuccessRate != 98 {
+			t.Fatalf("unexpected aggregate stats: %+v", resp)
+		}
+	})
+}
+
+func TestHandleListAgentScreenshots(t *testing.T) {
+	s := newAgentTestServer(t)
+	s.cfg.Server.DataDir = t.TempDir()
+	agent := db.Implant{ID: "agent-screenshots", Hostname: "SCREEN01", LastSeen: time.Now()}
+	if err := s.db.Create(&agent).Error; err != nil {
+		t.Fatalf("seed agent: %v", err)
+	}
+
+	dir := filepath.Join(s.cfg.Server.DataDir, "screenshots", agent.ID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("create screenshots directory: %v", err)
+	}
+	for _, filename := range []string{"screenshot_100.png", "screenshot_300.png", "screenshot_200.png", "ignored.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, filename), []byte("test"), 0o600); err != nil {
+			t.Fatalf("write screenshot fixture: %v", err)
+		}
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/api/agents/agent-screenshots/screenshots?page=1&page_size=2", nil)
+	c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+	s.handleListAgentScreenshots(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Screenshots []string `json:"screenshots"`
+			Total       int      `json:"total"`
+			Page        int      `json:"page"`
+			PageSize    int      `json:"page_size"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+	}
+	if !resp.Success || resp.Data.Total != 3 || resp.Data.Page != 1 || resp.Data.PageSize != 2 {
+		t.Fatalf("unexpected response metadata: %+v", resp)
+	}
+	if got, want := resp.Data.Screenshots, []string{"screenshot_300.png", "screenshot_200.png"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("screenshots = %v, want %v", got, want)
+	}
+}
+
+func TestHandleAPISearch_Agents(t *testing.T) {
+	t.Run("empty query returns empty results", func(t *testing.T) {
+		s := newAgentTestServer(t)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/api/search?q=", nil)
+
+		s.handleAPISearch(c)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var resp struct {
+			Success bool           `json:"success"`
+			Results []SearchResult `json:"results"`
+			Query   string         `json:"query"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("invalid json: %v", err)
+		}
+		if !resp.Success {
+			t.Fatal("expected success=true")
+		}
+		if len(resp.Results) != 0 {
+			t.Fatalf("expected empty results, got %d", len(resp.Results))
+		}
+	})
+
+	t.Run("search returns matching agent", func(t *testing.T) {
+		s := newAgentTestServer(t)
+		s.db.Create(&db.Implant{
+			ID:       "srch-1",
+			Hostname: "DC01",
+			IP:       "10.0.0.1",
+			OS:       "Windows",
+			Username: "admin",
+			LastSeen: time.Now(),
+		})
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/api/search?q=DC01", nil)
+
+		s.handleAPISearch(c)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			Success bool           `json:"success"`
+			Results []SearchResult `json:"results"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("invalid json: %v", err)
+		}
+		if !resp.Success {
+			t.Fatal("expected success=true")
+		}
+		if len(resp.Results) == 0 {
+			t.Fatal("expected at least one result")
+		}
+		if resp.Results[0].Type != "agent" {
+			t.Fatalf("expected agent result type, got %q", resp.Results[0].Type)
+		}
+	})
+}
+
+func keys(m map[string]any) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	return ks
+}

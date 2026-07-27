@@ -31,9 +31,9 @@ func TestHandleListCredentials_Empty(t *testing.T) {
 		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
 	}
 	var resp struct {
-		Success bool               `json:"success"`
+		Success bool                 `json:"success"`
 		Data    []db.CredentialEntry `json:"data"`
-		Total   int                 `json:"total"`
+		Total   int                  `json:"total"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
@@ -72,7 +72,7 @@ func TestHandleListCredentials_WithData(t *testing.T) {
 	var resp struct {
 		Success bool                 `json:"success"`
 		Data    []db.CredentialEntry `json:"data"`
-		Total   int                   `json:"total"`
+		Total   int                  `json:"total"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
@@ -119,8 +119,8 @@ func TestHandleCreateCredential_Success(t *testing.T) {
 		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
 	}
 	var resp struct {
-		Success bool   `json:"success"`
-		ID      uint   `json:"id"`
+		Success bool `json:"success"`
+		ID      uint `json:"id"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())

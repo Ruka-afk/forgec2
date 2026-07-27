@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
@@ -14,19 +14,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Check, ChevronLeft, ChevronRight, Download, Images, Minus, Pause, Play, Plus, Trash2, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-
-interface Screenshot {
-  id: string;
-  agent_id: string;
-  filename: string;
-  path: string;
-  created_at: string;
-}
-
-interface Resolution {
-  w: number;
-  h: number;
-}
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { Screenshot, Resolution } from "@/types/screenshot";
 
 const PAGE_SIZE = 24;
 
@@ -137,7 +126,7 @@ export default function ScreenshotsPage() {
   const deleteSelected = () => {
     if (selectedIds.size === 0) return;
     setCfm({
-      msg: `Delete ${selectedIds.size} screenshot(s)?`,
+      msg: t("screenshots.confirm_delete", { count: selectedIds.size }),
       cb: async () => {
         try {
           await api.postJson("/loot/bulk-delete", { ids: [...selectedIds] });
@@ -157,7 +146,7 @@ export default function ScreenshotsPage() {
   };
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader
         title={<>{t("screenshots.title")} <span className="text-primary">{t("screenshots.gallery")}</span></>}
         subtitle={t("screenshots.subtitle")}
@@ -243,7 +232,7 @@ export default function ScreenshotsPage() {
                       if (img.naturalWidth) handleResolution(s.id, img.naturalWidth, img.naturalHeight);
                     }}
                   />
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[10px] text-white px-2 py-1 opacity-0 group-hover:opacity-100 transition flex justify-between items-center">
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-(--font-size-micro-sm) text-white px-2 py-1 opacity-0 group-hover:opacity-100 transition flex justify-between items-center">
                     <span className="truncate">{s.agent_id.substring(0, 8)}</span>
                     <a href={`/screenshots/${s.path}`} download onClick={e => e.stopPropagation()} className="hover:text-emerald-300 px-1 transition-colors">
                       <Download className="w-4 h-4" />
@@ -273,35 +262,50 @@ export default function ScreenshotsPage() {
                 <span className="hidden sm:inline">{current.filename}</span>
               </div>
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon-sm" onClick={() => setZoom(z => Math.max(0.25, z - 0.25))} className="text-white/70 hover:text-white hover:bg-white/10" title="Zoom out" aria-label="Zoom out">
-                  <Minus className="w-4 h-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => setZoom(z => Math.max(0.25, z - 0.25))} className="text-white/70 hover:text-white hover:bg-white/10" aria-label={t("screenshots.lightbox_zoom_out")} />}>
+                    <Minus className="w-4 h-4" />
+                  </TooltipTrigger>
+                  <TooltipContent>{t("screenshots.lightbox_zoom_out")}</TooltipContent>
+                </Tooltip>
                 <span className="text-xs text-white/60 w-10 text-center">{Math.round(zoom * 100)}%</span>
-                <Button variant="ghost" size="icon-sm" onClick={() => setZoom(z => Math.min(5, z + 0.25))} className="text-white/70 hover:text-white hover:bg-white/10" title="Zoom in" aria-label="Zoom in">
-                  <Plus className="w-4 h-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => setZoom(z => Math.min(5, z + 0.25))} className="text-white/70 hover:text-white hover:bg-white/10" aria-label={t("screenshots.lightbox_zoom_in")} />}>
+                    <Plus className="w-4 h-4" />
+                  </TooltipTrigger>
+                  <TooltipContent>{t("screenshots.lightbox_zoom_in")}</TooltipContent>
+                </Tooltip>
                 <div className="w-px h-5 bg-secondary/70 mx-1" />
-                <Button variant="ghost" size="icon-sm" onClick={() => setSlideshow(s => !s)} className={`${slideshow ? "text-emerald-400" : "text-white/70 hover:text-white hover:bg-white/10"}`} title="Slideshow" aria-label="Slideshow">
-                  {slideshow ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                </Button>
-                <a href={current.url} download className="inline-flex size-7 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm" title="Download">
-                  <Download className="w-4 h-4" />
-                </a>
+                <Tooltip>
+                  <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => setSlideshow(s => !s)} className={`${slideshow ? "text-emerald-400" : "text-white/70 hover:text-white hover:bg-white/10"}`} aria-label={t("screenshots.lightbox_slideshow")} />}>
+                    {slideshow ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                  </TooltipTrigger>
+                  <TooltipContent>{t("screenshots.lightbox_slideshow")}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger render={<a href={current.url} download className="inline-flex size-7 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm" />}>
+                    <Download className="w-4 h-4" />
+                  </TooltipTrigger>
+                  <TooltipContent>{t("screenshots.lightbox_download")}</TooltipContent>
+                </Tooltip>
                 <div className="w-px h-5 bg-secondary/70 mx-1" />
-                <Button variant="ghost" size="icon-sm" onClick={() => setLbOpen(false)} className="text-white/70 hover:text-white hover:bg-white/10" title="Close (Esc)" aria-label="Close">
-                  <X className="w-4 h-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => setLbOpen(false)} className="text-white/70 hover:text-white hover:bg-white/10" aria-label={t("common.close")} />}>
+                    <X className="w-4 h-4" />
+                  </TooltipTrigger>
+                  <TooltipContent>{t("screenshots.lightbox_close")}</TooltipContent>
+                </Tooltip>
               </div>
             </div>
 
             <div className="flex-1 flex items-center justify-center relative overflow-hidden">
               {lbIndex > 0 && (
-                <Button variant="ghost" size="icon" onClick={goPrev} className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 text-white/80 hover:text-white hover:bg-white/10 rounded-full" aria-label="Previous">
+                <Button variant="ghost" size="icon" onClick={goPrev} className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 text-white/80 hover:text-white hover:bg-white/10 rounded-full" aria-label={t("screenshots.lightbox_previous")}>
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
               )}
               {lbIndex < lbImages.length - 1 && (
-                <Button variant="ghost" size="icon" onClick={goNext} className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 text-white/80 hover:text-white hover:bg-white/10 rounded-full" aria-label="Next">
+                <Button variant="ghost" size="icon" onClick={goNext} className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 text-white/80 hover:text-white hover:bg-white/10 rounded-full" aria-label={t("screenshots.lightbox_next")}>
                   <ChevronRight className="w-4 h-4" />
                 </Button>
               )}
@@ -321,11 +325,11 @@ export default function ScreenshotsPage() {
             </div>
 
             <div className="flex items-center justify-center gap-4 sm:gap-6 px-4 py-2 bg-black/80 border-t border-white/10 text-xs text-white/60 shrink-0 flex-wrap">
-              <span><span className="text-white/40">Agent:</span> {current.agent_id.substring(0, 12)}</span>
-              <span><span className="text-white/40">File:</span> {current.filename}</span>
-              <span><span className="text-white/40">Time:</span> {formatTime(current.created_at)}</span>
+              <span><span className="text-white/40">{t("screenshots.info_agent")}</span> {current.agent_id.substring(0, 12)}</span>
+              <span><span className="text-white/40">{t("screenshots.info_file")}</span> {current.filename}</span>
+              <span><span className="text-white/40">{t("screenshots.info_time")}</span> {formatTime(current.created_at)}</span>
               {resolutions[current.id] && (
-                <span><span className="text-white/40">Size:</span> {resolutions[current.id].w}&times;{resolutions[current.id].h}</span>
+                <span><span className="text-white/40">{t("screenshots.info_size")}</span> {resolutions[current.id].w}&times;{resolutions[current.id].h}</span>
               )}
             </div>
           </DialogContent>
@@ -334,10 +338,10 @@ export default function ScreenshotsPage() {
 
       <ConfirmModal
         open={!!cfm}
-        title="Confirm"
+        title={t("common.confirm")}
         message={cfm?.msg || ""}
-        confirmText="Delete"
-        cancelText="Cancel"
+        confirmText={t("common.delete")}
+        cancelText={t("common.cancel")}
         danger
         onConfirm={() => { cfm?.cb(); }}
         onCancel={() => setCfm(null)}

@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"encoding/base64"
@@ -16,10 +16,10 @@ func (s *Server) handleBOFPage(c *gin.Context) {
 	stats := s.getNavStats()
 
 	var bofs []db.BOFFile
-	s.db.Order("created_at desc").Find(&bofs)
+	s.db.Order("created_at desc").Limit(500).Find(&bofs)
 
 	data := gin.H{
-		"Title": "ForgeC2 - BOF Manager",
+		"Title":     "ForgeC2 - BOF Manager",
 		"ActiveNav": "bof",
 		"BOFFiles":  bofs,
 	}
@@ -80,7 +80,7 @@ func (s *Server) handleBOFUpload(c *gin.Context) {
 
 func (s *Server) handleBOFList(c *gin.Context) {
 	var bofs []db.BOFFile
-	s.db.Order("created_at desc").Find(&bofs)
+	s.db.Order("created_at desc").Limit(500).Find(&bofs)
 
 	results := make([]gin.H, 0, len(bofs))
 	for _, b := range bofs {
@@ -103,8 +103,7 @@ func (s *Server) handleBOFDelete(c *gin.Context) {
 	bofID := c.Param("id")
 
 	var bof db.BOFFile
-	if err := s.db.First(&bof, bofID).Error; err != nil {
-		respondError(c, http.StatusNotFound, "BOF not found")
+	if !s.findOrFail(c, &bof, bofID, "BOF") {
 		return
 	}
 
@@ -121,8 +120,7 @@ func (s *Server) handleBOFDownload(c *gin.Context) {
 	bofID := c.Param("id")
 
 	var bof db.BOFFile
-	if err := s.db.First(&bof, bofID).Error; err != nil {
-		respondError(c, http.StatusNotFound, "BOF not found")
+	if !s.findOrFail(c, &bof, bofID, "BOF") {
 		return
 	}
 
@@ -144,8 +142,7 @@ func (s *Server) handleBOFRun(c *gin.Context) {
 	}
 
 	var bof db.BOFFile
-	if err := s.db.First(&bof, bofID).Error; err != nil {
-		respondError(c, http.StatusNotFound, "BOF not found")
+	if !s.findOrFail(c, &bof, bofID, "BOF") {
 		return
 	}
 
@@ -251,8 +248,7 @@ func (s *Server) handleBOFEdit(c *gin.Context) {
 	bofID := c.Param("id")
 
 	var bof db.BOFFile
-	if err := s.db.First(&bof, bofID).Error; err != nil {
-		respondError(c, http.StatusNotFound, "BOF not found")
+	if !s.findOrFail(c, &bof, bofID, "BOF") {
 		return
 	}
 
@@ -272,4 +268,3 @@ func (s *Server) handleBOFEdit(c *gin.Context) {
 	s.LogAuditRecord(c, "bof_edit", "bof", "", fmt.Sprintf("Edited BOF: %s", bof.Name), true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "bof": bof})
 }
-

@@ -19,7 +19,7 @@ interface AgentFiltersProps {
   linkedFilter: string; setLinkedFilter: (v: string) => void;
   allTags: Tag[];
   visibleCols: Record<string, boolean>; setVisibleCols: (v: Record<string, boolean> | ((prev: Record<string, boolean>) => Record<string, boolean>)) => void;
-  onlineCount: number; staleCount: number; offlineCount: number;
+  onlineCount: number;
   windowsCount: number; linuxCount: number; darwinCount: number;
 }
 
@@ -31,7 +31,7 @@ export function AgentFilters({
   linkedFilter, setLinkedFilter,
   allTags,
   visibleCols, setVisibleCols,
-  onlineCount, staleCount, offlineCount,
+  onlineCount,
   windowsCount, linuxCount, darwinCount,
 }: AgentFiltersProps) {
   const { t } = useI18n();
@@ -99,7 +99,7 @@ export function AgentFilters({
             </SelectContent>
           </Select>
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="secondary" size="lg" className="flex-1 sm:flex-none gap-2" title="Toggle columns" />}>
+            <DropdownMenuTrigger render={<Button variant="secondary" size="lg" className="flex-1 sm:flex-none gap-2" aria-label="Toggle columns" />}>
               <Columns className="w-4 h-4" />
               <span className="hidden sm:inline">{t("agents.columns")}</span>
             </DropdownMenuTrigger>
@@ -115,7 +115,7 @@ export function AgentFilters({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <div className="hidden sm:flex items-center gap-1.5 ml-auto text-[11px]">
+          <div className="hidden sm:flex items-center gap-1.5 ml-auto text-(--font-size-xs-sm)">
             {onlineCount > 0 && <Badge variant="secondary" className="gap-1 text-emerald-600 dark:text-emerald-400"><Wifi className="w-4 h-4" />{onlineCount}</Badge>}
             {windowsCount > 0 && <Badge variant="secondary" className="gap-1"><Monitor className="w-4 h-4" />{windowsCount}</Badge>}
             {linuxCount > 0 && <Badge variant="secondary" className="gap-1"><Terminal className="w-4 h-4" />{linuxCount}</Badge>}

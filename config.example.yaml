@@ -1,0 +1,94 @@
+# ForgeC2 example configuration — copy to config.yaml and customize.
+# Sensitive values: leave empty to auto-generate on first run, or set via env:
+#   FORGEC2_JWT_SECRET, FORGEC2_AI_API_KEY, FORGEC2_DB_DRIVER, FORGEC2_DB_DSN
+
+server:
+  port: 8000
+  host: 0.0.0.0
+  tls_enabled: false
+  cert_file: data/server.crt
+  key_file: data/server.key
+  jwt_secret: ""
+  data_dir: data
+  offline_threshold: 60
+  session_max_age_hours: 24
+  cleanup_retention_days: 30
+  require_tls_for_auth: false
+  enable_pprof: false
+  enable_metrics: false
+  socks_listen_host: "127.0.0.1"
+  allowed_origins: []
+  cookie_domain: ""
+  beacon_key: ""
+  tcp_enabled: false
+  dns_enabled: false
+  grpc_enabled: false
+  icmp_enabled: false
+  ssh_enabled: false
+
+database:
+  path: data/db/forgec2.db
+  driver: sqlite
+  # dsn: "host=postgres user=forgec2 password=change_me dbname=forgec2 port=5432 sslmode=disable"
+
+implant:
+  default_interval: 5
+  default_jitter: 20
+  default_user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+  default_skip_tls: false
+
+auth:
+  password_hash: ""
+  default_password: ""
+
+password_policy:
+  min_length: 8
+  require_upper: true
+  require_lower: true
+  require_digit: true
+  require_symbol: false
+  max_age_days: 0
+
+crypto:
+  key: ""
+
+malleable:
+  enabled: false
+  status_code: 200
+  content_type: application/json
+  headers:
+    Server: nginx/1.24.0
+
+ai:
+  enabled: false
+  provider: deepseek
+  api_key: ""
+  model: deepseek-chat
+  allow_execute: false
+
+logging:
+  level: info
+
+siem:
+  enabled: false
+  url: ""
+  token: ""
+
+socks:
+  enabled: false
+  auth_required: false
+
+rate_limit:
+  login:
+    max_attempts: 5
+    window: 900
+    lockout_time: 900
+  api:
+    capacity: 100
+    rate: 20
+  beacon:
+    limit: 120
+    window: 60
+  extc2:
+    enabled: false
+    api_token: ""

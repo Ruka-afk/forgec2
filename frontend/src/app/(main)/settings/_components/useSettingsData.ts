@@ -1,0 +1,118 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n";
+import type { AgentForm, MalleableForm, PasswordForm, ServerForm, SettingsData } from "./types";
+
+const defaultAgentForm = (): AgentForm => ({
+  interval: 5,
+  jitter: 10,
+  skip_tls: false,
+  user_agent: "",
+  working_start: "",
+  working_end: "",
+  working_tz: "",
+});
+
+const defaultServerForm = (): ServerForm => ({
+  log_level: "info",
+  tcp_enabled: false,
+  tcp_addr: "",
+  offline_threshold: 60,
+  session_max_age: 24,
+  cleanup_retention: 30,
+});
+
+const defaultMalleableForm = (): MalleableForm => ({
+  enabled: false,
+  status_code: 200,
+  content_type: "application/json",
+  headers_text: "",
+  prepend: "",
+  append: "",
+});
+
+export function useSettingsData() {
+  const { t } = useI18n();
+  const [data, setData] = useState<SettingsData>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [agentForm, setAgentForm] = useState<AgentForm>(defaultAgentForm);
+  const [serverForm, setServerForm] = useState<ServerForm>(defaultServerForm);
+  const [malleableForm, setMalleableForm] = useState<MalleableForm>(defaultMalleableForm);
+  const [passwordForm, setPasswordForm] = useState<PasswordForm>({ current: "", next: "", confirm: "" });
+  const [theme, setTheme] = useState("system");
+  const [language, setLanguage] = useState("zh");
+
+  const loadSettings = useCallback(async () => {
+    setError(null);
+    try {
+      const d = await api.get<SettingsData>("/settings");
+      setData(d);
+      setAgentForm({
+        interval: d.default_interval ?? 5,
+        jitter: d.default_jitter ?? 10,
+        skip_tls: d.default_skip_tls ?? false,
+        user_agent: d.default_ua ?? "",
+        working_start: d.working_start ?? "",
+        working_end: d.working_end ?? "",
+        working_tz: d.working_tz ?? "",
+      });
+      setServerForm({
+        log_level: d.log_level ?? "info",
+        tcp_enabled: d.tcp_enabled ?? false,
+        tcp_addr: d.tcp_addr ?? "",
+        offline_threshold: d.offline_threshold ?? 60,
+        session_max_age: d.session_max_age ?? 24,
+        cleanup_retention: d.cleanup_retention ?? 30,
+      });
+      setMalleableForm({
+        enabled: d.malleable_enabled ?? false,
+        status_code: d.malleable_status ?? 200,
+        content_type: d.malleable_ct ?? "application/json",
+        headers_text: "",
+        prepend: d.malleable_prepend ?? "",
+        append: d.malleable_append ?? "",
+      });
+      try {
+        const storedTheme = localStorage.getItem("forgec2_theme");
+        if (storedTheme) setTheme(storedTheme);
+        const storedLang = document.cookie.match(/forgec2_lang=([^;]+)/)?.[1]
+          || localStorage.getItem("forgec2_lang");
+        if (storedLang === "en" || storedLang === "zh") setLanguage(storedLang);
+      } catch { /* silent */ }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : t("settings.toast.load_failed");
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
+  return {
+    data,
+    setData,
+    loading,
+    error,
+    loadSettings,
+    agentForm,
+    setAgentForm,
+    serverForm,
+    setServerForm,
+    malleableForm,
+    setMalleableForm,
+    passwordForm,
+    setPasswordForm,
+    theme,
+    setTheme,
+    language,
+    setLanguage,
+  };
+}

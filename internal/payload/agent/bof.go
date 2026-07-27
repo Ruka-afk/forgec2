@@ -36,11 +36,12 @@ func vehCallback(exceptionPointers uintptr) uintptr {
 		return exceptionContinueSearch
 	}
 	// EXCEPTION_POINTERS layout: { ExceptionRecord *EXCEPTION_RECORD, ContextRecord *CONTEXT }
-	// EXCEPTION_RECORD.ExceptionCode is the first DWORD at offset 0
+	// Follow first pointer to get EXCEPTION_RECORD base
 	exceptionRecord := *(*uintptr)(unsafe.Pointer(exceptionPointers))
 	if exceptionRecord == 0 {
 		return exceptionContinueSearch
 	}
+	// Read ExceptionCode (first DWORD of EXCEPTION_RECORD)
 	code := *(*uint32)(unsafe.Pointer(exceptionRecord))
 
 	switch code {
@@ -100,7 +101,8 @@ var (
 // Equivalent to C's memcpy, needed because syscall.Memcpy is not available.
 func bofMemcpy(dst, src unsafe.Pointer, n uintptr) {
 	for i := uintptr(0); i < n; i++ {
-		*(*byte)(unsafe.Pointer(uintptr(dst) + i)) = *(*byte)(unsafe.Pointer(uintptr(src) + i))
+	// Byte-by-byte copy: raw pointer memcpy for COFF section loading
+	*(*byte)(unsafe.Pointer(uintptr(dst) + i)) = *(*byte)(unsafe.Pointer(uintptr(src) + i))
 	}
 }
 
@@ -112,6 +114,7 @@ func bofGoString(p uintptr) string {
 	}
 	var b []byte
 	for {
+		// Byte-by-byte read from C string pointer (null-terminated)
 		c := *(*byte)(unsafe.Pointer(p))
 		if c == 0 {
 			break
@@ -133,13 +136,13 @@ func getProcAddr(name string) uintptr {
 }
 
 type coffFileHeader struct {
-	Machine               uint16
-	NumberOfSections      uint16
-	TimeDateStamp         uint32
-	PointerToSymbolTable  uint32
-	NumberOfSymbols       uint32
-	SizeOfOptionalHeader  uint16
-	Characteristics       uint16
+	Machine              uint16
+	NumberOfSections     uint16
+	TimeDateStamp        uint32
+	PointerToSymbolTable uint32
+	NumberOfSymbols      uint32
+	SizeOfOptionalHeader uint16
+	Characteristics      uint16
 }
 
 type coffSectionHeader struct {
@@ -217,26 +220,26 @@ var bofOutputBuf strings.Builder
 
 // callbackTable mirrors CS BOF API function table
 type callbackTable struct {
-	Printf    uintptr
-	Output    uintptr
-	DataParse uintptr
-	DataInt   uintptr
-	DataShort uintptr
-	DataLen   uintptr
+	Printf      uintptr
+	Output      uintptr
+	DataParse   uintptr
+	DataInt     uintptr
+	DataShort   uintptr
+	DataLen     uintptr
 	DataExtract uintptr
-	DataString uintptr
+	DataString  uintptr
 	// Stubs for security-related Beacon APIs — return FALSE/0 safely
-	BeaconUseToken         uintptr
-	BeaconRevertToken      uintptr
-	BeaconIsAdmin          uintptr
-	BeaconInjectProcess    uintptr
+	BeaconUseToken               uintptr
+	BeaconRevertToken            uintptr
+	BeaconIsAdmin                uintptr
+	BeaconInjectProcess          uintptr
 	BeaconInjectTemporaryProcess uintptr
 	BeaconSpawnTemporaryProcess  uintptr
-	BeaconCleanupProcess   uintptr
-	BeaconInformation      uintptr
-	BeaconGetCustomUserData uintptr
-	BeaconSetCustomUserData uintptr
-	BeaconCheckMsfPayload  uintptr
+	BeaconCleanupProcess         uintptr
+	BeaconInformation            uintptr
+	BeaconGetCustomUserData      uintptr
+	BeaconSetCustomUserData      uintptr
+	BeaconCheckMsfPayload        uintptr
 }
 
 // exportedBeaconAPI is the function table passed to BOF (referenced as __imp_Beacon*)
@@ -552,17 +555,21 @@ func loadAndRunBOF(bofData []byte, args string) (uintptr, error) {
 			switch rel.Type {
 			case IMAGE_REL_AMD64_ABSOLUTE:
 				// No-op
-			case IMAGE_REL_AMD64_ADDR64:
-				*(*uint64)(unsafe.Pointer(targetAddr)) = uint64(symAddr)
-			case IMAGE_REL_AMD64_ADDR32:
-				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(symAddr)
+		case IMAGE_REL_AMD64_ADDR64:
+			// Write full 64-bit absolute address into relocation target
+			*(*uint64)(unsafe.Pointer(targetAddr)) = uint64(symAddr)
+		case IMAGE_REL_AMD64_ADDR32:
+			// Write 32-bit absolute address (truncated)
+			*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(symAddr)
 			case IMAGE_REL_AMD64_ADDR32NB:
 				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(symAddr)
-			case IMAGE_REL_AMD64_REL32:
-				delta := uint64(symAddr) - uint64(targetAddr) - 4
-				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(delta)
-			case IMAGE_REL_AMD64_REL32_1:
-				delta := uint64(symAddr) - uint64(targetAddr) - 5
+		case IMAGE_REL_AMD64_REL32:
+			// Write 32-bit RIP-relative offset: symAddr - targetAddr - 4
+			delta := uint64(symAddr) - uint64(targetAddr) - 4
+			*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(delta)
+		case IMAGE_REL_AMD64_REL32_1:
+			// REL32 with 1-byte displacement adjustment
+			delta := uint64(symAddr) - uint64(targetAddr) - 5
 				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(delta)
 			case IMAGE_REL_AMD64_REL32_2:
 				delta := uint64(symAddr) - uint64(targetAddr) - 6
@@ -576,14 +583,14 @@ func loadAndRunBOF(bofData []byte, args string) (uintptr, error) {
 			case IMAGE_REL_AMD64_REL32_5:
 				delta := uint64(symAddr) - uint64(targetAddr) - 9
 				*(*uint32)(unsafe.Pointer(targetAddr)) = uint32(delta)
-			case IMAGE_REL_AMD64_SECTION:
-				// Section index
-				if symSection >= 0 {
+		case IMAGE_REL_AMD64_SECTION:
+			// Write 16-bit section index (1-based)
+			if symSection >= 0 {
 					*(*uint16)(unsafe.Pointer(targetAddr)) = uint16(symSection + 1)
 				}
-			case IMAGE_REL_AMD64_SECREL:
-				// Section-relative offset
-				if symSection >= 0 {
+		case IMAGE_REL_AMD64_SECREL:
+			// Write 32-bit section-relative offset for TLS/SEH
+			if symSection >= 0 {
 					*(*uint32)(unsafe.Pointer(targetAddr)) = symVal
 				}
 			}
@@ -626,6 +633,7 @@ func loadAndRunBOF(bofData []byte, args string) (uintptr, error) {
 	}
 
 	// Call the entry point
+	// Cast raw entry point address to Go function pointer and invoke BOF "go" entry
 	goFunc := *(*func(ptr uintptr))(unsafe.Pointer(&entryPoint))
 	goFunc(uintptr(unsafe.Pointer(&parser)))
 
@@ -657,26 +665,26 @@ func packBOFArgs(args string) []byte {
 func setupBeaconAPI() {
 	// Use text/trick: define function variables that point to Go functions
 	exportedBeaconAPI = callbackTable{
-		Printf:       uintptr(syscall.NewCallback(bofBeaconPrintf)),
-		Output:       uintptr(syscall.NewCallback(bofBeaconOutput)),
-		DataParse:    uintptr(syscall.NewCallback(bofDataParse)),
-		DataInt:      uintptr(syscall.NewCallback(bofDataInt)),
-		DataShort:    uintptr(syscall.NewCallback(bofDataShort)),
-		DataLen:      uintptr(syscall.NewCallback(bofDataLength)),
-		DataExtract:  uintptr(syscall.NewCallback(bofDataExtract)),
-		DataString:   uintptr(syscall.NewCallback(bofDataString)),
+		Printf:      uintptr(syscall.NewCallback(bofBeaconPrintf)),
+		Output:      uintptr(syscall.NewCallback(bofBeaconOutput)),
+		DataParse:   uintptr(syscall.NewCallback(bofDataParse)),
+		DataInt:     uintptr(syscall.NewCallback(bofDataInt)),
+		DataShort:   uintptr(syscall.NewCallback(bofDataShort)),
+		DataLen:     uintptr(syscall.NewCallback(bofDataLength)),
+		DataExtract: uintptr(syscall.NewCallback(bofDataExtract)),
+		DataString:  uintptr(syscall.NewCallback(bofDataString)),
 		// Stubs that return FALSE/0 safely — no token ops or process injection
-		BeaconUseToken:         uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconRevertToken:      uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconIsAdmin:          uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconInjectProcess:    uintptr(syscall.NewCallback(bofStubReturnFalse)),
+		BeaconUseToken:               uintptr(syscall.NewCallback(bofStubReturnFalse)),
+		BeaconRevertToken:            uintptr(syscall.NewCallback(bofStubReturnFalse)),
+		BeaconIsAdmin:                uintptr(syscall.NewCallback(bofStubReturnFalse)),
+		BeaconInjectProcess:          uintptr(syscall.NewCallback(bofStubReturnFalse)),
 		BeaconInjectTemporaryProcess: uintptr(syscall.NewCallback(bofStubReturnFalse)),
 		BeaconSpawnTemporaryProcess:  uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconCleanupProcess:   uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconInformation:      uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconGetCustomUserData: uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconSetCustomUserData: uintptr(syscall.NewCallback(bofStubReturnFalse)),
-		BeaconCheckMsfPayload:  uintptr(syscall.NewCallback(bofStubReturnFalse)),
+		BeaconCleanupProcess:         uintptr(syscall.NewCallback(bofStubReturnFalse)),
+		BeaconInformation:            uintptr(syscall.NewCallback(bofStubReturnFalse)),
+		BeaconGetCustomUserData:      uintptr(syscall.NewCallback(bofStubReturnFalse)),
+		BeaconSetCustomUserData:      uintptr(syscall.NewCallback(bofStubReturnFalse)),
+		BeaconCheckMsfPayload:        uintptr(syscall.NewCallback(bofStubReturnFalse)),
 	}
 }
 
@@ -730,11 +738,13 @@ func bofDataInt(parser uintptr) int32 {
 	if parser == 0 {
 		return 0
 	}
+	// Cast raw pointer to beaconDataParse struct for argument parsing
 	p := (*beaconDataParse)(unsafe.Pointer(parser))
 	if p.Length < 4 {
 		p.Indicator = 1
 		return 0
 	}
+	// Read 4-byte int from current buffer position
 	val := *(*int32)(unsafe.Pointer(p.Buffer))
 	p.Buffer = uintptr(unsafe.Pointer(uintptr(p.Buffer) + 4))
 	p.Length -= 4
@@ -746,6 +756,7 @@ func bofDataShort(parser uintptr) int32 {
 	if parser == 0 {
 		return 0
 	}
+	// Read 2-byte short from parser buffer
 	p := (*beaconDataParse)(unsafe.Pointer(parser))
 	if p.Length < 2 {
 		p.Indicator = 1
@@ -767,6 +778,7 @@ func bofDataExtract(parser uintptr, sizeOut uintptr) uintptr {
 	if parser == 0 {
 		return 0
 	}
+	// Read 2-byte length prefix for variable-length string extraction
 	p := (*beaconDataParse)(unsafe.Pointer(parser))
 	if p.Length < 2 {
 		p.Indicator = 1
@@ -780,6 +792,7 @@ func bofDataExtract(parser uintptr, sizeOut uintptr) uintptr {
 		return 0
 	}
 	if sizeOut != 0 {
+		// Write extracted string length back to caller's output parameter
 		*(*int32)(unsafe.Pointer(sizeOut)) = int32(strLen)
 	}
 	result := p.Buffer
@@ -802,6 +815,7 @@ func bofDataString(parser uintptr) uintptr {
 	result := p.Buffer
 	ptr := uintptr(p.Buffer)
 	end := ptr
+	// Byte-by-byte scan for null terminator in C string
 	for int32(end-ptr) < p.Length {
 		if *(*byte)(unsafe.Pointer(end)) == 0 {
 			end++

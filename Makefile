@@ -1,4 +1,4 @@
-.PHONY: build build-js build-all test vet lint run dev bundle clean
+.PHONY: build build-js build-embed build-all test vet lint run dev bundle clean
 .PHONY: build-cross build-linux build-windows build-darwin
 .PHONY: tidy deps i18n-check i18n-missing
 .PHONY: db-reset help
@@ -26,7 +26,20 @@ test:
 lint: vet
 	@echo "Install golangci-lint for full linting: https://golangci-lint.run/usage/install/"
 
-# ---------- Cross-compilation ----------
+# ---------- Embedded Frontend ----------
+
+build-js:
+	cd frontend && npm run build
+
+# Copy frontend output to embed directory
+internal/webdist/dist: build-js
+	rm -rf internal/webdist/dist
+	cp -r frontend/out internal/webdist/dist
+
+# Full embed pipeline: built frontend --> embed --> Go binary
+build-embed: internal/webdist/dist build
+
+# ---------- Cross-compilation (requires build-js first) ----------
 
 build-linux:
 	GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -trimpath -buildvcs=false -o $(BINARY)-linux-amd64 ./cmd/server
@@ -39,14 +52,9 @@ build-darwin:
 
 build-cross: build-linux build-windows build-darwin
 
-# ---------- Frontend ----------
+build-all: build-embed
 
-build-js:
-	powershell -ExecutionPolicy Bypass -File ./build_js.ps1 -SkipCSS
-
-build-all: build-js build
-
-bundle: build-js
+bundle: build-embed
 
 # ---------- i18n ----------
 
@@ -75,6 +83,7 @@ db-reset:
 
 clean:
 	go clean
+	rm -rf internal/webdist/dist
 	rm -f $(BINARY) $(BINARY).exe
 	rm -f $(BINARY)-linux-amd64 $(BINARY)-windows-amd64.exe $(BINARY)-darwin-amd64
 
@@ -83,7 +92,10 @@ clean:
 help:
 	@echo "ForgeC2 Makefile"
 	@echo ""
-	@echo "  make build          Build server (Windows .exe)"
+	@echo "  make build          Build server (Windows .exe, requires existing internal/webdist/dist)"
+	@echo "  make build-js       Build frontend JS"
+	@echo "  make build-embed    Build frontend + embed + Go binary (full pipeline)"
+	@echo "  make build-all      Alias for build-embed"
 	@echo "  make test           Run all Go tests"
 	@echo "  make vet            Run go vet"
 	@echo "  make tidy           Run go mod tidy"
@@ -91,7 +103,6 @@ help:
 	@echo "  make build-linux    Build for Linux amd64"
 	@echo "  make build-windows  Build for Windows amd64"
 	@echo "  make build-darwin   Build for macOS amd64"
-	@echo "  make build-all      Build frontend JS + server"
 	@echo "  make dev            Run in dev mode"
 	@echo "  make clean          Remove build artifacts"
 	@echo "  make help           Show this help"

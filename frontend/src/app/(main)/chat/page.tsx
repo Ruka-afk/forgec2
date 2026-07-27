@@ -37,20 +37,21 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { connected: wsConnected, subscribe } = useWS();
 
-  const loadHistory = useCallback(async (silent = false) => {
+  const loadHistory = useCallback(async (silent = false, signal?: AbortSignal) => {
     if (!silent) setLoading(true);
     try {
-      const data = await api.json(`/chat/history?channel=${currentChannel}`);
-      setMessages((data.messages as ChatMsg[]) || []);
-    } catch { setMessages([]); toast.error(t("chat.load_history_failed")); }
+      const data = await api.get(`/chat/history?channel=${currentChannel}`, { signal });
+      const msgs = (data.messages as ChatMsg[]) || [];
+      setMessages(msgs.slice(-500));
+    } catch (e) { if ((e as Error).name !== 'AbortError') { setMessages([]); toast.error(t("chat.load_history_failed")); } }
     if (!silent) setLoading(false);
   }, [currentChannel, t]);
 
-  const loadChannels = useCallback(async () => {
+  const loadChannels = useCallback(async (signal?: AbortSignal) => {
     try {
-      const data = await api.json("/chat/channels");
+      const data = await api.get("/chat/channels", { signal });
       if ((data.channels as ChannelInfo[])?.length > 0) setChannels(data.channels as ChannelInfo[]);
-    } catch { toast.error(t("chat.load_channels_failed")); }
+    } catch (e) { if ((e as Error).name !== 'AbortError') toast.error(t("chat.load_channels_failed")); }
   }, [t]);
 
   useEffect(() => {
@@ -63,7 +64,12 @@ export default function ChatPage() {
     return unsub;
   }, [subscribe, currentChannel, wsConnected, loadHistory]);
 
-  useEffect(() => { loadHistory(); loadChannels(); }, [currentChannel, loadHistory, loadChannels]);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadHistory(false, controller.signal);
+    loadChannels(controller.signal);
+    return () => controller.abort();
+  }, [currentChannel, loadHistory, loadChannels]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -86,7 +92,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up flex flex-col h-[calc(100vh-100px)]">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up flex flex-col h-[calc(100vh-100px)]">
       <PageHeader title={t("chat.title")} subtitle={t("chat.subtitle")}>
         <Badge variant={connected ? "success" : "destructive"}>
           {connected ? t("chat.connected") : t("chat.disconnected")}
@@ -100,7 +106,7 @@ export default function ChatPage() {
               className={`flex justify-between px-2.5 py-2 rounded-lg text-xs cursor-pointer transition-colors ${c.channel === currentChannel ? "bg-primary text-primary-foreground" : "hover:bg-secondary text-muted-foreground"}`}
               onClick={() => setCurrentChannel(c.channel)}>
               <span># {c.channel}</span>
-              <span className="text-[11px] opacity-70">{c.message_count}</span>
+              <span className="text-(--font-size-xs-sm) text-muted-foreground">{c.message_count}</span>
             </div>
           ))}
         </div>
@@ -119,7 +125,7 @@ export default function ChatPage() {
               messages.map(m => (
                 <div key={m.id} className="px-2.5 py-1.5 rounded-lg bg-card">
                   <span className="font-semibold text-xs text-indigo-600 dark:text-indigo-400 mr-2">{m.username}</span>
-                  <span className="text-[11px] text-muted-foreground">{formatTime(m.created_at)}</span>
+                  <span className="text-(--font-size-xs-sm) text-muted-foreground">{formatTime(m.created_at)}</span>
                   <div className="mt-1 text-sm text-foreground whitespace-pre-wrap break-words">{m.message}</div>
                 </div>
               ))

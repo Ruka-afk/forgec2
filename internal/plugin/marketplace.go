@@ -20,6 +20,7 @@ type Marketplace struct {
 	mu        sync.RWMutex
 	updateJob *time.Ticker
 	stopCh    chan struct{}
+	done      chan struct{} // closed when update checker goroutine exits
 }
 
 func NewMarketplace(database *gorm.DB) *Marketplace {
@@ -32,8 +33,10 @@ func (m *Marketplace) StartUpdateChecker(interval time.Duration) {
 		m.updateJob.Stop()
 	}
 	m.stopCh = make(chan struct{})
+	m.done = make(chan struct{})
 	m.updateJob = time.NewTicker(interval)
 	go func() {
+		defer close(m.done)
 		for {
 			select {
 			case <-m.updateJob.C:
@@ -49,6 +52,10 @@ func (m *Marketplace) StopUpdateChecker() {
 	if m.stopCh != nil {
 		close(m.stopCh)
 		m.stopCh = nil
+	}
+	if m.done != nil {
+		<-m.done
+		m.done = nil
 	}
 	if m.updateJob != nil {
 		m.updateJob.Stop()
@@ -301,9 +308,9 @@ func (m *Marketplace) fetchGitHubLatestVersion(homepage string) (string, string,
 	}
 
 	var release struct {
-		TagName     string `json:"tag_name"`
-		HTMLURL     string `json:"html_url"`
-		Body        string `json:"body"`
+		TagName string `json:"tag_name"`
+		HTMLURL string `json:"html_url"`
+		Body    string `json:"body"`
 	}
 	if err := json.Unmarshal(body, &release); err != nil {
 		return "", "", err
@@ -315,6 +322,66 @@ func (m *Marketplace) GetUpdateStatus(pluginID uint) (*db.PluginUpdateStatus, er
 	var status db.PluginUpdateStatus
 	err := m.db.FirstOrCreate(&status, db.PluginUpdateStatus{PluginID: pluginID}).Error
 	return &status, err
+}
+
+func (m *Marketplace) BatchEnrichPlugins(plugins []db.Plugin) {
+	if len(plugins) == 0 {
+		return
+	}
+	ids := make([]uint, len(plugins))
+	idSet := make(map[uint]struct{}, len(plugins))
+	for i, p := range plugins {
+		ids[i] = p.ID
+		idSet[p.ID] = struct{}{}
+	}
+
+	var reviews []db.PluginReview
+	if err := m.db.Where("plugin_id IN ?", ids).Find(&reviews).Error; err != nil {
+		slog.Error("BatchGetRatingSummaries failed", "error", err)
+		return
+	}
+	ratingMap := make(map[uint]*RatingSummary, len(ids))
+	for i := range ids {
+		ratingMap[ids[i]] = &RatingSummary{Stars: make([]int, 5)}
+	}
+	for _, r := range reviews {
+		summary, ok := ratingMap[r.PluginID]
+		if !ok {
+			continue
+		}
+		if r.Rating >= 1 && r.Rating <= 5 {
+			summary.Stars[r.Rating-1]++
+			summary.Count++
+		}
+	}
+	for _, summary := range ratingMap {
+		if summary.Count > 0 {
+			var total int
+			for i, c := range summary.Stars {
+				total += c * (i + 1)
+			}
+			summary.Overall = float64(total) / float64(summary.Count)
+		}
+	}
+	for i := range plugins {
+		if s, ok := ratingMap[plugins[i].ID]; ok {
+			plugins[i].RatingOverall = s.Overall
+			plugins[i].RatingCount = s.Count
+		}
+	}
+
+	var statuses []db.PluginUpdateStatus
+	if err := m.db.Where("plugin_id IN ?", ids).Find(&statuses).Error; err != nil {
+		slog.Error("BatchGetUpdateStatuses failed", "error", err)
+		return
+	}
+	statusMap := make(map[uint]bool, len(statuses))
+	for _, st := range statuses {
+		statusMap[st.PluginID] = st.UpdateAvailable
+	}
+	for i := range plugins {
+		plugins[i].UpdateAvailable = statusMap[plugins[i].ID]
+	}
 }
 
 func (m *Marketplace) UpdatePlugin(pluginID uint) error {

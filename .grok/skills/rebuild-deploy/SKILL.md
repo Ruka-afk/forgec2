@@ -1,6 +1,6 @@
 ---
 name: rebuild-deploy
-description: Rebuild ForgeC2 Next.js frontend and Go API server, then restart both on Windows
+description: Rebuild ForgeC2 single binary (embedded frontend + Go server) and restart
 license: MIT
 compatibility: grok
 metadata:
@@ -10,39 +10,50 @@ metadata:
 
 ## When to use
 
-Use after changing Go handlers/API, Next.js pages (`frontend/src/`), or legacy embedded templates.
+Use after changing Go handlers/API, Next.js pages (`frontend/src/`), or embedded frontend assets.
 
 ## Architecture
 
-| Service | Port | Build |
-|---------|------|-------|
-| Go API | 8080 | `go build -o forgec2-server.exe ./cmd/server` |
-| Next.js UI | 3000 | `cd frontend && npm run build` |
+Single binary — all-in-one process:
+
+| Component | Port | Build |
+|-----------|------|-------|
+| Go server (with embedded Next.js UI) | 8000 | `powershell -File scripts/build-embedded.ps1` |
 
 ## Windows — full restart (recommended)
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1
+powershell -File scripts\build-embedded.ps1
 ```
 
-`start.ps1` builds Go → starts API → builds Next.js → starts UI on `:3000`.
+`build-embedded.ps1` builds Next.js frontend → copies to embed directory → compiles Go binary → restarts server → runs health check.
 
 ## Manual steps
 
 ```powershell
-# 1. Build Go API
-go build -o forgec2-server.exe ./cmd/server/
+# 1. Build frontend
+cd frontend
+npm install
+npm run build
 
-# 2. Stop existing processes
-Get-Process forgec2-server,node -ErrorAction SilentlyContinue | Stop-Process -Force
+# 2. Copy to embed directory
+Remove-Item -Recurse -Force ..\internal\webdist\dist -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path ..\internal\webdist\dist | Out-Null
+Copy-Item -Recurse -Path "out\*" -Destination "..\internal\webdist\dist\"
 
-# 3. Start Go API
+# 3. Build Go binary
+cd ..
+go build -o forgec2-server.exe ./cmd/server
+
+# 4. Stop existing process
+taskkill /f /im forgec2-server.exe 2>$null
+
+# 5. Start server
 Start-Process .\forgec2-server.exe -ArgumentList "-config config.yaml" -WindowStyle Hidden
 
-# 4. Build + start Next.js
-cd frontend
-npm run build
-npx next start -p 3000
+# 6. Health check
+Start-Sleep -Seconds 3
+Invoke-RestMethod http://127.0.0.1:8000/health
 ```
 
 ## Development mode
@@ -51,24 +62,21 @@ npx next start -p 3000
 # Terminal 1 — API with live reload
 go run ./cmd/server -config config.yaml
 
-# Terminal 2 — Next.js hot reload
+# Terminal 2 — Next.js hot reload (proxies API to Go on :8000)
 cd frontend
 npm run dev
 ```
 
-Open **http://localhost:3000** (not `:8080` for UI).
+Open **http://localhost:3000** (Next.js hot-reload) or **http://localhost:8000** (single binary).
 
-## Legacy template bundles (optional)
-
-Only needed if editing `internal/server/templates/static/` for `:8080` HTML fallback:
+## Backend-only rebuild (no frontend changes)
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File build_js.ps1 -SkipCSS
-go build -o forgec2-server.exe ./cmd/server
+powershell -File scripts\dev-backend.ps1
 ```
 
 ## Verify
 
-- `http://127.0.0.1:8080/health` returns `{"status":"ok"}`
-- `http://127.0.0.1:3000/login` returns 200
+- `http://127.0.0.1:8000/health` returns `{"status":"ok"}`
+- `http://127.0.0.1:8000/login` returns 200 (SPA HTML)
 - Dashboard charts load; WebSocket shows Live in top bar

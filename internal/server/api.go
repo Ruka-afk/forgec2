@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"log/slog"
@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/errgroup"
+	"gorm.io/gorm"
 )
 
 // ── REST API: Agents ──
@@ -36,7 +38,7 @@ func (s *Server) apiListAgents(c *gin.Context) {
 	}
 
 	offlineCutoff := time.Now().Add(-s.offlineThreshold())
-	staleCutoff := time.Now().Add(-StaleThreshold)
+	staleCutoff := time.Now().Add(-s.staleThreshold())
 
 	query := s.db.Model(&db.Implant{})
 
@@ -60,21 +62,79 @@ func (s *Server) apiListAgents(c *gin.Context) {
 	}
 
 	var total int64
-	query.Count(&total)
+	if err := query.Count(&total).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to count agents")
+		return
+	}
 
 	var agents []db.Implant
-	query.Order("last_seen desc").Offset((pageNum - 1) * pageSize).Limit(pageSize).Find(&agents)
+	if err := query.Order("last_seen desc").Offset((pageNum - 1) * pageSize).Limit(pageSize).Find(&agents).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to query agents")
+		return
+	}
 
-	for i := range agents {
-		agents[i].Status = s.agentStatus(agents[i]).Status
+	// Compute task stats for the returned agents
+	agentIDs := make([]string, len(agents))
+	for i, a := range agents {
+		agentIDs[i] = a.ID
+		agents[i].Status = s.agentStatus(a).Status
+	}
+	taskStatsMap := computeTaskStats(s.db, agentIDs)
+
+	type agentResponse struct {
+		db.Implant
+		TaskStats *db.TaskStats `json:"taskStats,omitempty"`
+	}
+	resp := make([]agentResponse, len(agents))
+	for i, a := range agents {
+		ts := taskStatsMap[a.ID]
+		resp[i] = agentResponse{Implant: a, TaskStats: ts}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"agents":    agents,
+		"success":   true,
+		"data":      resp,
 		"total":     total,
 		"page":      pageNum,
 		"page_size": pageSize,
 	})
+}
+
+// computeTaskStats returns task status counts per agent ID using a single GROUP BY query.
+func computeTaskStats(database *gorm.DB, ids []string) map[string]*db.TaskStats {
+	if len(ids) == 0 {
+		return nil
+	}
+	type row struct {
+		AgentID string
+		Status  string
+		Count   int
+	}
+	var rows []row
+	database.Raw(
+		"SELECT agent_id, status, COUNT(*) as count FROM tasks WHERE agent_id IN ? GROUP BY agent_id, status",
+		ids,
+	).Scan(&rows)
+
+	out := make(map[string]*db.TaskStats, len(ids))
+	for _, r := range rows {
+		ts, ok := out[r.AgentID]
+		if !ok {
+			ts = &db.TaskStats{}
+			out[r.AgentID] = ts
+		}
+		switch r.Status {
+		case "pending":
+			ts.Pending = r.Count
+		case "running":
+			ts.Running = r.Count
+		case "completed":
+			ts.Completed = r.Count
+		case "failed":
+			ts.Failed = r.Count
+		}
+	}
+	return out
 }
 
 func (s *Server) apiGetAgent(c *gin.Context) {
@@ -134,9 +194,15 @@ func (s *Server) apiListTasks(c *gin.Context) {
 func (s *Server) apiGetTask(c *gin.Context) {
 	id := c.Param("id")
 	var task db.Task
-	if err := s.db.Preload("Agent").First(&task, id).Error; err != nil {
+	if err := s.db.First(&task, id).Error; err != nil {
 		respondError(c, http.StatusNotFound, "task not found")
 		return
+	}
+	if task.AgentID != "" {
+		var agent db.Implant
+		if err := s.db.First(&agent, "id = ?", task.AgentID).Error; err == nil {
+			task.Agent = agent
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": task})
 }
@@ -153,6 +219,11 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 		return
 	}
 
+	if !IsKnownTaskType(req.Type) && !protocol.ValidTaskType(req.Type) {
+		respondError(c, http.StatusBadRequest, "unknown task type: "+req.Type)
+		return
+	}
+
 	task, err := s.createTask(req.AgentID, req.Type, req.Command, req.Shell, "", "", 0, 0)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "task creation failed")
@@ -160,6 +231,7 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 	}
 
 	s.broadcastTaskUpdate(req.AgentID, *task)
+	slog.Info("Task created via API", "task_id", task.ID, "agent_id", task.AgentID, "type", task.Type)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": task})
 }
 
@@ -198,62 +270,108 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 	offlineCutoff := time.Now().Add(-s.offlineThreshold())
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	staleCutoff := now.Add(-s.staleThreshold())
 
-	var totalAgents, onlineAgents, todayTasks, pendingTasks, failedTasks,
-		totalCreds, totalTokens, totalListeners, totalTasks, totalAudits int64
+	type agentCounts struct {
+		Total   int64
+		Online  int64
+		Stale   int64
+		Offline int64
+	}
+	type taskCounts struct {
+		Total   int64
+		Today   int64
+		Pending int64
+		Failed  int64
+	}
 
 	g, ctx := errgroup.WithContext(c.Request.Context())
-	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Implant{}).Count(&totalAgents).Error })
-	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Implant{}).Where("last_seen > ?", offlineCutoff).Count(&onlineAgents).Error })
-	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Task{}).Where("created_at >= ?", todayStart).Count(&todayTasks).Error })
-	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks).Error })
-	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Task{}).Where("status = ?", "failed").Count(&failedTasks).Error })
-	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Task{}).Count(&totalTasks).Error })
+
+	var ac agentCounts
+	g.Go(func() error {
+		return s.db.WithContext(ctx).Raw(`
+			SELECT
+				COUNT(*) as total,
+				COALESCE(SUM(CASE WHEN last_seen > ? THEN 1 ELSE 0 END), 0) as online,
+				COALESCE(SUM(CASE WHEN last_seen > ? AND last_seen <= ? THEN 1 ELSE 0 END), 0) as stale,
+				COALESCE(SUM(CASE WHEN last_seen <= ? THEN 1 ELSE 0 END), 0) as offline
+			FROM implants`, offlineCutoff, offlineCutoff, staleCutoff, offlineCutoff,
+		).Scan(&ac).Error
+	})
+
+	var tc taskCounts
+	g.Go(func() error {
+		return s.db.WithContext(ctx).Raw(`
+			SELECT
+				COUNT(*) as total,
+				COALESCE(SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END), 0) as today,
+				COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as pending,
+				COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed
+			FROM tasks`, todayStart,
+		).Scan(&tc).Error
+	})
+
+	var totalCreds, totalTokens, totalListeners, totalAudits int64
 	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.CredentialEntry{}).Count(&totalCreds).Error })
 	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.TokenEntry{}).Count(&totalTokens).Error })
 	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.Listener{}).Count(&totalListeners).Error })
 	g.Go(func() error { return s.db.WithContext(ctx).Model(&db.AuditLog{}).Count(&totalAudits).Error })
+	var onlineUsersList []UserSession
+	g.Go(func() error {
+		onlineUsersList = s.getOnlineUsers()
+		return nil
+	})
 	if err := g.Wait(); err != nil {
 		slog.Error("api: failed to count dashboard stats", "error", err)
 	}
 
-	var staleCount int64
-	staleCutoff := now.Add(-30 * time.Minute)
-	if err := s.db.Model(&db.Implant{}).Where("last_seen > ? AND last_seen <= ?", offlineCutoff, staleCutoff).Count(&staleCount).Error; err != nil {
-		slog.Error("api: failed to count stale agents", "error", err)
-	}
-	var offlineCount int64
-	if err := s.db.Model(&db.Implant{}).Where("last_seen <= ?", offlineCutoff).Count(&offlineCount).Error; err != nil {
-		slog.Error("api: failed to count offline agents", "error", err)
-	}
-
-	onlineUsers := int64(len(s.getOnlineUsers()))
+	onlineUsers := int64(len(onlineUsersList))
 
 	var recentTasks []db.Task
-	s.db.Preload("Agent").
-		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
+	s.db.Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
 		Order("created_at desc").Limit(DashboardRecentTasks).Find(&recentTasks)
+	if len(recentTasks) > 0 {
+		agentIDs := make([]string, 0, len(recentTasks))
+		for _, t := range recentTasks {
+			if t.AgentID != "" {
+				agentIDs = append(agentIDs, t.AgentID)
+			}
+		}
+		if len(agentIDs) > 0 {
+			var agents []db.Implant
+			s.db.Where("id IN ?", agentIDs).Find(&agents)
+			agentMap := make(map[string]db.Implant, len(agents))
+			for _, a := range agents {
+				agentMap[a.ID] = a
+			}
+			for i := range recentTasks {
+				if a, ok := agentMap[recentTasks[i].AgentID]; ok {
+					recentTasks[i].Agent = a
+				}
+			}
+		}
+	}
 
 	stats := gin.H{
-		"total_agents":     totalAgents,
-		"online_agents":    onlineAgents,
-		"today_tasks":      todayTasks,
-		"pending_tasks":    pendingTasks,
-		"failed_tasks":     failedTasks,
-		"total_tasks":      totalTasks,
-		"total_creds":      totalCreds,
-		"total_tokens":     totalTokens,
-		"total_listeners":  totalListeners,
-		"total_audits":     totalAudits,
-		"online_count":     onlineAgents,
-		"stale_count":      staleCount,
-		"offline_count":    offlineCount,
-		"listener_count":   totalListeners,
-		"pending_count":    pendingTasks,
-		"online_users":     onlineUsers,
-		"completed_tasks":  totalTasks - failedTasks - pendingTasks,
-		"server_version":   ServerVersion,
-		"recent_tasks":     recentTasks,
+		"total_agents":    ac.Total,
+		"online_agents":   ac.Online,
+		"today_tasks":     tc.Today,
+		"pending_tasks":   tc.Pending,
+		"failed_tasks":    tc.Failed,
+		"total_tasks":     tc.Total,
+		"total_creds":     totalCreds,
+		"total_tokens":    totalTokens,
+		"total_listeners": totalListeners,
+		"total_audits":    totalAudits,
+		"online_count":    ac.Online,
+		"stale_count":     ac.Stale,
+		"offline_count":   ac.Offline,
+		"listener_count":  totalListeners,
+		"pending_count":   tc.Pending,
+		"online_users":    onlineUsers,
+		"completed_tasks": tc.Total - tc.Failed - tc.Pending,
+		"server_version":  ServerVersion,
+		"recent_tasks":    recentTasks,
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": stats})
@@ -287,7 +405,7 @@ func (s *Server) apiBulkResults(c *gin.Context) {
 	copy(results, s.bulkHistory)
 	s.bulkHistoryMu.Unlock()
 
-	c.JSON(http.StatusOK, gin.H{"results": results, "total": len(results)})
+	c.JSON(http.StatusOK, gin.H{"success": true, "results": results, "total": len(results)})
 }
 
 // ── REST API: Health ──
@@ -323,11 +441,11 @@ func (s *Server) registerAPIRoutes(api *gin.RouterGroup) {
 	api.GET("/tasks", s.apiListTasks)
 	api.GET("/tasks/:id", s.apiGetTask)
 	api.POST("/tasks", s.apiCreateTask)
+	api.GET("/task-types", s.apiListTaskTypes)
+	api.POST("/tasks/status", s.apiBulkTaskStatus)
 
 	api.GET("/credentials", s.apiListCredentials)
 	api.GET("/listeners", s.apiListListeners)
 	api.GET("/audit", s.apiListAuditLogs)
 	api.GET("/bulk/results", s.apiBulkResults)
 }
-
-

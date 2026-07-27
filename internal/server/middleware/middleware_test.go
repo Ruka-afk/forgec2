@@ -102,4 +102,110 @@ func TestRateLimiterWindowReset(t *testing.T) {
 	}
 }
 
+func TestCacheControl(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 
+	tests := []struct {
+		name       string
+		method     string
+		maxAge     int
+		wantHeader bool
+	}{
+		{"GET 200 sets cache", "GET", 30, true},
+		{"POST does not cache", "POST", 30, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request, _ = http.NewRequest(tt.method, "/test", nil)
+			c.Writer.WriteHeader(200)
+			c.Writer.Write([]byte("test body"))
+
+			middleware := CacheControl(tt.maxAge)
+			middleware(c)
+
+			cc := w.Header().Get("Cache-Control")
+			if tt.wantHeader && cc == "" {
+				t.Error("expected Cache-Control header, got empty")
+			}
+			if !tt.wantHeader && cc != "" {
+				t.Errorf("unexpected Cache-Control header: %s", cc)
+			}
+			if tt.wantHeader && cc != "public, max-age=30" {
+				t.Errorf("Cache-Control = %q, want %q", cc, "public, max-age=30")
+			}
+		})
+	}
+}
+
+func TestRequestID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest("GET", "/test", nil)
+
+	RequestID()(c)
+
+	id := w.Header().Get("X-Request-ID")
+	if id == "" {
+		t.Error("expected X-Request-ID header, got empty")
+	}
+	if len(id) != 32 {
+		t.Errorf("X-Request-ID length = %d, want 32", len(id))
+	}
+}
+
+func TestRequestIDReuseClientValue(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest("GET", "/test", nil)
+	c.Request.Header.Set("X-Request-ID", "my-custom-id")
+
+	RequestID()(c)
+
+	id := w.Header().Get("X-Request-ID")
+	if id != "my-custom-id" {
+		t.Errorf("X-Request-ID = %q, want %q", id, "my-custom-id")
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest("GET", "/test", nil)
+
+	SecurityHeaders(false)(c)
+
+	checks := map[string]string{
+		"X-Content-Type-Options": "nosniff",
+		"X-Frame-Options":       "SAMEORIGIN",
+		"Referrer-Policy":       "same-origin",
+	}
+	for header, want := range checks {
+		got := w.Header().Get(header)
+		if got != want {
+			t.Errorf("%s = %q, want %q", header, got, want)
+		}
+	}
+}
+
+func TestNoCache(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest("GET", "/test", nil)
+
+	NoCache()(c)
+
+	if cc := w.Header().Get("Cache-Control"); cc != "no-cache, no-store, must-revalidate" {
+		t.Errorf("Cache-Control = %q", cc)
+	}
+}

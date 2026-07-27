@@ -11,6 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var shellcodeNameRe = regexp.MustCompile(`^[a-zA-Z0-9._\[\]]*$`)
+
 func (s *Server) handleGenerateDonut(c *gin.Context) {
 	file, err := c.FormFile("assembly")
 	if err != nil {
@@ -30,14 +32,13 @@ func (s *Server) handleGenerateDonut(c *gin.Context) {
 		return
 	}
 
-	re := regexp.MustCompile(`^[a-zA-Z0-9._\[\]]*$`)
 	className := c.PostForm("class")
-	if className != "" && !re.MatchString(className) {
+	if className != "" && !shellcodeNameRe.MatchString(className) {
 		respondError(c, http.StatusBadRequest, "Invalid class name")
 		return
 	}
 	methodName := c.PostForm("method")
-	if methodName != "" && !re.MatchString(methodName) {
+	if methodName != "" && !shellcodeNameRe.MatchString(methodName) {
 		respondError(c, http.StatusBadRequest, "Invalid method name")
 		return
 	}

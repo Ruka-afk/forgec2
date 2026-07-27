@@ -8,70 +8,83 @@
 
 ForgeC2 是一个现代化的单二进制命令与控制框架，采用纯 Go 语言编写。内置完整的 Next.js Web 控制台、多传输信标、AI 助手、插件系统、OPSEC 守卫、脚本引擎、断路器以及 50+ 种植入任务类型——专为授权红队行动和安全研究打造。
 
-**v2.3.0** — 前后端分离 · 跨域部署 · 异常恢复 · 40+ 新模块 · CSRF 防护
+**v2.4.0** — 单二进制部署 · 前端嵌入 Go 二进制 · Docker 三阶段构建 · SPA 回退
 
 ---
 
 ## 架构
 
-ForgeC2 采用**前后端完全分离**的架构：
+ForgeC2 采用**单二进制**架构，通过 Go 的 `//go:embed` 将完整的 Next.js Web 控制台嵌入：
 
-| 组件 | 技术栈 | 默认端口 | 路径 |
-|------|--------|---------|------|
-| **Web UI** | Next.js 16 + React 19 + Tailwind 4 + shadcn/ui | **3000** | `frontend/` |
-| **API & C2** | Go (Gin, SQLite, WebSocket) | **8000** | `cmd/server/` |
+| 组件 | 技术栈 | 端口 |
+|------|--------|------|
+| **Web UI + API & C2** | Go (Gin, SQLite, WebSocket) + 嵌入式 Next.js 静态导出 | **8000** |
 
-- 浏览器访问 Next.js 的 `:3000` 端口，API 调用通过 `/api/go/path` 代理转发
-- WebSocket 直连 Go 后端 `ws://host:8000`，基于 Token 认证
-- **前后端可独立部署**在不同主机/域名上（参见 [跨域部署](#跨域部署)）
+- Go 二进制直接提供 SPA 前端页面——无需额外的前端服务器
+- 所有 API、WebSocket 和信标端点共用同一端口
+- 未匹配的 GET/HEAD 请求自动回退到 `index.html`（SPA 客户端路由）
+- 开发模式下前后端仍可独立运行（参见[开发](#开发)）
 
-### 一键启动（Windows）
+### 快速启动（单二进制）
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1
+```bash
+git clone https://github.com/Ruka-afk/forgec2.git
+cd forgec2
+powershell -File scripts\build-embedded.ps1
 ```
 
-打开 **http://localhost:3000**（UI）和 **http://localhost:8000**（API/健康检查）
+或使用 Docker：
 
-### 手动启动
+```bash
+docker compose up -d
+```
+
+打开 **http://localhost:8000**。首次启动会自动生成随机管理员密码——**请查看服务器输出获取凭据**。
+
+### 手动构建
 
 ```powershell
-# 终端 1 — Go API
-go build -o forgec2-server.exe ./cmd/server
-.\forgec2-server.exe -config config.yaml
-
-# 终端 2 — Next.js 开发服务器
+# 1. 构建前端
 cd frontend
 npm install
-npm run dev
+npm run build
+
+# 2. 复制到嵌入目录
+Remove-Item -Recurse -Force ..\internal\webdist\dist -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path ..\internal\webdist\dist | Out-Null
+Copy-Item -Recurse -Path "out\*" -Destination "..\internal\webdist\dist\"
+
+# 3. 编译 Go 二进制
+cd ..
+go build -o forgec2-server.exe ./cmd/server
+.\forgec2-server.exe -config config.yaml
 ```
 
-生产环境构建 UI：`cd frontend && npm run build && npm start`
+### Docker
+
+```bash
+docker compose up -d
+```
+
+三阶段 Dockerfile 分别构建前端（Node 20）、编译嵌入前端的 Go 二进制（Golang 1.25）、最终生成约 20MB 的 Alpine 运行镜像。
 
 ---
 
-## v2.3.0 更新内容
+---
 
-### 前后端分离
+## v2.4.0 更新内容
 
-前后端可独立运行在不同主机/域名：
+### 单二进制部署
 
-```bash
-# Frontend (.env.local)
-NEXT_PUBLIC_API_BASE=https://api.example.com
-NEXT_PUBLIC_WS_URL=wss://api.example.com
+前端通过 `//go:embed` 直接嵌入 Go 二进制——无需额外的前端服务器，开发时也无需反向代理。完整的 Next.js Web 控制台编译为静态导出后内置于服务端二进制中。
 
-# Backend (config.yaml)
-server:
-  allowed_origins:
-    - "app.example.com"
-  cookie_domain: ".example.com"
-  tls_enabled: true
-```
+**影响：** 单个 `.exe` 文件、Docker 镜像约 20MB、CI/CD 更简化。
+
+### 配置参考（跨域/开发模式）
 
 | 配置项 | 用途 | 默认值 |
 |--------|------|--------|
-| `NEXT_PUBLIC_API_BASE` | 前端 API 基础 URL | `/api/go`（代理模式） |
+| `NEXT_PUBLIC_API_BASE` | 前端 API 基础 URL | 空（同源） |
 | `NEXT_PUBLIC_WS_URL` | WebSocket 基础 URL | `ws://hostname:PORT` |
 | `server.allowed_origins` | CORS/WebSocket 来源白名单 | 全部（空 = 允许所有） |
 | `server.cookie_domain` | Session Cookie 域名属性 | 空（同主机） |
@@ -110,7 +123,7 @@ server:
 
 | 领域 | 新增内容 |
 |------|----------|
-| **部署** | 前后端完全可分离、CDN/源站部署支持 |
+| **部署** | 单二进制或 Docker；前端嵌入 Go 二进制，无需独立 UI 服务器 |
 | **安全** | CSRF 防护、SameSite Cookie、请求体限制、可配置 CORS/来源 |
 | **稳定性** | 异常恢复、协程泄漏修复、有界缓存、减少锁竞争 |
 | **外部 C2** | Discord 和 Slack 外部 C2 通道 |
@@ -119,11 +132,13 @@ server:
 | **RBAC** | 自定义角色、资源级权限门控、协作任务认领 |
 | **监控** | Prometheus 指标、日志轮转、流量画像、Agent 健康插件 |
 | **插件** | 40+ 插件（侦察、钩子、报告、凭据分析） |
-| **前端** | 60+ 新页面、shadcn/ui 组件库、i18n（en/zh/ja/ko/ar）、vitest |
+| **前端** | 60+ 页面、shadcn/ui 组件库、i18n（en/zh）、vitest |
 
 ---
 
 ## 功能列表
+
+任务完成度因类型与平台而异，详见 **[docs/CAPABILITY_MATRIX.md](./docs/CAPABILITY_MATRIX.md)**（Core / Hardened / Scripted / Experimental）。
 
 ### AI 助手
 - **模型**：DeepSeek、OpenAI、Claude、通义千问、自定义 OpenAI 兼容端点
@@ -170,7 +185,7 @@ server:
 - **60+ 页面** — 仪表盘、Agent、Shell、文件、AI、OPSEC、断路器、脚本、插件、战役、钓鱼、BloodHound、工作流、调度器等
 - 仪表盘图表（热力图、OS 分布、任务状态、流量、地理、攻击路径、甘特图）
 - 批量 Agent 操作、删除、Agent 详情（锁定/备注/Sleep/Spawn/信任/到期时间）
-- 主题（亮色/暗色/跟随系统）、i18n（en/zh/ja/ko/ar）、Ctrl+K 搜索
+- 主题（亮色/暗色/跟随系统）、i18n（en/zh）、Ctrl+K 搜索
 - WebSocket 实时通知、在线操作员面板
 - 生成页面：跨平台构建（EXE/DLL/PS1/Linux/macOS）、Malleable 配置锁定
 - Agent 组件：健康环、统计网格、任务列表、截图、流量画像
@@ -204,23 +219,65 @@ server:
 
 ## 快速开始
 
+### 单二进制（推荐）
+
 ```bash
 git clone https://github.com/Ruka-afk/forgec2.git
 cd forgec2
-go mod tidy
-go build -o forgec2-server ./cmd/server
-./forgec2-server -config config.yaml
+
+# 方式 A：使用构建脚本（需要 Node.js + Go）
+powershell -File scripts\build-embedded.ps1
+
+# 方式 B：Docker
+docker compose up -d
 ```
 
-打开 **http://localhost:3000**（Next.js UI）。首次启动会自动生成随机管理员密码——**请查看服务器输出获取凭据**。
+打开 **http://localhost:8000**。首次启动会自动生成随机管理员密码——**请查看服务器输出获取凭据**。
 
-> 纯 API 模式：`http://localhost:8000`
-
-### Windows 构建
+### 手动构建
 
 ```powershell
+# 1. 构建前端
+cd frontend
+npm install
+npm run build
+
+# 2. 复制到嵌入目录
+Remove-Item -Recurse -Force ..\internal\webdist\dist -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path ..\internal\webdist\dist | Out-Null
+Copy-Item -Recurse -Path "out\*" -Destination "..\internal\webdist\dist\"
+
+# 3. 编译 Go 二进制
+cd ..
 go build -o forgec2-server.exe ./cmd/server
 .\forgec2-server.exe -config config.yaml
+```
+
+### 开发模式（前后端分离）
+
+需要热重载开发时：
+
+```powershell
+# 终端 1 — Go API
+go build -o forgec2-server.exe ./cmd/server
+.\forgec2-server.exe -config config.yaml
+
+# 终端 2 — Next.js 开发服务器（连接 Go :8000）
+cd frontend
+npm install
+npm run dev
+```
+
+打开 **http://localhost:3000**（Next.js UI），API 在 **http://localhost:8000**
+
+---
+
+### 仅 Go 后端变更
+
+如果只修改了 Go 代码（前端已嵌入），可直接使用轻量脚本：
+
+```powershell
+powershell -File scripts\dev-backend.ps1
 ```
 
 ### 跨域部署
@@ -319,20 +376,38 @@ forgec2/
 │   ├── config/          # 配置加载器
 │   ├── malleable/       # C2 配置引擎（编译器、预设、变换）
 │   ├── crypto/          # 加密、签名、Loot 加密
-│   └── infrastructure/  # 自动生成重定向器配置（Nginx、Apache、HAProxy、Caddy）
+│   ├── infrastructure/  # 自动生成重定向器配置（Nginx、Apache、HAProxy、Caddy）
+│   └── webdist/         # 嵌入式前端静态文件（//go:embed all:dist）
 ├── frontend/            # Next.js Web UI（60+ 页面）
+├── scripts/             # 构建/部署脚本（dev-backend.ps1, build-embedded.ps1）
 ├── api/openapi.yaml     # REST API 规范
 ├── plugins/             # 40+ 插件（侦察、钩子、报告）
 ├── extensions/          # Chrome 扩展
-├── locales/             # 国际化文件（en、zh、ja、ko、ar）
+├── locales/             # 国际化文件（en、zh）
 ├── docs/                # 设计文档、Python API
 ├── pkg/                 # 共享协议类型、gRPC 服务
+├── Dockerfile           # 三阶段构建（Node → Go → Alpine）
+├── docker-compose.yml   # 单服务，卷挂载配置
 └── config.yaml          # 配置模板
 ```
 
 ---
 
 ## 开发
+
+### 完整构建（前端+后端+重启）
+
+```powershell
+powershell -File scripts\build-embedded.ps1
+```
+
+### 仅后端更新（前端无变更）
+
+```powershell
+powershell -File scripts\dev-backend.ps1
+```
+
+### Go 命令
 
 ```bash
 go build ./...           # 构建所有包
@@ -341,15 +416,13 @@ go vet ./...             # 静态分析
 go mod tidy              # 清理依赖
 ```
 
-### 前端开发
+### 前端开发（热重载）
 
 ```bash
 cd frontend
 npm install
-npm run dev              # 开发服务器 :3000
+npm run dev              # 开发服务器 :3000（API 代理到 Go :8000）
 npm run build            # 生产构建
-npm run check:css        # CSS 架构验证
-npm run check:i18n       # i18n 键一致性检查
 ```
 
 ### Agent 技能（Grok / Cursor / OpenCode）
@@ -374,11 +447,11 @@ npm run check:i18n       # i18n 键一致性检查
 
 ### Docker
 
-```yaml
+```bash
 docker compose up -d
 ```
 
-Compose 文件创建 `forgec2-server`，拉取前端镜像，首次运行自动生成 TLS + JWT 密钥。配置文件为挂载卷中的 `config.yaml`。
+三阶段 Dockerfile 分别构建前端（Node 20）、编译嵌入前端的 Go 二进制（Golang 1.25）、最终生成约 20MB 的 Alpine 运行镜像。
 
 ### 加固清单
 - 生产环境使用反向代理（Nginx/Caddy）终止 TLS
@@ -405,6 +478,7 @@ Compose 文件创建 `forgec2-server`，拉取前端镜像，首次运行自动�
 - [x] **v2.3.0**：前后端分离、跨域部署、CSRF、SameSite Cookie
 - [x] **v2.3.0**：战役、钓鱼、BloodHound、NTLM 中继、容器逃逸、工作流
 - [x] **v2.3.0**：40+ 插件、Prometheus 指标、日志轮转、任务调度器
+- [x] **v2.4.0**：单二进制部署、前端嵌入 Go 二进制、Docker 三阶段构建
 - [ ] 交互式远程桌面 (v2)
 - [ ] Form Grabber · IM 截获
 

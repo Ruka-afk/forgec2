@@ -1,62 +1,46 @@
 package server
 
 import (
-	"log/slog"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 func (s *Server) handleDashboard(c *gin.Context) {
-	// Calculate offline cutoff once (optimization #3)
 	offlineCutoff := time.Now().Add(-s.offlineThreshold())
+	todayStart := time.Now().AddDate(0, 0, -1)
 
-	// Concurrent database queries (optimization #1)
-	var wg sync.WaitGroup
-	var (
-		totalAgents    int64
-		onlineAgents   int64
-		todayTasks     int64
-		pendingTasks   int64
-		failedTasks    int64
-		totalCreds     int64
-		totalTokens    int64
-		totalAudits    int64
-		totalSocks     int64
-		totalListeners int64
-		totalTasks     int64
-	)
-
-	wg.Add(11)
-	dashRecover := func() {
-		if r := recover(); r != nil {
-			slog.Error("Dashboard stats goroutine panicked", "recover", r)
-		}
+	type dashCounts struct {
+		TotalAgents    int64
+		OnlineAgents   int64
+		TodayTasks     int64
+		PendingTasks   int64
+		FailedTasks    int64
+		TotalTasks     int64
+		TotalCreds     int64
+		TotalTokens    int64
+		TotalAudits    int64
+		TotalSocks     int64
+		TotalListeners int64
 	}
-	go func() { defer wg.Done(); defer dashRecover(); s.db.Session(&gorm.Session{NewDB: true}).Model(&db.Implant{}).Count(&totalAgents) }()
-	go func() {
-		defer wg.Done()
-		defer dashRecover()
-		s.db.Session(&gorm.Session{NewDB: true}).Model(&db.Implant{}).Where("last_seen > ?", offlineCutoff).Count(&onlineAgents)
-	}()
-	go func() {
-		defer wg.Done()
-		defer dashRecover()
-		s.db.Session(&gorm.Session{NewDB: true}).Model(&db.Task{}).Where("created_at >= ?", time.Now().AddDate(0, 0, -1)).Count(&todayTasks)
-	}()
-	go func() { defer wg.Done(); defer dashRecover(); s.db.Session(&gorm.Session{NewDB: true}).Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks) }()
-	go func() { defer wg.Done(); defer dashRecover(); s.db.Session(&gorm.Session{NewDB: true}).Model(&db.Task{}).Where("status = ?", "failed").Count(&failedTasks) }()
-	go func() { defer wg.Done(); defer dashRecover(); s.db.Session(&gorm.Session{NewDB: true}).Model(&db.Task{}).Count(&totalTasks) }()
-	go func() { defer wg.Done(); defer dashRecover(); s.db.Session(&gorm.Session{NewDB: true}).Model(&db.CredentialEntry{}).Count(&totalCreds) }()
-	go func() { defer wg.Done(); defer dashRecover(); s.db.Session(&gorm.Session{NewDB: true}).Model(&db.TokenEntry{}).Count(&totalTokens) }()
-	go func() { defer wg.Done(); defer dashRecover(); s.db.Session(&gorm.Session{NewDB: true}).Model(&db.AuditLog{}).Count(&totalAudits) }()
-	go func() { defer wg.Done(); defer dashRecover(); s.db.Session(&gorm.Session{NewDB: true}).Model(&db.SocksSession{}).Count(&totalSocks) }()
-	go func() { defer wg.Done(); defer dashRecover(); s.db.Session(&gorm.Session{NewDB: true}).Model(&db.Listener{}).Count(&totalListeners) }()
-	wg.Wait()
+
+	var counts dashCounts
+	s.db.Raw(`
+		SELECT
+			(SELECT COUNT(*) FROM implants) AS total_agents,
+			(SELECT COUNT(*) FROM implants WHERE last_seen > ?) AS online_agents,
+			(SELECT COUNT(*) FROM tasks WHERE created_at >= ?) AS today_tasks,
+			(SELECT COUNT(*) FROM tasks WHERE status = 'pending') AS pending_tasks,
+			(SELECT COUNT(*) FROM tasks WHERE status = 'failed') AS failed_tasks,
+			(SELECT COUNT(*) FROM tasks) AS total_tasks,
+			(SELECT COUNT(*) FROM credential_entries) AS total_creds,
+			(SELECT COUNT(*) FROM token_entries) AS total_tokens,
+			(SELECT COUNT(*) FROM audit_logs) AS total_audits,
+			(SELECT COUNT(*) FROM socks_sessions) AS total_socks,
+			(SELECT COUNT(*) FROM listeners) AS total_listeners
+	`, offlineCutoff, todayStart).Scan(&counts)
 
 	// Online agent list (recently active) - optimized with SELECT
 	var recentAgents []db.Implant
@@ -74,18 +58,18 @@ func (s *Server) handleDashboard(c *gin.Context) {
 	data := gin.H{
 		"Title":          "ForgeC2 - Dashboard",
 		"ActiveNav":      "dashboard",
-		"TotalAgents":    totalAgents,
-		"OnlineAgents":   onlineAgents,
-		"TodayTasks":     todayTasks,
+		"TotalAgents":    counts.TotalAgents,
+		"OnlineAgents":   counts.OnlineAgents,
+		"TodayTasks":     counts.TodayTasks,
 		"RecentTasks":    recentTasks,
-		"PendingTasks":   pendingTasks,
-		"FailedTasks":    failedTasks,
-		"TotalCreds":     totalCreds,
-		"TotalTokens":    totalTokens,
-		"TotalAudits":    totalAudits,
-		"TotalSocks":     totalSocks,
-		"TotalListeners": totalListeners,
-		"TotalTasks":     totalTasks,
+		"PendingTasks":   counts.PendingTasks,
+		"FailedTasks":    counts.FailedTasks,
+		"TotalCreds":     counts.TotalCreds,
+		"TotalTokens":    counts.TotalTokens,
+		"TotalAudits":    counts.TotalAudits,
+		"TotalSocks":     counts.TotalSocks,
+		"TotalListeners": counts.TotalListeners,
+		"TotalTasks":     counts.TotalTasks,
 		"RecentAgents":   recentAgents,
 	}
 	for k, v := range stats {
@@ -96,52 +80,30 @@ func (s *Server) handleDashboard(c *gin.Context) {
 }
 
 // --- Shared nav stats helper with caching (optimization #2) ---
-var (
-	navStatsCache     gin.H
-	navStatsCacheTime time.Time
-	navStatsCacheMu   sync.RWMutex
-	navStatsCacheTTL  = 5 * time.Second
-)
+const navStatsCacheTTL = 30 * time.Second
 
 func (s *Server) getNavStats() gin.H {
-	navStatsCacheMu.RLock()
-	if time.Since(navStatsCacheTime) < navStatsCacheTTL && navStatsCache != nil {
-		stats := navStatsCache
-		navStatsCacheMu.RUnlock()
+	s.navStatsCacheMu.RLock()
+	if time.Since(s.navStatsCacheAt) < navStatsCacheTTL && s.navStatsCache != nil {
+		stats := s.navStatsCache
+		s.navStatsCacheMu.RUnlock()
 		return stats
 	}
-	navStatsCacheMu.RUnlock()
-
-	// Cache expired, recalculate
-	navStatsCacheMu.Lock()
-	defer navStatsCacheMu.Unlock()
-
-	// Double-check after acquiring write lock
-	if time.Since(navStatsCacheTime) < navStatsCacheTTL && navStatsCache != nil {
-		return navStatsCache
-	}
+	s.navStatsCacheMu.RUnlock()
 
 	offlineCutoff := time.Now().Add(-s.offlineThreshold())
-	staleCutoff := time.Now().Add(-StaleThreshold)
+	staleCutoff := time.Now().Add(-s.staleThreshold())
 
-	var online int64
+	var online, stale, offlineAgents, listenerCount, pendingTasks int64
 	s.db.Model(&db.Implant{}).Where("last_seen > ?", offlineCutoff).Count(&online)
-
-	var stale int64
 	s.db.Model(&db.Implant{}).Where("last_seen <= ? AND last_seen > ?", offlineCutoff, staleCutoff).Count(&stale)
-
-	var offlineAgents int64
 	s.db.Model(&db.Implant{}).Where("last_seen <= ?", staleCutoff).Count(&offlineAgents)
-
-	var listenerCount int64
 	s.db.Model(&db.Listener{}).Where("enabled = ?", true).Count(&listenerCount)
-
-	var pendingTasks int64
 	s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks)
 
 	onlineUsers := int64(len(s.getOnlineUsers()))
 
-	navStatsCache = gin.H{
+	newCache := gin.H{
 		"online_count":   online,
 		"stale_count":    stale,
 		"offline_count":  offlineAgents,
@@ -149,8 +111,12 @@ func (s *Server) getNavStats() gin.H {
 		"pending_count":  pendingTasks,
 		"online_users":   onlineUsers,
 	}
-	navStatsCacheTime = time.Now()
-	return navStatsCache
+
+	s.navStatsCacheMu.Lock()
+	s.navStatsCache = newCache
+	s.navStatsCacheAt = time.Now()
+	s.navStatsCacheMu.Unlock()
+	return newCache
 }
 
 func detectLanguage(c *gin.Context) string {

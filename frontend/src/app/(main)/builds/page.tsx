@@ -15,7 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Activity, AlertCircle, AlertTriangle, Apple, Calendar, CheckCircle, Clock, Cpu, Download, File, Filter, Hammer, Loader2, Monitor, Plus, RefreshCw, Terminal, Timer, User, X, XCircle } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Activity, AlertCircle, AlertTriangle, Apple, Calendar, CheckCircle, Clock, Cpu, Download, File, Filter, Hammer, Monitor, Plus, RefreshCw, Terminal, Timer, User, X, XCircle } from "lucide-react";
 
 interface BuildLog {
   id?: string;
@@ -67,9 +69,9 @@ function getDuration(start?: string, end?: string): string {
 
 function getStatusInfo(status: string) {
   switch (status) {
-    case "success": return { icon: <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />, label: "Success", bg: "bg-emerald-500" };
+    case "success": return { icon: <CheckCircle className="w-4 h-4 text-primary" />, label: "Success", bg: "bg-emerald-500" };
     case "failed": return { icon: <XCircle className="w-4 h-4 text-destructive" />, label: "Failed", bg: "bg-destructive" };
-    case "building": return { icon: <Loader2 className="w-4 h-4 text-primary animate-spin" />, label: "Building", bg: "bg-primary" };
+    case "building": return { icon: <Spinner size="sm" />, label: "Building", bg: "bg-primary" };
     default: return { icon: <Clock className="w-4 h-4 text-muted-foreground" />, label: "Pending", bg: "bg-muted-foreground" };
   }
 }
@@ -92,7 +94,10 @@ export default function BuildsPage() {
       const params = new URLSearchParams();
       if (filterPlatform !== "all") params.set("platform", filterPlatform);
       if (filterStatus) params.set("status", filterStatus);
-      const data = await api.get(`/builds?${params}`);
+      const [data, agents] = await Promise.all([
+        api.get(`/builds?${params}`),
+        api.get("/api/agents").catch(() => null),
+      ]);
       const logs: BuildLog[] = (data.logs || []) as BuildLog[];
       setBuilds(logs);
       setTotal((data.total ?? logs.length) as number);
@@ -105,23 +110,22 @@ export default function BuildsPage() {
         return parseFloat(d) || 0;
       });
       setAvgDuration(durations.length > 0 ? Math.round(durations.reduce((a: number, b: number) => a + b, 0) / durations.length) : 0);
-      try {
-        const agents = await api.get("/api/agents");
+      if (agents) {
         const list = (Array.isArray(agents) ? agents : agents.agents || []) as { version?: string; Version?: string }[];
         const counts: Record<string, number> = {};
-        list.forEach(a => { const v = a.version || "unknown"; counts[v] = (counts[v] || 0) + 1; });
+        list.forEach(a => { const v = a.version || a.Version || "unknown"; counts[v] = (counts[v] || 0) + 1; });
         setVersionDist(Object.entries(counts).map(([version, count]) => ({ version, count })).sort((a, b) => b.count - a.count));
-      } catch { /* ignore */ }
+      }
     } catch {
       setBuilds([]);
       setTotal(0);
       setSuccessCount(0);
       setFailedCount(0);
       setAvgDuration(0);
-      toast.error(t("builds.toast.download_failed"));
+      toast.error(t("builds.toast.load_failed"));
     }
     setLoading(false);
-  }, [filterPlatform, filterStatus]);
+  }, [filterPlatform, filterStatus, t]);
 
   useEffect(() => { loadBuilds(); }, [loadBuilds]);
   useVisibleInterval(loadBuilds, 5000);
@@ -160,7 +164,7 @@ export default function BuildsPage() {
   };
 
   return (
-    <div className="max-w-[80rem] mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3">
         <PageHeader title={t("builds.title")} subtitle={`${t("builds.subtitle")} · ${successCount} ${t("builds.success")} · ${failedCount} ${t("builds.failed")} · Avg ${avgDuration}s`} />
         <div className="flex items-center gap-2">
@@ -189,7 +193,7 @@ export default function BuildsPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("builds.success")}</div>
-              <div className="text-2xl font-bold tabular-nums mt-2 text-emerald-600 dark:text-emerald-400">{successCount}</div>
+              <div className="text-2xl font-bold tabular-nums mt-2 text-primary">{successCount}</div>
             </div>
             <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
               <CheckCircle className="w-4 h-4" />
@@ -233,10 +237,13 @@ export default function BuildsPage() {
               const pct = Math.round((v.count / versionDist.reduce((s, x) => s + x.count, 0)) * 100);
               return (
                 <div key={v.version} className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-foreground w-32 truncate" title={v.version}>{v.version}</span>
-                  <div className="flex-1 bg-muted rounded-full h-4 overflow-hidden">
-                    <div className="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                  </div>
+                   <Tooltip>
+                     <TooltipTrigger>
+                       <span className="text-xs font-mono text-foreground w-32 truncate">{v.version}</span>
+                     </TooltipTrigger>
+                     <TooltipContent>{v.version}</TooltipContent>
+                   </Tooltip>
+                  <Progress value={pct} className="h-4 flex-1" />
                   <span className="text-xs text-muted-foreground w-16 text-right">{v.count} ({pct}%)</span>
                 </div>
               );
@@ -298,7 +305,7 @@ export default function BuildsPage() {
             <Hammer className="w-4 h-4" />
             <p className="text-sm font-medium text-muted-foreground">{t("builds.empty")}</p>
             <p className="text-xs mt-2 text-muted-foreground">
-              <Link href="/generate" className="text-indigo-600 dark:text-indigo-400 hover:underline">{t("builds.go_generate")}</Link> {t("builds.generate_new_implant")}
+              <Link href="/generate" className="text-primary hover:underline">{t("builds.go_generate")}</Link> {t("builds.generate_new_implant")}
             </p>
           </Card>
         ) : (
@@ -325,12 +332,12 @@ export default function BuildsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-semibold text-foreground">#{String(id).substring(0, 8)}</span>
-                        <Badge variant={platformColor(platform) as "success" | "outline"} className="px-2 py-0.5 text-[10px] rounded-lg">
+                        <Badge variant={platformColor(platform) as "success" | "outline"} className="px-2 py-0.5 text-(--font-size-micro-sm) rounded-lg">
                           {platformIcon(platform)} {platform || "unknown"}
                         </Badge>
-                        <Badge variant="outline" className="px-2 py-0.5 text-[10px] rounded-lg">{build.format || "-"}</Badge>
+                        <Badge variant="outline" className="px-2 py-0.5 text-(--font-size-micro-sm) rounded-lg">{build.format || "-"}</Badge>
                         <Badge variant={status === "success" ? "success" : status === "failed" ? "destructive" : "outline"}
-                          className="px-2 py-0.5 text-[10px] rounded-full">
+                          className="px-2 py-0.5 text-(--font-size-micro-sm) rounded-full">
                           <span className={`w-1.5 h-1.5 rounded-full inline-block mr-1 ${info.bg} ${isBuilding ? "animate-pulse" : ""}`}></span>
                           {info.label}
                         </Badge>
@@ -343,16 +350,22 @@ export default function BuildsPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Button variant="ghost" size="icon-sm" onClick={() => setExpandedBuild(isExpanded ? null : id)}
-                        aria-label="Toggle logs" title="Logs">
-                        <Terminal className="w-4 h-4" />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => setExpandedBuild(isExpanded ? null : id)}
+                            aria-label="Toggle logs" />}>
+                          <Terminal className="w-4 h-4" />
+                        </TooltipTrigger>
+                        <TooltipContent>Logs</TooltipContent>
+                      </Tooltip>
                       {(status === "success" || build.artifact_path) && (
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleDownload(build)}
-                          className="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
-                          aria-label="Download artifact" title="Download Artifact">
-                          <Download className="w-4 h-4" />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => handleDownload(build)}
+                              className="text-primary hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+                              aria-label="Download artifact" />}>
+                            <Download className="w-4 h-4" />
+                          </TooltipTrigger>
+                          <TooltipContent>Download Artifact</TooltipContent>
+                        </Tooltip>
                       )}
                     </div>
                   </div>
@@ -374,7 +387,7 @@ export default function BuildsPage() {
                         <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                           <Terminal className="w-4 h-4" /> {t("builds.log_title")}
                         </span>
-                        <span className="text-[10px] text-muted-foreground font-mono">{stdout.split("\n").length} {t("builds.lines")}</span>
+                        <span className="text-(--font-size-micro-sm) text-muted-foreground font-mono">{stdout.split("\n").length} {t("builds.lines")}</span>
                       </div>
                       <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed">
                         {stdout || <span className="text-muted-foreground italic">{t("builds.no_output")}</span>}

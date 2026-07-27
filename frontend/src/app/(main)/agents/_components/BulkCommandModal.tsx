@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useI18n } from "@/lib/i18n";
 import { COMMAND_TYPES } from "./types";
+import { EVASION_TECHNIQUES, EVASION_GROUPS } from "./evasion-techniques";
 
 interface BulkCommandModalProps {
   open: boolean;
@@ -23,8 +25,33 @@ export function BulkCommandModal({
   onSubmit, onClose,
 }: BulkCommandModalProps) {
   const { t } = useI18n();
+  const [loading, setLoading] = useState(false);
+  const [confirmStep, setConfirmStep] = useState(false);
+
+  const isDestructive = cmdType === "kill" || cmdType === "uninstall";
+
+  const handleSubmit = async () => {
+    if (isDestructive && !confirmStep) {
+      setConfirmStep(true);
+      return;
+    }
+    setLoading(true);
+    try {
+      await onSubmit();
+    } finally {
+      setLoading(false);
+      setConfirmStep(false);
+    }
+  };
+
+  const handleClose = () => {
+    setConfirmStep(false);
+    setLoading(false);
+    onClose();
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{t("agents.execute_command")}</DialogTitle>
@@ -32,10 +59,17 @@ export function BulkCommandModal({
         <p className="text-xs text-muted-foreground">
           {t("agents.send_command_to").replace("{n}", String(selectedCount)).replace("{s}", selectedCount !== 1 ? "s" : "")}
         </p>
+        {confirmStep && isDestructive && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            {cmdType === "kill"
+              ? t("agents.confirm_bulk_kill_msg").replace("{count}", String(selectedCount))
+              : t("agents.confirm_bulk_uninstall_msg").replace("{count}", String(selectedCount))}
+          </div>
+        )}
         <div className="space-y-3">
           <div>
             <span className="block text-xs font-medium text-muted-foreground mb-1">{t("agents.command_type")}</span>
-            <Select value={cmdType} onValueChange={(v) => { if (v !== null) setCmdType(v); }}>
+            <Select value={cmdType} onValueChange={(v) => { if (v !== null) { setCmdType(v); setConfirmStep(false); } }} disabled={loading}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -46,19 +80,40 @@ export function BulkCommandModal({
               </SelectContent>
             </Select>
           </div>
-          {cmdType !== "screenshot" && cmdType !== "kill" && cmdType !== "uninstall" && (
+          {cmdType === "run_evasion" && (
+            <div>
+              <span className="block text-xs font-medium text-muted-foreground mb-1">{t("agents.evasion_select")}</span>
+              <Select value={cmdText} onValueChange={(v) => { if (v !== null) setCmdText(v); }} disabled={loading}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t("agents.evasion_select")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {EVASION_GROUPS.map((group) => (
+                    <div key={group}>
+                      <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">{group}</div>
+                      {EVASION_TECHNIQUES.filter((tech) => tech.group === group).map((tech) => (
+                        <SelectItem key={tech.value} value={tech.value}>{t(tech.labelKey)}</SelectItem>
+                      ))}
+                    </div>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {cmdType !== "screenshot" && cmdType !== "kill" && cmdType !== "uninstall" && cmdType !== "run_evasion" && (
             <div>
               <span className="block text-xs font-medium text-muted-foreground mb-1">
                 {cmdType === "sleep" ? t("agents.interval_seconds") : t("agents.command")}
               </span>
-              <Input name="input-7"
+              <Input
                 type="text"
                 value={cmdText}
                 onChange={(e) => setCmdText(e.target.value)}
                 placeholder={cmdType === "shell" ? "whoami" : cmdType === "ps" ? "" : cmdType === "ls" ? "C:\\" : "30"}
                 className="h-11"
                 autoFocus
-                onKeyDown={(e) => { if (e.key === "Enter") onSubmit(); }}
+                disabled={loading}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
               />
             </div>
           )}
@@ -67,8 +122,14 @@ export function BulkCommandModal({
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
-          <Button onClick={onSubmit} disabled={selectedCount === 0}>{t("agents.execute_btn")}</Button>
+          <Button variant="outline" onClick={handleClose} disabled={loading}>{t("common.cancel")}</Button>
+          <Button
+            variant={isDestructive ? "destructive" : "default"}
+            onClick={handleSubmit}
+            disabled={selectedCount === 0 || loading}
+          >
+            {loading ? t("common.loading") : confirmStep ? t("agents.execute_confirm") : t("agents.execute_btn")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

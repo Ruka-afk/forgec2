@@ -78,7 +78,7 @@ func dpapiBlob(filePath string) (string, error) {
 func dpapiBrowser() (string, error) {
 	var results []string
 	browsers := []struct {
-		Name     string
+		Name       string
 		LocalState string
 		LoginData  string
 	}{

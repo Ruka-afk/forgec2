@@ -12,13 +12,13 @@ import (
 )
 
 var (
-	modkernel32              = windows.NewLazySystemDLL("kernel32.dll")
-	procGetProcessTimes      = modkernel32.NewProc("GetProcessTimes")
-	procGetDiskFreeSpaceExW  = modkernel32.NewProc("GetDiskFreeSpaceExW")
-	prevCPUKernelTime  int64 = 0
-	prevCPUUserTime    int64 = 0
-	prevCPUTime              = time.Time{}
-	cpuMu              sync.Mutex
+	modkernel32                   = windows.NewLazySystemDLL("kernel32.dll")
+	procGetProcessTimes           = modkernel32.NewProc("GetProcessTimes")
+	procGetDiskFreeSpaceExW       = modkernel32.NewProc("GetDiskFreeSpaceExW")
+	prevCPUKernelTime       int64 = 0
+	prevCPUUserTime         int64 = 0
+	prevCPUTime                   = time.Time{}
+	cpuMu                   sync.Mutex
 )
 
 func (m *MonitorCollector) getCPULoad() float64 {

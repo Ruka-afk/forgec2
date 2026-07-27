@@ -8,7 +8,7 @@ postcss([tw()]).process(css, { from: 'src/app/globals.css' }).then(r => {
   const out = r.css;
   fs.writeFileSync('C:\\Users\\18354\\AppData\\Local\\Temp\\opencode\\out.css', out);
   const checks = ['--color-text-primary', '--text-primary', '--background', '--color-background',
-    '--color-border', '--border', ':root', 'gap-4', 'ui-card', '--sidebar-width'];
+    '--color-border', '--border', ':root', 'gap-4', '--sidebar-width'];
   checks.forEach(c => {
     // for selectors like :root, check presence as substring
     console.log((out.includes(c) ? 'FOUND  ' : 'MISSING') + ': ' + c);

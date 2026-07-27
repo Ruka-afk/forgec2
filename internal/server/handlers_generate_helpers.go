@@ -14,16 +14,18 @@ import (
 
 // resolvedListener holds the result of resolving a listener to C2 connection parameters.
 type resolvedListener struct {
-	C2URL     string
-	Protocol  string
-	DNSDomain string
-	DNSServer string
+	C2URL           string
+	Protocol        string
+	BeaconTransport string
+	DNSDomain       string
+	DNSServer       string
 }
 
 // resolveListener looks up a listener by ID and returns the C2 connection parameters.
 // For HTTP/HTTPS: C2URL = "scheme://host:port", Protocol = "http"
 // For TCP/TLS:    C2URL = "scheme://host:port", Protocol = "tcp"
 // For DNS:        C2URL = "dns://host", Protocol = "dns", DNSDomain/DNSServer set
+// For gRPC/SSH/WSS/ICMP: Protocol matches transport
 func (s *Server) resolveListener(listenerID uint) (*resolvedListener, error) {
 	var listener db.Listener
 	if err := s.db.First(&listener, listenerID).Error; err != nil || !listener.Enabled {
@@ -33,6 +35,9 @@ func (s *Server) resolveListener(listenerID uint) (*resolvedListener, error) {
 	sch := listener.Scheme
 	if sch == "" {
 		sch = listener.Protocol
+	}
+	if sch == "" {
+		sch = listener.Type
 	}
 	if sch == "" {
 		sch = "http"
@@ -47,14 +52,41 @@ func (s *Server) resolveListener(listenerID uint) (*resolvedListener, error) {
 	case "tcp", "tls":
 		r.C2URL = fmt.Sprintf("%s://%s:%d", sch, listener.Host, listener.Port)
 		r.Protocol = "tcp"
+		r.BeaconTransport = "tcp"
 	case "dns":
 		r.C2URL = fmt.Sprintf("dns://%s", listener.Host)
 		r.Protocol = "dns"
+		r.BeaconTransport = "dns"
 		r.DNSDomain = listener.Host
 		r.DNSServer = listener.Host
+	case "grpc", "grpcs":
+		r.C2URL = fmt.Sprintf("%s://%s:%d", sch, listener.Host, listener.Port)
+		r.Protocol = "http"
+		r.BeaconTransport = "grpc"
+	case "ssh":
+		r.C2URL = fmt.Sprintf("ssh://%s:%d", listener.Host, listener.Port)
+		r.Protocol = "http"
+		r.BeaconTransport = "ssh"
+	case "wss", "ws":
+		r.C2URL = fmt.Sprintf("%s://%s:%d", sch, listener.Host, listener.Port)
+		r.Protocol = "http"
+		r.BeaconTransport = "wss"
+	case "icmp":
+		r.C2URL = fmt.Sprintf("icmp://%s", listener.Host)
+		r.Protocol = "icmp"
+		r.BeaconTransport = "icmp"
+	case "mtls":
+		r.C2URL = fmt.Sprintf("mtls://%s:%d", listener.Host, listener.Port)
+		r.Protocol = "http"
+		r.BeaconTransport = "mtls"
+	case "h2c":
+		r.C2URL = fmt.Sprintf("h2c://%s:%d", listener.Host, listener.Port)
+		r.Protocol = "http"
+		r.BeaconTransport = "h2c"
 	default:
 		r.C2URL = fmt.Sprintf("%s://%s:%d", sch, listener.Host, listener.Port)
 		r.Protocol = "http"
+		r.BeaconTransport = "http"
 	}
 
 	return r, nil
@@ -86,7 +118,7 @@ func (s *Server) getListeners() []db.Listener {
 	}
 
 	s.db.Select("id", "name", "host", "port", "scheme", "type", "protocol").
-		Where("enabled = ?", true).Find(&listenerCache)
+		Where("enabled = ?", true).Limit(500).Find(&listenerCache)
 	listenerCacheTime = time.Now()
 	return listenerCache
 }

@@ -1,20 +1,45 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
-import { AlertCircle, Lock, Shield, User, Loader2 } from "lucide-react";
+import { Spinner } from "@/components/UI";
+import { AlertCircle, Lock, Shield, User } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
-export default function LoginPage() {
+function LoginForm() {
+  const { t } = useI18n();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [version, setVersion] = useState("");
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get("expired") === "1") {
+      setError(t("login.session_expired"));
+    }
+  }, [searchParams, t]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/health", { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json() as { version?: string };
+        if (!cancelled && data.version) setVersion(String(data.version));
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,22 +52,38 @@ export default function LoginPage() {
       params.append("password", password);
       if (totpCode) params.append("totp_code", totpCode);
 
-      const response = await fetch("/api/login", {
+      const response = await fetch("/login", {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json, text/html, */*",
+        },
         body: params.toString(),
         credentials: "include",
+        redirect: "manual",
       });
 
-      if (response.ok) {
-        router.push("/dashboard");
+      // Success: 302 redirect or 200 with session cookie
+      if (response.status === 302 || response.status === 0 || (response.status >= 200 && response.status < 400 && response.ok)) {
+        const next = searchParams.get("next");
+        const dest = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+        router.push(dest);
         router.refresh();
-      } else {
-        const data = await response.json().catch(() => ({}));
-        setError(data.error || "Login failed");
+        return;
       }
+
+      // Failed: try JSON error body
+      let msg = t("login.error_failed");
+      try {
+        const ct = response.headers.get("content-type") || "";
+        if (ct.includes("application/json")) {
+          const data = await response.json() as { error?: string };
+          if (data.error) msg = data.error;
+        }
+      } catch { /* keep default */ }
+      setError(msg);
     } catch {
-      setError("Network error. Please try again.");
+      setError(t("login.error_network"));
     } finally {
       setLoading(false);
     }
@@ -50,16 +91,13 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-background via-muted/30 to-primary/5 dark:from-background dark:via-primary/[0.03] dark:to-primary/8">
-      {/* Animated background orbs */}
-      <div className="absolute rounded-full blur-[60px] opacity-15 dark:opacity-10 w-72 h-72 bg-primary/30 top-[-10%] left-[-5%] animate-orb-float" style={{ animationDelay: "0s" }} />
-      <div className="absolute rounded-full blur-[60px] opacity-15 dark:opacity-10 w-56 h-56 bg-primary/20 bottom-[-5%] right-[-3%] animate-orb-float" style={{ animationDelay: "2s" }} />
-      <div className="absolute rounded-full blur-[60px] opacity-15 dark:opacity-10 w-40 h-40 bg-violet-400/15 top-[40%] right-[20%] animate-orb-float" style={{ animationDelay: "4s" }} />
+      <div className="absolute rounded-full blur-(--blur-orb) opacity-15 dark:opacity-10 w-72 h-72 bg-primary/30 top-[-10%] left-[-5%] animate-orb-float" style={{ animationDelay: "0s" }} />
+      <div className="absolute rounded-full blur-(--blur-orb) opacity-15 dark:opacity-10 w-56 h-56 bg-primary/20 bottom-[-5%] right-[-3%] animate-orb-float" style={{ animationDelay: "2s" }} />
+      <div className="absolute rounded-full blur-(--blur-orb) opacity-15 dark:opacity-10 w-40 h-40 bg-violet-400/15 top-[40%] right-[20%] animate-orb-float" style={{ animationDelay: "4s" }} />
 
-      {/* Grid decoration */}
       <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.04] [background-image:linear-gradient(var(--border)_1px,transparent_1px),linear-gradient(90deg,var(--border)_1px,transparent_1px)] [background-size:40px_40px]" />
 
       <div className="relative z-10 w-full max-w-[22rem] mx-4 animate-fade-slide-up">
-        {/* Brand */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-xl shadow-indigo-500/25 animate-float">
             <Shield className="w-7 h-7 text-white" />
@@ -67,11 +105,11 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Forge<span className="text-primary">C2</span>
           </h1>
-          <p className="text-sm mt-1.5 text-muted-foreground/70">Professional Red Team Framework</p>
+          <p className="text-sm mt-1.5 text-muted-foreground/70">{t("login.subtitle")}</p>
         </div>
 
-        {/* Login card */}
-        <div className="bg-card/80 backdrop-blur-xl border border-border/60 rounded-xl p-7 shadow-2xl shadow-black/5 dark:shadow-black/20">
+        <Card className="bg-card/80 backdrop-blur-xl border-border/60 shadow-2xl shadow-black/5 dark:shadow-black/20">
+          <CardContent className="p-7">
           {error && (
             <Alert variant="destructive" className="mb-5 animate-scale-in" role="alert">
               <AlertCircle className="w-4 h-4" />
@@ -79,9 +117,9 @@ export default function LoginPage() {
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4" aria-label="Login form">
+          <form onSubmit={handleSubmit} className="space-y-4" aria-label={t("login.form_aria")}>
             <div>
-              <Label htmlFor="login-username" className="text-xs font-medium text-muted-foreground mb-1.5 block">Username</Label>
+              <Label htmlFor="login-username" className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("login.username")}</Label>
               <div className="relative group">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" />
                 <Input
@@ -98,7 +136,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <Label htmlFor="login-password" className="text-xs font-medium text-muted-foreground mb-1.5 block">Password</Label>
+              <Label htmlFor="login-password" className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("login.password")}</Label>
               <div className="relative group">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" />
                 <Input
@@ -114,7 +152,9 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <Label htmlFor="login-totp" className="text-xs font-medium text-muted-foreground mb-1.5 block">TOTP Code <span className="text-muted-foreground/70">(optional)</span></Label>
+              <Label htmlFor="login-totp" className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                {t("login.totp")} <span className="text-muted-foreground/70">({t("login.totp_optional")})</span>
+              </Label>
               <div className="relative group">
                 <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" />
                 <Input
@@ -127,7 +167,7 @@ export default function LoginPage() {
                   value={totpCode}
                   onChange={(e) => setTotpCode(e.target.value)}
                   placeholder="000000"
-                  className="h-11 pl-9 font-mono tracking-[0.3em] text-center transition-colors"
+                  className="h-11 pl-9 font-mono tracking-(--tracking-wide) text-center transition-colors"
                 />
               </div>
             </div>
@@ -139,18 +179,29 @@ export default function LoginPage() {
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Signing in...
+                  <Spinner size="sm" />
+                  {t("login.signing_in")}
                 </span>
-              ) : "Sign in"}
+              ) : t("login.sign_in")}
             </Button>
           </form>
-        </div>
+          </CardContent>
+        </Card>
 
         <p className="text-center text-xs mt-6 text-muted-foreground/70">
-          ForgeC2 v2.1 — Authorized access only
+          {version
+            ? t("login.footer_version", { version })
+            : t("login.footer")}
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Spinner /></div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

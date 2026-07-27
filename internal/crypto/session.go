@@ -20,7 +20,7 @@ const (
 )
 
 var (
-	ErrNoSession      = errors.New("no session for agent")
+	ErrNoSession          = errors.New("no session for agent")
 	ErrCiphertextTooShort = errors.New("ciphertext too short")
 	ErrDecryptFailed      = errors.New("decryption failed")
 )
@@ -271,7 +271,10 @@ func (to *TrafficObfuscator) AddJitter(baseDelay time.Duration) time.Duration {
 		return baseDelay
 	}
 	jitter := float64(baseDelay) * to.JitterPercent
-	randInt, _ := rand.Int(rand.Reader, big.NewInt(int64(jitter*2)))
+	randInt, err := rand.Int(rand.Reader, big.NewInt(int64(jitter*2)))
+	if err != nil {
+		return baseDelay
+	}
 	randomJitter := float64(randInt.Int64()) - jitter
 	return baseDelay + time.Duration(randomJitter)
 }

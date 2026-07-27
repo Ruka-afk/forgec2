@@ -19,7 +19,7 @@ type StructuredLogger struct {
 // NewStructuredLogger creates a new structured logger
 func NewStructuredLogger(logDir string, level slog.Level) (*StructuredLogger, error) {
 	// Ensure log directory exists
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(logDir, 0700); err != nil {
 		return nil, err
 	}
 

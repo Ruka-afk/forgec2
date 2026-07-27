@@ -72,7 +72,9 @@ func (s *Server) handleDeleteNotification(c *gin.Context) {
 // handleClearAllNotifications deletes all notifications (admin only).
 // DELETE /notifications
 func (s *Server) handleClearAllNotifications(c *gin.Context) {
-	if !s.requireAdmin(c) { return }
+	if !s.requireAdmin(c) {
+		return
+	}
 	if err := s.db.Where("1 = 1").Delete(&db.Notification{}).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Notification operation"))
 		return

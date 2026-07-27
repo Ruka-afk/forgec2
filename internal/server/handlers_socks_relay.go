@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"context"
@@ -31,7 +31,7 @@ type socksFrame struct {
 type socksRelayEngine struct {
 	mu          sync.Mutex
 	sessions    map[string]*socksRelaySession // agentID → session
-	connections map[uint64]*socksRelayConn   // connID → conn
+	connections map[uint64]*socksRelayConn    // connID → conn
 	nextConnID  uint64
 
 	controlFrames   map[string][]socksFrame
@@ -78,7 +78,11 @@ func (e *socksRelayEngine) startSession(s *Server, agentID string, port int) (in
 		return sess.port, nil // already running
 	}
 
-	addr := fmt.Sprintf("0.0.0.0:%d", port)
+	listenHost := "127.0.0.1"
+	if s.cfg != nil && s.cfg.Server.SocksListenHost != "" {
+		listenHost = s.cfg.Server.SocksListenHost
+	}
+	addr := fmt.Sprintf("%s:%d", listenHost, port)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return 0, fmt.Errorf("SOCKS relay listen %s: %w", addr, err)
@@ -391,7 +395,7 @@ func (e *socksRelayEngine) collectPendingFrames(agentID string) []socksFrame {
 
 	// 2. Data frames from connections — minimize lock hold time
 	type connDrain struct {
-		connID  uint64
+		connID   uint64
 		outbound [][]byte
 	}
 	var drained []connDrain
@@ -517,6 +521,13 @@ func (c *socksRelayConn) close() {
 	}
 }
 
+func listenHostMsg(s *Server) string {
+	if s != nil && s.cfg != nil && s.cfg.Server.SocksListenHost != "" {
+		return s.cfg.Server.SocksListenHost
+	}
+	return "127.0.0.1"
+}
+
 // ─── HTTP Handlers ───────────────────────────────────────────────────────────
 
 func (s *Server) handleStartSocksRelay(c *gin.Context) {
@@ -548,7 +559,7 @@ func (s *Server) handleStartSocksRelay(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"port":    actualPort,
-		"message": fmt.Sprintf("SOCKS5 relay listening on 0.0.0.0:%d → Agent %s", actualPort, id),
+		"message": fmt.Sprintf("SOCKS5 relay listening on %s:%d → Agent %s", listenHostMsg(s), actualPort, id),
 	})
 }
 
@@ -558,7 +569,7 @@ func (s *Server) handleStopSocksRelay(c *gin.Context) {
 	}
 	id := c.Param("id")
 	if err := s.socksEngine.stopSession(s, id); err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondErrorSafe(c, http.StatusBadRequest, err, "")
 		return
 	}
 
@@ -591,13 +602,13 @@ func (s *Server) handleSocksRelayStatus(c *gin.Context) {
 	s.db.Where("id = ?", sess.dbID).First(&dbSession)
 
 	c.JSON(http.StatusOK, gin.H{
-		"active":        true,
-		"port":          sess.port,
-		"conn_count":    cc,
-		"active_conns":  activeConns,
-		"bytes_in":      dbSession.BytesIn,
-		"bytes_out":     dbSession.BytesOut,
-		"created_at":    dbSession.CreatedAt,
+		"active":       true,
+		"port":         sess.port,
+		"conn_count":   cc,
+		"active_conns": activeConns,
+		"bytes_in":     dbSession.BytesIn,
+		"bytes_out":    dbSession.BytesOut,
+		"created_at":   dbSession.CreatedAt,
 	})
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -29,15 +30,11 @@ export function CopyButton({ text, label, title, className, size = "icon-xs", ch
     : <Copy className="w-2.5 h-2.5" />;
 
   return (
-    <Button
-      variant="ghost"
-      size={size}
-      onClick={copy}
-      title={title || `Copy ${label || "value"}`}
-      className={className || "ml-1 text-muted-foreground/70 hover:text-foreground"}
-      aria-label={`Copy ${label || "value"}`}
-    >
-      {typeof children === "function" ? children(copied) : (children ?? defaultIcon)}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger render={<Button variant="ghost" size={size} onClick={copy} className={className || "ml-1 text-muted-foreground/70 hover:text-foreground"} aria-label={`Copy ${label || "value"}`} />}>
+        {typeof children === "function" ? children(copied) : (children ?? defaultIcon)}
+      </TooltipTrigger>
+      <TooltipContent>{title || `Copy ${label || "value"}`}</TooltipContent>
+    </Tooltip>
   );
 }

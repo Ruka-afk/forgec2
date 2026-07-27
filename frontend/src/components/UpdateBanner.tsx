@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useWS } from "@/lib/wsContext";
+import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ArrowUpCircle, X } from "lucide-react";
@@ -10,6 +11,7 @@ const DISMISS_KEY = "forgec2_update_dismissed";
 
 export default function UpdateBanner({ currentVersion }: { currentVersion?: string }) {
   const { subscribe } = useWS();
+  const { t } = useI18n();
   const [info, setInfo] = useState<{ latest: string; downloadUrl: string } | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
@@ -18,9 +20,9 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
       const d = localStorage.getItem(DISMISS_KEY);
       if (d) Promise.resolve().then(() => setDismissed(true));
     } catch {
-      toast.error("Failed to access local storage");
+      toast.error(t("update_banner.toast.storage_failed"));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     return subscribe((msg) => {
@@ -44,7 +46,7 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
     try {
       localStorage.setItem(DISMISS_KEY, info.latest);
     } catch {
-      toast.error("Failed to access local storage");
+      toast.error(t("update_banner.toast.storage_failed"));
     }
   };
 
@@ -66,7 +68,7 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
         >
           Download
         </a>
-        <Button variant="ghost" size="icon-sm" onClick={dismiss} className="text-white/70 hover:text-white" aria-label="Dismiss">
+        <Button variant="ghost" size="icon-sm" onClick={dismiss} className="text-white/70 hover:text-white" aria-label={t("common.dismiss")}>
           <X className="w-4 h-4" />
         </Button>
       </div>

@@ -1,9 +1,12 @@
 import { useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n";
 import { downloadText } from "@/lib/download";
+import { DEFAULT_LISTENER_ADDR } from "@/lib/constants";
 import type { InfraListener } from "./useInfrastructureData";
 export function useInfrastructureConfigForm(listeners: InfraListener[]) {
+  const { t } = useI18n();
   const [selectedListener, setSelectedListener] = useState("");
   const [domain, setDomain] = useState("");
   const [port, setPort] = useState(443);
@@ -47,7 +50,7 @@ server {
     ssl_certificate_key ${keyPath || "/etc/letsencrypt/live/" + (domain || "c2.example.com") + "/privkey.pem"};
 
     location / {
-        proxy_pass https://${selectedListener ? (listeners.find(l => l.id === selectedListener)?.host || "127.0.0.1") + ":" + (listeners.find(l => l.id === selectedListener)?.port || "443") : "127.0.0.1:443"};
+        proxy_pass https://${selectedListener ? (listeners.find(l => l.id === selectedListener)?.host || "127.0.0.1") + ":" + (listeners.find(l => l.id === selectedListener)?.port || "443") : DEFAULT_LISTENER_ADDR};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -70,12 +73,12 @@ ${wsSupport ? `        proxy_http_version 1.1;
 
     SSLProxyEngine On
     ProxyPreserveHost On
-    ProxyPass / https://${selectedListener ? (listeners.find(l => l.id === selectedListener)?.host || "127.0.0.1") + ":" + (listeners.find(l => l.id === selectedListener)?.port || "443") : "127.0.0.1:443"}/
-    ProxyPassReverse / https://${selectedListener ? (listeners.find(l => l.id === selectedListener)?.host || "127.0.0.1") + ":" + (listeners.find(l => l.id === selectedListener)?.port || "443") : "127.0.0.1:443"}/
+    ProxyPass / https://${selectedListener ? (listeners.find(l => l.id === selectedListener)?.host || "127.0.0.1") + ":" + (listeners.find(l => l.id === selectedListener)?.port || "443") : DEFAULT_LISTENER_ADDR}/
+    ProxyPassReverse / https://${selectedListener ? (listeners.find(l => l.id === selectedListener)?.host || "127.0.0.1") + ":" + (listeners.find(l => l.id === selectedListener)?.port || "443") : DEFAULT_LISTENER_ADDR}/
 ${wsSupport ? `
     RewriteEngine On
     RewriteCond %{HTTP:Upgrade} websocket [NC]
-   RewriteRule /(*) ws://${selectedListener ? (listeners.find(l => l.id === selectedListener)?.host || "127.0.0.1") + ":" + (listeners.find(l => l.id === selectedListener)?.port || "443") : "127.0.0.1:443"}/$1 [P,L]` : ""}
+   RewriteRule /(*) ws://${selectedListener ? (listeners.find(l => l.id === selectedListener)?.host || "127.0.0.1") + ":" + (listeners.find(l => l.id === selectedListener)?.port || "443") : DEFAULT_LISTENER_ADDR}/$1 [P,L]` : ""}
 </VirtualHost>`,
         haproxy: `# HAProxy Redirector Configuration
 # Generated: ${new Date().toISOString()}
@@ -87,7 +90,7 @@ frontend c2_frontend
 
 backend c2_backend
     mode http
-    server c2server ${selectedListener ? (listeners.find(l => l.id === selectedListener)?.host || "127.0.0.1") + ":" + (listeners.find(l => l.id === selectedListener)?.port || "443") : "127.0.0.1:443"} ssl verify none${wsSupport ? " alpn h2,http/1.1" : ""}`,
+    server c2server ${selectedListener ? (listeners.find(l => l.id === selectedListener)?.host || "127.0.0.1") + ":" + (listeners.find(l => l.id === selectedListener)?.port || "443") : DEFAULT_LISTENER_ADDR} ssl verify none${wsSupport ? " alpn h2,http/1.1" : ""}`,
       };
       setConfigOutput(defaultConfigs[type] || "# Error generating config");
     }
@@ -99,8 +102,8 @@ backend c2_backend
       await navigator.clipboard.writeText(configOutput);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch { toast.error("Failed to copy config"); }
-  }, [configOutput]);
+    } catch { toast.error(t("infrastructure.toast.copy_config_failed")); }
+  }, [configOutput, t]);
 
   const downloadConfig = useCallback(() => {
     const ext = configType === "nginx" ? "conf" : configType === "apache" ? "conf" : "cfg";
@@ -113,9 +116,9 @@ backend c2_backend
       await api.postJson("/infrastructure/acme/provision", { domain: acmeDomain, email: acmeEmail, port: acmePort, staging: acmeStaging });
       setCertPath(`/etc/letsencrypt/live/${acmeDomain}/fullchain.pem`);
       setKeyPath(`/etc/letsencrypt/live/${acmeDomain}/privkey.pem`);
-    } catch { toast.error("Failed to provision certificate"); }
+    } catch { toast.error(t("infrastructure.toast.provision_cert_failed")); }
     setAcmeProvisioning(false);
-  }, [acmeDomain, acmeEmail, acmePort, acmeStaging]);
+  }, [acmeDomain, acmeEmail, acmePort, acmeStaging, t]);
 
   const exportProfile = useCallback(async () => {
     try {
@@ -123,8 +126,8 @@ backend c2_backend
       const content = exportFormat === "json" ? JSON.stringify(data, null, 2) : JSON.stringify(data);
       const ext = exportFormat === "json" ? "json" : exportFormat === "nginx" ? "conf" : "env";
       downloadText(content, `c2-profile-${exportFormat}.${ext}`, "application/json");
-    } catch { toast.error("Failed to export profile"); }
-  }, [exportFormat]);
+    } catch { toast.error(t("infrastructure.toast.export_profile_failed")); }
+  }, [exportFormat, t]);
 
   return {
     selectedListener, setSelectedListener,

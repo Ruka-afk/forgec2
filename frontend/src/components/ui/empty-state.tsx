@@ -1,27 +1,24 @@
 "use client";
 
 import { Inbox } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-export function EmptyState({ icon, title, message, action }: {
+export function EmptyState({ icon, title, message, action, className }: {
   icon?: React.ComponentType<{ className?: string }>;
   title: string;
   message?: string;
-  action?: { label: string; onClick: () => void };
+  action?: React.ReactNode;
+  className?: string;
 }) {
   const IconComponent = icon || Inbox;
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center animate-fade-in">
-      <div className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center mb-4">
-        <IconComponent className="w-7 h-7 text-muted-foreground/70" />
+    <div className={cn("flex flex-col items-center justify-center py-20 text-center animate-fade-in", className)}>
+      <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-5">
+        <IconComponent className="w-8 h-8 text-muted-foreground/60" />
       </div>
-      <p className="text-sm font-semibold text-foreground mb-1">{title}</p>
-      {message && <p className="text-xs text-muted-foreground mb-4 max-w-xs leading-relaxed">{message}</p>}
-      {action && (
-        <Button onClick={action.onClick} size="sm">
-          {action.label}
-        </Button>
-      )}
+      <p className="text-(--font-size-body-sm) font-semibold text-foreground mb-1.5">{title}</p>
+      {message && <p className="text-[12.5px] text-muted-foreground mb-5 max-w-xs leading-relaxed">{message}</p>}
+      {action && <div>{action}</div>}
     </div>
   );
 }

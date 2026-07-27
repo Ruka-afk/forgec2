@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/base64"
 	"log/slog"
 	"net/http"
 	"os"
@@ -62,17 +61,7 @@ func (s *Server) handleGetAgentScreenshot(c *gin.Context) {
 		return
 	}
 
-	raw, err := os.ReadFile(filepath.Join(screenshotDir, newest.Name()))
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to read screenshot")
-		return
-	}
-
-	encoded := base64.StdEncoding.EncodeToString(raw)
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"image":   encoded,
-	})
+	c.File(filepath.Join(screenshotDir, newest.Name()))
 }
 
 func (s *Server) handleRequestScreenshotWindow(c *gin.Context) {

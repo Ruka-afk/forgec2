@@ -3,8 +3,8 @@ package server
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/gin-gonic/gin"
 )
 
 // handleCloudResults returns cloud credentials harvested from a given agent.
@@ -21,7 +21,7 @@ func (s *Server) handleCloudSteal(c *gin.Context) {
 		return
 	}
 	var req struct {
-		AgentID string `json:"agent_id"`
+		AgentID  string `json:"agent_id"`
 		Provider string `json:"provider"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.AgentID == "" {

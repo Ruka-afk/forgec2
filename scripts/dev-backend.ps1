@@ -22,12 +22,12 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "binary build failed" }
 
     Write-Host "==> restart server" -ForegroundColor Cyan
-    taskkill /f /im forgec2-server.exe 2>$null
+    cmd /c "taskkill /f /im forgec2-server.exe >nul 2>&1"
     Start-Sleep -Seconds 1
     $p = Start-Process -WindowStyle Hidden -FilePath ".\forgec2-server.exe" -ArgumentList "-config config.yaml" -PassThru
     Start-Sleep -Seconds 3
 
-    $health = Invoke-RestMethod -Uri "http://127.0.0.1:8080/health" -ErrorAction SilentlyContinue
+    $health = Invoke-RestMethod -Uri "http://127.0.0.1:8000/health" -ErrorAction SilentlyContinue
     if ($null -eq $health -or $health.status -ne "ok") {
         Write-Warning "Server health check failed (PID $($p.Id))"
         exit 1

@@ -7,14 +7,15 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"sync"
 	"time"
 )
 
 type CertEntry struct {
-	Cert   *x509.Certificate
-	Key    *rsa.PrivateKey
+	Cert    *x509.Certificate
+	Key     *rsa.PrivateKey
 	CertPEM []byte
 	KeyPEM  []byte
 }
@@ -25,9 +26,15 @@ var (
 	certPoolMu   sync.RWMutex
 )
 
-func buildFakeCert(org string, years int) CertEntry {
-	key, _ := rsa.GenerateKey(rand.Reader, 2048)
-	serial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+func buildFakeCert(org string, years int) (CertEntry, error) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return CertEntry{}, fmt.Errorf("rsa.GenerateKey: %w", err)
+	}
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return CertEntry{}, fmt.Errorf("rand.Int: %w", err)
+	}
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
@@ -39,11 +46,17 @@ func buildFakeCert(org string, years int) CertEntry {
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning},
 		BasicConstraintsValid: true,
 	}
-	certDER, _ := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
-	cert, _ := x509.ParseCertificate(certDER)
+	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		return CertEntry{}, fmt.Errorf("x509.CreateCertificate: %w", err)
+	}
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return CertEntry{}, fmt.Errorf("x509.ParseCertificate: %w", err)
+	}
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
-	return CertEntry{Cert: cert, Key: key, CertPEM: certPEM, KeyPEM: keyPEM}
+	return CertEntry{Cert: cert, Key: key, CertPEM: certPEM, KeyPEM: keyPEM}, nil
 }
 
 func initCertPool() {
@@ -62,7 +75,12 @@ func initCertPool() {
 		"DigiCert Inc.",
 	}
 	for _, org := range orgs {
-		certPool = append(certPool, buildFakeCert(org, 3))
+		entry, err := buildFakeCert(org, 3)
+		if err != nil {
+			slog.Error("Failed to build fake cert", "org", org, "err", err)
+			continue
+		}
+		certPool = append(certPool, entry)
 	}
 }
 
@@ -70,7 +88,13 @@ func GetRandomCert() CertEntry {
 	certPoolOnce.Do(initCertPool)
 	certPoolMu.RLock()
 	defer certPoolMu.RUnlock()
-	idx, _ := rand.Int(rand.Reader, big.NewInt(int64(len(certPool))))
+	if len(certPool) == 0 {
+		return CertEntry{}
+	}
+	idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(certPool))))
+	if err != nil {
+		return certPool[0]
+	}
 	return certPool[idx.Int64()]
 }
 

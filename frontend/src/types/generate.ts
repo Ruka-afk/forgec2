@@ -24,6 +24,7 @@ export interface SharedState {
   listener_id: string;
   c2_url: string;
   protocol: string;
+  beacon_transport: string;
   interval: string;
   jitter: string;
   ua: string;
@@ -31,6 +32,12 @@ export interface SharedState {
   failover: string;
   crypto_key: string;
   profile: string;
+  dns_doh_url: string;
+  dns_dot_addr: string;
+  ssh_user: string;
+  ssh_password: string;
+  ssh_key: string;
+  ssh_host_key: string;
 }
 
 export interface BinaryForm {

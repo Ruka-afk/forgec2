@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -112,8 +111,7 @@ func (s *Server) handleGenerateStager(c *gin.Context) {
 	}
 
 	s.logBuild("windows", "stager", form.C2URL, form.ListenerID, form.Filename, "success", "", stagerPath)
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filepath.Base(stagerPath)))
-	c.File(stagerPath)
+	serveFileSafe(c, stagerPath, agentsDir, filepath.Base(stagerPath))
 }
 
 func (s *Server) handleGenerateStagerLinux(c *gin.Context) {
@@ -215,6 +213,5 @@ func (s *Server) handleGenerateStagerLinux(c *gin.Context) {
 	}
 
 	s.logBuild("linux", "stager", form.C2URL, form.ListenerID, form.Filename, "success", "", stagerPath)
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filepath.Base(stagerPath)))
-	c.File(stagerPath)
+	serveFileSafe(c, stagerPath, agentsDir, filepath.Base(stagerPath))
 }

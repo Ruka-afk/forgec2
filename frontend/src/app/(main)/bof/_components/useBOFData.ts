@@ -16,7 +16,7 @@ export function useBOFData() {
 
   const loadFiles = useCallback(async () => {
     try {
-      const data = await api.json<{ BOFFiles?: BOFFile[]; bofs?: BOFFile[]; files?: BOFFile[] }>("/api/bof/list");
+      const data = await api.get<{ BOFFiles?: BOFFile[]; bofs?: BOFFile[]; files?: BOFFile[] }>("/api/bof/list");
       setFiles(data.bofs || data.files || []);
       const execData = await api.get<{ results?: Execution[]; Results?: Execution[] }>("/api/bof/results");
       setExecutions(execData.results || []);
@@ -45,7 +45,7 @@ export function useBOFData() {
 
   const loadLibrary = useCallback(async () => {
     try {
-      const d = await api.json<{ bofs?: BOFLibraryItem[] }>("/api/bof/list");
+      const d = await api.get<{ bofs?: BOFLibraryItem[] }>("/api/bof/list");
       setLibraryItems(d.bofs || []);
     } catch {
       setLibraryItems([]);

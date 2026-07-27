@@ -1,0 +1,1 @@
+grep -rn "opacity-[0-9]\{1,3\}" C:/Users/18354/Downloads/C2/forgec2/frontend/src/ --include="*.tsx" --include="*.ts" | grep -v "node_modules" | grep -v "opacity-0 \\" | grep -v "opacity-100 \\" | grep -v "opacity-5 \\" | grep -v "opacity-\[0"

@@ -1,6 +1,6 @@
 ---
 name: e2e-smoke-test
-description: Run ForgeC2 end-to-end smoke tests (Next.js UI on :3000, Go API on :8080)
+description: Run ForgeC2 end-to-end smoke tests on the single-binary server (:8000)
 license: MIT
 compatibility: grok
 metadata:
@@ -11,20 +11,20 @@ metadata:
 ## Prerequisites
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1
-# or manually start Go :8080 + Next.js :3000
+powershell -File scripts\build-embedded.ps1
+# or manually start the binary: .\forgec2-server.exe -config config.yaml
 ```
 
 ## Smoke checklist
 
 | # | Step | Expected |
 |---|------|----------|
-| 1 | `GET http://127.0.0.1:8080/health` | `{"status":"ok"}` |
-| 2 | `GET http://127.0.0.1:3000/login` | HTTP 200 |
-| 3 | Login admin/admin on `:3000` | Redirect to dashboard |
-| 4 | `GET http://127.0.0.1:3000/dashboard` | Charts load (network → `/api/go?p=/api/dashboard/...`) |
-| 5 | `GET http://127.0.0.1:3000/agents` | Table renders, batch bar on select |
-| 6 | WebSocket | DevTools WS to `ws://127.0.0.1:8080/ws` — Live indicator in top bar |
+| 1 | `GET http://127.0.0.1:8000/health` | `{"status":"ok"}` |
+| 2 | `GET http://127.0.0.1:8000/login` | HTTP 200 (SPA HTML) |
+| 3 | Login admin/admin on `:8000` | Redirect to dashboard |
+| 4 | `GET http://127.0.0.1:8000/dashboard` | Dashboard renders (API fetched same-origin) |
+| 5 | `GET http://127.0.0.1:8000/agents` | Table renders, batch bar on select |
+| 6 | WebSocket | DevTools WS to `ws://127.0.0.1:8000/ws` — Live indicator in top bar |
 | 7 | Theme toggle | Light/dark/system persists after reload |
 | 8 | Language switch | UI strings change (en/zh) |
 | 9 | Implant beacon | `data/server.log` shows beacon processed |
@@ -33,33 +33,37 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1
 ## PowerShell quick script
 
 ```powershell
-# API health
-(Invoke-WebRequest "http://127.0.0.1:8080/health" -UseBasicParsing).Content
+# Prefer the packaged smoke script
+powershell -File scripts/api-smoke.ps1
+# Auth suite: session + CSRF + read-only agents/modules/listeners/dashboard/profiles/attack
+powershell -File scripts/api-smoke.ps1 -TryDefaultAdmin
+powershell -File scripts/api-smoke.ps1 -User admin -Password 'your-password'
+# Or env: $env:FORGEC2_SMOKE_USER='admin'; $env:FORGEC2_SMOKE_PASS='...'
 
-# UI reachable
-(Invoke-WebRequest "http://127.0.0.1:3000/login" -UseBasicParsing).StatusCode
+# OpenAPI hygiene (from repo root)
+go run ./cmd/checkopenapi -min-coverage 0.80
+go run ./cmd/checkopenapi -list-stale   # OpenAPI-only orphans
+go run ./cmd/checkopenapi -list-missing # backend routes still undocumented
 
-# API via Next.js proxy (needs session cookie after login)
-$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-Invoke-WebRequest "http://127.0.0.1:3000/login" -Method POST -Body @{username="admin";password="admin"} -WebSession $session | Out-Null
-(Invoke-WebRequest "http://127.0.0.1:3000/api/go?p=/dashboard&format=json" -WebSession $session).Content
+# Manual one-liners
+(Invoke-WebRequest "http://127.0.0.1:8000/health" -UseBasicParsing).Content
+(Invoke-WebRequest "http://127.0.0.1:8000/login" -UseBasicParsing).StatusCode
 ```
 
 ## After code changes
 
 1. `go test ./...`
-2. `cd frontend && npm run build` (if UI changed)
-3. Restart via `start.ps1`
+2. `powershell -File scripts\build-embedded.ps1` (if UI or Go changed)
+3. `powershell -File scripts\dev-backend.ps1` (if only Go changed)
 4. Hard refresh browser (Ctrl+Shift+R)
 5. Re-run checklist
 
 ## CI
 
-GitHub Actions `.github/workflows/ci.yml` runs `go test` + `go build`. Frontend build can be added separately.
+GitHub Actions `.github/workflows/ci.yml` runs frontend build → embed → Go build/vet/test → final binary.
 
 ## Ports reference
 
 | URL | Purpose |
 |-----|---------|
-| `http://localhost:3000` | **Primary UI** |
-| `http://localhost:8080` | API, beacons, WebSocket, legacy HTML |
+| `http://localhost:8000` | **Single binary — UI, API, beacons, WebSocket** |

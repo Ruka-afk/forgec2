@@ -10,9 +10,11 @@ import ScrollToTop from "@/components/ScrollToTop";
 import { Breadcrumb } from "@/components/UI";
 import { usePathname } from "next/navigation";
 import { useAppStore } from "@/lib/store";
+import { useI18n } from "@/lib/i18n";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { t } = useI18n();
   const isMobile = useAppStore((s) => s.isMobile);
   const setIsMobile = useAppStore((s) => s.setIsMobile);
   const setMobileMenuOpen = useAppStore((s) => s.setMobileMenuOpen);
@@ -44,9 +46,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Skip to content link (WCAG 2.4.1) */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:rounded-lg focus:text-sm focus:font-medium focus:shadow-lg focus:outline-none"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-(--z-skip-link) focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:rounded-lg focus:text-sm focus:font-medium focus:shadow-lg focus:outline-none"
       >
-        Skip to content
+        {t("a11y.skip_to_content")}
       </a>
 
       <Sidebar />
@@ -56,10 +58,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         style={{ marginLeft: isMobile ? 0 : sidebarWidth }}
       >
         <TopBar onMenuToggle={handleMenuToggle} />
-        <UpdateBanner />
-        <AgentStatusBanner />
         <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto min-h-0 pt-14 scroll-smooth focus:outline-none">
-          <div className="mx-auto h-full w-full max-w-screen-2xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+            <div className="mx-auto h-full w-full max-w-screen-2xl px-5 sm:px-8 lg:px-10 py-5 sm:py-7 lg:py-8">
+            <UpdateBanner />
+            <AgentStatusBanner />
             <Breadcrumb />
             {children}
           </div>

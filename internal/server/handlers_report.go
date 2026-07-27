@@ -1,4 +1,4 @@
-﻿package server
+package server
 
 import (
 	"encoding/json"
@@ -81,36 +81,36 @@ func (s *Server) handleGenerateReport(c *gin.Context) {
 		return
 	}
 
- 	// Validate format whitelist
- 	if req.Format == "" {
- 		req.Format = "html"
- 	}
- 	if req.Format != "html" && req.Format != "json" {
- 		respondError(c, http.StatusBadRequest, "invalid format: must be 'html' or 'json'")
- 		return
- 	}
+	// Validate format whitelist
+	if req.Format == "" {
+		req.Format = "html"
+	}
+	if req.Format != "html" && req.Format != "json" {
+		respondError(c, http.StatusBadRequest, "invalid format: must be 'html' or 'json'")
+		return
+	}
 
- 	// Parse dates
- 	startDate, err := time.Parse("2006-01-02", req.StartDate)
- 	if err != nil {
- 		startDate = time.Now().AddDate(0, -1, 0) // Default: last month
- 	}
- 	endDate, err := time.Parse("2006-01-02", req.EndDate)
- 	if err != nil {
- 		endDate = time.Now()
- 	}
- 	endDate = endDate.Add(24*time.Hour - 1*time.Second) // End of day
+	// Parse dates
+	startDate, err := time.Parse("2006-01-02", req.StartDate)
+	if err != nil {
+		startDate = time.Now().AddDate(0, -1, 0) // Default: last month
+	}
+	endDate, err := time.Parse("2006-01-02", req.EndDate)
+	if err != nil {
+		endDate = time.Now()
+	}
+	endDate = endDate.Add(24*time.Hour - 1*time.Second) // End of day
 
- 	// Validate date range
- 	if startDate.After(endDate) {
- 		respondError(c, http.StatusBadRequest, "start_date must be before end_date")
- 		return
- 	}
- 	// Cap date range to 365 days
- 	if endDate.Sub(startDate) > MaxReportDateRange {
- 		respondError(c, http.StatusBadRequest, "date range cannot exceed 365 days")
- 		return
- 	}
+	// Validate date range
+	if startDate.After(endDate) {
+		respondError(c, http.StatusBadRequest, "start_date must be before end_date")
+		return
+	}
+	// Cap date range to 365 days
+	if endDate.Sub(startDate) > MaxReportDateRange {
+		respondError(c, http.StatusBadRequest, "date range cannot exceed 365 days")
+		return
+	}
 
 	// Build report
 	report := gin.H{
@@ -149,8 +149,8 @@ func (s *Server) handleGenerateReport(c *gin.Context) {
 
 	// Agents
 	if req.Include.Agents {
- 		var agents []db.Implant
- 		s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(5000).Find(&agents)
+		var agents []db.Implant
+		s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(5000).Find(&agents)
 		agentList := make([]gin.H, 0, len(agents))
 		for _, a := range agents {
 			agentList = append(agentList, gin.H{
@@ -375,15 +375,22 @@ func generateHTMLReport(report gin.H) string {
 	return html
 }
 
-func parseReportDates(c *gin.Context) (time.Time, time.Time) {
+func parseReportDates(c *gin.Context) (time.Time, time.Time, error) {
 	startStr := c.Query("start")
 	endStr := c.Query("end")
 	var startDate, endDate time.Time
+	var parseErr error
 	if startStr != "" {
-		startDate, _ = time.Parse("2006-01-02", startStr)
+		startDate, parseErr = time.Parse("2006-01-02", startStr)
+		if parseErr != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("invalid start date: %w", parseErr)
+		}
 	}
 	if endStr != "" {
-		endDate, _ = time.Parse("2006-01-02", endStr)
+		endDate, parseErr = time.Parse("2006-01-02", endStr)
+		if parseErr != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("invalid end date: %w", parseErr)
+		}
 		endDate = endDate.Add(24*time.Hour - time.Second)
 	}
 	if startDate.IsZero() {
@@ -392,11 +399,15 @@ func parseReportDates(c *gin.Context) (time.Time, time.Time) {
 	if endDate.IsZero() {
 		endDate = time.Now()
 	}
-	return startDate, endDate
+	return startDate, endDate, nil
 }
 
 func (s *Server) handleAPIGetReportAgents(c *gin.Context) {
-	startDate, endDate := parseReportDates(c)
+	startDate, endDate, err := parseReportDates(c)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	var agents []db.Implant
 	s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Find(&agents)
 	agentList := make([]gin.H, 0, len(agents))
@@ -411,15 +422,14 @@ func (s *Server) handleAPIGetReportAgents(c *gin.Context) {
 }
 
 func (s *Server) handleAPIGetReportTasks(c *gin.Context) {
-	startDate, endDate := parseReportDates(c)
+	startDate, endDate, err := parseReportDates(c)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	var tasks []db.Task
 	s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(200).Find(&tasks)
-	stats := gin.H{
-		"total":     len(tasks),
-		"completed": 0,
-		"failed":    0,
-		"pending":   0,
-	}
+	var completed, failed, pending int
 	taskList := make([]gin.H, 0, len(tasks))
 	for _, t := range tasks {
 		entry := gin.H{
@@ -429,18 +439,27 @@ func (s *Server) handleAPIGetReportTasks(c *gin.Context) {
 		taskList = append(taskList, entry)
 		switch t.Status {
 		case "completed":
-			stats["completed"] = stats["completed"].(int) + 1
+			completed++
 		case "failed", "error":
-			stats["failed"] = stats["failed"].(int) + 1
+			failed++
 		default:
-			stats["pending"] = stats["pending"].(int) + 1
+			pending++
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"stats": stats, "tasks": taskList})
+	c.JSON(http.StatusOK, gin.H{"stats": gin.H{
+		"total":     len(tasks),
+		"completed": completed,
+		"failed":    failed,
+		"pending":   pending,
+	}, "tasks": taskList})
 }
 
 func (s *Server) handleAPIGetReportCredentials(c *gin.Context) {
-	startDate, endDate := parseReportDates(c)
+	startDate, endDate, err := parseReportDates(c)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	var creds []db.CredentialEntry
 	s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(100).Find(&creds)
 	credList := make([]gin.H, 0, len(creds))
@@ -469,7 +488,11 @@ func (s *Server) handleAPIGetReportNetwork(c *gin.Context) {
 }
 
 func (s *Server) handleAPIGetReportFindings(c *gin.Context) {
-	startDate, endDate := parseReportDates(c)
+	startDate, endDate, err := parseReportDates(c)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	var creds []db.CredentialEntry
 	s.db.Where("created_at BETWEEN ? AND ?", startDate, endDate).Order("created_at desc").Limit(50).Find(&creds)
 	findings := make([]gin.H, 0)
@@ -515,7 +538,11 @@ func (s *Server) handleAPIGetReportHistory(c *gin.Context) {
 }
 
 func (s *Server) handleAPIExportReportPDF(c *gin.Context) {
-	startDate, endDate := parseReportDates(c)
+	startDate, endDate, err := parseReportDates(c)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	template := c.DefaultQuery("template", "technical")
 
 	req := struct {
@@ -658,4 +685,3 @@ func (s *Server) buildReportData(startDate, endDate string, sections []string) g
 
 	return report
 }
-

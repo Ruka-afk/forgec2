@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 )
 
-type WebhookEntry struct {
-	db.WebhookConfig
-}
+const webhookMaxRetries = 3
 
 func (s *Server) triggerWebhooks(evt Event) {
 	var webhooks []db.WebhookConfig
@@ -40,36 +39,72 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 		return
 	}
 
-	req, err := http.NewRequest(wh.Method, wh.URL, bytes.NewReader(payload))
-	if err != nil {
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "ForgeC2-Webhook/1.0")
+	backoff := []time.Duration{time.Second, 3 * time.Second, 7 * time.Second}
+	for attempt := 0; attempt <= webhookMaxRetries; attempt++ {
+		select {
+		case <-s.ctx.Done():
+			return
+		default:
+		}
 
-	if wh.Headers != "" {
-		var hdr map[string]string
-		if json.Unmarshal([]byte(wh.Headers), &hdr) == nil {
-			for k, v := range hdr {
-				req.Header.Set(k, v)
+		req, err := http.NewRequestWithContext(s.ctx, wh.Method, wh.URL, bytes.NewReader(payload))
+		if err != nil {
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", "ForgeC2-Webhook/1.0")
+
+		if wh.Headers != "" {
+			var hdr map[string]string
+			if json.Unmarshal([]byte(wh.Headers), &hdr) == nil {
+				for k, v := range hdr {
+					req.Header.Set(k, v)
+				}
 			}
 		}
-	}
 
-	client := &http.Client{Timeout: WebhookDeliveryTimeout}
-	resp, err := client.Do(req)
-	if err != nil {
-		slog.Error("webhook delivery failed", "name", wh.Name, "error", err)
+		resp, err := s.httpClient.Do(req)
+		if err != nil {
+			if attempt < webhookMaxRetries {
+				slog.Warn("webhook delivery failed, retrying", "name", wh.Name, "attempt", attempt+1, "error", err)
+				select {
+				case <-s.ctx.Done():
+					return
+				case <-time.After(backoff[attempt]):
+				}
+				continue
+			}
+			slog.Error("webhook delivery failed, exhausted retries", "name", wh.Name, "error", err)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			s.db.Create(&db.AuditLog{
+				User:    "system",
+				Action:  "webhook",
+				Success: true,
+				Details: fmt.Sprintf("Webhook %s -> %s: %d", wh.Name, wh.URL, resp.StatusCode),
+			})
+			return
+		}
+		if attempt < webhookMaxRetries && resp.StatusCode >= 500 {
+			slog.Warn("webhook delivery got server error, retrying", "name", wh.Name, "status", resp.StatusCode, "attempt", attempt+1)
+			select {
+			case <-s.ctx.Done():
+				return
+			case <-time.After(backoff[attempt]):
+			}
+			continue
+		}
+
+		slog.Error("webhook delivery failed with non-retryable status", "name", wh.Name, "status", resp.StatusCode)
+		s.db.Create(&db.AuditLog{
+			User:    "system",
+			Action:  "webhook",
+			Success: false,
+			Details: fmt.Sprintf("Webhook %s -> %s: %d", wh.Name, wh.URL, resp.StatusCode),
+		})
 		return
-	}
-	defer resp.Body.Close()
-
-	if err := s.db.Create(&db.AuditLog{
-		User:    "system",
-		Action:  "webhook",
-		Success: resp.StatusCode >= 200 && resp.StatusCode < 300,
-		Details: fmt.Sprintf("Webhook %s -> %s: %d", wh.Name, wh.URL, resp.StatusCode),
-	}).Error; err != nil {
-		slog.Error("failed to create webhook audit log", "error", err)
 	}
 }

@@ -6,8 +6,10 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -17,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/forgec2/forgec2/internal/config"
 	"github.com/gin-gonic/gin"
 )
 
@@ -25,9 +28,32 @@ func respond(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, data)
 }
 
+// respondSuccess wraps data in the standard success envelope: {success: true, data: ...}.
+// Use this for all list/detail endpoints to ensure a consistent API response format.
+func respondSuccess(c *gin.Context, data interface{}) {
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": data})
+}
+
+// respondSuccessWithTotal wraps data with pagination metadata.
+func respondSuccessWithTotal(c *gin.Context, data interface{}, total int64, page, pageSize int) {
+	c.JSON(http.StatusOK, gin.H{
+		"success":  true,
+		"data":     data,
+		"total":    total,
+		"page":     page,
+		"pageSize": pageSize,
+	})
+}
+
 // respondError sends a JSON error response with the given HTTP status and message.
 func respondError(c *gin.Context, status int, msg string) {
 	c.JSON(status, gin.H{"success": false, "error": msg})
+}
+
+// respondErrorSafe sends a JSON error response with the error message sanitized
+// through sanitizeError, so raw err.Error() is never exposed to clients.
+func respondErrorSafe(c *gin.Context, status int, err error, context string) {
+	respondError(c, status, sanitizeError(err, context))
 }
 
 // sanitizeError maps known internal errors to safe user-facing messages.
@@ -168,12 +194,17 @@ type paginationParams struct {
 }
 
 // parsePagination reads page/page_size query parameters with sane defaults.
+// Accepts both "page_size" and "pageSize" query params for backward compatibility.
 func parsePagination(c *gin.Context, defaultPageSize, maxPageSize int) paginationParams {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if page < 1 {
 		page = 1
 	}
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", strconv.Itoa(defaultPageSize)))
+	pageSizeStr := c.DefaultQuery("page_size", "")
+	if pageSizeStr == "" {
+		pageSizeStr = c.DefaultQuery("pageSize", strconv.Itoa(defaultPageSize))
+	}
+	pageSize, _ := strconv.Atoi(pageSizeStr)
 	if pageSize < 1 || pageSize > maxPageSize {
 		pageSize = defaultPageSize
 	}
@@ -188,7 +219,11 @@ func parsePagination(c *gin.Context, defaultPageSize, maxPageSize int) paginatio
 
 // listAll queries all records ordered as specified and responds with data + total.
 func (s *Server) listAll(c *gin.Context, dest interface{}, order string) {
-	s.db.Order(order).Find(dest)
+	if err := s.db.Order(order).Find(dest).Error; err != nil {
+		slog.Error("listAll query failed", "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to query data")
+		return
+	}
 	respond(c, gin.H{"success": true, "data": dest, "total": reflect.ValueOf(dest).Elem().Len()})
 }
 
@@ -201,13 +236,49 @@ func csvSanitize(s string) string {
 	return s
 }
 
+// serveFileSafe serves a file after validating it falls within the base directory.
+// If downloadName is non-empty, it triggers a download (Content-Disposition).
+func serveFileSafe(c *gin.Context, absPath, baseDir, downloadName string) {
+	if err := validateFilePath(absPath, baseDir); err != nil {
+		respondError(c, http.StatusNotFound, "file not found")
+		return
+	}
+	if downloadName != "" {
+		c.FileAttachment(absPath, downloadName)
+	} else {
+		c.File(absPath)
+	}
+}
+
+// allowedOrigin checks whether an HTTP request's Origin is permitted based on
+// the server's AllowedOrigins config. When empty, only localhost origins pass.
+func allowedOrigin(cfg *config.Config, r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	originHost := u.Hostname()
+	if len(cfg.Server.AllowedOrigins) == 0 {
+		return originHost == "localhost" || originHost == "127.0.0.1" || originHost == "::1"
+	}
+	for _, allowed := range cfg.Server.AllowedOrigins {
+		if originHost == allowed {
+			return true
+		}
+	}
+	return false
+}
+
 // sanitizeFilename strips characters that could enable Content-Disposition header injection
 // and prevents path traversal by using filepath.Base and removing leading dots.
 func sanitizeFilename(name string) string {
 	name = filepath.Base(name)
 	name = strings.TrimLeft(name, ".")
-	re := regexp.MustCompile(`[^\w.\-]`)
-	name = re.ReplaceAllString(name, "_")
+	name = sanitizeRe.ReplaceAllString(name, "_")
 	if name == "" || name == "." {
 		return "download"
 	}
@@ -311,6 +382,21 @@ func validateWebhookURL(rawURL string) error {
 		}
 	}
 
+	// DNS resolution check: resolve the hostname and verify no resolved IP is private
+	if ip == nil {
+		ips, err := net.LookupIP(host)
+		if err == nil {
+			for _, resolved := range ips {
+				if resolved.IsLoopback() || resolved.IsUnspecified() || resolved.IsLinkLocalUnicast() || resolved.IsLinkLocalMulticast() {
+					return fmt.Errorf("webhook URL hostname %s resolves to blocked IP: %s", host, resolved.String())
+				}
+				if resolved.IsPrivate() {
+					return fmt.Errorf("webhook URL hostname %s resolves to private IP: %s", host, resolved.String())
+				}
+			}
+		}
+	}
+
 	// Block known cloud metadata hostnames
 	blockedHosts := []string{
 		"169.254.169.254", "metadata.google.internal",
@@ -337,5 +423,18 @@ func escapeLike(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, `%`, `\%`)
 	s = strings.ReplaceAll(s, `_`, `\_`)
+	s = strings.ReplaceAll(s, `[`, `\[`)
+	s = strings.ReplaceAll(s, `]`, `\]`)
 	return s
+}
+
+// marshalJSONSafe wraps json.Marshal with error logging.
+// Returns the JSON bytes and a boolean indicating success.
+func marshalJSONSafe(v interface{}) ([]byte, bool) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		slog.Error("json.Marshal failed", "error", err, "type", fmt.Sprintf("%T", v))
+		return nil, false
+	}
+	return b, true
 }
