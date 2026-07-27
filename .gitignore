@@ -32,7 +32,8 @@ opencode.json
 Thumbs.db
 
 # Generated agent binaries
-agent
+/agent
+/agent.exe
 
 # Debug logs and temp output
 *.log
