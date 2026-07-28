@@ -50,18 +50,18 @@ export interface Tag {
 }
 
 export const COMMAND_TYPES = [
-  { value: "shell", label: "Shell" },
-  { value: "ps", label: "Process List" },
-  { value: "ls", label: "List Directory" },
-  { value: "screenshot", label: "Screenshot" },
-  { value: "sleep", label: "Sleep" },
-  { value: "netstat", label: "Network Status" },
-  { value: "users", label: "List Users" },
-  { value: "clipboard_get", label: "Clipboard Get" },
-  { value: "creds_dump", label: "Dump Credentials" },
-  { value: "run_evasion", label: "Run Evasion" },
-  { value: "kill", label: "Kill" },
-  { value: "uninstall", label: "Uninstall" },
+  { value: "shell", labelKey: "command.type.shell" },
+  { value: "ps", labelKey: "command.type.process_list" },
+  { value: "ls", labelKey: "command.type.list_directory" },
+  { value: "screenshot", labelKey: "command.type.screenshot" },
+  { value: "sleep", labelKey: "command.type.sleep" },
+  { value: "netstat", labelKey: "command.type.netstat" },
+  { value: "users", labelKey: "command.type.users" },
+  { value: "clipboard_get", labelKey: "command.type.clipboard_get" },
+  { value: "creds_dump", labelKey: "command.type.creds_dump" },
+  { value: "run_evasion", labelKey: "command.type.run_evasion" },
+  { value: "kill", labelKey: "command.type.kill" },
+  { value: "uninstall", labelKey: "command.type.uninstall" },
 ];
 
 export function avatarColor(hostname: string) {

@@ -28,15 +28,6 @@ export function useAgentFilters(beacons: Beacon[]) {
   useEffect(() => { if (searchInput) setPage(1); }, [searchInput]);
 
   useEffect(() => {
-    if (!colMenuOpen) return;
-    const close = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement)?.closest?.("[data-col-menu]")) setColMenuOpen(false);
-    };
-    document.addEventListener("click", close, true);
-    return () => document.removeEventListener("click", close, true);
-  }, [colMenuOpen]);
-
-  useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement)?.tagName)) {
         e.preventDefault();

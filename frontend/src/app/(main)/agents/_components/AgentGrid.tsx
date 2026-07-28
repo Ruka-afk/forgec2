@@ -72,13 +72,13 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
               </div>
               <div className="flex items-center gap-1.5">
                 <Clock className="w-3 h-3 text-muted-foreground/50" />
-                <span title={beacon.last_seen ? new Date(beacon.last_seen).toLocaleString() : ""}>{timeAgo(beacon.last_seen || "")}</span>
+                <span title={beacon.last_seen ? new Date(beacon.last_seen).toLocaleString() : ""}>{timeAgo(beacon.last_seen || "", t)}</span>
                 {beacon.created_at && <span className="text-(--font-size-micro) text-muted-foreground/70 ml-1">up {formatUptime(beacon.last_seen || beacon.created_at)}</span>}
               </div>
             </div>
             <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-border/40">
-              {(tagsByAgent[id] || []).slice(0, 5).map((t) => (
-                <span key={t.id} className="w-2.5 h-2.5 rounded-full ring-1.5 ring-white dark:ring-border shadow-sm" style={{ backgroundColor: t.color }} title={t.name} />
+              {(tagsByAgent[id] || []).slice(0, 5).map((tag) => (
+                <span key={tag.id} className="w-2.5 h-2.5 rounded-full ring-1.5 ring-white dark:ring-border shadow-sm" style={{ backgroundColor: tag.color }} title={tag.name} />
               ))}
               <span className="ml-auto text-(--font-size-micro-sm) text-muted-foreground/70">{t("agents.n_tasks").replace("{n}", String(taskCountMap[id] ?? 0))}</span>
             </div>

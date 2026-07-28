@@ -75,7 +75,7 @@ export function BulkCommandModal({
               </SelectTrigger>
               <SelectContent>
                 {COMMAND_TYPES.map((ct) => (
-                  <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>
+                  <SelectItem key={ct.value} value={ct.value}>{t(ct.labelKey)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

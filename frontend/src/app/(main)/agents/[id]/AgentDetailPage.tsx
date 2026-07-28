@@ -9,6 +9,7 @@ import { ConfirmModal, StatusBadge, Spinner } from "@/components/UI";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useWS } from "@/lib/wsContext";
 import { timeAgo } from "@/lib/utils";
+import { AgentStatus, AgentDetail as AgentDetailExt, AgentDetailData, AgentTaskRecord } from "@/types/agent";
 import AgentHeader from "./_components/AgentHeader";
 import AgentStatsGrid from "./_components/AgentStatsGrid";
 import AgentTaskList from "./_components/AgentTaskList";
@@ -395,20 +396,20 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     return lastCompletedTask ? (lastCompletedTask.result || "").substring(0, 500) : "";
   }, [tasks, data]);
 
-  const quickAction = async (action: string, label: string) => {
-    setActionLoading(action);
-    try { await api.postJson(`/agents/${id}/command`, { type: action, command: "" }); toast.success(t("agents.detail_action_sent").replace("{label}", label)); }
-    catch { toast.error(t("agents.detail_action_failed").replace("{label}", label)); } finally { setActionLoading(null); }
-  };
+   const quickAction = async (action: string, label: string) => {
+     setActionLoading(action);
+     try { await api.postJson(`/agents/${id}/command`, { type: action, command: "" }); toast.success(t("agents.detail_action_sent").replace("{label}", label)); }
+     catch (err) { console.error("quickAction failed:", err); toast.error(t("agents.detail_action_failed").replace("{label}", label)); } finally { setActionLoading(null); }
+   };
 
-  const forceKeyRotation = async () => {
-    setActionLoading("key_rotate");
-    try {
-      await api.postJson("/tasks", { agent_id: id, type: "key_rotate" });
-      toast.success(t("agents.force_key_rotation_sent"));
-    } catch { toast.error(t("agents.force_key_rotation_failed")); }
-    setActionLoading(null);
-  };
+   const forceKeyRotation = async () => {
+     setActionLoading("key_rotate");
+     try {
+       await api.postJson("/tasks", { agent_id: id, type: "key_rotate" });
+       toast.success(t("agents.force_key_rotation_sent"));
+     } catch (err) { console.error("forceKeyRotation failed:", err); toast.error(t("agents.force_key_rotation_failed")); }
+     setActionLoading(null);
+   };
 
   const handleApplySleep = async () => {
     setSleepSaving(true);
@@ -438,7 +439,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     const os = agent.os || "—";
     const arch = agent.arch || "—";
     const username = agent.username || "—";
-    const status = (agent.status || "offline") as import("@/types/agent").AgentStatus;
+    const status = (agent.status || "offline") as AgentStatus;
     const uptime = data.uptime || "—";
     const totalTasks = data.total_tasks ?? 0;
     const completedTasks = data.completed_tasks ?? 0;
@@ -474,7 +475,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     const os = agent.os || "—";
     const arch = agent.arch || "—";
     const username = agent.username || "—";
-    const status = (agent.status || "offline") as import("@/types/agent").AgentStatus;
+    const status = (agent.status || "offline") as AgentStatus;
     const uptime = data.uptime || "—";
     const totalTasks = data.total_tasks ?? 0;
     const completedTasks = data.completed_tasks ?? 0;
@@ -505,7 +506,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             <Skeleton className="w-14 h-14 rounded-xl" />
             <div className="space-y-2"><Skeleton className="h-5 w-40" /><Skeleton className="h-3 w-60" /></div>
           </div></Card>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[1,2,3,4].map((i) => (<Card key={i} className="p-4"><Skeleton className="h-3 w-16 mb-2" /><Skeleton className="h-4 w-24" /></Card>))}</div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[1,2,3,4].map((n) => (<Card key={n} className="p-4"><Skeleton className="h-3 w-16 mb-2" /><Skeleton className="h-4 w-24" /></Card>))}</div>
         </div>
       </div>
     );
@@ -534,7 +535,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   return (
     <div className={cn("max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up", partyMode && "party-rainbow")}>
       <AgentHeader
-        agent={agent as Partial<import("@/types/agent").AgentDetail>}
+        agent={agent as Partial<AgentDetailExt>}
         agentId={id}
         agentAge={agentAge}
         status={status}
@@ -549,8 +550,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
 
       <Collapsible open={childrenExpanded} onOpenChange={setChildrenExpanded}>
       <AgentStatsGrid
-        agent={agent as Partial<import("@/types/agent").AgentDetail>}
-        data={data as import("@/types/agent").AgentDetailData}
+        agent={agent as Partial<AgentDetailExt>}
+        data={data as AgentDetailData}
         healthScore={healthScore}
         activityBuckets={activityBuckets}
         maxActivity={maxActivity}
@@ -646,8 +647,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
                 <polyline points={sparklinePoints.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
                   fill="none" stroke="currentColor" strokeWidth="1.5"
                   className="text-indigo-500 dark:text-indigo-400" strokeLinejoin="round" strokeLinecap="round" />
-                {sparklinePoints.map((p, i) => (
-                  <circle key={i} cx={p.x} cy={p.y} r="1.5"
+                {sparklinePoints.map((p, idx) => (
+                  <circle key={idx} cx={p.x} cy={p.y} r="1.5"
                     className="fill-indigo-500 dark:fill-indigo-400" />
                 ))}
               </svg>
@@ -678,7 +679,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
       )}
 
       <AgentTaskList
-        tasks={tasks as import("@/types/agent").AgentTaskRecord[]}
+        tasks={tasks as AgentTaskRecord[]}
         agentId={id}
         expandedTaskId={expandedTask}
         onToggleExpand={(taskId) => setExpandedTask(expandedTask === taskId ? null : taskId)}
@@ -722,7 +723,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
           <div><span className="block text-xs font-medium text-muted-foreground mb-1.5">{t("agents.detail_tags_hint")}</span><Input aria-label="Tags" name="input-0" type="text" value={editTags} onChange={(e) => setEditTags(e.target.value)} placeholder={t("agents.detail_tags_placeholder")} /></div>
           <div><span className="block text-xs font-medium text-muted-foreground mb-1.5">{t("agents.detail_notes")}</span><Textarea aria-label="Notes" name="textarea-0" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={3} placeholder={t("agents.detail_notes_placeholder")} /></div>
         </div>) : (<div className="space-y-3">
-          <div><div className="text-xs font-medium text-muted-foreground mb-2">{t("agents.detail_tags")}</div>{tagsList.length > 0 ? (<div className="flex flex-wrap gap-1.5">{tagsList.map((tag, i) => { return <Link key={i} href={`/agents?tag=${encodeURIComponent(tag)}`}><Badge variant="outline" className="cursor-pointer hover:opacity-80 transition-opacity">{tag}</Badge></Link>; })}</div>) : <span className="text-xs text-muted-foreground/70">{t("agents.detail_no_tags")}</span>}</div>
+          <div><div className="text-xs font-medium text-muted-foreground mb-2">{t("agents.detail_tags")}</div>{tagsList.length > 0 ? (<div className="flex flex-wrap gap-1.5">{tagsList.map((tag) => { return <Link key={tag} href={`/agents?tag=${encodeURIComponent(tag)}`}><Badge variant="outline" className="cursor-pointer hover:opacity-80 transition-opacity">{tag}</Badge></Link>; })}</div>) : <span className="text-xs text-muted-foreground/70">{t("agents.detail_no_tags")}</span>}</div>
           <div><div className="text-xs font-medium text-muted-foreground mb-1">{t("agents.detail_notes")}</div>{note ? <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{note}</p> : <span className="text-xs text-muted-foreground/70">{t("agents.detail_no_notes")}</span>}</div>
         </div>)}</div>
       </Card>
@@ -733,7 +734,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
           <div className="max-h-64 overflow-y-auto"><div className="divide-y divide-border">{logs.map((log, i) => (
             <div key={log.id || i} className="px-4 py-2 flex items-center justify-between">
               <div className="flex items-center gap-2.5"><Circle className={`w-1.5 h-1.5 fill-current ${log.type === "online" ? "text-emerald-500" : log.type === "offline" ? "text-red-500" : "text-indigo-500"}`} /><span className="text-xs text-foreground">{log.user || t("agents.detail_log_system")}</span>{log.message && <span className="text-xs text-muted-foreground/70">{log.message}</span>}</div>
-              <span className="text-(--font-size-micro-sm) text-muted-foreground/70 whitespace-nowrap">{(log.created_at) ? timeAgo(String(log.created_at)) : ""}</span>
+              <span className="text-(--font-size-micro-sm) text-muted-foreground/70 whitespace-nowrap">{(log.created_at) ? timeAgo(String(log.created_at), t) : ""}</span>
             </div>))}</div></div>
         </Card>
       )}
@@ -770,12 +771,12 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
                 </div>
                 {shellHistory.length > 0 && (
                   <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {shellHistory.map((entry, i) => (
-                      <div key={i} className="p-2.5 rounded-lg bg-muted/50 border border-border">
+                    {shellHistory.map((entry, idx) => (
+                      <div key={entry.timestamp + idx} className="p-2.5 rounded-lg bg-muted/50 border border-border">
                         <div className="flex items-center gap-2 mb-1">
                           <Badge variant="secondary" className="text-(--font-size-micro-sm) font-mono">{entry.shell}</Badge>
                           <span className="text-xs font-mono text-foreground">{entry.command}</span>
-                          <span className="text-(--font-size-micro-sm) text-muted-foreground/70 ml-auto">{timeAgo(entry.timestamp)}</span>
+                          <span className="text-(--font-size-micro-sm) text-muted-foreground/70 ml-auto">{timeAgo(entry.timestamp, t)}</span>
                         </div>
                         <pre className="font-mono text-(--font-size-micro-sm) text-muted-foreground whitespace-pre-wrap break-all max-h-20 overflow-y-auto">{entry.result}</pre>
                       </div>
