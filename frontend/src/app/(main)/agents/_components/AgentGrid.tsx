@@ -40,7 +40,10 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
         return (
           <Card
             key={id}
+            role="button"
+            tabIndex={0}
             onClick={() => onSelect(id)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(id); } }}
             className={`p-4 cursor-pointer hover:ring-2 hover:ring-indigo-500/50 hover:shadow-md transition-all duration-200 border-l-4 ${borderColor} group ring-0 shadow-sm`}
           >
             <div className="flex items-start justify-between mb-2">
@@ -73,7 +76,7 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
               <div className="flex items-center gap-1.5">
                 <Clock className="w-3 h-3 text-muted-foreground/50" />
                 <span title={beacon.last_seen ? new Date(beacon.last_seen).toLocaleString() : ""}>{timeAgo(beacon.last_seen || "", t)}</span>
-                {beacon.created_at && <span className="text-(--font-size-micro) text-muted-foreground/70 ml-1">up {formatUptime(beacon.last_seen || beacon.created_at)}</span>}
+                {beacon.created_at && <span className="text-(--font-size-micro) text-muted-foreground/70 ml-1">{t("format.uptime.up")} {formatUptime(beacon.last_seen || beacon.created_at, t)}</span>}
               </div>
             </div>
             <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-border/40">

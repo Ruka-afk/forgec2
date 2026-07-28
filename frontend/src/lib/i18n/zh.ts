@@ -935,7 +935,12 @@ export const zh: Record<string, string> = {
     "agents.detail_notes_placeholder": "添加关于此 Agent 的备注...",
     "agents.detail_log_system": "系统",
 
-    "command.type.shell": "Shell",
+    "format.uptime.up": "已运行",
+  "format.uptime.days": "{n}天 {h}小时",
+  "format.uptime.hours": "{h}小时 {m}分钟",
+  "format.uptime.minutes": "{m}分钟",
+
+  "command.type.shell": "Shell",
   "command.type.process_list": "进程列表",
   "command.type.list_directory": "列出目录",
   "command.type.screenshot": "截图",

@@ -277,12 +277,14 @@ export default function AgentsPageContent() {
     closeCmdModal();
   };
 
-  const sendScreenshot = async (id: string) => {
+  const sendScreenshot = useCallback(async (id: string) => {
     try {
       await api.post(`/agents/${id}/screenshot`);
       setActionMsg(t("agents.screenshot_sent"));
-    } catch { setActionMsg(t("agents.screenshot_failed")); }
-  };
+    } catch {
+      setActionMsg(t("agents.screenshot_failed"));
+    }
+  }, []);
 
   const submitQuickSleep = async () => {
     if (!quickSleepAgent) return;

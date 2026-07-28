@@ -328,7 +328,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
 
   const agent = data?.agent || ({} as AgentDetail);
   const tasks: TaskEntry[] = useMemo(() => data?.tasks || [], [data?.tasks]);
-  const status = (agent.status || "offline") as import("@/types/agent").AgentStatus;
+  const status = (agent.status || "offline") as AgentStatus;
   const rawTags = agent.tags || "";
   const tagsList = rawTags ? rawTags.split(",").map((t) => t.trim()).filter(Boolean) : [];
   const note = agent.note || "";

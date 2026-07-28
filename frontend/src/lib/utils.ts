@@ -12,7 +12,10 @@ export function formatTime(iso?: string | null): string {
   return d.toLocaleString()
 }
 
-export function timeAgo(iso?: string | null, t?: (...args: any[]) => any): string {
+export function timeAgo(
+  iso?: string | null,
+  t?: (key: string, params?: Record<string, string | number>) => string
+): string {
   if (!iso) return t?.("time.ago.unknown") ?? "—"
   const d = new Date(iso)
   if (isNaN(d.getTime())) return t?.("time.ago.unknown") ?? "—"

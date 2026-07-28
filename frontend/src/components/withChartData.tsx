@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { api } from "@/lib/api";
 import { Spinner } from "@/components/UI";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ export function withChartData<T>(
   endpoint: string,
   transform?: (raw: unknown) => T,
 ) {
-  const ChartDataWrapper = function ChartDataWrapper() {
+  const ChartDataWrapper = memo(function ChartDataWrapper() {
     const [data, setData] = useState<T | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
@@ -64,7 +64,7 @@ export function withChartData<T>(
         ) : null}
       </div>
     );
-  };
+  });
   ChartDataWrapper.displayName = `ChartDataWrapper(${Wrapped.displayName || Wrapped.name || "Component"})`;
   return ChartDataWrapper;
 }

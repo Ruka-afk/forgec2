@@ -6,7 +6,6 @@ import { useEffect, useRef } from "react"
  */
 export function useVisibleInterval(callback: () => void, delay: number) {
   const savedCallback = useRef(callback)
-  const remainingRef = useRef(delay)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -17,7 +16,6 @@ export function useVisibleInterval(callback: () => void, delay: number) {
     if (delay <= 0) return
 
     const tick = () => {
-      remainingRef.current = delay
       savedCallback.current()
     }
 

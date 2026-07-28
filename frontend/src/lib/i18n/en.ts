@@ -916,7 +916,12 @@ export const en: Record<string, string> = {
     "agents.detail_notes_placeholder": "Add notes about this agent...",
     "agents.detail_log_system": "system",
 
-    "command.type.shell": "Shell",
+    "format.uptime.up": "up",
+  "format.uptime.days": "{n}d {h}h",
+  "format.uptime.hours": "{h}h {m}m",
+  "format.uptime.minutes": "{m}m",
+
+  "command.type.shell": "Shell",
   "command.type.process_list": "Process List",
   "command.type.list_directory": "List Directory",
   "command.type.screenshot": "Screenshot",

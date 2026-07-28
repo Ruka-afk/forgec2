@@ -68,8 +68,8 @@ export function BulkCommandModal({
         )}
         <div className="space-y-3">
           <div>
-            <span className="block text-xs font-medium text-muted-foreground mb-1">{t("agents.command_type")}</span>
-            <Select value={cmdType} onValueChange={(v) => { if (v !== null) { setCmdType(v); setConfirmStep(false); } }} disabled={loading}>
+            <span className="block text-xs font-medium text-muted-foreground mb-1" id="cmd-type-label">{t("agents.command_type")}</span>
+            <Select value={cmdType} onValueChange={(v) => { if (v !== null) { setCmdType(v); setConfirmStep(false); } }} disabled={loading} aria-labelledby="cmd-type-label">
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -102,10 +102,11 @@ export function BulkCommandModal({
           )}
           {cmdType !== "screenshot" && cmdType !== "kill" && cmdType !== "uninstall" && cmdType !== "run_evasion" && (
             <div>
-              <span className="block text-xs font-medium text-muted-foreground mb-1">
+              <span className="block text-xs font-medium text-muted-foreground mb-1" id="cmd-text-label">
                 {cmdType === "sleep" ? t("agents.interval_seconds") : t("agents.command")}
               </span>
               <Input
+                id="cmd-text-input"
                 type="text"
                 value={cmdText}
                 onChange={(e) => setCmdText(e.target.value)}
@@ -113,6 +114,7 @@ export function BulkCommandModal({
                 className="h-11"
                 autoFocus
                 disabled={loading}
+                aria-labelledby="cmd-text-label"
                 onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
               />
             </div>

@@ -136,7 +136,7 @@ export default function RemoteDesktopPage() {
   useEffect(() => {
     return () => {
       if (!id) return;
-      api.post(`/agents/${id}/screen/stop`).catch(() => {});
+      api.post(`/agents/${id}/screen/stop`).catch((e) => { console.error("RemoteDesktop stop failed:", e); });
     };
   }, [id]);
 

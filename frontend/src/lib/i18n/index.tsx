@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo, type ReactNode } from "react";
 import { en } from "./en";
+import { zh } from "./zh";
 
 export type Locale = "en" | "zh";
 
@@ -19,9 +20,9 @@ const I18nContext = createContext<I18nContextType>({
   dir: "ltr",
 });
 
-const translations: Record<Locale, Record<string, string>> = { en, zh: {} };
+const translations: Record<Locale, Record<string, string>> = { en, zh };
 
-const loadedLocales: Set<Locale> = new Set(["en"]);
+const loadedLocales: Set<Locale> = new Set(["en", "zh"]);
 
 function loadLocale(locale: Locale): Promise<void> {
   if (loadedLocales.has(locale)) return Promise.resolve();

@@ -75,14 +75,14 @@ export function copyToClipboard(text: string, key: string, setCopied: (k: string
   navigator.clipboard.writeText(text).then(() => { setCopied(key); setTimeout(() => setCopied(""), 1500); }).catch(() => {});
 }
 
-export function formatUptime(dateStr: string): string {
-  if (!dateStr) return "";
+export function formatUptime(dateStr: string, t?: (key: string, params?: Record<string, string | number>) => string): string {
+  if (!dateStr) return t?.("time.ago.unknown") ?? "";
   const diff = Date.now() - new Date(dateStr).getTime();
-  if (diff < 0) return "";
+  if (diff < 0) return t?.("time.ago.unknown") ?? "";
   const d = Math.floor(diff / 86400000);
   const h = Math.floor((diff % 86400000) / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
+  if (d > 0) return t?.("format.uptime.days", { n: d, h, m }) ?? `${d}d ${h}h`;
+  if (h > 0) return t?.("format.uptime.hours", { n: h, m }) ?? `${h}h ${m}m`;
+  return t?.("format.uptime.minutes", { n: m }) ?? `${m}m`;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 
 interface UseConfirmDialogResult {
   open: boolean;
@@ -24,7 +24,7 @@ export function useConfirmDialog(): UseConfirmDialogResult {
   const [description, setDescription] = useState("");
   const [confirmLabel, setConfirmLabel] = useState("Confirm");
   const [variant, setVariant] = useState<"default" | "destructive">("default");
-  const [resolver, setResolver] = useState<((value: boolean) => void) | null>(null);
+  const resolverRef = useRef<((value: boolean) => void) | null>(null);
 
   const ask = useCallback(
     (opts: {
@@ -39,7 +39,7 @@ export function useConfirmDialog(): UseConfirmDialogResult {
       setVariant(opts.variant ?? "default");
       setOpen(true);
       return new Promise<boolean>((resolve) => {
-        setResolver(() => resolve);
+        resolverRef.current = resolve;
       });
     },
     []
@@ -47,15 +47,15 @@ export function useConfirmDialog(): UseConfirmDialogResult {
 
   const onConfirm = useCallback(() => {
     setOpen(false);
-    resolver?.(true);
-    setResolver(null);
-  }, [resolver]);
+    resolverRef.current?.(true);
+    resolverRef.current = null;
+  }, []);
 
   const close = useCallback(() => {
     setOpen(false);
-    resolver?.(false);
-    setResolver(null);
-  }, [resolver]);
+    resolverRef.current?.(false);
+    resolverRef.current = null;
+  }, []);
 
   return { open, title, description, confirmLabel, variant, onConfirm, ask, close };
 }

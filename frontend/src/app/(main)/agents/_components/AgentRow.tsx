@@ -46,6 +46,7 @@ export const AgentRow = memo(function AgentRow({
   onCopy,
 }: AgentRowProps) {
   const id = beacon.id || "";
+  const { t } = useI18n();
   const hostname = beacon.hostname || "-";
   const username = beacon.username || "-";
   const ip = beacon.ip || "-";
@@ -57,7 +58,6 @@ export const AgentRow = memo(function AgentRow({
   const elevated = beacon.elevated || false;
   const notes = beacon.notes || "";
   const activeWindow = beacon.active_window || "";
-  const { t } = useI18n();
 
   const borderLeft = status === "online" ? "border-l-2 border-l-emerald-500" :
     status === "stale" ? "border-l-2 border-l-amber-500" : "border-l-2 border-l-red-500";
@@ -143,7 +143,7 @@ export const AgentRow = memo(function AgentRow({
       )}
       {visibleCols.last_seen && (
       <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4 text-xs text-muted-foreground font-mono whitespace-nowrap" data-label="Last Seen">
-        <span title={lastSeen ? new Date(lastSeen).toLocaleString() : ""}>{timeAgo(lastSeen)}</span>
+        <span title={lastSeen ? new Date(lastSeen).toLocaleString() : ""}>{timeAgo(lastSeen, t)}</span>
       </TableCell>
       )}
       {visibleCols.window && (

@@ -111,7 +111,7 @@ export default function DashboardPage() {
   useVisibleInterval(() => {
     api.get<DashboardPageStats>("/api/v1/dashboard")
       .then((d) => setStats(d))
-      .catch(() => {});
+      .catch((e) => { console.error("Dashboard poll failed:", e); });
   }, 30000);
 
   const s = stats;
