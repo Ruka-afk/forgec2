@@ -202,6 +202,8 @@ type AuditLog struct {
 	Success   bool      `json:"success"`               // whether the action succeeded
 	Error     string    `json:"error"`                 // error message if failed
 	Details   string    `json:"details"`               // additional details
+	PrevHash  string    `gorm:"size:64" json:"prev_hash"` // SHA-256 of the previous audit entry (append-only hash chain)
+	EntryHash string    `gorm:"size:64" json:"entry_hash"` // SHA-256 hash of this entry (covers all fields)
 	CreatedAt time.Time `gorm:"index" json:"created_at"`
 }
 

@@ -36,7 +36,7 @@ func (s *Server) tryRegisterPluginFromDisk(name string) {
 		return
 	}
 	if err := s.pluginManager.Register(manifest); err != nil {
-		slog.Error("failed to register plugin", "name", name, "error", err)
+		slog.Error("Failed to register plugin", "name", name, "error", err)
 	}
 }
 

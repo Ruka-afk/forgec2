@@ -20,7 +20,7 @@ const bloodHoundDir = "data/bloodhound"
 func (s *Server) handleBloodHoundList(c *gin.Context) {
 	var results []db.BloodHoundResult
 	if err := s.db.Order("created_at desc").Limit(BloodHoundResultLimit).Find(&results).Error; err != nil {
-		slog.Error("failed to list bloodhound results", "error", err)
+		slog.Error("Failed to list bloodhound results", "error", err)
 	}
 	respond(c, gin.H{"results": results, "total": len(results)})
 }
@@ -29,12 +29,12 @@ func (s *Server) handleBloodHoundList(c *gin.Context) {
 func (s *Server) handleBloodHoundStatus(c *gin.Context) {
 	var total int64
 	if err := s.db.Model(&db.BloodHoundResult{}).Count(&total).Error; err != nil {
-		slog.Error("failed to count bloodhound results", "error", err)
+		slog.Error("Failed to count bloodhound results", "error", err)
 	}
 
 	var last db.BloodHoundResult
 	if err := s.db.Order("created_at desc").First(&last).Error; err != nil {
-		slog.Error("failed to fetch last bloodhound result", "error", err)
+		slog.Error("Failed to fetch last bloodhound result", "error", err)
 	}
 
 	respond(c, gin.H{
@@ -79,7 +79,7 @@ func (s *Server) handleBloodHoundDownload(c *gin.Context) {
 		return
 	}
 	if err := validateFilePath(result.FilePath, bloodHoundDir); err != nil {
-		slog.Warn("bloodhound: path traversal blocked", "path", result.FilePath, "error", err)
+		slog.Warn("Bloodhound: path traversal blocked", "path", result.FilePath, "error", err)
 		respondError(c, http.StatusForbidden, "invalid file path")
 		return
 	}
@@ -195,7 +195,7 @@ func (s *Server) handleBloodHoundResult(c *gin.Context) {
 			task.Status = "completed"
 			task.Result = "bloodhound collection stored"
 			if err := s.db.Save(&task).Error; err != nil {
-				slog.Error("failed to update bloodhound task", "error", err)
+				slog.Error("Failed to update bloodhound task", "error", err)
 			}
 			s.broadcastTaskUpdate(task.AgentID, task)
 			s.agentPendingTasksMu.Lock()

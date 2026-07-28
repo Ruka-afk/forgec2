@@ -382,6 +382,19 @@ var Migrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	{
+		ID: "2026-07-28-add-audit-log-hash-chain",
+		Migrate: func(tx *gorm.DB) error {
+			execMigration(tx, "ALTER TABLE audit_logs ADD COLUMN prev_hash VARCHAR(64) DEFAULT ''", "add_audit_logs_prev_hash")
+			execMigration(tx, "ALTER TABLE audit_logs ADD COLUMN entry_hash VARCHAR(64) DEFAULT ''", "add_audit_logs_entry_hash")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "ALTER TABLE audit_logs DROP COLUMN prev_hash", "drop_audit_logs_prev_hash")
+			execMigration(tx, "ALTER TABLE audit_logs DROP COLUMN entry_hash", "drop_audit_logs_entry_hash")
+			return nil
+		},
+	},
 }
 
 func runMigrations(db *gorm.DB) error {

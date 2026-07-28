@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -11,7 +13,29 @@ import (
 // LogAuditRecord creates an audit log entry
 // c may be nil for non-HTTP paths (e.g. TCP transport beacons)
 func (s *Server) LogAuditRecord(c *gin.Context, action, resource, agentID, details string, success bool, err error) {
-	var user string
+	entries := s.buildAuditEntries(c, []auditEntry{{action, resource, agentID, details, success, err}})
+	s.flushAuditEntries(entries)
+}
+
+// auditEntry is a lightweight intermediate for batch collection.
+type auditEntry struct {
+	action, resource, agentID, details string
+	success                             bool
+	err                                 error
+}
+
+// LogAuditRecords batch-inserts multiple audit log entries in a single DB round-trip.
+// c may be nil for non-HTTP paths.
+func (s *Server) LogAuditRecords(c *gin.Context, entries []auditEntry) {
+	if len(entries) == 0 {
+		return
+	}
+	logEntries := s.buildAuditEntries(c, entries)
+	s.flushAuditEntries(logEntries)
+}
+
+func (s *Server) buildAuditEntries(c *gin.Context, entries []auditEntry) []db.AuditLog {
+	var user, ip string
 	if c != nil {
 		if u, exists := c.Get("user"); exists {
 			if us, ok := u.(string); ok {
@@ -22,50 +46,71 @@ func (s *Server) LogAuditRecord(c *gin.Context, action, resource, agentID, detai
 		} else {
 			user = "system"
 		}
-	} else {
-		user = "system"
-	}
-
-	ip := ""
-	if c != nil {
 		ip = c.ClientIP()
 		if ip == "" {
 			ip = c.Request.RemoteAddr
 		}
+	} else {
+		user = "system"
 	}
 
-	errorMsg := ""
-	if err != nil {
-		errorMsg = err.Error()
+	result := make([]db.AuditLog, 0, len(entries))
+	for _, e := range entries {
+		errorMsg := ""
+		if e.err != nil {
+			errorMsg = e.err.Error()
+		}
+		logEntry := db.AuditLog{
+			User:     user,
+			Action:   e.action,
+			Resource: e.resource,
+			AgentID:  e.agentID,
+			IP:       ip,
+			Success:  e.success,
+			Error:    errorMsg,
+			Details:  e.details,
+		}
+		result = append(result, logEntry)
 	}
+	return result
+}
 
-	logEntry := db.AuditLog{
-		User:     user,
-		Action:   action,
-		Resource: resource,
-		AgentID:  agentID,
-		IP:       ip,
-		Success:  success,
-		Error:    errorMsg,
-		Details:  details,
+func (s *Server) flushAuditEntries(entries []db.AuditLog) {
+	if len(entries) == 0 {
+		return
 	}
-
-	if err := s.db.Create(&logEntry).Error; err != nil {
-		slog.Error("Failed to create audit log", "err", err)
+	// Compute append-only hash chain for tamper detection
+	var lastHash string
+	var lastEntry db.AuditLog
+	if err := s.db.Order("id DESC").First(&lastEntry).Error; err == nil {
+		lastHash = lastEntry.EntryHash
 	}
-
+	for i := range entries {
+		entries[i].PrevHash = lastHash
+		h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s|%s|%t|%s|%s",
+			entries[i].User, entries[i].Action, entries[i].Resource,
+			entries[i].AgentID, entries[i].IP, entries[i].Success,
+			entries[i].Error, entries[i].Details)))
+		entries[i].EntryHash = fmt.Sprintf("%x", h)
+		lastHash = entries[i].EntryHash
+	}
+	if err := s.db.CreateInBatches(entries, 50).Error; err != nil {
+		slog.Error("Failed to batch-create audit logs", "count", len(entries), "err", err)
+	}
 	if s.siem != nil {
-		s.siem.Send(SIEMEvent{
-			Timestamp: logEntry.CreatedAt,
-			Action:    action,
-			Resource:  resource,
-			AgentID:   agentID,
-			User:      user,
-			IP:        ip,
-			Success:   success,
-			Error:     errorMsg,
-			Details:   details,
-		})
+		for _, logEntry := range entries {
+			s.siem.Send(SIEMEvent{
+				Timestamp: logEntry.CreatedAt,
+				Action:    logEntry.Action,
+				Resource:  logEntry.Resource,
+				AgentID:   logEntry.AgentID,
+				User:      logEntry.User,
+				IP:        logEntry.IP,
+				Success:   logEntry.Success,
+				Error:     logEntry.Error,
+				Details:   logEntry.Details,
+			})
+		}
 	}
 }
 

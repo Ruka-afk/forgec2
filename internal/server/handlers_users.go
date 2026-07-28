@@ -82,7 +82,7 @@ func (s *Server) handleAddUser(c *gin.Context) {
 	currentUser, _ := c.Get("user")
 	s.LogAuditRecord(c, "user_create", "auth", currentUser.(string),
 		fmt.Sprintf("Created user %s with role %s", username, role), true, nil)
-	slog.Info("User created", "username", username, "role", role, "by", currentUser)
+	slog.Info("User created", "username", username, "role", role, "user", currentUser)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("User %s created", username)})
 }
@@ -174,7 +174,7 @@ func (s *Server) handleEditUser(c *gin.Context) {
 	currentUser, _ := c.Get("user")
 	s.LogAuditRecord(c, "user_edit", "auth", currentUser.(string),
 		fmt.Sprintf("Edited user %s: %v", user.Username, updates), true, nil)
-	slog.Info("User edited", "user_id", idStr, "updates", updates, "by", currentUser)
+	slog.Info("User edited", "user_id", idStr, "updates", updates, "user", currentUser)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "User updated"})
 }
@@ -206,7 +206,7 @@ func (s *Server) handleForceLogoutUser(c *gin.Context) {
 
 	s.LogAuditRecord(c, "user_force_logout", "auth", currentUser.(string),
 		fmt.Sprintf("Force logged out user %s", target.Username), true, nil)
-	slog.Info("User force logged out", "username", target.Username, "by", currentUser)
+	slog.Info("User force logged out", "username", target.Username, "user", currentUser)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Force logged out %s", target.Username)})
 }
@@ -252,7 +252,7 @@ func (s *Server) handleDeleteUser(c *gin.Context) {
 
 	s.LogAuditRecord(c, "user_delete", "auth", currentUser.(string),
 		fmt.Sprintf("Deleted user %s", user.Username), true, nil)
-	slog.Info("User deleted", "username", user.Username, "by", currentUser)
+	slog.Info("User deleted", "username", user.Username, "user", currentUser)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("User %s deleted", user.Username)})
 }

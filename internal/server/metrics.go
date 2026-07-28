@@ -10,14 +10,16 @@ import (
 )
 
 type MetricsCollector struct {
-	AgentsTotal     prometheus.Gauge
-	AgentsOnline    prometheus.Gauge
-	TasksTotal      prometheus.Counter
-	TasksPending    prometheus.Gauge
-	ListenersTotal  prometheus.Gauge
-	CredsTotal      prometheus.Gauge
-	UptimeSeconds   prometheus.GaugeFunc
-	RequestDuration *prometheus.HistogramVec
+	AgentsTotal        prometheus.Gauge
+	AgentsOnline       prometheus.Gauge
+	TasksTotal         prometheus.Counter
+	TasksPending       prometheus.Gauge
+	ListenersTotal     prometheus.Gauge
+	CredsTotal         prometheus.Gauge
+	UptimeSeconds      prometheus.GaugeFunc
+	RequestDuration    *prometheus.HistogramVec
+	BeaconDuration     *prometheus.HistogramVec
+	TaskExecuteDuration *prometheus.HistogramVec
 }
 
 func NewMetricsCollector(s *Server) *MetricsCollector {
@@ -57,6 +59,16 @@ func NewMetricsCollector(s *Server) *MetricsCollector {
 			Help:    "Histogram of API request durations.",
 			Buckets: prometheus.DefBuckets,
 		}, []string{"method", "path", "status"}),
+		BeaconDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "forgec2_beacon_duration_seconds",
+			Help:    "Histogram of beacon processing durations.",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
+		}, []string{"transport"}),
+		TaskExecuteDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "forgec2_task_execute_duration_seconds",
+			Help:    "Histogram of task execution durations (time between creation and completion).",
+			Buckets: []float64{0.1, 0.5, 1, 5, 10, 30, 60, 120, 300, 600},
+		}, []string{"type"}),
 	}
 }
 
@@ -70,6 +82,8 @@ func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
 		mc.CredsTotal,
 		mc.UptimeSeconds,
 		mc.RequestDuration,
+		mc.BeaconDuration,
+		mc.TaskExecuteDuration,
 	)
 }
 

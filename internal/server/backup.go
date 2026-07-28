@@ -3,7 +3,9 @@ package server
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -205,64 +207,11 @@ func (bm *BackupManager) PerformBackup() error {
 }
 
 func (bm *BackupManager) encrypt(data []byte) ([]byte, error) {
-	salt := make([]byte, backupSaltSize)
-	if _, err := rand.Read(salt); err != nil {
-		return nil, err
-	}
-
-	iv := make([]byte, backupIVSize)
-	if _, err := rand.Read(iv); err != nil {
-		return nil, err
-	}
-
-	block, err := aes.NewCipher(bm.key)
-	if err != nil {
-		return nil, err
-	}
-
-	aead, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-
-	plaintext := append(salt, data...)
-	ciphertext := aead.Seal(nil, iv, plaintext, nil)
-
-	result := make([]byte, 0, len(iv)+len(ciphertext))
-	result = append(result, iv...)
-	result = append(result, ciphertext...)
-
-	return result, nil
+	return bm.encryptWithKey(data, bm.key)
 }
 
 func (bm *BackupManager) decrypt(encryptedData []byte) ([]byte, error) {
-	if len(encryptedData) < backupIVSize+backupTagSize {
-		return nil, fmt.Errorf("backup data too short")
-	}
-
-	iv := encryptedData[:backupIVSize]
-	ciphertext := encryptedData[backupIVSize:]
-
-	block, err := aes.NewCipher(bm.key)
-	if err != nil {
-		return nil, err
-	}
-
-	aead, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-
-	plaintext, err := aead.Open(nil, iv, ciphertext, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(plaintext) < backupSaltSize {
-		return nil, fmt.Errorf("invalid backup format")
-	}
-
-	return plaintext[backupSaltSize:], nil
+	return bm.decryptWithKey(encryptedData, bm.key)
 }
 
 func (bm *BackupManager) cleanupOldBackups() {
@@ -367,9 +316,28 @@ func (bm *BackupManager) encryptWithKey(data []byte, key []byte) ([]byte, error)
 }
 
 func (bm *BackupManager) decryptWithKey(encryptedData []byte, key []byte) ([]byte, error) {
-	if len(encryptedData) < backupIVSize+backupTagSize {
-		return nil, fmt.Errorf("backup data too short")
+	// Try HMAC-SHA256 verification first (new format)
+	hasHMAC := false
+	if len(encryptedData) >= backupIVSize+backupTagSize+32 {
+		dataWithIV := encryptedData[:len(encryptedData)-32]
+		receivedHMAC := encryptedData[len(encryptedData)-32:]
+
+		mac := hmac.New(sha256.New, key)
+		mac.Write(dataWithIV)
+		expectedHMAC := mac.Sum(nil)
+
+		if hmac.Equal(receivedHMAC, expectedHMAC) {
+			hasHMAC = true
+			encryptedData = dataWithIV
+		}
 	}
+
+	if !hasHMAC {
+		if len(encryptedData) < backupIVSize+backupTagSize {
+			return nil, fmt.Errorf("backup data too short")
+		}
+	}
+
 	iv := encryptedData[:backupIVSize]
 	ciphertext := encryptedData[backupIVSize:]
 	block, err := aes.NewCipher(key)

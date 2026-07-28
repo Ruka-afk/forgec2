@@ -375,7 +375,7 @@ func (s *Server) runPhishingCampaign(campID uint, tpl db.PhishingTemplate, targe
 		// stop if campaign was stopped
 		var camp db.PhishingCampaign
 		if err := s.db.First(&camp, campID).Error; err != nil || camp.Status != "running" {
-			slog.Info("phishing campaign stopped mid-send", "campaign", campID, "sent", sent)
+			slog.Info("Phishing campaign stopped mid-send", "campaign", campID, "sent", sent)
 			return
 		}
 
@@ -402,7 +402,7 @@ func (s *Server) runPhishingCampaign(campID uint, tpl db.PhishingTemplate, targe
 		}
 
 		if err := sendPhishingMail(smtpHost, smtpPort, smtpUser, smtpPass, from, email, subject, body, isHTML); err != nil {
-			slog.Warn("phishing send failed", "campaign", campID, "to", email, "err", err)
+			slog.Warn("Phishing send failed", "campaign", campID, "to", email, "err", err)
 			evt.EventType = "send_failed"
 			payload, _ := json.Marshal(map[string]string{"error": err.Error()})
 			evt.Payload = string(payload)
@@ -419,7 +419,7 @@ func (s *Server) runPhishingCampaign(campID uint, tpl db.PhishingTemplate, targe
 
 	s.db.Model(&db.PhishingCampaign{}).Where("id = ? AND status = ?", campID, "running").
 		Updates(map[string]interface{}{"status": "completed", "updated_at": time.Now()})
-	slog.Info("phishing campaign finished", "campaign", campID, "sent", sent, "total", len(targets))
+	slog.Info("Phishing campaign finished", "campaign", campID, "sent", sent, "total", len(targets))
 }
 
 func (s *Server) handleAPIStopPhishingCampaign(c *gin.Context) {

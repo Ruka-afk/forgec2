@@ -71,7 +71,7 @@ func (s *Server) handleDBBackupList(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"success": true, "data": []backupEntry{}})
 			return
 		}
-		respondError(c, http.StatusInternalServerError, "Failed to read backup directory")
+		respondError(c, http.StatusInternalServerError, "failed to read backup directory")
 		return
 	}
 
@@ -109,13 +109,13 @@ func (s *Server) handleDBBackup(c *gin.Context) {
 	}
 	src := s.cfg.Database.Path
 	if _, err := os.Stat(src); err != nil {
-		respondError(c, http.StatusInternalServerError, "Database file not found")
+		respondError(c, http.StatusInternalServerError, "database file not found")
 		return
 	}
 
 	dir := s.backupDir()
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to create backup directory")
+		respondError(c, http.StatusInternalServerError, "failed to create backup directory")
 		return
 	}
 
@@ -125,21 +125,21 @@ func (s *Server) handleDBBackup(c *gin.Context) {
 
 	srcFile, err := os.Open(src)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to open database file")
+		respondError(c, http.StatusInternalServerError, "failed to open database file")
 		return
 	}
 	defer srcFile.Close()
 
 	dstFile, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to create backup file")
+		respondError(c, http.StatusInternalServerError, "failed to create backup file")
 		return
 	}
 	defer dstFile.Close()
 
 	n, err := io.Copy(dstFile, srcFile)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to copy database")
+		respondError(c, http.StatusInternalServerError, "failed to copy database")
 		return
 	}
 
@@ -166,7 +166,7 @@ func (s *Server) handleDBRestore(c *gin.Context) {
 	case "file":
 		s.handleRestoreFromFile(c)
 	default:
-		respondError(c, http.StatusBadRequest, "Restore type must be 'upload' or 'file'")
+		respondError(c, http.StatusBadRequest, "restore type must be 'upload' or 'file'")
 	}
 }
 
@@ -176,50 +176,50 @@ func (s *Server) handleRestoreFromUpload(c *gin.Context) {
 	}
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		respondError(c, http.StatusBadRequest, "No file uploaded")
+		respondError(c, http.StatusBadRequest, "no file uploaded")
 		return
 	}
 	defer file.Close()
 
 	if header.Size == 0 {
-		respondError(c, http.StatusBadRequest, "Uploaded file is empty")
+		respondError(c, http.StatusBadRequest, "uploaded file is empty")
 		return
 	}
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if ext != ".db" && ext != ".fbk" {
-		respondError(c, http.StatusBadRequest, "Only .db or .fbk files are accepted")
+		respondError(c, http.StatusBadRequest, "only .db or .fbk files are accepted")
 		return
 	}
 
 	br := bufio.NewReader(file)
 	if !isSQLiteFile(br) {
-		respondError(c, http.StatusBadRequest, "Uploaded file is not a valid SQLite database")
+		respondError(c, http.StatusBadRequest, "uploaded file is not a valid SQLite database")
 		return
 	}
 
 	dbPath := s.cfg.Database.Path
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to prepare database directory")
+		respondError(c, http.StatusInternalServerError, "failed to prepare database directory")
 		return
 	}
 
 	dstFile, err := os.OpenFile(dbPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to open database for writing")
+		respondError(c, http.StatusInternalServerError, "failed to open database for writing")
 		return
 	}
 	defer dstFile.Close()
 
 	if _, err := io.Copy(dstFile, br); err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to write database file")
+		respondError(c, http.StatusInternalServerError, "failed to write database file")
 		return
 	}
 	dstFile.Close()
 
 	if err := verifyRestoredDB(dbPath); err != nil {
 		slog.Error("Restored database failed integrity check", "error", err)
-		respondError(c, http.StatusInternalServerError, fmt.Sprintf("Restore failed verification: %v", err))
+		respondError(c, http.StatusInternalServerError, fmt.Sprintf("restore failed verification: %v", err))
 		return
 	}
 
@@ -248,58 +248,58 @@ func (s *Server) handleRestoreFromFile(c *gin.Context) {
 	}
 	name := c.PostForm("name")
 	if name == "" {
-		respondError(c, http.StatusBadRequest, "Backup name is required")
+		respondError(c, http.StatusBadRequest, "backup name is required")
 		return
 	}
 
 	name = filepath.Base(name)
 	if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") {
-		respondError(c, http.StatusBadRequest, "Invalid backup name")
+		respondError(c, http.StatusBadRequest, "invalid backup name")
 		return
 	}
 
 	backupPath := filepath.Join(s.backupDir(), name)
 	if _, err := os.Stat(backupPath); err != nil {
-		respondError(c, http.StatusNotFound, "Backup file not found")
+		respondError(c, http.StatusNotFound, "backup file not found")
 		return
 	}
 
 	dbPath := s.cfg.Database.Path
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to prepare database directory")
+		respondError(c, http.StatusInternalServerError, "failed to prepare database directory")
 		return
 	}
 
 	srcFile, err := os.Open(backupPath)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to open backup file")
+		respondError(c, http.StatusInternalServerError, "failed to open backup file")
 		return
 	}
 	defer srcFile.Close()
 
 	br := bufio.NewReader(srcFile)
 	if !isSQLiteFile(br) {
-		respondError(c, http.StatusBadRequest, "Backup file is not a valid SQLite database")
+		respondError(c, http.StatusBadRequest, "backup file is not a valid SQLite database")
 		return
 	}
 
 	dstFile, err := os.OpenFile(dbPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to open database for writing")
+		respondError(c, http.StatusInternalServerError, "failed to open database for writing")
 		return
 	}
 	defer dstFile.Close()
 
 	n, err := io.Copy(dstFile, br)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to restore database")
+		respondError(c, http.StatusInternalServerError, "failed to restore database")
 		return
 	}
 	dstFile.Close()
 
 	if err := verifyRestoredDB(dbPath); err != nil {
 		slog.Error("Restored database failed integrity check", "error", err)
-		respondError(c, http.StatusInternalServerError, fmt.Sprintf("Restore failed verification: %v", err))
+		respondError(c, http.StatusInternalServerError, fmt.Sprintf("restore failed verification: %v", err))
 		return
 	}
 
@@ -325,18 +325,18 @@ func (s *Server) handleRestoreFromFile(c *gin.Context) {
 func (s *Server) handleDBBackupDownload(c *gin.Context) {
 	name := c.Query("name")
 	if name == "" {
-		respondError(c, http.StatusBadRequest, "Backup name is required")
+		respondError(c, http.StatusBadRequest, "backup name is required")
 		return
 	}
 	name = filepath.Base(name)
 	ext := strings.ToLower(filepath.Ext(name))
 	if ext != ".db" && ext != ".fbk" {
-		respondError(c, http.StatusBadRequest, "Invalid backup file type")
+		respondError(c, http.StatusBadRequest, "invalid backup file type")
 		return
 	}
 	backupPath := filepath.Join(s.backupDir(), name)
 	if _, err := os.Stat(backupPath); err != nil {
-		respondError(c, http.StatusNotFound, "Backup file not found")
+		respondError(c, http.StatusNotFound, "backup file not found")
 		return
 	}
 	serveFileSafe(c, backupPath, s.backupDir(), name)

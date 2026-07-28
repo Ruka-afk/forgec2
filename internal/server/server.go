@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -217,7 +218,10 @@ const maxBulkHistory = 50
 func New(cfg *config.Config, database *gorm.DB) *Server {
 	gin.SetMode(gin.ReleaseMode)
 
-	middleware.InitJWTSecret(cfg, "")
+	if err := middleware.InitJWTSecret(cfg, ""); err != nil {
+		slog.Error("Failed to initialize JWT secret", "err", err)
+		os.Exit(1)
+	}
 	crypto.InitLootEncryption(cfg.Server.JWTSecret)
 	crypto.InitExtC2Encryption(cfg.Server.JWTSecret)
 
@@ -254,38 +258,38 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		extC2TaskQueue:        make(map[string][]extC2Task),
 		extC2Notify:           make(map[string]chan struct{}),
 		buildJobs:             make(map[string]*BuildJob),
-		geoIPSem:              make(chan struct{}, 10),
-		taskWorkerSem:         make(chan struct{}, 32),
+		geoIPSem:              make(chan struct{}, GeoIPSemaphoreSize),
+		taskWorkerSem:         make(chan struct{}, TaskWorkerPoolSize),
 		wsUpgrader: websocket.Upgrader{
-			ReadBufferSize:  16384,
-			WriteBufferSize: 16384,
+			ReadBufferSize:  WSReadBufSize,
+			WriteBufferSize: WSWriteBufSize,
 			CheckOrigin: func(r *http.Request) bool {
 				return allowedOrigin(cfg, r)
 			},
 		},
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: HTTPClientShortTimeout,
 			Transport: &http.Transport{
-				MaxIdleConns:        20,
-				MaxIdleConnsPerHost: 5,
-				IdleConnTimeout:     90 * time.Second,
+				MaxIdleConns:        HTTPMaxIdleConns,
+				MaxIdleConnsPerHost: HTTPMaxIdleConnsPerHost,
+				IdleConnTimeout:     HTTPIdleConnTimeout,
 			},
 		},
 		httpClientLong: &http.Client{
-			Timeout: 5 * time.Minute,
+			Timeout: HTTPClientLongTimeout,
 			Transport: &http.Transport{
 				MaxIdleConns:        10,
 				MaxIdleConnsPerHost: 3,
-				IdleConnTimeout:     90 * time.Second,
+				IdleConnTimeout:     HTTPIdleConnTimeout,
 			},
 		},
 	}
 
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
-	// Beacon dedup cache cleanup
+	// Beacon dedup cache cleanup (bounded to prevent memory exhaustion)
 	go func() {
-		ticker := time.NewTicker(60 * time.Second)
+		ticker := time.NewTicker(BeaconDedupCleanup)
 		defer ticker.Stop()
 		for {
 			select {
@@ -293,7 +297,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 				s.beaconDedupMu.Lock()
 				now := time.Now()
 				for k, t := range s.beaconDedupCache {
-					if now.Sub(t) > 30*time.Second {
+					if now.Sub(t) > BeaconDedupStaleAge {
 						delete(s.beaconDedupCache, k)
 					}
 				}
@@ -314,6 +318,25 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	s.loginLockout.startCleanup(s.ctx)
 
 	// Beacon payload encryption via ECDH session (cfg.Crypto.Key = "ecdh:")
+	if strings.HasPrefix(cfg.Crypto.Key, "ecdh:") {
+		maxMsgs := cfg.Crypto.SessionMaxMessages
+		maxAgeMin := cfg.Crypto.SessionMaxAgeMinutes
+		var maxAge time.Duration
+		if maxAgeMin > 0 {
+			maxAge = time.Duration(maxAgeMin) * time.Minute
+		} else {
+			maxAge = crypto.DefaultSessionMaxAge
+		}
+		sm, err := crypto.NewSessionManagerWithConfig(maxMsgs, maxAge)
+		if err != nil {
+			slog.Error("Failed to initialize ECDH session manager, falling back to XOR", "err", err)
+		} else {
+			s.sessionManager = sm
+			slog.Info("ECDH session encryption enabled",
+				"max_messages", sm.MaxMessages(),
+				"max_age", sm.MaxAge())
+		}
+	}
 
 	s.apiRateLimiter.SetWhitelist(cfg.RateLimit.API.Whitelist)
 
@@ -860,13 +883,13 @@ func (s *Server) pushBulkResult(r BulkResult) {
 func (s *Server) cleanupOldData() {
 	retention := s.cfg.Server.CleanupRetentionDays
 	if retention < 1 {
-		retention = 30
+		retention = DefaultCleanupRetentionDays
 	}
 	cutoff := time.Now().AddDate(0, 0, -retention)
 
 	// delete old tasks
 	if err := s.db.Where("created_at < ? AND status IN ?", cutoff, []string{"completed", "failed"}).Delete(&db.Task{}).Error; err != nil {
-		slog.Error("cleanup tasks failed", "err", err)
+		slog.Error("Cleanup tasks failed", "err", err)
 	}
 
 	// Periodic SQLite maintenance: VACUUM and ANALYZE to prevent bloat and
@@ -902,7 +925,7 @@ func (s *Server) cleanupOldData() {
 
 	s.cleanupStaleMapEntries()
 
-	slog.Info("old data cleanup completed")
+	slog.Info("Old data cleanup completed")
 }
 
 func (s *Server) cleanupStaleMapEntries() {
@@ -947,13 +970,13 @@ func (s *Server) cleanupStaleMapEntries() {
 func (s *Server) offlineThreshold() time.Duration {
 	d := s.cfg.Server.OfflineThreshold
 	if d < 1 {
-		d = 60
+		d = DefaultOfflineThresholdSec
 	}
 	return time.Duration(d) * time.Second
 }
 
 func (s *Server) staleThreshold() time.Duration {
-	return s.offlineThreshold() * 3
+	return s.offlineThreshold() * StaleThresholdMultiplier
 }
 
 // AgentStatusInfo holds display info for an agent's status
@@ -1005,7 +1028,7 @@ func (s *Server) cleanupGhostAgents() {
 
 	retention := s.cfg.Server.CleanupRetentionDays
 	if retention < 1 {
-		retention = 30
+		retention = DefaultCleanupRetentionDays
 	}
 	offlineCutoff := time.Now().AddDate(0, 0, -retention)
 	var stale []db.Implant
@@ -1097,10 +1120,10 @@ func (s *Server) Shutdown() {
 		select {
 		case <-done:
 			slog.Info("All in-flight requests completed")
-		case <-time.After(5 * time.Second):
+		case <-time.After(InFlightDrainTimeout):
 			slog.Warn("Timed out waiting for in-flight requests, proceeding with shutdown")
 		}
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), GracefulShutdownTimeout)
 		defer cancel()
 		if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
 			slog.Error("HTTP server shutdown error", "err", err)
@@ -1382,7 +1405,7 @@ func (s *Server) makeBeaconHandler() func(string, []byte) []byte {
 		var req beaconRequest
 		if len(reqJSON) > 0 {
 			if err := json.Unmarshal(reqJSON, &req); err != nil {
-				slog.Error("beacon handler unmarshal error", "err", err)
+				slog.Error("Beacon handler unmarshal error", "err", err)
 			}
 		}
 		if req.UUID == "" {
@@ -1714,7 +1737,7 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 		if err := binary.Read(conn, binary.BigEndian, &msgLen); err != nil {
 			return
 		}
-		if msgLen == 0 || msgLen > 16*1024*1024 {
+		if msgLen == 0 || msgLen > TCPMaxMessageSize {
 			return
 		}
 
@@ -1752,14 +1775,14 @@ func (s *Server) ActivityMiddleware() gin.HandlerFunc {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		ticker := time.NewTicker(10 * time.Minute)
+		ticker := time.NewTicker(ActivityCleanupInterval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-s.ctx.Done():
 				return
 			case <-ticker.C:
-				cutoff := time.Now().Add(-10 * time.Minute)
+				cutoff := time.Now().Add(-ActivityCleanupInterval)
 				mu.Lock()
 				for uid, t := range lastUpdated {
 					if t.Before(cutoff) {

@@ -23,27 +23,29 @@ func (s *Server) handleBulkDeleteAgents(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "agent_ids required")
 		return
 	}
-	if len(req.AgentIDs) > 500 {
-		respondError(c, http.StatusBadRequest, "too many agents (max 500)")
+	if len(req.AgentIDs) > MaxBatchAgentLimit {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("too many agents (max %d)", MaxBatchAgentLimit))
 		return
 	}
 
 	deleted := 0
 	failed := 0
+	var deleteAudit []auditEntry
 	for _, id := range req.AgentIDs {
 		if s.deleteAgentRecord(id) {
 			deleted++
-			s.LogAuditRecord(c, "delete_agent", "agent", id, "bulk delete", true, nil)
+			deleteAudit = append(deleteAudit, auditEntry{action: "delete_agent", resource: "agent", agentID: id, details: "bulk delete", success: true})
 		} else {
 			failed++
 		}
 	}
+	s.LogAuditRecords(c, deleteAudit)
 
 	user, _ := c.Get("user")
 	operator := fmt.Sprintf("%v", user)
 	s.broadcastBulkAgentDeleteAlert(operator, deleted)
 	s.LogAuditRecord(c, "batch_delete_agents", "agent", "", fmt.Sprintf("deleted %d agents (%d failed)", deleted, failed), true, nil)
-	slog.Warn("Bulk agent delete", "deleted", deleted, "failed", failed, "operator", operator)
+	slog.Warn("Bulk agent delete", "deleted", deleted, "failed", failed, "user", operator)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -75,8 +77,8 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "no agents selected")
 		return
 	}
-	if len(req.AgentIDs) > 500 {
-		respondError(c, http.StatusBadRequest, "too many agents (max 500)")
+	if len(req.AgentIDs) > MaxBatchAgentLimit {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("too many agents (max %d)", MaxBatchAgentLimit))
 		return
 	}
 

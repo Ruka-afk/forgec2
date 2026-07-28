@@ -173,4 +173,59 @@ const (
 	CertFileName          = "fullchain.pem"
 	KeyFileName           = "privkey.pem"
 	AnthropicAPIVersion   = "2023-06-01"
+
+	// ─── Beacon Dedup ───
+	MaxBeaconDedupEntries = 10000
+	BeaconDedupWindow     = 5 * time.Second  // window for duplicate detection
+	BeaconDedupStaleAge   = 30 * time.Second // entries older than this are purged
+	BeaconDedupCleanup    = 60 * time.Second // cleanup ticker interval
+
+	// ─── Batch / Request Limits ───
+	MaxBatchAgentLimit      = 500
+	MaxTaskIDsPerRequest    = 200
+	MaxBulkCancelLimit      = 100
+	PasswordHistoryMax      = 10
+	DefaultBOFLimit         = 20
+	TopoRecencyMinutes      = 30
+	TopoAgentLimit          = 30
+
+	// ─── Plugin / Callback Timeouts ───
+	PluginHookTimeout = 30 * time.Second
+
+	// ─── Server Lifecycle ───
+	GracefulShutdownTimeout = 15 * time.Second
+	InFlightDrainTimeout    = 5 * time.Second
+	HTTPClientShortTimeout  = 30 * time.Second
+	HTTPClientLongTimeout   = 5 * time.Minute
+	HTTPMaxIdleConns        = 20
+	HTTPMaxIdleConnsPerHost = 5
+	HTTPIdleConnTimeout     = 90 * time.Second
+	TCPMaxMessageSize       = 16 * 1024 * 1024 // 16 MB
+	GeoIPSemaphoreSize      = 10
+	TaskWorkerPoolSize      = 32
+
+	// ─── Agent Offline / Stale ───
+	DefaultOfflineThresholdSec = 60
+	StaleThresholdMultiplier   = 3
+	DefaultCleanupRetentionDays = 30
+
+	// ─── Backup ───
+	BackupRetainCount = 7
+
+	// ─── Auth / Security ───
+	BcryptCost             = 12
+	AuthUserCacheTTL       = 5 * time.Minute
+	PasswordChangeCooldown = 5 * time.Minute
+
+	// ─── Activity Middleware ───
+	ActivityCleanupInterval = 10 * time.Minute
+
+	// ─── Audit / SIEM ───
+	AuditAlertCheckInterval = 10 * time.Minute
+	LockoutEntryMaxEntries  = 10000
+	LockoutCleanupInterval  = 10 * time.Minute
+	LockoutStaleGrace       = 5 * time.Minute
+	SIEMBatchSize           = 100
+	SIEMBatchInterval       = 10 * time.Second
+	SIEMHTTPTimeout         = 10 * time.Second
 )

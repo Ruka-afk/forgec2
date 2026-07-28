@@ -80,6 +80,7 @@ type Config struct {
 		DefaultJitter       int    `yaml:"default_jitter"`   // percent
 		DefaultUA           string `yaml:"default_user_agent"`
 		DefaultSkipTLS      bool   `yaml:"default_skip_tls"`
+		DefaultPinnedCert   string `yaml:"default_pinned_cert"` // SHA-256 hex of server DER cert for pinning
 		DefaultWorkingStart string `yaml:"default_working_start"` // HH:MM local time (empty = disabled)
 		DefaultWorkingEnd   string `yaml:"default_working_end"`   // HH:MM local time (empty = disabled)
 		DefaultWorkingTZ    string `yaml:"default_working_tz"`    // IANA timezone (e.g. "America/New_York"), empty = UTC
@@ -100,10 +101,13 @@ type Config struct {
 		RequireDigit  bool `yaml:"require_digit"`   // require digit (default true)
 		RequireSymbol bool `yaml:"require_symbol"`  // require special character (default false)
 		MaxAge        int  `yaml:"max_age_days"`    // force password rotation every N days (0 = disabled)
+		BcryptCost    int  `yaml:"bcrypt_cost"`     // bcrypt hash cost (0 = default 10, min 4, max 31)
 	} `yaml:"password_policy"`
 
 	Crypto struct {
-		Key string `yaml:"key"` // 32-byte hex key for XOR encryption, or "ecdh:" for ECDH+AES-256-GCM (empty=disabled)
+		Key                 string `yaml:"key"`                   // 32-byte hex key for XOR encryption, or "ecdh:" for ECDH+AES-256-GCM (empty=disabled)
+		SessionMaxMessages  int    `yaml:"session_max_messages"`  // ECDH key rotation after N messages (0 = default 100)
+		SessionMaxAgeMinutes int   `yaml:"session_max_age_minutes"` // ECDH key rotation after N minutes (0 = default 10)
 	} `yaml:"crypto"`
 
 	Malleable struct {
@@ -597,6 +601,12 @@ func (c *Config) Validate() error {
 	if c.PasswordPolicy.MaxAge < 0 {
 		errs = append(errs, errors.New("password_policy.max_age_days must be >= 0"))
 	}
+	if c.PasswordPolicy.BcryptCost < 0 {
+		errs = append(errs, errors.New("password_policy.bcrypt_cost must be >= 0 (0 = default 10)"))
+	}
+	if c.PasswordPolicy.BcryptCost > 0 && (c.PasswordPolicy.BcryptCost < 4 || c.PasswordPolicy.BcryptCost > 31) {
+		errs = append(errs, errors.New("password_policy.bcrypt_cost must be between 4 and 31 when non-zero"))
+	}
 	if c.Socks.Enabled {
 		for _, dest := range c.Socks.AllowedDests {
 			if !strings.Contains(dest, ":") {
@@ -633,6 +643,22 @@ func (c *Config) Validate() error {
 		}
 		if c.Listeners.WG.PeerPublicKey == "" {
 			errs = append(errs, errors.New("listeners.wg.peer_public_key is required when listeners.wg.enabled is true"))
+		}
+	}
+
+	// Crypto session rotation validation
+	if strings.HasPrefix(c.Crypto.Key, "ecdh:") {
+		if c.Crypto.SessionMaxMessages < 0 {
+			errs = append(errs, errors.New("crypto.session_max_messages must be >= 0 (0 = default 100)"))
+		}
+		if c.Crypto.SessionMaxMessages > 10000 {
+			errs = append(errs, errors.New("crypto.session_max_messages must be <= 10000"))
+		}
+		if c.Crypto.SessionMaxAgeMinutes < 0 {
+			errs = append(errs, errors.New("crypto.session_max_age_minutes must be >= 0 (0 = default 10)"))
+		}
+		if c.Crypto.SessionMaxAgeMinutes > 1440 {
+			errs = append(errs, errors.New("crypto.session_max_age_minutes must be <= 1440 (24 hours)"))
 		}
 	}
 

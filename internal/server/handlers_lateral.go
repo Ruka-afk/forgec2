@@ -153,7 +153,7 @@ func (s *Server) handleAPILateralExecute(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Lateral movement via JSON API", "agent", req.Source, "target", req.Target, "method", req.Method)
+	slog.Info("Lateral movement via JSON API", "agent_id", req.Source, "target", req.Target, "method", req.Method)
 	s.broadcastTaskUpdate(req.Source, *task)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
 }

@@ -139,10 +139,7 @@ func sendDNSDoT(dotAddr, qname string) []byte {
 	}
 	pkt := buildDNSQuery(qname, qtype)
 
-	tlsCfg := &tls.Config{
-		ServerName:         "cloudflare-dns.com",
-		InsecureSkipVerify: SkipTLSVerify,
-	}
+	tlsCfg := newAgentTLSConfig("cloudflare-dns.com")
 	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", dotAddr, tlsCfg)
 	if err != nil {
 		if Debug {

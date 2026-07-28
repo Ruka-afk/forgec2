@@ -42,7 +42,7 @@ func (s *Server) triggerEmailNotifications(evt Event) {
 		Email EmailConfig `json:"email"`
 	}
 	if err := json.Unmarshal([]byte(cfgStr.Value), &targets); err != nil {
-		slog.Error("failed to parse email config", "error", err)
+		slog.Error("Failed to parse email config", "error", err)
 		return
 	}
 	cfg := targets.Email
@@ -54,7 +54,7 @@ func (s *Server) triggerEmailNotifications(evt Event) {
 	msg := buildMIMEMessage(cfg.From, cfg.To, fmt.Sprintf("ForgeC2 Alert: %s", evt.Type), body)
 
 	if err := sendEmailWithRetry(cfg, msg); err != nil {
-		slog.Error("email notification failed after retries", "event", evt.Type, "agent", evt.AgentID, "error", err)
+		slog.Error("Email notification failed after retries", "event", evt.Type, "agent", evt.AgentID, "error", err)
 		s.db.Create(&db.AuditLog{
 			User:    "system",
 			Action:  "email_notification",
@@ -76,7 +76,7 @@ func sendEmailWithRetry(cfg EmailConfig, msg []byte) error {
 	for attempt := 0; attempt <= emailMaxRetries; attempt++ {
 		if err := smtp.SendMail(cfg.addr(), cfg.auth(), cfg.From, []string{cfg.To}, msg); err != nil {
 			if attempt < emailMaxRetries {
-				slog.Warn("email delivery failed, retrying", "to", cfg.To, "attempt", attempt+1, "error", err)
+				slog.Warn("Email delivery failed, retrying", "to", cfg.To, "attempt", attempt+1, "error", err)
 				time.Sleep(backoff[attempt])
 				continue
 			}

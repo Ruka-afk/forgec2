@@ -136,6 +136,7 @@ func ErrorHandler() gin.HandlerFunc {
 
 			// Return JSON error response with generic message
 			c.JSON(statusCode, gin.H{
+				"success": false,
 				"error":   "internal_error",
 				"message": "An internal error occurred",
 			})

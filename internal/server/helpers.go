@@ -220,7 +220,7 @@ func parsePagination(c *gin.Context, defaultPageSize, maxPageSize int) paginatio
 // listAll queries all records ordered as specified and responds with data + total.
 func (s *Server) listAll(c *gin.Context, dest interface{}, order string) {
 	if err := s.db.Order(order).Find(dest).Error; err != nil {
-		slog.Error("listAll query failed", "error", err)
+		slog.Error("ListAll query failed", "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to query data")
 		return
 	}

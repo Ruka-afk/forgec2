@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	SessionMaxMessages = 100
-	SessionMaxAge      = 10 * time.Minute
+	DefaultSessionMaxMessages = 100
+	DefaultSessionMaxAge      = 10 * time.Minute
 )
 
 var (
@@ -27,9 +27,11 @@ var (
 
 // SessionManager manages ECDH key exchange and session keys with PFS
 type SessionManager struct {
-	privateKey *ecdh.PrivateKey
-	sessions   map[string]*Session
-	mu         sync.RWMutex
+	privateKey  *ecdh.PrivateKey
+	sessions    map[string]*Session
+	maxMessages int
+	maxAge      time.Duration
+	mu          sync.RWMutex
 }
 
 // Session represents a single agent session with PFS
@@ -41,17 +43,29 @@ type Session struct {
 	LastUsed     time.Time
 }
 
-// NewSessionManager creates a new session manager with ECDH key pair
+// NewSessionManager creates a new session manager with default rotation thresholds
 func NewSessionManager() (*SessionManager, error) {
+	return NewSessionManagerWithConfig(DefaultSessionMaxMessages, DefaultSessionMaxAge)
+}
+
+// NewSessionManagerWithConfig creates a session manager with custom rotation thresholds
+func NewSessionManagerWithConfig(maxMessages int, maxAge time.Duration) (*SessionManager, error) {
 	curve := ecdh.X25519()
 	privateKey, err := curve.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, err
 	}
-
+	if maxMessages <= 0 {
+		maxMessages = DefaultSessionMaxMessages
+	}
+	if maxAge <= 0 {
+		maxAge = DefaultSessionMaxAge
+	}
 	return &SessionManager{
-		privateKey: privateKey,
-		sessions:   make(map[string]*Session),
+		privateKey:  privateKey,
+		sessions:    make(map[string]*Session),
+		maxMessages: maxMessages,
+		maxAge:      maxAge,
 	}, nil
 }
 
@@ -59,6 +73,12 @@ func NewSessionManager() (*SessionManager, error) {
 func (sm *SessionManager) GetPublicKey() []byte {
 	return sm.privateKey.PublicKey().Bytes()
 }
+
+// MaxMessages returns the configured max messages before rotation
+func (sm *SessionManager) MaxMessages() int { return sm.maxMessages }
+
+// MaxAge returns the configured max session age before rotation
+func (sm *SessionManager) MaxAge() time.Duration { return sm.maxAge }
 
 // EstablishSession performs ECDH key exchange with an agent
 func (sm *SessionManager) EstablishSession(agentID string, agentPublicKey []byte) error {
@@ -117,7 +137,7 @@ func (sm *SessionManager) NeedsRotation(agentID string) bool {
 	if session == nil {
 		return false
 	}
-	return session.MessageCount >= SessionMaxMessages || time.Since(session.CreatedAt) >= SessionMaxAge
+	return session.MessageCount >= sm.maxMessages || time.Since(session.CreatedAt) >= sm.maxAge
 }
 
 // RotateSessionKey generates a new session key for forward secrecy

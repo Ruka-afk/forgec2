@@ -154,7 +154,7 @@ func (s *Server) handleProfileExport(c *gin.Context) {
 	case "json":
 		data, err := json.MarshalIndent(profile, "", "  ")
 		if err != nil {
-			slog.Error("json.MarshalIndent failed", "error", err)
+			slog.Error("JSON marshal indent failed", "error", err)
 			respondError(c, http.StatusInternalServerError, "failed to marshal profile")
 			return
 		}

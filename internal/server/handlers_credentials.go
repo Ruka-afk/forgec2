@@ -82,7 +82,7 @@ func parseAndStoreCredentials(database *gorm.DB, agentID string, raw string, tas
 
 	if len(batch) > 0 {
 		database.CreateInBatches(batch, 50)
-		slog.Info("Credentials stored in vault", "agent", agentID, "count", len(batch))
+		slog.Info("Credentials stored in vault", "agent_id", agentID, "count", len(batch))
 	}
 }
 
@@ -140,7 +140,7 @@ func parseAndStoreKerberoastResults(database *gorm.DB, agentID string, raw strin
 	}
 	if len(newEntries) > 0 {
 		database.Create(&newEntries)
-		slog.Info("Kerberoast hashes stored in vault", "agent", agentID, "count", len(newEntries))
+		slog.Info("Kerberoast hashes stored in vault", "agent_id", agentID, "count", len(newEntries))
 	}
 }
 

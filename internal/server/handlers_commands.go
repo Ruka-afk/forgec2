@@ -113,7 +113,7 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 		shell = "cmd.exe"
 	}
 
-	slog.Info("handleSendCommand called", "agent_id", id, "command", truncateString(cmd, 100))
+	slog.Info("HandleSendCommand called", "agent_id", id, "command", truncateString(cmd, 100))
 
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -216,8 +216,8 @@ func (s *Server) handleBatchTaskStatus(c *gin.Context) {
 	}
 
 	idStrs := strings.Split(idsStr, ",")
-	if len(idStrs) > 100 {
-		respondError(c, http.StatusBadRequest, "too many task IDs (max 100)")
+	if len(idStrs) > MaxBulkCancelLimit {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("too many task IDs (max %d)", MaxBulkCancelLimit))
 		return
 	}
 
@@ -282,7 +282,7 @@ func (s *Server) handleSuspendProcess(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Suspend requested", "agent", id, "target", target)
+	slog.Info("Suspend requested", "agent_id", id, "target", target)
 	s.dispatchTask(c, task, "suspend_process", target)
 }
 
@@ -308,7 +308,7 @@ func (s *Server) handleResumeProcess(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Resume requested", "agent", id, "target", target)
+	slog.Info("Resume requested", "agent_id", id, "target", target)
 	s.dispatchTask(c, task, "resume_process", target)
 }
 
@@ -334,7 +334,7 @@ func (s *Server) handleKillProcess(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Kill process requested", "agent", id, "target", target)
+	slog.Info("Kill process requested", "agent_id", id, "target", target)
 	s.dispatchTask(c, task, "kill_process", target)
 }
 
@@ -360,7 +360,7 @@ func (s *Server) handleClipboardSet(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Clipboard set requested", "agent", id)
+	slog.Info("Clipboard set requested", "agent_id", id)
 	s.dispatchTask(c, task, "clipboard_set", "")
 }
 
@@ -379,7 +379,7 @@ func (s *Server) handleFindFiles(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Find files requested", "agent", id, "path", path, "pattern", pattern)
+	slog.Info("Find files requested", "agent_id", id, "path", path, "pattern", pattern)
 	s.dispatchTask(c, task, "find_files", path+" "+pattern)
 }
 
@@ -401,7 +401,7 @@ func (s *Server) handleRegGet(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Reg get requested", "agent", id, "key", key)
+	slog.Info("Reg get requested", "agent_id", id, "key", key)
 	s.dispatchTask(c, task, "reg_get", key)
 }
 
@@ -421,7 +421,7 @@ func (s *Server) handleRegSet(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Reg set requested", "agent", id, "path", path)
+	slog.Info("Reg set requested", "agent_id", id, "path", path)
 	s.dispatchTask(c, task, "reg_set", path)
 }
 
@@ -443,7 +443,7 @@ func (s *Server) handleRegDelete(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Reg delete requested", "agent", id, "key", key)
+	slog.Info("Reg delete requested", "agent_id", id, "key", key)
 	s.dispatchTask(c, task, "reg_delete", key)
 }
 
@@ -484,7 +484,7 @@ func (s *Server) handlePortScan(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Portscan requested", "agent", id, "target", target)
+	slog.Info("Portscan requested", "agent_id", id, "target", target)
 	s.dispatchTask(c, task, "portscan", target)
 }
 
@@ -518,7 +518,7 @@ func (s *Server) handleDownloadURL(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Download URL requested", "agent", id, "url", url)
+	slog.Info("Download URL requested", "agent_id", id, "url", url)
 	s.dispatchTask(c, task, "download_url", url+" -> "+dest)
 }
 
@@ -553,7 +553,7 @@ func (s *Server) handleSetSleep(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Set sleep requested", "agent", id, "sleep", sleep)
+	slog.Info("Set sleep requested", "agent_id", id, "sleep", sleep)
 	s.dispatchTask(c, task, "set_sleep", sleep)
 }
 
@@ -574,7 +574,7 @@ func (s *Server) handleElevate(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Elevate requested", "agent", id, "cmd", cmd)
+	slog.Info("Elevate requested", "agent_id", id, "cmd", cmd)
 	s.dispatchTask(c, task, "elevate", cmd)
 }
 
@@ -599,7 +599,7 @@ func (s *Server) handleUACBypass(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("UAC bypass requested", "agent", id, "method", method)
+	slog.Info("UAC bypass requested", "agent_id", id, "method", method)
 	s.LogAuditRecord(c, "uac_bypass", "agent", id, "UAC bypass: "+method, true, nil)
 	s.dispatchTask(c, task, "uac_bypass", method)
 }
@@ -647,7 +647,7 @@ func (s *Server) handleInject(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Inject requested", "agent", id, "pid", pidStr, "tech", tech)
+	slog.Info("Inject requested", "agent_id", id, "pid", pidStr, "tech", tech)
 	s.dispatchTask(c, task, "inject", cmd)
 }
 
@@ -679,7 +679,7 @@ func (s *Server) handleSpawn(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Spawn requested", "agent", id, "target", target, "tech", technique, "size", size)
+	slog.Info("Spawn requested", "agent_id", id, "target", target, "tech", technique, "size", size)
 	s.LogAuditRecord(c, "spawn", "agent", id, fmt.Sprintf("Spawn: %s|%s (%d bytes shellcode)", target, technique, size), true, nil)
 	s.dispatchTask(c, task, "spawn", fmt.Sprintf("%s|%s", target, technique))
 }
@@ -701,7 +701,7 @@ func (s *Server) handleLateral(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Lateral movement requested", "agent", id, "spec", spec)
+	slog.Info("Lateral movement requested", "agent_id", id, "spec", spec)
 	s.dispatchTask(c, task, "lateral", spec)
 }
 
@@ -726,7 +726,7 @@ func (s *Server) handleSocks(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("SOCKS5 requested on agent", "agent", id, "port", port)
+	slog.Info("SOCKS5 requested on agent", "agent_id", id, "port", port)
 	s.dispatchTask(c, task, "socks", port)
 }
 
@@ -780,12 +780,12 @@ func (s *Server) handleCancelTask(c *gin.Context) {
 			s.agentPendingTasks[agentID]++
 			s.agentPendingTasksMu.Unlock()
 			s.broadcastTaskUpdate(agentID, abortTask)
-			slog.Info("Abort task injected for cancelled running task", "agent", agentID, "original_task", taskID)
+			slog.Info("Abort task injected for cancelled running task", "agent_id", agentID, "original_task", taskID)
 		}
 	}
 
-	slog.Info("Task cancelled", "agent", agentID, "task", taskID, "type", task.Type)
-	s.LogAuditRecord(c, "cancel_task", "agent", agentID, fmt.Sprintf("Cancelled task #%d (%s)", taskID, task.Type), true, nil)
+	slog.Info("Task cancelled", "agent_id", agentID, "task", taskID, "type", task.Type)
+	s.LogAuditRecord(c, "cancel_task", "agent_id", agentID, fmt.Sprintf("Cancelled task #%d (%s)", taskID, task.Type), true, nil)
 	s.broadcastTaskUpdate(agentID, task)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Task cancelled"})
 }
@@ -839,7 +839,7 @@ func (s *Server) handleRerunTask(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Task rerun", "agent", agentID, "original_task", taskID, "new_task", newTask.ID, "type", original.Type)
+	slog.Info("Task rerun", "agent_id", agentID, "original_task", taskID, "new_task", newTask.ID, "type", original.Type)
 	s.dispatchTask(c, newTask, "rerun_"+original.Type, fmt.Sprintf("rerun of #%d", taskID))
 }
 
@@ -863,7 +863,7 @@ func (s *Server) handleExecuteAssembly(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Execute-assembly requested", "agent", id, "assembly", filename, "size", size)
+	slog.Info("Execute-assembly requested", "agent_id", id, "assembly", filename, "size", size)
 	s.LogAuditRecord(c, "execute_assembly", "agent", id, fmt.Sprintf("Assembly: %s (%d bytes)", filename, size), true, nil)
 	s.dispatchTask(c, task, "execute_assembly", filename)
 }
@@ -892,7 +892,7 @@ func (s *Server) handleElevatePrintNightmare(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("PrintNightmare exploit requested", "agent", id, "dll", dllPath)
+	slog.Info("PrintNightmare exploit requested", "agent_id", id, "dll", dllPath)
 	s.LogAuditRecord(c, "elevate_printnightmare", "agent", id, fmt.Sprintf("PrintNightmare DLL: %s", dllPath), true, nil)
 	s.dispatchTask(c, task, "elevate_printnightmare", dllPath)
 }
@@ -923,7 +923,7 @@ func (s *Server) handlePersistence(c *gin.Context) {
 			respondError(c, http.StatusInternalServerError, "failed to create task")
 			return
 		}
-		slog.Info("Persistence add requested", "agent", id, "method", method)
+		slog.Info("Persistence add requested", "agent_id", id, "method", method)
 		s.LogAuditRecord(c, "persistence_add", "agent", id, "Persistence add: "+method, true, nil)
 		s.dispatchTask(c, task, "persistence_add", method)
 
@@ -933,7 +933,7 @@ func (s *Server) handlePersistence(c *gin.Context) {
 			respondError(c, http.StatusInternalServerError, "failed to create task")
 			return
 		}
-		slog.Info("Persistence list requested", "agent", id)
+		slog.Info("Persistence list requested", "agent_id", id)
 		s.LogAuditRecord(c, "persistence_list", "agent", id, "Persistence list", true, nil)
 		s.dispatchTask(c, task, "persistence_list", "list")
 
@@ -948,7 +948,7 @@ func (s *Server) handlePersistence(c *gin.Context) {
 			respondError(c, http.StatusInternalServerError, "failed to create task")
 			return
 		}
-		slog.Info("Persistence remove requested", "agent", id, "method", method)
+		slog.Info("Persistence remove requested", "agent_id", id, "method", method)
 		s.LogAuditRecord(c, "persistence_remove", "agent", id, "Persistence remove: "+method, true, nil)
 		s.dispatchTask(c, task, "persistence_remove", method)
 
@@ -983,7 +983,7 @@ func (s *Server) handlePowerPick(c *gin.Context) {
 		return
 	}
 
-	slog.Info("PowerPick requested", "agent", id, "script_len", len(script))
+	slog.Info("PowerPick requested", "agent_id", id, "script_len", len(script))
 	s.LogAuditRecord(c, "powerpick", "agent", id, fmt.Sprintf("PowerPick script (%d bytes)", len(script)), true, nil)
 	s.dispatchTask(c, task, "powerpick", fmt.Sprintf("PowerPick (%d bytes)", len(script)))
 }
@@ -1027,7 +1027,7 @@ func (s *Server) handleMimikatz(c *gin.Context) {
 	} else {
 		detail += " (no server module; implant needs local script)"
 	}
-	slog.Info("mimikatz requested", "agent", id, "module_attached", moduleB64 != "")
+	slog.Info("mimikatz requested", "agent_id", id, "module_attached", moduleB64 != "")
 	s.LogAuditRecord(c, "mimikatz", "agent", id, detail, true, nil)
 	s.dispatchTask(c, task, "mimikatz", detail)
 }
@@ -1052,7 +1052,7 @@ func (s *Server) handleNetCommand(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Net command requested", "agent", id, "command", command)
+	slog.Info("Net command requested", "agent_id", id, "command", command)
 	s.LogAuditRecord(c, "net", "agent", id, "Net: "+command, true, nil)
 	s.dispatchTask(c, task, "net", "Net: "+command)
 }
@@ -1077,7 +1077,7 @@ func (s *Server) handleBOF(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("BOF execution requested", "agent", id, "file", filename, "size", size, "args", args)
+	slog.Info("BOF execution requested", "agent_id", id, "file", filename, "size", size, "args", args)
 	s.LogAuditRecord(c, "bof", "agent", id, fmt.Sprintf("BOF: %s (%d bytes) args=%s", filename, size, args), true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "message": fmt.Sprintf("BOF %s dispatched", filename)})
 }
@@ -1098,7 +1098,7 @@ func (s *Server) handleAMSIByPass(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("AMSI bypass requested", "agent", id)
+	slog.Info("AMSI bypass requested", "agent_id", id)
 	s.LogAuditRecord(c, "amsi_bypass", "agent", id, "AMSI bypass requested", true, nil)
 	s.dispatchTask(c, task, "amsi_bypass", "AMSI Bypass")
 }
@@ -1117,7 +1117,7 @@ func (s *Server) handleETWByPass(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("ETW bypass requested", "agent", id)
+	slog.Info("ETW bypass requested", "agent_id", id)
 	s.LogAuditRecord(c, "etw_bypass", "agent", id, "ETW bypass requested", true, nil)
 	s.dispatchTask(c, task, "etw_bypass", "ETW Bypass")
 }
@@ -1136,7 +1136,7 @@ func (s *Server) handleAMSIHardwareBP(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("AMSI hardware breakpoint requested", "agent", id)
+	slog.Info("AMSI hardware breakpoint requested", "agent_id", id)
 	s.LogAuditRecord(c, "amsi_hardware_bp", "agent", id, "AMSI hardware breakpoint bypass requested", true, nil)
 	s.dispatchTask(c, task, "amsi_hardware_bp", "AMSI Hardware Breakpoint")
 }
@@ -1155,7 +1155,7 @@ func (s *Server) handleETWHardwareBP(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("ETW hardware breakpoint requested", "agent", id)
+	slog.Info("ETW hardware breakpoint requested", "agent_id", id)
 	s.LogAuditRecord(c, "etw_hardware_bp", "agent", id, "ETW hardware breakpoint bypass requested", true, nil)
 	s.dispatchTask(c, task, "etw_hardware_bp", "ETW Hardware Breakpoint")
 }
@@ -1184,7 +1184,7 @@ func (s *Server) handleRunEvasion(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Run evasion requested", "agent", id, "technique", technique)
+	slog.Info("Run evasion requested", "agent_id", id, "technique", technique)
 	s.LogAuditRecord(c, "run_evasion", "agent", id, "Run evasion: "+technique, true, nil)
 	s.dispatchTask(c, task, "run_evasion", "Run Evasion: "+technique)
 }
@@ -1203,7 +1203,7 @@ func (s *Server) handleSandboxDetectAdvanced(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Advanced sandbox detection requested", "agent", id)
+	slog.Info("Advanced sandbox detection requested", "agent_id", id)
 	s.LogAuditRecord(c, "sandbox_detect_advanced", "agent", id, "Advanced sandbox detection requested", true, nil)
 	s.dispatchTask(c, task, "sandbox_detect_advanced", "Advanced Sandbox Detection")
 }
@@ -1222,7 +1222,7 @@ func (s *Server) handleSetSleepMaskAdvanced(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Advanced sleep mask requested", "agent", id)
+	slog.Info("Advanced sleep mask requested", "agent_id", id)
 	s.LogAuditRecord(c, "set_sleep_mask_advanced", "agent", id, "Advanced sleep mask activation requested", true, nil)
 	s.dispatchTask(c, task, "set_sleep_mask_advanced", "Advanced Sleep Mask")
 }
@@ -1248,7 +1248,7 @@ func (s *Server) handleSelfUpdate(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Self-update requested", "agent", id, "url", url)
+	slog.Info("Self-update requested", "agent_id", id, "url", url)
 	s.LogAuditRecord(c, "self_update", "agent", id, "Self-update: "+url, true, nil)
 	s.dispatchTask(c, task, "self_update", "Self-Update ("+url+")")
 }
@@ -1274,7 +1274,7 @@ func (s *Server) createSimpleTask(c *gin.Context, id string, def simpleTaskDef) 
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return false
 	}
-	slog.Info(def.taskType+" requested", "agent", id)
+	slog.Info(def.taskType+" requested", "agent_id", id)
 	s.dispatchTask(c, task, def.audit, def.details)
 	return true
 }
@@ -1333,7 +1333,7 @@ func (s *Server) createOneParamTask(c *gin.Context, def oneParamTaskDef) bool {
 	if def.auditDetailFn != nil {
 		detail = def.auditDetailFn(val)
 	}
-	slog.Info(def.taskType+" requested", "agent", id, "param", val)
+	slog.Info(def.taskType+" requested", "agent_id", id, "param", val)
 	s.dispatchTask(c, task, def.audit, detail)
 	return true
 }

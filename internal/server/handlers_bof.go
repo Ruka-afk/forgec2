@@ -158,7 +158,7 @@ func (s *Server) handleBOFRun(c *gin.Context) {
 		return
 	}
 
-	slog.Info("BOF dispatched from library", "agent", agentID, "bof", bof.Name, "args", args)
+	slog.Info("BOF dispatched from library", "agent_id", agentID, "bof", bof.Name, "args", args)
 	s.LogAuditRecord(c, "bof_run", "agent", agentID, fmt.Sprintf("BOF: %s args=%s", bof.Name, args), true, nil)
 	s.dispatchTask(c, task, "bof", fmt.Sprintf("BOF: %s args=%s", bof.Name, args))
 }
@@ -200,7 +200,7 @@ func (s *Server) handleBOFQuickRun(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("BOF quick execute", "agent", id, "file", file.Filename, "size", len(data), "args", args)
+	slog.Info("BOF quick execute", "agent_id", id, "file", file.Filename, "size", len(data), "args", args)
 	s.LogAuditRecord(c, "bof_quick", "agent", id, fmt.Sprintf("BOF quick: %s (%d bytes) args=%s", file.Filename, len(data), args), true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "message": fmt.Sprintf("BOF %s dispatched", file.Filename)})
 }

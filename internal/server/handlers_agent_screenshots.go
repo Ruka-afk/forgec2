@@ -26,7 +26,7 @@ func (s *Server) handleRequestScreenshot(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Screenshot requested", "agent", id)
+	slog.Info("Screenshot requested", "agent_id", id)
 	s.dispatchTask(c, task, "request_screenshot", "screenshot")
 }
 
@@ -80,6 +80,6 @@ func (s *Server) handleRequestScreenshotWindow(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Window screenshot requested", "agent", id)
+	slog.Info("Window screenshot requested", "agent_id", id)
 	s.dispatchTask(c, task, "request_screenshot_window", "screenshot_window")
 }

@@ -38,13 +38,13 @@ func (s *Server) handleListAutomationRules(c *gin.Context) {
 		var conditions []RuleCondition
 		if dr.Conditions != "" {
 			if err := json.Unmarshal([]byte(dr.Conditions), &conditions); err != nil {
-				slog.Warn("automation: unmarshal conditions", "rule", dr.Name, "error", err)
+				slog.Warn("Automation: unmarshal conditions", "rule", dr.Name, "error", err)
 			}
 		}
 		var actions []RuleAction
 		if dr.Actions != "" {
 			if err := json.Unmarshal([]byte(dr.Actions), &actions); err != nil {
-				slog.Warn("automation: unmarshal actions", "rule", dr.Name, "error", err)
+				slog.Warn("Automation: unmarshal actions", "rule", dr.Name, "error", err)
 			}
 		}
 		rules = append(rules, AutomationRule{
@@ -221,7 +221,7 @@ func (s *Server) handlePluginToggle(c *gin.Context) {
 	}
 	if p.Name != "" {
 		if err := s.pluginManager.SetEnabled(p.Name, p.Enabled); err != nil {
-			slog.Error("automation: failed to set plugin enabled state", "plugin_name", p.Name, "enabled", p.Enabled, "error", err)
+			slog.Error("Automation: failed to set plugin enabled state", "plugin_name", p.Name, "enabled", p.Enabled, "error", err)
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -235,7 +235,7 @@ func (s *Server) handlePluginDelete(c *gin.Context) {
 	}
 	if p.Name != "" {
 		if err := s.pluginManager.Unregister(p.Name); err != nil {
-			slog.Error("automation: failed to unregister plugin", "plugin_name", p.Name, "error", err)
+			slog.Error("Automation: failed to unregister plugin", "plugin_name", p.Name, "error", err)
 		}
 	}
 	if err := s.db.Delete(p).Error; err != nil {

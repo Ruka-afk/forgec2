@@ -72,7 +72,9 @@ func TestCheckPassword(t *testing.T) {
 func TestGenerateToken(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Server.JWTSecret = "test-jwt-secret-for-testing-12345"
-	InitJWTSecret(cfg, "")
+	if err := InitJWTSecret(cfg, ""); err != nil {
+		t.Fatalf("InitJWTSecret() error = %v", err)
+	}
 
 	t.Run("normal session", func(t *testing.T) {
 		user := db.User{ID: 1, Username: "admin", Role: "admin", IsActive: true, LastLogin: time.Now()}
@@ -111,7 +113,9 @@ func TestGenerateToken(t *testing.T) {
 func TestAuthRequired(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Server.JWTSecret = "test-jwt-secret-for-auth-test"
-	InitJWTSecret(cfg, "")
+	if err := InitJWTSecret(cfg, ""); err != nil {
+		t.Fatalf("InitJWTSecret() error = %v", err)
+	}
 
 	gin.SetMode(gin.TestMode)
 
@@ -273,11 +277,13 @@ func TestAuthRequired(t *testing.T) {
 
 func TestInitJWTSecret(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.Server.JWTSecret = "my-custom-secret-key-for-test"
+	cfg.Server.JWTSecret = "my-custom-secret-key-for-test-32chars"
 
-	InitJWTSecret(cfg, "")
+	if err := InitJWTSecret(cfg, ""); err != nil {
+		t.Fatalf("InitJWTSecret() error = %v", err)
+	}
 
-	if string(jwtSecret) != "my-custom-secret-key-for-test" {
+	if string(jwtSecret) != "my-custom-secret-key-for-test-32chars" {
 		t.Error("jwtSecret was not initialized from config")
 	}
 
@@ -287,12 +293,13 @@ func TestInitJWTSecret(t *testing.T) {
 
 	cfg2 := config.DefaultConfig()
 	cfg2.Server.JWTSecret = ""
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("InitJWTSecret should panic on empty secret")
-		}
-	}()
-	InitJWTSecret(cfg2, "")
+	// Empty secret auto-generates a new one; should not error
+	if err := InitJWTSecret(cfg2, ""); err != nil {
+		t.Fatalf("InitJWTSecret() with empty secret should auto-generate, got error = %v", err)
+	}
+	if len(cfg2.Server.JWTSecret) < 32 {
+		t.Error("auto-generated JWT secret should be at least 32 chars")
+	}
 }
 
 func TestRequireRole(t *testing.T) {

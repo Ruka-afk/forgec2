@@ -19,7 +19,9 @@ func newLoginTestServer(t *testing.T) *Server {
 	gin.SetMode(gin.TestMode)
 	cfg := config.DefaultConfig()
 	cfg.Server.JWTSecret = "test-jwt-secret-for-login"
-	middleware.InitJWTSecret(cfg, "")
+	if err := middleware.InitJWTSecret(cfg, ""); err != nil {
+		t.Fatalf("InitJWTSecret() error = %v", err)
+	}
 	return &Server{
 		db:           newContractDB(t),
 		cfg:          cfg,

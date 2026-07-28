@@ -21,19 +21,19 @@ func (s *Server) handleGetCertInfo(c *gin.Context) {
 
 	certPEM, err := os.ReadFile(certPath)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No certificate found"})
+		respondError(c, http.StatusNotFound, "no certificate found")
 		return
 	}
 
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode certificate"})
+		respondError(c, http.StatusInternalServerError, "failed to decode certificate")
 		return
 	}
 
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse certificate"})
+		respondError(c, http.StatusInternalServerError, "failed to parse certificate")
 		return
 	}
 
@@ -63,7 +63,7 @@ func (s *Server) handleRegenerateCert(c *gin.Context) {
 	os.Remove(keyPath)
 
 	if err := crypto.GenerateSelfSignedCert(certPath, keyPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to regenerate certificate"})
+		respondError(c, http.StatusInternalServerError, "failed to regenerate certificate")
 		return
 	}
 

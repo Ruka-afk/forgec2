@@ -93,7 +93,7 @@ func resolveOpenAPIPath() string {
 func (s *Server) handleAPIDocsYAML(c *gin.Context) {
 	data, err := os.ReadFile(resolveOpenAPIPath())
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to read OpenAPI specification")
+		respondError(c, http.StatusInternalServerError, "failed to read OpenAPI specification")
 		return
 	}
 

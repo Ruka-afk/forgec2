@@ -225,7 +225,7 @@ func (bc *BuildCache) Stats() CacheStats {
 func HashParams(params interface{}) string {
 	data, err := json.Marshal(params)
 	if err != nil {
-		slog.Error("failed to marshal params for cache hash", "error", err)
+		slog.Error("Failed to marshal params for cache hash", "error", err)
 		return ""
 	}
 	h := sha256.Sum256(data)

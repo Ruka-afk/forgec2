@@ -91,7 +91,7 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 			AgentID string `json:"agent_id"` // optional: target specific agent
 		}
 		if err := json.Unmarshal(action.Params, &params); err != nil {
-			slog.Error("automation: unmarshal command params", "error", err)
+			slog.Error("Automation: unmarshal command params", "error", err)
 			return
 		}
 		if params.Command != "" {
@@ -108,7 +108,7 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 					Status:    "pending",
 					CreatedBy: "automation",
 				}).Error; err != nil {
-					slog.Error("automation: failed to create command task", "error", err)
+					slog.Error("Automation: failed to create command task", "error", err)
 				}
 			}
 		}
@@ -120,7 +120,7 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 			Secret  string            `json:"secret"` // HMAC secret
 		}
 		if err := json.Unmarshal(action.Params, &params); err != nil {
-			slog.Error("automation: unmarshal webhook params", "error", err)
+			slog.Error("Automation: unmarshal webhook params", "error", err)
 			return
 		}
 		if params.URL != "" {
@@ -167,7 +167,7 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 				expanded := s.expandTemplate(params.Command, evt)
 				task, err := s.createTask(targetAgent, params.Type, expanded, "", "", "", 0, 0)
 				if err != nil {
-					slog.Error("automation: failed to create task", "error", err)
+					slog.Error("Automation: failed to create task", "error", err)
 				} else {
 					s.db.Model(task).Update("created_by", "automation")
 				}
@@ -193,7 +193,7 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 					Status:    "pending",
 					CreatedBy: "automation",
 				}).Error; err != nil {
-					slog.Error("automation: failed to create set_sleep task", "error", err)
+					slog.Error("Automation: failed to create set_sleep task", "error", err)
 				}
 			}
 		}
@@ -220,12 +220,12 @@ func (s *Server) executeWebhook(params struct {
 	Secret  string            `json:"secret"`
 }, evt Event) {
 	if err := validateWebhookURL(params.URL); err != nil {
-		slog.Error("automation: webhook URL rejected", "url", params.URL, "error", err)
+		slog.Error("Automation: webhook URL rejected", "url", params.URL, "error", err)
 		return
 	}
 	body, err := json.Marshal(evt)
 	if err != nil {
-		slog.Error("automation: marshal webhook body", "error", err)
+		slog.Error("Automation: marshal webhook body", "error", err)
 		return
 	}
 	method := params.Method
@@ -234,7 +234,7 @@ func (s *Server) executeWebhook(params struct {
 	}
 	req, err := http.NewRequest(method, params.URL, bytes.NewReader(body))
 	if err != nil {
-		slog.Error("automation: create webhook request", "error", err)
+		slog.Error("Automation: create webhook request", "error", err)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -254,7 +254,7 @@ func (s *Server) executeWebhook(params struct {
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		slog.Error("automation: webhook request failed", "url", params.URL, "error", err)
+		slog.Error("Automation: webhook request failed", "url", params.URL, "error", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -271,7 +271,7 @@ func (s *Server) loadAutomationRules() []AutomationRule {
 
 	var dbRules []db.AutomationRule
 	if err := s.db.Limit(AutomationRuleLimit).Find(&dbRules).Error; err != nil {
-		slog.Error("automation: failed to load rules", "error", err)
+		slog.Error("Automation: failed to load rules", "error", err)
 	}
 
 	var rules []AutomationRule
@@ -279,13 +279,13 @@ func (s *Server) loadAutomationRules() []AutomationRule {
 		var conditions []RuleCondition
 		if dr.Conditions != "" {
 			if err := json.Unmarshal([]byte(dr.Conditions), &conditions); err != nil {
-				slog.Warn("automation: unmarshal conditions", "rule", dr.Name, "error", err)
+				slog.Warn("Automation: unmarshal conditions", "rule", dr.Name, "error", err)
 			}
 		}
 		var actions []RuleAction
 		if dr.Actions != "" {
 			if err := json.Unmarshal([]byte(dr.Actions), &actions); err != nil {
-				slog.Warn("automation: unmarshal actions", "rule", dr.Name, "error", err)
+				slog.Warn("Automation: unmarshal actions", "rule", dr.Name, "error", err)
 			}
 		}
 		rules = append(rules, AutomationRule{
@@ -357,7 +357,7 @@ func (s *Server) deleteAutomationRule(id string) error {
 func (s *Server) migrateAutomationRules() {
 	var count int64
 	if err := s.db.Model(&db.AutomationRule{}).Count(&count).Error; err != nil {
-		slog.Error("automation: failed to count rules", "error", err)
+		slog.Error("Automation: failed to count rules", "error", err)
 	}
 	if count > 0 {
 		return
@@ -375,26 +375,26 @@ func (s *Server) migrateAutomationRules() {
 
 	for _, rule := range rules {
 		if err := s.saveAutomationRule(rule); err != nil {
-			slog.Warn("automation: failed to import rule", "id", rule.ID, "error", err)
+			slog.Warn("Automation: failed to import rule", "id", rule.ID, "error", err)
 		}
 	}
 
 	if err := s.db.Where("key = ?", "automation_rules").Delete(&db.ServerConfig{}).Error; err != nil {
-		slog.Error("automation: failed to delete legacy config", "error", err)
+		slog.Error("Automation: failed to delete legacy config", "error", err)
 	}
 }
 
 func (s *Server) getConfigJSON(key string) string {
 	var cfg struct{ Value string }
 	if err := s.db.Model(&db.ServerConfig{}).Where("key = ?", key).First(&cfg).Error; err != nil {
-		slog.Debug("config key not found", "key", key, "error", err)
+		slog.Debug("Config key not found", "key", key, "error", err)
 	}
 	return cfg.Value
 }
 
 func (s *Server) setConfigJSON(key, value string) {
 	if err := s.db.Model(&db.ServerConfig{}).Where("key = ?", key).Assign(db.ServerConfig{Value: value}).FirstOrCreate(&db.ServerConfig{Key: key}).Error; err != nil {
-		slog.Error("failed to set config", "key", key, "error", err)
+		slog.Error("Failed to set config", "key", key, "error", err)
 	}
 }
 
@@ -429,7 +429,7 @@ func (s *Server) registerBuiltinAutomations() {
 	}
 	if !exists {
 		if err := s.saveAutomationRule(rule); err != nil {
-			slog.Warn("automation: failed to register builtin rule", "id", rule.ID, "error", err)
+			slog.Warn("Automation: failed to register builtin rule", "id", rule.ID, "error", err)
 		}
 	}
 }

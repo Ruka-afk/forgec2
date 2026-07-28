@@ -80,7 +80,7 @@ func (em *EventManager) Emit(evt Event) {
 				defer func() {
 					<-em.workerSem
 					if r := recover(); r != nil {
-						slog.Error("event handler panic", "panic", r)
+						slog.Error("Event handler panic", "panic", r)
 					}
 				}()
 				handler(evt)

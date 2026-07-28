@@ -20,7 +20,7 @@ func (s *Server) handleTOTPStatus(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	var user db.User
 	if err := s.db.First(&user, userID).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "User not found")
+		respondError(c, http.StatusInternalServerError, "user not found")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -33,13 +33,13 @@ func (s *Server) handleTOTPGenerate(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	var user db.User
 	if err := s.db.First(&user, userID).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "User not found")
+		respondError(c, http.StatusInternalServerError, "user not found")
 		return
 	}
 
 	secret, err := totp.GenerateSecret()
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to generate secret")
+		respondError(c, http.StatusInternalServerError, "failed to generate secret")
 		return
 	}
 
@@ -48,7 +48,7 @@ func (s *Server) handleTOTPGenerate(c *gin.Context) {
 
 	encryptedSecret, err := encryptSecret(secret, s.cfg.Server.JWTSecret)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to process secret")
+		respondError(c, http.StatusInternalServerError, "failed to process secret")
 		return
 	}
 	s.pendingTOTP = &pendingTOTPState{
@@ -71,31 +71,31 @@ func (s *Server) handleTOTPEnable(c *gin.Context) {
 	code := c.PostForm("code")
 
 	if secret == "" || code == "" {
-		respondError(c, http.StatusBadRequest, "Secret and code are required")
+		respondError(c, http.StatusBadRequest, "secret and code are required")
 		return
 	}
 
 	if !totp.VerifyCode(secret, code) {
-		respondError(c, http.StatusBadRequest, "Invalid verification code")
+		respondError(c, http.StatusBadRequest, "invalid verification code")
 		return
 	}
 
 	var user db.User
 	if err := s.db.First(&user, userID).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "User not found")
+		respondError(c, http.StatusInternalServerError, "user not found")
 		return
 	}
 
 	encryptedSecret, err := encryptSecret(secret, s.cfg.Server.JWTSecret)
 	if err != nil {
 		slog.Error("Failed to encrypt TOTP secret", "user_id", user.ID, "err", err)
-		respondError(c, http.StatusInternalServerError, "Failed to enable 2FA")
+		respondError(c, http.StatusInternalServerError, "failed to enable 2FA")
 		return
 	}
 
 	if err := s.db.Model(&user).Update("totp_secret", encryptedSecret).Error; err != nil {
 		slog.Error("Failed to enable TOTP", "user_id", user.ID, "err", err)
-		respondError(c, http.StatusInternalServerError, "Failed to enable 2FA")
+		respondError(c, http.StatusInternalServerError, "failed to enable 2FA")
 		return
 	}
 
@@ -133,24 +133,24 @@ func (s *Server) handleTOTPDisable(c *gin.Context) {
 	password := c.PostForm("password")
 
 	if password == "" {
-		respondError(c, http.StatusBadRequest, "Password is required")
+		respondError(c, http.StatusBadRequest, "password is required")
 		return
 	}
 
 	var user db.User
 	if err := s.db.First(&user, userID).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "User not found")
+		respondError(c, http.StatusInternalServerError, "user not found")
 		return
 	}
 
 	if !middleware.CheckPassword(user.PasswordHash, password) {
-		respondError(c, http.StatusUnauthorized, "Incorrect password")
+		respondError(c, http.StatusUnauthorized, "incorrect password")
 		return
 	}
 
 	if err := s.db.Model(&user).Update("totp_secret", "").Error; err != nil {
 		slog.Error("Failed to disable TOTP", "user_id", user.ID, "err", err)
-		respondError(c, http.StatusInternalServerError, "Failed to disable 2FA")
+		respondError(c, http.StatusInternalServerError, "failed to disable 2FA")
 		return
 	}
 	s.db.Where("user_id = ?", user.ID).Delete(&db.BackupCode{})

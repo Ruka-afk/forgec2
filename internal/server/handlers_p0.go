@@ -60,7 +60,7 @@ func (s *Server) handleRPortFwdRelayStart(c *gin.Context) {
 	s.rportfwdListeners[key] = relay
 	go relay.start()
 
-	slog.Info("Reverse port forward relay started", "agent", id, "lport", lport, "target", forwardTarget)
+	slog.Info("Reverse port forward relay started", "agent_id", id, "lport", lport, "target", forwardTarget)
 	s.LogAuditRecord(c, "rportfwd_relay_start", "agent", id, fmt.Sprintf("rportfwd relay :%d -> %s via %s", lport, forwardTarget, id), true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("rportfwd relay :%d -> %s via %s", lport, forwardTarget, id)})
 }
@@ -144,7 +144,7 @@ func (s *Server) handleRPortFwdRelayStop(c *gin.Context) {
 		return
 	}
 	relay.stop()
-	slog.Info("Reverse port forward relay stopped", "agent", id, "lport", localPortStr)
+	slog.Info("Reverse port forward relay stopped", "agent_id", id, "lport", localPortStr)
 	s.LogAuditRecord(c, "rportfwd_relay_stop", "agent", id, fmt.Sprintf("rportfwd relay stopped :%s", localPortStr), true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "rportfwd relay stopped"})
 }
@@ -184,7 +184,7 @@ func (r *rportfwdRelay) start() {
 	addr := fmt.Sprintf("%s:%d", listenHost, r.localPort)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		slog.Error("rportfwd relay listen failed", "addr", addr, "err", err)
+		slog.Error("Rportfwd relay listen failed", "addr", addr, "err", err)
 		return
 	}
 	r.listener = &rportfwdListener{
@@ -201,7 +201,7 @@ func (r *rportfwdRelay) start() {
 		ln.Close()
 	}()
 
-	slog.Info("rportfwd relay listening", "addr", addr, "target", r.forwardTarget, "agent", r.agentID)
+	slog.Info("Rportfwd relay listening", "addr", addr, "target", r.forwardTarget, "agent_id", r.agentID)
 	for {
 		conn, err := ln.Accept()
 		if err != nil {

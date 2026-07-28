@@ -10,3 +10,13 @@ func debugLog(msg string) {
 		fmt.Printf("[*] %s\n", msg)
 	}
 }
+
+func logDebug(msg string) {
+	debugLog(msg)
+}
+
+func logDebugf(format string, args ...interface{}) {
+	if Debug {
+		fmt.Printf("[*] "+format+"\n", args...)
+	}
+}

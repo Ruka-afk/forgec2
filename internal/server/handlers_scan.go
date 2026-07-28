@@ -183,7 +183,7 @@ func (s *Server) handleProcessScanResult(c *gin.Context) {
 
 	if len(results) > 0 {
 		if err := s.db.CreateInBatches(results, 500).Error; err != nil {
-			slog.Error("Failed to save scan results", "agent", req.AgentID, "task", req.TaskID, "count", len(results), "err", err)
+			slog.Error("Failed to save scan results", "agent_id", req.AgentID, "task", req.TaskID, "count", len(results), "err", err)
 		}
 	}
 

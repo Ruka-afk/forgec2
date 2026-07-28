@@ -58,7 +58,7 @@ func (s *Server) handleListDir(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Directory list requested", "agent", id, "path", path)
+	slog.Info("Directory list requested", "agent_id", id, "path", path)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
 }
 
@@ -84,7 +84,7 @@ func (s *Server) handleFileDelete(c *gin.Context) {
 		return
 	}
 
-	slog.Info("File delete requested", "agent", id, "path", filePath)
+	slog.Info("File delete requested", "agent_id", id, "path", filePath)
 	s.dispatchTask(c, task, "file_delete", filePath)
 }
 
@@ -110,7 +110,7 @@ func (s *Server) handleFileRead(c *gin.Context) {
 		return
 	}
 
-	slog.Info("File read requested", "agent", id, "path", filePath)
+	slog.Info("File read requested", "agent_id", id, "path", filePath)
 	s.dispatchTask(c, task, "file_read", filePath)
 }
 
@@ -136,7 +136,7 @@ func (s *Server) handleFileUploadFromAgent(c *gin.Context) {
 		return
 	}
 
-	slog.Info("File upload requested", "agent", id, "path", filePath)
+	slog.Info("File upload requested", "agent_id", id, "path", filePath)
 	s.dispatchTask(c, task, "file_upload_exfil", filePath)
 }
 
@@ -164,7 +164,7 @@ func (s *Server) handleDownload(c *gin.Context) {
 		return
 	}
 
-	slog.Info("File download requested", "agent", id, "url", fileURL, "path", targetPath)
+	slog.Info("File download requested", "agent_id", id, "url", fileURL, "path", targetPath)
 	s.dispatchTask(c, task, "file_download_url", fileURL+" -> "+targetPath)
 }
 
@@ -218,7 +218,7 @@ func (s *Server) handleUploadFile(c *gin.Context) {
 	}
 	s.LogAuditRecord(c, "file_upload_push", "agent", id, targetPath, true, nil)
 
-	slog.Info("File upload chunk requested", "agent", id, "path", targetPath, "offset", task.Offset)
+	slog.Info("File upload chunk requested", "agent_id", id, "path", targetPath, "offset", task.Offset)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
 }
 

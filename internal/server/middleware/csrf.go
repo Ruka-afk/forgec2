@@ -3,6 +3,7 @@ package middleware
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -37,7 +38,15 @@ func CSRFProtect() gin.HandlerFunc {
 
 		// On every GET/HEAD, rotate the CSRF token to prevent stale cookie injection
 		if method == "GET" || method == "HEAD" {
-			token := generateCSRFToken()
+			token, err := generateCSRFToken()
+			if err != nil {
+				slog.Error("Failed to generate CSRF token", "error", err)
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+					"success": false,
+					"error":   "Internal server error",
+				})
+				return
+			}
 			SetCookieWithSameSite(c, csrfCookieName, token, 0, "/", CookieSecure, false, http.SameSiteLaxMode)
 		}
 
@@ -45,11 +54,10 @@ func CSRFProtect() gin.HandlerFunc {
 	}
 }
 
-func generateCSRFToken() string {
+func generateCSRFToken() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		slog.Error("CRNG failed for CSRF token", "error", err)
-		panic("CSRF token generation: crypto/rand failed")
+		return "", fmt.Errorf("CRNG failed for CSRF token: %w", err)
 	}
-	return hex.EncodeToString(b)
+	return hex.EncodeToString(b), nil
 }

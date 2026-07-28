@@ -105,13 +105,13 @@ func (e *socksRelayEngine) startSession(s *Server, agentID string, port int) (in
 		Status:     "active",
 	}
 	if err := s.db.Create(&session).Error; err != nil {
-		slog.Error("Failed to persist SOCKS session", "agent", agentID, "err", err)
+		slog.Error("Failed to persist SOCKS session", "agent_id", agentID, "err", err)
 	}
 	sess.dbID = session.ID
 
 	e.sessions[agentID] = sess
 
-	slog.Info("SOCKS relay started", "agent", agentID, "port", actualPort)
+	slog.Info("SOCKS relay started", "agent_id", agentID, "port", actualPort)
 	go e.acceptLoop(s, sess)
 
 	return actualPort, nil
@@ -147,7 +147,7 @@ func (e *socksRelayEngine) stopSession(s *Server, agentID string) error {
 		slog.Error("Failed to update SOCKS session on stop", "session_id", sess.dbID, "err", err)
 	}
 
-	slog.Info("SOCKS relay stopped", "agent", agentID, "port", sess.port)
+	slog.Info("SOCKS relay stopped", "agent_id", agentID, "port", sess.port)
 	return nil
 }
 
@@ -160,7 +160,7 @@ func (e *socksRelayEngine) getSession(agentID string) *socksRelaySession {
 // ─── Accept Loop (Operator → Server) ─────────────────────────────────────────
 
 func (e *socksRelayEngine) acceptLoop(s *Server, sess *socksRelaySession) {
-	slog.Info("SOCKS relay accept loop started", "agent", sess.agentID, "port", sess.port)
+	slog.Info("SOCKS relay accept loop started", "agent_id", sess.agentID, "port", sess.port)
 	for {
 		conn, err := sess.listener.Accept()
 		if err != nil {
@@ -263,7 +263,7 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 	if activeConns >= SocksMaxConns {
 		e.mu.Unlock()
 		conn.Write([]byte{0x05, 0x02, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
-		slog.Warn("SOCKS relay: max connections reached", "agent", sess.agentID, "limit", SocksMaxConns)
+		slog.Warn("SOCKS relay: max connections reached", "agent_id", sess.agentID, "limit", SocksMaxConns)
 		return
 	}
 
@@ -306,7 +306,7 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 	// Clear deadline, now we relay
 	conn.SetDeadline(time.Time{})
 
-	slog.Info("SOCKS relay: operator connected", "agent", sess.agentID, "conn_id", connID, "dest", destAddr)
+	slog.Info("SOCKS relay: operator connected", "agent_id", sess.agentID, "conn_id", connID, "dest", destAddr)
 
 	// Read from operator → buffer for agent
 	buf := make([]byte, SocksMaxFrameSize)

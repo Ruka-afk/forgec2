@@ -66,9 +66,11 @@ func GenerateBackupCodes() []string {
 	return codes
 }
 
+var BackupCodeBcryptCost = 10
+
 func HashBackupCode(code string) (string, error) {
 	code = strings.ReplaceAll(code, " ", "")
-	hash, err := bcrypt.GenerateFromPassword([]byte(code), 10)
+	hash, err := bcrypt.GenerateFromPassword([]byte(code), BackupCodeBcryptCost)
 	return string(hash), err
 }
 

@@ -140,7 +140,7 @@ func MetricsUnaryInterceptor(collector *GRPCMetricsCollector) grpc.UnaryServerIn
 		m.record(elapsed, err != nil)
 
 		if elapsed > 5*time.Second {
-			slog.Warn("slow gRPC unary", "method", method, "latency", elapsed)
+			slog.Warn("Slow gRPC unary", "method", method, "latency", elapsed)
 		}
 
 		return resp, err

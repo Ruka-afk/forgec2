@@ -45,7 +45,7 @@ func (h *RDHub) Join(agentID, operatorID string, conn *websocket.Conn) {
 	session.Operators[operatorID] = conn
 	session.mu.Unlock()
 
-	slog.Info("Operator joined remote desktop", "agent_id", agentID, "operator", operatorID)
+	slog.Info("Operator joined remote desktop", "agent_id", agentID, "user", operatorID)
 }
 
 // Leave removes an operator from a remote desktop session.
@@ -88,7 +88,7 @@ func (h *RDHub) BroadcastFrame(agentID string, frameData []byte) {
 	for operatorID, conn := range operators {
 		conn.SetWriteDeadline(time.Now().Add(RemoteDesktopWriteDeadline))
 		if err := conn.WriteMessage(websocket.BinaryMessage, frameData); err != nil {
-			slog.Debug("Failed to send frame", "operator", operatorID, "error", err)
+			slog.Debug("Failed to send frame", "user", operatorID, "error", err)
 			h.Leave(agentID, operatorID)
 		}
 	}

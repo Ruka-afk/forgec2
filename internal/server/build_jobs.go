@@ -91,7 +91,7 @@ func (s *Server) handleBuildStatus(c *gin.Context) {
 	job, ok := s.buildJobs[buildID]
 	s.buildJobsMu.RUnlock()
 	if !ok {
-		respondError(c, http.StatusNotFound, "Build not found")
+		respondError(c, http.StatusNotFound, "build not found")
 		return
 	}
 	resp := gin.H{
@@ -119,16 +119,16 @@ func (s *Server) handleBuildDownload(c *gin.Context) {
 	job, ok := s.buildJobs[buildID]
 	s.buildJobsMu.RUnlock()
 	if !ok {
-		respondError(c, http.StatusNotFound, "Build not found")
+		respondError(c, http.StatusNotFound, "build not found")
 		return
 	}
 	if job.Status != "completed" {
-		respondError(c, http.StatusNotFound, "Build not ready")
+		respondError(c, http.StatusNotFound, "build not ready")
 		return
 	}
 	cleanPath := filepath.Clean(job.Output)
 	if _, err := os.Stat(cleanPath); err != nil {
-		respondError(c, http.StatusNotFound, "Build output file not found")
+		respondError(c, http.StatusNotFound, "build output file not found")
 		return
 	}
 	serveFileSafe(c, cleanPath, s.extractAgentsDir(), sanitizeFilename(filepath.Base(cleanPath)))

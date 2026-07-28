@@ -30,10 +30,22 @@ func (s *Server) handleEmergencyStop(c *gin.Context) {
 	}
 
 	killDate := time.Now()
+	groupID := c.PostForm("group_id")
 
-	result := s.db.Model(&db.Implant{}).
-		Where("status != ?", "offline").
-		Update("kill_date", killDate)
+	query := s.db.Model(&db.Implant{}).Where("status != ?", "offline")
+
+	if groupID != "" {
+		// Group-scoped kill: only kill agents in the specified group
+		var group db.AgentGroup
+		if err := s.db.Where("id = ?", groupID).First(&group).Error; err != nil {
+			respondError(c, http.StatusNotFound, "Agent group not found")
+			return
+		}
+		query = query.Joins("JOIN agent_group_assignments ON agent_group_assignments.implant_id = implants.id").
+			Where("agent_group_assignments.agent_group_id = ?", groupID)
+	}
+
+	result := query.Update("kill_date", killDate)
 	affected := result.RowsAffected
 
 	if err := result.Error; err != nil {
@@ -42,20 +54,27 @@ func (s *Server) handleEmergencyStop(c *gin.Context) {
 		return
 	}
 
+	scope := "all online agents"
+	if groupID != "" {
+		scope = "group " + groupID
+	}
+
 	s.LogAuditRecord(c, "emergency_stop", "security", user.Username,
-		"Emergency stop activated", true, nil)
+		"Emergency stop activated ("+scope+")", true, nil)
 
 	s.broadcastSystemAlert("EMERGENCY STOP",
-		"Emergency stop activated by "+user.Username+". All online agents will self-terminate.",
+		"Emergency stop activated by "+user.Username+". "+scope+" will self-terminate.",
 		"emergency_stop")
 
 	slog.Warn("EMERGENCY STOP ACTIVATED",
-		"operator", user.Username,
+		"user", user.Username,
+		"scope", scope,
 		"agents_affected", affected)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":      true,
 		"message":      "Emergency stop activated",
+		"scope":        scope,
 		"agents_killed": affected,
 	})
 }
@@ -68,8 +87,8 @@ func (s *Server) handleEmergencyStatus(c *gin.Context) {
 	s.db.Model(&db.Task{}).Where("type = ? AND status IN ?", "kill", []string{"pending", "running"}).Count(&pendingKill)
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":         true,
-		"online_agents":   onlineCount,
-		"pending_kills":   pendingKill,
+		"success":       true,
+		"online_agents": onlineCount,
+		"pending_kills": pendingKill,
 	})
 }

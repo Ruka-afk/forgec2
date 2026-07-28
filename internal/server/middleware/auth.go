@@ -54,14 +54,13 @@ type Claims struct {
 // InitJWTSecret initializes the JWT secret and cookie secure flag from config.
 // If the secret is shorter than 32 characters, it auto-generates a secure random
 // secret and logs a warning.
-func InitJWTSecret(cfg *config.Config, configPath string) {
+func InitJWTSecret(cfg *config.Config, configPath string) error {
 	secret := cfg.Server.JWTSecret
 	if secret == "" {
 		slog.Warn("JWT secret is empty, auto-generating a secure random secret")
 		b := make([]byte, 32)
 		if _, err := rand.Read(b); err != nil {
-			slog.Error("Failed to generate JWT secret", "error", err)
-			panic("JWT secret is empty and cannot generate random secret")
+			return fmt.Errorf("JWT secret is empty and cannot generate random secret: %w", err)
 		}
 		cfg.Server.JWTSecret = hex.EncodeToString(b)
 		if configPath != "" {
@@ -76,8 +75,7 @@ func InitJWTSecret(cfg *config.Config, configPath string) {
 			"length", len(secret), "min_required", minJWTSecretLen)
 		b := make([]byte, 32)
 		if _, err := rand.Read(b); err != nil {
-			slog.Error("Failed to generate JWT secret", "error", err)
-			panic("JWT secret is too short and cannot generate random secret")
+			return fmt.Errorf("JWT secret is too short and cannot generate random secret: %w", err)
 		}
 		cfg.Server.JWTSecret = hex.EncodeToString(b)
 		if configPath != "" {
@@ -98,6 +96,7 @@ func InitJWTSecret(cfg *config.Config, configPath string) {
 			slog.Warn("Cookie Secure flag is disabled (TLS not enabled) — session cookies will be sent over plain HTTP")
 		}
 	}
+	return nil
 }
 
 // SetCookieWithSameSite sets a cookie with SameSite attribute.
@@ -317,9 +316,20 @@ func CheckPassword(hash, password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
 
+// BcryptCost is the bcrypt hash cost used for password hashing.
+// Set via SetBcryptCost at startup from config.
+var BcryptCost = 12
+
+// SetBcryptCost sets the bcrypt cost for password hashing (clamped to [4, 31]).
+func SetBcryptCost(cost int) {
+	if cost >= 4 && cost <= 31 {
+		BcryptCost = cost
+	}
+}
+
 // HashPassword for storage
 func HashPassword(password string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
 	return string(hash), err
 }
 

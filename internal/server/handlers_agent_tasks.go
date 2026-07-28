@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/csv"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -36,7 +37,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to count tasks")
+		respondError(c, http.StatusInternalServerError, "failed to count tasks")
 		return
 	}
 
@@ -129,8 +130,8 @@ func (s *Server) apiBulkTaskStatus(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "task_ids required")
 		return
 	}
-	if len(req.TaskIDs) > 200 {
-		respondError(c, http.StatusBadRequest, "max 200 task IDs per request")
+	if len(req.TaskIDs) > MaxTaskIDsPerRequest {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("max %d task IDs per request", MaxTaskIDsPerRequest))
 		return
 	}
 	var tasks []db.Task

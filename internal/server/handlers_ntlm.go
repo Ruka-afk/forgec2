@@ -125,7 +125,7 @@ func (s *Server) handleCoerce(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Coerce requested", "agent", id, "type", coerceType, "target", target)
+	slog.Info("Coerce requested", "agent_id", id, "type", coerceType, "target", target)
 	s.dispatchTask(c, task, "coerce_"+coerceType, fmt.Sprintf("target=%s listener=%s", target, listenAddr))
 }
 
@@ -168,7 +168,7 @@ func (s *Server) handleNTLMRelayStart(c *gin.Context) {
 		StartedAt: time.Now(),
 	})
 
-	slog.Info("NTLM relay start requested", "agent", id, "target", target, "listener", listener)
+	slog.Info("NTLM relay start requested", "agent_id", id, "target", target, "listener", listener)
 	s.dispatchTask(c, task, "relay_ntlm_start", fmt.Sprintf("target=%s listener=%s", target, listener))
 }
 
@@ -194,6 +194,6 @@ func (s *Server) handleNTLMRelayStop(c *gin.Context) {
 		s.ntlmRelays.remove(sess.ID)
 	}
 
-	slog.Info("NTLM relay stop requested", "agent", id)
+	slog.Info("NTLM relay stop requested", "agent_id", id)
 	s.dispatchTask(c, task, "relay_ntlm_stop", "stop relay")
 }

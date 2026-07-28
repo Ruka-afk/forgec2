@@ -559,7 +559,7 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 	s.screenMonitorMu.Lock()
 	if len(s.screenMonitorImplants) >= MaxScreenMonitors {
 		s.screenMonitorMu.Unlock()
-		c.JSON(http.StatusTooManyRequests, gin.H{"error": "screen monitor limit reached"})
+		respondError(c, http.StatusTooManyRequests, "screen monitor limit reached")
 		return
 	}
 	s.screenMonitorImplants[strings.ToLower(id)] = time.Now()
@@ -588,7 +588,7 @@ func (s *Server) handleStartScreenMonitor(c *gin.Context) {
 	}
 
 	s.LogAuditRecord(c, "screen_monitor_start", "agent", id, "Started screen monitoring", true, nil)
-	slog.Info("Screen monitoring started", "agent", id, "task_id", task.ID)
+	slog.Info("Screen monitoring started", "agent_id", id, "task_id", task.ID)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Screen stream started"})
 }
 
@@ -618,7 +618,7 @@ func (s *Server) handleStopScreenMonitor(c *gin.Context) {
 	s.broadcastTaskUpdate(id, *stopTask)
 
 	s.LogAuditRecord(c, "screen_monitor_stop", "agent", id, "Stopped screen monitoring", true, nil)
-	slog.Info("Screen monitoring stopped", "agent", id)
+	slog.Info("Screen monitoring stopped", "agent_id", id)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 

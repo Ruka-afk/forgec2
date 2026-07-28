@@ -44,7 +44,7 @@ func (we *WorkflowEngine) ExecuteWorkflow(wf db.Workflow, agentIDs []string) (in
 		StartedAt:    time.Now(),
 	}
 	if err := we.server.db.Create(&exec).Error; err != nil {
-		slog.Error("workflow: failed to create execution record", "error", err)
+		slog.Error("Workflow: failed to create execution record", "error", err)
 	}
 
 	taskCount := 0
@@ -123,7 +123,7 @@ func (we *WorkflowEngine) executeStep(wf db.Workflow, step db.WorkflowStep, agen
 
 	task, err := we.server.createTask(agentID, step.TaskType, step.Command, step.Shell, "", "", 0, 0)
 	if err != nil {
-		slog.Error("workflow: failed to create task", "step", step.StepOrder, "agent", agentID, "error", err)
+		slog.Error("Workflow: failed to create task", "step", step.StepOrder, "agent", agentID, "error", err)
 		stepLog.Status = "failed"
 		stepLog.Result = err.Error()
 		now := time.Now()

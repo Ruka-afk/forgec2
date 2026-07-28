@@ -24,7 +24,7 @@ func (s *Server) triggerWebhooks(evt Event) {
 
 func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 	if err := validateWebhookURL(wh.URL); err != nil {
-		slog.Error("webhook URL rejected", "name", wh.Name, "url", wh.URL, "error", err)
+		slog.Error("Webhook URL rejected", "name", wh.Name, "url", wh.URL, "error", err)
 		return
 	}
 	payload, err := json.Marshal(map[string]interface{}{
@@ -35,7 +35,7 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 		"data":      evt.Data,
 	})
 	if err != nil {
-		slog.Error("webhook marshal payload failed", "error", err)
+		slog.Error("Webhook marshal payload failed", "error", err)
 		return
 	}
 
@@ -66,7 +66,7 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 		resp, err := s.httpClient.Do(req)
 		if err != nil {
 			if attempt < webhookMaxRetries {
-				slog.Warn("webhook delivery failed, retrying", "name", wh.Name, "attempt", attempt+1, "error", err)
+				slog.Warn("Webhook delivery failed, retrying", "name", wh.Name, "attempt", attempt+1, "error", err)
 				select {
 				case <-s.ctx.Done():
 					return
@@ -74,7 +74,7 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 				}
 				continue
 			}
-			slog.Error("webhook delivery failed, exhausted retries", "name", wh.Name, "error", err)
+			slog.Error("Webhook delivery failed, exhausted retries", "name", wh.Name, "error", err)
 			return
 		}
 		defer resp.Body.Close()
@@ -89,7 +89,7 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 			return
 		}
 		if attempt < webhookMaxRetries && resp.StatusCode >= 500 {
-			slog.Warn("webhook delivery got server error, retrying", "name", wh.Name, "status", resp.StatusCode, "attempt", attempt+1)
+			slog.Warn("Webhook delivery got server error, retrying", "name", wh.Name, "status", resp.StatusCode, "attempt", attempt+1)
 			select {
 			case <-s.ctx.Done():
 				return
@@ -98,7 +98,7 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 			continue
 		}
 
-		slog.Error("webhook delivery failed with non-retryable status", "name", wh.Name, "status", resp.StatusCode)
+		slog.Error("Webhook delivery failed with non-retryable status", "name", wh.Name, "status", resp.StatusCode)
 		s.db.Create(&db.AuditLog{
 			User:    "system",
 			Action:  "webhook",

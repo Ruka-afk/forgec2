@@ -322,7 +322,7 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 		return nil
 	})
 	if err := g.Wait(); err != nil {
-		slog.Error("api: failed to count dashboard stats", "error", err)
+		slog.Error("API: failed to count dashboard stats", "error", err)
 	}
 
 	onlineUsers := int64(len(onlineUsersList))

@@ -119,19 +119,21 @@ func (rl *APIRateLimiter) GetBucket(key string) *TokenBucket {
 }
 
 func (rl *APIRateLimiter) evictOldest() {
-	var oldestKey string
-	var oldestTime time.Time
+	now := time.Now()
+	// First pass: evict stale entries (>5min untouched)
 	for key, bucket := range rl.buckets {
 		bucket.mu.Lock()
 		accessed := bucket.accessedAt
 		bucket.mu.Unlock()
-		if oldestKey == "" || accessed.Before(oldestTime) {
-			oldestKey = key
-			oldestTime = accessed
+		if now.Sub(accessed) > 5*time.Minute {
+			delete(rl.buckets, key)
+			return
 		}
 	}
-	if oldestKey != "" {
-		delete(rl.buckets, oldestKey)
+	// Second pass: evict any single entry (O(1) fallback)
+	for key := range rl.buckets {
+		delete(rl.buckets, key)
+		return
 	}
 }
 

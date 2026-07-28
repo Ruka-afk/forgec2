@@ -1,10 +1,6 @@
 package server
 
-import (
-	"net/http"
-
-	"github.com/gin-gonic/gin"
-)
+import "net/http"
 
 type ErrorCode int
 
@@ -98,34 +94,4 @@ func (e ErrorCode) HTTPStatus() int {
 		return s
 	}
 	return http.StatusInternalServerError
-}
-
-type AppError struct {
-	Code    ErrorCode `json:"code"`
-	Message string    `json:"message"`
-	Detail  string    `json:"detail,omitempty"`
-}
-
-func (e *AppError) Error() string {
-	if e.Detail != "" {
-		return e.Message + ": " + e.Detail
-	}
-	return e.Message
-}
-
-func NewAppError(code ErrorCode, message string) *AppError {
-	return &AppError{Code: code, Message: message}
-}
-
-func NewAppErrorDetail(code ErrorCode, message, detail string) *AppError {
-	return &AppError{Code: code, Message: message, Detail: detail}
-}
-
-func respondAppError(c *gin.Context, err *AppError) {
-	c.JSON(err.Code.HTTPStatus(), gin.H{
-		"success": false,
-		"error":   err.Message,
-		"code":    int(err.Code),
-		"detail":  err.Detail,
-	})
 }

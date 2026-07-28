@@ -90,6 +90,14 @@ type task struct {
 }
 
 func (s *Server) handleBeacon(c *gin.Context) {
+	beaconStart := time.Now()
+	defer func() {
+		if s.metrics != nil {
+			transport := "http"
+			s.metrics.BeaconDuration.WithLabelValues(transport).Observe(time.Since(beaconStart).Seconds())
+		}
+	}()
+
 	if s.cfg.Server.BeaconKey != "" {
 		key := c.GetHeader("X-Beacon-Key")
 		if key == "" {
@@ -129,12 +137,12 @@ func (s *Server) handleBeacon(c *gin.Context) {
 		// AES-256-GCM encrypted payload via ECDH session
 		plaintext, err := s.sessionManager.DecryptB64(envelope.UUID, envelope.CipherB64)
 		if err != nil {
-			slog.Warn("ECDH decryption failed", "agent", envelope.UUID, "err", err)
+			slog.Warn("ECDH decryption failed", "agent_id", envelope.UUID, "err", err)
 			respondError(c, http.StatusBadRequest, "decryption failed")
 			return
 		}
 		if err := encoding.Unmarshal(plaintext, &req); err != nil {
-			slog.Warn("ECDH decrypted payload parse failed", "agent", envelope.UUID, "err", err)
+			slog.Warn("ECDH decrypted payload parse failed", "agent_id", envelope.UUID, "err", err)
 			respondError(c, http.StatusBadRequest, "invalid decrypted payload")
 			return
 		}
@@ -144,16 +152,16 @@ func (s *Server) handleBeacon(c *gin.Context) {
 		// ECDH handshake: establish a new session
 		agentPubKey, err := base64.StdEncoding.DecodeString(envelope.ECDHPub)
 		if err != nil {
-			slog.Warn("Invalid ECDH public key encoding", "agent", envelope.UUID)
+			slog.Warn("Invalid ECDH public key encoding", "agent_id", envelope.UUID)
 			respondError(c, http.StatusBadRequest, "invalid ecdh key")
 			return
 		}
 		if err := s.sessionManager.EstablishSession(envelope.UUID, agentPubKey); err != nil {
-			slog.Warn("ECDH handshake failed", "agent", envelope.UUID, "err", err)
+			slog.Warn("ECDH handshake failed", "agent_id", envelope.UUID, "err", err)
 			respondError(c, http.StatusBadRequest, "ecdh handshake failed")
 			return
 		}
-		slog.Info("ECDH session established", "agent", envelope.UUID)
+		slog.Info("ECDH session established", "agent_id", envelope.UUID)
 		// Parse inner payload from raw JSON (ECDHPub field is at top level, rest is in body)
 		if err := json.Unmarshal(raw, &req); err != nil {
 			respondError(c, http.StatusBadRequest, "invalid json")
@@ -189,7 +197,7 @@ func (s *Server) handleBeacon(c *gin.Context) {
 						slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
 					}
 				}()
-				ctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
+				ctx, cancel := context.WithTimeout(s.ctx, GeoIPLookupTimeout)
 				defer cancel()
 				country, city, lat, lon := s.lookupGeoIP(ctx, publicIP)
 				if country != "" {
@@ -213,7 +221,7 @@ func (s *Server) handleBeacon(c *gin.Context) {
 	// Build response with appropriate encryption (multi-format)
 	respBytes, err := encoding.Marshal(resp)
 	if err != nil {
-		slog.Error("beacon response marshal failed", "error", err)
+		slog.Error("Beacon response marshal failed", "error", err)
 		respondError(c, http.StatusInternalServerError, "response marshal failed")
 		return
 	}
@@ -222,7 +230,7 @@ func (s *Server) handleBeacon(c *gin.Context) {
 		// Encrypt response with ECDH session key
 		cipherB64, err := s.sessionManager.EncryptB64(req.UUID, respBytes)
 		if err != nil {
-			slog.Error("ECDH response encryption failed", "agent", req.UUID, "err", err)
+			slog.Error("ECDH response encryption failed", "agent_id", req.UUID, "err", err)
 			respondError(c, http.StatusInternalServerError, "encryption failed")
 			return
 		}
@@ -317,7 +325,7 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 	if isNewAgent {
 		hostname, username, ip := decodeBeaconIdentity(req.Info)
 		if strings.TrimSpace(hostname) == "" && strings.TrimSpace(ip) == "" {
-			slog.Warn("Rejected ghost agent registration", "uuid", req.UUID, "public_ip", publicIP)
+			slog.Warn("Rejected ghost agent registration", "agent_id", req.UUID, "public_ip", publicIP)
 			return db.Implant{}, false
 		}
 
@@ -358,9 +366,9 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 			}
 		}
 		if err := s.db.Create(&agent).Error; err != nil {
-			slog.Error("Failed to create agent", "id", agent.ID, "error", err)
+			slog.Error("Failed to create agent", "agent_id", agent.ID, "error", err)
 		}
-		slog.Info("New agent registered", "id", agent.ID, "hostname", agent.Hostname, "ip", agent.IP, "listener_id", agent.ListenerID)
+		slog.Info("New agent registered", "agent_id", agent.ID, "hostname", agent.Hostname, "ip", agent.IP, "listener_id", agent.ListenerID)
 		s.broadcastAgentOnline(agent, true)
 		s.recordAgentStatusEvent(agent.ID, "online")
 		s.eventManager.Emit(Event{
@@ -440,7 +448,7 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 			return tx.Where("id = ?", agent.ID).First(&agent).Error
 		})
 		if updateErr != nil {
-			slog.Error("Failed to update agent", "id", agent.ID, "error", updateErr)
+			slog.Error("Failed to update agent", "agent_id", agent.ID, "error", updateErr)
 			return agent, false
 		}
 		agent.LastSeen = now
@@ -457,7 +465,7 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 				Data:      map[string]interface{}{"new": false, "reconnected": true, "prev_status": prevStatus, "ip": agent.IP},
 			})
 		}
-		slog.Info("Beacon processed", "agent", req.UUID, "last_seen", now, "status", "online", "prev_status", prevStatus)
+		slog.Info("Beacon processed", "agent_id", req.UUID, "last_seen", now, "status", "online", "prev_status", prevStatus)
 	}
 
 	return agent, isNewAgent
@@ -478,13 +486,16 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 	var loadedTasks []db.Task
 	if len(taskIDs) > 0 {
 		if err := s.db.Where("id IN ? AND LOWER(agent_id) = LOWER(?)", taskIDs, uuid).Limit(len(taskIDs)).Find(&loadedTasks).Error; err != nil {
-			slog.Error("Failed to batch-load tasks", "agent", uuid, "error", err)
+			slog.Error("Failed to batch-load tasks", "agent_id", uuid, "error", err)
 		}
 	}
 	taskMap := make(map[uint]*db.Task, len(loadedTasks))
 	for i := range loadedTasks {
 		taskMap[loadedTasks[i].ID] = &loadedTasks[i]
 	}
+
+	var pendingAudit []auditEntry
+	defer func() { s.LogAuditRecords(nil, pendingAudit) }()
 
 	for _, r := range results {
 		if r.Type == "screen_frame" && r.Output != "" {
@@ -540,12 +551,12 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		}
 
 		if r.Type == "screenshot" && r.Output != "" {
-			slog.Info("Processing screenshot result", "agent_uuid", uuid, "task_id", r.TaskID)
+			slog.Info("Processing screenshot result", "agent_id", uuid, "task_id", r.TaskID)
 
 			if s.IsScreenMonitoring(uuid) {
 				task.Result = "[live screen monitoring - not retained]"
 				s.BroadcastScreenshot(uuid, r.Output)
-				slog.Info("Screen frame received (monitoring - not saved to file)", "agent", uuid)
+				slog.Info("Screen frame received (monitoring - not saved to file)", "agent_id", uuid)
 			} else {
 				// Keep as base64 so the frontend can directly use it in data: URL
 				task.Result = r.Output
@@ -587,7 +598,7 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			}
 			if len(sleepUpdates) > 0 {
 				if err := s.db.Model(&db.Implant{}).Where("id = ?", uuid).Updates(sleepUpdates).Error; err != nil {
-					slog.Error("Failed to update sleep settings on agent", "agent", uuid, "error", err)
+					slog.Error("Failed to update sleep settings on agent", "agent_id", uuid, "error", err)
 				} else {
 					s.broadcastAgentDataUpdate(uuid, sleepUpdates)
 				}
@@ -638,7 +649,7 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			task.Result = truncateString(task.Result, MaxResultSize)
 		}
 		if err := s.db.Save(task).Error; err != nil {
-			slog.Error("Failed to save task result", "task_id", task.ID, "agent", uuid, "type", r.Type, "error", err)
+			slog.Error("Failed to save task result", "task_id", task.ID, "agent_id", uuid, "type", r.Type, "error", err)
 		}
 		if !isSilent {
 			s.broadcastTaskUpdate(uuid, *task)
@@ -669,10 +680,10 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 				defer s.wg.Done()
 				defer func() {
 					if r := recover(); r != nil {
-						slog.Error("Plugin hook panicked", "agent", uuid, "recover", r)
+						slog.Error("Plugin hook panicked", "agent_id", uuid, "recover", r)
 					}
 				}()
-				ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+				ctx, cancel := context.WithTimeout(s.ctx, PluginHookTimeout)
 				defer cancel()
 				s.pluginManager.ExecuteHook(ctx, plugin.Event{
 					Type:      plugin.EventTaskCompleted,
@@ -699,7 +710,7 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 					defer s.wg.Done()
 					defer func() {
 						if r := recover(); r != nil {
-							slog.Error("Token result processor panicked", "agent", uuid, "recover", r)
+							slog.Error("Token result processor panicked", "agent_id", uuid, "recover", r)
 						}
 					}()
 					s.processTokenResult(uuid, r.Type, task.Result)
@@ -728,8 +739,7 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			if len(details) > AuditLogDetailsMaxLen {
 				details = details[:AuditLogDetailsMaxLen] + "..."
 			}
-			// c may be nil for TCP transport
-			s.LogAuditRecord(nil, "command_result", "agent", uuid, details, r.Error == "", nil)
+			pendingAudit = append(pendingAudit, auditEntry{action: "command_result", resource: "agent", agentID: uuid, details: details, success: r.Error == ""})
 		}
 
 		if r.Type == "upload" && r.Output != "" {
@@ -768,7 +778,7 @@ func (s *Server) processTaskAcknowledgements(agentID string, taskIDs []uint, now
 	if err := s.db.Model(&db.Task{}).
 		Where("id IN ? AND agent_id = ? AND status = ? AND acknowledged_at IS NULL", unique, agentID, "running").
 		Update("acknowledged_at", now).Error; err != nil {
-		slog.Error("Failed to acknowledge agent tasks", "agent", agentID, "count", len(unique), "error", err)
+		slog.Error("Failed to acknowledge agent tasks", "agent_id", agentID, "count", len(unique), "error", err)
 	}
 }
 
@@ -911,10 +921,10 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 		}
 		return tx.Where("id IN ?", ids).Order("priority DESC, created_at ASC").Find(&claimedTasks).Error
 	}); err != nil {
-		slog.Error("Failed to claim pending tasks", "agent", uuid, "error", err)
+		slog.Error("Failed to claim pending tasks", "agent_id", uuid, "error", err)
 	}
 
-	slog.Info("Beacon fetching pending tasks", "agent_uuid", uuid, "pending_count", len(claimedTasks))
+	slog.Info("Beacon fetching pending tasks", "agent_id", uuid, "pending_count", len(claimedTasks))
 
 	tasks := make([]task, len(claimedTasks))
 	for i, t := range claimedTasks {
@@ -1038,10 +1048,10 @@ func (s *Server) fireAgentConnectHook(agent db.Implant, isNew bool, now time.Tim
 		defer s.wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				slog.Error("Plugin hook panicked (agent connect)", "agent", agent.ID, "recover", r)
+				slog.Error("Plugin hook panicked (agent connect)", "agent_id", agent.ID, "recover", r)
 			}
 		}()
-		ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+		ctx, cancel := context.WithTimeout(s.ctx, PluginHookTimeout)
 		defer cancel()
 		s.pluginManager.ExecuteHook(ctx, plugin.Event{
 			Type:      plugin.EventAgentConnect,
@@ -1080,12 +1090,12 @@ func (s *Server) enforceKillDate(agent db.Implant, resp *beaconResponse, now tim
 	}
 	killTask, err := s.createTask(agent.ID, "kill", "", "", "", "", 0, 0)
 	if err != nil {
-		slog.Error("Failed to create kill task for expired agent", "agent", agent.ID, "error", err)
+		slog.Error("Failed to create kill task for expired agent", "agent_id", agent.ID, "error", err)
 		return
 	}
 	killTask.Status = "running"
 	if err := s.db.Save(killTask).Error; err != nil {
-		slog.Error("Failed to save kill task", "agent", agent.ID, "error", err)
+		slog.Error("Failed to save kill task", "agent_id", agent.ID, "error", err)
 		return
 	}
 	resp.Tasks = append(resp.Tasks, task{
@@ -1111,8 +1121,17 @@ func (s *Server) isDuplicateBeacon(req beaconRequest) bool {
 	}
 	s.beaconDedupMu.Lock()
 	defer s.beaconDedupMu.Unlock()
+	// Bounded cache: force eviction if too large (anti-memory-exhaustion)
+	if len(s.beaconDedupCache) > MaxBeaconDedupEntries {
+		now := time.Now()
+		for k, t := range s.beaconDedupCache {
+			if now.Sub(t) > BeaconDedupWindow {
+				delete(s.beaconDedupCache, k)
+			}
+		}
+	}
 	if t, ok := s.beaconDedupCache[fp]; ok {
-		if time.Since(t) < 5*time.Second {
+		if time.Since(t) < BeaconDedupWindow {
 			return true
 		}
 	}
@@ -1127,7 +1146,14 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 
 	// Dedup: skip recently processed identical beacons
 	if s.isDuplicateBeacon(req) {
-		slog.Warn("Duplicate beacon dropped", "agent", req.UUID)
+		slog.Warn("Duplicate beacon dropped", "agent_id", req.UUID)
+		return beaconResponse{}
+	}
+
+	// Reject agents with protocol versions below minimum supported
+	if req.ProtocolVersion > 0 && req.ProtocolVersion < protocol.MinSupportedProtocolVersion {
+		slog.Warn("Agent protocol version too old, rejecting",
+			"agent_id", req.UUID, "agent_pv", req.ProtocolVersion, "min_pv", protocol.MinSupportedProtocolVersion)
 		return beaconResponse{}
 	}
 
@@ -1147,7 +1173,7 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 			s.opsecAdaptive.RecordIntegrityFailure(agent.ID)
 		}
 		if agent.EnvHoneypot {
-			slog.Warn("Agent reports honeypot environment", "agent", agent.ID, "threat_score", agent.EnvThreatScore)
+			slog.Warn("Agent reports honeypot environment", "agent_id", agent.ID, "threat_score", agent.EnvThreatScore)
 			s.opsecAdaptive.RecordIntegrityFailure(agent.ID)
 		}
 	}
@@ -1187,7 +1213,7 @@ func (s *Server) saveScreenshot(dataDir, agentID string, taskID uint, b64Data st
 	}
 	dir := filepath.Join(dataDir, "screenshots", agentID)
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		slog.Error("Failed to create screenshots dir", "agent", agentID, "error", err)
+		slog.Error("Failed to create screenshots dir", "agent_id", agentID, "error", err)
 	}
 	data, err := base64.StdEncoding.DecodeString(b64Data)
 	if err != nil {
@@ -1195,7 +1221,7 @@ func (s *Server) saveScreenshot(dataDir, agentID string, taskID uint, b64Data st
 	}
 	filename := fmt.Sprintf("screenshot_%d_%d.png", taskID, time.Now().Unix())
 	if err := os.WriteFile(filepath.Join(dir, filename), data, 0600); err != nil {
-		slog.Error("failed to save screenshot", "file", filename, "error", err)
+		slog.Error("Failed to save screenshot", "file", filename, "error", err)
 	}
 }
 
@@ -1226,7 +1252,7 @@ func (s *Server) handleServeScreenshot(c *gin.Context) {
 func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefix string, resultPrefix string) bool {
 	uploadBase := filepath.Join(s.cfg.Server.DataDir, "uploads", uuid)
 	if err := os.MkdirAll(uploadBase, 0700); err != nil {
-		slog.Error("Failed to create uploads dir", "agent", uuid, "error", err)
+		slog.Error("Failed to create uploads dir", "agent_id", uuid, "error", err)
 	}
 	filename := r.Filename
 	if filename == "" {
@@ -1262,13 +1288,13 @@ func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefi
 		}
 		return true
 	}
+	defer f.Close()
 	off := r.Offset
 	if off == 0 {
 		off = task.Offset
 	}
 	if off > 0 {
 		if _, err := f.Seek(off, 0); err != nil {
-			f.Close()
 			task.Result = fmt.Sprintf("ERROR: seek failed: %v", err)
 			if len(task.Result) > MaxResultSize {
 				task.Result = truncateString(task.Result, MaxResultSize)
@@ -1280,7 +1306,6 @@ func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefi
 		}
 	}
 	if _, err := f.Write(decoded); err != nil {
-		f.Close()
 		task.Result = fmt.Sprintf("ERROR: write failed: %v", err)
 		if len(task.Result) > MaxResultSize {
 			task.Result = truncateString(task.Result, MaxResultSize)
@@ -1290,7 +1315,6 @@ func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefi
 		}
 		return true
 	}
-	f.Close()
 	task.Result = fmt.Sprintf("%s: %s offset %d (%d bytes)", resultPrefix, filename, off, r.Size)
 	if len(task.Result) > MaxResultSize {
 		task.Result = truncateString(task.Result, MaxResultSize)
@@ -1298,7 +1322,7 @@ func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefi
 	if err := s.db.Save(task).Error; err != nil {
 		slog.Error("Failed to save "+logPrefix+" success", "task_id", task.ID, "error", err)
 	}
-	slog.Info("File chunk "+logPrefix, "agent", uuid, "file", filename, "offset", off, "size", r.Size)
+	slog.Info("File chunk "+logPrefix, "agent_id", uuid, "file", filename, "offset", off, "size", r.Size)
 	return false
 }
 
@@ -1306,7 +1330,7 @@ func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefi
 // autoSwitchSleepMask rotates to a different sleep mask variant when integrity failure is detected.
 // Output format: "sleep_mask_integrity_failure: mask=<name> page=<idx>"
 func (s *Server) autoSwitchSleepMask(agentID string, output string) {
-	slog.Error("Sleep mask integrity failure — auto-switching variant", "agent", agentID, "output", output)
+	slog.Error("Sleep mask integrity failure — auto-switching variant", "agent_id", agentID, "output", output)
 
 	// Parse the current mask name from the alert output
 	currentMask := ""
@@ -1335,19 +1359,19 @@ func (s *Server) autoSwitchSleepMask(agentID string, output string) {
 	// Create a set_sleep_mask task for the agent with high priority
 	t, err := s.createTask(agentID, "set_sleep_mask", nextMask, "", "", "", 0, 0)
 	if err != nil {
-		slog.Error("Failed to create auto-switch sleep mask task", "agent", agentID, "error", err)
+		slog.Error("Failed to create auto-switch sleep mask task", "agent_id", agentID, "error", err)
 		return
 	}
 	t.Priority = 2
 	if err := s.db.Save(t).Error; err != nil {
-		slog.Error("Failed to save auto-switch sleep mask task", "agent", agentID, "error", err)
+		slog.Error("Failed to save auto-switch sleep mask task", "agent_id", agentID, "error", err)
 		return
 	}
 
 	s.LogAuditRecord(nil, "auto_switch_sleep_mask", "agent", agentID,
 		fmt.Sprintf("Auto-switched sleep mask from %s to %s due to integrity failure", currentMask, nextMask), true, nil)
 
-	slog.Warn("Auto-switched sleep mask", "agent", agentID, "from", currentMask, "to", nextMask)
+	slog.Warn("Auto-switched sleep mask", "agent_id", agentID, "from", currentMask, "to", nextMask)
 }
 
 // forceKeyRotation marks a key_rotate task as completed and rotates the ECDH key pair.
@@ -1363,9 +1387,9 @@ func (s *Server) forceKeyRotation(agentID string, taskID uint) {
 			"result":     "ECDH key pair rotated",
 			"updated_at": time.Now(),
 		}).Error; err != nil {
-		slog.Error("Failed to mark key_rotate task completed", "agent", agentID, "error", err)
+		slog.Error("Failed to mark key_rotate task completed", "agent_id", agentID, "error", err)
 	}
-	slog.Info("Forced ECDH key rotation for agent", "agent", agentID)
+	slog.Info("Forced ECDH key rotation for agent", "agent_id", agentID)
 }
 
 // Returns empty string if the path escapes the base directory.

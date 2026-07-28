@@ -36,9 +36,7 @@ func (s *Server) renderLoginPage(c *gin.Context, data gin.H) {
 }
 
 func (s *Server) renderLoginError(c *gin.Context, errMsg, lastUsername string, rememberMe bool) {
-	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-		"error": errMsg,
-	})
+	respondError(c, http.StatusUnauthorized, errMsg)
 }
 
 func (s *Server) handleLogin(c *gin.Context) {
@@ -146,6 +144,7 @@ func (s *Server) handleLogin(c *gin.Context) {
 			if err := s.db.Where("user_id = ? AND used = false", user.ID).Find(&codes).Error; err != nil || len(codes) == 0 {
 				slog.Warn("Login failed: no unused backup codes", "username", username, "ip", c.ClientIP())
 				s.LogAuditRecord(c, "login_failed", "auth", username, "No unused backup codes", false, nil)
+				s.recordLoginFailure(clientIP, username)
 				s.renderLoginError(c, "Invalid two-factor authentication code", username, rememberMe)
 				return
 			}
@@ -160,6 +159,14 @@ func (s *Server) handleLogin(c *gin.Context) {
 			if !matched {
 				slog.Warn("Login failed: invalid backup code", "username", username, "ip", c.ClientIP())
 				s.LogAuditRecord(c, "login_failed", "auth", username, "Invalid backup code", false, nil)
+				if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
+					s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
+					return
+				}
+				if locked, retryAfter := s.recordAccountLoginFailure(username); locked {
+					s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter), username, rememberMe)
+					return
+				}
 				s.renderLoginError(c, "Invalid two-factor authentication code", username, rememberMe)
 				return
 			}
@@ -199,7 +206,7 @@ func (s *Server) handleLogin(c *gin.Context) {
 	var csrfBuf [32]byte
 	if _, err := rand.Read(csrfBuf[:]); err != nil {
 		slog.Error("Failed to generate CSRF token", "err", err)
-		respondError(c, http.StatusInternalServerError, "Failed to generate security token")
+		respondError(c, http.StatusInternalServerError, "failed to generate security token")
 		return
 	}
 	csrfToken := hex.EncodeToString(csrfBuf[:])

@@ -113,7 +113,7 @@ func (s *Server) handleContainerDetect(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Container detect requested", "agent", id)
+	slog.Info("Container detect requested", "agent_id", id)
 	s.dispatchTask(c, task, "container_detect", "detect container environment")
 }
 
@@ -129,7 +129,7 @@ func (s *Server) handleContainerEscape(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Container escape requested", "agent", id)
+	slog.Info("Container escape requested", "agent_id", id)
 	s.dispatchTask(c, task, "container_escape", "generic container escape")
 }
 
@@ -145,7 +145,7 @@ func (s *Server) handleContainerDocker(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Container Docker escape requested", "agent", id)
+	slog.Info("Container Docker escape requested", "agent_id", id)
 	s.dispatchTask(c, task, "container_docker", "docker socket escape")
 }
 
@@ -161,6 +161,6 @@ func (s *Server) handleContainerK8s(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Container K8s escape requested", "agent", id)
+	slog.Info("Container K8s escape requested", "agent_id", id)
 	s.dispatchTask(c, task, "container_k8s", "kubernetes service account abuse")
 }

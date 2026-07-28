@@ -41,7 +41,7 @@ func (s *Server) handleAgents(c *gin.Context) {
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to count agents")
+		respondError(c, http.StatusInternalServerError, "failed to count agents")
 		return
 	}
 
@@ -81,7 +81,7 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 	id := c.Param("id")
 	var agent db.Implant
 	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "Agent not found")
+		respondError(c, http.StatusNotFound, "agent not found")
 		return
 	}
 
@@ -234,14 +234,14 @@ func (s *Server) handleListAgentScreenshots(c *gin.Context) {
 	id := c.Param("id")
 	var agent db.Implant
 	if err := s.db.Select("id").First(&agent, "id = ?", id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "Agent not found")
+		respondError(c, http.StatusNotFound, "agent not found")
 		return
 	}
 
 	screenshots, err := s.listAgentScreenshots(id)
 	if err != nil {
 		slog.Error("Failed to list agent screenshots", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "Failed to list screenshots")
+		respondError(c, http.StatusInternalServerError, "failed to list screenshots")
 		return
 	}
 
@@ -278,7 +278,7 @@ func (s *Server) handleKillAgent(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Kill task created", "agent", id)
+	slog.Info("Kill task created", "agent_id", id)
 	s.LogAuditRecord(c, "kill_agent", "agent", id, "kill command", true, nil)
 	s.broadcastTaskUpdate(id, *task)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "message": "Kill command sent. Agent will exit on next beacon."})
@@ -330,7 +330,7 @@ func (s *Server) handleDeleteAgent(c *gin.Context) {
 	id := c.Param("id")
 	var agent db.Implant
 	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "Agent not found")
+		respondError(c, http.StatusNotFound, "agent not found")
 		return
 	}
 	s.LogAuditRecord(c, "agent_delete", "agent", id, fmt.Sprintf("Deleted agent %s", agent.Hostname), true, nil)
@@ -338,7 +338,7 @@ func (s *Server) handleDeleteAgent(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to delete agent")
 		return
 	}
-	slog.Warn("Agent deleted", "id", id)
+	slog.Warn("Agent deleted", "agent_id", id)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -407,7 +407,7 @@ func (s *Server) handleListAgents(c *gin.Context) {
 	offset := (page - 1) * pageSize
 	if err := s.db.Order("hostname asc").Offset(offset).Limit(pageSize).Find(&agents).Error; err != nil {
 		slog.Error("Failed to list agents", "error", err)
-		respondError(c, http.StatusInternalServerError, "Failed to list agents")
+		respondError(c, http.StatusInternalServerError, "failed to list agents")
 		return
 	}
 	type agentBrief struct {
@@ -440,7 +440,7 @@ func (s *Server) handleListUnlinkedAgents(c *gin.Context) {
 	var agents []db.Implant
 	if err := s.db.Where("parent_id = '' OR parent_id IS NULL").Order("hostname asc").Limit(500).Find(&agents).Error; err != nil {
 		slog.Error("Failed to list unlinked agents", "error", err)
-		respondError(c, http.StatusInternalServerError, "Failed to list agents")
+		respondError(c, http.StatusInternalServerError, "failed to list agents")
 		return
 	}
 	c.JSON(http.StatusOK, agents)

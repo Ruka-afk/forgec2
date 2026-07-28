@@ -110,7 +110,7 @@ func (s *Server) handleTokenListProcs(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Token list procs requested", "agent", id)
+	slog.Info("Token list procs requested", "agent_id", id)
 	s.dispatchTask(c, task, "token_list_procs", "list process tokens")
 }
 
@@ -141,7 +141,7 @@ func (s *Server) handleTokenSteal(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Token steal requested", "agent", id, "pid", pidStr)
+	slog.Info("Token steal requested", "agent_id", id, "pid", pidStr)
 	s.LogAuditRecord(c, "token_steal", "agent", id, fmt.Sprintf("steal token from pid %s", pidStr), true, nil)
 	s.broadcastTaskUpdate(id, *task)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
@@ -175,7 +175,7 @@ func (s *Server) handleTokenMake(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Token make requested", "agent", id, "user", domUser)
+	slog.Info("Token make requested", "agent_id", id, "user", domUser)
 	s.LogAuditRecord(c, "token_make", "agent", id, fmt.Sprintf("make_token for %s (logon: %s)", domUser, logonType), true, nil)
 	s.broadcastTaskUpdate(id, *task)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
@@ -201,7 +201,7 @@ func (s *Server) handleTokenRevert(c *gin.Context) {
 		slog.Error("Failed to deactivate tokens for revert", "agent_id", id, "err", err)
 	}
 
-	slog.Info("Token revert (rev2self) requested", "agent", id)
+	slog.Info("Token revert (rev2self) requested", "agent_id", id)
 	s.LogAuditRecord(c, "token_revert", "agent", id, "rev2self", true, nil)
 	s.broadcastTaskUpdate(id, *task)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
@@ -282,7 +282,7 @@ func (s *Server) handleTokenImpersonate(c *gin.Context) {
 		return
 	}
 
-	slog.Info("Token re-impersonate requested", "agent", id, "pid", entry.PID, "user", entry.Username)
+	slog.Info("Token re-impersonate requested", "agent_id", id, "pid", entry.PID, "user", entry.Username)
 	s.LogAuditRecord(c, "token_impersonate", "agent", id, fmt.Sprintf("re-impersonate %s\\%s (pid %d)", entry.Domain, entry.Username, entry.PID), true, nil)
 	s.broadcastTaskUpdate(id, *task)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
@@ -333,7 +333,7 @@ func (s *Server) processTokenResult(agentID string, taskType string, output stri
 			slog.Error("Failed to save stolen token", "agent_id", agentID, "err", err)
 			return
 		}
-		slog.Info("Token stolen and saved", "agent", agentID, "user", m["domain"]+"\\"+m["username"])
+		slog.Info("Token stolen and saved", "agent_id", agentID, "user", m["domain"]+"\\"+m["username"])
 
 	case "token_make":
 		var m map[string]string
@@ -362,7 +362,7 @@ func (s *Server) processTokenResult(agentID string, taskType string, output stri
 			slog.Error("Failed to save made token", "agent_id", agentID, "err", err)
 			return
 		}
-		slog.Info("Token made and saved", "agent", agentID, "user", m["domain"]+"\\"+m["username"])
+		slog.Info("Token made and saved", "agent_id", agentID, "user", m["domain"]+"\\"+m["username"])
 
 	case "token_revert", "rev2self":
 		// mark all inactive

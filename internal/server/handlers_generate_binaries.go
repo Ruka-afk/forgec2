@@ -46,6 +46,7 @@ type binaryGenForm struct {
 	SSHPassword     string `form:"ssh_password"`
 	SSHKey          string `form:"ssh_key"`
 	SSHHostKey      string `form:"ssh_host_key"` // base64 server host public key pin
+	PinnedCertSHA256 string `form:"pinned_cert_sha256"`
 }
 
 // parseBinaryForm validates a binary generation request and returns the resolved form.
@@ -160,6 +161,7 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) payload.ImplantConfig {
 		SSHPassword:     form.SSHPassword,
 		SSHKey:          form.SSHKey,
 		SSHHostKey:      hostKey,
+		PinnedCertSHA256: form.PinnedCertSHA256,
 	}
 }
 

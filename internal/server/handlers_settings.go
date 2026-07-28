@@ -286,9 +286,9 @@ func (s *Server) handleChangePassword(c *gin.Context) {
 
 	var count int64
 	s.db.Model(&db.PasswordHistory{}).Where("user_id = ?", user.ID).Count(&count)
-	if count > 10 {
+	if count > PasswordHistoryMax {
 		var oldest []db.PasswordHistory
-		s.db.Where("user_id = ?", user.ID).Order("created_at ASC").Limit(int(count - 10)).Find(&oldest)
+		s.db.Where("user_id = ?", user.ID).Order("created_at ASC").Limit(int(count - PasswordHistoryMax)).Find(&oldest)
 		ids := make([]uint, len(oldest))
 		for i, h := range oldest {
 			ids[i] = h.ID
@@ -445,7 +445,10 @@ func (s *Server) handleRegenerateJWT(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "Failed to save config")
 		return
 	}
-	middleware.InitJWTSecret(s.cfg, s.configPath)
+	if err := middleware.InitJWTSecret(s.cfg, s.configPath); err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to reinitialize JWT secret")
+		return
+	}
 
 	var users []db.User
 	s.db.Where("totp_secret != ''").Limit(500).Find(&users)
