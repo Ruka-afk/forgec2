@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -14,10 +15,14 @@ import (
 // collaboration lock owner (if any). Used by the agents page to show locks.
 func (s *Server) handleCollabAgents(c *gin.Context) {
 	var agents []db.Implant
-	s.db.Select("id").Order("last_seen desc").Limit(5000).Find(&agents)
+	if err := s.db.Select("id").Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
+		slog.Error("Failed to query collab agents", "err", err)
+	}
 
 	var locks []db.AgentLock
-	s.db.Limit(1000).Find(&locks)
+	if err := s.db.Limit(1000).Find(&locks).Error; err != nil {
+		slog.Error("Failed to query collab locks", "err", err)
+	}
 	lockMap := make(map[string]string, len(locks))
 	for _, l := range locks {
 		lockMap[l.AgentID] = l.LockedBy

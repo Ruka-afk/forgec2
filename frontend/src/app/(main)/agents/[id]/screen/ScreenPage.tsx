@@ -104,70 +104,31 @@ interface ScreenshotItem {
     setStatus("capturing");
     setMonitoringStatus("capturing");
     try {
-      const data = await api.post<{image?: string; data?: string; screenshot?: string; width?: number; height?: number; window_name?: string}>(`/agents/${id}/screenshot`, {});
-      const imgData = data.image || data.data || data.screenshot || "";
-      const width = data.width || 0;
-      const height = data.height || 0;
-      if (imgData) {
-        const fullData = imgData.startsWith("data:") ? imgData : `data:image/png;base64,${imgData}`;
-        setScreenshot(fullData);
-        setLastUpdate(new Date().toLocaleTimeString());
-        setStatus("waiting");
-        setMonitoringStatus("connected");
-        if (width && height) setResolution({ width, height });
-        const galleryItem: ScreenshotItem = {
-          id: String(++galleryIdRef.current),
-          data: fullData,
-          timestamp: new Date().toLocaleTimeString(),
-          width,
-          height,
-          window_name: data.window_name || "Desktop",
-        };
-        setScreenshotGallery(prev => [galleryItem, ...prev].slice(0, 50));
-        toast.success(t("agents.screen_capture"));
-      } else {
-        setStatus("error");
-        setMonitoringStatus("offline");
-        toast.error(t("agents.screen_capture_failed"));
-      }
-    } catch (err) {      setStatus("error");
+      await api.post<{ success?: boolean }>(`/agents/${id}/screenshot`, {});
+      toast.success(t("agents.screen_capture"));
+      await new Promise((r) => setTimeout(r, 900));
+      await captureScreenshot();
+    } catch (err) {
+      setStatus("error");
       setMonitoringStatus("offline");
       toast.error(String(err));
-    }  };
+    }
+  };
 
   const handleWindowScreenshot = async () => {
     if (!id) return;
     setStatus("capturing");
     setMonitoringStatus("capturing");
-    try {      const data = await api.post<{image?: string; data?: string; screenshot?: string; width?: number; height?: number; window_name?: string}>(`/agents/${id}/screenshot_window`, {});
-      const imgData = data.image || data.data || data.screenshot || "";
-      const width = data.width || 0;
-      const height = data.height || 0;
-      if (imgData) {
-        const fullData = imgData.startsWith("data:") ? imgData : `data:image/png;base64,${imgData}`;
-        setScreenshot(fullData);
-        setLastUpdate(new Date().toLocaleTimeString());
-        setStatus("waiting");
-        setMonitoringStatus("connected");
-        if (width && height) setResolution({ width, height });
-        const galleryItem: ScreenshotItem = {
-          id: String(++galleryIdRef.current),
-          data: fullData,
-          timestamp: new Date().toLocaleTimeString(),
-          width,
-          height,
-          window_name: data.window_name || "Window Capture",
-        };
-        setScreenshotGallery(prev => [galleryItem, ...prev].slice(0, 50));
-        toast.success(t("agents.screen_window_capture"));
-      } else {
-        setStatus("error");
-        setMonitoringStatus("offline");
-        toast.error(t("agents.screen_capture_failed"));
-      }
-    } catch (err) {      setStatus("error");
+    try {
+      await api.post<{ success?: boolean }>(`/agents/${id}/screenshot_window`, {});
+      toast.success(t("agents.screen_window_capture"));
+      await new Promise((r) => setTimeout(r, 900));
+      await captureScreenshot();
+    } catch (err) {
+      setStatus("error");
       setMonitoringStatus("offline");
-      toast.error(String(err));    }
+      toast.error(String(err));
+    }
   };
 
   const handleDownloadScreenshot = (imgSrc?: string, filename?: string) => {
@@ -241,8 +202,6 @@ interface ScreenshotItem {
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <div className="flex flex-col h-[calc(100vh-4rem)]">        <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
           <div className="flex items-center gap-3">
-            <Link href={`/agents/${id}`} className="text-muted-foreground/70 hover:text-foreground transition-colors">              <ArrowLeft className="w-4 h-4" />
-            </Link>
             <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
               <Monitor className="w-4 h-4" />
               {t("agents.screen_title")}

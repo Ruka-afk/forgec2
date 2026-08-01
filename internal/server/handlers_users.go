@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -15,7 +16,9 @@ import (
 // handleUsersPage shows user management
 func (s *Server) handleUsersPage(c *gin.Context) {
 	var users []db.User
-	s.db.Order("created_at desc").Find(&users)
+	if err := s.db.Order("created_at desc").Limit(1000).Find(&users).Error; err != nil {
+		slog.Error("Failed to list users", "err", err)
+	}
 
 	stats := s.getNavStats()
 	data := gin.H{
@@ -80,7 +83,8 @@ func (s *Server) handleAddUser(c *gin.Context) {
 	}
 
 	currentUser, _ := c.Get("user")
-	s.LogAuditRecord(c, "user_create", "auth", currentUser.(string),
+	usernameCU, _ := currentUser.(string)
+	s.LogAuditRecord(c, "user_create", "auth", usernameCU,
 		fmt.Sprintf("Created user %s with role %s", username, role), true, nil)
 	slog.Info("User created", "username", username, "role", role, "user", currentUser)
 
@@ -97,34 +101,32 @@ func (s *Server) handleToggleUser(c *gin.Context) {
 
 	currentUser, _ := c.Get("user")
 
+	// Only admins can toggle users
+	if !s.requireAdmin(c) {
+		return
+	}
 	// Prevent disabling yourself
 	if currentUser == user.Username {
 		respondError(c, http.StatusBadRequest, "Cannot disable your own account")
 		return
 	}
-	// Only admins can toggle users
-	if !s.requireAdmin(c) {
-		return
-	}
 
-	if err := s.db.Model(&user).Update("is_active", !user.IsActive).Error; err != nil {
+	if err := s.db.Model(&user).Update("is_active", gorm.Expr("NOT is_active")).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to toggle user")
 		return
 	}
+	user.IsActive = !user.IsActive
 	status := "enabled"
 	if !user.IsActive {
 		status = "disabled"
 	}
-	s.LogAuditRecord(c, "user_toggle", "auth", currentUser.(string),
+	usernameTU, _ := currentUser.(string)
+	s.LogAuditRecord(c, "user_toggle", "auth", usernameTU,
 		fmt.Sprintf("%s account %s", status, user.Username), true, nil)
 	slog.Info("User toggled", "username", user.Username, "active", !user.IsActive)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("User %s", status)})
 }
-func (s *Server) handleKickUser(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Kick functionality removed"})
-}
-
 // handleEditUser updates username/role (admin only)
 func (s *Server) handleEditUser(c *gin.Context) {
 	idStr := c.Param("id")
@@ -172,7 +174,8 @@ func (s *Server) handleEditUser(c *gin.Context) {
 		return
 	}
 	currentUser, _ := c.Get("user")
-	s.LogAuditRecord(c, "user_edit", "auth", currentUser.(string),
+	usernameEU, _ := currentUser.(string)
+	s.LogAuditRecord(c, "user_edit", "auth", usernameEU,
 		fmt.Sprintf("Edited user %s: %v", user.Username, updates), true, nil)
 	slog.Info("User edited", "user_id", idStr, "updates", updates, "user", currentUser)
 
@@ -204,7 +207,8 @@ func (s *Server) handleForceLogoutUser(c *gin.Context) {
 		return
 	}
 
-	s.LogAuditRecord(c, "user_force_logout", "auth", currentUser.(string),
+	usernameFL, _ := currentUser.(string)
+	s.LogAuditRecord(c, "user_force_logout", "auth", usernameFL,
 		fmt.Sprintf("Force logged out user %s", target.Username), true, nil)
 	slog.Info("User force logged out", "username", target.Username, "user", currentUser)
 
@@ -238,6 +242,26 @@ func (s *Server) handleDeleteUser(c *gin.Context) {
 		return
 	}
 
+	// Clean up associated data
+	if err := tx.Where("user_id = ?", user.ID).Delete(&db.UserSession{}).Error; err != nil {
+		tx.Rollback()
+		slog.Error("Failed to clean up user sessions", "user_id", user.ID, "err", err)
+		respondError(c, http.StatusInternalServerError, "Failed to clean up user sessions")
+		return
+	}
+	if err := tx.Where("user_id = ?", user.ID).Delete(&db.BackupCode{}).Error; err != nil {
+		tx.Rollback()
+		slog.Error("Failed to clean up backup codes", "user_id", user.ID, "err", err)
+		respondError(c, http.StatusInternalServerError, "Failed to clean up backup codes")
+		return
+	}
+	if err := tx.Where("user_id = ?", user.ID).Delete(&db.ApiKey{}).Error; err != nil {
+		tx.Rollback()
+		slog.Error("Failed to clean up API keys", "user_id", user.ID, "err", err)
+		respondError(c, http.StatusInternalServerError, "Failed to clean up API keys")
+		return
+	}
+
 	// Delete the user
 	if err := tx.Delete(&user).Error; err != nil {
 		tx.Rollback()
@@ -246,11 +270,13 @@ func (s *Server) handleDeleteUser(c *gin.Context) {
 	}
 
 	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
 		respondError(c, http.StatusInternalServerError, "Failed to commit transaction")
 		return
 	}
 
-	s.LogAuditRecord(c, "user_delete", "auth", currentUser.(string),
+	usernameDU, _ := currentUser.(string)
+	s.LogAuditRecord(c, "user_delete", "auth", usernameDU,
 		fmt.Sprintf("Deleted user %s", user.Username), true, nil)
 	slog.Info("User deleted", "username", user.Username, "user", currentUser)
 
@@ -276,7 +302,12 @@ func (s *Server) handleSetUserPassword(c *gin.Context) {
 		return
 	}
 
-	result := s.db.Model(&db.User{}).Where("id = ?", idStr).Update("password_hash", hash)
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "invalid user ID")
+		return
+	}
+	result := s.db.Model(&db.User{}).Where("id = ?", id).Update("password_hash", hash)
 	if result.Error != nil {
 		respondError(c, http.StatusInternalServerError, "Database error")
 		return
@@ -285,6 +316,12 @@ func (s *Server) handleSetUserPassword(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "User not found")
 		return
 	}
+
+	s.revokeAllUserSessions(uint(id))
+	currentUser, _ := c.Get("user")
+	usernameSU, _ := currentUser.(string)
+	s.LogAuditRecord(c, "user_password_set", "auth", usernameSU,
+		fmt.Sprintf("Set password for user ID %d", id), true, nil)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Password updated"})
 }

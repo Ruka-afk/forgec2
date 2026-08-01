@@ -12,10 +12,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Check, ChevronLeft, ChevronRight, Download, Images, Minus, Pause, Play, Plus, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Images, Minus, Pause, Play, Plus, Trash2, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Screenshot, Resolution } from "@/types/screenshot";
+import { ScreenshotCard } from "./_components/ScreenshotCard";
 
 const PAGE_SIZE = 24;
 
@@ -42,6 +43,7 @@ export default function ScreenshotsPage() {
       setScreenshots((result.screenshots || []) as Screenshot[]);
     } catch {
       setScreenshots([]);
+      toast.error(t("screenshots.load_failed"));
     }
     setLoading(false);
   }, []);
@@ -102,14 +104,14 @@ export default function ScreenshotsPage() {
     };
   }, [slideshow, lbImages.length]);
 
-  const toggleSelect = (id: string) => {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  };
+  }, []);
 
   const toggleSelectAll = () => {
     const allSelected = currentItems.every(s => selectedIds.has(s.id));
@@ -138,12 +140,12 @@ export default function ScreenshotsPage() {
     });
   };
 
-  const handleResolution = (id: string, w: number, h: number) => {
+  const handleResolution = useCallback((id: string, w: number, h: number) => {
     setResolutions(prev => {
       if (prev[id]) return prev;
       return { ...prev, [id]: { w, h } };
     });
-  };
+  }, []);
 
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
@@ -170,7 +172,7 @@ export default function ScreenshotsPage() {
               onClick={deleteSelected}
               className="gap-2"
             >
-              <Trash2 className="w-4 h-4" /><span>{t("screenshots.delete")} ({selectedIds.size})</span>
+              <Trash2 aria-hidden="true" className="w-4 h-4" /><span>{t("screenshots.delete")} ({selectedIds.size})</span>
             </Button>
           )}
         </div>
@@ -198,47 +200,15 @@ export default function ScreenshotsPage() {
             {currentItems.map(s => {
               const globalIdx = filtered.indexOf(s);
               return (
-                <div
+                <ScreenshotCard
                   key={s.id}
-                  className={`group relative rounded-xl overflow-hidden border-2 cursor-pointer bg-muted transition-all hover:shadow-lg dark:hover:shadow-black/30 ${
-                    selectedIds.has(s.id)
-                      ? "border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-800"
-                      : "border-border"
-                  }`}
-                  onClick={() => {
-                    setLbIndex(globalIdx);
-                    setZoom(1);
-                    setSlideshow(false);
-                    setLbOpen(true);
-                  }}
-                >
-                  <div className="absolute top-1.5 left-1.5 z-10" onClick={e => { e.stopPropagation(); toggleSelect(s.id); }}>
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                      selectedIds.has(s.id)
-                        ? "bg-indigo-500 border-indigo-500"
-                        : "bg-secondary/90 border-border"
-                    }`}>
-                      {selectedIds.has(s.id) && <Check className="w-4 h-4" />}
-                    </div>
-                  </div>
-                  <img
-                    src={`/screenshots/${s.path}`}
-                    alt={s.filename}
-                    className="w-full h-28 object-contain bg-card"
-                    loading="lazy"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    onLoad={e => {
-                      const img = e.currentTarget;
-                      if (img.naturalWidth) handleResolution(s.id, img.naturalWidth, img.naturalHeight);
-                    }}
-                  />
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-(--font-size-micro-sm) text-white px-2 py-1 opacity-0 group-hover:opacity-100 transition flex justify-between items-center">
-                    <span className="truncate">{s.agent_id.substring(0, 8)}</span>
-                    <a href={`/screenshots/${s.path}`} download onClick={e => e.stopPropagation()} className="hover:text-emerald-300 px-1 transition-colors">
-                      <Download className="w-4 h-4" />
-                    </a>
-                  </div>
-                </div>
+                  screenshot={s}
+                  isSelected={selectedIds.has(s.id)}
+                  index={globalIdx}
+                  onToggleSelect={toggleSelect}
+                  onOpen={(idx) => { setLbIndex(idx); setZoom(1); setSlideshow(false); setLbOpen(true); }}
+                  onResolution={handleResolution}
+                />
               );
             })}
           </div>
@@ -263,35 +233,35 @@ export default function ScreenshotsPage() {
               </div>
               <div className="flex items-center gap-1">
                 <Tooltip>
-                  <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => setZoom(z => Math.max(0.25, z - 0.25))} className="text-white/70 hover:text-white hover:bg-white/10" aria-label={t("screenshots.lightbox_zoom_out")} />}>
-                    <Minus className="w-4 h-4" />
+                  <TooltipTrigger render={                    <Button variant="ghost" size="icon-sm" onClick={() => setZoom(z => Math.max(0.25, z - 0.25))} className="text-white/70 hover:text-white hover:bg-white/10" aria-label={t("screenshots.lightbox_zoom_out")} />}>
+                    <Minus aria-hidden="true" className="w-4 h-4" />
                   </TooltipTrigger>
                   <TooltipContent>{t("screenshots.lightbox_zoom_out")}</TooltipContent>
                 </Tooltip>
                 <span className="text-xs text-white/60 w-10 text-center">{Math.round(zoom * 100)}%</span>
                 <Tooltip>
-                  <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => setZoom(z => Math.min(5, z + 0.25))} className="text-white/70 hover:text-white hover:bg-white/10" aria-label={t("screenshots.lightbox_zoom_in")} />}>
-                    <Plus className="w-4 h-4" />
+                  <TooltipTrigger render={                    <Button variant="ghost" size="icon-sm" onClick={() => setZoom(z => Math.min(5, z + 0.25))} className="text-white/70 hover:text-white hover:bg-white/10" aria-label={t("screenshots.lightbox_zoom_in")} />}>
+                    <Plus aria-hidden="true" className="w-4 h-4" />
                   </TooltipTrigger>
                   <TooltipContent>{t("screenshots.lightbox_zoom_in")}</TooltipContent>
                 </Tooltip>
                 <div className="w-px h-5 bg-secondary/70 mx-1" />
                 <Tooltip>
                   <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => setSlideshow(s => !s)} className={`${slideshow ? "text-emerald-400" : "text-white/70 hover:text-white hover:bg-white/10"}`} aria-label={t("screenshots.lightbox_slideshow")} />}>
-                    {slideshow ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    {slideshow ? <Pause aria-hidden="true" className="w-4 h-4" /> : <Play aria-hidden="true" className="w-4 h-4" />}
                   </TooltipTrigger>
                   <TooltipContent>{t("screenshots.lightbox_slideshow")}</TooltipContent>
                 </Tooltip>
                 <Tooltip>
-                  <TooltipTrigger render={<a href={current.url} download className="inline-flex size-7 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm" />}>
-                    <Download className="w-4 h-4" />
+                  <TooltipTrigger render={<a href={current.url} download aria-label={t("screenshots.lightbox_download")} className="inline-flex size-7 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm" />}>
+                    <Download aria-hidden="true" className="w-4 h-4" />
                   </TooltipTrigger>
                   <TooltipContent>{t("screenshots.lightbox_download")}</TooltipContent>
                 </Tooltip>
                 <div className="w-px h-5 bg-secondary/70 mx-1" />
                 <Tooltip>
                   <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => setLbOpen(false)} className="text-white/70 hover:text-white hover:bg-white/10" aria-label={t("common.close")} />}>
-                    <X className="w-4 h-4" />
+                    <X aria-hidden="true" className="w-4 h-4" />
                   </TooltipTrigger>
                   <TooltipContent>{t("screenshots.lightbox_close")}</TooltipContent>
                 </Tooltip>
@@ -301,12 +271,12 @@ export default function ScreenshotsPage() {
             <div className="flex-1 flex items-center justify-center relative overflow-hidden">
               {lbIndex > 0 && (
                 <Button variant="ghost" size="icon" onClick={goPrev} className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 text-white/80 hover:text-white hover:bg-white/10 rounded-full" aria-label={t("screenshots.lightbox_previous")}>
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft aria-hidden="true" className="w-4 h-4" />
                 </Button>
               )}
               {lbIndex < lbImages.length - 1 && (
                 <Button variant="ghost" size="icon" onClick={goNext} className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 text-white/80 hover:text-white hover:bg-white/10 rounded-full" aria-label={t("screenshots.lightbox_next")}>
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight aria-hidden="true" className="w-4 h-4" />
                 </Button>
               )}
               <img

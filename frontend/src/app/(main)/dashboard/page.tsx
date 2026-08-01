@@ -33,8 +33,8 @@ function AuditStrip() {
   const [logs, setLogs] = useState<{ action?: string; username?: string; created_at?: string; details?: string }[]>([]);
   useEffect(() => {
     const controller = new AbortController();
-    api.get<{ success?: boolean; data?: { action?: string; username?: string; created_at?: string; details?: string }[]; logs?: { action?: string; username?: string; created_at?: string; details?: string }[] }>("/audit/logs?page=1&pageSize=6", { signal: controller.signal })
-      .then((d) => setLogs(d.data || d.logs || []))
+    api.get<{ logs?: { action?: string; username?: string; created_at?: string; details?: string }[] }>("/audit/logs?page=1&pageSize=6", { signal: controller.signal })
+      .then((d) => setLogs(d.logs || []))
       .catch(() => setLogs([]));
     return () => controller.abort();
   }, []);
@@ -163,7 +163,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded" />}>
+      <Suspense fallback={<Skeleton className="h-64 w-full rounded-md" />}>
         {/* Charts Row 1 */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-5">
           <ChartCard title={t("dashboard.heatmap")} icon={Calendar} iconColor="text-emerald-500 dark:text-emerald-400" exportFilename="activity-heatmap.png" className="animate-fade-slide-up"><LazyHeatmapGrid /></ChartCard>

@@ -273,17 +273,26 @@ func decryptField(val *string) error {
 
 // BeforeCreate encrypts sensitive fields before inserting into the database.
 func (c *CredentialEntry) BeforeCreate(tx *gorm.DB) error {
-	return encryptField(&c.Password)
+	if err := encryptField(&c.Password); err != nil {
+		return err
+	}
+	return encryptField(&c.Hash)
 }
 
 // AfterFind decrypts sensitive fields after loading from the database.
 func (c *CredentialEntry) AfterFind(tx *gorm.DB) error {
-	return decryptField(&c.Password)
+	if err := decryptField(&c.Password); err != nil {
+		return err
+	}
+	return decryptField(&c.Hash)
 }
 
 // BeforeUpdate encrypts sensitive fields before updating the database.
 func (c *CredentialEntry) BeforeUpdate(tx *gorm.DB) error {
-	return encryptField(&c.Password)
+	if err := encryptField(&c.Password); err != nil {
+		return err
+	}
+	return encryptField(&c.Hash)
 }
 
 func (cc *CloudCred) BeforeCreate(tx *gorm.DB) error {
@@ -362,6 +371,18 @@ func (r *Redirector) BeforeUpdate(tx *gorm.DB) error {
 		return err
 	}
 	return encryptField(&r.SSHPassword)
+}
+
+func (u *User) BeforeCreate(tx *gorm.DB) error {
+	return encryptField(&u.TOTPSecret)
+}
+
+func (u *User) AfterFind(tx *gorm.DB) error {
+	return decryptField(&u.TOTPSecret)
+}
+
+func (u *User) BeforeUpdate(tx *gorm.DB) error {
+	return encryptField(&u.TOTPSecret)
 }
 
 // TokenEntry records a stolen/created Windows token for an agent.
@@ -962,6 +983,18 @@ type PhishingCampaign struct {
 
 func (PhishingCampaign) TableName() string { return "phishing_campaigns" }
 
+func (c *PhishingCampaign) BeforeCreate(tx *gorm.DB) error {
+	return encryptField(&c.SMTPPass)
+}
+
+func (c *PhishingCampaign) AfterFind(tx *gorm.DB) error {
+	return decryptField(&c.SMTPPass)
+}
+
+func (c *PhishingCampaign) BeforeUpdate(tx *gorm.DB) error {
+	return encryptField(&c.SMTPPass)
+}
+
 type PhishingEvent struct {
 	ID         uint      `gorm:"primaryKey" json:"id"`
 	CampaignID uint      `gorm:"index" json:"campaign_id"`
@@ -975,6 +1008,18 @@ type PhishingEvent struct {
 }
 
 func (PhishingEvent) TableName() string { return "phishing_events" }
+
+func (e *PhishingEvent) BeforeCreate(tx *gorm.DB) error {
+	return encryptField(&e.Payload)
+}
+
+func (e *PhishingEvent) AfterFind(tx *gorm.DB) error {
+	return decryptField(&e.Payload)
+}
+
+func (e *PhishingEvent) BeforeUpdate(tx *gorm.DB) error {
+	return encryptField(&e.Payload)
+}
 
 type AgentTag struct {
 	ID        string     `gorm:"primaryKey;size:36" json:"id"`

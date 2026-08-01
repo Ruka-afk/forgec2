@@ -204,7 +204,7 @@ export default function AIPage() {
     const lastUserMsg = cur[lastUser];
     setMessagesBoth(cur.slice(0, lastUser + 1));
     setInput(lastUserMsg.content);
-    setTimeout(() => handleSend(), 0);
+    Promise.resolve().then(() => handleSend());
   };
 
   // saveTurn persists every message added since `fromIndex` into the session.

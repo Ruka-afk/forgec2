@@ -14,7 +14,9 @@ import (
 func (s *Server) handleAPIWorkflows(c *gin.Context) {
 	p := parsePagination(c, 50, 200)
 	var total int64
-	s.db.Model(&db.Workflow{}).Count(&total)
+	if err := s.db.Model(&db.Workflow{}).Count(&total).Error; err != nil {
+		slog.Error("Failed to count workflows", "err", err)
+	}
 	var workflows []db.Workflow
 	if err := s.db.Preload("Steps").Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&workflows).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to load workflows")
@@ -65,17 +67,25 @@ func (s *Server) handleAPIWorkflowsExecute(c *gin.Context) {
 			respondError(c, http.StatusInternalServerError, "invalid scope_ids")
 			return
 		}
-		if wf.ScopeType == "agents" {
-			s.db.Where("id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents)
-		} else if wf.ScopeType == "tags" {
-			s.db.Distinct("implants.*").Joins("JOIN agent_tag_assignments ON agent_tag_assignments.agent_id = implants.id").
-				Where("agent_tag_assignments.tag_id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents)
-		} else {
-			s.db.Distinct("implants.*").Joins("JOIN agent_group_assignments ON agent_group_assignments.agent_id = implants.id").
-				Where("agent_group_assignments.group_id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents)
+	if wf.ScopeType == "agents" {
+		if err := s.db.Where("id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents).Error; err != nil {
+			slog.Error("Workflow: failed to query target agents by IDs", "err", err)
 		}
-	default:
-		s.db.Where("last_seen > ?", time.Now().Add(-30*time.Minute)).Limit(AgentQueryLimit).Find(&targetAgents)
+	} else if wf.ScopeType == "tags" {
+		if err := s.db.Distinct("implants.*").Joins("JOIN agent_tag_assignments ON agent_tag_assignments.implant_id = implants.id").
+			Where("agent_tag_assignments.agent_tag_id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents).Error; err != nil {
+			slog.Error("Workflow: failed to query target agents by tags", "err", err)
+		}
+	} else {
+		if err := s.db.Distinct("implants.*").Joins("JOIN agent_group_assignments ON agent_group_assignments.implant_id = implants.id").
+			Where("agent_group_assignments.agent_group_id IN ?", ids).Limit(AgentQueryLimit).Find(&targetAgents).Error; err != nil {
+			slog.Error("Workflow: failed to query target agents by groups", "err", err)
+		}
+	}
+default:
+	if err := s.db.Where("last_seen > ?", time.Now().Add(-30*time.Minute)).Limit(AgentQueryLimit).Find(&targetAgents).Error; err != nil {
+		slog.Error("Workflow: failed to query recent agents", "err", err)
+	}
 	}
 
 	agentIDs := make([]string, len(targetAgents))
@@ -209,7 +219,9 @@ func (s *Server) handleAPIUpdateWorkflow(c *gin.Context) {
 func (s *Server) handleListWorkflowExecutions(c *gin.Context) {
 	workflowID := c.Param("id")
 	var executions []db.WorkflowExecution
-	s.db.Where("workflow_id = ?", workflowID).Order("started_at desc").Limit(50).Find(&executions)
+	if err := s.db.Where("workflow_id = ?", workflowID).Order("started_at desc").Limit(50).Find(&executions).Error; err != nil {
+		slog.Error("Failed to list workflow executions", "err", err)
+	}
 	respond(c, gin.H{"executions": executions})
 }
 
@@ -220,7 +232,9 @@ func (s *Server) handleGetWorkflowExecution(c *gin.Context) {
 		return
 	}
 	var logs []db.WorkflowStepLog
-	s.db.Where("execution_id = ?", exec.ID).Order("step_order").Find(&logs)
+	if err := s.db.Where("execution_id = ?", exec.ID).Order("step_order").Find(&logs).Error; err != nil {
+		slog.Error("Failed to query workflow step logs", "err", err)
+	}
 	respond(c, gin.H{"execution": exec, "logs": logs})
 }
 
@@ -263,10 +277,12 @@ func (s *Server) handleAPIGroups(c *gin.Context) {
 		Count   int64
 	}
 	var agentCounts []agentCountRow
-	s.db.Model(&db.Implant{}).Select("agent_group_assignments.group_id, COUNT(*) as count").
-		Joins("JOIN agent_group_assignments ON agent_group_assignments.agent_id = implants.id").
-		Where("agent_group_assignments.group_id IN ?", groupIDs).
-		Group("agent_group_assignments.group_id").Find(&agentCounts)
+	if err := s.db.Model(&db.Implant{}).Select("agent_group_assignments.agent_group_id as group_id, COUNT(*) as count").
+		Joins("JOIN agent_group_assignments ON agent_group_assignments.implant_id = implants.id").
+		Where("agent_group_assignments.agent_group_id IN ?", groupIDs).
+		Group("agent_group_assignments.agent_group_id").Find(&agentCounts).Error; err != nil {
+		slog.Error("Failed to query agent counts by group", "err", err)
+	}
 	agentCountMap := make(map[string]int64, len(agentCounts))
 	for _, row := range agentCounts {
 		agentCountMap[row.GroupID] = row.Count
@@ -277,9 +293,11 @@ func (s *Server) handleAPIGroups(c *gin.Context) {
 		Count    int64
 	}
 	var childCounts []childCountRow
-	s.db.Model(&db.AgentGroup{}).Select("parent_id, COUNT(*) as count").
+	if err := s.db.Model(&db.AgentGroup{}).Select("parent_id, COUNT(*) as count").
 		Where("parent_id IN ?", groupIDs).
-		Group("parent_id").Find(&childCounts)
+		Group("parent_id").Find(&childCounts).Error; err != nil {
+		slog.Error("Failed to query child counts by group", "err", err)
+	}
 	childCountMap := make(map[string]int64, len(childCounts))
 	for _, row := range childCounts {
 		childCountMap[row.ParentID] = row.Count
@@ -367,14 +385,22 @@ func (s *Server) handleAPIUpdateGroup(c *gin.Context) {
 func (s *Server) handleAPIDeleteGroup(c *gin.Context) {
 	id := c.Param("id")
 	var agentCount int64
-	s.db.Model(&db.Implant{}).Joins("JOIN agent_group_assignments ON agent_group_assignments.agent_id = implants.id").
-		Where("agent_group_assignments.group_id = ?", id).Count(&agentCount)
+	if err := s.db.Model(&db.Implant{}).Joins("JOIN agent_group_assignments ON agent_group_assignments.implant_id = implants.id").
+		Where("agent_group_assignments.agent_group_id = ?", id).Count(&agentCount).Error; err != nil {
+		slog.Error("Failed to count group agents", "group_id", id, "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to check agent count")
+		return
+	}
 	if agentCount > 0 {
 		respondError(c, http.StatusBadRequest, "cannot delete group with agents — reassign agents first")
 		return
 	}
 	var childCount int64
-	s.db.Model(&db.AgentGroup{}).Where("parent_id = ?", id).Count(&childCount)
+	if err := s.db.Model(&db.AgentGroup{}).Where("parent_id = ?", id).Count(&childCount).Error; err != nil {
+		slog.Error("Failed to count child groups", "parent_id", id, "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to check child group count")
+		return
+	}
 	if childCount > 0 {
 		respondError(c, http.StatusBadRequest, "cannot delete group with child groups — remove children first")
 		return

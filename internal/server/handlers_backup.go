@@ -2,6 +2,8 @@ package server
 
 import (
 	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -39,6 +41,17 @@ func (s *Server) backupDir() string {
 	return filepath.Join(s.cfg.Server.DataDir, "backups")
 }
 
+// removeStaleDBArtifacts deletes WAL/SHM sidecar files that belonged to the
+// pre-restore database. Without this, SQLite would try to replay the old
+// write-ahead log against the newly restored file on the next startup.
+func removeStaleDBArtifacts(dbPath string) {
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if err := os.Remove(dbPath + suffix); err != nil && !os.IsNotExist(err) {
+			slog.Warn("Failed to remove stale database sidecar", "path", dbPath+suffix, "error", err)
+		}
+	}
+}
+
 // verifyRestoredDB performs post-restore integrity checks on the SQLite database.
 func verifyRestoredDB(dbPath string) error {
 	f, err := os.Open(dbPath)
@@ -60,6 +73,68 @@ func verifyRestoredDB(dbPath string) error {
 		return fmt.Errorf("restored file too small (%d bytes) — likely truncated", fi.Size())
 	}
 
+	return nil
+}
+
+// prepareRestoreSource returns a reader over the raw SQLite bytes of an upload
+// or on-disk backup. Plain SQLite files pass through untouched; encrypted .fbk
+// files (produced by the scheduled BackupManager) are decrypted with the
+// configured backup key and verified before use.
+func (s *Server) prepareRestoreSource(src io.Reader, ext string) (io.Reader, error) {
+	br := bufio.NewReader(src)
+	if isSQLiteFile(br) {
+		return br, nil
+	}
+	if ext != ".fbk" {
+		return nil, errors.New("file is not a valid SQLite database")
+	}
+	data, err := io.ReadAll(br)
+	if err != nil {
+		return nil, errors.New("failed to read backup file")
+	}
+	plaintext, err := decryptBackupData(data, s.backupKey())
+	if err != nil {
+		return nil, errors.New("failed to decrypt backup (key mismatch or corrupt file)")
+	}
+	if !isSQLiteFile(bufio.NewReader(bytes.NewReader(plaintext))) {
+		return nil, errors.New("decrypted backup is not a valid SQLite database")
+	}
+	return bytes.NewReader(plaintext), nil
+}
+
+// writeRestoredDB copies the source stream to a temp file in the database
+// directory, verifies it, then atomically swaps it over the live database.
+// The live database is left untouched if verification or the swap fails.
+func writeRestoredDB(src io.Reader, dbPath string) error {
+	dir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("prepare database directory: %w", err)
+	}
+
+	tmp, err := os.CreateTemp(dir, ".forgec2-restore-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := io.Copy(tmp, src); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write database file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+
+	if err := verifyRestoredDB(tmpPath); err != nil {
+		return err
+	}
+
+	if err := os.Rename(tmpPath, dbPath); err != nil {
+		return fmt.Errorf("swap database file: %w", err)
+	}
+
+	removeStaleDBArtifacts(dbPath)
 	return nil
 }
 
@@ -107,8 +182,7 @@ func (s *Server) handleDBBackup(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
-	src := s.cfg.Database.Path
-	if _, err := os.Stat(src); err != nil {
+	if _, err := os.Stat(s.cfg.Database.Path); err != nil {
 		respondError(c, http.StatusInternalServerError, "database file not found")
 		return
 	}
@@ -123,32 +197,27 @@ func (s *Server) handleDBBackup(c *gin.Context) {
 	backupName := fmt.Sprintf("forgec2_%s.db", ts)
 	backupPath := filepath.Join(dir, backupName)
 
-	srcFile, err := os.Open(src)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to open database file")
-		return
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to create backup file")
-		return
-	}
-	defer dstFile.Close()
-
-	n, err := io.Copy(dstFile, srcFile)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to copy database")
+	// Use SQLite's VACUUM INTO to produce a consistent snapshot. A raw file
+	// copy is unsafe while the database runs in WAL mode: it would omit the
+	// -wal file and yield an incomplete/corrupt backup.
+	if err := s.db.Exec("VACUUM INTO ?", backupPath).Error; err != nil {
+		slog.Error("Failed to create database backup", "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to create backup")
 		return
 	}
 
-	slog.Info("Database backup created", "path", backupPath, "size", n)
+	fi, err := os.Stat(backupPath)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to stat backup file")
+		return
+	}
+
+	slog.Info("Database backup created", "path", backupPath, "size", fi.Size())
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": backupEntry{
 			Name:    backupName,
-			Size:    n,
+			Size:    fi.Size(),
 			ModTime: time.Now().UTC().Format(time.RFC3339),
 		},
 	})
@@ -186,40 +255,27 @@ func (s *Server) handleRestoreFromUpload(c *gin.Context) {
 		return
 	}
 
+	if header.Size > MaxUploadSize {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("file too large (max %d bytes)", MaxUploadSize))
+		return
+	}
+
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if ext != ".db" && ext != ".fbk" {
 		respondError(c, http.StatusBadRequest, "only .db or .fbk files are accepted")
 		return
 	}
 
-	br := bufio.NewReader(file)
-	if !isSQLiteFile(br) {
-		respondError(c, http.StatusBadRequest, "uploaded file is not a valid SQLite database")
+	src, err := s.prepareRestoreSource(file, ext)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	dbPath := s.cfg.Database.Path
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to prepare database directory")
-		return
-	}
-
-	dstFile, err := os.OpenFile(dbPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to open database for writing")
-		return
-	}
-	defer dstFile.Close()
-
-	if _, err := io.Copy(dstFile, br); err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to write database file")
-		return
-	}
-	dstFile.Close()
-
-	if err := verifyRestoredDB(dbPath); err != nil {
-		slog.Error("Restored database failed integrity check", "error", err)
-		respondError(c, http.StatusInternalServerError, fmt.Sprintf("restore failed verification: %v", err))
+	if err := writeRestoredDB(src, dbPath); err != nil {
+		slog.Error("Database restore from upload failed", "error", err)
+		respondError(c, http.StatusInternalServerError, "restore failed")
 		return
 	}
 
@@ -258,15 +314,15 @@ func (s *Server) handleRestoreFromFile(c *gin.Context) {
 		return
 	}
 
-	backupPath := filepath.Join(s.backupDir(), name)
-	if _, err := os.Stat(backupPath); err != nil {
-		respondError(c, http.StatusNotFound, "backup file not found")
+	ext := strings.ToLower(filepath.Ext(name))
+	if ext != ".db" && ext != ".fbk" {
+		respondError(c, http.StatusBadRequest, "invalid backup file type")
 		return
 	}
 
-	dbPath := s.cfg.Database.Path
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to prepare database directory")
+	backupPath := filepath.Join(s.backupDir(), name)
+	if _, err := os.Stat(backupPath); err != nil {
+		respondError(c, http.StatusNotFound, "backup file not found")
 		return
 	}
 
@@ -277,33 +333,31 @@ func (s *Server) handleRestoreFromFile(c *gin.Context) {
 	}
 	defer srcFile.Close()
 
-	br := bufio.NewReader(srcFile)
-	if !isSQLiteFile(br) {
-		respondError(c, http.StatusBadRequest, "backup file is not a valid SQLite database")
-		return
-	}
-
-	dstFile, err := os.OpenFile(dbPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	fi, err := srcFile.Stat()
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to open database for writing")
+		respondError(c, http.StatusInternalServerError, "failed to stat backup file")
 		return
 	}
-	defer dstFile.Close()
 
-	n, err := io.Copy(dstFile, br)
+	if fi.Size() > MaxUploadSize {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("backup file too large (max %d bytes)", MaxUploadSize))
+		return
+	}
+
+	src, err := s.prepareRestoreSource(srcFile, ext)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "failed to restore database")
-		return
-	}
-	dstFile.Close()
-
-	if err := verifyRestoredDB(dbPath); err != nil {
-		slog.Error("Restored database failed integrity check", "error", err)
-		respondError(c, http.StatusInternalServerError, fmt.Sprintf("restore failed verification: %v", err))
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	slog.Info("Database restored from backup", "backup", name, "bytes", n)
+	dbPath := s.cfg.Database.Path
+	if err := writeRestoredDB(src, dbPath); err != nil {
+		slog.Error("Database restore from backup failed", "error", err)
+		respondError(c, http.StatusInternalServerError, "restore failed")
+		return
+	}
+
+	slog.Info("Database restored from backup", "backup", name, "size", fi.Size())
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

@@ -1,53 +1,50 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useRef, useState, useCallback } from "react";
 
 interface UseSelectionSetResult {
-  selectedIds: Set<string>;
   toggleSelect: (id: string) => void;
   toggleSelectAll: (ids: string[]) => void;
   clearSelection: () => void;
   isSelected: (id: string) => boolean;
   count: number;
+  selectedSet: ReadonlySet<string>;
 }
 
 export function useSelectionSet(): UseSelectionSetResult {
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const ref = useRef(new Set<string>());
+  const [version, setVersion] = useState(0);
 
   const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+    const s = ref.current;
+    if (s.has(id)) { s.delete(id); } else { s.add(id); }
+    setVersion(v => v + 1);
   }, []);
 
   const toggleSelectAll = useCallback((ids: string[]) => {
-    setSelectedIds((prev) => {
-      const allSelected = ids.every((id) => prev.has(id));
-      if (allSelected) {
-        return new Set<string>();
-      }
-      return new Set(ids);
-    });
+    const s = ref.current;
+    const allSelected = ids.every(id => s.has(id));
+    if (allSelected) {
+      ref.current = new Set();
+    } else {
+      ref.current = new Set(ids);
+    }
+    setVersion(v => v + 1);
   }, []);
 
   const clearSelection = useCallback(() => {
-    setSelectedIds(new Set());
+    ref.current = new Set();
+    setVersion(v => v + 1);
   }, []);
 
-  const isSelected = useCallback((id: string) => selectedIds.has(id), [selectedIds]);
+  const isSelected = useCallback((id: string) => ref.current.has(id), []);
 
   return {
-    selectedIds,
     toggleSelect,
     toggleSelectAll,
     clearSelection,
     isSelected,
-    count: selectedIds.size,
+    count: ref.current.size,
+    selectedSet: ref.current,
   };
 }

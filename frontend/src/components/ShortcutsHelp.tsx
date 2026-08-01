@@ -30,7 +30,7 @@ function ShortcutsHelpPanel({ open, onOpenChange }: { open: boolean; onOpenChang
       <DialogContent className="max-w-lg" aria-label={t("a11y.shortcuts")}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Keyboard className="w-4 h-4" />
+            <Keyboard aria-hidden="true" className="w-4 h-4" />
             {t("a11y.shortcuts")}
           </DialogTitle>
         </DialogHeader>
@@ -91,7 +91,7 @@ export function ShortcutsHelpButton() {
     <>
       <Tooltip>
         <TooltipTrigger render={<Button onClick={() => setOpen(true)} variant="ghost" size="sm" className="hidden md:flex text-xs" />}>
-          <Keyboard className="w-4 h-4" />
+          <Keyboard aria-hidden="true" className="w-4 h-4" />
           <span>Shortcuts</span>
         </TooltipTrigger>
         <TooltipContent>Keyboard shortcuts (Ctrl+/)</TooltipContent>

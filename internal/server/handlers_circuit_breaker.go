@@ -72,7 +72,9 @@ func (s *Server) handleAPICircuitBreakerConfig(c *gin.Context) {
 
 func (s *Server) handleAPICircuitBreakerEvents(c *gin.Context) {
 	var events []db.CircuitBreakerEvent
-	s.db.Order("created_at DESC").Limit(100).Find(&events)
+	if err := s.db.Order("created_at DESC").Limit(100).Find(&events).Error; err != nil {
+		slog.Error("Failed to list circuit breaker events", "err", err)
+	}
 	respond(c, gin.H{"events": events})
 }
 

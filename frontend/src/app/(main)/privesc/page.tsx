@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Bot, ChevronDown, CircleAlert, Info, CircleQuestionMark, Eye, FileCode, FileSpreadsheet, History, Lightbulb, Play, Settings, ShieldAlert, ShieldCheck, TriangleAlert, TrendingUp, Zap } from "lucide-react";
+import { Bot, ChevronDown, CircleAlert, Info, CircleQuestionMark, Eye, FileCode, FileSpreadsheet, History, Lightbulb, Play, ShieldAlert, ShieldCheck, TriangleAlert, TrendingUp, Zap } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
@@ -120,7 +120,7 @@ export default function PrivescPage() {
     }
     setRunning(true);
     try {
-      await api.postJson(`/privesc/run`, { agent_id: selectedAgent, check_type: checkType });
+      await api.postJson(`/api/privesc/run`, { agent_id: selectedAgent, check_type: checkType });
       setTimeout(loadData, 2000);
     } catch { toast.error(t("privesc.toast.start_check_failed")); }
     setRunning(false);
@@ -133,17 +133,10 @@ export default function PrivescPage() {
     } catch { toast.error(t("privesc.toast.load_history_failed")); }
   };
 
-  const handleProcessResult = async (historyId: string) => {
-    try {
-      await api.postJson(`/api/privesc/result`, { history_id: historyId });
-      loadData();
-    } catch { toast.error(t("privesc.toast.process_result_failed")); }
-  };
-
   const handleExecuteExploit = (finding: PrivescFinding) => {
     setCfm({msg: `${t("privesc.confirm_exploit")}\n\n${finding.title || t("privesc.unknown")}`, cb: async () => {
       try {
-        await api.postJson(`/privesc/execute`, { agent_id: selectedAgent, check_type: checkType, exploit_command: finding.exploit_command });
+        await api.postJson(`/api/privesc/execute`, { agent_id: selectedAgent, check_type: checkType, exploit_command: finding.exploit_command });
       } catch { toast.error(t("privesc.toast.execute_exploit_failed")); }
     }});
   };
@@ -377,14 +370,6 @@ export default function PrivescPage() {
                             </TooltipTrigger>
                            <TooltipContent>{t("privesc.view_result")}</TooltipContent>
                          </Tooltip>
-                        {(item.status) === "completed" && (
-                           <Tooltip>
-                             <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleProcessResult(hid)} aria-label="View result" />}>
-                                <Settings className="w-4 h-4" />
-                              </TooltipTrigger>
-                             <TooltipContent>{t("privesc.process_result")}</TooltipContent>
-                           </Tooltip>
-                        )}
                       </div>
                     </TableCell>
                   </TableRow>

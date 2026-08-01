@@ -101,12 +101,12 @@ export default function LateralPageContent() {
         api.get(`/api/lateral/history/all`).catch(() => { failed++; return { lateral: [] }; }),
         api.get(`/agents`).catch(() => { failed++; return { agents: [] }; }),
         api.get(`/credentials`).catch(() => { failed++; return { vault_entries: [] }; }),
-        api.get(`/api/v1/tasks?type=lateral&limit=50`).catch(() => { failed++; return { data: [] }; }),
+        api.get(`/tasks?type=lateral&pageSize=50`).catch(() => { failed++; return { tasks: [] }; }),
       ]);
       setStats(data as LateralStats);
       setAgents((agentData.agents || []) as Agent[]);
       setCredentials((credData.vault_entries || []) as Credential[]);
-      setHistory((histData.data || []) as MovementHistory[]);
+      setHistory((histData.tasks || []) as MovementHistory[]);
       if (failed > 0) toast.error(t("lateral.toast.load_failed"));
     } catch { toast.error(t("lateral.toast.load_failed")); }
     setLoading(false);

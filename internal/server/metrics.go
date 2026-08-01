@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -73,7 +74,7 @@ func NewMetricsCollector(s *Server) *MetricsCollector {
 }
 
 func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
-	reg.MustRegister(
+	collectors := []prometheus.Collector{
 		mc.AgentsTotal,
 		mc.AgentsOnline,
 		mc.TasksTotal,
@@ -84,7 +85,15 @@ func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
 		mc.RequestDuration,
 		mc.BeaconDuration,
 		mc.TaskExecuteDuration,
-	)
+	}
+	for _, c := range collectors {
+		err := reg.Register(c)
+		if err != nil {
+			if _, ok := err.(prometheus.AlreadyRegisteredError); !ok {
+				slog.Error("Failed to register metrics collector", "error", err)
+			}
+		}
+	}
 }
 
 func metricsMiddleware(mc *MetricsCollector) gin.HandlerFunc {
@@ -106,23 +115,33 @@ func metricsPromHandler() gin.HandlerFunc {
 
 func (s *Server) updateMetricsFromDB() {
 	var total int64
-	s.db.Model(&db.Implant{}).Count(&total)
+	if err := s.db.Model(&db.Implant{}).Count(&total).Error; err != nil {
+		slog.Error("Failed to count total agents for metrics", "err", err)
+	}
 	s.metrics.AgentsTotal.Set(float64(total))
 
 	offlineCutoff := time.Now().Add(-s.offlineThreshold())
 	var online int64
-	s.db.Model(&db.Implant{}).Where("last_seen > ?", offlineCutoff).Count(&online)
+	if err := s.db.Model(&db.Implant{}).Where("last_seen > ?", offlineCutoff).Count(&online).Error; err != nil {
+		slog.Error("Failed to count online agents for metrics", "err", err)
+	}
 	s.metrics.AgentsOnline.Set(float64(online))
 
 	var pending int64
-	s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pending)
+	if err := s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pending).Error; err != nil {
+		slog.Error("Failed to count pending tasks for metrics", "err", err)
+	}
 	s.metrics.TasksPending.Set(float64(pending))
 
 	var listeners int64
-	s.db.Model(&db.Listener{}).Where("enabled = ?", true).Count(&listeners)
+	if err := s.db.Model(&db.Listener{}).Where("enabled = ?", true).Count(&listeners).Error; err != nil {
+		slog.Error("Failed to count listeners for metrics", "err", err)
+	}
 	s.metrics.ListenersTotal.Set(float64(listeners))
 
 	var creds int64
-	s.db.Model(&db.CredentialEntry{}).Count(&creds)
+	if err := s.db.Model(&db.CredentialEntry{}).Count(&creds).Error; err != nil {
+		slog.Error("Failed to count credentials for metrics", "err", err)
+	}
 	s.metrics.CredsTotal.Set(float64(creds))
 }

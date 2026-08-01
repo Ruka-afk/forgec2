@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -29,10 +30,14 @@ func (s *Server) handleListNotifications(c *gin.Context) {
 	}
 
 	var total int64
-	q.Count(&total)
+	if err := q.Count(&total).Error; err != nil {
+		slog.Error("Failed to count notifications", "err", err)
+	}
 
 	var items []db.Notification
-	q.Order("created_at desc").Offset(pg.Offset).Limit(pg.PageSize).Find(&items)
+	if err := q.Order("created_at desc").Offset(pg.Offset).Limit(pg.PageSize).Find(&items).Error; err != nil {
+		slog.Error("Failed to query notifications", "err", err)
+	}
 
 	respond(c, gin.H{"notifications": items, "total": total})
 }

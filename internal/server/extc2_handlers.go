@@ -73,7 +73,9 @@ func (s *Server) handleConfigureSlackC2(c *gin.Context) {
 
 func (s *Server) handleListExtC2Configs(c *gin.Context) {
 	var channels []db.ExtC2Channel
-	s.db.Limit(500).Find(&channels)
+	if err := s.db.Limit(500).Find(&channels).Error; err != nil {
+		slog.Error("Failed to list external C2 channels", "err", err)
+	}
 	for i := range channels {
 		channels[i].BotToken = "***REDACTED***"
 	}
@@ -103,7 +105,9 @@ func (s *Server) handleDeleteExtC2Config(c *gin.Context) {
 
 func (s *Server) restoreExtC2Channels() {
 	var channels []db.ExtC2Channel
-	s.db.Where("enabled = ?", true).Limit(500).Find(&channels)
+	if err := s.db.Where("enabled = ?", true).Limit(500).Find(&channels).Error; err != nil {
+		slog.Error("Failed to restore external C2 channels", "err", err)
+	}
 
 	for _, ch := range channels {
 		switch ch.Type {

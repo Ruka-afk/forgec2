@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -61,12 +62,16 @@ type Config struct {
 		FrontDomains         []string `yaml:"front_domains"`          // CDN front domains for domain fronting auto-failover
 		FrontCheckInterval   int      `yaml:"front_check_interval"`   // seconds between domain front health checks (default 60)
 		AllowedOrigins       []string `yaml:"allowed_origins"`        // allowed WebSocket/CORS origins (default: localhost,127.0.0.1,::1)
+		TrustedProxies       []string `yaml:"trusted_proxies"`        // trusted reverse proxy IPs/CIDRs for X-Forwarded-For (empty = trust none, use direct client IP)
 		CookieDomain         string   `yaml:"cookie_domain"`          // domain for session/CSRF cookies (for cross-origin deployments)
 		BeaconKey            string   `yaml:"beacon_key"`             // optional pre-shared key for agent beacon auth (X-Beacon-Key header)
 		RequireTLSForAuth    bool     `yaml:"require_tls_for_auth"`   // require TLS before issuing session cookies (strongly recommended in production)
 		EnablePprof          bool     `yaml:"enable_pprof"`           // expose /debug/pprof (default false; requires auth when enabled)
 		EnableMetrics        bool     `yaml:"enable_metrics"`         // expose /metrics (default false; requires auth when enabled)
-		SocksListenHost      string   `yaml:"socks_listen_host"`      // bind host for SOCKS/rportfwd (default 127.0.0.1)
+		SocksListenHost      string        `yaml:"socks_listen_host"`      // bind host for SOCKS/rportfwd (default 127.0.0.1)
+		DBMaxOpenConns       int           `yaml:"db_max_open_conns"`       // max open connections for PostgreSQL pool (default 25)
+		DBMaxIdleConns       int           `yaml:"db_max_idle_conns"`       // max idle connections for PostgreSQL pool (default 5)
+		DBConnMaxLifetime    time.Duration `yaml:"db_conn_max_lifetime"`    // max connection lifetime for PostgreSQL pool (default 30m)
 	} `yaml:"server"`
 
 	Database struct {
@@ -76,8 +81,10 @@ type Config struct {
 	} `yaml:"database"`
 
 	Implant struct {
-		DefaultInterval     int    `yaml:"default_interval"` // seconds
-		DefaultJitter       int    `yaml:"default_jitter"`   // percent
+		DefaultInterval     int    `yaml:"default_interval"`  // seconds
+		MinInterval         int    `yaml:"min_interval"`      // OPSEC: minimum allowed beacon interval in seconds (0 = no minimum, default 5)
+		DefaultJitter       int    `yaml:"default_jitter"`    // percent
+		MinJitter           int    `yaml:"min_jitter"`        // OPSEC: minimum allowed jitter percent (0 = no minimum, default 10)
 		DefaultUA           string `yaml:"default_user_agent"`
 		DefaultSkipTLS      bool   `yaml:"default_skip_tls"`
 		DefaultPinnedCert   string `yaml:"default_pinned_cert"` // SHA-256 hex of server DER cert for pinning
@@ -105,9 +112,13 @@ type Config struct {
 	} `yaml:"password_policy"`
 
 	Crypto struct {
-		Key                 string `yaml:"key"`                   // 32-byte hex key for XOR encryption, or "ecdh:" for ECDH+AES-256-GCM (empty=disabled)
-		SessionMaxMessages  int    `yaml:"session_max_messages"`  // ECDH key rotation after N messages (0 = default 100)
-		SessionMaxAgeMinutes int   `yaml:"session_max_age_minutes"` // ECDH key rotation after N minutes (0 = default 10)
+		Key                     string `yaml:"key"`                       // 32-byte hex key for XOR encryption, or "ecdh:" for ECDH+AES-256-GCM (empty=disabled)
+		LootKey                 string `yaml:"loot_key"`                  // 32-byte hex key for AES-256-GCM loot encryption (empty = derived from JWT secret)
+		BackupKey               string `yaml:"backup_key"`                // 32-byte hex key for encrypted .fbk backups (empty = derived from crypto key / JWT secret)
+		SessionMaxMessages      int    `yaml:"session_max_messages"`      // ECDH key rotation after N messages (0 = default 100)
+		SessionMaxAgeMinutes    int    `yaml:"session_max_age_minutes"`   // ECDH key rotation after N minutes (0 = default 10)
+		ForceECDH               bool   `yaml:"force_ecdh"`                // reject plaintext beacons when ECDH is enabled
+		MaxDecryptedPayloadSize int    `yaml:"max_decrypted_payload_size"` // max bytes for decrypted beacon body (0 = default 10MB)
 	} `yaml:"crypto"`
 
 	Malleable struct {
@@ -192,7 +203,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	cfg := &Config{}
 	cfg.Server.Port = 8000
-	cfg.Server.Host = "0.0.0.0"
+	cfg.Server.Host = "127.0.0.1" // change to "0.0.0.0" for production access
 	cfg.Server.TLSEnabled = false
 	cfg.Server.TCPEnabled = false
 	cfg.Server.TCPAddr = ""
@@ -224,6 +235,9 @@ func DefaultConfig() *Config {
 	cfg.Server.EnablePprof = false
 	cfg.Server.EnableMetrics = false
 	cfg.Server.SocksListenHost = "127.0.0.1"
+	cfg.Server.DBMaxOpenConns = 25
+	cfg.Server.DBMaxIdleConns = 5
+	cfg.Server.DBConnMaxLifetime = 30 * time.Minute
 
 	cfg.Database.Path = filepath.Join(cfg.Server.DataDir, "db/forgec2.db")
 	cfg.Database.Driver = "sqlite"
@@ -231,6 +245,8 @@ func DefaultConfig() *Config {
 	cfg.Server.KeyFile = filepath.Join(cfg.Server.DataDir, "server.key")
 
 	cfg.Implant.DefaultInterval = 5
+	cfg.Implant.MinInterval = 5
+	cfg.Implant.MinJitter = 10
 
 	cfg.PasswordPolicy.MinLength = 8
 	cfg.PasswordPolicy.RequireUpper = true
@@ -317,8 +333,9 @@ func isWeakSecret(s string) bool {
 	}
 	weak := []string{
 		"forgec2_secret_key_change_this_in_production",
-		"change_me", "secret", "password", "admin",
-		"jwt_secret", "your_secret_here", "todo",
+		"change_me", "changeme", "change_this", "secret", "password", "admin",
+		"jwt_secret", "your_secret_here", "todo", "placeholder", "redacted",
+		"replace_in_production", "replace_me",
 		"0b0d003179038fb3742671c8242100f77f03be74aa69dbc38139fe1e500d9dfd",
 	}
 	lower := strings.ToLower(s)
@@ -385,6 +402,16 @@ func Load(path string) (*Config, error) {
 			return nil, err
 		}
 		slog.Warn("ExtC2 API token auto-generated. To use a custom token, edit rate_limit.extc2.api_token in config.yaml")
+	}
+
+	// Env override for loot key (takes precedence over config file)
+	if envLootKey := os.Getenv("FORGEC2_LOOT_KEY"); envLootKey != "" {
+		cfg.Crypto.LootKey = envLootKey
+	}
+
+	// Env override for backup key (takes precedence over config file)
+	if envBackupKey := os.Getenv("FORGEC2_BACKUP_KEY"); envBackupKey != "" {
+		cfg.Crypto.BackupKey = envBackupKey
 	}
 
 	// Env override for AI API key (takes precedence over config file)
@@ -476,6 +503,21 @@ func (c *Config) Validate() error {
 	}
 	if c.Implant.DefaultJitter < 0 || c.Implant.DefaultJitter > 100 {
 		errs = append(errs, errors.New("implant.default_jitter must be between 0 and 100"))
+	}
+	if c.Implant.MinInterval < 0 {
+		errs = append(errs, errors.New("implant.min_interval must be >= 0 (0 = no minimum)"))
+	}
+	if c.Implant.MinInterval > 86400 {
+		errs = append(errs, errors.New("implant.min_interval must be <= 86400 (24h)"))
+	}
+	if c.Implant.MinJitter < 0 || c.Implant.MinJitter > 100 {
+		errs = append(errs, errors.New("implant.min_jitter must be between 0 and 100"))
+	}
+	if c.Implant.DefaultInterval < c.Implant.MinInterval {
+		errs = append(errs, fmt.Errorf("implant.default_interval (%d) must be >= implant.min_interval (%d)", c.Implant.DefaultInterval, c.Implant.MinInterval))
+	}
+	if c.Implant.DefaultJitter < c.Implant.MinJitter {
+		errs = append(errs, fmt.Errorf("implant.default_jitter (%d) must be >= implant.min_jitter (%d)", c.Implant.DefaultJitter, c.Implant.MinJitter))
 	}
 	if c.Logging.Level != "" && c.Logging.Level != "debug" && c.Logging.Level != "info" && c.Logging.Level != "warn" && c.Logging.Level != "error" {
 		errs = append(errs, errors.New(`logging.level must be one of: debug, info, warn, error`))
@@ -646,7 +688,32 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Crypto session rotation validation
+	// Crypto validation
+	if c.Crypto.ForceECDH && !strings.HasPrefix(c.Crypto.Key, "ecdh:") {
+		errs = append(errs, errors.New("crypto.force_ecdh requires crypto.key to start with \"ecdh:\""))
+	}
+	if c.Crypto.MaxDecryptedPayloadSize < 0 {
+		errs = append(errs, errors.New("crypto.max_decrypted_payload_size must be >= 0 (0 = default 10MB)"))
+	}
+	if c.Crypto.MaxDecryptedPayloadSize > 104857600 {
+		errs = append(errs, errors.New("crypto.max_decrypted_payload_size must be <= 104857600 (100MB)"))
+	}
+	if c.Crypto.LootKey != "" {
+		if len(c.Crypto.LootKey) != 64 {
+			errs = append(errs, errors.New("crypto.loot_key must be a 64-character hex string (32 bytes) when set"))
+		}
+		if _, err := hex.DecodeString(c.Crypto.LootKey); err != nil {
+			errs = append(errs, errors.New("crypto.loot_key must be a valid hex string"))
+		}
+	}
+	if c.Crypto.BackupKey != "" {
+		if len(c.Crypto.BackupKey) != 64 {
+			errs = append(errs, errors.New("crypto.backup_key must be a 64-character hex string (32 bytes) when set"))
+		}
+		if _, err := hex.DecodeString(c.Crypto.BackupKey); err != nil {
+			errs = append(errs, errors.New("crypto.backup_key must be a valid hex string"))
+		}
+	}
 	if strings.HasPrefix(c.Crypto.Key, "ecdh:") {
 		if c.Crypto.SessionMaxMessages < 0 {
 			errs = append(errs, errors.New("crypto.session_max_messages must be >= 0 (0 = default 100)"))
@@ -663,6 +730,16 @@ func (c *Config) Validate() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// Lock acquires the config mutex for safe concurrent reads/writes.
+func (c *Config) Lock() {
+	c.mu.Lock()
+}
+
+// Unlock releases the config mutex.
+func (c *Config) Unlock() {
+	c.mu.Unlock()
 }
 
 // Save persists the config (e.g. after setting password)

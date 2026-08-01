@@ -58,6 +58,7 @@ func (s *Server) handleAIConfig(c *gin.Context) {
 	}
 
 	slog.Info("AI config save request", "enabled", req.Enabled, "provider", req.Provider, "model", req.Model)
+	s.configMu.Lock()
 	s.cfg.AI.Enabled = req.Enabled
 	s.cfg.AI.Provider = req.Provider
 	if strings.TrimSpace(req.APIKey) != "" {
@@ -66,6 +67,7 @@ func (s *Server) handleAIConfig(c *gin.Context) {
 	s.cfg.AI.Model = req.Model
 	s.cfg.AI.Endpoint = req.Endpoint
 	s.cfg.AI.SystemPrompt = req.SystemPrompt
+	s.configMu.Unlock()
 	configPath := s.configPath
 	if configPath == "" {
 		configPath = "config.yaml"
@@ -82,9 +84,23 @@ func (s *Server) handleAIConfig(c *gin.Context) {
 // 鈹€鈹€ SSE Chat (streaming) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 func (s *Server) handleAIChat(c *gin.Context) {
-	if !s.cfg.AI.Enabled || s.cfg.AI.APIKey == "" {
-		slog.Warn("AI chat blocked", "enabled", s.cfg.AI.Enabled, "provider", s.cfg.AI.Provider)
+	s.configMu.RLock()
+	aiEnabled := s.cfg.AI.Enabled
+	aiAPIKey := s.cfg.AI.APIKey
+	aiProvider := s.cfg.AI.Provider
+	s.configMu.RUnlock()
+	if !aiEnabled || aiAPIKey == "" {
+		slog.Warn("AI chat blocked", "enabled", aiEnabled, "provider", aiProvider)
 		respondError(c, http.StatusBadRequest, "AI not configured. Set api_key in AI settings.")
+		return
+	}
+
+	// The AI assistant can dispatch commands to agents (execute_command tool),
+	// so gate it behind the same permission as manual command execution.
+	role, _ := c.Get("user_role")
+	roleStr, _ := role.(string)
+	if roleStr != "admin" && !db.RoleHasPermission(roleStr, db.PermAgentsWrite) {
+		respondError(c, http.StatusForbidden, "AI assistant requires agents.write permission")
 		return
 	}
 
@@ -564,7 +580,7 @@ func buildTools() []toolDef {
 			Type: "function",
 			Function: toolFuncDef{
 				Name:        "execute_command",
-				Description: "Execute a command on the specified agent. By default waits up to 60s for the result (polls using the agent's beacon interval). Set wait_for_result=false to queue only.",
+				Description: "Execute a command on the specified agent. The command is queued and requires a human operator to approve it in the ForgeC2 Tasks page before the agent executes it. Returns the task id and status pending_approval; use get_agent_tasks later to check the result.",
 				Parameters: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -582,7 +598,7 @@ func buildTools() []toolDef {
 						},
 						"wait_for_result": map[string]interface{}{
 							"type":        "boolean",
-							"description": "Wait for command output (default true). When true, polls task status until completed/failed or 60s timeout.",
+							"description": "Reserved. AI-generated commands always require operator approval.",
 						},
 					},
 					"required": []string{"agent_id", "command"},
@@ -653,7 +669,9 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 	switch name {
 	case "list_agents":
 		var agents []db.Implant
-		s.db.Order("last_seen desc").Limit(50).Find(&agents)
+		if err := s.db.Order("last_seen desc").Limit(50).Find(&agents).Error; err != nil {
+			slog.Error("AI: failed to list agents", "err", err)
+		}
 		var out []map[string]interface{}
 		for _, a := range agents {
 			out = append(out, map[string]interface{}{
@@ -678,7 +696,9 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 			return `{"error":"agent not found"}`
 		}
 		var taskCount int64
-		s.db.Model(&db.Task{}).Where("agent_id = ?", agent.ID).Count(&taskCount)
+		if err := s.db.Model(&db.Task{}).Where("agent_id = ?", agent.ID).Count(&taskCount).Error; err != nil {
+			slog.Error("Failed to count agent tasks", "err", err)
+		}
 		type detail struct {
 			ID, Hostname, IP, OS, Arch, Username, Domain, Status string
 			Integrity                                            string
@@ -705,18 +725,15 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 		}
 		task := db.Task{
 			AgentID: aid, Type: "shell", Command: ecArgs.Command,
-			Shell: shell, Status: "pending",
+			Shell: shell, Status: TaskStatusPendingApproval, CreatedBy: "ai",
 		}
 		if err := s.db.Create(&task).Error; err != nil {
 			return `{"error":"failed to create task"}`
 		}
-		if ecArgs.WaitForResult {
-			return s.waitForTaskResult(task.ID, aid)
-		}
 		b, ok := marshalJSONSafe(map[string]interface{}{
 			"task_id": task.ID,
-			"status":  "pending",
-			"message": "Command queued. Use get_agent_tasks to fetch the result when ready.",
+			"status":  "pending_approval",
+			"message": "Command created but requires operator approval before the agent executes it. Approve it in the Tasks page.",
 		})
 		if !ok {
 			return `{"error":"failed to marshal task result"}`
@@ -729,7 +746,9 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 			return `{"error":"agent not found"}`
 		}
 		var tasks []db.Task
-		s.db.Where("agent_id = ?", aid).Order("created_at desc").Limit(10).Find(&tasks)
+		if err := s.db.Where("agent_id = ?", aid).Order("created_at desc").Limit(10).Find(&tasks).Error; err != nil {
+			slog.Error("AI: failed to query agent tasks", "err", err)
+		}
 		var out []map[string]interface{}
 		for _, t := range tasks {
 			r := map[string]interface{}{
@@ -752,7 +771,9 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 
 	case "list_listeners":
 		var listeners []db.Listener
-		s.db.Order("created_at desc").Limit(500).Find(&listeners)
+		if err := s.db.Order("created_at desc").Limit(500).Find(&listeners).Error; err != nil {
+			slog.Error("AI: failed to list listeners", "err", err)
+		}
 		var out []map[string]interface{}
 		for _, l := range listeners {
 			out = append(out, map[string]interface{}{
@@ -768,7 +789,9 @@ func (s *Server) executeTool(name string, argsJSON string) string {
 
 	case "list_credentials":
 		var creds []db.CredentialEntry
-		s.db.Order("created_at desc").Limit(100).Find(&creds)
+		if err := s.db.Order("created_at desc").Limit(100).Find(&creds).Error; err != nil {
+			slog.Error("AI: failed to list credentials", "err", err)
+		}
 		var out []map[string]interface{}
 		for _, c := range creds {
 			entry := map[string]interface{}{
@@ -1002,7 +1025,9 @@ func (s *Server) buildClaudeRequest(openAIPayload []byte) []byte {
 
 func parseJSONMap(s string) map[string]interface{} {
 	var m map[string]interface{}
-	json.Unmarshal([]byte(s), &m)
+	if err := json.Unmarshal([]byte(s), &m); err != nil {
+		slog.Error("parseJSONMap: failed to unmarshal", "error", err)
+	}
 	if m == nil {
 		m = map[string]interface{}{}
 	}

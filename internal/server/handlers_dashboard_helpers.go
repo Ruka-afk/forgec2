@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"strings"
 	"time"
 
@@ -44,15 +45,19 @@ func (s *Server) handleDashboard(c *gin.Context) {
 
 	// Online agent list (recently active) - optimized with SELECT
 	var recentAgents []db.Implant
-	s.db.Select("id", "hostname", "ip", "os", "arch", "last_seen").
+	if err := s.db.Select("id", "hostname", "ip", "os", "arch", "last_seen").
 		Where("last_seen > ?", offlineCutoff).
-		Order("last_seen desc").Limit(10).Find(&recentAgents)
+		Order("last_seen desc").Limit(10).Find(&recentAgents).Error; err != nil {
+		slog.Error("Dashboard: failed to query recent agents", "err", err)
+	}
 
 	// Recent tasks
 	var recentTasks []db.Task
-	s.db.Preload("Agent").
+	if err := s.db.Preload("Agent").
 		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
-		Order("created_at desc").Limit(DashboardRecentTasks).Find(&recentTasks)
+		Order("created_at desc").Limit(DashboardRecentTasks).Find(&recentTasks).Error; err != nil {
+		slog.Error("Dashboard: failed to query recent tasks", "err", err)
+	}
 
 	stats := s.getNavStats()
 	data := gin.H{
@@ -95,11 +100,28 @@ func (s *Server) getNavStats() gin.H {
 	staleCutoff := time.Now().Add(-s.staleThreshold())
 
 	var online, stale, offlineAgents, listenerCount, pendingTasks int64
-	s.db.Model(&db.Implant{}).Where("last_seen > ?", offlineCutoff).Count(&online)
-	s.db.Model(&db.Implant{}).Where("last_seen <= ? AND last_seen > ?", offlineCutoff, staleCutoff).Count(&stale)
-	s.db.Model(&db.Implant{}).Where("last_seen <= ?", staleCutoff).Count(&offlineAgents)
-	s.db.Model(&db.Listener{}).Where("enabled = ?", true).Count(&listenerCount)
-	s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks)
+	type agentStats struct {
+		Online  int64
+		Stale   int64
+		Offline int64
+	}
+	var as agentStats
+	s.db.Raw(`
+		SELECT
+			COALESCE(SUM(CASE WHEN last_seen > ? THEN 1 ELSE 0 END), 0) as online,
+			COALESCE(SUM(CASE WHEN last_seen > ? AND last_seen <= ? THEN 1 ELSE 0 END), 0) as stale,
+			COALESCE(SUM(CASE WHEN last_seen <= ? THEN 1 ELSE 0 END), 0) as offline
+		FROM implants`, offlineCutoff, offlineCutoff, staleCutoff, offlineCutoff,
+	).Scan(&as)
+	online = as.Online
+	stale = as.Stale
+	offlineAgents = as.Offline
+	if err := s.db.Model(&db.Listener{}).Where("enabled = ?", true).Count(&listenerCount).Error; err != nil {
+		slog.Error("Failed to count listeners", "err", err)
+	}
+	if err := s.db.Model(&db.Task{}).Where("status = ?", "pending").Count(&pendingTasks).Error; err != nil {
+		slog.Error("Failed to count pending tasks", "err", err)
+	}
 
 	onlineUsers := int64(len(s.getOnlineUsers()))
 

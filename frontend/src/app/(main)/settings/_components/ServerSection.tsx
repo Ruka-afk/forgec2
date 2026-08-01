@@ -2,6 +2,7 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Toggle from "./Toggle";
 import { Info, Lock, Save, Server, Unlock } from "lucide-react";
@@ -27,12 +28,12 @@ export default function ServerSection({
         <form onSubmit={onSave} className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <span className="block text-xs text-muted-foreground mb-1.5">HTTP Port</span>
-              <Input aria-label="HTTP port" name="input-0" type="number" defaultValue={data.server_port} readOnly className="bg-muted cursor-not-allowed text-muted-foreground" />
+              <Label htmlFor="server-http-port" className="block text-xs text-muted-foreground mb-1.5">HTTP Port</Label>
+              <Input id="server-http-port" type="number" defaultValue={data.server_port} readOnly className="bg-muted cursor-not-allowed text-muted-foreground" />
             </div>
             <div>
-              <span className="block text-xs text-muted-foreground mb-1.5">Listen Address</span>
-              <Input aria-label="Listen address" name="input-1" type="text" defaultValue={data.server_address ?? ""} readOnly className="bg-muted cursor-not-allowed text-muted-foreground font-mono" />
+              <Label htmlFor="server-listen-address" className="block text-xs text-muted-foreground mb-1.5">Listen Address</Label>
+              <Input id="server-listen-address" type="text" defaultValue={data.server_address ?? ""} readOnly className="bg-muted cursor-not-allowed text-muted-foreground font-mono" />
             </div>
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">Log Level</span>
@@ -65,23 +66,23 @@ export default function ServerSection({
               </div>
             </div>
             <div>
-              <span className="block text-xs text-muted-foreground mb-1.5">TCP Address</span>
-              <Input aria-label="0.0.0.0:4444" name="0-0-0-0-4444-3" type="text" placeholder="0.0.0.0:4444" value={form.tcp_addr} onChange={(e) => setForm({ ...form, tcp_addr: e.target.value })} className="font-mono" />
+              <Label htmlFor="server-tcp-address" className="block text-xs text-muted-foreground mb-1.5">TCP Address</Label>
+              <Input id="server-tcp-address" type="text" placeholder="0.0.0.0:4444" value={form.tcp_addr} onChange={(e) => setForm({ ...form, tcp_addr: e.target.value })} className="font-mono" />
             </div>
           </div>
           <div className="border-t border-border pt-4 mt-2">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <span className="block text-xs text-muted-foreground mb-1.5">Offline Threshold (sec)</span>
-                <Input aria-label="Offline threshold in seconds" name="input-4" type="number" min={5} max={3600} value={form.offline_threshold} onChange={(e) => setForm({ ...form, offline_threshold: Number(e.target.value) })} />
+                <Label htmlFor="server-offline-threshold" className="block text-xs text-muted-foreground mb-1.5">Offline Threshold (sec)</Label>
+                <Input id="server-offline-threshold" type="number" min={5} max={3600} value={form.offline_threshold} onChange={(e) => setForm({ ...form, offline_threshold: Number(e.target.value) })} />
               </div>
               <div>
-                <span className="block text-xs text-muted-foreground mb-1.5">Session Timeout (hours)</span>
-                <Input aria-label="Session timeout in hours" name="input-5" type="number" min={1} max={720} value={form.session_max_age} onChange={(e) => setForm({ ...form, session_max_age: Number(e.target.value) })} />
+                <Label htmlFor="server-session-timeout" className="block text-xs text-muted-foreground mb-1.5">Session Timeout (hours)</Label>
+                <Input id="server-session-timeout" type="number" min={1} max={720} value={form.session_max_age} onChange={(e) => setForm({ ...form, session_max_age: Number(e.target.value) })} />
               </div>
               <div>
-                <span className="block text-xs text-muted-foreground mb-1.5">Cleanup Retention (days)</span>
-                <Input aria-label="Cleanup retention in days" name="input-6" type="number" min={1} max={365} value={form.cleanup_retention} onChange={(e) => setForm({ ...form, cleanup_retention: Number(e.target.value) })} />
+                <Label htmlFor="server-cleanup-retention" className="block text-xs text-muted-foreground mb-1.5">Cleanup Retention (days)</Label>
+                <Input id="server-cleanup-retention" type="number" min={1} max={365} value={form.cleanup_retention} onChange={(e) => setForm({ ...form, cleanup_retention: Number(e.target.value) })} />
               </div>
             </div>
           </div>

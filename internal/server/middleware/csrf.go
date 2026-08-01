@@ -1,10 +1,9 @@
 package middleware
 
 import (
-	"crypto/rand"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
-	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -18,6 +17,10 @@ const csrfHeaderName = "X-CSRF-Token"
 // a cookie that JavaScript can read (HttpOnly=false) and must be echoed back
 // in the X-CSRF-Token header. This double-submit pattern defeats CSRF because
 // an attacker cannot read cookies from a cross-origin page.
+//
+// The CSRF token is derived from the session token via HMAC, binding it to
+// the current session so a token stolen from one session cannot be reused
+// in another.
 func CSRFProtect() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		method := c.Request.Method
@@ -25,9 +28,17 @@ func CSRFProtect() gin.HandlerFunc {
 		// Only protect state-changing methods
 		if method != "GET" && method != "HEAD" && method != "OPTIONS" {
 			headerToken := c.GetHeader(csrfHeaderName)
-			cookieToken, _ := c.Cookie(csrfCookieName)
-
-			if cookieToken == "" || headerToken == "" || headerToken != cookieToken {
+			sessionToken, err := c.Cookie("forgec2_session")
+			if sessionToken == "" || err != nil {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+					"success": false,
+					"error":   "Missing or invalid CSRF token",
+				})
+				return
+			}
+			secret := jwtSecret.Load().([]byte)
+			expected := deriveCSRFToken(sessionToken, secret)
+			if headerToken == "" || headerToken != expected {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 					"success": false,
 					"error":   "Missing or invalid CSRF token",
@@ -38,26 +49,21 @@ func CSRFProtect() gin.HandlerFunc {
 
 		// On every GET/HEAD, rotate the CSRF token to prevent stale cookie injection
 		if method == "GET" || method == "HEAD" {
-			token, err := generateCSRFToken()
-			if err != nil {
-				slog.Error("Failed to generate CSRF token", "error", err)
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-					"success": false,
-					"error":   "Internal server error",
-				})
-				return
+			sessionToken, err := c.Cookie("forgec2_session")
+			if err == nil && sessionToken != "" {
+				secret := jwtSecret.Load().([]byte)
+				token := deriveCSRFToken(sessionToken, secret)
+				SetCookieWithSameSite(c, csrfCookieName, token, 0, "/", CookieSecure, false, http.SameSiteLaxMode)
 			}
-			SetCookieWithSameSite(c, csrfCookieName, token, 0, "/", CookieSecure, false, http.SameSiteLaxMode)
 		}
 
 		c.Next()
 	}
 }
 
-func generateCSRFToken() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("CRNG failed for CSRF token: %w", err)
-	}
-	return hex.EncodeToString(b), nil
+func deriveCSRFToken(sessionToken string, secret []byte) string {
+	h := sha256.Sum256([]byte(sessionToken))
+	mac := hmac.New(sha256.New, secret)
+	mac.Write(h[:])
+	return hex.EncodeToString(mac.Sum(nil))
 }

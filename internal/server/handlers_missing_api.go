@@ -34,14 +34,26 @@ func (s *Server) handleAPIPackerInfo(c *gin.Context) {
 func (s *Server) handleAPISettings(c *gin.Context) {
 	// Gather DB stats
 	var totalAgents, onlineAgents int64
-	s.db.Model(&db.Implant{}).Count(&totalAgents)
-	s.db.Model(&db.Implant{}).Where("last_seen > ?", time.Now().Add(-s.offlineThreshold())).Count(&onlineAgents)
+	if err := s.db.Model(&db.Implant{}).Count(&totalAgents).Error; err != nil {
+		slog.Error("Failed to count agents", "err", err)
+	}
+	if err := s.db.Model(&db.Implant{}).Where("last_seen > ?", time.Now().Add(-s.offlineThreshold())).Count(&onlineAgents).Error; err != nil {
+		slog.Error("Failed to count online agents", "err", err)
+	}
 
 	var totalListeners, totalCreds, totalTokens, totalAudits int64
-	s.db.Model(&db.Listener{}).Count(&totalListeners)
-	s.db.Model(&db.CredentialEntry{}).Count(&totalCreds)
-	s.db.Model(&db.TokenEntry{}).Count(&totalTokens)
-	s.db.Model(&db.AuditLog{}).Count(&totalAudits)
+	if err := s.db.Model(&db.Listener{}).Count(&totalListeners).Error; err != nil {
+		slog.Error("Failed to count listeners", "err", err)
+	}
+	if err := s.db.Model(&db.CredentialEntry{}).Count(&totalCreds).Error; err != nil {
+		slog.Error("Failed to count credentials", "err", err)
+	}
+	if err := s.db.Model(&db.TokenEntry{}).Count(&totalTokens).Error; err != nil {
+		slog.Error("Failed to count tokens", "err", err)
+	}
+	if err := s.db.Model(&db.AuditLog{}).Count(&totalAudits).Error; err != nil {
+		slog.Error("Failed to count audit logs", "err", err)
+	}
 
 	var dbSize int64
 	if fi, err := os.Stat(s.cfg.Database.Path); err == nil {
@@ -95,7 +107,9 @@ func (s *Server) handleAPISettings(c *gin.Context) {
 
 func (s *Server) handleAPIMeshTopology(c *gin.Context) {
 	var peers []db.MeshPeer
-	s.db.Limit(500).Find(&peers)
+	if err := s.db.Limit(500).Find(&peers).Error; err != nil {
+		slog.Error("Failed to query mesh peers", "err", err)
+	}
 	type topoNode struct {
 		ID        string `json:"id"`
 		Label     string `json:"label"`
@@ -187,9 +201,11 @@ func (s *Server) handleAPITimelineData(c *gin.Context) {
 		IP        string
 		Success   bool
 	}
-	s.db.Table("audit_logs").
+	if err := s.db.Table("audit_logs").
 		Select("id, created_at, user, action, details, agent_id, ip, success").
-		Order("created_at DESC").Limit(200).Find(&auditLogs)
+		Order("created_at DESC").Limit(200).Find(&auditLogs).Error; err != nil {
+		slog.Error("Failed to query audit logs for timeline", "err", err)
+	}
 	for _, l := range auditLogs {
 		events = append(events, timelineEntry{
 			ID: l.ID, Timestamp: l.CreatedAt, Type: "audit",
@@ -207,9 +223,11 @@ func (s *Server) handleAPITimelineData(c *gin.Context) {
 		Command   string
 		Status    string
 	}
-	s.db.Table("tasks").
+	if err := s.db.Table("tasks").
 		Select("id, created_at, agent_id, type, command, status").
-		Order("created_at DESC").Limit(200).Find(&tasks)
+		Order("created_at DESC").Limit(200).Find(&tasks).Error; err != nil {
+		slog.Error("Failed to query tasks for timeline", "err", err)
+	}
 	for _, t := range tasks {
 		events = append(events, timelineEntry{
 			ID: t.ID, Timestamp: t.CreatedAt, Type: "task",
@@ -224,7 +242,9 @@ func (s *Server) handleAPITimelineData(c *gin.Context) {
 func (s *Server) handleAPIChatHistory(c *gin.Context) {
 	channel := c.DefaultQuery("channel", "general")
 	var msgs []db.ChatMessage
-	s.db.Where("channel = ?", channel).Order("created_at asc").Limit(200).Find(&msgs)
+	if err := s.db.Where("channel = ?", channel).Order("created_at asc").Limit(200).Find(&msgs).Error; err != nil {
+		slog.Error("Failed to query chat history", "err", err)
+	}
 	respond(c, gin.H{"messages": msgs})
 }
 
@@ -236,15 +256,19 @@ func (s *Server) handleAPIChatChannels(c *gin.Context) {
 		LastTime     string `gorm:"column:last_time"`
 	}
 	var rows []channelRow
-	s.db.Model(&db.ChatMessage{}).
+	if err := s.db.Model(&db.ChatMessage{}).
 		Select("channel, COUNT(*) as message_count, MAX(message) as last_message, MAX(created_at) as last_time").
-		Group("channel").Order("MAX(created_at) DESC").Limit(500).Find(&rows)
+		Group("channel").Order("MAX(created_at) DESC").Limit(500).Find(&rows).Error; err != nil {
+		slog.Error("Failed to query chat channels", "err", err)
+	}
 	respond(c, gin.H{"channels": rows})
 }
 
 func (s *Server) buildChainEntries() []gin.H {
 	var agents []db.Implant
-	s.db.Select("id, hostname, parent_agent_id").Limit(5000).Find(&agents)
+	if err := s.db.Select("id, hostname, parent_agent_id").Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
+		slog.Error("Failed to build chain entries", "err", err)
+	}
 	entries := make([]gin.H, 0, len(agents))
 	for _, a := range agents {
 		entries = append(entries, gin.H{
@@ -396,7 +420,9 @@ func (s *Server) handleSettingsMaintenancePurge(c *gin.Context) {
 	}
 	for _, t := range tables {
 		var count int64
-		s.db.Table(t.name).Where(t.col+" < ?", cutoff).Count(&count)
+		if err := s.db.Table(t.name).Where(t.col+" < ?", cutoff).Count(&count).Error; err != nil {
+			slog.Error("Failed to count purgeable records", "table", t.name, "err", err)
+		}
 		if count > 0 {
 			s.db.Table(t.name).Where(t.col+" < ?", cutoff).Delete(nil)
 			results = append(results, purgeResult{Table: t.name, Count: count})
@@ -467,7 +493,9 @@ func (s *Server) handleAgentRecordingGet(c *gin.Context) {
 	if agentID != "" {
 		q = q.Where("agent_id = ?", agentID)
 	}
-	q.Find(&recordings)
+	if err := q.Find(&recordings).Error; err != nil {
+		slog.Error("Failed to query agent recordings", "err", err)
+	}
 	respond(c, gin.H{"recordings": recordings})
 }
 
@@ -494,7 +522,9 @@ func (s *Server) handleMeshRoute(c *gin.Context) {
 		return
 	}
 	var peers []db.MeshPeer
-	s.db.Where("agent_id = ? OR peer_id = ?", agentID, agentID).Limit(500).Find(&peers)
+	if err := s.db.Where("agent_id = ? OR peer_id = ?", agentID, agentID).Limit(500).Find(&peers).Error; err != nil {
+		slog.Error("Failed to query mesh route", "err", err)
+	}
 	respond(c, gin.H{"success": true, "peers": peers})
 }
 

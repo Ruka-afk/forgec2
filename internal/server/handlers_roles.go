@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -38,7 +39,9 @@ func marshalPermissions(perms []string) string {
 // GET /api/roles
 func (s *Server) handleRolesList(c *gin.Context) {
 	var roles []db.CustomRole
-	s.db.Order("created_at desc").Limit(100).Find(&roles)
+	if err := s.db.Order("created_at desc").Limit(100).Find(&roles).Error; err != nil {
+		slog.Error("Failed to list roles", "err", err)
+	}
 
 	type roleResp struct {
 		ID          uint     `json:"id"`

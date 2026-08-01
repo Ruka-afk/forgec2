@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -11,7 +12,9 @@ import (
 
 func (s *Server) handleAPITagList(c *gin.Context) {
 	var tags []db.AgentTag
-	s.db.Order("name asc").Find(&tags)
+	if err := s.db.Order("name asc").Find(&tags).Error; err != nil {
+		slog.Error("Failed to list tags", "err", err)
+	}
 	respond(c, gin.H{"tags": tags})
 }
 
@@ -86,7 +89,7 @@ func (s *Server) handleAPITagDelete(c *gin.Context) {
 	if !s.findOrFail(c, &tag, id, "tag") {
 		return
 	}
-	s.db.Model(&tag).Association("Tags").Clear()
+	s.db.Model(&tag).Association("Agents").Clear()
 	if err := s.db.Delete(&tag).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Tag deletion"))
 		return
@@ -98,7 +101,13 @@ func (s *Server) handleAPITagDelete(c *gin.Context) {
 func (s *Server) handleAgentTags(c *gin.Context) {
 	id := c.Param("id")
 	var tags []db.AgentTag
-	s.db.Model(&db.Implant{ID: id}).Association("Tags").Find(&tags)
+	if err := s.db.Table("agent_tags").
+		Joins("JOIN agent_tag_assignments ON agent_tag_assignments.agent_tag_id = agent_tags.id").
+		Where("agent_tag_assignments.implant_id = ?", id).
+		Order("agent_tags.name asc").
+		Find(&tags).Error; err != nil {
+		slog.Error("Failed to load agent tags", "agent_id", id, "err", err)
+	}
 	respond(c, gin.H{"tags": tags})
 }
 
@@ -120,11 +129,13 @@ func (s *Server) handleBatchAgentTags(c *gin.Context) {
 		Color   string `gorm:"column:color"`
 	}
 	var rows []agentTagsRow
-	s.db.Table("agent_tag_assignments").
-		Select("agent_tag_assignments.agent_id, agent_tags.id as tag_id, agent_tags.name, agent_tags.color").
-		Joins("JOIN agent_tags ON agent_tags.id = agent_tag_assignments.tag_id").
-		Where("agent_tag_assignments.agent_id IN ?", req.AgentIDs).
-		Find(&rows)
+	if err := s.db.Table("agent_tag_assignments").
+		Select("agent_tag_assignments.implant_id as agent_id, agent_tags.id as tag_id, agent_tags.name, agent_tags.color").
+		Joins("JOIN agent_tags ON agent_tags.id = agent_tag_assignments.agent_tag_id").
+		Where("agent_tag_assignments.implant_id IN ?", req.AgentIDs).
+		Find(&rows).Error; err != nil {
+		slog.Error("Failed to batch-load agent tags", "agent_ids", req.AgentIDs, "err", err)
+	}
 
 	tagsByAgent := make(map[string][]gin.H)
 	for _, r := range rows {

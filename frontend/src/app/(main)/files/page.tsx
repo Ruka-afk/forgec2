@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { formatTime } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { DataState } from "@/components/ui/data-state";
 import { NormalizedAgent as Agent } from "@/types/agent";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,10 +27,12 @@ export default function FilesPage() {
   const [currentPath, setCurrentPath] = useState("C:\\");
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filesLoading, setFilesLoading] = useState(false);
 
   const loadAgents = useCallback(() => {
     setLoading(true);
+    setError(null);
     api.get("/agents?page=1&pageSize=200")
       .then((data) => {
         const list = data.agents || data || [];
@@ -37,6 +40,7 @@ export default function FilesPage() {
       })
       .catch(() => {
         setAgents([]);
+        setError(t("files.toast.load_agents_failed"));
         toast.error(t("files.toast.load_agents_failed"));
       })
       .finally(() => setLoading(false));
@@ -97,6 +101,7 @@ export default function FilesPage() {
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("files.title")} subtitle={t("files.subtitle")} />
 
+      <DataState loading={loading} error={error} onRetry={loadAgents}>
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div className="lg:col-span-1">
           <Card className="">
@@ -153,9 +158,9 @@ export default function FilesPage() {
                 </div>
               ) : files.length > 0 ? (
                 <div className="divide-y divide-border">
-                  {files.filter((f) => f.name).map((f, i) => (
+                  {files.filter((f) => f.name).map((f) => (
                     <div
-                      key={i}
+                      key={f.name}
                       role={f.is_dir ? "button" : undefined}
                       tabIndex={f.is_dir ? 0 : undefined}
                       onClick={() => f.is_dir && navigateDir(f.name)}
@@ -188,6 +193,7 @@ export default function FilesPage() {
           )}
         </div>
       </div>
+      </DataState>
     </div>
   );
 }

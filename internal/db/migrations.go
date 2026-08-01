@@ -5,7 +5,75 @@ import (
 	"gorm.io/gorm"
 )
 
-var Migrations = []*gormigrate.Migration{
+// initialSchemaIndexes are the CREATE INDEX statements that were historically
+// part of the initial-schema migration. They are applied by an index-phase
+// migration that runs AFTER AutoMigrate, so databases arriving via the legacy
+// agents->implants rename path (whose target columns only exist after
+// AutoMigrate) still get their indexes created.
+var initialSchemaIndexes = []struct{ sql, label string }{
+	{"CREATE INDEX IF NOT EXISTS idx_implants_last_seen ON implants(last_seen)", "idx_implants_last_seen"},
+	{"CREATE INDEX IF NOT EXISTS idx_implants_status ON implants(status)", "idx_implants_status"},
+	{"CREATE INDEX IF NOT EXISTS idx_implants_listener_id ON implants(listener_id)", "idx_implants_listener_id"},
+	{"CREATE INDEX IF NOT EXISTS idx_implants_hostname ON implants(hostname)", "idx_implants_hostname"},
+	{"CREATE INDEX IF NOT EXISTS idx_implants_ip ON implants(ip)", "idx_implants_ip"},
+	{"CREATE INDEX IF NOT EXISTS idx_tasks_agent_status_created ON tasks(agent_id, status, created_at)", "idx_tasks_agent_status_created"},
+	{"CREATE INDEX IF NOT EXISTS idx_tasks_created_status ON tasks(created_at, status)", "idx_tasks_created_status"},
+	{"CREATE INDEX IF NOT EXISTS idx_tasks_type ON tasks(type)", "idx_tasks_type"},
+	{"CREATE INDEX IF NOT EXISTS idx_credential_entries_agent_id ON credential_entries(agent_id)", "idx_credential_entries_agent_id"},
+	{"CREATE INDEX IF NOT EXISTS idx_credential_entries_source ON credential_entries(source)", "idx_credential_entries_source"},
+	{"CREATE INDEX IF NOT EXISTS idx_credential_entries_created ON credential_entries(created_at)", "idx_credential_entries_created"},
+	{"CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user)", "idx_audit_user"},
+	{"CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action)", "idx_audit_action"},
+	{"CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at)", "idx_audit_created"},
+	{"CREATE INDEX IF NOT EXISTS idx_scan_agent_id ON scan_results(agent_id)", "idx_scan_agent_id"},
+	{"CREATE INDEX IF NOT EXISTS idx_scan_created ON scan_results(created_at)", "idx_scan_created"},
+	{"CREATE INDEX IF NOT EXISTS idx_implants_username ON implants(username)", "idx_implants_username"},
+	{"CREATE INDEX IF NOT EXISTS idx_implants_os ON implants(os)", "idx_implants_os"},
+	{"CREATE INDEX IF NOT EXISTS idx_implants_arch ON implants(arch)", "idx_implants_arch"},
+	{"CREATE INDEX IF NOT EXISTS idx_implants_elevated ON implants(elevated)", "idx_implants_elevated"},
+	{"CREATE INDEX IF NOT EXISTS idx_implants_created ON implants(created_at)", "idx_implants_created"},
+	{"CREATE INDEX IF NOT EXISTS idx_implants_parent_id ON implants(parent_id)", "idx_implants_parent_id"},
+	{"CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)", "idx_users_username"},
+	{"CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)", "idx_users_role"},
+	{"CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)", "idx_users_active"},
+	{"CREATE INDEX IF NOT EXISTS idx_listeners_enabled ON listeners(enabled)", "idx_listeners_enabled"},
+	{"CREATE INDEX IF NOT EXISTS idx_listeners_scheme ON listeners(scheme)", "idx_listeners_scheme"},
+	{"CREATE INDEX IF NOT EXISTS idx_token_entries_active ON token_entries(active)", "idx_token_entries_active"},
+	{"CREATE INDEX IF NOT EXISTS idx_token_entries_domain ON token_entries(domain)", "idx_token_entries_domain"},
+	{"CREATE INDEX IF NOT EXISTS idx_socks_sessions_status ON socks_sessions(status)", "idx_socks_sessions_status"},
+	{"CREATE INDEX IF NOT EXISTS idx_credentials_type ON credential_entries(type)", "idx_credentials_type"},
+	{"CREATE INDEX IF NOT EXISTS idx_credentials_confirmed ON credential_entries(confirmed)", "idx_credentials_confirmed"},
+	{"CREATE INDEX IF NOT EXISTS idx_build_logs_user ON build_logs(user)", "idx_build_logs_user"},
+	{"CREATE INDEX IF NOT EXISTS idx_build_logs_status ON build_logs(status)", "idx_build_logs_status"},
+	{"CREATE INDEX IF NOT EXISTS idx_network_hosts_ip ON network_hosts(ip)", "idx_network_hosts_ip"},
+	{"CREATE INDEX IF NOT EXISTS idx_command_templates_category ON command_templates(category)", "idx_command_templates_category"},
+	{"CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status)", "idx_alerts_status"},
+	{"CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity)", "idx_alerts_severity"},
+	{"CREATE INDEX IF NOT EXISTS idx_alerts_type ON alerts(type)", "idx_alerts_type"},
+	{"CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled ON alert_rules(enabled)", "idx_alert_rules_enabled"},
+	{"CREATE INDEX IF NOT EXISTS idx_alert_rules_event ON alert_rules(event_type)", "idx_alert_rules_event"},
+	{"CREATE INDEX IF NOT EXISTS idx_system_metrics_created ON system_metrics(created_at)", "idx_system_metrics_created"},
+	{"CREATE INDEX IF NOT EXISTS idx_automation_rules_enabled ON automation_rules(enabled)", "idx_automation_rules_enabled"},
+	{"CREATE INDEX IF NOT EXISTS idx_automation_rules_event ON automation_rules(event_type)", "idx_automation_rules_event"},
+	{"CREATE INDEX IF NOT EXISTS idx_tasks_agent_created ON tasks(agent_id, created_at DESC)", "idx_tasks_agent_created"},
+	{"CREATE INDEX IF NOT EXISTS idx_credential_entries_agent_created ON credential_entries(agent_id, created_at)", "idx_credential_entries_agent_created"},
+	{"CREATE INDEX IF NOT EXISTS idx_notifications_type_read_created ON notifications(type, read, created_at)", "idx_notifications_type_read_created"},
+	{"CREATE INDEX IF NOT EXISTS idx_notifications_read_created ON notifications(read, created_at)", "idx_notifications_read_created"},
+	{"CREATE INDEX IF NOT EXISTS idx_implants_status_last_seen ON implants(status, last_seen)", "idx_implants_status_last_seen"},
+	{"CREATE INDEX IF NOT EXISTS idx_audit_logs_action_created ON audit_logs(action, created_at)", "idx_audit_logs_action_created"},
+	{"CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)", "idx_tasks_status"},
+	{"CREATE INDEX IF NOT EXISTS idx_alerts_status_severity ON alerts(status, severity)", "idx_alerts_status_severity"},
+	{"CREATE INDEX IF NOT EXISTS idx_alerts_rule_source ON alerts(rule_id, source, status)", "idx_alerts_rule_source"},
+	{"CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_messages(channel)", "idx_chat_messages_channel"},
+	{"CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run ON scheduled_tasks(next_run, enabled)", "idx_scheduled_tasks_next_run"},
+	{"CREATE INDEX IF NOT EXISTS idx_opsec_history_agent_created ON opsec_history(agent_id, created_at)", "idx_opsec_history_agent_created"},
+	{"CREATE INDEX IF NOT EXISTS idx_network_hosts_agent_ip ON network_hosts(agent_id, ip)", "idx_network_hosts_agent_ip"},
+	{"CREATE INDEX IF NOT EXISTS idx_phishing_events_type_created ON phishing_events(event_type, created_at)", "idx_phishing_events_type_created"},
+	{"CREATE INDEX IF NOT EXISTS idx_credential_domain_created ON credential_entries(domain, created_at)", "idx_credential_domain_created"},
+}
+
+// schemaMigrations mutate tables/columns/data and run BEFORE AutoMigrate.
+var schemaMigrations = []*gormigrate.Migration{
 	{
 		ID: "2024-01-01-initial-schema",
 		Migrate: func(tx *gorm.DB) error {
@@ -25,65 +93,6 @@ var Migrations = []*gormigrate.Migration{
 			m("ALTER TABLE listeners ADD COLUMN color VARCHAR(7) DEFAULT ''", "add_listeners_color")
 			m("ALTER TABLE listeners ADD COLUMN status VARCHAR(20) DEFAULT 'running'", "add_listeners_status")
 
-			m("CREATE INDEX IF NOT EXISTS idx_implants_last_seen ON implants(last_seen)", "idx_implants_last_seen")
-			m("CREATE INDEX IF NOT EXISTS idx_implants_status ON implants(status)", "idx_implants_status")
-			m("CREATE INDEX IF NOT EXISTS idx_implants_listener_id ON implants(listener_id)", "idx_implants_listener_id")
-			m("CREATE INDEX IF NOT EXISTS idx_implants_hostname ON implants(hostname)", "idx_implants_hostname")
-			m("CREATE INDEX IF NOT EXISTS idx_implants_ip ON implants(ip)", "idx_implants_ip")
-			m("CREATE INDEX IF NOT EXISTS idx_tasks_agent_status_created ON tasks(agent_id, status, created_at)", "idx_tasks_agent_status_created")
-			m("CREATE INDEX IF NOT EXISTS idx_tasks_created_status ON tasks(created_at, status)", "idx_tasks_created_status")
-			m("CREATE INDEX IF NOT EXISTS idx_tasks_type ON tasks(type)", "idx_tasks_type")
-			m("CREATE INDEX IF NOT EXISTS idx_credential_entries_agent_id ON credential_entries(agent_id)", "idx_credential_entries_agent_id")
-			m("CREATE INDEX IF NOT EXISTS idx_credential_entries_source ON credential_entries(source)", "idx_credential_entries_source")
-			m("CREATE INDEX IF NOT EXISTS idx_credential_entries_created ON credential_entries(created_at)", "idx_credential_entries_created")
-			m("CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user)", "idx_audit_user")
-			m("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action)", "idx_audit_action")
-			m("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at)", "idx_audit_created")
-			m("CREATE INDEX IF NOT EXISTS idx_scan_agent_id ON scan_results(agent_id)", "idx_scan_agent_id")
-			m("CREATE INDEX IF NOT EXISTS idx_scan_created ON scan_results(created_at)", "idx_scan_created")
-			m("CREATE INDEX IF NOT EXISTS idx_implants_username ON implants(username)", "idx_implants_username")
-			m("CREATE INDEX IF NOT EXISTS idx_implants_os ON implants(os)", "idx_implants_os")
-			m("CREATE INDEX IF NOT EXISTS idx_implants_arch ON implants(arch)", "idx_implants_arch")
-			m("CREATE INDEX IF NOT EXISTS idx_implants_elevated ON implants(elevated)", "idx_implants_elevated")
-			m("CREATE INDEX IF NOT EXISTS idx_implants_created ON implants(created_at)", "idx_implants_created")
-			m("CREATE INDEX IF NOT EXISTS idx_implants_parent_id ON implants(parent_id)", "idx_implants_parent_id")
-			m("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)", "idx_users_username")
-			m("CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)", "idx_users_role")
-			m("CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)", "idx_users_active")
-			m("CREATE INDEX IF NOT EXISTS idx_listeners_enabled ON listeners(enabled)", "idx_listeners_enabled")
-			m("CREATE INDEX IF NOT EXISTS idx_listeners_scheme ON listeners(scheme)", "idx_listeners_scheme")
-			m("CREATE INDEX IF NOT EXISTS idx_token_entries_active ON token_entries(active)", "idx_token_entries_active")
-			m("CREATE INDEX IF NOT EXISTS idx_token_entries_domain ON token_entries(domain)", "idx_token_entries_domain")
-			m("CREATE INDEX IF NOT EXISTS idx_socks_sessions_status ON socks_sessions(status)", "idx_socks_sessions_status")
-			m("CREATE INDEX IF NOT EXISTS idx_credentials_type ON credential_entries(type)", "idx_credentials_type")
-			m("CREATE INDEX IF NOT EXISTS idx_credentials_confirmed ON credential_entries(confirmed)", "idx_credentials_confirmed")
-			m("CREATE INDEX IF NOT EXISTS idx_build_logs_user ON build_logs(user)", "idx_build_logs_user")
-			m("CREATE INDEX IF NOT EXISTS idx_build_logs_status ON build_logs(status)", "idx_build_logs_status")
-			m("CREATE INDEX IF NOT EXISTS idx_network_hosts_ip ON network_hosts(ip)", "idx_network_hosts_ip")
-			m("CREATE INDEX IF NOT EXISTS idx_command_templates_category ON command_templates(category)", "idx_command_templates_category")
-			m("CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status)", "idx_alerts_status")
-			m("CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity)", "idx_alerts_severity")
-			m("CREATE INDEX IF NOT EXISTS idx_alerts_type ON alerts(type)", "idx_alerts_type")
-			m("CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled ON alert_rules(enabled)", "idx_alert_rules_enabled")
-			m("CREATE INDEX IF NOT EXISTS idx_system_metrics_created ON system_metrics(created_at)", "idx_system_metrics_created")
-			m("CREATE INDEX IF NOT EXISTS idx_automation_rules_enabled ON automation_rules(enabled)", "idx_automation_rules_enabled")
-			m("CREATE INDEX IF NOT EXISTS idx_automation_rules_event ON automation_rules(event_type)", "idx_automation_rules_event")
-			m("CREATE INDEX IF NOT EXISTS idx_tasks_agent_created ON tasks(agent_id, created_at DESC)", "idx_tasks_agent_created")
-			m("CREATE INDEX IF NOT EXISTS idx_credential_entries_agent_created ON credential_entries(agent_id, created_at)", "idx_credential_entries_agent_created")
-			m("CREATE INDEX IF NOT EXISTS idx_notifications_type_read_created ON notifications(type, read, created_at)", "idx_notifications_type_read_created")
-			m("CREATE INDEX IF NOT EXISTS idx_notifications_read_created ON notifications(read, created_at)", "idx_notifications_read_created")
-			m("CREATE INDEX IF NOT EXISTS idx_implants_status_last_seen ON implants(status, last_seen)", "idx_implants_status_last_seen")
-			m("CREATE INDEX IF NOT EXISTS idx_audit_logs_action_created ON audit_logs(action, created_at)", "idx_audit_logs_action_created")
-			m("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)", "idx_tasks_status")
-			m("CREATE INDEX IF NOT EXISTS idx_alerts_status_severity ON alerts(status, severity)", "idx_alerts_status_severity")
-			m("CREATE INDEX IF NOT EXISTS idx_alerts_rule_source ON alerts(rule_id, source, status)", "idx_alerts_rule_source")
-			m("CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_messages(channel)", "idx_chat_messages_channel")
-			m("CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run ON scheduled_tasks(next_run, enabled)", "idx_scheduled_tasks_next_run")
-			m("CREATE INDEX IF NOT EXISTS idx_opsec_history_agent_created ON opsec_history(agent_id, created_at)", "idx_opsec_history_agent_created")
-			m("CREATE INDEX IF NOT EXISTS idx_network_hosts_agent_ip ON network_hosts(agent_id, ip)", "idx_network_hosts_agent_ip")
-			m("CREATE INDEX IF NOT EXISTS idx_phishing_events_type_created ON phishing_events(event_type, created_at)", "idx_phishing_events_type_created")
-			m("CREATE INDEX IF NOT EXISTS idx_credential_domain_created ON credential_entries(domain, created_at)", "idx_credential_domain_created")
-
 			return nil
 		},
 		Rollback: func(tx *gorm.DB) error {
@@ -98,7 +107,24 @@ var Migrations = []*gormigrate.Migration{
 			m := func(sql, label string) {
 				execMigration(tx, sql, label)
 			}
-			m("ALTER TABLE agents RENAME TO implants", "rename_agents_to_implants")
+			if !tx.Migrator().HasTable("agents") {
+				return nil
+			}
+			if !tx.Migrator().HasTable("implants") {
+				m("ALTER TABLE agents RENAME TO implants", "rename_agents_to_implants")
+				return nil
+			}
+			// Older server versions ran AutoMigrate before this migration,
+			// creating an empty `implants` table and stranding the legacy data
+			// in `agents`. Heal that state only when `implants` holds no rows.
+			var implantCount int64
+			if err := tx.Table("implants").Count(&implantCount).Error; err != nil {
+				return err
+			}
+			if implantCount == 0 {
+				m("DROP TABLE implants", "drop_empty_implants")
+				m("ALTER TABLE agents RENAME TO implants", "rename_agents_to_implants")
+			}
 			return nil
 		},
 		Rollback: func(tx *gorm.DB) error {
@@ -120,6 +146,99 @@ var Migrations = []*gormigrate.Migration{
 		},
 		Rollback: func(tx *gorm.DB) error {
 			// Irreversible: old role values are lost after migration.
+			return nil
+		},
+	},
+	{
+		ID: "2025-07-25-add-agent-status-events",
+		Migrate: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&AgentStatusEvent{})
+		},
+		Rollback: func(tx *gorm.DB) error {
+			return tx.Migrator().DropTable("agent_status_events")
+		},
+	},
+	{
+		ID: "2025-07-25-add-backup-codes",
+		Migrate: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&BackupCode{})
+		},
+		Rollback: func(tx *gorm.DB) error {
+			return tx.Migrator().DropTable("backup_codes")
+		},
+	},
+	{
+		ID: "2025-07-25-add-user-sessions",
+		Migrate: func(tx *gorm.DB) error {
+			return tx.AutoMigrate(&UserSession{})
+		},
+		Rollback: func(tx *gorm.DB) error {
+			return tx.Migrator().DropTable("user_sessions")
+		},
+	},
+	{
+		ID: "2026-07-26-add-task-acknowledged-at",
+		Migrate: func(tx *gorm.DB) error {
+			execMigration(tx, "ALTER TABLE tasks ADD COLUMN acknowledged_at DATETIME", "add_tasks_acknowledged_at")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			return nil
+		},
+	},
+	{
+		ID: "2026-07-26-add-implant-protocol-version",
+		Migrate: func(tx *gorm.DB) error {
+			execMigration(tx, "ALTER TABLE implants ADD COLUMN protocol_version INTEGER DEFAULT 0", "add_implants_protocol_version")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "ALTER TABLE implants DROP COLUMN protocol_version", "drop_implants_protocol_version")
+			return nil
+		},
+	},
+	{
+		ID: "2026-07-27-add-implant-env-fields",
+		Migrate: func(tx *gorm.DB) error {
+			execMigration(tx, "ALTER TABLE implants ADD COLUMN env_threat_score INTEGER DEFAULT 0", "add_implants_env_threat_score")
+			execMigration(tx, "ALTER TABLE implants ADD COLUMN env_honeypot BOOLEAN DEFAULT FALSE", "add_implants_env_honeypot")
+			execMigration(tx, "ALTER TABLE implants ADD COLUMN env_class VARCHAR(32) DEFAULT ''", "add_implants_env_class")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "ALTER TABLE implants DROP COLUMN env_threat_score", "drop_implants_env_threat_score")
+			execMigration(tx, "ALTER TABLE implants DROP COLUMN env_honeypot", "drop_implants_env_honeypot")
+			execMigration(tx, "ALTER TABLE implants DROP COLUMN env_class", "drop_implants_env_class")
+			return nil
+		},
+	},
+	{
+		ID: "2026-07-28-add-audit-log-hash-chain",
+		Migrate: func(tx *gorm.DB) error {
+			execMigration(tx, "ALTER TABLE audit_logs ADD COLUMN prev_hash VARCHAR(64) DEFAULT ''", "add_audit_logs_prev_hash")
+			execMigration(tx, "ALTER TABLE audit_logs ADD COLUMN entry_hash VARCHAR(64) DEFAULT ''", "add_audit_logs_entry_hash")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "ALTER TABLE audit_logs DROP COLUMN prev_hash", "drop_audit_logs_prev_hash")
+			execMigration(tx, "ALTER TABLE audit_logs DROP COLUMN entry_hash", "drop_audit_logs_entry_hash")
+			return nil
+		},
+	},
+}
+
+// indexMigrations create/drop indexes and run AFTER AutoMigrate, so their
+// target tables/columns are guaranteed to exist on every upgrade path.
+var indexMigrations = []*gormigrate.Migration{
+	{
+		ID: "2024-01-01-initial-schema-indexes",
+		Migrate: func(tx *gorm.DB) error {
+			for _, idx := range initialSchemaIndexes {
+				execMigration(tx, idx.sql, idx.label)
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
 			return nil
 		},
 	},
@@ -261,33 +380,6 @@ var Migrations = []*gormigrate.Migration{
 		},
 	},
 	{
-		ID: "2025-07-25-add-agent-status-events",
-		Migrate: func(tx *gorm.DB) error {
-			return tx.AutoMigrate(&AgentStatusEvent{})
-		},
-		Rollback: func(tx *gorm.DB) error {
-			return tx.Migrator().DropTable("agent_status_events")
-		},
-	},
-	{
-		ID: "2025-07-25-add-backup-codes",
-		Migrate: func(tx *gorm.DB) error {
-			return tx.AutoMigrate(&BackupCode{})
-		},
-		Rollback: func(tx *gorm.DB) error {
-			return tx.Migrator().DropTable("backup_codes")
-		},
-	},
-	{
-		ID: "2025-07-25-add-user-sessions",
-		Migrate: func(tx *gorm.DB) error {
-			return tx.AutoMigrate(&UserSession{})
-		},
-		Rollback: func(tx *gorm.DB) error {
-			return tx.Migrator().DropTable("user_sessions")
-		},
-	},
-	{
 		ID: "2025-07-26-add-missing-indexes",
 		Migrate: func(tx *gorm.DB) error {
 			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_credential_entries_username ON credential_entries(username)", "idx_credential_entries_username")
@@ -326,40 +418,13 @@ var Migrations = []*gormigrate.Migration{
 		},
 	},
 	{
-		ID: "2026-07-26-add-task-acknowledged-at",
+		ID: "2026-07-26-add-task-acknowledged-at-index",
 		Migrate: func(tx *gorm.DB) error {
-			execMigration(tx, "ALTER TABLE tasks ADD COLUMN acknowledged_at DATETIME", "add_tasks_acknowledged_at")
 			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_tasks_status_claimed_acknowledged ON tasks(status, claimed_at, acknowledged_at)", "idx_tasks_status_claimed_acknowledged")
 			return nil
 		},
 		Rollback: func(tx *gorm.DB) error {
 			execMigration(tx, "DROP INDEX IF EXISTS idx_tasks_status_claimed_acknowledged", "drop_idx_tasks_status_claimed_acknowledged")
-			return nil
-		},
-	},
-	{
-		ID: "2026-07-26-add-implant-protocol-version",
-		Migrate: func(tx *gorm.DB) error {
-			execMigration(tx, "ALTER TABLE implants ADD COLUMN protocol_version INTEGER DEFAULT 0", "add_implants_protocol_version")
-			return nil
-		},
-		Rollback: func(tx *gorm.DB) error {
-			execMigration(tx, "ALTER TABLE implants DROP COLUMN protocol_version", "drop_implants_protocol_version")
-			return nil
-		},
-	},
-	{
-		ID: "2026-07-27-add-implant-env-fields",
-		Migrate: func(tx *gorm.DB) error {
-			execMigration(tx, "ALTER TABLE implants ADD COLUMN env_threat_score INTEGER DEFAULT 0", "add_implants_env_threat_score")
-			execMigration(tx, "ALTER TABLE implants ADD COLUMN env_honeypot BOOLEAN DEFAULT FALSE", "add_implants_env_honeypot")
-			execMigration(tx, "ALTER TABLE implants ADD COLUMN env_class VARCHAR(32) DEFAULT ''", "add_implants_env_class")
-			return nil
-		},
-		Rollback: func(tx *gorm.DB) error {
-			execMigration(tx, "ALTER TABLE implants DROP COLUMN env_threat_score", "drop_implants_env_threat_score")
-			execMigration(tx, "ALTER TABLE implants DROP COLUMN env_honeypot", "drop_implants_env_honeypot")
-			execMigration(tx, "ALTER TABLE implants DROP COLUMN env_class", "drop_implants_env_class")
 			return nil
 		},
 	},
@@ -383,22 +448,33 @@ var Migrations = []*gormigrate.Migration{
 		},
 	},
 	{
-		ID: "2026-07-28-add-audit-log-hash-chain",
+		ID: "2026-07-31-add-join-table-implant-indexes",
 		Migrate: func(tx *gorm.DB) error {
-			execMigration(tx, "ALTER TABLE audit_logs ADD COLUMN prev_hash VARCHAR(64) DEFAULT ''", "add_audit_logs_prev_hash")
-			execMigration(tx, "ALTER TABLE audit_logs ADD COLUMN entry_hash VARCHAR(64) DEFAULT ''", "add_audit_logs_entry_hash")
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_agent_tag_assignments_implant ON agent_tag_assignments(implant_id)", "idx_agent_tag_assignments_implant")
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_agent_group_assignments_implant ON agent_group_assignments(implant_id)", "idx_agent_group_assignments_implant")
 			return nil
 		},
 		Rollback: func(tx *gorm.DB) error {
-			execMigration(tx, "ALTER TABLE audit_logs DROP COLUMN prev_hash", "drop_audit_logs_prev_hash")
-			execMigration(tx, "ALTER TABLE audit_logs DROP COLUMN entry_hash", "drop_audit_logs_entry_hash")
+			execMigration(tx, "DROP INDEX IF EXISTS idx_agent_tag_assignments_implant", "drop_idx_agent_tag_assignments_implant")
+			execMigration(tx, "DROP INDEX IF EXISTS idx_agent_group_assignments_implant", "drop_idx_agent_group_assignments_implant")
 			return nil
 		},
 	},
 }
 
-func runMigrations(db *gorm.DB) error {
-	m := gormigrate.New(db, gormigrate.DefaultOptions, Migrations)
+// Migrations is the combined migration history, kept for tooling and tests.
+var Migrations = append(append([]*gormigrate.Migration{}, schemaMigrations...), indexMigrations...)
+
+func runSchemaMigrations(db *gorm.DB) error {
+	m := gormigrate.New(db, gormigrate.DefaultOptions, schemaMigrations)
+	m.InitSchema(func(tx *gorm.DB) error {
+		return nil
+	})
+	return m.Migrate()
+}
+
+func runIndexMigrations(db *gorm.DB) error {
+	m := gormigrate.New(db, gormigrate.DefaultOptions, indexMigrations)
 	m.InitSchema(func(tx *gorm.DB) error {
 		return nil
 	})

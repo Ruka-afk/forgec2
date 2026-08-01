@@ -13,7 +13,7 @@ export function useAgentDetail<T>(agentId: string) {
     setLoading(true);
     setLoadError(false);
     try {
-      const response = await api.get<T>(`/agents/${agentId}?format=json&include_screenshots=false`, { signal });
+      const response = await api.get<T>(`/agents/${agentId}?include_screenshots=false`, { signal });
       setData(response);
     } catch (error) {
       if ((error as Error).name !== "AbortError") {

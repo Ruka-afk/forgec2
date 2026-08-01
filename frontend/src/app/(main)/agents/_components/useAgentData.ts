@@ -37,7 +37,7 @@ export function useAgentData(t: (key: string) => string) {
       if (os) p.set("os", os);
       if (tag_id) p.set("tag_id", tag_id);
       api
-        .get(`/api/v1/agents?${p.toString()}`)
+        .get(`/api/agents?${p.toString()}`)
         .then((data) => {
           const list = (data.agents || []) as Beacon[];
           setBeacons(list);

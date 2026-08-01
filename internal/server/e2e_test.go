@@ -103,7 +103,7 @@ func TestE2E_Beacon_Task_ResultFlow(t *testing.T) {
 	r.POST("/beacon", s.handleBeacon)
 	s.router = r
 
-	agentUUID := "e2e-test-agent-001"
+	agentUUID := "11111111-2222-4333-8444-555555555555"
 
 	// Helper: clear dedup cache so each beacon is processed
 	clearDedup := func() {
@@ -233,7 +233,7 @@ func TestE2E_Beacon_Task_ResultFlow(t *testing.T) {
 
 	// Step 7: Protocol version rejection
 	t.Run("step7_protocol_version_rejection", func(t *testing.T) {
-		beaconJSON := `{"uuid":"old-agent-999","pv":0,"info":{"hostname":"old"}}`
+		beaconJSON := `{"uuid":"55555555-6666-4333-8444-777777777777","pv":0,"info":{"hostname":"old"}}`
 		clearDedup()
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest(http.MethodPost, "/beacon", strings.NewReader(beaconJSON))

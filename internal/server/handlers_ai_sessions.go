@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,7 +15,9 @@ func (s *Server) handleAISessionsList(c *gin.Context) {
 	username, _ := c.Get("user")
 
 	var sessions []db.AIChatSession
-	s.db.Where("owner = ?", username).Order("updated_at desc").Limit(100).Find(&sessions)
+	if err := s.db.Where("owner = ?", username).Order("updated_at desc").Limit(100).Find(&sessions).Error; err != nil {
+		slog.Error("Failed to list AI sessions", "err", err)
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": sessions})
 }
 
@@ -62,7 +65,9 @@ func (s *Server) handleAISessionsGet(c *gin.Context) {
 	}
 
 	var messages []db.AIChatMessage
-	s.db.Where("session_id = ?", sessionID).Order("created_at asc").Limit(1000).Find(&messages)
+	if err := s.db.Where("session_id = ?", sessionID).Order("created_at asc").Limit(1000).Find(&messages).Error; err != nil {
+		slog.Error("Failed to list AI messages", "err", err)
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": messages})
 }
 

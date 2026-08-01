@@ -135,6 +135,7 @@ export default function RemoteDesktopPage() {
 
   useEffect(() => {
     return () => {
+      if (moveThrottleRef.current) clearTimeout(moveThrottleRef.current);
       if (!id) return;
       api.post(`/agents/${id}/screen/stop`).catch((e) => { console.error("RemoteDesktop stop failed:", e); });
     };
@@ -270,12 +271,6 @@ export default function RemoteDesktopPage() {
       <div className="flex flex-col h-[calc(100vh-4rem)]">
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap shrink-0">
         <div className="flex items-center gap-3">
-            <a
-              href={`/agents/${id}`}
-              className="text-muted-foreground/70 hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </a>
             <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
             <Users className="w-4 h-4" />
             {t("agents.rdp_title")}

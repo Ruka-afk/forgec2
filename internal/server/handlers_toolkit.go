@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -13,18 +14,24 @@ func (s *Server) handleToolkitPage(c *gin.Context) {
 	stats := s.getNavStats()
 
 	var agents []db.Implant
-	s.db.Order("last_seen desc").Limit(50).Find(&agents)
+	if err := s.db.Order("last_seen desc").Limit(50).Find(&agents).Error; err != nil {
+		slog.Error("Toolkit: failed to query agents", "err", err)
+	}
 	for i := range agents {
 		agents[i].Status = s.agentStatus(agents[i]).Status
 	}
 
 	var recentTasks []db.Task
-	s.db.Where("status IN ('completed','failed')").
-		Order("created_at desc").Limit(20).Find(&recentTasks)
+	if err := s.db.Where("status IN ('completed','failed')").
+		Order("created_at desc").Limit(20).Find(&recentTasks).Error; err != nil {
+		slog.Error("Toolkit: failed to query recent tasks", "err", err)
+	}
 
 	var agentTasks []db.Task
-	s.db.Where("agent_id = ? AND status IN ('completed','failed')", "").
-		Order("created_at desc").Limit(10).Find(&agentTasks)
+	if err := s.db.Where("agent_id = ? AND status IN ('completed','failed')", "").
+		Order("created_at desc").Limit(10).Find(&agentTasks).Error; err != nil {
+		slog.Error("Toolkit: failed to query agent tasks", "err", err)
+	}
 
 	data := gin.H{
 		"Title":       "ForgeC2 - Post-Exploitation Toolkit",
@@ -182,8 +189,10 @@ func buildQuickActionCommand(action, param, shell string) (string, string) {
 
 func (s *Server) handleToolkitRecentResults(c *gin.Context) {
 	var tasks []db.Task
-	s.db.Where("status IN ('completed','failed')").
-		Order("created_at desc").Limit(50).Find(&tasks)
+	if err := s.db.Where("status IN ('completed','failed')").
+		Order("created_at desc").Limit(50).Find(&tasks).Error; err != nil {
+		slog.Error("Toolkit: failed to query recent results", "err", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
 }
@@ -198,8 +207,12 @@ func (s *Server) handleToolkitAgentInfo(c *gin.Context) {
 	}
 
 	var taskCount, completedCount int64
-	s.db.Model(&db.Task{}).Where("agent_id = ?", agentID).Count(&taskCount)
-	s.db.Model(&db.Task{}).Where("agent_id = ? AND status = 'completed'", agentID).Count(&completedCount)
+	if err := s.db.Model(&db.Task{}).Where("agent_id = ?", agentID).Count(&taskCount).Error; err != nil {
+		slog.Error("Failed to count agent tasks", "agent_id", agentID, "err", err)
+	}
+	if err := s.db.Model(&db.Task{}).Where("agent_id = ? AND status = 'completed'", agentID).Count(&completedCount).Error; err != nil {
+		slog.Error("Failed to count completed tasks", "agent_id", agentID, "err", err)
+	}
 
 	successRate := 0.0
 	if taskCount > 0 {
@@ -217,8 +230,10 @@ func (s *Server) handleToolkitAgentTasks(c *gin.Context) {
 	agentID := c.Param("id")
 
 	var tasks []db.Task
-	s.db.Where("agent_id = ?", agentID).
-		Order("created_at desc").Limit(30).Find(&tasks)
+	if err := s.db.Where("agent_id = ?", agentID).
+		Order("created_at desc").Limit(30).Find(&tasks).Error; err != nil {
+		slog.Error("Toolkit: failed to query agent tasks", "err", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
 }

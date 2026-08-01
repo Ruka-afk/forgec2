@@ -50,7 +50,7 @@ export default function ExtC2Section() {
     setSaving(true);
     try {
       const endpoint = formType === "discord" ? "/extc2/discord" : "/extc2/slack";
-      await api.post(endpoint, { bot_token: botToken, channel_id: channelId });
+      await api.postJson(endpoint, { bot_token: botToken, channel_id: channelId });
       toast.success(t("settings.toast.extc2_configured", { type: formType.charAt(0).toUpperCase() + formType.slice(1) }));
       setBotToken("");
       setChannelId("");
@@ -130,8 +130,9 @@ export default function ExtC2Section() {
             </Button>
           </div>
           <div className="space-y-2">
-            <Label className="text-xs">{t("settings.extc2.botToken")}</Label>
+            <Label htmlFor="extc2-bot-token" className="text-xs">{t("settings.extc2.botToken")}</Label>
             <Input
+              id="extc2-bot-token"
               type="password"
               value={botToken}
               onChange={e => setBotToken(e.target.value)}
@@ -140,8 +141,9 @@ export default function ExtC2Section() {
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-xs">{t("settings.extc2.channelId")}</Label>
+            <Label htmlFor="extc2-channel-id" className="text-xs">{t("settings.extc2.channelId")}</Label>
             <Input
+              id="extc2-channel-id"
               value={channelId}
               onChange={e => setChannelId(e.target.value)}
               placeholder={t("settings.extc2.channelId")}

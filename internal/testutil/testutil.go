@@ -29,8 +29,13 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		&db.CampaignAgent{}, &db.OpsecHistory{}, &db.CircuitBreakerConfig{},
 		&db.CircuitBreakerEvent{}, &db.CustomRole{}, &db.SessionRecording{},
 		&db.PhishingTemplate{}, &db.PhishingCampaign{}, &db.PhishingEvent{},
-		&db.AgentTag{}, &db.AutoTagRule{}, &db.Notification{},
-		&db.AgentStatusEvent{},
+		&db.AgentTag{}, &db.AgentTagAssignment{}, &db.AutoTagRule{}, &db.ScheduledTask{}, &db.Notification{},
+		&db.AgentGroup{}, &db.AgentGroupAssignment{}, &db.Workflow{}, &db.WorkflowStep{},
+		&db.WorkflowExecution{}, &db.WorkflowStepLog{}, &db.ChatMessage{},
+		&db.StagerToken{}, &db.Redirector{}, &db.AgentLock{},
+		&db.AIChatSession{}, &db.AIChatMessage{}, &db.ExtC2Channel{},
+		&db.UserSession{}, &db.BackupCode{}, &db.OpsecRule{},
+		&db.PasswordHistory{}, &db.ApiKey{}, &db.Script{},
 	)
 	if err != nil {
 		t.Fatalf("migrate: %v", err)

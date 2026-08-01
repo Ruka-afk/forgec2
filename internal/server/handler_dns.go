@@ -73,11 +73,13 @@ func (s *Server) handleDNSStart(c *gin.Context) {
 	if addr == "" {
 		addr = ":53"
 	}
+	s.cfg.Lock()
 	if domain != "" {
 		s.cfg.Server.DNSDomain = domain
 	}
 	s.cfg.Server.DNSAddr = addr
 	s.cfg.Server.DNSEnabled = true
+	s.cfg.Unlock()
 
 	dl := NewDNSBeaconListener(domain, s.cfg.Server.Host, 0, addr)
 	dl.SetHandler(func(agentID string, reqJSON []byte) []byte {

@@ -16,7 +16,9 @@ func (s *Server) handleBOFPage(c *gin.Context) {
 	stats := s.getNavStats()
 
 	var bofs []db.BOFFile
-	s.db.Order("created_at desc").Limit(500).Find(&bofs)
+	if err := s.db.Order("created_at desc").Limit(500).Find(&bofs).Error; err != nil {
+		slog.Error("Failed to list BOFs", "err", err)
+	}
 
 	data := gin.H{
 		"Title":     "ForgeC2 - BOF Manager",
@@ -80,7 +82,9 @@ func (s *Server) handleBOFUpload(c *gin.Context) {
 
 func (s *Server) handleBOFList(c *gin.Context) {
 	var bofs []db.BOFFile
-	s.db.Order("created_at desc").Limit(500).Find(&bofs)
+	if err := s.db.Order("created_at desc").Limit(500).Find(&bofs).Error; err != nil {
+		slog.Error("Failed to list BOFs", "err", err)
+	}
 
 	results := make([]gin.H, 0, len(bofs))
 	for _, b := range bofs {
@@ -213,7 +217,9 @@ func (s *Server) handleBOFRecentResults(c *gin.Context) {
 	}
 
 	var tasks []db.Task
-	s.db.Where("type = ?", "bof").Preload("Agent").Order("created_at desc").Limit(limit).Find(&tasks)
+	if err := s.db.Where("type = ?", "bof").Preload("Agent").Order("created_at desc").Limit(limit).Find(&tasks).Error; err != nil {
+		slog.Error("Failed to list BOF results", "err", err)
+	}
 
 	results := make([]gin.H, 0, len(tasks))
 	for _, t := range tasks {

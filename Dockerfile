@@ -19,14 +19,16 @@ COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 COPY locales/ ./locales/
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o forgec2-server ./cmd/server
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o healthcheck ./cmd/healthcheck
 
 # Stage 3: Runtime — distroless for minimal attack surface
 FROM gcr.io/distroless/static-debian12
 LABEL org.opencontainers.image.title="ForgeC2"
 LABEL org.opencontainers.image.description="Command & Control Framework"
 COPY --from=backend-builder /build/forgec2-server /usr/local/bin/
+COPY --from=backend-builder /build/healthcheck /usr/local/bin/healthcheck
 EXPOSE 8000 443 8443 53
 USER nonroot:nonroot
 WORKDIR /home/nonroot
 ENTRYPOINT ["forgec2-server"]
-CMD ["-config", "/home/nonroot/config.yaml"]
+CMD ["-config", "/data/config.yaml"]

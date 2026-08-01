@@ -34,25 +34,30 @@ type Event struct {
 type EventHandler func(Event)
 
 const maxConcurrentEventHandlers = 32
+const eventQueueSize = 256
 
 type EventManager struct {
-	mu        sync.RWMutex
-	handlers  map[EventType][]EventHandler
-	db        *gorm.DB
-	workerSem chan struct{}
-	ctx       context.Context
-	cancel    context.CancelFunc
+	mu         sync.RWMutex
+	handlers   map[EventType][]EventHandler
+	db         *gorm.DB
+	workerSem  chan struct{}
+	eventQueue chan Event
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
 func NewEventManager(database *gorm.DB) *EventManager {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &EventManager{
-		handlers:  make(map[EventType][]EventHandler),
-		db:        database,
-		workerSem: make(chan struct{}, maxConcurrentEventHandlers),
-		ctx:       ctx,
-		cancel:    cancel,
+	em := &EventManager{
+		handlers:   make(map[EventType][]EventHandler),
+		db:         database,
+		workerSem:  make(chan struct{}, maxConcurrentEventHandlers),
+		eventQueue: make(chan Event, eventQueueSize),
+		ctx:        ctx,
+		cancel:     cancel,
 	}
+	go em.queueReader()
+	return em
 }
 
 func (em *EventManager) Shutdown() {
@@ -66,25 +71,44 @@ func (em *EventManager) On(et EventType, handler EventHandler) {
 }
 
 func (em *EventManager) Emit(evt Event) {
-	em.mu.RLock()
-	handlers := make([]EventHandler, len(em.handlers[evt.Type]))
-	copy(handlers, em.handlers[evt.Type])
-	em.mu.RUnlock()
+	select {
+	case <-em.ctx.Done():
+		return
+	case em.eventQueue <- evt:
+	default:
+		slog.Warn("Event queue full, dropping event", "type", evt.Type)
+	}
+}
 
-	for _, h := range handlers {
+func (em *EventManager) queueReader() {
+	for {
 		select {
 		case <-em.ctx.Done():
 			return
-		case em.workerSem <- struct{}{}:
-			go func(handler EventHandler) {
-				defer func() {
-					<-em.workerSem
-					if r := recover(); r != nil {
-						slog.Error("Event handler panic", "panic", r)
-					}
-				}()
-				handler(evt)
-			}(h)
+		case evt := <-em.eventQueue:
+			em.mu.RLock()
+			handlers := make([]EventHandler, len(em.handlers[evt.Type]))
+			copy(handlers, em.handlers[evt.Type])
+			em.mu.RUnlock()
+
+			for _, h := range handlers {
+				select {
+				case <-em.ctx.Done():
+					return
+				case em.workerSem <- struct{}{}:
+					go func(handler EventHandler) {
+						defer func() {
+							<-em.workerSem
+							if r := recover(); r != nil {
+								slog.Error("Event handler panic", "panic", r)
+							}
+						}()
+						handler(evt)
+					}(h)
+				default:
+					slog.Warn("Event handler worker saturated, dropping event", "type", evt.Type)
+				}
+			}
 		}
 	}
 }

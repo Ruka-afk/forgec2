@@ -38,7 +38,9 @@ type extC2SendResponse struct {
 }
 
 func (s *Server) checkExtC2Token(c *gin.Context) bool {
+	s.configMu.RLock()
 	token := s.cfg.RateLimit.ExtC2.APIToken
+	s.configMu.RUnlock()
 	if token == "" {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "extc2 token not configured"})
 		return false
@@ -121,23 +123,24 @@ func (s *Server) handleExtC2Send(c *gin.Context) {
 	slog.Info("External C2 send", "beacon_id", req.BeaconID, "data_len", len(req.Data))
 
 	s.extC2ChannelsMu.Lock()
-	var channelID string
+	channelIDs := make([]string, 0, len(s.extC2Channels))
 	for id := range s.extC2Channels {
-		channelID = id
-		break
+		channelIDs = append(channelIDs, id)
 	}
 	s.extC2ChannelsMu.Unlock()
 
-	if channelID == "" {
+	if len(channelIDs) == 0 {
 		c.JSON(http.StatusServiceUnavailable, extC2SendResponse{Error: "no active extc2 channels"})
 		return
 	}
 
-	s.QueueExtC2Task(channelID, extC2Task{
-		AgentID: req.BeaconID,
-		Type:    "send",
-		Command: req.Data,
-	})
+	for _, channelID := range channelIDs {
+		s.QueueExtC2Task(channelID, extC2Task{
+			AgentID: req.BeaconID,
+			Type:    "send",
+			Command: req.Data,
+		})
+	}
 
 	c.JSON(http.StatusOK, extC2SendResponse{Success: true})
 }
@@ -245,6 +248,7 @@ func (s *Server) handleExternalC2WebSocket(c *gin.Context) {
 	}()
 
 	// Read loop: receive results from external agent
+	conn.SetReadLimit(WSMaxMessageSize)
 	for {
 		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		_, msg, err := conn.ReadMessage()
@@ -281,11 +285,14 @@ func (s *Server) processExternalC2Result(agentID string, taskID uint, result str
 	if taskID == 0 {
 		return
 	}
-	s.db.Model(&db.Task{}).Where("id = ? AND agent_id = ?", taskID, agentID).Updates(map[string]interface{}{
+	if err := s.db.Model(&db.Task{}).Where("id = ? AND agent_id = ?", taskID, agentID).Updates(map[string]interface{}{
 		"status":     "completed",
 		"result":     result,
 		"updated_at": time.Now(),
-	})
+	}).Error; err != nil {
+		slog.Error("Failed to update task result from extc2", "task_id", taskID, "agent_id", agentID, "err", err)
+		return
+	}
 	slog.Info("External C2 result processed", "agent_id", agentID, "task_id", taskID)
 }
 

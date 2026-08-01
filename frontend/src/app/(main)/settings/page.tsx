@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Bell, Bot, CloudUpload, Cpu, Database, FileCode, Globe, Lock, LogIn, Palette, Server, Shield, User, Wrench, Archive, Radio } from "lucide-react";
+import { Bell, Bot, Cpu, Database, FileCode, Globe, Lock, Palette, Server, Shield, User, Wrench, Archive, Radio } from "lucide-react";
 import { useTOTP } from "./_components/useTOTP";
 import { useSettingsData } from "./_components/useSettingsData";
 import ProfileSection from "./_components/ProfileSection";
@@ -19,17 +19,17 @@ import LanguageSection from "./_components/LanguageSection";
 import SecuritySection from "./_components/SecuritySection";
 import ServerSection from "./_components/ServerSection";
 import AgentSection from "./_components/AgentSection";
-import MalleableSection from "./_components/MalleableSection";
-import DatabaseSection from "./_components/DatabaseSection";
-import MaintenanceSection from "./_components/MaintenanceSection";
-import AboutSection from "./_components/AboutSection";
-import NotificationsSection from "./_components/NotificationsSection";
-import SyncSection from "./_components/SyncSection";
-import SIEMSection from "./_components/SIEMSection";
-import BackupSection from "./_components/BackupSection";
-import ExtC2Section from "./_components/ExtC2Section";
-import CertificatesSection from "./_components/CertificatesSection";
-import ModulesSection from "./_components/ModulesSection";
+import dynamic from "next/dynamic";
+
+const MalleableSection = dynamic(() => import("./_components/MalleableSection"), { ssr: false });
+const DatabaseSection = dynamic(() => import("./_components/DatabaseSection"), { ssr: false });
+const MaintenanceSection = dynamic(() => import("./_components/MaintenanceSection"), { ssr: false });
+const AboutSection = dynamic(() => import("./_components/AboutSection"), { ssr: false });
+const NotificationsSection = dynamic(() => import("./_components/NotificationsSection"), { ssr: false });
+const BackupSection = dynamic(() => import("./_components/BackupSection"), { ssr: false });
+const ExtC2Section = dynamic(() => import("./_components/ExtC2Section"), { ssr: false });
+const CertificatesSection = dynamic(() => import("./_components/CertificatesSection"), { ssr: false });
+const ModulesSection = dynamic(() => import("./_components/ModulesSection"), { ssr: false });
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -60,7 +60,8 @@ export default function SettingsPage() {
   const {
     totpStatus, totpSecret, totpQR, totpBackupCodes,
     totpCode, setTotpCode, showTotpSetup,
-    totpDisablePassword, setTotpDisablePassword,
+    totpEnablePassword, setTotpEnablePassword,
+    totpDisablePassword, setTotpDisablePassword, totpDisableCode, setTotpDisableCode,
     handleGenerateTOTP, handleEnableTOTP, handleDisableTOTP,
   } = useTOTP(t, saving, setSaving, activeSection);
 
@@ -166,7 +167,7 @@ export default function SettingsPage() {
 
   const handleDownloadDB = async () => {
     try {
-      const { blob } = await api.download("/settings/config/download");
+      const { blob } = await api.downloadGet("/settings/config/download");
       downloadBlob(blob, "forgec2.db");
     } catch { toast.error(t("settings.toast.download_failed")); }
   };
@@ -206,8 +207,6 @@ export default function SettingsPage() {
     { key: "backup", label: t("settings.backup"), icon: <Archive className="w-4 h-4" /> },
     { key: "maintenance", label: t("settings.maintenance"), icon: <Wrench className="w-4 h-4" /> },
     { key: "notifications", label: t("settings.notifications"), icon: <Bell className="w-4 h-4" /> },
-    { key: "siem", label: t("settings.siem"), icon: <LogIn className="w-4 h-4" /> },
-    { key: "sync", label: t("settings.sync"), icon: <CloudUpload className="w-4 h-4" /> },
     { key: "extc2", label: t("settings.extc2"), icon: <Radio className="w-4 h-4" /> },
     { key: "certificates", label: t("settings.certificates.label"), icon: <Lock className="w-4 h-4" /> },
     { key: "modules", label: t("settings.modules.title"), icon: <FileCode className="w-4 h-4" /> },
@@ -253,7 +252,9 @@ export default function SettingsPage() {
                   data={data} passwordForm={passwordForm} setPasswordForm={setPasswordForm}
                   totpStatus={totpStatus} totpSecret={totpSecret} totpQR={totpQR} totpBackupCodes={totpBackupCodes}
                   totpCode={totpCode} setTotpCode={setTotpCode} showTotpSetup={showTotpSetup}
+                  totpEnablePassword={totpEnablePassword} setTotpEnablePassword={setTotpEnablePassword}
                   totpDisablePassword={totpDisablePassword} setTotpDisablePassword={setTotpDisablePassword}
+                  totpDisableCode={totpDisableCode} setTotpDisableCode={setTotpDisableCode}
                   saving={saving} onChangePassword={handleChangePassword} onRegenerateJWT={handleRegenerateJWT}
                   onGenerateTOTP={handleGenerateTOTP} onEnableTOTP={handleEnableTOTP} onDisableTOTP={handleDisableTOTP}
                 />
@@ -265,8 +266,6 @@ export default function SettingsPage() {
               <TabsContent value="backup" className="mt-0"><BackupSection /></TabsContent>
               <TabsContent value="maintenance" className="mt-0"><MaintenanceSection purgeDays={purgeDays} setPurgeDays={setPurgeDays} saving={saving} onPurge={handlePurge} onPurgeScreenshots={() => setCfmInline({msg: t("settings.confirm.purge_screenshots"), cb: () => handlePurge("screenshots") })} /></TabsContent>
               <TabsContent value="notifications" className="mt-0"><NotificationsSection /></TabsContent>
-              <TabsContent value="siem" className="mt-0"><SIEMSection /></TabsContent>
-              <TabsContent value="sync" className="mt-0"><SyncSection /></TabsContent>
               <TabsContent value="about" className="mt-0"><AboutSection data={data} onCheckUpdate={handleCheckUpdate} /></TabsContent>
               <TabsContent value="extc2" className="mt-0"><ExtC2Section /></TabsContent>
               <TabsContent value="certificates" className="mt-0"><CertificatesSection data={data} saving={saving} onRefresh={loadSettings} /></TabsContent>

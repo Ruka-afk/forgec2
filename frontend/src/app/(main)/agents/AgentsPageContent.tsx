@@ -113,7 +113,7 @@ export default function AgentsPageContent() {
 
   useEffect(() => {
     if (!showResults) return;
-      api.get("/api/v1/bulk/results?page=1&pageSize=10")
+      api.get("/agents/bulk/results?page=1&pageSize=10")
       .then((d) => {
         const results = (d.results || d.data || []) as BulkResult[];
         setBulkResults(results);
@@ -147,6 +147,16 @@ export default function AgentsPageContent() {
     if (sortKey !== field) return <ArrowUpDown className="w-3 h-3 text-muted-foreground" />;
     return sortDir === "asc" ? <ArrowUp className="w-3 h-3 text-indigo-500" /> : <ArrowDown className="w-3 h-3 text-indigo-500" />;
   };
+
+  const handleSortKeyDown = useCallback(
+    (field: typeof sortKey) => (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleSort(field);
+      }
+    },
+    [toggleSort],
+  );
 
   const handleRowConfirm = useCallback(
     (type: "kill" | "delete" | "batch-delete" | "bulk-kill" | "bulk-uninstall", id: string, hostname: string) => {
@@ -471,26 +481,26 @@ export default function AgentsPageContent() {
                   onCheckedChange={(v) => toggleSelectAll(v === true)}
                 />
               </TableHead>
-              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" onClick={() => toggleSort("hostname")}>
+              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "hostname" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("hostname")} onKeyDown={handleSortKeyDown("hostname")}>
                 {t("agents.col_hostname")} {sortIcon("hostname")}
               </TableHead>
               {visibleCols.username && (
-              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" onClick={() => toggleSort("username")}>
+              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "username" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("username")} onKeyDown={handleSortKeyDown("username")}>
                 {t("agents.col_user")} {sortIcon("username")}
               </TableHead>
               )}
               {visibleCols.os && (
-              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" onClick={() => toggleSort("os")}>
+              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "os" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("os")} onKeyDown={handleSortKeyDown("os")}>
                 {t("agents.col_os")} {sortIcon("os")}
               </TableHead>
               )}
               {visibleCols.ip && (
-              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" onClick={() => toggleSort("ip")}>
+              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "ip" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("ip")} onKeyDown={handleSortKeyDown("ip")}>
                 {t("agents.col_ip")} {sortIcon("ip")}
               </TableHead>
               )}
               {visibleCols.last_seen && (
-              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" onClick={() => toggleSort("last_seen")}>
+              <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "last_seen" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("last_seen")} onKeyDown={handleSortKeyDown("last_seen")}>
                 {t("agents.col_last_seen")} {sortIcon("last_seen")}
               </TableHead>
               )}
@@ -505,7 +515,7 @@ export default function AgentsPageContent() {
               )}
               {visibleCols.version && <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 max-sm:hidden">{t("agents.col_version")}</TableHead>}
               {visibleCols.status && (
-              <TableHead className="text-center py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" onClick={() => toggleSort("status")}>
+              <TableHead className="text-center py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "status" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("status")} onKeyDown={handleSortKeyDown("status")}>
                 {t("agents.col_status")} {sortIcon("status")}
               </TableHead>
               )}

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,7 +15,9 @@ import (
 func (s *Server) handleLootPage(c *gin.Context) {
 	// Get all agents
 	var agents []db.Implant
-	s.db.Order("last_seen desc").Limit(LootAgentLimit).Find(&agents)
+	if err := s.db.Order("last_seen desc").Limit(LootAgentLimit).Find(&agents).Error; err != nil {
+		slog.Error("Failed to query loot agents", "err", err)
+	}
 
 	dataDir := s.cfg.Server.DataDir
 	if dataDir == "" {
@@ -59,15 +62,19 @@ func (s *Server) handleLootPage(c *gin.Context) {
 
 	// Keylogger dumps
 	var keylogTasks []db.Task
-	s.db.Preload("Agent").
+	if err := s.db.Preload("Agent").
 		Where("type = ?", "keylogger_dump").
-		Order("created_at desc").Limit(50).Find(&keylogTasks)
+		Order("created_at desc").Limit(50).Find(&keylogTasks).Error; err != nil {
+		slog.Error("Failed to query keylog tasks", "err", err)
+	}
 
 	// Recent downloads / exfil
 	var downloadTasks []db.Task
-	s.db.Preload("Agent").
+	if err := s.db.Preload("Agent").
 		Where("type IN ?", []string{"download", "download_url"}).
-		Order("created_at desc").Limit(50).Find(&downloadTasks)
+		Order("created_at desc").Limit(50).Find(&downloadTasks).Error; err != nil {
+		slog.Error("Failed to query download tasks", "err", err)
+	}
 
 	stats := s.getNavStats()
 	data := gin.H{

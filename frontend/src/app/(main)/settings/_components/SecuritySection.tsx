@@ -5,12 +5,15 @@ import { ConfirmModal, Spinner } from "@/components/UI";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Check, CheckCircle, Key, Lock, QrCode, RotateCw, Save, Shield, X } from "lucide-react";
 
 export default function SecuritySection({
   data, passwordForm, setPasswordForm, totpStatus, totpSecret, totpQR, totpBackupCodes,
-  totpCode, setTotpCode, showTotpSetup, totpDisablePassword, setTotpDisablePassword,
+  totpCode, setTotpCode, showTotpSetup,
+  totpEnablePassword, setTotpEnablePassword,
+  totpDisablePassword, setTotpDisablePassword, totpDisableCode, setTotpDisableCode,
   saving, onChangePassword, onRegenerateJWT, onGenerateTOTP, onEnableTOTP, onDisableTOTP,
 }: {
   data: SettingsData;
@@ -23,8 +26,12 @@ export default function SecuritySection({
   totpCode: string;
   setTotpCode: React.Dispatch<React.SetStateAction<string>>;
   showTotpSetup: boolean;
+  totpEnablePassword: string;
+  setTotpEnablePassword: React.Dispatch<React.SetStateAction<string>>;
   totpDisablePassword: string;
   setTotpDisablePassword: React.Dispatch<React.SetStateAction<string>>;
+  totpDisableCode: string;
+  setTotpDisableCode: React.Dispatch<React.SetStateAction<string>>;
   saving: boolean;
   onChangePassword: (e: React.FormEvent) => void;
   onRegenerateJWT: () => void;
@@ -48,17 +55,17 @@ export default function SecuritySection({
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="w-4 h-4" />Change Password</h3>
           <form onSubmit={onChangePassword} className="max-w-md space-y-4">
             <div>
-              <span className="block text-xs text-muted-foreground mb-1.5">Current Password</span>
-              <Input aria-label="password" name="input-0" type="password" required value={passwordForm.current} onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })}  />
+              <Label htmlFor="sec-current-pw" className="text-xs text-muted-foreground mb-1.5">Current Password</Label>
+              <Input id="sec-current-pw" type="password" value={passwordForm.current} onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <span className="block text-xs text-muted-foreground mb-1.5">New Password</span>
-                <Input aria-label="password" name="input-1" type="password" required minLength={8} value={passwordForm.next} onChange={(e) => setPasswordForm({ ...passwordForm, next: e.target.value })}  />
+                <Label htmlFor="sec-new-pw" className="text-xs text-muted-foreground mb-1.5">New Password</Label>
+                <Input id="sec-new-pw" type="password" minLength={8} value={passwordForm.next} onChange={(e) => setPasswordForm({ ...passwordForm, next: e.target.value })} />
               </div>
               <div>
-                <span className="block text-xs text-muted-foreground mb-1.5">Confirm New Password</span>
-                <Input aria-label="password" name="input-2" type="password" required minLength={8} value={passwordForm.confirm} onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })}  />
+                <Label htmlFor="sec-confirm-pw" className="text-xs text-muted-foreground mb-1.5">Confirm New Password</Label>
+                <Input id="sec-confirm-pw" type="password" minLength={8} value={passwordForm.confirm} onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })} />
               </div>
             </div>
             <Button type="submit" disabled={saving} className="h-11 px-6 rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
@@ -116,8 +123,12 @@ export default function SecuritySection({
                     </div>
                   </div>
                   <div>
+                    <span className="block text-xs text-muted-foreground mb-1.5">Current Password</span>
+                    <Input id="totp-enable-pw" type="password" placeholder="Confirm password to enable" value={totpEnablePassword} onChange={(e) => setTotpEnablePassword(e.target.value)} />
+                  </div>
+                  <div>
                     <span className="block text-xs text-muted-foreground mb-1.5">Verification Code</span>
-                    <Input aria-label="123 456" name="123-456-3" type="text" placeholder="123 456" maxLength={8} value={totpCode} onChange={(e) => setTotpCode(e.target.value)}  />
+                    <Input id="totp-code" type="text" placeholder="123 456" maxLength={8} value={totpCode} onChange={(e) => setTotpCode(e.target.value)} />
                   </div>
                   {totpBackupCodes && (
                     <div className="bg-warning/10 border border-warning/20 rounded-xl p-3 text-xs text-warning-foreground">
@@ -142,7 +153,11 @@ export default function SecuritySection({
               </div>
               <div>
                 <span className="block text-xs text-muted-foreground mb-1.5">Enter password to disable</span>
-                <Input aria-label="Current password" name="current-password-4" type="password" placeholder="Current password" value={totpDisablePassword} onChange={(e) => setTotpDisablePassword(e.target.value)}  />
+                <Input id="totp-disable-pw" type="password" placeholder="Current password" value={totpDisablePassword} onChange={(e) => setTotpDisablePassword(e.target.value)} />
+              </div>
+              <div>
+                <span className="block text-xs text-muted-foreground mb-1.5">Enter current 2FA code</span>
+                <Input id="totp-disable-code" type="text" placeholder="123 456" maxLength={8} value={totpDisableCode} onChange={(e) => setTotpDisableCode(e.target.value)} />
               </div>
               <Button onClick={() => setCfm({msg: t("settings.disable_totp"), cb: () => onDisableTOTP()})} disabled={saving} className="h-11 px-6 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
                 <X className="w-4 h-4" />Disable 2FA

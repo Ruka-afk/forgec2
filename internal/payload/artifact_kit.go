@@ -159,6 +159,8 @@ go 1.25
 	escape := func(s string) string {
 		s = strings.ReplaceAll(s, `\`, `\\`)
 		s = strings.ReplaceAll(s, `"`, `\"`)
+		s = strings.ReplaceAll(s, "\n", `\n`)
+		s = strings.ReplaceAll(s, "\r", `\r`)
 		return s
 	}
 
@@ -179,6 +181,13 @@ go 1.25
 		if abs, err := filepath.Abs(outPath); err == nil {
 			outPath = abs
 		}
+	}
+	absOutputDir, absErr := filepath.Abs(outputDir)
+	if absErr != nil {
+		absOutputDir = outputDir
+	}
+	if !strings.HasPrefix(outPath, absOutputDir+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid stager filename: escapes output directory")
 	}
 	outDir := filepath.Dir(outPath)
 	if err := os.MkdirAll(outDir, 0755); err != nil {
@@ -314,6 +323,8 @@ go 1.25
 	escape := func(s string) string {
 		s = strings.ReplaceAll(s, `\`, `\\`)
 		s = strings.ReplaceAll(s, `"`, `\"`)
+		s = strings.ReplaceAll(s, "\n", `\n`)
+		s = strings.ReplaceAll(s, "\r", `\r`)
 		return s
 	}
 
@@ -334,6 +345,13 @@ go 1.25
 		if abs, err := filepath.Abs(outPath); err == nil {
 			outPath = abs
 		}
+	}
+	absOutputDir, absErr := filepath.Abs(outputDir)
+	if absErr != nil {
+		absOutputDir = outputDir
+	}
+	if !strings.HasPrefix(outPath, absOutputDir+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid stager filename: escapes output directory")
 	}
 	outDir := filepath.Dir(outPath)
 	if err := os.MkdirAll(outDir, 0755); err != nil {

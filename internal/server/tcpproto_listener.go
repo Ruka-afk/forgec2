@@ -98,6 +98,10 @@ func (l *TCPProtoListener) handleConn(conn net.Conn) {
 	}
 
 	// Process beacon
+	if l.handler == nil {
+		slog.Error("TCP Proto: handler not set, dropping connection")
+		return
+	}
 	respData := l.handler(agentID, reqData)
 
 	// Write response

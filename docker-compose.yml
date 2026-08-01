@@ -16,7 +16,7 @@ services:
     environment:
       - FORGEC2_JWT_SECRET=${FORGEC2_JWT_SECRET:-}
       - FORGEC2_AI_API_KEY=${FORGEC2_AI_API_KEY:-}
-      - FORGEC2_HOST=${FORGEC2_HOST:-0.0.0.0}
+      - FORGEC2_HOST=${FORGEC2_HOST:-127.0.0.1} # change to 0.0.0.0 for production access
       - FORGEC2_PORT=${FORGEC2_PORT:-8000}
       - FORGEC2_DB_PATH=${FORGEC2_DB_PATH:-/data/db/forgec2.db}
       - FORGEC2_DB_DRIVER=${FORGEC2_DB_DRIVER:-postgres}
@@ -29,9 +29,9 @@ services:
     cap_drop:
       - ALL
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["/usr/local/bin/healthcheck"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
       start_period: 10s
 

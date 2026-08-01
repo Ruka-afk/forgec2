@@ -163,7 +163,7 @@ export const api = {
     const body = data ? new URLSearchParams(data).toString() : undefined;
     return request<T>(path, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: body ? { "Content-Type": "application/x-www-form-urlencoded" } : {},
       body,
     });
   },
@@ -199,6 +199,20 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
+      raw: true,
+    });
+    const cd = res.headers.get("Content-Disposition");
+    let filename = "download.bin";
+    if (cd) {
+      const m = cd.match(/filename=(.+)/);
+      if (m) filename = m[1].replace(/"/g, "");
+    }
+    return { blob: await res.blob(), filename };
+  },
+
+  async downloadGet(path: string): Promise<{ blob: Blob; filename: string }> {
+    const res = await request<Response>(path, {
+      method: "GET",
       raw: true,
     });
     const cd = res.headers.get("Content-Disposition");
@@ -329,7 +343,7 @@ export async function getAgentStatus(agentId: string): Promise<AgentStatus | "un
     Agent?: { status?: string };
     status?: string;
     data?: { status?: string };
-  }>(`/api/v1/agents/${agentId}`);
+  }>(`/agents/${agentId}`);
   const agent = data.data || data;
   const raw = agent?.status || data.status || "unknown";
   return (VALID_STATUSES.includes(raw) ? raw : "unknown") as AgentStatus | "unknown";
@@ -411,3 +425,22 @@ export function runTaskWithCancel(
     },
   };
 }
+
+// ── Type-safe API wrappers ──
+// Uses Zod schemas from ./api-schemas to validate API responses at runtime.
+// Import and use these instead of raw api.get/post when you want type safety.
+
+import { parseResponse, AgentSchema, TaskSchema } from "./api-schemas";
+import type { Agent, Task as TaskType } from "./api-schemas";
+
+export const typedApi = {
+  async getAgent(id: string): Promise<Agent> {
+    const data = await api.get(`/agents/${id}`);
+    return parseResponse(AgentSchema, data);
+  },
+
+  async getTask(agentId: string, taskId: string): Promise<TaskType> {
+    const data = await api.get(`/agents/${agentId}/tasks/${taskId}`);
+    return parseResponse(TaskSchema, data);
+  },
+};

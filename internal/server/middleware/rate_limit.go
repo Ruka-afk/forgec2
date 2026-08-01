@@ -62,6 +62,19 @@ func (tb *TokenBucket) Tokens() float64 {
 	return tokens
 }
 
+// Snapshot returns a consistent view of the bucket's state under its lock.
+func (tb *TokenBucket) Snapshot() (tokens, capacity, rate float64, lastRefill, accessedAt time.Time) {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+	now := time.Now()
+	elapsed := now.Sub(tb.lastRefill).Seconds()
+	tokens = tb.tokens + elapsed*tb.rate
+	if tokens > tb.capacity {
+		tokens = tb.capacity
+	}
+	return tokens, tb.capacity, tb.rate, tb.lastRefill, tb.accessedAt
+}
+
 const maxBuckets = 10000
 
 type APIRateLimiter struct {
@@ -71,6 +84,7 @@ type APIRateLimiter struct {
 	rate      float64
 	whitelist map[string]bool
 	stop      chan struct{}
+	stopOnce  sync.Once
 }
 
 func NewAPIRateLimiter(ctx context.Context, capacity, rate float64) *APIRateLimiter {
@@ -149,7 +163,11 @@ func (rl *APIRateLimiter) cleanup(ctx context.Context) {
 		case <-ticker.C:
 			rl.mu.Lock()
 			for key, bucket := range rl.buckets {
-				if bucket.Tokens() >= rl.capacity*0.95 && time.Since(bucket.lastRefill) > 5*time.Minute {
+				bucket.mu.Lock()
+				lastRefill := bucket.lastRefill
+				tokens := bucket.tokens
+				bucket.mu.Unlock()
+				if tokens <= rl.capacity*0.1 && time.Since(lastRefill) > 5*time.Minute {
 					delete(rl.buckets, key)
 				}
 			}
@@ -160,7 +178,9 @@ func (rl *APIRateLimiter) cleanup(ctx context.Context) {
 
 // Stop terminates the cleanup goroutine.
 func (rl *APIRateLimiter) Stop() {
-	close(rl.stop)
+	rl.stopOnce.Do(func() {
+		close(rl.stop)
+	})
 }
 
 func (rl *APIRateLimiter) LimitByUser() gin.HandlerFunc {
@@ -197,10 +217,14 @@ func (rl *APIRateLimiter) LimitByUser() gin.HandlerFunc {
 
 		limit := int(rl.capacity)
 		remaining := int(bucket.Tokens())
+		rem := remaining - 1
+		if rem < 0 {
+			rem = 0
+		}
 		resetTime := time.Now().Add(time.Duration(float64(limit-remaining+1)/rl.rate) * time.Second).Unix()
 
 		c.Header("X-RateLimit-Limit", strconv.Itoa(limit))
-		c.Header("X-RateLimit-Remaining", strconv.Itoa(remaining-1))
+		c.Header("X-RateLimit-Remaining", strconv.Itoa(rem))
 		c.Header("X-RateLimit-Reset", strconv.FormatInt(resetTime, 10))
 
 		if !bucket.Allow() {
@@ -228,11 +252,12 @@ func (rl *APIRateLimiter) GetStatus() map[string]interface{} {
 	defer rl.mu.Unlock()
 	buckets := make(map[string]interface{})
 	for key, bucket := range rl.buckets {
+		tokens, capacity, rate, lastRefill, _ := bucket.Snapshot()
 		buckets[key] = map[string]interface{}{
-			"tokens":      bucket.Tokens(),
-			"capacity":    rl.capacity,
-			"rate":        rl.rate,
-			"last_refill": bucket.lastRefill,
+			"tokens":      tokens,
+			"capacity":    capacity,
+			"rate":        rate,
+			"last_refill": lastRefill,
 		}
 	}
 	return map[string]interface{}{

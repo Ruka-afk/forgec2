@@ -5,15 +5,13 @@ import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { ConfirmModal, EmptyState, PageHeader, Pagination } from "@/components/UI";
-import { formatTime } from "@/lib/utils";
+import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BellOff, Check, CheckCheck, CheckCircle, CircleAlert, Info, Trash2, XCircle } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { BellOff, Check, CheckCheck, Trash2 } from "lucide-react";
+import { NotificationRow } from "./_components/NotificationRow";
 
 interface NotificationItem {
   id: number;
@@ -27,20 +25,6 @@ interface NotificationItem {
   created_at: string;
 }
 
-const SEVERITY_VARIANT: Record<string, "success" | "destructive" | "warning" | "default"> = {
-  success: "success",
-  error: "destructive",
-  warning: "warning",
-  info: "default",
-};
-
-const SEVERITY_ICONS: Record<string, React.ReactNode> = {
-  success: <CheckCircle className="w-4 h-4" />,
-  error: <XCircle className="w-4 h-4" />,
-  warning: <CircleAlert className="w-4 h-4" />,
-  info: <Info className="w-4 h-4" />,
-};
-
 const NOTIF_TYPES = ["agent_online", "agent_offline", "task_completed", "task_failed"];
 
 export default function NotificationsPage() {
@@ -48,6 +32,7 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState("");
   const [severityFilter, setSeverityFilter] = useState("");
@@ -57,6 +42,7 @@ export default function NotificationsPage() {
 
   const loadNotifications = useCallback(() => {
     setLoading(true);
+    setError(null);
     const params = new URLSearchParams({ page: String(page), pageSize: "50" });
     if (typeFilter) params.set("type", typeFilter);
     if (severityFilter) params.set("severity", severityFilter);
@@ -69,6 +55,7 @@ export default function NotificationsPage() {
       .catch(() => {
         setNotifications([]);
         setTotal(0);
+        setError(t("notifications.toast.load_failed"));
         toast.error(t("notifications.toast.load_failed"));
       })
       .finally(() => setLoading(false));
@@ -76,21 +63,21 @@ export default function NotificationsPage() {
 
   useEffect(() => { loadNotifications(); }, [loadNotifications]);
 
-  const handleMarkRead = async (id: number) => {
+  const handleMarkRead = useCallback(async (id: number) => {
     await api.put(`/notifications/${id}/read`);
     loadNotifications();
-  };
+  }, [loadNotifications]);
 
   const handleMarkAllRead = async () => {
     await api.put("/notifications/read-all");
     loadNotifications();
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = useCallback(async (id: number) => {
     await api.del(`/notifications/${id}`);
     setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
     loadNotifications();
-  };
+  }, [loadNotifications]);
 
   const handleClearAll = async () => {
     await api.del("/notifications");
@@ -106,13 +93,13 @@ export default function NotificationsPage() {
     loadNotifications();
   };
 
-  const toggleSelect = (id: number) => {
+  const toggleSelect = useCallback((id: number) => {
     setSelectedIds((prev) => {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id); else n.add(id);
       return n;
     });
-  };
+  }, []);
 
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
@@ -161,7 +148,7 @@ export default function NotificationsPage() {
       </Card>
 
       <Card className="overflow-hidden">
-        {loading ? (
+        <DataState loading={loading} error={error} onRetry={loadNotifications} empty={!loading && !error && notifications.length === 0} emptyIcon={BellOff} emptyTitle={t("notifications.empty")} emptyMessage={t("notifications.empty_hint")} loadingSkeleton={
           <div className="divide-y divide-border">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex items-start gap-3 px-4 sm:px-6 py-4">
@@ -179,56 +166,21 @@ export default function NotificationsPage() {
               </div>
             ))}
           </div>
-        ) : notifications.length > 0 ? (
+        }>
           <div className="divide-y divide-border">
             {notifications.map((n) => (
-              <div key={n.id} className={`flex items-start gap-3 px-4 sm:px-6 py-4 transition-colors ${n.read ? "" : "bg-indigo-50/50 dark:bg-indigo-900/10"}`}>
-                <Checkbox
-                  checked={selectedIds.has(n.id)}
-                  onCheckedChange={() => toggleSelect(n.id)}
-                  aria-label={`Select notification ${n.title}`}
-                  className="mt-1 shrink-0"
-                />
-                <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs ${SEVERITY_VARIANT[n.severity] === "success" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : SEVERITY_VARIANT[n.severity] === "destructive" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : SEVERITY_VARIANT[n.severity] === "warning" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"}`}>
-                  {SEVERITY_ICONS[n.severity] || <Info className="w-4 h-4" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="font-medium text-sm">{n.title || n.type}</span>
-                    {!n.read && <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0"></span>}
-                  </div>
-                  <p className="text-sm text-muted-foreground truncate">{n.message}</p>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                    <span>{n.created_at ? formatTime(n.created_at) : "-"}</span>
-                    {n.agent_id && <span>{t("notifications.agent_prefix")} {n.agent_id.substring(0, 8)}</span>}
-                    <Badge variant={SEVERITY_VARIANT[n.severity] || "default"}>{n.severity}</Badge>
-                    <span className="font-mono text-(--font-size-micro-sm)">{n.type}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {!n.read && (
-                    <Tooltip>
-                      <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleMarkRead(n.id)} className="w-8 h-8 p-0" aria-label="Mark as read" />}>
-                        <Check className="w-4 h-4" />
-                      </TooltipTrigger>
-                      <TooltipContent>Mark read</TooltipContent>
-                    </Tooltip>
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleDelete(n.id)} className="w-8 h-8 p-0 text-muted-foreground hover:text-destructive" aria-label="Delete notification" />}>
-                      <Trash2 className="w-4 h-4" />
-                    </TooltipTrigger>
-                    <TooltipContent>Delete</TooltipContent>
-                  </Tooltip>
-                </div>
-              </div>
+              <NotificationRow
+                key={n.id}
+                item={n}
+                isSelected={selectedIds.has(n.id)}
+                onToggleSelect={toggleSelect}
+                onMarkRead={handleMarkRead}
+                onDelete={handleDelete}
+                t={t}
+              />
             ))}
           </div>
-        ) : (
-          <div className="p-12 text-center text-muted-foreground">
-            <EmptyState icon={BellOff} title={t("notifications.empty")} message={t("notifications.empty_hint")} />
-          </div>
-        )}
+        </DataState>
       </Card>
 
       <Pagination page={page} pageSize={50} total={total} onPageChange={setPage} />

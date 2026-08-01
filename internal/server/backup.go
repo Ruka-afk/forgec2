@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -160,23 +162,40 @@ func (bm *BackupManager) PerformBackup() error {
 
 	if err := bm.db.Exec("VACUUM INTO ?", backupPath).Error; err != nil {
 		slog.Warn("VACUUM INTO backup failed, falling back to file copy", "error", err)
+		if err := bm.db.Exec("BEGIN IMMEDIATE").Error; err != nil {
+			slog.Error("Failed to begin transaction", "error", err)
+		}
 		dbFile, err := os.Open(bm.dbPath)
 		if err != nil {
+			if rerr := bm.db.Exec("ROLLBACK").Error; rerr != nil {
+				slog.Warn("Backup rollback failed", "error", rerr)
+			}
 			slog.Error("Failed to open database file", "error", err)
 			return err
 		}
-		defer dbFile.Close()
 		tmpFile, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 		if err != nil {
+			dbFile.Close()
+			if rerr := bm.db.Exec("ROLLBACK").Error; rerr != nil {
+				slog.Warn("Backup rollback failed", "error", rerr)
+			}
 			slog.Error("Failed to create temp backup file", "error", err)
 			return err
 		}
 		if _, err := io.Copy(tmpFile, dbFile); err != nil {
 			tmpFile.Close()
+			dbFile.Close()
+			if rerr := bm.db.Exec("ROLLBACK").Error; rerr != nil {
+				slog.Warn("Backup rollback failed", "error", rerr)
+			}
 			slog.Error("Failed to copy database file", "error", err)
 			return err
 		}
 		tmpFile.Close()
+		dbFile.Close()
+		if err := bm.db.Exec("ROLLBACK").Error; err != nil {
+			slog.Error("Failed to rollback transaction", "error", err)
+		}
 	}
 
 	timestamp := time.Now().Format(backupTimestamp)
@@ -234,11 +253,17 @@ func (bm *BackupManager) cleanupOldBackups() {
 		return
 	}
 
+	sort.Slice(backupFiles, func(i, j int) bool {
+		return backupFiles[i].ModTime().Before(backupFiles[j].ModTime())
+	})
+
 	for i := 0; i < len(backupFiles)-keepCount; i++ {
-		os.Remove(filepath.Join(bm.backupDir, backupFiles[i].Name()))
+		if err := os.Remove(filepath.Join(bm.backupDir, backupFiles[i].Name())); err != nil {
+			slog.Warn("Failed to remove old backup", "file", backupFiles[i].Name(), "error", err)
+		}
 	}
 
-	slog.Info("Cleaned up old backups", "remaining", keepCount)
+	slog.Info("Cleaned up old backups", "deleted", len(backupFiles)-keepCount, "remaining", keepCount)
 }
 
 func (bm *BackupManager) RotateKey(newKeyHex string) error {
@@ -278,8 +303,8 @@ func (bm *BackupManager) RotateKey(newKeyHex string) error {
 			continue
 		}
 		if err := os.WriteFile(path, enc, 0600); err != nil {
-			slog.Warn("Failed to write re-encrypted backup", "file", file.Name(), "error", err)
-			continue
+			slog.Error("Failed to write re-encrypted backup, aborting key rotation", "file", file.Name(), "error", err)
+			return fmt.Errorf("key rotation aborted: failed to write re-encrypted backup %s: %w", file.Name(), err)
 		}
 		reencrypted++
 	}
@@ -316,6 +341,12 @@ func (bm *BackupManager) encryptWithKey(data []byte, key []byte) ([]byte, error)
 }
 
 func (bm *BackupManager) decryptWithKey(encryptedData []byte, key []byte) ([]byte, error) {
+	return decryptBackupData(encryptedData, key)
+}
+
+// decryptBackupData decrypts an encrypted .fbk backup blob with a 32-byte key.
+// It accepts both the newer HMAC-authenticated format and the legacy format.
+func decryptBackupData(encryptedData []byte, key []byte) ([]byte, error) {
 	// Try HMAC-SHA256 verification first (new format)
 	hasHMAC := false
 	if len(encryptedData) >= backupIVSize+backupTagSize+32 {
@@ -356,4 +387,33 @@ func (bm *BackupManager) decryptWithKey(encryptedData []byte, key []byte) ([]byt
 		return nil, fmt.Errorf("invalid backup format")
 	}
 	return plaintext[backupSaltSize:], nil
+}
+
+// backupKeyHex returns the hex key used to encrypt/decrypt .fbk backup files.
+// A dedicated crypto.backup_key takes precedence; otherwise it falls back to
+// the legacy derivation (crypto.key, then the JWT secret) so backups created
+// by older versions remain restorable.
+func (s *Server) backupKeyHex() string {
+	if s.cfg.Crypto.BackupKey != "" {
+		return s.cfg.Crypto.BackupKey
+	}
+	if s.cfg.Crypto.Key != "" {
+		if strings.HasPrefix(s.cfg.Crypto.Key, "ecdh:") {
+			return s.cfg.Server.JWTSecret
+		}
+		return s.cfg.Crypto.Key
+	}
+	return s.cfg.Server.JWTSecret
+}
+
+// backupKey decodes backupKeyHex into the 32 raw key bytes used for .fbk
+// encryption/decryption.
+func (s *Server) backupKey() []byte {
+	hexKey := s.backupKeyHex()
+	b, err := hex.DecodeString(hexKey)
+	if err != nil || len(b) != backupKeySize {
+		h := sha256.Sum256([]byte(hexKey))
+		return h[:32]
+	}
+	return b
 }

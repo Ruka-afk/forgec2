@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { api, getCsrfToken } from "@/lib/api";
+import { api, getCsrfToken, buildUrl } from "@/lib/api";
 import { downloadFromResponse } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { ConfirmModal, EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -83,6 +84,7 @@ export default function PluginsPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [detailPlugin, setDetailPlugin] = useState<Plugin | null>(null);
   const [actionStates, setActionStates] = useState<Record<string, string>>({});
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -100,12 +102,14 @@ export default function PluginsPage() {
 
   const loadPlugins = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const apiData = await api.get<{ plugins?: Plugin[]; Plugins?: Plugin[] } | Plugin[]>("/api/plugins");
       const data = apiData as { plugins?: Plugin[]; Plugins?: Plugin[] };
       setPlugins(data.plugins || (Array.isArray(apiData) ? apiData : []));
     } catch {
       setPlugins([]);
+      setError(t("plugins.toast.load_failed"));
       toast.error(t("plugins.toast.load_failed"));
     } finally {
       setLoading(false);
@@ -204,7 +208,7 @@ export default function PluginsPage() {
 
   const handleExport = async (pluginId: string) => {
     try {
-      const res = await fetch(`/api/plugins/${pluginId}/export`, { credentials: "include", headers: { "Accept": "application/octet-stream", "X-CSRF-Token": getCsrfToken() } });
+      const res = await fetch(buildUrl(`/api/plugins/${pluginId}/export`), { credentials: "include", headers: { "Accept": "application/octet-stream", "X-CSRF-Token": getCsrfToken() } });
       if (!res.ok) throw new Error("Export failed");
       await downloadFromResponse(res, `plugin_${pluginId}.json`);
       toast.success(t("plugins.toast.exported"));
@@ -329,13 +333,8 @@ export default function PluginsPage() {
         })}
       </div>
 
-      {loading ? (
-        <CardGridSkeleton count={6} columns={3} />
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <EmptyState icon={Puzzle} title={t("plugins.empty")} />
-        </div>
-      ) : viewMode === "grid" ? (
+      <DataState loading={loading} error={error} onRetry={loadPlugins} empty={!loading && !error && filtered.length === 0} emptyIcon={Puzzle} emptyTitle={t("plugins.empty")}>
+      {viewMode === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((p, i) => <PluginCard key={p.id || String(i)} plugin={p} actionState={actionStates[p.id || String(i)]} onInstall={handleInstall} onUninstall={handleUninstall} onDelete={handleDelete} onToggle={handleToggle} onDetail={() => { setDetailPlugin(p); handleLoadDependencies(p); }} onExecute={() => { setExecutePlugin(p); setShowExecute(true); setExecuteResult(null); }} onExport={() => handleExport(p.id || "")} onUpdate={() => handleUpdate(p.id || "")} onReviews={() => handleLoadReviews(p)} onRating={(r) => handleRating(p.id || "", r)} />)}
         </div>
@@ -344,6 +343,7 @@ export default function PluginsPage() {
           {filtered.map((p, i) => <PluginListItem key={p.id || String(i)} plugin={p} actionState={actionStates[p.id || String(i)]} onInstall={handleInstall} onUninstall={handleUninstall} onDelete={handleDelete} onToggle={handleToggle} onDetail={() => { setDetailPlugin(p); handleLoadDependencies(p); }} onExecute={() => { setExecutePlugin(p); setShowExecute(true); setExecuteResult(null); }} onExport={() => handleExport(p.id || "")} onUpdate={() => handleUpdate(p.id || "")} onReviews={() => handleLoadReviews(p)} onRating={(r) => handleRating(p.id || "", r)} />)}
         </div>
       )}
+      </DataState>
 
       {detailPlugin && <PluginDetailModal plugin={detailPlugin} open={!!detailPlugin} onOpenChange={(open) => { if (!open) setDetailPlugin(null); }} />}
 
@@ -715,8 +715,8 @@ function PluginDetailModal({ plugin, open, onOpenChange }: {
             <div>
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t("plugins.dependencies")}</h3>
               <div className="flex flex-wrap gap-2">
-                {deps.map((d, i) => (
-                  <Badge key={i} variant="outline" className="font-mono">{d}</Badge>
+                {deps.map((d) => (
+                  <Badge key={d} variant="outline" className="font-mono">{d}</Badge>
                 ))}
               </div>
             </div>

@@ -18,10 +18,10 @@ type ConfigReloader struct {
 	watcher  *fsnotify.Watcher
 	mu       sync.Mutex
 	running  bool
-	onReload func(*config.Config)
+	onReload func(*config.Config, []string)
 }
 
-func NewConfigReloader(cfg *config.Config, path string, onReload func(*config.Config)) *ConfigReloader {
+func NewConfigReloader(cfg *config.Config, path string, onReload func(*config.Config, []string)) *ConfigReloader {
 	return &ConfigReloader{
 		cfg:      cfg,
 		path:     path,
@@ -68,11 +68,15 @@ func (r *ConfigReloader) Stop() {
 }
 
 func (r *ConfigReloader) monitor() {
+	r.mu.Lock()
+	w := r.watcher
+	r.mu.Unlock()
+
 	var debounce *time.Timer
 
 	for {
 		select {
-		case event, ok := <-r.watcher.Events:
+		case event, ok := <-w.Events:
 			if !ok {
 				return
 			}
@@ -93,7 +97,7 @@ func (r *ConfigReloader) monitor() {
 				r.reload()
 			})
 
-		case err, ok := <-r.watcher.Errors:
+		case err, ok := <-w.Errors:
 			if !ok {
 				return
 			}
@@ -129,24 +133,25 @@ func (r *ConfigReloader) reload() {
 		return
 	}
 
-	changed := diffConfig(r.cfg, newCfg)
-	if len(changed) == 0 {
+	changed, staticOnly := diffConfig(r.cfg, newCfg)
+	if len(changed) == 0 && len(staticOnly) == 0 {
 		slog.Info("Config file changed but no values differ, skipping reload")
+		return
+	}
+	if len(staticOnly) > 0 {
+		slog.Warn("Config file changed with non-hot-reloadable fields (restart required), rejecting reload", "fields", strings.Join(staticOnly, ", "))
 		return
 	}
 	slog.Info("Config fields changed", "fields", strings.Join(changed, ", "))
 
-	r.cfg.CopyFrom(newCfg)
-
 	if r.onReload != nil {
-		r.onReload(r.cfg)
+		r.onReload(newCfg, changed)
 	}
+	r.cfg = newCfg
 
 	slog.Info("Config reloaded successfully", "changed_fields", len(changed))
 }
 
-// Reload manually triggers a config reload from disk. Returns an error if the
-// reload fails (e.g., file not found, parse error). Safe for concurrent use.
 func (r *ConfigReloader) Reload() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -167,56 +172,71 @@ func (r *ConfigReloader) Reload() error {
 		return fmt.Errorf("config validation failed: %w", err)
 	}
 
-	r.cfg.CopyFrom(newCfg)
-
-	if r.onReload != nil {
-		r.onReload(r.cfg)
+	changed, staticOnly := diffConfig(r.cfg, newCfg)
+	if len(staticOnly) > 0 {
+		return fmt.Errorf("config has non-hot-reloadable fields that require restart: %s", strings.Join(staticOnly, ", "))
 	}
 
-	slog.Info("Manual config reload completed")
+	if r.onReload != nil {
+		r.onReload(newCfg, changed)
+	}
+	r.cfg = newCfg
+
+	slog.Info("Manual config reload completed", "changed_fields", len(changed))
 	return nil
 }
 
-func diffConfig(old, new *config.Config) []string {
-	var changed []string
+var nonHotReloadableFields = map[string]bool{
+	"server.port":    true,
+	"server.tls":     true,
+	"server.dns":     true,
+	"server.grpc":    true,
+	"database.driver": true,
+	"database.path":  true,
+}
+
+func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []string) {
 	if old.Server.Port != new.Server.Port {
-		changed = append(changed, "server.port")
+		staticOnly = append(staticOnly, "server.port")
 	}
 	if old.Server.BeaconKey != new.Server.BeaconKey {
-		changed = append(changed, "server.beacon_key")
+		hotReloadable = append(hotReloadable, "server.beacon_key")
 	}
 	if old.Crypto.Key != new.Crypto.Key {
-		changed = append(changed, "crypto.key")
+		hotReloadable = append(hotReloadable, "crypto.key")
 	}
 	if old.Server.JWTSecret != new.Server.JWTSecret {
-		changed = append(changed, "server.jwt_secret")
+		hotReloadable = append(hotReloadable, "server.jwt_secret")
 	}
 	if old.Database.Driver != new.Database.Driver {
-		changed = append(changed, "database.driver")
+		staticOnly = append(staticOnly, "database.driver")
 	}
 	if old.Database.Path != new.Database.Path {
-		changed = append(changed, "database.path")
+		staticOnly = append(staticOnly, "database.path")
 	}
 	if old.Logging.Level != new.Logging.Level {
-		changed = append(changed, "logging.level")
+		hotReloadable = append(hotReloadable, "logging.level")
 	}
 	if old.Server.TLSEnabled != new.Server.TLSEnabled || old.Server.CertFile != new.Server.CertFile || old.Server.KeyFile != new.Server.KeyFile {
-		changed = append(changed, "server.tls")
+		staticOnly = append(staticOnly, "server.tls")
 	}
 	if old.SIEM.Enabled != new.SIEM.Enabled || old.SIEM.URL != new.SIEM.URL {
-		changed = append(changed, "siem")
+		hotReloadable = append(hotReloadable, "siem")
 	}
 	if old.PasswordPolicy.MinLength != new.PasswordPolicy.MinLength {
-		changed = append(changed, "password_policy")
+		hotReloadable = append(hotReloadable, "password_policy")
 	}
 	if old.RateLimit.Login.MaxAttempts != new.RateLimit.Login.MaxAttempts {
-		changed = append(changed, "rate_limit.login")
+		hotReloadable = append(hotReloadable, "rate_limit.login")
 	}
 	if old.Server.DNSEnabled != new.Server.DNSEnabled || old.Server.DNSDomain != new.Server.DNSDomain {
-		changed = append(changed, "server.dns")
+		staticOnly = append(staticOnly, "server.dns")
 	}
 	if old.Server.GRPCEnabled != new.Server.GRPCEnabled {
-		changed = append(changed, "server.grpc")
+		staticOnly = append(staticOnly, "server.grpc")
 	}
-	return changed
+	if len(staticOnly) > 0 {
+		slog.Warn("Config file changed with non-hot-reloadable fields (restart required)", "fields", staticOnly)
+	}
+	return
 }

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { buildUrl } from "@/lib/api";
 
 const CHECK_INTERVAL_MS = 60_000;
 const WARN_BEFORE_MS = 5 * 60 * 1000;
@@ -64,7 +65,7 @@ export default function SessionTimeoutWarning() {
 
   const handleExtend = useCallback(async () => {
     try {
-      await fetch("/api/me", { credentials: "include" });
+      await fetch(buildUrl("/api/me"), { credentials: "include" });
       toastShownRef.current = false;
       check();
     } catch {

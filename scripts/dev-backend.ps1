@@ -17,6 +17,12 @@ try {
     Write-Host "==> go mod tidy" -ForegroundColor Cyan
     go mod tidy 2>&1 | ForEach-Object { Write-Host $_ }
 
+    Write-Host "==> running critical unit tests" -ForegroundColor Cyan
+    go test ./internal/config/... -count=1 -timeout 30s 2>&1 | ForEach-Object { Write-Host $_ }
+    if ($LASTEXITCODE -ne 0) { throw "config tests failed" }
+    go test ./internal/crypto/... -count=1 -timeout 30s 2>&1 | ForEach-Object { Write-Host $_ }
+    if ($LASTEXITCODE -ne 0) { throw "crypto tests failed" }
+
     Write-Host "==> build binary" -ForegroundColor Cyan
     go build -o forgec2-server.exe ./cmd/server 2>&1 | ForEach-Object { Write-Host $_ }
     if ($LASTEXITCODE -ne 0) { throw "binary build failed" }

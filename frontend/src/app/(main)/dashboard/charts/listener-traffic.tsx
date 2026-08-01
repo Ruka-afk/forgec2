@@ -15,7 +15,7 @@ function TrafficBody({ data }: { data: TrafficPoint[] }) {
     <div className="space-y-2">
       <div className="flex items-end gap-0.5 h-16">
         {data.length === 0 ? <span className="text-xs text-muted-foreground/70">No traffic data</span> : data.slice(0, 30).map((d, i) => (
-          <Tooltip key={i}><TooltipTrigger><div className="flex-1 bg-indigo-400 dark:bg-indigo-600 rounded-t-sm min-h-[2px] transition-all" style={{ height: `${Math.max(2, ((Number(d.value) || 0) / maxVal) * 100)}%` }}></div></TooltipTrigger><TooltipContent>{String(d.time ?? i)}</TooltipContent></Tooltip>
+          <Tooltip key={d.time ?? i}><TooltipTrigger><div className="flex-1 bg-indigo-400 dark:bg-indigo-600 rounded-t-sm min-h-[2px] transition-all" style={{ height: `${Math.max(2, ((Number(d.value) || 0) / maxVal) * 100)}%` }}></div></TooltipTrigger><TooltipContent>{String(d.time ?? i)}</TooltipContent></Tooltip>
         ))}
       </div>
     </div>

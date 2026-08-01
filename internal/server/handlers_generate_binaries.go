@@ -96,8 +96,10 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 		form.BeaconTransport = "http"
 	}
 
-	// Prefix filename with short UUID to prevent concurrent build collisions
+	// Prefix filename with short UUID to prevent concurrent build collisions.
+	// Sanitize first to block path traversal and header-injection characters.
 	if form.Filename != "" {
+		form.Filename = sanitizeFilename(form.Filename)
 		shortID := strings.Replace(uuid.New().String()[:8], "-", "", -1)
 		form.Filename = fmt.Sprintf("%s_%s", shortID, form.Filename)
 	}

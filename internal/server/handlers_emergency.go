@@ -46,7 +46,6 @@ func (s *Server) handleEmergencyStop(c *gin.Context) {
 	}
 
 	result := query.Update("kill_date", killDate)
-	affected := result.RowsAffected
 
 	if err := result.Error; err != nil {
 		slog.Error("Emergency stop: failed to set kill dates", "err", err)
@@ -69,22 +68,26 @@ func (s *Server) handleEmergencyStop(c *gin.Context) {
 	slog.Warn("EMERGENCY STOP ACTIVATED",
 		"user", user.Username,
 		"scope", scope,
-		"agents_affected", affected)
+		"agents_affected", result.RowsAffected)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":      true,
 		"message":      "Emergency stop activated",
 		"scope":        scope,
-		"agents_killed": affected,
+		"agents_killed": result.RowsAffected,
 	})
 }
 
 func (s *Server) handleEmergencyStatus(c *gin.Context) {
 	var onlineCount int64
-	s.db.Model(&db.Implant{}).Where("status != ?", "offline").Count(&onlineCount)
+	if err := s.db.Model(&db.Implant{}).Where("status != ?", "offline").Count(&onlineCount).Error; err != nil {
+		slog.Error("Failed to count online agents", "err", err)
+	}
 
 	var pendingKill int64
-	s.db.Model(&db.Task{}).Where("type = ? AND status IN ?", "kill", []string{"pending", "running"}).Count(&pendingKill)
+	if err := s.db.Model(&db.Task{}).Where("type = ? AND status IN ?", "kill", []string{"pending", "running"}).Count(&pendingKill).Error; err != nil {
+		slog.Error("Failed to count pending kills", "err", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":       true,

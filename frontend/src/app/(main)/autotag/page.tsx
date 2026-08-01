@@ -40,10 +40,13 @@ interface AutoTagRule {
 }
 
 interface TagCondition {
+  _key?: number;
   field: string;
   op: string;
   value: string;
 }
+
+let conditionKeyCounter = 0;
 
 const FIELDS = ["hostname", "os", "arch", "ip", "username", "domain", "process_name", "external_ip"];
 const OPS = ["contains", "equals", "starts_with", "regex", "not_equals"];
@@ -58,7 +61,10 @@ export default function AutoTagPage() {
   const [name, setName] = useState("");
   const [tagId, setTagId] = useState("");
   const [priority, setPriority] = useState(0);
-  const [conditions, setConditions] = useState<TagCondition[]>([{ field: "hostname", op: "contains", value: "" }]);
+  const [conditions, setConditions] = useState<TagCondition[]>(() => {
+    conditionKeyCounter++;
+    return [{ _key: conditionKeyCounter, field: "hostname", op: "contains", value: "" }];
+  });
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
   const [message, setMessage] = useState("");
 
@@ -78,7 +84,8 @@ export default function AutoTagPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   function resetForm() {
-    setName(""); setTagId(""); setPriority(0); setConditions([{ field: "hostname", op: "contains", value: "" }]); setEditingId(null);
+    conditionKeyCounter++;
+    setName(""); setTagId(""); setPriority(0); setConditions([{ _key: conditionKeyCounter, field: "hostname", op: "contains", value: "" }]); setEditingId(null);
   }
 
   async function handleSave() {
@@ -126,7 +133,8 @@ export default function AutoTagPage() {
   }
 
   function addCondition() {
-    setConditions([...conditions, { field: "hostname", op: "contains", value: "" }]);
+    conditionKeyCounter++;
+    setConditions([...conditions, { _key: conditionKeyCounter, field: "hostname", op: "contains", value: "" }]);
   }
 
   function removeCondition(i: number) {
@@ -193,13 +201,14 @@ export default function AutoTagPage() {
           <div>
             <Label className="mb-2 text-xs">{t("autotag.conditions")}</Label>
             {conditions.map((c, i) => (
-              <div key={i} className="flex flex-col sm:flex-row gap-2 mb-2">
+              <div key={c._key ?? i} className="flex flex-col sm:flex-row gap-2 mb-2">
                 <Select value={c.field} onValueChange={(v) => updateCondition(i, "field", v ?? "")}>
                   <SelectTrigger className="w-full sm:w-40">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {FIELDS.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+
                   </SelectContent>
                 </Select>
                 <Select value={c.op} onValueChange={(v) => updateCondition(i, "op", v ?? "")}>
@@ -208,6 +217,7 @@ export default function AutoTagPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {OPS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+
                   </SelectContent>
                 </Select>
                 <Input

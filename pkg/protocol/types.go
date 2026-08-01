@@ -4,6 +4,10 @@ package protocol
 // Increment when making breaking changes to the wire format.
 const CurrentProtocolVersion uint = 1
 
+// MinSupportedProtocolVersion is the oldest protocol version the server
+// will accept. Agents below this threshold are rejected immediately.
+const MinSupportedProtocolVersion uint = 1
+
 // BeaconRequest is sent by agent to server on each check-in.
 type BeaconRequest struct {
 	UUID            string            `json:"uuid"`

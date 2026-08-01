@@ -10,17 +10,76 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/UI";
 import { AlertCircle, Lock, Shield, User } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { useForm } from "@/lib/hooks/useForm";
+import { z } from "zod";
+
+const loginSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+  totpCode: z.string().regex(/^[0-9]{0,6}$/, "Invalid TOTP code").optional().or(z.literal("")),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
 
 function LoginForm() {
   const { t } = useI18n();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [totpCode, setTotpCode] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const [version, setVersion] = useState("");
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const {
+    values,
+    errors,
+    touched,
+    isSubmitting,
+    handleChange,
+    handleBlur,
+    handleSubmit,
+  } = useForm<LoginFormValues>({
+    initialValues: { username: "", password: "", totpCode: "" },
+    schema: loginSchema,
+    onSubmit: async (vals) => {
+      setError("");
+      const params = new URLSearchParams();
+      params.append("username", vals.username);
+      params.append("password", vals.password);
+      if (vals.totpCode) params.append("totp_code", vals.totpCode);
+
+      try {
+        const response = await fetch("/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Accept: "application/json, text/html, */*",
+          },
+          body: params.toString(),
+          credentials: "include",
+          redirect: "manual",
+        });
+
+        if (response.status === 302 || response.status === 0 || (response.status >= 200 && response.status < 400 && response.ok)) {
+          const next = searchParams.get("next");
+          const dest = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+          router.push(dest);
+          router.refresh();
+          return;
+        }
+
+        let msg = t("login.error_failed");
+        try {
+          const ct = response.headers.get("content-type") || "";
+          if (ct.includes("application/json")) {
+            const data = await response.json() as { error?: string };
+            if (data.error) msg = data.error;
+          }
+        } catch { /* keep default */ }
+        setError(msg);
+      } catch {
+        setError(t("login.error_network"));
+      }
+    },
+  });
 
   useEffect(() => {
     if (searchParams.get("expired") === "1") {
@@ -41,54 +100,6 @@ function LoginForm() {
     return () => { cancelled = true; };
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      const params = new URLSearchParams();
-      params.append("username", username);
-      params.append("password", password);
-      if (totpCode) params.append("totp_code", totpCode);
-
-      const response = await fetch("/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Accept: "application/json, text/html, */*",
-        },
-        body: params.toString(),
-        credentials: "include",
-        redirect: "manual",
-      });
-
-      // Success: 302 redirect or 200 with session cookie
-      if (response.status === 302 || response.status === 0 || (response.status >= 200 && response.status < 400 && response.ok)) {
-        const next = searchParams.get("next");
-        const dest = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
-        router.push(dest);
-        router.refresh();
-        return;
-      }
-
-      // Failed: try JSON error body
-      let msg = t("login.error_failed");
-      try {
-        const ct = response.headers.get("content-type") || "";
-        if (ct.includes("application/json")) {
-          const data = await response.json() as { error?: string };
-          if (data.error) msg = data.error;
-        }
-      } catch { /* keep default */ }
-      setError(msg);
-    } catch {
-      setError(t("login.error_network"));
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-background via-muted/30 to-primary/5 dark:from-background dark:via-primary/[0.03] dark:to-primary/8">
       <div className="absolute rounded-full blur-(--blur-orb) opacity-15 dark:opacity-10 w-72 h-72 bg-primary/30 top-[-10%] left-[-5%] animate-orb-float" style={{ animationDelay: "0s" }} />
@@ -100,7 +111,7 @@ function LoginForm() {
       <div className="relative z-10 w-full max-w-[22rem] mx-4 animate-fade-slide-up">
         <div className="text-center mb-8">
           <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-xl shadow-indigo-500/25 animate-float">
-            <Shield className="w-7 h-7 text-white" />
+            <Shield className="w-7 h-7 text-white" aria-hidden="true" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Forge<span className="text-primary">C2</span>
@@ -112,43 +123,53 @@ function LoginForm() {
           <CardContent className="p-7">
           {error && (
             <Alert variant="destructive" className="mb-5 animate-scale-in" role="alert">
-              <AlertCircle className="w-4 h-4" />
+              <AlertCircle className="w-4 h-4" aria-hidden="true" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4" aria-label={t("login.form_aria")}>
+          <form onSubmit={handleSubmit} className="space-y-4" aria-label={t("login.form_aria")} noValidate>
             <div>
               <Label htmlFor="login-username" className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("login.username")}</Label>
               <div className="relative group">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />
                 <Input
                   id="login-username"
                   type="text"
                   autoFocus
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  value={values.username}
+                  onChange={handleChange("username")}
+                  onBlur={handleBlur("username")}
                   className="h-11 pl-9 transition-colors"
-                  required
+                  aria-invalid={!!(touched.username && errors.username)}
+                  aria-describedby={errors.username ? "login-username-error" : undefined}
                   autoComplete="username"
                 />
               </div>
+              {touched.username && errors.username && (
+                <p id="login-username-error" role="alert" className="text-xs text-destructive mt-1">{errors.username}</p>
+              )}
             </div>
 
             <div>
               <Label htmlFor="login-password" className="text-xs font-medium text-muted-foreground mb-1.5 block">{t("login.password")}</Label>
               <div className="relative group">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />
                 <Input
                   id="login-password"
                   type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  value={values.password}
+                  onChange={handleChange("password")}
+                  onBlur={handleBlur("password")}
                   className="h-11 pl-9 transition-colors"
-                  required
+                  aria-invalid={!!(touched.password && errors.password)}
+                  aria-describedby={errors.password ? "login-password-error" : undefined}
                   autoComplete="current-password"
                 />
               </div>
+              {touched.password && errors.password && (
+                <p id="login-password-error" role="alert" className="text-xs text-destructive mt-1">{errors.password}</p>
+              )}
             </div>
 
             <div>
@@ -156,7 +177,7 @@ function LoginForm() {
                 {t("login.totp")} <span className="text-muted-foreground/70">({t("login.totp_optional")})</span>
               </Label>
               <div className="relative group">
-                <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" />
+                <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10 transition-colors group-focus-within:text-primary" aria-hidden="true" />
                 <Input
                   id="login-totp"
                   type="text"
@@ -164,20 +185,26 @@ function LoginForm() {
                   autoComplete="one-time-code"
                   maxLength={6}
                   pattern="[0-9]{6}"
-                  value={totpCode}
-                  onChange={(e) => setTotpCode(e.target.value)}
+                  value={values.totpCode}
+                  onChange={handleChange("totpCode")}
+                  onBlur={handleBlur("totpCode")}
                   placeholder="000000"
                   className="h-11 pl-9 font-mono tracking-(--tracking-wide) text-center transition-colors"
+                  aria-invalid={!!(touched.totpCode && errors.totpCode)}
+                  aria-describedby={errors.totpCode ? "login-totp-error" : undefined}
                 />
               </div>
+              {touched.totpCode && errors.totpCode && (
+                <p id="login-totp-error" role="alert" className="text-xs text-destructive mt-1">{errors.totpCode}</p>
+              )}
             </div>
 
             <Button
               type="submit"
-              disabled={loading}
+              disabled={isSubmitting}
               className="w-full h-11 font-semibold transition-all duration-200 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 active:scale-[0.98]"
             >
-              {loading ? (
+              {isSubmitting ? (
                 <span className="flex items-center justify-center gap-2">
                   <Spinner size="sm" />
                   {t("login.signing_in")}

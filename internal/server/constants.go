@@ -23,6 +23,11 @@ const (
 	MaxResultSize           = 1 * 1024 * 1024  // 1 MB max per task result to prevent DB bloat
 	MaxJSONBodySize         = 2 * 1024 * 1024  // 2 MB max for JSON/form request bodies
 	MaxPendingTasksPerAgent = 50               // max pending tasks per agent before rejecting new ones
+	MaxCommandLength        = 10000            // max characters in a command string
+	MaxNotesLength          = 5000             // max characters in agent notes/tags
+	MaxShellcodeSize        = 10 * 1024 * 1024 // 10 MB max decoded shellcode payload
+	MaxTechniqueLength      = 64               // max characters in an injection/spawn technique name
+	MaxTargetLength         = 128              // max characters in a spawn target executable
 
 	// ─── Map Size Limits ───
 	MaxWSConnections       = 256              // max concurrent WebSocket dashboard clients
@@ -78,6 +83,7 @@ const (
 	BatchFlushThreshold = 16
 
 	TCPReadDeadline        = 60 * time.Second
+	TCPWriteDeadline       = 10 * time.Second
 	ActivityUpdateThrottle = 60 * time.Second
 
 	BeaconPingInterval    = 30 * time.Second
@@ -89,6 +95,7 @@ const (
 	SOCKSRelayWriteTimeout = 10 * time.Second
 
 	RemoteDesktopWriteDeadline = 5 * time.Second
+	RemoteDesktopReadDeadline  = 5 * time.Minute
 	MonitorMetricsInterval     = 30 * time.Second
 	MonitorAlertInterval       = 1 * time.Minute
 
@@ -129,8 +136,17 @@ const (
 	CallbackHTTPTimeout      = 30 * time.Second
 	StaleTaskRequeueInterval = 5 * time.Minute
 	StaleRunningTaskTimeout  = 10 * time.Minute
-	AuditLogResultMaxLen     = 300
-	AuditLogDetailsMaxLen    = 600
+	// BeaconMaxBodySize caps unauthenticated beacon payloads. Beacons are
+	// ECDH-encrypted (base64 ~1.33x expansion) and may carry file chunks, so the
+	// cap is larger than MaxJSONBodySize while still bounding memory exhaustion.
+	BeaconMaxBodySize = 64 * 1024 * 1024
+	// AckedTaskResultTimeout bounds tasks the agent acknowledged but never
+	// returned a result for. Acknowledged tasks are never dispatched twice (they
+	// may still be executing), so after this window they are marked failed
+	// instead of being left "running" forever.
+	AckedTaskResultTimeout = 30 * time.Minute
+	AuditLogResultMaxLen   = 300
+	AuditLogDetailsMaxLen  = 600
 
 	// ─── Auth / Session ───
 	DefaultSessionHours  = 24

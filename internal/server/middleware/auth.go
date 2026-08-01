@@ -6,9 +6,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/config"
@@ -21,7 +24,112 @@ import (
 
 const minJWTSecretLen = 32
 
-var jwtSecret []byte
+var jwtSecret atomic.Value
+
+// trustedProxyIPs holds the operator-configured proxy IPs/CIDRs whose
+// X-Forwarded-* headers are trusted (set via SetTrustedProxyIPs).
+var trustedProxyIPs atomic.Value // []netip.Prefix
+
+// SetTrustedProxyIPs configures the reverse proxies whose X-Forwarded-Proto
+// header IsSecureConnection may trust. An empty list disables header trust.
+func SetTrustedProxyIPs(proxies []string) {
+	prefixes := make([]netip.Prefix, 0, len(proxies))
+	for _, p := range proxies {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if addr, err := netip.ParseAddr(p); err == nil {
+			prefixes = append(prefixes, netip.PrefixFrom(addr, addr.BitLen()))
+			continue
+		}
+		if pref, err := netip.ParsePrefix(p); err == nil {
+			prefixes = append(prefixes, pref.Masked())
+		}
+	}
+	trustedProxyIPs.Store(prefixes)
+}
+
+func peerAddr(c *gin.Context) netip.Addr {
+	host, _, err := net.SplitHostPort(c.Request.RemoteAddr)
+	if err != nil {
+		host = c.Request.RemoteAddr
+	}
+	if addr, err := netip.ParseAddr(strings.TrimSpace(host)); err == nil {
+		return addr.Unmap()
+	}
+	return netip.Addr{}
+}
+
+func isTrustedPeer(c *gin.Context) bool {
+	prefixes, _ := trustedProxyIPs.Load().([]netip.Prefix)
+	if len(prefixes) == 0 {
+		return false
+	}
+	addr := peerAddr(c)
+	if !addr.IsValid() {
+		return false
+	}
+	for _, pref := range prefixes {
+		if pref.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
+// apiKeyRateLimiter provides simple per-IP rate limiting for API key auth.
+type apiKeyRateLimiter struct {
+	mu      sync.Mutex
+	entries map[string]*apiKeyLimitEntry
+}
+
+type apiKeyLimitEntry struct {
+	attempts    int
+	windowStart time.Time
+}
+
+const (
+	apiKeyMaxAttempts = 10
+	apiKeyWindowSec   = 60
+	apiKeyLockoutSec  = 300
+)
+
+func (r *apiKeyRateLimiter) isLocked(ip string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	entry, ok := r.entries[ip]
+	if !ok {
+		return false
+	}
+	if !entry.windowStart.IsZero() && time.Since(entry.windowStart) > time.Duration(apiKeyLockoutSec)*time.Second {
+		delete(r.entries, ip)
+		return false
+	}
+	return entry.attempts >= apiKeyMaxAttempts
+}
+
+func (r *apiKeyRateLimiter) recordFailure(ip string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	entry, ok := r.entries[ip]
+	if !ok {
+		if len(r.entries) >= 10000 {
+			for k := range r.entries {
+				delete(r.entries, k)
+				break
+			}
+		}
+		entry = &apiKeyLimitEntry{windowStart: time.Now()}
+		r.entries[ip] = entry
+	}
+	entry.attempts++
+	entry.windowStart = time.Now()
+}
+
+var globalAPIKeyLimiter = &apiKeyRateLimiter{
+	entries: make(map[string]*apiKeyLimitEntry),
+}
 
 // respondError sends a consistent {success: false, error: msg} envelope.
 func respondError(c *gin.Context, status int, msg string) {
@@ -41,6 +149,7 @@ var RequireTLSForAuth bool
 const (
 	JWTExpiry     = 24 * time.Hour
 	JWTLongExpiry = 7 * 24 * time.Hour // "remember me"
+	userCacheTTL  = 5 * time.Minute
 )
 
 // Claims for JWT
@@ -85,7 +194,7 @@ func InitJWTSecret(cfg *config.Config, configPath string) error {
 		}
 		secret = cfg.Server.JWTSecret
 	}
-	jwtSecret = []byte(secret)
+	jwtSecret.Store([]byte(secret))
 	CookieSecure = cfg.Server.TLSEnabled
 	CookieDomain = cfg.Server.CookieDomain
 	RequireTLSForAuth = cfg.Server.RequireTLSForAuth
@@ -122,9 +231,15 @@ func isWebSocketUpgrade(c *gin.Context) bool {
 
 // IsSecureConnection returns true if the request arrived over TLS, either
 // directly or via a trusted reverse proxy that sets X-Forwarded-Proto: https.
+// The X-Forwarded-Proto header is only honored when the direct peer is a
+// configured trusted proxy; otherwise any client could spoof it on a plaintext
+// connection.
 func IsSecureConnection(c *gin.Context) bool {
 	if c.Request.TLS != nil {
 		return true
+	}
+	if !isTrustedPeer(c) {
+		return false
 	}
 	return strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
 }
@@ -185,6 +300,11 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// API key authentication (X-API-Key header)
 		if apiKey := c.GetHeader("X-API-Key"); apiKey != "" {
+			clientIP := c.ClientIP()
+			if globalAPIKeyLimiter.isLocked(clientIP) {
+				authFail(c, "Auth failed: API key rate limit exceeded", "path", c.Request.URL.Path, "ip", clientIP)
+				return
+			}
 			h := sha256.Sum256([]byte(apiKey))
 			hash := fmt.Sprintf("%x", h)
 			var ak db.ApiKey
@@ -201,7 +321,8 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 					}
 				}
 			}
-			authFail(c, "Auth failed: invalid API key", "path", c.Request.URL.Path, "ip", c.ClientIP())
+			globalAPIKeyLimiter.recordFailure(clientIP)
+			authFail(c, "Auth failed: invalid API key", "path", c.Request.URL.Path, "ip", clientIP)
 			return
 		}
 
@@ -219,7 +340,7 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			return jwtSecret, nil
+			return jwtSecret.Load().([]byte), nil
 		})
 		if err != nil || !token.Valid {
 			SetCookieWithSameSite(c, "forgec2_session", "", -1, "/", CookieSecure, true, http.SameSiteLaxMode)
@@ -248,7 +369,7 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 				return
 			}
 			cacheMu.Lock()
-			userCache[claims.UserID] = cacheEntry{user: user, expiresAt: time.Now().Add(5 * time.Minute)}
+			userCache[claims.UserID] = cacheEntry{user: user, expiresAt: time.Now().Add(userCacheTTL)}
 			cacheMu.Unlock()
 		}
 
@@ -305,7 +426,7 @@ func GenerateToken(user db.User, rememberMe bool, sessionMaxAgeHours int) (strin
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
+	return token.SignedString(jwtSecret.Load().([]byte))
 }
 
 // CheckPassword compares hash
@@ -428,7 +549,7 @@ func ParseToken(tokenStr string) (*Claims, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return jwtSecret, nil
+		return jwtSecret.Load().([]byte), nil
 	})
 	if err != nil {
 		return nil, err
@@ -440,16 +561,19 @@ func ParseToken(tokenStr string) (*Claims, error) {
 	return claims, nil
 }
 
-func tokenHash(token string) string {
+func TokenHash(token string) string {
 	h := sha256.Sum256([]byte(token))
 	return fmt.Sprintf("%x", h)
 }
 
 func isSessionRevoked(database *gorm.DB, tokenStr string) bool {
-	hash := tokenHash(tokenStr)
+	hash := TokenHash(tokenStr)
 	var count int64
-	database.Table("user_sessions").
+	if err := database.Table("user_sessions").
 		Where("token_hash = ? AND revoked_at > ?", hash, time.Unix(0, 0)).
-		Count(&count)
+		Count(&count).Error; err != nil {
+		slog.Warn("Session revocation check failed, allowing access", "err", err)
+		return false
+	}
 	return count > 0
 }

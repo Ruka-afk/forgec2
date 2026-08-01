@@ -3,6 +3,7 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/server/middleware"
@@ -11,9 +12,9 @@ import (
 )
 
 type pendingTOTPState struct {
-	userID         uint
 	secret         string
 	backupRawCodes []string
+	createdAt      time.Time
 }
 
 func (s *Server) handleTOTPStatus(c *gin.Context) {
@@ -51,11 +52,16 @@ func (s *Server) handleTOTPGenerate(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to process secret")
 		return
 	}
-	s.pendingTOTP = &pendingTOTPState{
-		userID:         user.ID,
+	s.pendingTOTPMu.Lock()
+	if s.pendingTOTP == nil {
+		s.pendingTOTP = make(map[uint]*pendingTOTPState)
+	}
+	s.pendingTOTP[user.ID] = &pendingTOTPState{
 		secret:         encryptedSecret,
 		backupRawCodes: rawCodes,
+		createdAt:      time.Now(),
 	}
+	s.pendingTOTPMu.Unlock()
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":      true,
@@ -67,8 +73,25 @@ func (s *Server) handleTOTPGenerate(c *gin.Context) {
 
 func (s *Server) handleTOTPEnable(c *gin.Context) {
 	userID, _ := c.Get("user_id")
+	password := c.PostForm("password")
 	secret := c.PostForm("secret")
 	code := c.PostForm("code")
+
+	if password == "" {
+		respondError(c, http.StatusBadRequest, "password is required")
+		return
+	}
+
+	var curUser db.User
+	if err := s.db.First(&curUser, userID).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "user not found")
+		return
+	}
+
+	if !middleware.CheckPassword(curUser.PasswordHash, password) {
+		respondError(c, http.StatusForbidden, "incorrect password")
+		return
+	}
 
 	if secret == "" || code == "" {
 		respondError(c, http.StatusBadRequest, "secret and code are required")
@@ -100,11 +123,11 @@ func (s *Server) handleTOTPEnable(c *gin.Context) {
 	}
 
 	s.pendingTOTPMu.Lock()
-	pending := s.pendingTOTP
-	s.pendingTOTP = nil
+	pending := s.pendingTOTP[user.ID]
+	delete(s.pendingTOTP, user.ID)
 	s.pendingTOTPMu.Unlock()
 
-	if pending != nil && pending.userID == user.ID {
+	if pending != nil {
 		for _, raw := range pending.backupRawCodes {
 			hash, err := totp.HashBackupCode(raw)
 			if err != nil {
@@ -131,6 +154,7 @@ func (s *Server) handleTOTPEnable(c *gin.Context) {
 func (s *Server) handleTOTPDisable(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	password := c.PostForm("password")
+	totpCode := c.PostForm("code")
 
 	if password == "" {
 		respondError(c, http.StatusBadRequest, "password is required")
@@ -148,6 +172,19 @@ func (s *Server) handleTOTPDisable(c *gin.Context) {
 		return
 	}
 
+	if user.TOTPSecret != "" {
+		decryptedSecret, err := decryptSecret(user.TOTPSecret, s.cfg.Server.JWTSecret)
+		if err != nil {
+			slog.Error("Failed to decrypt TOTP secret for disable", "user_id", user.ID, "err", err)
+			respondError(c, http.StatusInternalServerError, "failed to verify 2FA code")
+			return
+		}
+		if totpCode == "" || !totp.VerifyCode(decryptedSecret, totpCode) {
+			respondError(c, http.StatusBadRequest, "current TOTP code is required to disable 2FA")
+			return
+		}
+	}
+
 	if err := s.db.Model(&user).Update("totp_secret", "").Error; err != nil {
 		slog.Error("Failed to disable TOTP", "user_id", user.ID, "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to disable 2FA")
@@ -163,6 +200,8 @@ func (s *Server) handleTOTPDisable(c *gin.Context) {
 func (s *Server) handleBackupCodeCount(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	var count int64
-	s.db.Model(&db.BackupCode{}).Where("user_id = ? AND used = false", userID).Count(&count)
+	if err := s.db.Model(&db.BackupCode{}).Where("user_id = ? AND used = false", userID).Count(&count).Error; err != nil {
+		slog.Error("Failed to count backup codes", "err", err)
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "remaining": count})
 }

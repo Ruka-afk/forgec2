@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
@@ -15,7 +16,9 @@ import (
 // GET /api/autotag/rules
 func (s *Server) handleAutoTagRules(c *gin.Context) {
 	var rules []db.AutoTagRule
-	s.db.Preload("Tag").Order("priority desc, created_at desc").Limit(200).Find(&rules)
+	if err := s.db.Preload("Tag").Order("priority desc, created_at desc").Limit(200).Find(&rules).Error; err != nil {
+		slog.Error("Failed to list auto-tag rules", "err", err)
+	}
 	respond(c, gin.H{"rules": rules})
 }
 
@@ -103,14 +106,20 @@ func (s *Server) handleAutoTagDelete(c *gin.Context) {
 // POST /api/autotag/apply
 func (s *Server) handleAutoTagApply(c *gin.Context) {
 	var rules []db.AutoTagRule
-	s.db.Preload("Tag").Where("enabled = ?", true).Limit(AutoTagRuleLimit).Find(&rules)
+	if err := s.db.Preload("Tag").Where("enabled = ?", true).Limit(AutoTagRuleLimit).Find(&rules).Error; err != nil {
+		slog.Error("Failed to load auto-tag rules for apply", "err", err)
+	}
 
 	var agents []db.Implant
-	s.db.Limit(AutoTagAgentLimit).Find(&agents)
+	if err := s.db.Limit(AutoTagAgentLimit).Find(&agents).Error; err != nil {
+		slog.Error("Failed to load agents for auto-tag", "err", err)
+	}
 
 	// Load all existing assignments once (avoids an O(rules*agents) query storm).
 	var assignments []db.AgentTagAssignment
-	s.db.Limit(AutoTagAssignmentLimit).Find(&assignments)
+	if err := s.db.Limit(AutoTagAssignmentLimit).Find(&assignments).Error; err != nil {
+		slog.Error("Failed to load auto-tag assignments", "err", err)
+	}
 	existingSet := make(map[string]bool, len(assignments))
 	for _, a := range assignments {
 		existingSet[a.AgentTagID+"|"+a.ImplantID] = true

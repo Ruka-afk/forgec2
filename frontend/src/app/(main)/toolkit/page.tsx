@@ -166,8 +166,8 @@ export default function ToolkitPage() {
             <SelectTrigger className="w-full"><SelectValue placeholder={t("toolkit.select_agent_placeholder")} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="">{t("toolkit.select_agent_placeholder")}</SelectItem>
-              {toolkitAgents.map((a, i) => (
-                <SelectItem key={i} value={a.id || ""}>
+              {toolkitAgents.map((a) => (
+                <SelectItem key={a.id} value={a.id || ""}>
                   {(a.hostname || "unknown")} ({a.ip || "-"})
                 </SelectItem>
               ))}

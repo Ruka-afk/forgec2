@@ -163,14 +163,6 @@ export default function AgentConfigPage() {
 
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
-      <div className="flex items-center gap-3 mb-2">
-        <Link href={`/agents/${id}`} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-4 h-4" /> {hostname}
-        </Link>
-        <span className="text-xs text-muted-foreground/70">/</span>
-        <span className="text-sm text-foreground">Config {os ? <span className="text-muted-foreground/70">({os})</span> : null}</span>
-      </div>
-
       {hasPending && (
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3 text-sm text-amber-800 dark:text-amber-200 flex items-center gap-2">
           <Clock className="w-4 h-4" />
@@ -223,8 +215,8 @@ export default function AgentConfigPage() {
                   <SelectValue placeholder={t("agents.config_quick_fill")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {COMMON_UAS.map((ua, i) => (
-                    <SelectItem key={i} value={ua}>{ua.slice(0, 60)}...</SelectItem>
+                  {COMMON_UAS.map((ua) => (
+                    <SelectItem key={ua} value={ua}>{ua.slice(0, 60)}...</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -294,7 +286,7 @@ export default function AgentConfigPage() {
               <p className="text-xs text-muted-foreground/70 italic px-1">{t("agents.config_no_headers")}</p>
             ) : (
               editHeaders.map((h, i) => (
-                <div key={i} className="flex gap-2 items-center">
+                <div key={h.key} className="flex gap-2 items-center">
                   <Input aria-label="Header name" name="header-name-6" type="text" placeholder={t("agents.config_header_name")} value={h.key} onChange={(e) => updateHeader(i, "key", e.target.value)}
                     className="flex-1 font-mono" />
                   <Input aria-label="Value" name="value-7" type="text" placeholder={t("agents.config_header_value")} value={h.value} onChange={(e) => updateHeader(i, "value", e.target.value)}

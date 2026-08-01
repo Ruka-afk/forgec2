@@ -2,9 +2,13 @@ package crypto
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/ecdh"
 	"crypto/rand"
+	"crypto/sha256"
 	"testing"
+	"time"
 )
 
 func TestSessionManagerEstablishAndGet(t *testing.T) {
@@ -205,6 +209,166 @@ func TestSessionManagerRotateSessionKeyMissing(t *testing.T) {
 	}
 }
 
+func TestSessionManagerTryRotateSessionKey(t *testing.T) {
+	sm, _ := NewSessionManager()
+	curve := ecdh.X25519()
+	agentKey, _ := curve.GenerateKey(rand.Reader)
+	if err := sm.EstablishSession("agent-1", agentKey.PublicKey().Bytes()); err != nil {
+		t.Fatalf("initial EstablishSession: %v", err)
+	}
+
+	// Encrypt under the original session key.
+	plaintext := []byte("rotation data")
+	ciphertext, err := sm.Encrypt("agent-1", plaintext)
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+
+	// Agent rotates its keypair; the ciphertext is now encrypted under the new
+	// session key (agent-new-priv * server-pub == server-priv * agent-new-pub).
+	newAgentKey, _ := curve.GenerateKey(rand.Reader)
+	newCipher, err := encryptWithAgentPub(sm, newAgentKey.PublicKey().Bytes(), plaintext)
+	if err != nil {
+		t.Fatalf("encryptWithAgentPub: %v", err)
+	}
+
+	// TryRotateSessionKey must re-key and authenticate the new ciphertext.
+	got, err := sm.TryRotateSessionKey("agent-1", newAgentKey.PublicKey().Bytes(), newCipher)
+	if err != nil {
+		t.Fatalf("TryRotateSessionKey: %v", err)
+	}
+	if !bytes.Equal(got, plaintext) {
+		t.Errorf("decrypted plaintext mismatch: got %q want %q", got, plaintext)
+	}
+
+	// The old ciphertext (under the previous key) must no longer decrypt.
+	if _, err := sm.Decrypt("agent-1", ciphertext); err == nil {
+		t.Error("old ciphertext should not decrypt after rotation")
+	}
+}
+
+func TestSessionManagerTryRotateSessionKeyRejectsForged(t *testing.T) {
+	sm, _ := NewSessionManager()
+	curve := ecdh.X25519()
+	agentKey, _ := curve.GenerateKey(rand.Reader)
+	if err := sm.EstablishSession("agent-1", agentKey.PublicKey().Bytes()); err != nil {
+		t.Fatalf("initial EstablishSession: %v", err)
+	}
+
+	// Legitimate ciphertext under the current key.
+	plaintext := []byte("still intact")
+	if _, err := sm.Encrypt("agent-1", plaintext); err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+
+	// Attacker forges an ecdh_pub but does NOT know the matching private key, so
+	// they can only send a ciphertext encrypted under the OLD (still-live) key.
+	// The rotation must be rejected without destroying the active session.
+	forgedKey, _ := curve.GenerateKey(rand.Reader)
+	forgedCipher, err := sm.Encrypt("agent-1", []byte("stale ciphertext"))
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+
+	if _, err := sm.TryRotateSessionKey("agent-1", forgedKey.PublicKey().Bytes(), forgedCipher); err == nil {
+		t.Error("expected forged rotation to be rejected")
+	}
+
+	// Session key must be untouched: original key still decrypts.
+	enc, err := sm.Encrypt("agent-1", plaintext)
+	if err != nil {
+		t.Fatalf("Encrypt after rejected rotation: %v", err)
+	}
+	dec, err := sm.Decrypt("agent-1", enc)
+	if err != nil || !bytes.Equal(dec, plaintext) {
+		t.Errorf("session key was clobbered by forged rotation: dec=%q err=%v", dec, err)
+	}
+}
+
+func TestSessionManagerTryRotateSessionKeyMissing(t *testing.T) {
+	sm, _ := NewSessionManager()
+	curve := ecdh.X25519()
+	agentKey, _ := curve.GenerateKey(rand.Reader)
+	_, err := sm.TryRotateSessionKey("nonexistent", agentKey.PublicKey().Bytes(), []byte("x"))
+	if err != ErrNoSession {
+		t.Errorf("expected ErrNoSession, got %v", err)
+	}
+}
+
+func TestSessionManagerEstablishRejectsActiveOverwrite(t *testing.T) {
+	sm, _ := NewSessionManager()
+	curve := ecdh.X25519()
+	agentKey, _ := curve.GenerateKey(rand.Reader)
+	if err := sm.EstablishSession("agent-1", agentKey.PublicKey().Bytes()); err != nil {
+		t.Fatalf("initial EstablishSession: %v", err)
+	}
+
+	// Use the session so it counts as active.
+	plaintext := []byte("data")
+	if _, err := sm.Encrypt("agent-1", plaintext); err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+
+	// Replaying a handshake (same or different key) must not overwrite it.
+	otherKey, _ := curve.GenerateKey(rand.Reader)
+	if err := sm.EstablishSession("agent-1", otherKey.PublicKey().Bytes()); err != ErrSessionActive {
+		t.Errorf("expected ErrSessionActive for in-use session, got %v", err)
+	}
+	if err := sm.EstablishSession("agent-1", agentKey.PublicKey().Bytes()); err != ErrSessionActive {
+		t.Errorf("expected ErrSessionActive for in-use session replay, got %v", err)
+	}
+
+	// The original session key must still decrypt.
+	encrypted, err := sm.Encrypt("agent-1", plaintext)
+	if err != nil {
+		t.Fatalf("Encrypt after rejected overwrite: %v", err)
+	}
+	decrypted, err := sm.Decrypt("agent-1", encrypted)
+	if err != nil || string(decrypted) != "data" {
+		t.Errorf("session key was clobbered by rejected handshake: decrypted=%q err=%v", decrypted, err)
+	}
+}
+
+func TestSessionManagerEstablishAllowsIdleOverwrite(t *testing.T) {
+	sm, _ := NewSessionManagerWithConfig(100, 5*time.Minute)
+	curve := ecdh.X25519()
+	agentKey, _ := curve.GenerateKey(rand.Reader)
+	if err := sm.EstablishSession("agent-1", agentKey.PublicKey().Bytes()); err != nil {
+		t.Fatalf("initial EstablishSession: %v", err)
+	}
+
+	// A never-used session may be replaced (harmless: nothing was encrypted yet).
+	newKey, _ := curve.GenerateKey(rand.Reader)
+	if err := sm.EstablishSession("agent-1", newKey.PublicKey().Bytes()); err != nil {
+		t.Errorf("expected idle session overwrite to succeed, got %v", err)
+	}
+}
+
+func TestSessionManagerEstablishAllowsExpiredOverwrite(t *testing.T) {
+	sm, _ := NewSessionManagerWithConfig(100, 5*time.Minute)
+	curve := ecdh.X25519()
+	agentKey, _ := curve.GenerateKey(rand.Reader)
+	if err := sm.EstablishSession("agent-1", agentKey.PublicKey().Bytes()); err != nil {
+		t.Fatalf("initial EstablishSession: %v", err)
+	}
+	if _, err := sm.Encrypt("agent-1", []byte("data")); err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+
+	// Age the session beyond maxAge so an agent re-handshaking (e.g. after a
+	// process restart) is allowed to establish a fresh session.
+	sess := sm.GetSession("agent-1")
+	sess.CreatedAt = time.Now().Add(-10 * time.Minute)
+
+	newKey, _ := curve.GenerateKey(rand.Reader)
+	if err := sm.EstablishSession("agent-1", newKey.PublicKey().Bytes()); err != nil {
+		t.Errorf("expected expired session overwrite to succeed, got %v", err)
+	}
+	if got := sm.GetSession("agent-1").MessageCount; got != 0 {
+		t.Errorf("MessageCount after re-handshake = %d, want 0", got)
+	}
+}
+
 func TestSessionManagerMultipleAgents(t *testing.T) {
 	sm, _ := NewSessionManager()
 	curve := ecdh.X25519()
@@ -288,4 +452,41 @@ func BenchmarkSessionManagerEstablish(b *testing.B) {
 		agentKey, _ := curve.GenerateKey(rand.Reader)
 		sm.EstablishSession("bench-agent", agentKey.PublicKey().Bytes())
 	}
+}
+
+// encryptWithAgentPub derives a session key from the given agent public key
+// using the server's private key and returns the AES-256-GCM ciphertext. It
+// simulates an agent beacon encrypted under a NEW rotated session key.
+func encryptWithAgentPub(sm *SessionManager, agentPubBytes, plaintext []byte) ([]byte, error) {
+	curve := ecdh.X25519()
+	agentPub, err := curve.NewPublicKey(agentPubBytes)
+	if err != nil {
+		return nil, err
+	}
+	sm.mu.Lock()
+	shared, err := sm.privateKey.ECDH(agentPub)
+	sm.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	key := sha256.Sum256(shared)
+	return encryptAESGCM(key[:], plaintext)
+}
+
+// encryptAESGCM encrypts plaintext under the provided AES-256 key and returns
+// raw nonce+ciphertext bytes (mirrors SessionManager.Encrypt's wire format).
+func encryptAESGCM(key, plaintext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	aesGCM, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, aesGCM.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+	return aesGCM.Seal(nonce, nonce, plaintext, nil), nil
 }

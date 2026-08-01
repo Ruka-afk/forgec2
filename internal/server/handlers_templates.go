@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -13,7 +14,9 @@ func (s *Server) handleTemplatesPage(c *gin.Context) {
 
 	// Get all templates
 	var templates []db.CommandTemplate
-	s.db.Order("category, name").Find(&templates)
+	if err := s.db.Order("category, name").Find(&templates).Error; err != nil {
+		slog.Error("Failed to list command templates", "err", err)
+	}
 
 	// Group by category
 	categories := make(map[string][]db.CommandTemplate)
@@ -80,7 +83,9 @@ func (s *Server) handleGetTemplatesByCategory(c *gin.Context) {
 	category := c.Param("category")
 
 	var templates []db.CommandTemplate
-	s.db.Where("category = ?", category).Order("name").Find(&templates)
+	if err := s.db.Where("category = ?", category).Order("name").Find(&templates).Error; err != nil {
+		slog.Error("Failed to query templates by category", "err", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"templates": templates,
@@ -117,7 +122,9 @@ func (s *Server) handleUpdateTemplate(c *gin.Context) {
 // handleListTemplatesJSON returns all templates as JSON
 func (s *Server) handleListTemplatesJSON(c *gin.Context) {
 	var templates []db.CommandTemplate
-	s.db.Order("category, name").Find(&templates)
+	if err := s.db.Order("category, name").Find(&templates).Error; err != nil {
+		slog.Error("Failed to list templates JSON", "err", err)
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"templates": templates,
 		"total":     len(templates),

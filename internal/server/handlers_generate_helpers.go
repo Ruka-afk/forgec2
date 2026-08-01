@@ -61,15 +61,15 @@ func (s *Server) resolveListener(listenerID uint) (*resolvedListener, error) {
 		r.DNSServer = listener.Host
 	case "grpc", "grpcs":
 		r.C2URL = fmt.Sprintf("%s://%s:%d", sch, listener.Host, listener.Port)
-		r.Protocol = "http"
+		r.Protocol = listener.Type
 		r.BeaconTransport = "grpc"
 	case "ssh":
 		r.C2URL = fmt.Sprintf("ssh://%s:%d", listener.Host, listener.Port)
-		r.Protocol = "http"
+		r.Protocol = "ssh"
 		r.BeaconTransport = "ssh"
 	case "wss", "ws":
 		r.C2URL = fmt.Sprintf("%s://%s:%d", sch, listener.Host, listener.Port)
-		r.Protocol = "http"
+		r.Protocol = listener.Type
 		r.BeaconTransport = "wss"
 	case "icmp":
 		r.C2URL = fmt.Sprintf("icmp://%s", listener.Host)
@@ -77,7 +77,7 @@ func (s *Server) resolveListener(listenerID uint) (*resolvedListener, error) {
 		r.BeaconTransport = "icmp"
 	case "mtls":
 		r.C2URL = fmt.Sprintf("mtls://%s:%d", listener.Host, listener.Port)
-		r.Protocol = "http"
+		r.Protocol = listener.Type
 		r.BeaconTransport = "mtls"
 	case "h2c":
 		r.C2URL = fmt.Sprintf("h2c://%s:%d", listener.Host, listener.Port)
@@ -117,8 +117,10 @@ func (s *Server) getListeners() []db.Listener {
 		return listenerCache
 	}
 
-	s.db.Select("id", "name", "host", "port", "scheme", "type", "protocol").
-		Where("enabled = ?", true).Limit(500).Find(&listenerCache)
+	if err := s.db.Select("id", "name", "host", "port", "scheme", "type", "protocol").
+		Where("enabled = ?", true).Limit(500).Find(&listenerCache).Error; err != nil {
+		slog.Error("Failed to load listener cache for payload gen", "err", err)
+	}
 	listenerCacheTime = time.Now()
 	return listenerCache
 }

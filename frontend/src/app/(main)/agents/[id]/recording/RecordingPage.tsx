@@ -197,12 +197,6 @@ export default function AgentRecordingPage() {
 
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href={`/agents/${id}`} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Agent
-        </Link>
-      </div>
-
       <PageHeader title={t("agents.recording_title")} subtitle={t("agents.recording_subtitle")}>
         <div className="flex items-center gap-2">
           {replaying ? (

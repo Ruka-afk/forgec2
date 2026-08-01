@@ -46,7 +46,9 @@ func (s *Server) handleAgents(c *gin.Context) {
 	}
 
 	var agents []db.Implant
-	query.Order("last_seen desc").Offset(p.Offset).Limit(p.PageSize).Find(&agents)
+	if err := query.Order("last_seen desc").Offset(p.Offset).Limit(p.PageSize).Find(&agents).Error; err != nil {
+		slog.Error("Failed to list agents", "err", err)
+	}
 
 	for i := range agents {
 		agents[i].Status = s.agentStatus(agents[i]).Status
@@ -88,9 +90,11 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 	agent.Status = s.agentStatus(agent).Status
 
 	var tasks []db.Task
-	s.db.Where("agent_id = ?", id).
+	if err := s.db.Where("agent_id = ?", id).
 		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
-		Order("created_at desc").Limit(AgentDetailTaskLimit).Find(&tasks)
+		Order("created_at desc").Limit(AgentDetailTaskLimit).Find(&tasks).Error; err != nil {
+		slog.Error("Failed to query agent detail tasks", "err", err)
+	}
 
 	var screenshots []string
 	if c.Query("include_screenshots") != "false" {
@@ -170,7 +174,9 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 
 	// Fetch children for P2P chain
 	var children []db.Implant
-	s.db.Where("parent_id = ?", id).Limit(500).Find(&children)
+	if err := s.db.Where("parent_id = ?", id).Limit(500).Find(&children).Error; err != nil {
+		slog.Error("Failed to query agent children", "err", err)
+	}
 
 	// Fetch unlinked agents (for linking dropdown) - optimized
 	var unlinkedAgents []db.Implant
@@ -295,9 +301,17 @@ func (s *Server) handleUpdateNote(c *gin.Context) {
 		}
 		if err := c.ShouldBindJSON(&req); err == nil {
 			if req.Notes != "" {
+				if len(req.Notes) > MaxNotesLength {
+					respondError(c, http.StatusBadRequest, fmt.Sprintf("notes too long (max %d characters)", MaxNotesLength))
+					return
+				}
 				updates["notes"] = req.Notes
 			}
 			if req.Tags != "" {
+				if len(req.Tags) > MaxNotesLength {
+					respondError(c, http.StatusBadRequest, fmt.Sprintf("tags too long (max %d characters)", MaxNotesLength))
+					return
+				}
 				updates["tags"] = req.Tags
 			}
 		}
@@ -305,9 +319,17 @@ func (s *Server) handleUpdateNote(c *gin.Context) {
 		note := c.PostForm("notes")
 		tags := c.PostForm("tags")
 		if note != "" {
+			if len(note) > MaxNotesLength {
+				respondError(c, http.StatusBadRequest, fmt.Sprintf("notes too long (max %d characters)", MaxNotesLength))
+				return
+			}
 			updates["notes"] = note
 		}
 		if tags != "" {
+			if len(tags) > MaxNotesLength {
+				respondError(c, http.StatusBadRequest, fmt.Sprintf("tags too long (max %d characters)", MaxNotesLength))
+				return
+			}
 			updates["tags"] = tags
 		}
 	}
@@ -380,11 +402,17 @@ func (s *Server) deleteAgentRecord(id string) bool {
 		return false
 	}
 	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
 		slog.Error("Failed to commit agent deletion", "agent_id", id, "err", err)
 		return false
 	}
-	if err := os.RemoveAll(filepath.Join(s.cfg.Server.DataDir, "screenshots", id)); err != nil {
-		slog.Warn("Failed to remove agent screenshots", "agent_id", id, "err", err)
+	screenshotsDir := safeJoin(filepath.Join(s.cfg.Server.DataDir, "screenshots"), id)
+	if screenshotsDir != "" {
+		if err := os.RemoveAll(screenshotsDir); err != nil {
+			slog.Warn("Failed to remove agent screenshots", "agent_id", id, "err", err)
+		}
+	} else {
+		slog.Warn("Invalid agent ID for screenshot cleanup", "agent_id", id)
 	}
 	return true
 }
@@ -401,7 +429,9 @@ func (s *Server) handleListAgents(c *gin.Context) {
 	}
 
 	var total int64
-	s.db.Model(&db.Implant{}).Count(&total)
+	if err := s.db.Model(&db.Implant{}).Count(&total).Error; err != nil {
+		slog.Error("Failed to count agents", "err", err)
+	}
 
 	var agents []db.Implant
 	offset := (page - 1) * pageSize

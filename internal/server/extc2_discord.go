@@ -23,14 +23,16 @@ type DiscordExternalC2 struct {
 	stopCh    chan struct{}
 	sequence  atomic.Int64
 	sessionID string
+	httpClient *http.Client
 }
 
 func NewDiscordExternalC2(s *Server, botToken, channelID string) *DiscordExternalC2 {
 	return &DiscordExternalC2{
-		server:    s,
-		botToken:  botToken,
-		channelID: channelID,
-		stopCh:    make(chan struct{}),
+		server:     s,
+		botToken:   botToken,
+		channelID:  channelID,
+		stopCh:     make(chan struct{}),
+		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -80,6 +82,7 @@ func (d *DiscordExternalC2) runLoop(channelID string) {
 }
 
 func (d *DiscordExternalC2) connectAndRun(channelID string) {
+	defer d.cleanupChannel(channelID)
 	gatewayURL := "wss://gateway.discord.gg/?v=10&encoding=json"
 	header := http.Header{}
 	header.Set("Bot", d.botToken)
@@ -226,7 +229,8 @@ func (d *DiscordExternalC2) connectAndRun(channelID string) {
 			S  *int            `json:"s"`
 			T  string          `json:"t"`
 		}
-		if json.Unmarshal(msg, &payload) != nil {
+		if err := json.Unmarshal(msg, &payload); err != nil {
+			slog.Warn("Discord: failed to unmarshal gateway payload", "error", err)
 			continue
 		}
 
@@ -265,7 +269,9 @@ func (d *DiscordExternalC2) connectAndRun(channelID string) {
 			var ready struct {
 				SessionID string `json:"session_id"`
 			}
-			if json.Unmarshal(payload.D, &ready) == nil {
+			if err := json.Unmarshal(payload.D, &ready); err != nil {
+				slog.Warn("Discord: failed to unmarshal READY payload", "error", err)
+			} else {
 				d.sessionID = ready.SessionID
 				slog.Info("Discord bot connected", "session_id", d.sessionID, "channel_id", d.channelID)
 			}
@@ -280,7 +286,9 @@ func (d *DiscordExternalC2) connectAndRun(channelID string) {
 					Bot bool   `json:"bot"`
 				} `json:"author"`
 			}
-			if json.Unmarshal(payload.D, &event) == nil {
+			if err := json.Unmarshal(payload.D, &event); err != nil {
+				slog.Warn("Discord: failed to unmarshal MESSAGE_CREATE payload", "error", err)
+			} else {
 				if event.Author.Bot {
 					continue
 				}
@@ -319,31 +327,45 @@ func (d *DiscordExternalC2) sendRESTMessage(content string) {
 		req.Header.Set("Authorization", "Bot "+d.botToken)
 		req.Header.Set("Content-Type", "application/json")
 
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := d.httpClient.Do(req)
 		if err != nil {
 			slog.Error("Discord REST send failed", "error", err)
 			return
 		}
-		defer resp.Body.Close()
 
 		if resp.StatusCode == 429 {
 			var rl struct {
 				RetryAfter float64 `json:"retry_after"`
 			}
 			if json.NewDecoder(resp.Body).Decode(&rl) == nil {
+				resp.Body.Close()
 				time.Sleep(time.Duration(rl.RetryAfter*1000) * time.Millisecond)
 				continue
 			}
-			return
+			resp.Body.Close()
+			slog.Warn("Discord 429 rate limit but failed to decode retry_after, using default 1s")
+			time.Sleep(time.Second)
+			continue
 		}
 
 		if resp.StatusCode != 200 && resp.StatusCode != 201 {
 			bodyBytes, _ := io.ReadAll(resp.Body)
 			slog.Error("Discord REST error", "status", resp.StatusCode, "body", string(bodyBytes))
 		}
+		resp.Body.Close()
 		return
 	}
 	slog.Warn("Discord REST rate limit retries exhausted", "max_retries", maxRetries)
+}
+
+func (d *DiscordExternalC2) cleanupChannel(channelID string) {
+	d.server.extC2TaskMu.Lock()
+	if q, ok := d.server.extC2TaskQueue[channelID]; ok && len(q) > 0 {
+		slog.Warn("Discord ExtC2 channel closing with pending tasks", "channel", channelID, "count", len(q))
+	}
+	delete(d.server.extC2TaskQueue, channelID)
+	delete(d.server.extC2Notify, channelID)
+	d.server.extC2TaskMu.Unlock()
 }
 
 func (d *DiscordExternalC2) Stop() {

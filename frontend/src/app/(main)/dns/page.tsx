@@ -165,8 +165,9 @@ export default function DNSPage() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_domain")}</label>
+            <label htmlFor="dns-domain" className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_domain")}</label>
             <Input
+              id="dns-domain"
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
               placeholder="c2.example.com"
@@ -174,8 +175,9 @@ export default function DNSPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_listen")}</label>
+            <label htmlFor="dns-listen" className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_listen")}</label>
             <Input
+              id="dns-listen"
               value={addr}
               onChange={(e) => setAddr(e.target.value)}
               placeholder=":53"
@@ -183,8 +185,9 @@ export default function DNSPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_upstream")}</label>
+            <label htmlFor="dns-upstream" className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_upstream")}</label>
             <Input
+              id="dns-upstream"
               value={server}
               onChange={(e) => setServer(e.target.value)}
               placeholder="8.8.8.8:53"
@@ -192,8 +195,9 @@ export default function DNSPage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_prefix")}</label>
+            <label htmlFor="dns-prefix" className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_prefix")}</label>
             <Input
+              id="dns-prefix"
               value={txtPrefix}
               onChange={(e) => setTxtPrefix(e.target.value)}
               placeholder=".dns"

@@ -61,16 +61,25 @@ const SEGMENT_LABELS: Record<string, string> = {
   integrations: "nav.integrations",
   attack: "nav.attack",
   circuit_breaker: "nav.circuit_breaker",
+  bloodhound: "nav.bloodhound",
+  search: "nav.search",
+  timeline: "nav.timeline",
 };
 
+function normalizeKey(seg: string): string {
+  return seg.replace(/-/g, "_");
+}
+
 const SUB_ROUTE_LABELS: Record<string, string> = {
-  config: "agents.config",
+  config: "agents.config_title",
   shell: "agents.shell",
   files: "nav.files",
-  screen: "agents.screen",
-  processes: "agents.processes",
-  screenshot: "agents.screenshot",
-  history: "agents.history",
+  screen: "agents.screen_title",
+  recording: "agents.recording_title",
+  "remote-desktop": "agents.rdp_title",
+  token: "agents.token_title",
+  traffic: "nav.traffic",
+  persistence: "agents.persistence_title",
 };
 
 function Breadcrumb() {
@@ -97,7 +106,7 @@ function Breadcrumb() {
     }
 
     const subKey = SUB_ROUTE_LABELS[seg];
-    const navKey = SEGMENT_LABELS[seg];
+    const navKey = SEGMENT_LABELS[seg] || SEGMENT_LABELS[normalizeKey(seg)];
     const label = subKey ? t(subKey) : navKey ? t(navKey) : seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, " ");
 
     items.push({ label, href: i < segments.length - 1 ? accPath : undefined });
@@ -111,7 +120,7 @@ function Breadcrumb() {
         {items.map((item, i) => {
           const isLast = i === items.length - 1;
           return (
-            <li key={i} className="flex items-center gap-1">
+            <li key={item.label} className="flex items-center gap-1">
               {i > 0 && <ChevronSep className="w-3 h-3 shrink-0 text-muted-foreground/40" />}
               {isLast ? (
                 <span className="font-medium text-foreground/80 truncate max-w-[160px]">{item.label}</span>

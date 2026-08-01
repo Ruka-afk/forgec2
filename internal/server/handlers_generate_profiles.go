@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"html/template"
 	"io"
 	"net/http"
@@ -15,6 +16,10 @@ func (s *Server) handleImportProfile(c *gin.Context) {
 	file, err := c.FormFile("profile")
 	if err != nil {
 		respondError(c, http.StatusBadRequest, "profile file required")
+		return
+	}
+	if file.Size > MaxUploadSize {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("profile file too large (max %d bytes)", MaxUploadSize))
 		return
 	}
 	f, err := file.Open()

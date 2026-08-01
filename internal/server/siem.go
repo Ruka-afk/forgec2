@@ -102,6 +102,7 @@ func (sw *SIEMWebhook) flush() {
 
 	data, err := json.Marshal(events)
 	if err != nil {
+		slog.Error("SIEM: failed to marshal events", "error", err)
 		return
 	}
 	sw.sendWithRetry(data)
@@ -151,67 +152,88 @@ type CorrelationRule struct {
 
 type eventWindow struct {
 	events []SIEMEvent
+	Latest time.Time
 }
 
 type EventCorrelator struct {
-	mu      sync.Mutex
-	rules   []CorrelationRule
-	windows map[string]*eventWindow
-	dedup   map[string]time.Time
+	mu        sync.Mutex
+	rules     []CorrelationRule
+	windows   map[string]*eventWindow
+	dedup     map[string]time.Time
+	maxWindow time.Duration
 }
 
 func NewEventCorrelator() *EventCorrelator {
-	return &EventCorrelator{
-		rules: []CorrelationRule{
-			{
-				Name:         "multi_source_login_failure",
-				Action:       "login_failed",
-				Window:       5 * time.Minute,
-				Threshold:    5,
-				AlertAction:  "siem_alert",
-				AlertDetails: "Multiple login failures from different sources within 5 minutes",
-			},
-			{
-				Name:         "agent_beacon_anomaly",
-				Action:       "implant_checkin",
-				Window:       10 * time.Minute,
-				Threshold:    10,
-				AlertAction:  "siem_alert",
-				AlertDetails: "Agent beacon frequency anomaly detected",
-			},
-			{
-				Name:         "credential_dump_spike",
-				Action:       "credential_found",
-				Window:       1 * time.Minute,
-				Threshold:    3,
-				AlertAction:  "siem_alert",
-				AlertDetails: "Multiple credentials found in short window",
-			},
-			{
-				Name:         "task_cancel_spike",
-				Action:       "task_cancelled",
-				Window:       2 * time.Minute,
-				Threshold:    5,
-				AlertAction:  "siem_alert",
-				AlertDetails: "Multiple task cancellations in short window",
-			},
-			{
-				Name:         "privilege_escalation",
-				Action:       "agent_elevated",
-				Window:       0,
-				Threshold:    1,
-				AlertAction:  "siem_alert",
-				AlertDetails: "Agent privilege escalation detected",
-			},
+	rules := []CorrelationRule{
+		{
+			Name:         "multi_source_login_failure",
+			Action:       "login_failed",
+			Window:       5 * time.Minute,
+			Threshold:    5,
+			AlertAction:  "siem_alert",
+			AlertDetails: "Multiple login failures from different sources within 5 minutes",
 		},
-		windows: make(map[string]*eventWindow),
-		dedup:   make(map[string]time.Time),
+		{
+			Name:         "agent_beacon_anomaly",
+			Action:       "implant_checkin",
+			Window:       10 * time.Minute,
+			Threshold:    10,
+			AlertAction:  "siem_alert",
+			AlertDetails: "Agent beacon frequency anomaly detected",
+		},
+		{
+			Name:         "credential_dump_spike",
+			Action:       "credential_found",
+			Window:       1 * time.Minute,
+			Threshold:    3,
+			AlertAction:  "siem_alert",
+			AlertDetails: "Multiple credentials found in short window",
+		},
+		{
+			Name:         "task_cancel_spike",
+			Action:       "task_cancelled",
+			Window:       2 * time.Minute,
+			Threshold:    5,
+			AlertAction:  "siem_alert",
+			AlertDetails: "Multiple task cancellations in short window",
+		},
+		{
+			Name:         "privilege_escalation",
+			Action:       "agent_elevated",
+			Window:       1 * time.Second,
+			Threshold:    1,
+			AlertAction:  "siem_alert",
+			AlertDetails: "Agent privilege escalation detected",
+		},
+	}
+	var maxWindow time.Duration
+	for _, r := range rules {
+		if r.Window > maxWindow {
+			maxWindow = r.Window
+		}
+	}
+	return &EventCorrelator{
+		rules:     rules,
+		windows:   make(map[string]*eventWindow),
+		dedup:     make(map[string]time.Time),
+		maxWindow: maxWindow,
+	}
+}
+
+func (ec *EventCorrelator) cleanup() {
+	now := time.Now()
+	for key, w := range ec.windows {
+		if now.Sub(w.Latest) > ec.maxWindow && ec.maxWindow > 0 {
+			delete(ec.windows, key)
+		}
 	}
 }
 
 func (ec *EventCorrelator) ProcessEvent(event SIEMEvent) []SIEMEvent {
 	ec.mu.Lock()
 	defer ec.mu.Unlock()
+
+	ec.cleanup()
 
 	var alerts []SIEMEvent
 	for _, rule := range ec.rules {
@@ -234,6 +256,7 @@ func (ec *EventCorrelator) ProcessEvent(event SIEMEvent) []SIEMEvent {
 		}
 		w.events = filtered
 		w.events = append(w.events, event)
+		w.Latest = now
 
 		if len(w.events) >= rule.Threshold {
 			dedupKey := rule.Name + ":" + event.AgentID

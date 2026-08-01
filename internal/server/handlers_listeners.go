@@ -29,7 +29,11 @@ func (s *Server) handleListListeners(c *gin.Context) {
 	}
 
 	var listeners []db.Listener
-	query.Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&listeners)
+	if err := query.Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&listeners).Error; err != nil {
+		slog.Error("Failed to list listeners", "err", err)
+		respondError(c, http.StatusInternalServerError, "Failed to list listeners")
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success":   true,
 		"data":      listeners,
@@ -47,11 +51,15 @@ func (s *Server) handleListenerDetail(c *gin.Context) {
 		return
 	}
 
-	var agents []db.Implant
-	s.db.Where("listener_id = ?", listener.ID).Order("last_seen desc").Limit(5000).Find(&agents)
-
+	agents := make([]db.Implant, 0)
+	if err := s.db.Where("listener_id = ?", listener.ID).Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
+		slog.Error("Failed to query listener agents", "err", err)
+	}
+	
 	var activeCount int64
-	s.db.Model(&db.Implant{}).Where("listener_id = ? AND last_seen > ?", listener.ID, time.Now().Add(-ListenerActiveThreshold)).Count(&activeCount)
+	if err := s.db.Model(&db.Implant{}).Where("listener_id = ? AND last_seen > ?", listener.ID, time.Now().Add(-ListenerActiveThreshold)).Count(&activeCount).Error; err != nil {
+		slog.Error("Failed to count active agents", "err", err)
+	}
 
 	stats := s.getNavStats()
 	data := gin.H{
@@ -186,6 +194,15 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 
 	normalizeListenerProtocol(&l)
 
+	if l.Port != 0 && (l.Port < 1 || l.Port > 65535) {
+		respondError(c, http.StatusBadRequest, "port must be between 1 and 65535")
+		return
+	}
+	if l.Host != "" && !isValidHost(l.Host) {
+		respondError(c, http.StatusBadRequest, "invalid host address")
+		return
+	}
+
 	l.Enabled = true
 	l.Status = "running"
 	if err := s.db.Create(&l).Error; err != nil {
@@ -244,7 +261,15 @@ func (s *Server) handleUpdateListener(c *gin.Context) {
 		l.Host = updates.Host
 	}
 	if updates.Port != 0 {
+		if updates.Port < 1 || updates.Port > 65535 {
+			respondError(c, http.StatusBadRequest, "port must be between 1 and 65535")
+			return
+		}
 		l.Port = updates.Port
+	}
+	if updates.Host != "" && !isValidHost(updates.Host) {
+		respondError(c, http.StatusBadRequest, "invalid host address")
+		return
 	}
 	if updates.Notes != "" {
 		l.Notes = updates.Notes
@@ -296,7 +321,11 @@ func (s *Server) handleDeleteListener(c *gin.Context) {
 
 	// Check if any agents are using this listener
 	var agentCount int64
-	s.db.Model(&db.Implant{}).Where("listener_id = ?", id).Count(&agentCount)
+	if err := s.db.Model(&db.Implant{}).Where("listener_id = ?", id).Count(&agentCount).Error; err != nil {
+		slog.Error("Failed to count listener agents", "listener_id", id, "err", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check agent count"})
+		return
+	}
 	if agentCount > 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":       fmt.Sprintf("Cannot delete listener: %d agents still using this listener", agentCount),
@@ -311,8 +340,13 @@ func (s *Server) handleDeleteListener(c *gin.Context) {
 		s.stopExtraListener(listenerKey(&l))
 	}
 
-	if err := s.db.Delete(&db.Listener{}, id).Error; err != nil {
-		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Listener delete"))
+	result := s.db.Delete(&db.Listener{}, id)
+	if result.Error != nil {
+		respondError(c, http.StatusInternalServerError, sanitizeError(result.Error, "Listener delete"))
+		return
+	}
+	if result.RowsAffected == 0 {
+		respondError(c, http.StatusNotFound, "listener not found")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -354,15 +388,29 @@ func (s *Server) handleDisableListener(c *gin.Context) {
 
 func (s *Server) handleListenersPage(c *gin.Context) {
 	var listeners []db.Listener
-	s.db.Order("created_at desc").Limit(500).Find(&listeners)
+	if err := s.db.Order("created_at desc").Limit(500).Find(&listeners).Error; err != nil {
+		slog.Error("Failed to list listeners for page", "err", err)
+	}
 
 	var total, enabled, httpC, tcpC, dnsC, icmpC int64
-	s.db.Model(&db.Listener{}).Count(&total)
-	s.db.Model(&db.Listener{}).Where("enabled = ?", true).Count(&enabled)
-	s.db.Model(&db.Listener{}).Where("type = ?", "http").Count(&httpC)
-	s.db.Model(&db.Listener{}).Where("type = ?", "tcp").Count(&tcpC)
-	s.db.Model(&db.Listener{}).Where("type = ?", "dns").Count(&dnsC)
-	s.db.Model(&db.Listener{}).Where("type = ?", "icmp").Count(&icmpC)
+	if err := s.db.Model(&db.Listener{}).Count(&total).Error; err != nil {
+		slog.Error("Failed to count listeners", "err", err)
+	}
+	if err := s.db.Model(&db.Listener{}).Where("enabled = ?", true).Count(&enabled).Error; err != nil {
+		slog.Error("Failed to count enabled listeners", "err", err)
+	}
+	if err := s.db.Model(&db.Listener{}).Where("type = ?", "http").Count(&httpC).Error; err != nil {
+		slog.Error("Failed to count HTTP listeners", "err", err)
+	}
+	if err := s.db.Model(&db.Listener{}).Where("type = ?", "tcp").Count(&tcpC).Error; err != nil {
+		slog.Error("Failed to count TCP listeners", "err", err)
+	}
+	if err := s.db.Model(&db.Listener{}).Where("type = ?", "dns").Count(&dnsC).Error; err != nil {
+		slog.Error("Failed to count DNS listeners", "err", err)
+	}
+	if err := s.db.Model(&db.Listener{}).Where("type = ?", "icmp").Count(&icmpC).Error; err != nil {
+		slog.Error("Failed to count ICMP listeners", "err", err)
+	}
 
 	stats := s.getNavStats()
 	data := gin.H{

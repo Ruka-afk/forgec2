@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -146,8 +147,7 @@ func getGoCmd() string {
 				cachedGoCmd = goBinary
 				return
 			}
-			cachedGoCmd = goBinary
-			return
+			// env var points to non-existent file; clear override and fall through
 		}
 
 		// Standard PATH lookup
@@ -645,11 +645,12 @@ func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, g
 			var stderr bytes.Buffer
 			cmd.Stderr = &stderr
 			if err := cmd.Run(); err != nil {
-				return fmt.Errorf("garble build failed (falling back to go build): %w\n%s", err, stderr.String())
+				slog.Warn("garble build failed, falling back to go build", "error", err, "stderr", stderr.String())
+			} else {
+				return nil
 			}
-			return nil
 		}
-		// garble not found, fall through to regular build with extra flags
+		// garble not found or failed, fall through to regular build
 	}
 	cmd := exec.Command(goCmd, append(buildArgs,
 		"-ldflags", ldflags,

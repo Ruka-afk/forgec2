@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -14,7 +15,9 @@ import (
 // GET /campaigns
 func (s *Server) handleCampaignsList(c *gin.Context) {
 	var campaigns []db.Campaign
-	s.db.Preload("Agents").Order("created_at desc").Limit(200).Find(&campaigns)
+	if err := s.db.Preload("Agents").Order("created_at desc").Limit(200).Find(&campaigns).Error; err != nil {
+		slog.Error("Failed to list campaigns", "err", err)
+	}
 	respond(c, gin.H{"success": true, "data": campaigns})
 }
 
@@ -34,7 +37,9 @@ func (s *Server) handleCampaignGet(c *gin.Context) {
 
 	var tasks []db.Task
 	if len(agentIDs) > 0 {
-		s.db.Where("agent_id IN ?", agentIDs).Limit(CampaignTaskLimit).Find(&tasks)
+		if err := s.db.Where("agent_id IN ?", agentIDs).Limit(CampaignTaskLimit).Find(&tasks).Error; err != nil {
+			slog.Error("Failed to query campaign tasks", "err", err)
+		}
 	}
 
 	stats := computeCampaignStats(campaign.Agents, tasks)
@@ -132,7 +137,9 @@ func (s *Server) handleCampaignMitre(c *gin.Context) {
 	}
 	var tasks []db.Task
 	if len(agentIDs) > 0 {
-		s.db.Where("agent_id IN ?", agentIDs).Limit(CampaignTaskLimit).Find(&tasks)
+		if err := s.db.Where("agent_id IN ?", agentIDs).Limit(CampaignTaskLimit).Find(&tasks).Error; err != nil {
+			slog.Error("Failed to query campaign MITRE tasks", "err", err)
+		}
 	}
 
 	phaseCounts := map[string]int{}
@@ -224,9 +231,13 @@ func (s *Server) handleMitreTimeline(c *gin.Context) {
 
 	var tasks []db.Task
 	if len(agentIDs) > 0 {
-		s.db.Where("agent_id IN ?", agentIDs).Order("created_at asc").Limit(CampaignTaskLimit).Find(&tasks)
+		if err := s.db.Where("agent_id IN ?", agentIDs).Order("created_at asc").Limit(CampaignTaskLimit).Find(&tasks).Error; err != nil {
+			slog.Error("Failed to query campaign timeline tasks", "err", err)
+		}
 	} else {
-		s.db.Order("created_at asc").Limit(MITRETimelineLimit).Find(&tasks)
+		if err := s.db.Order("created_at asc").Limit(MITRETimelineLimit).Find(&tasks).Error; err != nil {
+			slog.Error("Failed to query MITRE timeline tasks", "err", err)
+		}
 	}
 
 	respond(c, gin.H{"success": true, "data": buildPhaseTimeline(tasks)})

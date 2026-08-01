@@ -70,14 +70,22 @@ func (s *Server) handleBuildLogs(c *gin.Context) {
 	}
 
 	var total int64
-	query.Count(&total)
+	if err := query.Count(&total).Error; err != nil {
+		slog.Error("Failed to count build logs", "err", err)
+	}
 
 	var logs []db.BuildLog
-	query.Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&logs)
+	if err := query.Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&logs).Error; err != nil {
+		slog.Error("Failed to query build logs", "err", err)
+	}
 
 	var successCount, failedCount int64
-	s.db.Model(&db.BuildLog{}).Where("status = ?", "success").Count(&successCount)
-	s.db.Model(&db.BuildLog{}).Where("status = ?", "failed").Count(&failedCount)
+	if err := s.db.Model(&db.BuildLog{}).Where("status = ?", "success").Count(&successCount).Error; err != nil {
+		slog.Error("Failed to count successful builds", "err", err)
+	}
+	if err := s.db.Model(&db.BuildLog{}).Where("status = ?", "failed").Count(&failedCount).Error; err != nil {
+		slog.Error("Failed to count failed builds", "err", err)
+	}
 
 	totalPages := (int(total) + p.PageSize - 1) / p.PageSize
 	if totalPages < 1 {

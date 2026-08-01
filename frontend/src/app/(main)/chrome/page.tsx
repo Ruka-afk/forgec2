@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { DataState } from "@/components/ui/data-state";
 import { EmptyState, PageHeader, Spinner } from "@/components/UI";
 import { timeAgo } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -30,6 +31,7 @@ export default function ChromeC2Page() {
   const { t } = useI18n();
   const [agents, setAgents] = useState<ChromeAgent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   // Experimental: tasks target the Chrome extension agent only, not the standard Go implant.
   const [selectedAgent, setSelectedAgent] = useState("");
   const [taskType, setTaskType] = useState("chrome_exec");
@@ -54,11 +56,14 @@ export default function ChromeC2Page() {
   ];
 
   const fetchAgents = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const data = await api.get<{ agents: ChromeAgent[] }>("/api/chrome/agents");
       setAgents(data.agents || []);
     } catch {
       setAgents([]);
+      setError(t("chrome.toast.load_failed"));
       toast.error(t("chrome.toast.load_failed"));
     } finally {
       setLoading(false);
@@ -120,11 +125,7 @@ export default function ChromeC2Page() {
         </a>
       </PageHeader>
 
-      {loading ? (
-        <div className="text-center py-12 text-muted-foreground/70">
-          <Spinner />
-        </div>
-      ) : (
+      <DataState loading={loading} error={error} onRetry={fetchAgents}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Agent List */}
           <div className="lg:col-span-2">
@@ -234,7 +235,7 @@ export default function ChromeC2Page() {
             </Card>
           </div>
         </div>
-      )}
+      </DataState>
     </div>
   );
 }

@@ -117,7 +117,9 @@ func (m *MonitorCollector) checkSystemAlerts() {
 	m.mu.Unlock()
 
 	var rules []db.AlertRule
-	m.server.db.Where("enabled = ? AND type IN ?", true, []string{"cpu_high", "memory_high", "disk_high"}).Limit(200).Find(&rules)
+	if err := m.server.db.Where("enabled = ? AND type IN ?", true, []string{"cpu_high", "memory_high", "disk_high"}).Limit(200).Find(&rules).Error; err != nil {
+		slog.Error("Monitor: failed to query system alert rules", "err", err)
+	}
 
 	for _, rule := range rules {
 		var trigger bool
@@ -149,16 +151,13 @@ func (m *MonitorCollector) checkSystemAlerts() {
 
 func (m *MonitorCollector) checkAgentAlerts() {
 	var rules []db.AlertRule
-	m.server.db.Where("enabled = ? AND type = ?", true, "agent_offline").Limit(200).Find(&rules)
+	if err := m.server.db.Where("enabled = ? AND type = ?", true, "agent_offline").Limit(200).Find(&rules).Error; err != nil {
+		slog.Error("Monitor: failed to query agent offline rules", "err", err)
+	}
 
 	var agents []db.Implant
-	m.server.db.Where("status IN ?", []string{"online", "stale"}).Limit(5000).Find(&agents)
-
-	alertThreshold := m.server.offlineThreshold()
-	for _, rule := range rules {
-		if rule.Threshold > 0 {
-			alertThreshold = time.Duration(rule.Threshold) * time.Second
-		}
+	if err := m.server.db.Where("status IN ?", []string{"online", "stale"}).Limit(5000).Find(&agents).Error; err != nil {
+		slog.Error("Monitor: failed to query agents for alert check", "err", err)
 	}
 
 	now := time.Now()
@@ -190,16 +189,20 @@ func (m *MonitorCollector) checkAgentAlerts() {
 				})
 			}(agent)
 		}
+		case offlineFor > m.server.offlineThreshold() && agent.Status == "online":
+			staleIDs = append(staleIDs, agent.ID)
+			m.server.recordAgentStatusEvent(agent.ID, "stale")
+		}
 		for _, rule := range rules {
-			if offlineFor > alertThreshold {
+			threshold := time.Duration(rule.Threshold) * time.Second
+			if threshold <= 0 {
+				threshold = m.server.offlineThreshold()
+			}
+			if offlineFor > threshold {
 				m.triggerAlert(&rule, agent.ID, agent.Hostname,
 					offlineFor.String(),
 					map[string]interface{}{"agent_id": agent.ID, "hostname": agent.Hostname})
 			}
-		}
-		case offlineFor > m.server.offlineThreshold() && agent.Status == "online":
-			staleIDs = append(staleIDs, agent.ID)
-			m.server.recordAgentStatusEvent(agent.ID, "stale")
 		}
 	}
 	if len(staleIDs) > 0 {
@@ -339,7 +342,11 @@ func (s *Server) handleGetAlerts(c *gin.Context) {
 	}
 
 	var alerts []db.Alert
-	query.Preload("Rule").Order("created_at DESC").Limit(100).Find(&alerts)
+	if err := query.Preload("Rule").Order("created_at DESC").Limit(100).Find(&alerts).Error; err != nil {
+		slog.Error("Failed to query alerts", "err", err)
+		respondError(c, http.StatusInternalServerError, "Failed to query alerts")
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"alerts": alerts})
 }
@@ -352,10 +359,19 @@ func (s *Server) handleGetAlertStats(c *gin.Context) {
 		Info     int64 `json:"info"`
 	}
 
-	s.db.Model(&db.Alert{}).Where("status = ?", "active").Count(&stats.Active)
-	s.db.Model(&db.Alert{}).Where("status = ? AND severity = ?", "active", "critical").Count(&stats.Critical)
-	s.db.Model(&db.Alert{}).Where("status = ? AND severity = ?", "active", "warning").Count(&stats.Warning)
-	s.db.Model(&db.Alert{}).Where("status = ? AND severity = ?", "active", "info").Count(&stats.Info)
+	err := s.db.Raw(`
+		SELECT
+			COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) as active,
+			COALESCE(SUM(CASE WHEN status = 'active' AND severity = 'critical' THEN 1 ELSE 0 END), 0) as critical,
+			COALESCE(SUM(CASE WHEN status = 'active' AND severity = 'warning' THEN 1 ELSE 0 END), 0) as warning,
+			COALESCE(SUM(CASE WHEN status = 'active' AND severity = 'info' THEN 1 ELSE 0 END), 0) as info
+		FROM alerts`,
+	).Scan(&stats).Error
+	if err != nil {
+		slog.Error("Failed to query alert stats", "err", err)
+		respondError(c, http.StatusInternalServerError, "Failed to query alert stats")
+		return
+	}
 
 	c.JSON(http.StatusOK, stats)
 }
@@ -363,9 +379,17 @@ func (s *Server) handleGetAlertStats(c *gin.Context) {
 func (s *Server) handleGetAlertRules(c *gin.Context) {
 	p := parsePagination(c, 50, 200)
 	var total int64
-	s.db.Model(&db.AlertRule{}).Count(&total)
+	if err := s.db.Model(&db.AlertRule{}).Count(&total).Error; err != nil {
+		slog.Error("Failed to count alert rules", "err", err)
+		respondError(c, http.StatusInternalServerError, "Failed to count alert rules")
+		return
+	}
 	var rules []db.AlertRule
-	s.db.Order("created_at DESC").Offset(p.Offset).Limit(p.PageSize).Find(&rules)
+	if err := s.db.Order("created_at DESC").Offset(p.Offset).Limit(p.PageSize).Find(&rules).Error; err != nil {
+		slog.Error("Failed to query alert rules", "err", err)
+		respondError(c, http.StatusInternalServerError, "Failed to query alert rules")
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"rules": rules, "total": total, "page": p.Page, "page_size": p.PageSize})
 }
 
@@ -491,13 +515,21 @@ func (s *Server) handleGetAgentStatus(c *gin.Context) {
 		Offline int64 `json:"offline"`
 	}
 
-	s.db.Model(&db.Implant{}).Count(&stats.Total)
+	offlineCutoff := time.Now().Add(-s.offlineThreshold())
+	staleCutoff := time.Now().Add(-s.staleThreshold())
 
-	threshold := s.offlineThreshold()
-	staleThreshold := s.staleThreshold()
-	s.db.Model(&db.Implant{}).Where("last_seen > ?", time.Now().Add(-threshold)).Count(&stats.Online)
-	s.db.Model(&db.Implant{}).Where("last_seen <= ? AND last_seen > ?", time.Now().Add(-threshold), time.Now().Add(-staleThreshold)).Count(&stats.Stale)
-	s.db.Model(&db.Implant{}).Where("last_seen <= ?", time.Now().Add(-staleThreshold)).Count(&stats.Offline)
+	if err := s.db.Raw(`
+		SELECT
+			COUNT(*) as total,
+			COALESCE(SUM(CASE WHEN last_seen > ? THEN 1 ELSE 0 END), 0) as online,
+			COALESCE(SUM(CASE WHEN last_seen > ? AND last_seen <= ? THEN 1 ELSE 0 END), 0) as stale,
+			COALESCE(SUM(CASE WHEN last_seen <= ? THEN 1 ELSE 0 END), 0) as offline
+		FROM implants`, offlineCutoff, offlineCutoff, staleCutoff, offlineCutoff,
+	).Scan(&stats).Error; err != nil {
+		slog.Error("Failed to query agent status stats", "err", err)
+		respondError(c, http.StatusInternalServerError, "Failed to query agent status stats")
+		return
+	}
 
 	c.JSON(http.StatusOK, stats)
 }
@@ -510,11 +542,17 @@ func (s *Server) TriggerAlertForEvent(evt Event) {
 	var rules []db.AlertRule
 	switch evt.Type {
 	case EventCredentialFound:
-		s.db.Where("enabled = ? AND type = ?", true, "credential_found").Limit(200).Find(&rules)
+		if err := s.db.Where("enabled = ? AND type = ?", true, "credential_found").Limit(200).Find(&rules).Error; err != nil {
+			slog.Error("Monitor: failed to query credential_found rules", "err", err)
+		}
 	case EventImplantCheckin:
-		s.db.Where("enabled = ? AND type = ?", true, "agent_online").Limit(200).Find(&rules)
+		if err := s.db.Where("enabled = ? AND type = ?", true, "agent_online").Limit(200).Find(&rules).Error; err != nil {
+			slog.Error("Monitor: failed to query agent_online rules", "err", err)
+		}
 	case EventImplantDisconnect:
-		s.db.Where("enabled = ? AND type = ?", true, "agent_offline").Limit(200).Find(&rules)
+		if err := s.db.Where("enabled = ? AND type = ?", true, "agent_offline").Limit(200).Find(&rules).Error; err != nil {
+			slog.Error("Monitor: failed to query agent_offline rules", "err", err)
+		}
 	}
 
 	for _, rule := range rules {

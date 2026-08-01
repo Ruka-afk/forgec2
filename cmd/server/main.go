@@ -14,6 +14,7 @@ import (
 	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/server"
+	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/forgec2/forgec2/internal/webdist"
 )
 
@@ -66,8 +67,13 @@ func main() {
 	}
 	slog.SetDefault(slog.New(logHandler))
 
+	// Set bcrypt cost before DB init (admin password hashing)
+	if cfg.PasswordPolicy.BcryptCost > 0 {
+		middleware.SetBcryptCost(cfg.PasswordPolicy.BcryptCost)
+	}
+
 	// Initialize database
-	database, err := db.InitDBWithDriver(cfg.Database.Driver, cfg.Database.DSN, cfg.Database.Path, logLevel, cfg.Auth.DefaultPasswd)
+	database, err := db.InitDBWithDriver(cfg.Database.Driver, cfg.Database.DSN, cfg.Database.Path, logLevel, cfg.Server.DBMaxOpenConns, cfg.Server.DBMaxIdleConns, cfg.Server.DBConnMaxLifetime, cfg.Auth.DefaultPasswd)
 	if err != nil {
 		slog.Error("Failed to initialize database", "err", err)
 		os.Exit(1)
@@ -107,6 +113,7 @@ func main() {
 
 	if err := srv.Run(); err != nil {
 		slog.Error("Server failed", "err", err)
+		srv.Shutdown()
 		os.Exit(1)
 	}
 }

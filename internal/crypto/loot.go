@@ -6,7 +6,9 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 )
@@ -18,16 +20,25 @@ var (
 	extc2KeyOnce  sync.Once
 )
 
-// InitLootEncryption initializes the loot encryption key from the JWT secret.
-func InitLootEncryption(jwtSecret string) {
+// InitLootEncryption initializes the loot encryption key.
+// If lootKeyHex is non-empty, uses that 32-byte hex key directly.
+// Otherwise, derives the key from the JWT secret (backward compatible).
+func InitLootEncryption(jwtSecret, lootKeyHex string) {
 	lootKeyOnce.Do(func() {
+		if lootKeyHex != "" {
+			b, err := hex.DecodeString(lootKeyHex)
+			if err == nil && len(b) == 32 {
+				lootKey = b
+				return
+			}
+		}
 		h := sha256.Sum256([]byte(jwtSecret))
 		lootKey = h[:32]
 	})
 }
 
 // InitExtC2Encryption initializes a separate encryption key for ExtC2 channels,
-// derived independently from the JWT secret to limit key compromise blast radius.
+// derived independently to limit key compromise blast radius.
 func InitExtC2Encryption(jwtSecret string) {
 	extc2KeyOnce.Do(func() {
 		h := sha256.Sum256([]byte("extc2:" + jwtSecret))
@@ -76,7 +87,7 @@ func DecryptLoot(s string) (string, error) {
 	}
 	data, err := base64.StdEncoding.DecodeString(s[len(marker):])
 	if err != nil {
-		return s, nil // not valid ciphertext — treat as plaintext
+		return "", fmt.Errorf("decryption failed: invalid ciphertext encoding: %w", err)
 	}
 	block, err := aes.NewCipher(lootKey)
 	if err != nil {
@@ -88,12 +99,12 @@ func DecryptLoot(s string) (string, error) {
 	}
 	nonceSize := aead.NonceSize()
 	if len(data) < nonceSize {
-		return s, nil // too short
+		return "", errors.New("decryption failed: ciphertext too short")
 	}
 	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
 	plaintext, err := aead.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		return s, nil // decryption failed — legacy plaintext
+		return "", fmt.Errorf("decryption failed: %w", err)
 	}
 	return string(plaintext), nil
 }
@@ -134,7 +145,7 @@ func DecryptExtC2(s string) (string, error) {
 	}
 	data, err := base64.StdEncoding.DecodeString(s[len(marker):])
 	if err != nil {
-		return s, nil
+		return "", fmt.Errorf("extc2 decryption failed: invalid ciphertext encoding: %w", err)
 	}
 	block, err := aes.NewCipher(extc2Key)
 	if err != nil {
@@ -146,12 +157,12 @@ func DecryptExtC2(s string) (string, error) {
 	}
 	nonceSize := aead.NonceSize()
 	if len(data) < nonceSize {
-		return s, nil
+		return "", errors.New("extc2 decryption failed: ciphertext too short")
 	}
 	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
 	plaintext, err := aead.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		return s, nil
+		return "", fmt.Errorf("extc2 decryption failed: %w", err)
 	}
 	return string(plaintext), nil
 }

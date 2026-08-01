@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -44,11 +45,16 @@ func (s *Server) handleTimelinePage(c *gin.Context) {
 
 // handleTimelineData returns timeline events as JSON
 func (s *Server) handleTimelineData(c *gin.Context) {
-	filterType := c.Query("type")
-	filterUser := c.Query("user")
-	filterAgent := c.Query("agent")
-	dateFrom := c.Query("from")
-	dateTo := c.Query("to")
+	events := s.buildTimelineEvents(c.Query("type"), c.Query("user"), c.Query("agent"), c.Query("from"), c.Query("to"))
+
+	c.JSON(http.StatusOK, gin.H{
+		"events": events,
+		"total":  len(events),
+	})
+}
+
+// buildTimelineEvents returns unified timeline events (audit logs + tasks) filtered by type/user/agent/date range.
+func (s *Server) buildTimelineEvents(filterType, filterUser, filterAgent, dateFrom, dateTo string) []TimelineEvent {
 	limit := 200
 
 	// Get audit logs
@@ -82,7 +88,9 @@ func (s *Server) handleTimelineData(c *gin.Context) {
 		}
 	}
 
-	query.Order("created_at desc").Limit(limit).Find(&auditLogs)
+	if err := query.Order("created_at desc").Limit(limit).Find(&auditLogs).Error; err != nil {
+		slog.Error("Timeline: failed to query audit logs", "err", err)
+	}
 
 	// Get tasks
 	var tasks []struct {
@@ -107,7 +115,9 @@ func (s *Server) handleTimelineData(c *gin.Context) {
 		if dateTo != "" {
 			taskQuery = taskQuery.Where("created_at <= ?", dateTo)
 		}
-		taskQuery.Order("created_at desc").Limit(limit).Find(&tasks)
+		if err := taskQuery.Order("created_at desc").Limit(limit).Find(&tasks).Error; err != nil {
+			slog.Error("Timeline: failed to query tasks", "err", err)
+		}
 	}
 
 	// Build unified timeline
@@ -135,7 +145,9 @@ func (s *Server) handleTimelineData(c *gin.Context) {
 			ID       string
 			Hostname string
 		}
-		s.db.Table("agents").Select("id, hostname").Where("id IN ?", ids).Find(&agents)
+		if err := s.db.Table("agents").Select("id, hostname").Where("id IN ?", ids).Find(&agents).Error; err != nil {
+			slog.Error("Timeline: failed to query agents", "err", err)
+		}
 		for _, a := range agents {
 			agentNames[a.ID] = a.Hostname
 		}
@@ -182,56 +194,36 @@ func (s *Server) handleTimelineData(c *gin.Context) {
 		})
 	}
 
-	// Sort by timestamp (newest first)
-	// Already sorted by individual queries, but could merge sort here if needed
-
-	c.JSON(http.StatusOK, gin.H{
-		"events": events,
-		"total":  len(events),
-	})
+	return events
 }
 
 // handleTimelineExport exports timeline as CSV
 func (s *Server) handleTimelineExport(c *gin.Context) {
-	// Get events
-	filterUser := c.Query("user")
-	filterAgent := c.Query("agent")
-
-	// Reuse handleTimelineData logic
-	// For simplicity, just get recent audit logs
-	var auditLogs []struct {
-		Timestamp time.Time
-		User      string
-		Action    string
-		Details   string
-		AgentID   string
-		IP        string
-		Success   bool
-	}
-
-	query := s.db.Table("audit_logs").Select("created_at as timestamp, user, action, details, agent_id, ip, success")
-	if filterUser != "" {
-		query = query.Where("user LIKE ? ESCAPE '\\'", "%"+escapeLike(filterUser)+"%")
-	}
-	if filterAgent != "" {
-		query = query.Where("agent_id LIKE ? ESCAPE '\\'", "%"+escapeLike(filterAgent)+"%")
-	}
-	query.Order("created_at desc").Limit(1000).Find(&auditLogs)
+	// Accept filters from both query string and form body (frontend uses POST download)
+	events := s.buildTimelineEvents(
+		c.Request.FormValue("type"),
+		c.Request.FormValue("user"),
+		c.Request.FormValue("agent"),
+		c.Request.FormValue("from"),
+		c.Request.FormValue("to"),
+	)
 
 	// Generate CSV
 	c.Header("Content-Disposition", "attachment; filename=timeline_export.csv")
 	c.Header("Content-Type", "text/csv")
-	c.Writer.WriteString("Timestamp,User,Action,Details,Agent ID,IP,Success\n")
+	c.Writer.WriteString("Timestamp,Type,User,Action,Details,Agent ID,Agent Name,IP,Success\n")
 
-	for _, log := range auditLogs {
-		c.Writer.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s,%s,%t\n",
-			log.Timestamp.Format("2006-01-02 15:04:05"),
-			csvSanitize(log.User),
-			csvSanitize(log.Action),
-			csvSanitize(log.Details),
-			csvSanitize(log.AgentID),
-			csvSanitize(log.IP),
-			log.Success,
+	for _, ev := range events {
+		c.Writer.WriteString(fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%t\n",
+			ev.Timestamp.Format("2006-01-02 15:04:05"),
+			csvSanitize(ev.Type),
+			csvSanitize(ev.User),
+			csvSanitize(ev.Action),
+			csvSanitize(ev.Details),
+			csvSanitize(ev.AgentID),
+			csvSanitize(ev.AgentName),
+			csvSanitize(ev.IP),
+			ev.Success,
 		))
 	}
 }

@@ -351,9 +351,7 @@ export default function FilesPage() {
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <Link href={`/agents/${id}`} className="text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-          </Link>          <h1 className="text-2xl font-bold">          <FolderTree className="w-4 h-4" />
+          <h1 className="text-2xl font-bold">          <FolderTree className="w-4 h-4" />
           {t("agents.files_title")}
           </h1>
           <Badge variant="secondary" className="text-xs font-mono">{id}</Badge>
@@ -405,7 +403,7 @@ export default function FilesPage() {
           >            {rootPath}
           </Button>
           {pathParts.map((part, i) => (
-            <span key={i} className="flex items-center gap-1.5">
+            <span key={part} className="flex items-center gap-1.5">
               <span className="text-muted-foreground font-mono">{sep === "/" ? "/" : "\\"}</span>
               <Button
                 variant="ghost"
@@ -460,11 +458,11 @@ export default function FilesPage() {
           </div>
           {findResults.length > 0 && (
             <div className="mt-3 max-h-48 overflow-y-auto border border-border rounded-xl bg-muted/50">
-              {findResults.map((result, i) => (
+              {findResults.map((result) => (
                 <Button
                   variant="ghost"
                   size="sm"
-                  key={i}
+                  key={result}
                   onClick={() => {
                     const parentDir = result.substring(0, result.lastIndexOf(sep)) || currentPath;                    const fileName = result.split(sep).pop() || "";
                     navigateTo(parentDir);
@@ -492,11 +490,11 @@ export default function FilesPage() {
             {drives.length === 0 ? (
               <p className="text-muted-foreground text-sm text-center py-4">{t("agents.files_no_drives")}</p>            ) : (
               <div className="space-y-2">
-                {drives.map((drive, i) => (
+                {drives.map((drive) => (
                   <Button
                     variant="ghost"
                     size="sm"
-                    key={i}                    onClick={() => {                      navigateTo(drive.letter);                      setShowDrives(false);
+                    key={drive.letter}                    onClick={() => {                      navigateTo(drive.letter);                      setShowDrives(false);
                     }}
                     className="w-full justify-start items-center gap-3 px-4 py-3 bg-muted hover:bg-primary/10 rounded-xl transition-colors"
                   >
@@ -541,9 +539,9 @@ export default function FilesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {entries.map((entry, i) => (
+                {entries.map((entry) => (
                   <TableRow
-                    key={i}
+                    key={entry.name}
                     className={`border-b border-border last:border-0 hover:bg-primary/5 cursor-pointer transition-colors ${                      selectedFile === entry.name ? "bg-primary/10" : ""
                     }`}
                     onClick={() => handleFileClick(entry)}>

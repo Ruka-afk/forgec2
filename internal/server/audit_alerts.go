@@ -14,6 +14,9 @@ type loginLockoutState struct {
 	attempts    int
 	windowStart time.Time
 	lockedUntil time.Time
+	// ips tracks distinct source IPs for account-level entries so that a
+	// single-source attacker cannot trivially lock another user's account.
+	ips map[string]struct{}
 }
 
 type loginLockoutTracker struct {
@@ -32,13 +35,14 @@ func newLoginLockoutTracker() *loginLockoutTracker {
 }
 
 // startCleanup periodically removes expired lockout entries to prevent unbounded memory growth.
-func (t *loginLockoutTracker) startCleanup(ctx context.Context) {
+func (t *loginLockoutTracker) startCleanup(ctx context.Context, windowSec int) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
 			}
 		}()
+		window := time.Duration(windowSec) * time.Second
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
 		for {
@@ -46,19 +50,23 @@ func (t *loginLockoutTracker) startCleanup(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				t.mu.Lock()
-			now := time.Now()
-			for ip, entry := range t.entries {
-				if entry.lockedUntil.IsZero() || now.After(entry.lockedUntil.Add(5*time.Minute)) {
-					delete(t.entries, ip)
-				}
-			}
-			for user, entry := range t.accountEntries {
-				if entry.lockedUntil.IsZero() || now.After(entry.lockedUntil.Add(5*time.Minute)) {
-					delete(t.accountEntries, user)
-				}
-			}
-			t.mu.Unlock()
+				func() {
+					t.mu.Lock()
+					defer t.mu.Unlock()
+					now := time.Now()
+					for ip, entry := range t.entries {
+						if (!entry.lockedUntil.IsZero() && now.After(entry.lockedUntil.Add(5*time.Minute))) ||
+							(entry.lockedUntil.IsZero() && now.After(entry.windowStart.Add(window))) {
+							delete(t.entries, ip)
+						}
+					}
+					for user, entry := range t.accountEntries {
+						if (!entry.lockedUntil.IsZero() && now.After(entry.lockedUntil.Add(5*time.Minute))) ||
+							(entry.lockedUntil.IsZero() && now.After(entry.windowStart.Add(window))) {
+							delete(t.accountEntries, user)
+						}
+					}
+				}()
 			}
 		}
 	}()
@@ -148,7 +156,7 @@ func (t *loginLockoutTracker) isAccountLocked(username string, now time.Time) (b
 	return true, retryAfter
 }
 
-func (t *loginLockoutTracker) recordAccountFailure(username string, maxAttempts, windowSec, lockoutSec int, now time.Time) (locked bool, retryAfter int) {
+func (t *loginLockoutTracker) recordAccountFailure(username, ip string, maxAttempts, windowSec, lockoutSec int, now time.Time) (locked bool, retryAfter int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -167,8 +175,14 @@ func (t *loginLockoutTracker) recordAccountFailure(username string, maxAttempts,
 				delete(t.accountEntries, oldestUser)
 			}
 		}
-		entry = &loginLockoutState{windowStart: now}
+		entry = &loginLockoutState{windowStart: now, ips: make(map[string]struct{})}
 		t.accountEntries[username] = entry
+	}
+	if entry.ips == nil {
+		entry.ips = make(map[string]struct{})
+	}
+	if ip != "" {
+		entry.ips[ip] = struct{}{}
 	}
 
 	if !entry.lockedUntil.IsZero() && now.Before(entry.lockedUntil) {
@@ -187,13 +201,20 @@ func (t *loginLockoutTracker) recordAccountFailure(username string, maxAttempts,
 
 	entry.attempts++
 	if entry.attempts >= maxAttempts {
-		entry.lockedUntil = now.Add(time.Duration(lockoutSec) * time.Second)
-		entry.attempts = 0
-		retryAfter = lockoutSec
-		if retryAfter < 1 {
-			retryAfter = 1
+		if len(entry.ips) >= 2 {
+			entry.lockedUntil = now.Add(time.Duration(lockoutSec) * time.Second)
+			entry.attempts = 0
+			retryAfter = lockoutSec
+			if retryAfter < 1 {
+				retryAfter = 1
+			}
+			return true, retryAfter
 		}
-		return true, retryAfter
+		// All failures came from a single source: the per-IP lockout already
+		// handles that case. Restart the window so one attacker cannot lock a
+		// legitimate user's account from a single IP.
+		entry.attempts = 0
+		entry.windowStart = now
 	}
 	return false, 0
 }
@@ -224,7 +245,10 @@ func (s *Server) checkLoginLockout(ip string) (locked bool, retryAfter int) {
 	if s.loginLockout == nil {
 		return false, 0
 	}
-	for _, wl := range s.cfg.RateLimit.Login.Whitelist {
+	s.configMu.RLock()
+	whitelist := s.cfg.RateLimit.Login.Whitelist
+	s.configMu.RUnlock()
+	for _, wl := range whitelist {
 		if wl == ip {
 			slog.Debug("Login lockout check bypassed for whitelisted IP", "ip", ip)
 			return false, 0
@@ -237,22 +261,25 @@ func (s *Server) recordLoginFailure(ip, username string) (locked bool, retryAfte
 	if s.loginLockout == nil {
 		return false, 0
 	}
-	for _, wl := range s.cfg.RateLimit.Login.Whitelist {
+	s.configMu.RLock()
+	whitelist := s.cfg.RateLimit.Login.Whitelist
+	maxAttempts := s.cfg.RateLimit.Login.MaxAttempts
+	windowSec := s.cfg.RateLimit.Login.Window
+	lockoutSec := s.cfg.RateLimit.Login.LockoutTime
+	s.configMu.RUnlock()
+	for _, wl := range whitelist {
 		if wl == ip {
 			slog.Warn("Login failure from whitelisted IP — lockout bypassed", "ip", ip, "username", username)
 			return false, 0
 		}
 	}
 
-	maxAttempts := s.cfg.RateLimit.Login.MaxAttempts
 	if maxAttempts < 1 {
 		maxAttempts = DefaultMaxLoginAttempts
 	}
-	windowSec := s.cfg.RateLimit.Login.Window
 	if windowSec < 1 {
 		windowSec = DefaultLoginWindowSec
 	}
-	lockoutSec := s.cfg.RateLimit.Login.LockoutTime
 	if lockoutSec < 1 {
 		lockoutSec = DefaultLockoutTimeSec
 	}
@@ -279,24 +306,26 @@ func (s *Server) checkAccountLockout(username string) (bool, int) {
 	return s.loginLockout.isAccountLocked(username, time.Now())
 }
 
-func (s *Server) recordAccountLoginFailure(username string) (locked bool, retryAfter int) {
+func (s *Server) recordAccountLoginFailure(username, ip string) (locked bool, retryAfter int) {
 	if s.loginLockout == nil {
 		return false, 0
 	}
+	s.configMu.RLock()
 	maxAttempts := s.cfg.RateLimit.Login.MaxAttempts
+	windowSec := s.cfg.RateLimit.Login.Window
+	lockoutSec := s.cfg.RateLimit.Login.LockoutTime
+	s.configMu.RUnlock()
 	if maxAttempts < 1 {
 		maxAttempts = DefaultMaxLoginAttempts
 	}
-	windowSec := s.cfg.RateLimit.Login.Window
 	if windowSec < 1 {
 		windowSec = DefaultLoginWindowSec
 	}
-	lockoutSec := s.cfg.RateLimit.Login.LockoutTime
 	if lockoutSec < 1 {
 		lockoutSec = DefaultLockoutTimeSec
 	}
 
-	locked, retryAfter = s.loginLockout.recordAccountFailure(username, maxAttempts, windowSec, lockoutSec, time.Now())
+	locked, retryAfter = s.loginLockout.recordAccountFailure(username, ip, maxAttempts, windowSec, lockoutSec, time.Now())
 	if locked {
 		msg := fmt.Sprintf("Account lockout for user %s. Retry after %ds.", username, retryAfter)
 		s.broadcastSystemAlert("Account Lockout", msg, "account_lockout")

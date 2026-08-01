@@ -1,7 +1,7 @@
 "use client";
 
 import { toast } from "sonner";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { api } from "@/lib/api";
 import { downloadText } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
@@ -16,12 +16,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, CircleCheck, CircleQuestionMark, Copy, Database, Download, Eye, EyeOff, Filter, Lock, Pencil, PenLine, Plus, Shield, Tag, Trash2, WandSparkles } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { AlertTriangle, Download, Filter, Lock, Plus, Tag } from "lucide-react";
 import { CRED_TYPES, TYPE_BADGE_VARIANT, type VaultEntry } from "./_components/types";
 import { useCredentialsData } from "./_components/useCredentialsData";
+import { CredentialRow } from "./_components/CredentialRow";
 
 export default function CredentialsPage() {
   const { t } = useI18n();
@@ -96,7 +96,9 @@ export default function CredentialsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const requestDelete = useCallback((id: string) => setShowDeleteConfirm(id), []);
+
+  const handleDelete = useCallback(async (id: string) => {
     try {
       await api.del(`/credentials/${id}`);
       showToastNotify(t("cred.toast.deleted"), "success");
@@ -105,14 +107,14 @@ export default function CredentialsPage() {
     } catch (err) {
       showToastNotify(String(err), "error");
     }
-  };
+  }, [t, loadData]);
 
-  const handleToggleConfirm = async (entry: VaultEntry) => {
+  const handleToggleConfirm = useCallback(async (entry: VaultEntry) => {
     try {
       await api.post(`/credentials/${entry.id}/confirm`);
       loadData();
     } catch { toast.error(t("cred.toast.confirm_failed")); }
-  };
+  }, [loadData, t]);
 
   const handleBatchTags = async () => {
     if (!batchTags || selectedIds.size === 0) return;
@@ -149,7 +151,7 @@ export default function CredentialsPage() {
     showToastNotify(t("cred.toast.csv_exported"), "success");
   };
 
-  const openEdit = (entry: VaultEntry) => {
+  const openEdit = useCallback((entry: VaultEntry) => {
     setEditTarget(entry);
     setForm({
       domain: entry.domain || "",
@@ -162,7 +164,7 @@ export default function CredentialsPage() {
       notes: entry.notes || "",
     });
     setShowEditModal(true);
-  };
+  }, []);
 
   const resetForm = () => {
     setForm({
@@ -177,13 +179,13 @@ export default function CredentialsPage() {
     });
   };
 
-  const toggleSelect = (id: string) => {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  };
+  }, []);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredEntries.length) {
@@ -193,13 +195,13 @@ export default function CredentialsPage() {
     }
   };
 
-  const togglePasswordVisibility = (id: string) => {
+  const togglePasswordVisibility = useCallback((id: string) => {
     setShowPasswords(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  };
+  }, []);
 
   const entries = useMemo(() => data?.VaultEntries || [], [data?.VaultEntries]);
 
@@ -403,103 +405,18 @@ export default function CredentialsPage() {
               </TableHeader>
               <TableBody className="divide-y divide-border">
                 {filteredEntries.map(entry => (
-                  <TableRow key={entry.id} className="hover:bg-muted/50 transition-colors">
-                    <TableCell className="py-3 px-2">
-                      <Checkbox
-                        checked={selectedIds.has(entry.id)}
-                        onCheckedChange={() => toggleSelect(entry.id)}
-                      />
-                    </TableCell>
-                    <TableCell className="py-3 px-4">
-                      <Badge variant={TYPE_BADGE_VARIANT[entry.type] || "outline"}>
-                        {entry.type || "unknown"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="py-3 px-4 font-medium text-foreground">
-                      {entry.username}
-                    </TableCell>
-                    <TableCell className="py-3 px-4 font-mono text-xs">
-                      {entry.password ? (
-                        <div className="flex items-center gap-1">
-                          <span className="text-muted-foreground">
-                            {showPasswords.has(entry.id) ? entry.password : "????????"}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => togglePasswordVisibility(entry.id)}
-                            aria-label={showPasswords.has(entry.id) ? t("cred.hide_password") : t("cred.show_password")}
-                          >
-                            {showPasswords.has(entry.id) ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => { navigator.clipboard.writeText(entry.password); toast.success(t("cred.copied")); }}
-                            aria-label={t("cred.copy_password")}
-                          >
-                            <Copy className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="max-sm:hidden py-3 px-4 text-muted-foreground">{entry.domain || "-"}</TableCell>
-                    <TableCell className="max-sm:hidden py-3 px-4 text-xs text-muted-foreground">
-                      {entry.source === "mimikatz" ? <WandSparkles className="w-3 h-3 text-amber-600 dark:text-amber-400 mr-1" /> : entry.source === "sam" ? <Database className="w-3 h-3 text-blue-500 mr-1" /> : entry.source === "kerberoast" ? <Shield className="w-3 h-3 text-orange-500 mr-1" /> : <PenLine className="w-3 h-3 text-muted-foreground mr-1" />}
-                      {entry.source || "manual"}
-                    </TableCell>
-                    <TableCell className="max-sm:hidden py-3 px-4">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleConfirm(entry)}
-                        className={entry.confirmed ? "text-primary hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30" : "text-muted-foreground hover:bg-muted"}
-                      >
-                        {entry.confirmed ? <CircleCheck className="w-4 h-4" /> : <CircleQuestionMark className="w-4 h-4" />}
-                        {entry.confirmed ? t("cred.confirmed") : t("cred.unconfirmed")}
-                      </Button>
-                    </TableCell>
-                    <TableCell className="max-sm:hidden py-3 px-4">
-                      {entry.tags ? (
-                        <div className="flex flex-wrap gap-1">
-                          {entry.tags.split(",").map(tag => (
-                            <Badge key={tag} variant="outline">
-                              {tag.trim()}
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-3 px-4 text-center whitespace-nowrap">
-                       <Tooltip>
-                         <TooltipTrigger render={<Button
-                             variant="ghost"
-                             size="icon-sm"
-                             onClick={() => openEdit(entry)}
-                             aria-label={t("cred.edit_title")}
-                           />}>
-                            <Pencil className="w-4 h-4" />
-                          </TooltipTrigger>
-                         <TooltipContent>{t("common.edit")}</TooltipContent>
-                       </Tooltip>
-                       <Tooltip>
-                         <TooltipTrigger render={<Button
-                             variant="ghost"
-                             size="icon-sm"
-                             onClick={() => setShowDeleteConfirm(entry.id)}
-                             className="text-destructive hover:text-destructive/80 hover:bg-destructive/5"
-                             aria-label={t("cred.delete_title")}
-                           />}>
-                            <Trash2 className="w-4 h-4" />
-                          </TooltipTrigger>
-                         <TooltipContent>{t("common.delete")}</TooltipContent>
-                       </Tooltip>
-                    </TableCell>
-                  </TableRow>
+                  <CredentialRow
+                    key={entry.id}
+                    entry={entry}
+                    isSelected={selectedIds.has(entry.id)}
+                    showPassword={showPasswords.has(entry.id)}
+                    onToggleSelect={toggleSelect}
+                    onToggleConfirm={handleToggleConfirm}
+                    onEdit={openEdit}
+                    onDelete={requestDelete}
+                    togglePasswordVisibility={togglePasswordVisibility}
+                    t={t}
+                  />
                 ))}
               </TableBody>
             </Table>

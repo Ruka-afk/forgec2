@@ -59,8 +59,10 @@ func parseAndStoreCredentials(database *gorm.DB, agentID string, raw string, tas
 	const batchSize = 1000
 	for {
 		var batch []db.CredentialEntry
-		database.Where("agent_id = ? AND id > ?", agentID, lastID).
-			Order("id ASC").Limit(batchSize).Find(&batch)
+		if err := database.Where("agent_id = ? AND id > ?", agentID, lastID).
+			Order("id ASC").Limit(batchSize).Find(&batch).Error; err != nil {
+			slog.Error("Failed to load existing credential batch", "err", err)
+		}
 		if len(batch) == 0 {
 			break
 		}
@@ -81,8 +83,11 @@ func parseAndStoreCredentials(database *gorm.DB, agentID string, raw string, tas
 	}
 
 	if len(batch) > 0 {
-		database.CreateInBatches(batch, 50)
-		slog.Info("Credentials stored in vault", "agent_id", agentID, "count", len(batch))
+		if err := database.CreateInBatches(batch, 50).Error; err != nil {
+			slog.Error("Failed to store credentials batch", "agent_id", agentID, "err", err)
+		} else {
+			slog.Info("Credentials stored in vault", "agent_id", agentID, "count", len(batch))
+		}
 	}
 }
 
@@ -139,8 +144,11 @@ func parseAndStoreKerberoastResults(database *gorm.DB, agentID string, raw strin
 		})
 	}
 	if len(newEntries) > 0 {
-		database.Create(&newEntries)
-		slog.Info("Kerberoast hashes stored in vault", "agent_id", agentID, "count", len(newEntries))
+		if err := database.Create(&newEntries).Error; err != nil {
+			slog.Error("Failed to store kerberoast hashes", "agent_id", agentID, "err", err)
+		} else {
+			slog.Info("Kerberoast hashes stored in vault", "agent_id", agentID, "count", len(newEntries))
+		}
 	}
 }
 
@@ -266,11 +274,16 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 		}
 	}
 
-	query.Limit(5000).Find(&creds)
+	if err := query.Limit(5000).Find(&creds).Error; err != nil {
+		slog.Error("Failed to query credentials page", "err", err)
+	}
 
 	var allTags []string
 	var tagStrings []string
-	s.db.Model(&db.CredentialEntry{}).Where("tags != '' AND tags IS NOT NULL").Pluck("tags", &tagStrings)
+	if err := s.db.Model(&db.CredentialEntry{}).Where("tags != '' AND tags IS NOT NULL").Limit(5000).Pluck("tags", &tagStrings).Error; err != nil {
+		slog.Error("Failed to pluck credential tags", "err", err)
+		tagStrings = []string{}
+	}
 	tagSet := make(map[string]int)
 	for _, tags := range tagStrings {
 		for _, tag := range strings.Split(tags, ",") {
@@ -285,14 +298,18 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 	}
 
 	var credsTasks []db.Task
-	s.db.Preload("Agent").
+	if err := s.db.Preload("Agent").
 		Where("type = ?", "creds").
-		Order("created_at desc").Limit(100).Find(&credsTasks)
+		Order("created_at desc").Limit(100).Find(&credsTasks).Error; err != nil {
+		slog.Error("Failed to query creds tasks", "err", err)
+	}
 
 	var related []db.Task
-	s.db.Preload("Agent").
+	if err := s.db.Preload("Agent").
 		Where("type = ? AND (command LIKE ? OR command LIKE ? OR command LIKE ?)", "shell", "%mimikatz%", "%sekurlsa%", "%lsass%").
-		Order("created_at desc").Limit(30).Find(&related)
+		Order("created_at desc").Limit(30).Find(&related).Error; err != nil {
+		slog.Error("Failed to query related creds tasks", "err", err)
+	}
 
 	stats := s.getNavStats()
 	data := gin.H{
@@ -370,7 +387,9 @@ func (s *Server) handleExportCredentials(c *gin.Context) {
 		}
 	}
 
-	query.Limit(5000).Find(&creds)
+	if err := query.Limit(5000).Find(&creds).Error; err != nil {
+		slog.Error("Failed to query credentials for export", "err", err)
+	}
 
 	c.Header("Content-Type", "text/csv")
 	c.Header("Content-Disposition", "attachment; filename=credentials.csv")
@@ -507,9 +526,13 @@ func (s *Server) handleBatchAddTags(c *gin.Context) {
 
 	newTags := strings.Join(req.Tags, ",")
 
-	s.db.Model(&db.CredentialEntry{}).
+	if err := s.db.Model(&db.CredentialEntry{}).
 		Where("id IN ?", req.IDs).
-		Update("tags", gorm.Expr("CASE WHEN tags = '' OR tags IS NULL THEN ? ELSE tags || ',' || ? END", newTags, newTags))
+		Update("tags", gorm.Expr("CASE WHEN tags = '' OR tags IS NULL THEN ? ELSE tags || ',' || ? END", newTags, newTags)).Error; err != nil {
+		slog.Error("Failed to batch add tags", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to update tags")
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "count": len(req.IDs)})
 }

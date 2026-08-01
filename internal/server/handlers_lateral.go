@@ -17,21 +17,31 @@ func (s *Server) handleLateralPage(c *gin.Context) {
 
 	// Get available agents
 	var agents []db.Implant
-	s.db.Where("status = 'online'").Limit(5000).Find(&agents)
+	if err := s.db.Where("status = 'online'").Order("last_seen desc").Limit(5000).Find(&agents).Error; err != nil {
+		slog.Error("Failed to query lateral agents", "err", err)
+	}
 
 	// Get credentials from vault
 	var credentials []db.CredentialEntry
-	s.db.Order("created_at desc").Limit(50).Find(&credentials)
+	if err := s.db.Order("created_at desc").Limit(50).Find(&credentials).Error; err != nil {
+		slog.Error("Failed to query lateral credentials", "err", err)
+	}
 
 	// Get statistics
 	var onlineAgents int64
-	s.db.Model(&db.Implant{}).Where("status = 'online'").Count(&onlineAgents)
+	if err := s.db.Model(&db.Implant{}).Where("status = 'online'").Count(&onlineAgents).Error; err != nil {
+		slog.Error("Failed to count online agents", "err", err)
+	}
 
 	var totalCreds int64
-	s.db.Model(&db.CredentialEntry{}).Count(&totalCreds)
+	if err := s.db.Model(&db.CredentialEntry{}).Count(&totalCreds).Error; err != nil {
+		slog.Error("Failed to count credentials", "err", err)
+	}
 
 	var totalTasks int64
-	s.db.Model(&db.Task{}).Where("type = 'lateral'").Count(&totalTasks)
+	if err := s.db.Model(&db.Task{}).Where("type = 'lateral'").Count(&totalTasks).Error; err != nil {
+		slog.Error("Failed to count lateral tasks", "err", err)
+	}
 
 	data := gin.H{
 		"Title":        "ForgeC2 - Lateral Movement",
@@ -51,10 +61,11 @@ func (s *Server) handleLateralHistory(c *gin.Context) {
 	agentID := c.Param("id")
 
 	var tasks []db.Task
-	s.db.Where("agent_id = ? AND type = 'lateral'", agentID).
-		Order("created_at desc").
-		Limit(50).
-		Find(&tasks)
+	q := s.db.Where("type = 'lateral'")
+	if agentID != "all" {
+		q = q.Where("agent_id = ?", agentID)
+	}
+	q.Order("created_at desc").Limit(50).Find(&tasks)
 
 	c.JSON(http.StatusOK, gin.H{
 		"tasks": tasks,

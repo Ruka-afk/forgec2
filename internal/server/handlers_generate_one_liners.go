@@ -53,15 +53,16 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 	}
 
 	cfg := payload.ImplantConfig{
-		C2URL:         form.C2URL,
-		Protocol:      form.Protocol,
-		Interval:      interval,
-		Jitter:        form.Jitter,
-		UserAgent:     form.UserAgent,
-		Persist:       form.Persist,
-		SkipTLSVerify: form.SkipTLSVerify,
-		Filename:      form.Filename,
-		Debug:         false,
+		C2URL:          form.C2URL,
+		Protocol:       form.Protocol,
+		BeaconTransport: resolved.BeaconTransport,
+		Interval:       interval,
+		Jitter:         form.Jitter,
+		UserAgent:      form.UserAgent,
+		Persist:        form.Persist,
+		SkipTLSVerify:  form.SkipTLSVerify,
+		Filename:       form.Filename,
+		Debug:          false,
 		Profile:       form.Profile,
 		ListenerID:    form.ListenerID,
 		Proxy:         form.Proxy,
@@ -88,24 +89,25 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 // handleGenerateOneLiner generates a payload and returns 10+ one-liner variants
 func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 	var form struct {
-		C2URL         string `form:"c2_url"`
-		Protocol      string `form:"protocol"`
-		Interval      int    `form:"interval"`
-		Jitter        int    `form:"jitter"`
-		BeaconTime    int    `form:"beacon_time"`
-		UserAgent     string `form:"user_agent"`
-		Persist       bool   `form:"persist"`
-		SkipTLSVerify bool   `form:"skip_tls_verify"`
-		Profile       string `form:"profile"`
-		ListenerID    uint   `form:"listener_id"`
-		PayloadType   string `form:"payload_type"` // "exe", "ps1", "linux"
-		Proxy         string `form:"proxy"`
-		CryptoKey     string `form:"crypto_key"`
-		P2PMode       string `form:"p2p_mode"`
-		P2PParent     string `form:"p2p_parent"`
-		P2PListenAddr string `form:"p2p_listen_addr"`
-		DNSDomain     string `form:"dns_domain"`
-		DNSServer     string `form:"dns_server"`
+		C2URL            string `form:"c2_url"`
+		Protocol         string `form:"protocol"`
+		BeaconTransport  string `form:"beacon_transport"`
+		Interval         int    `form:"interval"`
+		Jitter           int    `form:"jitter"`
+		BeaconTime       int    `form:"beacon_time"`
+		UserAgent        string `form:"user_agent"`
+		Persist          bool   `form:"persist"`
+		SkipTLSVerify    bool   `form:"skip_tls_verify"`
+		Profile          string `form:"profile"`
+		ListenerID       uint   `form:"listener_id"`
+		PayloadType      string `form:"payload_type"` // "exe", "ps1", "linux"
+		Proxy            string `form:"proxy"`
+		CryptoKey        string `form:"crypto_key"`
+		P2PMode          string `form:"p2p_mode"`
+		P2PParent        string `form:"p2p_parent"`
+		P2PListenAddr    string `form:"p2p_listen_addr"`
+		DNSDomain        string `form:"dns_domain"`
+		DNSServer        string `form:"dns_server"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request parameters")
@@ -134,6 +136,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		}
 		form.C2URL = resolved.C2URL
 		form.Protocol = resolved.Protocol
+		form.BeaconTransport = resolved.BeaconTransport
 		if resolved.DNSDomain != "" {
 			form.DNSDomain = resolved.DNSDomain
 			if form.DNSServer == "" {
@@ -142,6 +145,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		}
 	} else if isDNS && form.Protocol == "" {
 		form.Protocol = "dns"
+		form.BeaconTransport = "dns"
 	}
 
 	interval := form.Interval
@@ -160,22 +164,24 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 	} else if form.P2PMode == "child" {
 		p2pParent = form.P2PParent
 		form.Protocol = "http"
+		form.BeaconTransport = "tcp"
 	}
 
 	cfg := payload.ImplantConfig{
-		C2URL:         form.C2URL,
-		Protocol:      form.Protocol,
-		Interval:      interval,
-		Jitter:        form.Jitter,
-		UserAgent:     form.UserAgent,
-		Persist:       form.Persist,
-		SkipTLSVerify: form.SkipTLSVerify,
-		Filename:      "forgec2_beacon",
-		Debug:         false,
-		Profile:       form.Profile,
-		ListenerID:    form.ListenerID,
-		P2PMode:       p2pMode,
-		P2PParent:     p2pParent,
+		C2URL:            form.C2URL,
+		Protocol:         form.Protocol,
+		BeaconTransport:  form.BeaconTransport,
+		Interval:         interval,
+		Jitter:           form.Jitter,
+		UserAgent:        form.UserAgent,
+		Persist:          form.Persist,
+		SkipTLSVerify:    form.SkipTLSVerify,
+		Filename:         "forgec2_beacon",
+		Debug:            false,
+		Profile:          form.Profile,
+		ListenerID:       form.ListenerID,
+		P2PMode:          p2pMode,
+		P2PParent:        p2pParent,
 		P2PListenAddr: p2pListenAddr,
 		DNSDomain:     form.DNSDomain,
 		DNSServer:     form.DNSServer,

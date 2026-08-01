@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -154,7 +155,9 @@ func (s *Server) handleDashboardTaskStatus(c *gin.Context) {
 		Status string
 		Count  int64
 	}
-	s.db.Model(&db.Task{}).Select("status, count(*) as count").Group("status").Limit(10).Find(&counts)
+	if err := s.db.Model(&db.Task{}).Select("status, count(*) as count").Group("status").Limit(10).Find(&counts).Error; err != nil {
+		slog.Error("Dashboard: failed to query task status counts", "err", err)
+	}
 
 	countMap := make(map[string]int64, len(counts))
 	for _, c := range counts {
@@ -206,7 +209,9 @@ func (s *Server) handleDashboardListenerTraffic(c *gin.Context) {
 	bytesOut := make([]int64, points)
 
 	var tasks []db.Task
-	s.db.Select("created_at").Where("created_at >= ?", startTime).Limit(DashboardTrafficLimit).Find(&tasks)
+	if err := s.db.Select("created_at").Where("created_at >= ?", startTime).Limit(DashboardTrafficLimit).Find(&tasks).Error; err != nil {
+		slog.Error("Dashboard: failed to query traffic tasks", "err", err)
+	}
 
 	now := time.Now()
 	for _, task := range tasks {
@@ -405,10 +410,14 @@ func (s *Server) handleDashboardTaskGantt(c *gin.Context) {
 
 func (s *Server) handleDashboardAttackPath(c *gin.Context) {
 	var agents []db.Implant
-	s.db.Select("id, hostname, os, ip, parent_id").Limit(10).Find(&agents)
+	if err := s.db.Select("id, hostname, os, ip, parent_id").Limit(10).Find(&agents).Error; err != nil {
+		slog.Error("Dashboard: failed to query attack path agents", "err", err)
+	}
 
 	var creds []db.CredentialEntry
-	s.db.Select("agent_id, domain, username, type").Limit(20).Find(&creds)
+	if err := s.db.Select("agent_id, domain, username, type").Limit(20).Find(&creds).Error; err != nil {
+		slog.Error("Dashboard: failed to query attack path creds", "err", err)
+	}
 
 	nodes := make([]AttackPathNode, 0)
 	edges := make([]AttackPathEdge, 0)

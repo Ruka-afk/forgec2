@@ -90,7 +90,9 @@ func (bc *BuildCache) Lookup(paramsHash string) (string, bool) {
 	if time.Since(entry.CreatedAt) > bc.ttl {
 		bc.mu.Lock()
 		bc.misses++
-		os.Remove(entry.Path)
+		if err := os.Remove(entry.Path); err != nil {
+			slog.Error("Build cache: failed to remove expired entry", "path", entry.Path, "err", err)
+		}
 		delete(bc.entries, paramsHash)
 		bc.mu.Unlock()
 		return "", false
@@ -135,7 +137,9 @@ func (bc *BuildCache) Cleanup() {
 	for hash, entry := range bc.entries {
 		if now.Sub(entry.CreatedAt) > bc.ttl {
 			expired = append(expired, hash)
-			os.Remove(entry.Path)
+			if err := os.Remove(entry.Path); err != nil && !os.IsNotExist(err) {
+				slog.Warn("Build cache: failed to remove expired entry", "path", entry.Path, "err", err)
+			}
 			continue
 		}
 		totalSize += entry.Size
@@ -174,7 +178,9 @@ func (bc *BuildCache) Cleanup() {
 			continue
 		}
 		totalSize -= entry.Size
-		os.Remove(entry.Path)
+		if err := os.Remove(entry.Path); err != nil && !os.IsNotExist(err) {
+			slog.Warn("Build cache: failed to remove LRU entry", "path", entry.Path, "err", err)
+		}
 		delete(bc.entries, item.hash)
 	}
 }

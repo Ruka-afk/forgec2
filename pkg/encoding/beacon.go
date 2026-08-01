@@ -33,16 +33,24 @@ var (
 )
 
 // randomFormat selects a format, cycling through to avoid repeating the same format.
+// Safe against FormatMax changes: returns 0 (JSON) if FormatMax <= 1.
 func randomFormat() byte {
+	if FormatMax <= 1 {
+		lastFormat.Store(0)
+		return 0
+	}
 	last := lastFormat.Load()
-	// Pick next format, skipping the last one used (rotation reduces repeat)
-	for {
+	for i := 0; i < 8; i++ {
 		f := byte(rand.Intn(int(FormatMax)))
 		if f != byte(last) {
 			lastFormat.Store(uint32(f))
 			return f
 		}
 	}
+	// Fallback: rotate to next format to guarantee forward progress
+	next := (byte(last) + 1) % FormatMax
+	lastFormat.Store(uint32(next))
+	return next
 }
 
 // Marshal encodes v using a randomly selected format, prepending a format byte.

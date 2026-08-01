@@ -81,10 +81,10 @@ func ClearCache() {
 // InitDB initializes the database using glebarez/sqlite pure Go driver
 // or PostgreSQL via gorm.io/driver/postgres when driver="postgres" and dsn is set.
 func InitDB(dbPath string, logLevel slog.Level, defaultPassword ...string) (*gorm.DB, error) {
-	return InitDBWithDriver("", "", dbPath, logLevel, defaultPassword...)
+	return InitDBWithDriver("", "", dbPath, logLevel, 25, 5, 30*time.Minute, defaultPassword...)
 }
 
-func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, defaultPassword ...string) (*gorm.DB, error) {
+func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbMaxOpenConns int, dbMaxIdleConns int, dbConnMaxLifetime time.Duration, defaultPassword ...string) (*gorm.DB, error) {
 	gormConfig := &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	}
@@ -101,6 +101,13 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, def
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
 		}
+		sqlDB, err := db.DB()
+		if err != nil {
+			return nil, fmt.Errorf("get underlying DB: %w", err)
+		}
+		sqlDB.SetMaxOpenConns(dbMaxOpenConns)
+		sqlDB.SetMaxIdleConns(dbMaxIdleConns)
+		sqlDB.SetConnMaxLifetime(dbConnMaxLifetime)
 		slog.Info("Database initialized (PostgreSQL)", "dsn", redactDSN(dsn))
 	} else {
 		if err := os.MkdirAll(filepath.Dir(fallbackPath), 0700); err != nil {
@@ -122,14 +129,24 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, def
 		slog.Info("Database initialized (SQLite)", "path", fallbackPath)
 	}
 
-	// Auto-migrate all models
+	// Apply gormigrate schema migrations FIRST. They must run before AutoMigrate
+	// so table renames (e.g. agents -> implants) operate on the pre-existing
+	// schema; running AutoMigrate first would create the new table and silently
+	// strand the old table's data.
+	if err := runSchemaMigrations(db); err != nil {
+		return nil, fmt.Errorf("schema migration failed: %w", err)
+	}
+
+	// Auto-migrate all models (creates any tables/columns still missing on
+	// fresh installs and after historical migrations)
 	if err := db.AutoMigrate(&Implant{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &ScanResult{}, &NetworkHost{}, &CommandTemplate{}, &BOFFile{}, &BOFLibrary{}, &ServerConfig{}, &WebhookConfig{}, &Plugin{}, &PluginReview{}, &PluginDependency{}, &PluginUpdateStatus{}, &RolePermission{}, &AutomationRule{}, &AlertRule{}, &Alert{}, &SystemMetric{}, &GeneratedReport{}, &Campaign{}, &CampaignAgent{}, &MeshPeer{}, &BloodHoundResult{}, &BloodHoundFile{}, &SessionRecording{}, &OpsecHistory{}, &OpsecRule{}, &CircuitBreakerConfig{}, &CircuitBreakerEvent{}, &CustomRole{}, &PhishingTemplate{}, &PhishingCampaign{}, &PhishingEvent{}, &AgentTag{}, &AgentTagAssignment{}, &AutoTagRule{}, &ScheduledTask{}, &Notification{}, &AgentGroup{}, &AgentGroupAssignment{}, &Workflow{}, &WorkflowStep{}, &WorkflowExecution{}, &WorkflowStepLog{}, &ChatMessage{}, &ScheduledReport{}, &StagerToken{}, &Redirector{}, &AgentLock{}, &CloudCred{}, &AIChatSession{}, &AIChatMessage{}, &ExtC2Channel{}, &AgentStatusEvent{}, &BackupCode{}, &UserSession{}, &PasswordHistory{}, &ApiKey{}, &Script{}); err != nil {
 		return nil, err
 	}
 
-	// Apply gormigrate schema migrations (ALTER TABLE, CREATE INDEX, rename, etc.)
-	if err := runMigrations(db); err != nil {
-		return nil, fmt.Errorf("schema migration failed: %w", err)
+	// Apply index migrations LAST, once every table/column they target is
+	// guaranteed to exist on all upgrade paths.
+	if err := runIndexMigrations(db); err != nil {
+		return nil, fmt.Errorf("index migration failed: %w", err)
 	}
 
 	// Seed role permissions
@@ -137,7 +154,9 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, def
 
 	// Seed default admin user if none exist
 	var userCount int64
-	db.Model(&User{}).Count(&userCount)
+	if err := db.Model(&User{}).Count(&userCount).Error; err != nil {
+		return nil, fmt.Errorf("failed to check for existing users: %w", err)
+	}
 	if userCount == 0 {
 		adminPass := ""
 		if len(defaultPassword) > 0 && defaultPassword[0] != "" {
@@ -187,7 +206,9 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, def
 
 func seedRolePermissions(db *gorm.DB) {
 	var count int64
-	db.Model(&RolePermission{}).Count(&count)
+	if err := db.Model(&RolePermission{}).Count(&count).Error; err != nil {
+		return
+	}
 	if count > 0 {
 		return
 	}

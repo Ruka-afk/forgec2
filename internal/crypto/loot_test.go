@@ -5,14 +5,14 @@ import (
 )
 
 func TestInitLootEncryption(t *testing.T) {
-	InitLootEncryption("test-secret-key-for-testing-only")
+	InitLootEncryption("test-secret-key-for-testing-only", "")
 	if lootKey == nil {
 		t.Fatal("lootKey should be initialized")
 	}
 }
 
 func TestEncryptDecryptRoundTrip(t *testing.T) {
-	InitLootEncryption("test-secret-key-for-testing-only")
+	InitLootEncryption("test-secret-key-for-testing-only", "")
 	plaintext := "P@ssw0rd!123"
 	enc, err := EncryptLoot(plaintext)
 	if err != nil {
@@ -32,7 +32,7 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 }
 
 func TestEncryptEmptyString(t *testing.T) {
-	InitLootEncryption("test-secret-key-for-testing-only")
+	InitLootEncryption("test-secret-key-for-testing-only", "")
 	enc, err := EncryptLoot("")
 	if err != nil {
 		t.Fatalf("EncryptLoot empty should not error: %v", err)
@@ -43,7 +43,7 @@ func TestEncryptEmptyString(t *testing.T) {
 }
 
 func TestDecryptLegacyPlaintext(t *testing.T) {
-	InitLootEncryption("test-secret-key-for-testing-only")
+	InitLootEncryption("test-secret-key-for-testing-only", "")
 	// Legacy plaintext credentials should pass through
 	dec, err := DecryptLoot("old-plaintext-password")
 	if err != nil {
@@ -55,12 +55,9 @@ func TestDecryptLegacyPlaintext(t *testing.T) {
 }
 
 func TestDecryptInvalidFormat(t *testing.T) {
-	InitLootEncryption("test-secret-key-for-testing-only")
-	dec, err := DecryptLoot("FC2ENC:!!!invalid-base64!!!")
-	if err != nil {
-		t.Fatalf("DecryptLoot invalid format should fallback: %v", err)
-	}
-	if dec != "FC2ENC:!!!invalid-base64!!!" {
-		t.Fatal("invalid ciphertext should pass through as plaintext")
+	InitLootEncryption("test-secret-key-for-testing-only", "")
+	_, err := DecryptLoot("FC2ENC:!!!invalid-base64!!!")
+	if err == nil {
+		t.Fatal("DecryptLoot invalid format should return error")
 	}
 }

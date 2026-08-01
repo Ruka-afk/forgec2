@@ -1,4 +1,43 @@
 export const en: Record<string, string> = {
+    "agents.agents_count": "Agents ({count})",
+    "agents.files_deleted": "Deleted {filename}",
+    "agents.files_downloaded": "Downloaded {filename}",
+    "agents.files_found_results": "Found {n} result(s)",
+    "agents.files_free_of": "{free} free of {total}",
+    "agents.files_upload_failed_status": "Upload failed (HTTP {status})",
+    "agents.files_uploaded": "Uploaded {name}",
+    "agents.recording_recording_fmt": "Recording #{id}",
+    "agents.recording_task_fmt": "Task #{id}",
+    "agents.token_subtitle": "Token for {hostname}",
+    "agents.traffic_baseline_val": "Baseline: {value} bytes",
+    "agents.traffic_beacon_timeline": "Beacon Timeline ({count})",
+    "agents.traffic_mean": "Mean: {value}s",
+    "agents.traffic_stddev": "StdDev: {value}s",
+    "agents.traffic_suggest_interval": "Suggested interval: {value}s",
+    "agents.traffic_suggest_jitter": "Suggested jitter: {value}%",
+    "agents.traffic_suggest_pad": "Suggested padding: {value} bytes",
+    "auto.rule_conditions_actions": "({conditions} conditions, {actions} actions)",
+    "auto.rules_count": "{count} rule(s)",
+    "auto.webhooks_count": "{count} webhook(s)",
+    "autotag.applied": "Applied auto-tags to {count} agent(s)",
+    "cb.listener_reset": "Reset circuit breaker for listener {id}",
+    "cb.listener_toggled": "Listener {id} {state}",
+    "cb.probes_every": "Probes every {seconds}s",
+    "chain.parent_set": "Parent set to {id}",
+    "chain.select_parent_desc": "Parent: {name}",
+    "container.task_dispatched": "Dispatched task #{id}",
+    "cred.batch_desc": "{count} selected",
+    "domain_fronting.remove_domain": "Remove domain {domain}?",
+    "login.footer_version": "ForgeC2 v{version}",
+    "loot.delete_selected": "Delete {count} selected",
+    "notifications.mark_n_read": "Mark {count} as read",
+    "packer.exe_loaded": "EXE loaded ({size} KB)",
+    "plugins.subtitle": "{count} plugin(s) installed",
+    "screenshots.confirm_delete": "Delete {count} screenshot(s)?",
+    "scripting.run_history": "History ({count})",
+    "sidebar.current_operator": "Operator: {username}",
+    "stager.tokens_count": "{count} token(s)",
+    "users.showing": "Showing {filtered} of {total}",
     "attack.techniques": "Techniques",
     "infra.about": "About infrastructure",
     "infra.about_desc": "Manage listeners, redirectors, certificates, and external C2 settings",
@@ -163,13 +202,13 @@ export const en: Record<string, string> = {
     "login.error_failed": "Login failed",
     "login.error_network": "Network error. Please try again.",
     "login.footer": "ForgeC2 — Authorized access only",
-    "login.footer_version": "ForgeC2 v{version} — Authorized access only",
+
     "login.session_expired": "Session expired — please sign in again",
 
     "generate.shared_title": "Shared Settings",
     "generate.shared_subtitle": "Select listener and configure common parameters",
     "generate.create_listener": "Create Listener",
-    "generate.listener": "Listener",
+
     "generate.listener_required": "Listener *",
     "generate.select_listener": "-- Select Listener --",
     "generate.unknown_listener": "Unknown",
@@ -256,13 +295,13 @@ export const en: Record<string, string> = {
     "section.build-deploy": "Build & Deploy",
     "section.post-exploitation": "Post-Exploitation",
     "section.intel-analysis": "Intel & Analysis",
-    "section.lab": "Lab / Experimental",
-    "section.lab_badge": "exp",
+    "section.lab": "Advanced Tactics",
+    "section.lab_badge": "adv",
     "section.system": "System",
 
     "common.search": "Search",
     "common.actions": "Actions",
-    "common.status": "Status",
+
     "common.refresh": "Refresh",
     "common.create": "Create",
     "common.edit": "Edit",
@@ -275,30 +314,23 @@ export const en: Record<string, string> = {
     "common.confirm": "Confirm",
     "common.online": "Online",
     "common.offline": "Offline",
-    "common.all": "All",
+
     "common.live": "Live",
     "common.disconnected": "Disconnected",
     "common.total": "Total",
-    "common.success": "Success",
-    "common.failed": "Failed",
-    "common.pending": "Pending",
-    "common.completed": "Completed",
+
     "common.type": "Type",
-    "common.time": "Time",
-    "common.result": "Result",
+
     "common.command": "Command",
-    "common.notes": "Notes",
-    "common.tags": "Tags",
+
     "common.remove": "Remove",
     "common.disconnect": "Disconnect",
     "common.disable": "Disable",
-    "common.clear_all": "Clear All",
-    "common.are_you_sure": "Are you sure?",
-    "common.yes_delete": "Yes, Delete",
+
     "common.error": "Something went wrong",
     "common.try_again": "Try Again",
     "common.no_data": "No data",
-    "common.check_connection": "Please check your connection and try again.",
+
     "common.dismiss": "Dismiss",
     "common.export_png": "Export PNG",
     "common.scroll_to_top": "Scroll to top",
@@ -312,9 +344,7 @@ export const en: Record<string, string> = {
     "a11y.collapse_sidebar": "Collapse sidebar",
     "a11y.navigation": "Navigation",
     "a11y.shortcuts": "Keyboard shortcuts",
-    "shortcuts.group_nav": "Navigation",
-    "shortcuts.group_actions": "Actions",
-    "shortcuts.group_general": "General",
+
     "chart.load_failed": "Failed to load chart",
     "chart.try_later": "Please try again later",
 
@@ -326,7 +356,7 @@ export const en: Record<string, string> = {
     "phishing.delete_campaign": "Delete this campaign?",
     "bof.delete_library": "Delete this BOF from library?",
     "bloodhound.delete_report": "Delete this BloodHound report?",
-    "domain_fronting.remove_domain": "Remove domain {domain}?",
+
     "pivoting.disconnect_socks": "Disconnect current SOCKS relay? Active connections will be dropped.",
     "settings.disable_totp": "Disable two-factor authentication? You will lose 2FA protection on your account.",
     "campaign.delete_confirm": "Delete this campaign?",
@@ -353,20 +383,11 @@ export const en: Record<string, string> = {
     "topbar.theme_dark": "Dark",
     "topbar.theme_system": "System",
 
-    "beacons.title": "Beacon Management",
-    "beacons.total": "Total Beacons",
-    "beacons.online": "Online Beacons",
-    "beacons.hostname": "Hostname",
-    "beacons.username": "User",
-    "beacons.ip": "Internal IP",
-    "beacons.os": "OS",
-    "beacons.last_seen": "Last Check-in",
 
     "dashboard.title": "Operations Dashboard",
-    "dashboard.total_beacons": "Total Beacons",
-    "dashboard.online_beacons": "Online Beacons",
+
     "dashboard.tasks_today": "Tasks Today",
-    "dashboard.pending_tasks": "Pending",
+
     "dashboard.subtitle": "C2 Operations Overview",
     "dashboard.total_tasks_suffix": "total tasks",
     "dashboard.beacons": "Beacons",
@@ -387,10 +408,9 @@ export const en: Record<string, string> = {
     "dashboard.beacon_geo": "Beacon Geo-Map",
     "dashboard.attack_path": "Attack Path",
     "dashboard.active_alerts": "Active Alerts",
-    "dashboard.retry": "Retry",
+
     "dashboard.load_failed": "Failed to load dashboard data",
     "dashboard.refresh_failed": "Failed to refresh dashboard data",
-    "dashboard.dismiss_error": "Dismiss error",
 
     "agents.title": "Beacons",
     "agents.total_label": "total",
@@ -418,9 +438,9 @@ export const en: Record<string, string> = {
     "agents.col_last_seen": "Last Seen",
     "agents.col_window": "Window",
     "agents.col_lock": "Lock",
-    "agents.col_tags": "Tags",
+
     "agents.col_tasks": "Tasks",
-    "agents.col_last_task": "Last Task",
+
     "agents.col_version": "Version",
     "agents.col_status": "Status",
     "agents.col_actions": "Actions",
@@ -451,8 +471,7 @@ export const en: Record<string, string> = {
     "agents.locks_failed": "Failed to load locks",
     "agents.tags_load_failed": "Failed to load tags",
     "agents.bulk_results_failed": "Failed to load bulk results",
-    "agents.retry": "Retry",
-    "agents.dismiss": "Dismiss",
+
     "agents.kill_sent": "Kill command sent",
     "agents.kill_failed": "Kill failed",
     "agents.deleted": "Agent deleted",
@@ -502,7 +521,7 @@ export const en: Record<string, string> = {
     "agents.locked_by": "Locked by {user}",
     "agents.quick_sleep": "Quick Sleep",
     "agents.edit_notes": "Edit Notes",
-    "agents.details": "Details",
+
     "agents.tasks_label": "Tasks",
     "agents.n_tasks": "{n} tasks",
     "agents.send_command_to": "Send a command to {n} agent{s}",
@@ -523,7 +542,6 @@ export const en: Record<string, string> = {
     "agents.task_completed": "Completed",
     "agents.task_failed": "Failed",
     "agents.total_tasks": "{n} total tasks",
-    "agents.last_task_label": "Recent",
 
     "agents.config_hot_config": "Hot Config",
     "agents.config_current_config": "Current Config (Read-Only)",
@@ -547,7 +565,7 @@ export const en: Record<string, string> = {
     "agents.config_load_failed": "Failed to load config",
     "agents.shell_title": "Shell",
     "agents.shell_select_agent": "Select agent...",
-    "agents.shell_loading": "Loading...",
+
     "agents.files_title": "File Browser",
     "agents.files_uploading": "Uploading...",
     "agents.files_upload": "Upload",
@@ -560,12 +578,9 @@ export const en: Record<string, string> = {
     "agents.files_image": "Image:",
     "agents.files_confirm_delete": "Are you sure you want to delete this file?",
     "agents.files_detect_os_failed": "Failed to detect OS",
-    "agents.files_downloaded": "Downloaded {filename}",
-    "agents.files_deleted": "Deleted {filename}",
-    "agents.files_uploaded": "Uploaded {name}",
-    "agents.files_upload_failed_status": "Upload failed: {status}",
+
     "agents.files_upload_failed_network": "Upload failed: network error",
-    "agents.files_found_results": "Found {n} results",
+
     "agents.files_go": "Go",
     "agents.files_up": "Up",
     "agents.files_quick": "Quick:",
@@ -582,7 +597,7 @@ export const en: Record<string, string> = {
     "agents.files_col_size": "Size",
     "agents.files_col_modified": "Modified",
     "agents.files_no_drives": "No drives available",
-    "agents.files_free_of": "{free} free of {total}",
+
     "agents.files_download_content": "Download content",
     "agents.files_download": "Download",
     "agents.screen_title": "Screen Monitor",
@@ -602,7 +617,7 @@ export const en: Record<string, string> = {
     "agents.screen_stop_failed": "Failed to stop monitoring",
     "agents.screen_capture_failed": "Failed to capture screenshot",
     "agents.screen_no_screenshots": "No screenshots yet",
-    "agents.screen_seconds": "{n}s",
+
     "agents.rdp_title": "Remote Desktop",
     "agents.rdp_experimental_title": "Experimental: Screen Control",
     "agents.rdp_experimental_desc": "This is screenshot streaming plus remote_input tasks, not a full RDP/VNC stack. Input injection quality varies by implant version and OS.",
@@ -612,7 +627,7 @@ export const en: Record<string, string> = {
     "agents.rdp_start": "Start",
     "agents.rdp_start_hint": "Click Start to begin remote desktop session",
     "agents.rdp_stop": "Stop",
-    "agents.rdp_resolution": "Resolution",
+
     "agents.rdp_low": "Low (480p)",
     "agents.rdp_medium": "Medium (720p)",
     "agents.rdp_high": "High (1080p)",
@@ -662,7 +677,7 @@ export const en: Record<string, string> = {
     "agents.token_make_failed": "Failed to create token",
     "agents.token_revert_success": "Reverted to self",
     "agents.token_revert_failed": "Failed to revert",
-    "agents.token_whoami_success": "Identity checked",
+
     "agents.token_whoami_failed": "Failed to check identity",
     "agents.token_drop_success": "Token dropped",
     "agents.token_drop_failed": "Failed to drop token",
@@ -672,20 +687,18 @@ export const en: Record<string, string> = {
     "agents.persistence_install": "Install",
     "agents.persistence_remove": "Remove",
     "agents.persistence_installed": "Installed Methods",
-    "agents.persistence_registry": "Registry Run Key",
-    "agents.persistence_scheduled_task": "Scheduled Task",
-    "agents.persistence_startup_folder": "Startup Folder",
-    "agents.persistence_wmi": "WMI Event Subscription",
-    "agents.persistence_service": "Windows Service",
-    "agents.persistence_ifeo": "IFEO Debugger",
-    "agents.persistence_com_hijack": "COM Hijack",
-    "agents.persistence_dll_hijack": "DLL Search Order Hijack",
+
     "agents.persistence_install_success": "Persistence installed",
     "agents.persistence_list_success": "Persistence list loaded",
     "agents.persistence_install_failed": "Failed to install persistence",
     "agents.persistence_remove_success": "Persistence removed",
     "agents.persistence_remove_failed": "Failed to remove persistence",
     "agents.persistence_load_failed": "Failed to load persistence status",
+    "agents.persistence_not_found_title": "Agent Not Found",
+    "agents.persistence_not_found_desc": "The requested agent does not exist or has been removed.",
+    "agents.persistence_back_to_agents": "Back to Agents",
+    "agents.persistence_refresh_list": "Refresh List",
+    "agents.persistence_no_methods": "No persistence methods installed yet. Use the buttons on the left to install persistence.",
     "agents.recording_title": "Session Recording",
     "agents.recording_total_actions": "Total Actions",
     "agents.recording_shell_commands": "Shell Commands",
@@ -697,8 +710,7 @@ export const en: Record<string, string> = {
     "agents.recording_reset": "Reset",
     "agents.recording_result": "Result",
     "agents.recording_no_result": "No result available — task may still be pending",
-    "agents.recording_recording_fmt": "Recording #{id}",
-    "agents.recording_task_fmt": "Task #{id}",
+
     "agents.recording_no_recordings": "No recordings yet",
     "agents.recording_load_failed": "Failed to load recordings",
     "agents.recording_filter_all": "All Actions",
@@ -717,28 +729,24 @@ export const en: Record<string, string> = {
     "agents.traffic_moderate": "Moderate",
     "agents.traffic_natural": "Natural",
     "agents.traffic_load_failed": "Failed to load traffic profile",
-    "agents.traffic_adapt_success": "Adaptation task queued",
+
     "agents.traffic_adapt_failed": "Failed to trigger adaptation",
     "agents.traffic_auto_adapt_enabled": "Auto-adapt enabled",
     "agents.traffic_auto_adapt_disabled": "Auto-adapt disabled",
     "agents.traffic_adapt_queued": "Adaptation task queued: {message}",
     "agents.traffic_adapt_error": "Adaptation failed: {error}",
     "agents.traffic_no_data": "No traffic data yet. Beacons will be recorded automatically.",
-    "agents.traffic_mean": "mean: {value}s",
-    "agents.traffic_baseline_val": "baseline: {value}b",
-    "agents.traffic_stddev": "stddev: {value}s",
+
     "agents.traffic_current_suggestion": "Current Suggestion",
-    "agents.traffic_suggest_interval": "interval: {value}s",
-    "agents.traffic_suggest_jitter": "jitter: {value}%",
-    "agents.traffic_suggest_pad": "pad: +{value}b",
+
     "agents.traffic_collecting_baseline": "Collecting baseline data...",
-    "agents.traffic_beacon_timeline": "Beacon Timeline (last {count} beacons)",
+
     "agents.traffic_col_time": "Time",
     "agents.traffic_col_size": "Size",
     "agents.traffic_col_interval": "Interval",
     "agents.traffic_col_jitter": "Jitter",
     "agents.traffic_col_transport": "Transport",
-    "agents.traffic_breadcrumb_agent": "Agent",
+
     "agents.detail_total_tasks": "Total Tasks",
     "agents.detail_completed": "Completed",
     "agents.detail_pending": "Pending",
@@ -754,10 +762,10 @@ export const en: Record<string, string> = {
     "agents.detail_child_agents": "Child Agents",
     "agents.detail_no_tags": "No tags",
     "agents.detail_no_notes": "No notes",
-    "agents.detail_no_activity": "No activity data",
+
     "agents.detail_collapse": "Collapse",
     "agents.detail_expand": "Expand",
-    "agents.detail_show_full_result": "Show full result",
+
     "agents.detail_hide": "Hide",
     "agents.detail_load": "Load",
     "agents.detail_edit": "Edit",
@@ -780,12 +788,12 @@ export const en: Record<string, string> = {
     "agents.detail_retry": "Retry",
     "agents.detail_back_to_agents": "Back to Agents",
     "agents.header_agents": "Agents",
-    "agents.header_alive": "(alive {duration})",
+
     "agents.header_more": "More",
     "agents.header_elevated": "ELEVATED",
     "agents.header_screenshot": "Screenshot",
     "agents.header_processes": "Processes",
-    "agents.header_hash_dump": "Hash Dump",
+
     "agents.header_creds_dump": "Creds Dump",
     "agents.header_clipboard": "Clipboard",
     "agents.header_privesc": "Privesc",
@@ -795,23 +803,7 @@ export const en: Record<string, string> = {
 
     "agents.prank_title": "Prank Actions",
     "agents.prank_honesty": "Lab/noise only — high visibility, poor OPSEC. Prefer real engagement tooling over pranks.",
-    "agents.prank_wallpaper": "Wallpaper",
-    "agents.prank_wallpaper_hint": "Image URL or local path",
-    "agents.prank_msgbox": "Message Box",
-    "agents.prank_msgbox_hint": "Message to display",
-    "agents.prank_sound": "Play Sound",
-    "agents.prank_sound_hint": "WAV file path (empty = beep)",
-    "agents.prank_open_url": "Open URL",
-    "agents.prank_url_hint": "URL to open",
-    "agents.prank_screen_rotate": "Rotate Screen",
-    "agents.prank_cdrom": "CD-ROM Tray",
-    "agents.prank_cdrom_hint": "open or close",
-    "agents.prank_notepad": "Notepad Spam",
-    "agents.prank_notepad_hint": "Number of windows (1-20)",
-    "agents.prank_lock": "Lock Screen",
-    "agents.prank_volume": "Set Volume",
-    "agents.prank_volume_hint": "Volume level (0-100)",
-    "agents.prank_cursor": "Flip Cursor",
+
     "agents.prank_sent": "{action} sent",
     "agents.prank_failed": "Action failed",
 
@@ -842,7 +834,7 @@ export const en: Record<string, string> = {
     "agents.prank_cancel": "Cancel",
     "agents.prank_execute": "Execute",
     "agents.prank_sending": "Sending...",
-    "agents.agents_count": "{count} agent(s)",
+
     "agents.set": "Set",
     "agents.header_double_click": "Double-click me...",
     "agents.header_click_confetti": "Click for confetti",
@@ -866,7 +858,7 @@ export const en: Record<string, string> = {
     "agents.stats_jitter": "Jitter",
     "agents.stats_uptime": "Uptime",
     "agents.stats_last_seen": "Last Seen",
-    "agents.stats_active_window": "Active Window",
+
     "agents.stats_parent": "Parent",
     "agents.stats_peers": "Peers",
     "agents.stats_children": "Children",
@@ -878,14 +870,7 @@ export const en: Record<string, string> = {
     "agents.stats_copy_all": "Copy All",
     "agents.tasklist_recent": "Recent Tasks",
     "agents.tasklist_view_all": "View all",
-    "agents.tasklist_id": "ID",
-    "agents.tasklist_type": "Type",
-    "agents.tasklist_created": "Created",
-    "agents.tasklist_command": "Command",
-    "agents.tasklist_by": "By",
-    "agents.tasklist_result": "Result",
-    "agents.tasklist_error": "Error",
-    "agents.tasklist_pending": "pending",
+
     "agents.screenshots_title": "Screenshots",
     "agents.screenshots_view_all": "View all",
     "agents.screenshots_prev": "Previous screenshot",
@@ -1062,7 +1047,7 @@ export const en: Record<string, string> = {
     "ai.calling_tool": "Calling",
     "ai.tool_result": "Result",
     "ai.tool": "Tool",
-    "ai.not_configured": "Not configured",
+
     "ai.clear": "Clear",
     "ai.export": "Export",
     "ai.config_title": "AI Configuration",
@@ -1223,7 +1208,7 @@ export const en: Record<string, string> = {
     "timeline.description": "Description",
     "timeline.user": "User",
     "timeline.type": "Type",
-    "cred.domain_none": "None",
+
     "cred.title": "Credentials",
     "cred.subtitle": "Credential vault and management",
     "cred.export_csv": "Export CSV",
@@ -1267,7 +1252,7 @@ export const en: Record<string, string> = {
     "cred.ph_tags": "admin, high-value",
     "cred.btn.add": "Add",
     "cred.batch_title": "Batch Add Tags",
-    "cred.batch_desc": "Add tags to {count} selected credential(s)",
+
     "cred.batch_btn": "Add Tags",
     "cred.delete_title": "Delete Credential?",
     "cred.delete_message": "This action cannot be undone.",
@@ -1288,7 +1273,7 @@ export const en: Record<string, string> = {
     "templates.subtitle": "Manage reusable command templates for quick task dispatch",
     "templates.add_template": "Add Template",
     "templates.add_title": "Add Template",
-    "templates.add_desc": "Create a new command template",
+
     "templates.empty_title": "No templates yet",
     "templates.empty_desc": "Create your first command template to get started",
     "templates.count_unit": "templates",
@@ -1567,6 +1552,11 @@ export const en: Record<string, string> = {
     "tasks.release": "Release",
     "tasks.cancel": "Cancel",
     "tasks.rerun": "Rerun",
+    "tasks.approve": "Approve",
+    "tasks.reject": "Reject",
+    "tasks.approval_pending": "Awaiting Approval",
+    "tasks.toast_approve_failed": "Failed to approve task",
+    "tasks.toast_reject_failed": "Failed to reject task",
     "tasks.detail_agent": "Agent",
     "tasks.detail_created": "Created",
     "tasks.detail_duration": "Duration",
@@ -1603,14 +1593,14 @@ export const en: Record<string, string> = {
     "users.user_desc_2": "File browsing, credential harvesting",
     "users.user_desc_3": "Generate payloads, create listeners",
     "users.user_desc_4": "Lock agents for exclusive ops",
-    "users.showing": "Showing {filtered} of {total} users",
+
     "users.col_username": "Username",
     "users.col_role": "Role",
     "users.col_active": "Active",
     "users.col_last_activity": "Last Activity",
     "users.col_created_at": "Created At",
     "users.col_actions": "Actions",
-    "users.add_title": "Add User",
+
     "users.edit_title": "Edit User",
     "users.label_username": "Username",
     "users.label_password": "Password",
@@ -1654,7 +1644,7 @@ export const en: Record<string, string> = {
     "notifications.title": "Notifications",
     "notifications.total": "total",
     "notifications.mark_all_read": "Mark All Read",
-    "notifications.mark_n_read": "Mark {count} Read",
+
     "notifications.clear_all": "Clear All",
     "notifications.all_types": "All Types",
     "notifications.all_severity": "All Severity",
@@ -1713,14 +1703,12 @@ export const en: Record<string, string> = {
     "loot.all_agents": "All Agents",
     "loot.export_json": "Export JSON",
     "loot.export_csv": "Export CSV",
-    "loot.delete_selected": "Delete Selected ({count})",
+
     "loot.select_all": "Select All",
     "loot.empty_screenshots": "No screenshots",
     "loot.empty_keylogs": "No key logs",
     "loot.empty_downloads": "No downloads",
     "loot.search_keylogs": "Search keylogs...",
-    "loot.collapse": "Collapse",
-    "loot.expand": "Expand",
 
     "builds.title": "Build Logs",
     "builds.subtitle": "Implant build records",
@@ -1732,8 +1720,7 @@ export const en: Record<string, string> = {
     "builds.success_rate": "Success Rate",
     "builds.version_dist": "Agent Version Distribution",
     "builds.agents_unit": "agents",
-    "builds.building": "Building",
-    "builds.pending": "Pending",
+
     "builds.filter_all": "All",
     "builds.filter_building": "Building",
     "builds.clear": "Clear",
@@ -1818,7 +1805,7 @@ export const en: Record<string, string> = {
     "stager.field_dns_domain": "DNS Domain",
     "stager.field_dns_server": "DNS Server",
     "stager.field_skip_tls": "Skip TLS Verify",
-    "stager.tokens_count": "Stager Tokens ({count})",
+
     "stager.empty_tokens": "No stager tokens registered",
     "stager.col_id": "ID",
     "stager.col_os": "OS",
@@ -1896,10 +1883,6 @@ export const en: Record<string, string> = {
     "workflows.toast.toggle_failed": "Failed to toggle workflow",
     "workflows.toast.execute_failed": "Failed to execute workflow",
     "workflows.toast.load_exec_failed": "Failed to load execution history",
-    "workflows.repeat_count": "Repeat",
-    "workflows.repeat_delay": "Delay (s)",
-    "workflows.history": "History",
-    "workflows.executions": "Executions",
 
     "topology.title": "Network Topology",
     "topology.p2p_view": "P2P Mesh Topology (DB)",
@@ -1911,9 +1894,9 @@ export const en: Record<string, string> = {
     "topology.node_details": "Node Details",
     "topology.legend": "Legend",
     "topology.quick_actions": "Quick Actions",
-    "topology.id": "ID",
+
     "topology.group": "Group",
-    "topology.p2p_mode": "P2P Mode",
+
     "topology.peers": "Peers",
     "topology.set_parent": "Set Preferred Parent:",
     "topology.set": "Set",
@@ -1926,7 +1909,7 @@ export const en: Record<string, string> = {
     "topology.edge_p2p": "P2P Link",
     "topology.edge_mesh": "Mesh Edge",
     "topology.physics": "Physics Sim",
-    "topology.stabilize": "Stabilize",
+
     "topology.export_png": "Export PNG",
     "topology.on": "ON",
     "topology.off": "OFF",
@@ -2030,7 +2013,7 @@ export const en: Record<string, string> = {
 
     "opsec.title": "OPSEC Guard",
     "opsec.subtitle": "Pre-flight safety checks for agent operations",
-    "opsec.rules_active": "rules active",
+
     "opsec.active_rules": "Active Rules",
     "opsec.new_rule": "New Rule",
     "opsec.col_name": "Name",
@@ -2089,7 +2072,6 @@ export const en: Record<string, string> = {
     "search.hint": "Type a query to search agents, listeners, credentials, BOFs, users, and tasks.",
     "search.searching": "Searching...",
     "search.no_results": "No results found",
-    "search.loading": "Loading...",
 
     "files.title": "File Browser",
     "files.subtitle": "Browse files across all agents",
@@ -2128,7 +2110,7 @@ export const en: Record<string, string> = {
     "attack.kill_chain_title": "Kill Chain Phase Coverage",
     "attack.kill_chain_subtitle": "Campaign coverage across all 14 MITRE ATT&CK phases",
     "attack.fetch_failed": "Failed to fetch coverage",
-    "attack.load_agents_failed": "Failed to load agents",
+
     "attack.load_phases_failed": "Failed to load MITRE phases",
 
     "chain.subtitle": "Configure proxy chains to route agent traffic through other agents (Agent → Agent → C2)",
@@ -2138,12 +2120,12 @@ export const en: Record<string, string> = {
     "chain.set_parent": "Set Parent Agent",
     "chain.clear_chain": "Clear Chain (Direct to C2)",
     "chain.set_proxy_parent": "Set Proxy Parent",
-    "chain.select_parent_desc": "Select the parent agent that **{name}** will route through:",
+
     "chain.no_other_agents": "No other agents available",
     "chain.topology_view": "Chain Topology View",
     "chain.load_failed": "Failed to load chain data",
     "chain.load_proxy_failed": "Failed to load proxy chain",
-    "chain.parent_set": "Chain parent set to {id}",
+
     "chain.set_failed": "Failed to set chain parent",
     "chain.cleared": "Chain cleared - agent now goes direct to C2",
     "chain.clear_failed": "Failed to clear chain",
@@ -2171,7 +2153,7 @@ export const en: Record<string, string> = {
     "autotag.toggle_failed": "Failed to toggle",
     "autotag.delete_confirm": "Delete this rule?",
     "autotag.delete_failed": "Failed to delete",
-    "autotag.applied": "Applied {count} tags",
+
     "autotag.apply_failed": "Failed to apply",
 
     "screenshots.title": "Screenshot",
@@ -2183,6 +2165,7 @@ export const en: Record<string, string> = {
     "screenshots.screenshots_count": "screenshots",
     "screenshots.empty_title": "No screenshots found",
     "screenshots.empty_message": "Captured screenshots will appear here once agents check in.",
+    "screenshots.load_failed": "Failed to load screenshots",
     "screenshots.delete_failed": "Failed to delete screenshots",
 
     "scheduler.title": "Task Scheduler",
@@ -2267,7 +2250,7 @@ export const en: Record<string, string> = {
     "cloud.copied": "Cloud credentials copied",
     "cloud.empty_title": "No cloud credentials found",
     "cloud.empty_message": "Select an agent and dispatch a cloud credential theft task to see results here.",
-    "cloud.load_agents_failed": "Failed to load agents",
+
     "cloud.load_results_failed": "Failed to load results",
     "cloud.steal_failed": "Failed to steal credentials",
     "cloud.steal_dispatched": "Cloud steal task dispatched",
@@ -2291,12 +2274,10 @@ export const en: Record<string, string> = {
     "container.dispatching": "Dispatching...",
     "container.detect_btn": "Detect Environment",
     "container.escape_desc": "Select an escape method and execute it against the target agent.",
-    "container.escape_method": "Escape Method",
+
     "container.escape_btn": "Execute Escape",
     "container.result": "Result",
-    "container.result_desc": "Operation result",
-    "container.load_failed": "Failed to load agents",
-    "container.task_dispatched": "Task dispatched. Task ID: {id}. Polling for agent results…",
+
     "container.poll_pending": "Pending",
     "container.poll_running": "Running",
     "container.poll_completed": "Completed",
@@ -2344,7 +2325,7 @@ export const en: Record<string, string> = {
     "cb.half_open_desc": "Probing — limited traffic allowed",
     "cb.open_desc": "Blocked — auto-failover triggered",
     "cb.check_interval": "Check Interval",
-    "cb.probes_every": "Probes every {seconds}s",
+
     "cb.monitored_listeners": "Monitored Listeners",
     "cb.config": "Config",
     "cb.col_target": "Target",
@@ -2369,9 +2350,9 @@ export const en: Record<string, string> = {
     "cb.save_config": "Save Config",
     "cb.config_saved": "Configuration saved",
     "cb.config_save_failed": "Failed to save circuit breaker configuration",
-    "cb.listener_reset": "Listener {id} reset",
+
     "cb.reset_failed": "Failed to reset circuit breaker listener",
-    "cb.listener_toggled": "Listener {id} toggled to {state}",
+
     "cb.toggle_failed": "Failed to toggle circuit breaker listener",
     "cb.load_failed": "Failed to load circuit breaker data",
 
@@ -2407,7 +2388,7 @@ export const en: Record<string, string> = {
     "scripting.output": "Output",
     "scripting.clear": "Clear",
     "scripting.editor": "Editor",
-    "scripting.run_history": "Run History ({count})",
+
     "scripting.no_history": "No run history yet",
     "scripting.toast.save_failed": "Failed to save script",
     "scripting.toast.delete_failed": "Failed to delete script",
@@ -2477,7 +2458,7 @@ export const en: Record<string, string> = {
     "packer.building": "Building...",
     "packer.build_artifact": "Build Artifact",
     "packer.payload_exe": "Payload EXE",
-    "packer.exe_loaded": "EXE loaded ({size} KB)",
+
     "packer.icon": "Icon",
     "packer.optional": "(optional)",
     "packer.icon_loaded": "Icon loaded",
@@ -2509,9 +2490,7 @@ export const en: Record<string, string> = {
     "toolkit.agent_info": "Agent Info",
     "toolkit.no_results": "No task results yet",
     "toolkit.run": "Run",
-    "toolkit.select_first": "Select an agent first",
-    "toolkit.load_failed": "Toolkit: load data failed",
-    "toolkit.action_failed": "Failed to execute action",
+
     "toolkit.cat_system_recon": "System Recon",
     "toolkit.cat_process_service": "Process & Service",
     "toolkit.cat_network_recon": "Network Recon",
@@ -2559,7 +2538,7 @@ export const en: Record<string, string> = {
     "toolkit.desc_persistence": "Install persistence",
 
     "plugins.title": "Plugins",
-    "plugins.subtitle": "{count} plugins available \u00b7 Manage, install, and configure",
+
     "plugins.check_updates": "Check Updates",
     "plugins.create": "Create",
     "plugins.import": "Import",
@@ -2851,7 +2830,7 @@ export const en: Record<string, string> = {
     "timeline.empty_title": "No timeline events",
     "timeline.empty_message": "Timeline events will appear here after you start performing operations.",
     "loot.page_title": "Screenshot Collection",
-    "agents.token_subtitle": "Manage tokens for agent {hostname}",
+
     "settings.backup.empty_title": "No backups found",
     "settings.backup.empty_message": "Create one to get started.",
     "settings.notifications.empty_title": "No notification targets",
@@ -2865,7 +2844,7 @@ export const en: Record<string, string> = {
     "status_banner.online": "online",
     "status_banner.commands_paused": "interactive commands paused",
     "status_banner.toggle_details": "Toggle details",
-    "status_banner.details": "Details",
+
     "status_banner.dismiss": "Dismiss",
     "status_banner.dismiss_hint": "Dismiss (reappears if counts change)",
     "status_banner.expanded_message": "Shell, file browser, screenshot and other interactive commands will not return results until the agent beacons back. Ensure the agent executable is running on target hosts.",
@@ -2875,7 +2854,7 @@ export const en: Record<string, string> = {
     "error.boundary_message": "An unexpected error occurred.",
     "error.reload_page": "Reload Page",
     "sidebar.online_operators": "Online operators",
-    "sidebar.current_operator": "{username} (you)",
+
     "sidebar.offline": "Offline",
     "sidebar.reconnecting": "Reconnecting",
     "settings.about.system_information": "System Information",
@@ -2894,4 +2873,5 @@ export const en: Record<string, string> = {
     "settings.about.check_updates": "Check for Updates",
     "settings.about.version_label": "ForgeC2 v{version} • Multi-user mode",
     "settings.about.authorized_only": "For authorized red team operations only",
+    "common.error_hint": "Please try again or check your permissions.",
 };

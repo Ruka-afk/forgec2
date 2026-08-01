@@ -29,7 +29,9 @@ func (s *Server) handleTokenPage(c *gin.Context) {
 
 	// load stored tokens for this agent
 	var tokens []db.TokenEntry
-	s.db.Where("agent_id = ?", id).Order("created_at desc").Find(&tokens)
+	if err := s.db.Where("agent_id = ?", id).Order("created_at desc").Find(&tokens).Error; err != nil {
+		slog.Error("Failed to load agent tokens", "err", err)
+	}
 
 	// active token (most recent with Active=true)
 	var activeToken *db.TokenEntry
@@ -58,7 +60,9 @@ func (s *Server) handleTokenPage(c *gin.Context) {
 // handleGlobalTokensPage shows all tokens across all agents
 func (s *Server) handleGlobalTokensPage(c *gin.Context) {
 	var tokens []db.TokenEntry
-	s.db.Order("created_at desc").Limit(500).Find(&tokens)
+	if err := s.db.Order("created_at desc").Limit(500).Find(&tokens).Error; err != nil {
+		slog.Error("Failed to load global tokens", "err", err)
+	}
 
 	// build agent map for display
 	agentIDs := map[string]bool{}
@@ -71,7 +75,9 @@ func (s *Server) handleGlobalTokensPage(c *gin.Context) {
 		for id := range agentIDs {
 			ids = append(ids, id)
 		}
-		s.db.Where("id IN ?", ids).Find(&agentsInView)
+		if err := s.db.Where("id IN ?", ids).Find(&agentsInView).Error; err != nil {
+			slog.Error("Failed to query agents for token view", "err", err)
+		}
 	}
 	agentMap := map[string]db.Implant{}
 	for _, a := range agentsInView {
@@ -292,7 +298,9 @@ func (s *Server) handleTokenImpersonate(c *gin.Context) {
 func (s *Server) handleGetTokens(c *gin.Context) {
 	id := c.Param("id")
 	var tokens []db.TokenEntry
-	s.db.Where("agent_id = ?", id).Order("created_at desc").Find(&tokens)
+	if err := s.db.Where("agent_id = ?", id).Order("created_at desc").Find(&tokens).Error; err != nil {
+		slog.Error("Failed to get tokens", "err", err)
+	}
 	c.JSON(http.StatusOK, tokens)
 }
 

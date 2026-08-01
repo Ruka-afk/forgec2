@@ -428,6 +428,17 @@ func escapeLike(s string) string {
 	return s
 }
 
+// isValidHost checks whether a host string is a valid IP address or hostname.
+func isValidHost(host string) bool {
+	if net.ParseIP(host) != nil {
+		return true
+	}
+	return len(host) > 0 && len(host) <= 255 &&
+		!strings.HasPrefix(host, "-") && !strings.HasSuffix(host, "-") &&
+		!strings.Contains(host, "..") &&
+		strings.Contains(host, ".")
+}
+
 // marshalJSONSafe wraps json.Marshal with error logging.
 // Returns the JSON bytes and a boolean indicating success.
 func marshalJSONSafe(v interface{}) ([]byte, bool) {

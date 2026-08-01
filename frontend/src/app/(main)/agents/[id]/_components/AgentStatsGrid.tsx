@@ -24,11 +24,26 @@ function InfoRow({ label, value, mono, title, copyValue, copyLabel, isSelect }: 
       if (sel) { sel.removeAllRanges(); sel.addRange(range); }
     }
   };
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); }
+  };
+  const isEmDash = value === "\u2014";
+  const spanClasses = [
+    "text-xs text-right",
+    mono ? "font-mono" : "",
+    "truncate max-w-[120px]",
+    isEmDash ? "text-muted-foreground/70" : "text-foreground font-medium",
+    isSelect ? "cursor-pointer select-all" : "",
+  ].filter(Boolean).join(" ");
   return (
     <div className="flex items-center justify-between gap-2" title={title}>
       <span className="text-xs text-muted-foreground/70 shrink-0">{label}</span>
       <div className="flex items-center min-w-0">
-        <span ref={spanRef} onClick={handleClick} className={`text-xs text-right ${mono ? "font-mono" : ""} truncate max-w-[120px] ${value === "\u2014" ? "text-muted-foreground/70" : "text-foreground font-medium"}${isSelect ? " cursor-pointer select-all" : ""}`}>{value}</span>
+        {isSelect ? (
+          <span ref={spanRef} onClick={handleClick} tabIndex={0} role="button" onKeyDown={handleKeyDown} className={spanClasses}>{value}</span>
+        ) : (
+          <span className={spanClasses}>{value}</span>
+        )}
         {copyValue && <CopyButton text={copyValue} label={copyLabel} />}
       </div>
     </div>

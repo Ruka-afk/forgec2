@@ -71,7 +71,7 @@ export default function AuditPage() {
       if (userFilter) params.set("user", userFilter);
       if (actionFilter) params.set("action", actionFilter);
       const data = await api.get(`/audit/logs?${params}`, { signal });
-      setLogs((data.data as AuditLog[]) || []);
+      setLogs((data.logs as AuditLog[]) || []);
       setTotal((data.total as number) || 0);
     } catch {
       setLogs([]);

@@ -48,6 +48,7 @@ type TransportManager struct {
 
 	// Socks proxy
 	socksEngine *socksRelayEngine
+	socksMu     sync.Mutex
 }
 
 // NewTransportManager initializes all maps and internal state.
@@ -73,8 +74,11 @@ func (tm *TransportManager) StopAllListeners() {
 	tm.extraListeners = make(map[string]io.Closer)
 	tm.extraListenersMu.Unlock()
 
-	if tm.socksEngine != nil {
-		tm.socksEngine.cleanup()
+	tm.socksMu.Lock()
+	engine := tm.socksEngine
+	tm.socksMu.Unlock()
+	if engine != nil {
+		engine.cleanup()
 	}
 }
 

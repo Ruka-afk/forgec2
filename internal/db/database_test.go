@@ -1,15 +1,20 @@
 package db
 
 import (
+	"log/slog"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/glebarez/sqlite"
+	"github.com/go-gormigrate/gormigrate/v2"
 	"gorm.io/gorm"
 )
 
 func setupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
+	crypto.InitLootEncryption("test-secret-for-db-tests", "")
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("failed to open test database: %v", err)
@@ -39,12 +44,140 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&SystemMetric{},
 		&BloodHoundResult{},
 		&BloodHoundFile{},
+		&Redirector{},
+		&AgentLock{},
+		&ExtC2Channel{},
+		&BackupCode{},
 	)
 	if err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)
 	}
 
 	return db
+}
+
+func TestUpgradePreservesLegacyAgentsData(t *testing.T) {
+	crypto.InitLootEncryption("test-secret-for-db-tests", "")
+	dbPath := filepath.Join(t.TempDir(), "legacy.db")
+
+	raw, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open legacy database: %v", err)
+	}
+	if err := raw.AutoMigrate(&User{}); err != nil {
+		t.Fatalf("failed to create users table: %v", err)
+	}
+	if err := raw.Exec(`CREATE TABLE agents (
+		id TEXT PRIMARY KEY,
+		hostname TEXT,
+		created_at DATETIME
+	)`).Error; err != nil {
+		t.Fatalf("failed to create legacy agents table: %v", err)
+	}
+	if err := raw.Exec(`INSERT INTO agents (id, hostname, created_at) VALUES ('legacy-1', 'legacy-host', '2024-01-01 00:00:00')`).Error; err != nil {
+		t.Fatalf("failed to seed legacy agent: %v", err)
+	}
+	// Record the first migration so gormigrate is not treated as a fresh
+	// install (fresh installs skip the whole migration list via InitSchema).
+	if err := raw.Exec(`CREATE TABLE migrations (id VARCHAR(255) PRIMARY KEY)`).Error; err != nil {
+		t.Fatalf("failed to create migrations table: %v", err)
+	}
+	if err := raw.Exec(`INSERT INTO migrations (id) VALUES ('2024-01-01-initial-schema')`).Error; err != nil {
+		t.Fatalf("failed to record initial migration: %v", err)
+	}
+	if sqlDB, err := raw.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+
+	// Upgrade path used by InitDB: gormigrate migrations run BEFORE AutoMigrate.
+	db, err := InitDBWithDriver("", "", dbPath, slog.LevelWarn, 10, 5, time.Minute)
+	if err != nil {
+		t.Fatalf("InitDBWithDriver: %v", err)
+	}
+
+	if db.Migrator().HasTable("agents") {
+		t.Error("legacy agents table should have been renamed to implants")
+	}
+	var count int64
+	if err := db.Table("implants").Where("id = ?", "legacy-1").Count(&count).Error; err != nil {
+		t.Fatalf("count implants: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected legacy agent row to survive the upgrade, got %d", count)
+	}
+
+	if sqlDB, err := db.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+}
+
+func TestRenameMigrationSelfHealsStrandedAgentsData(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open test database: %v", err)
+	}
+
+	if err := db.Exec(`CREATE TABLE agents (id TEXT PRIMARY KEY, hostname TEXT)`).Error; err != nil {
+		t.Fatalf("failed to create legacy agents table: %v", err)
+	}
+	if err := db.Exec(`INSERT INTO agents (id, hostname) VALUES ('legacy-1', 'legacy-host')`).Error; err != nil {
+		t.Fatalf("failed to seed legacy agent: %v", err)
+	}
+	// Simulate a pre-fix server that ran AutoMigrate before the rename
+	// migration: an empty `implants` table already exists.
+	if err := db.Exec(`CREATE TABLE implants (id TEXT PRIMARY KEY, hostname TEXT)`).Error; err != nil {
+		t.Fatalf("failed to create empty implants table: %v", err)
+	}
+
+	var renameMigration *gormigrate.Migration
+	for _, m := range Migrations {
+		if m.ID == "2025-07-20-rename-agents-table" {
+			renameMigration = m
+			break
+		}
+	}
+	if renameMigration == nil {
+		t.Fatal("rename migration not found")
+	}
+	if err := renameMigration.Migrate(db); err != nil {
+		t.Fatalf("rename migration: %v", err)
+	}
+
+	if db.Migrator().HasTable("agents") {
+		t.Error("legacy agents table should have been renamed away")
+	}
+	var count int64
+	if err := db.Table("implants").Where("id = ?", "legacy-1").Count(&count).Error; err != nil {
+		t.Fatalf("count implants: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected stranded legacy row to be healed into implants, got %d", count)
+	}
+}
+
+func TestRenameMigrationSkipsWhenNoLegacyTable(t *testing.T) {
+	db := setupTestDB(t)
+
+	var renameMigration *gormigrate.Migration
+	for _, m := range Migrations {
+		if m.ID == "2025-07-20-rename-agents-table" {
+			renameMigration = m
+			break
+		}
+	}
+	if renameMigration == nil {
+		t.Fatal("rename migration not found")
+	}
+	if err := renameMigration.Migrate(db); err != nil {
+		t.Fatalf("rename migration: %v", err)
+	}
+
+	if db.Migrator().HasTable("agents") {
+		t.Error("agents table should not exist")
+	}
+	if !db.Migrator().HasTable("implants") {
+		t.Error("implants table should exist")
+	}
 }
 
 func TestTaskClaimIndexesMigration(t *testing.T) {
@@ -69,15 +202,57 @@ func TestTaskClaimIndexesMigration(t *testing.T) {
 
 func TestTaskAcknowledgedAtMigration(t *testing.T) {
 	database := setupTestDB(t)
-	migration := Migrations[len(Migrations)-1]
-	if err := migration.Migrate(database); err != nil {
+	var schemaMigration *gormigrate.Migration
+	var indexMigration *gormigrate.Migration
+	for _, m := range Migrations {
+		switch m.ID {
+		case "2026-07-26-add-task-acknowledged-at":
+			schemaMigration = m
+		case "2026-07-26-add-task-acknowledged-at-index":
+			indexMigration = m
+		}
+	}
+	if schemaMigration == nil || indexMigration == nil {
+		t.Fatal("task acknowledgement migrations not found")
+	}
+	if err := schemaMigration.Migrate(database); err != nil {
 		t.Fatalf("run task acknowledgement migration: %v", err)
+	}
+	if err := indexMigration.Migrate(database); err != nil {
+		t.Fatalf("run task acknowledgement index migration: %v", err)
 	}
 	if !database.Migrator().HasColumn(&Task{}, "acknowledged_at") {
 		t.Fatal("missing task acknowledged_at column")
 	}
 	if !database.Migrator().HasIndex(&Task{}, "idx_tasks_status_claimed_acknowledged") {
 		t.Fatal("missing task acknowledgement index")
+	}
+}
+
+func TestJoinTableImplantIndexesMigration(t *testing.T) {
+	database := setupTestDB(t)
+	if err := database.AutoMigrate(&AgentTag{}, &AgentGroup{}); err != nil {
+		t.Fatalf("failed to create join tables: %v", err)
+	}
+	var migrationID int
+	for i, m := range Migrations {
+		if m.ID == "2026-07-31-add-join-table-implant-indexes" {
+			migrationID = i
+			break
+		}
+	}
+	migration := Migrations[migrationID]
+	if migration == nil {
+		t.Fatal("migration 2026-07-31-add-join-table-implant-indexes not found")
+	}
+	if err := migration.Migrate(database); err != nil {
+		t.Fatalf("run join table implant index migration: %v", err)
+	}
+	if !database.Migrator().HasIndex(&AgentTagAssignment{}, "idx_agent_tag_assignments_implant") {
+		t.Fatal("missing idx_agent_tag_assignments_implant index")
+	}
+	if !database.Migrator().HasIndex(&AgentGroupAssignment{}, "idx_agent_group_assignments_implant") {
+		t.Fatal("missing idx_agent_group_assignments_implant index")
 	}
 }
 

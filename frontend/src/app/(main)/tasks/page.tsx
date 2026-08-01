@@ -33,8 +33,10 @@ import {
 } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Ban, ChevronDown, ChevronUp, FileSpreadsheet, Hand, Inbox, Maximize2, RotateCw } from "lucide-react";
+import { Ban, Check, ChevronDown, ChevronUp, FileSpreadsheet, Hand, Inbox, Maximize2, RotateCw, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { Task } from "@/types/task";
+
+type SortKey = "created_at" | "type" | "command" | "status";
 
 function TasksPage() {
   const { t } = useI18n();
@@ -50,6 +52,30 @@ function TasksPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [detailTask, setDetailTask] = useState<Task | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const toggleSort = useCallback((key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "created_at" ? "desc" : "asc"); }
+  }, [sortKey]);
+
+  const sortIcon = (col: SortKey) => {
+    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 inline-block ml-1 text-muted-foreground/50" />;
+    return sortDir === "asc"
+      ? <ArrowUp className="w-3 h-3 inline-block ml-1 text-indigo-500" />
+      : <ArrowDown className="w-3 h-3 inline-block ml-1 text-indigo-500" />;
+  };
+
+  const handleSortKeyDown = useCallback(
+    (field: SortKey) => (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleSort(field);
+      }
+    },
+    [toggleSort],
+  );
 
   const getAgentName = useCallback((agentId: string) => {
     return agents.find((a) => a.id === agentId)?.hostname;
@@ -57,7 +83,7 @@ function TasksPage() {
 
   const loadAgents = useCallback(async () => {
     try {
-      const data = await api.get("/agents?page=1&pageSize=200");
+      const data = await api.get("/api/agents?page=1&pageSize=200");
       setAgents(normalizeAgentList(data));
     } catch { toast.error(t("tasks.toast_load_agents_failed")); }
   }, [t]);
@@ -67,11 +93,11 @@ function TasksPage() {
     setError(null);
     const params = new URLSearchParams({ page: String(page), pageSize: "50" });
     if (statusFilter) params.set("status", statusFilter);
-    if (agentFilter) params.set("agentId", agentFilter);
+    if (agentFilter) params.set("agent", agentFilter);
     if (typeFilter) params.set("type", typeFilter);
     api.get(`/tasks?${params}`)
       .then((data: Record<string, unknown>) => {
-        setTasks((data.tasks || data || []) as Task[]);
+        setTasks((Array.isArray(data.tasks) ? data.tasks : []) as Task[]);
         setTotal(Number(data.Total) || Number(data.total) || 0);
       })
       .catch((e) => {
@@ -125,6 +151,20 @@ function TasksPage() {
     } catch { toast.error(t("tasks.toast_rerun_failed")); }
   };
 
+  const handleApprove = async (task: Task) => {
+    try {
+      await api.post(`/tasks/${task.id}/approve`);
+      loadTasks();
+    } catch { toast.error(t("tasks.toast_approve_failed")); }
+  };
+
+  const handleReject = async (task: Task) => {
+    try {
+      await api.post(`/tasks/${task.id}/reject`);
+      loadTasks();
+    } catch { toast.error(t("tasks.toast_reject_failed")); }
+  };
+
   const handleClaim = async (taskId: number) => {
     try {
       await api.post(`/collab/tasks/${taskId}/claim`);
@@ -150,9 +190,25 @@ function TasksPage() {
     totalHeight,
   } = useVirtualWindow({ count: tasks.length, rowHeight: TASK_ROW_H, threshold: 25 });
 
+  const sortedTasks = useMemo(() => {
+    const list = [...tasks];
+    const dir = sortDir === "asc" ? 1 : -1;
+    list.sort((a, b) => {
+      if (sortKey === "created_at") {
+        const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return (at - bt) * dir;
+      }
+      const av = String(a[sortKey as keyof Task] || "");
+      const bv = String(b[sortKey as keyof Task] || "");
+      return av.localeCompare(bv) * dir;
+    });
+    return list;
+  }, [tasks, sortKey, sortDir]);
+
   const visibleTasks = useMemo(
-    () => (virtualized ? tasks.slice(virtStart, virtEnd) : tasks),
-    [tasks, virtualized, virtStart, virtEnd],
+    () => (virtualized ? sortedTasks.slice(virtStart, virtEnd) : sortedTasks),
+    [sortedTasks, virtualized, virtStart, virtEnd],
   );
 
   const getStatusBadge = (status: string): React.ReactNode => {
@@ -185,6 +241,7 @@ function TasksPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("tasks.all_status")}</SelectItem>
+              <SelectItem value="pending_approval">{t("tasks.approval_pending")}</SelectItem>
               <SelectItem value="completed">{t("tasks.completed")}</SelectItem>
               <SelectItem value="pending">{t("tasks.pending")}</SelectItem>
               <SelectItem value="failed">{t("tasks.failed")}</SelectItem>
@@ -245,14 +302,22 @@ function TasksPage() {
           <Table>
             <TableHeader className="bg-muted/50 sticky top-0 z-10">
               <TableRow>
-                <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[140px]">{t("tasks.col_time")}</TableHead>
+                <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[140px] cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "created_at" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("created_at")} onKeyDown={handleSortKeyDown("created_at")}>
+                  {t("tasks.col_time")} {sortIcon("created_at")}
+                </TableHead>
                 <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[120px]">{t("tasks.col_agent")}</TableHead>
-                <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[100px]">{t("tasks.col_type")}</TableHead>
-                <TableHead className="text-left py-3 px-4 font-normal min-w-[180px]">{t("tasks.col_command")}</TableHead>
+                <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[100px] cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "type" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("type")} onKeyDown={handleSortKeyDown("type")}>
+                  {t("tasks.col_type")} {sortIcon("type")}
+                </TableHead>
+                <TableHead className="text-left py-3 px-4 font-normal min-w-[180px] cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "command" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("command")} onKeyDown={handleSortKeyDown("command")}>
+                  {t("tasks.col_command")} {sortIcon("command")}
+                </TableHead>
                 <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[200px]">{t("tasks.col_result")}</TableHead>
                 <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[80px]">{t("tasks.col_claimed_by")}</TableHead>
                 <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[90px]">{t("tasks.col_duration")}</TableHead>
-                <TableHead className="text-center py-3 px-4 font-normal min-w-[90px]">{t("tasks.col_status")}</TableHead>
+                <TableHead className="text-center py-3 px-4 font-normal min-w-[90px] cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "status" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("status")} onKeyDown={handleSortKeyDown("status")}>
+                  {t("tasks.col_status")} {sortIcon("status")}
+                </TableHead>
                 <TableHead className="text-center py-3 px-4 font-normal min-w-[160px]">{t("tasks.col_actions")}</TableHead>
               </TableRow>
             </TableHeader>
@@ -263,7 +328,7 @@ function TasksPage() {
                 </TableRow>
               )}
               {visibleTasks.map((task) => (
-                <TaskRow key={task.id} task={task} expanded={expandedRows.has(task.id)} onToggle={() => toggleRow(task.id)} onDetail={() => setDetailTask(task)} onCancel={() => handleCancel(task)} onRerun={() => handleRerun(task)} onClaim={() => handleClaim(task.id)} onRelease={() => handleRelease(task.id)} getAgentName={getAgentName} getTypeBadge={getTypeBadge} getStatusBadge={getStatusBadge} />
+                <TaskRow key={task.id} task={task} expanded={expandedRows.has(task.id)} onToggle={() => toggleRow(task.id)} onDetail={() => setDetailTask(task)} onCancel={() => handleCancel(task)} onRerun={() => handleRerun(task)} onApprove={() => handleApprove(task)} onReject={() => handleReject(task)} onClaim={() => handleClaim(task.id)} onRelease={() => handleRelease(task.id)} getAgentName={getAgentName} getTypeBadge={getTypeBadge} getStatusBadge={getStatusBadge} />
               ))}
               {virtualized && totalHeight - offsetTop - visibleTasks.length * TASK_ROW_H > 0 && (
                 <TableRow aria-hidden className="hover:bg-transparent">
@@ -292,13 +357,15 @@ export default function TasksPageWrapper() {
   );
 }
 
-const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCancel, onRerun, onClaim, onRelease, getAgentName, getTypeBadge, getStatusBadge }: {
+const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCancel, onRerun, onApprove, onReject, onClaim, onRelease, getAgentName, getTypeBadge, getStatusBadge }: {
   task: Task;
   expanded: boolean;
   onToggle: () => void;
   onDetail: () => void;
   onCancel: () => void;
   onRerun: () => void;
+  onApprove: () => void;
+  onReject: () => void;
   onClaim: () => void;
   onRelease: () => void;
   getAgentName: (id: string) => string | undefined;
@@ -358,6 +425,16 @@ const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCa
               <Button variant="ghost" size="icon-xs" onClick={onRerun} className="text-muted-foreground hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title={t("tasks.rerun")} aria-label={t("tasks.rerun")}>
                 <RotateCw className="w-4 h-4" />
               </Button>
+            )}
+            {task.status === "pending_approval" && (
+              <>
+                <Button variant="ghost" size="icon-xs" onClick={onApprove} className="text-muted-foreground hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" title={t("tasks.approve")} aria-label={t("tasks.approve")}>
+                  <Check className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="icon-xs" onClick={onReject} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" title={t("tasks.reject")} aria-label={t("tasks.reject")}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </>
             )}
           </div>
         </TableCell>

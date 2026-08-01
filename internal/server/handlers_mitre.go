@@ -1,6 +1,8 @@
 package server
 
 import (
+	"log/slog"
+
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
@@ -101,13 +103,19 @@ func (s *Server) handleAttackCoverage(c *gin.Context) {
 	used := map[string]bool{}
 	if agentID != "" {
 		var types []string
-		s.db.Table("tasks").Select("DISTINCT type").Where("agent_id = ?", agentID).Pluck("type", &types)
+		if err := s.db.Table("tasks").Select("DISTINCT type").Where("agent_id = ?", agentID).Pluck("type", &types).Error; err != nil {
+			slog.Error("Failed to pluck task types for agent", "agent_id", agentID, "err", err)
+			types = []string{}
+		}
 		for _, t := range types {
 			used[t] = true
 		}
 	} else {
 		var types []string
-		s.db.Table("tasks").Select("DISTINCT type").Pluck("type", &types)
+		if err := s.db.Table("tasks").Select("DISTINCT type").Pluck("type", &types).Error; err != nil {
+			slog.Error("Failed to pluck task types", "err", err)
+			types = []string{}
+		}
 		for _, t := range types {
 			used[t] = true
 		}
@@ -165,7 +173,9 @@ func (s *Server) handleAttackCoverage(c *gin.Context) {
 // GET /mitre/phases
 func (s *Server) handleMitrePhases(c *gin.Context) {
 	var campaigns []db.Campaign
-	s.db.Preload("Agents").Limit(500).Find(&campaigns)
+	if err := s.db.Preload("Agents").Limit(500).Find(&campaigns).Error; err != nil {
+		slog.Error("Failed to query MITRE campaigns", "err", err)
+	}
 
 	phaseTasks := map[string]int{}
 	phaseCampaigns := map[string]map[string]bool{}
@@ -185,7 +195,9 @@ func (s *Server) handleMitrePhases(c *gin.Context) {
 	}
 	var allTasks []agentTask
 	if len(allAgentIDs) > 0 {
-		s.db.Table("tasks").Select("agent_id, type").Where("agent_id IN ?", allAgentIDs).Find(&allTasks)
+		if err := s.db.Table("tasks").Select("agent_id, type").Where("agent_id IN ?", allAgentIDs).Find(&allTasks).Error; err != nil {
+			slog.Error("Failed to query MITRE tasks", "err", err)
+		}
 	}
 
 	// Index tasks by agent

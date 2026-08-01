@@ -320,8 +320,8 @@ export default function SyncSection() {
               )}
               {status.last_errors && status.last_errors.length > 0 && (
                 <div className="text-destructive bg-destructive/10 rounded-xl p-2 space-y-1">
-                  {status.last_errors.map((err, i) => (
-                    <div key={i} className="font-mono text-(--font-size-micro-sm) leading-tight">{err}</div>
+                  {status.last_errors.map((err) => (
+                    <div key={err} className="font-mono text-(--font-size-micro-sm) leading-tight">{err}</div>
                   ))}
                 </div>
               )}

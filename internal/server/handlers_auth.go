@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -15,6 +16,24 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+var (
+	dummyPasswordHash string
+	dummyHashOnce     sync.Once
+)
+
+// dummyHash returns a valid bcrypt hash used to equalize login timing for
+// unknown users / disabled accounts. Without it, a user-not-found branch
+// returns far faster than a wrong-password branch, leaking username existence.
+func dummyHash() string {
+	dummyHashOnce.Do(func() {
+		h, err := middleware.HashPassword("forgec2-timing-equalizer-dummy")
+		if err == nil {
+			dummyPasswordHash = h
+		}
+	})
+	return dummyPasswordHash
+}
 
 func (s *Server) handleLoginPage(c *gin.Context) {
 	if tokenStr, err := c.Cookie("forgec2_session"); err == nil && tokenStr != "" {
@@ -48,16 +67,17 @@ func (s *Server) handleLogin(c *gin.Context) {
 	rememberMe := c.PostForm("remember_me") == "on"
 	clientIP := c.ClientIP()
 
-	slog.Info("Login attempt", "username", username, "ip", clientIP, "password_provided", password != "")
+	slog.Info("Login attempt", "ip", clientIP)
 
+	// Note: no audit record is written for requests rejected while in lockout —
+	// the failures that triggered the lockout were already audited, and writing one
+	// per subsequent attempt lets an attacker flood the audit log during a lockout.
 	if locked, retryAfter := s.checkLoginLockout(clientIP); locked {
-		s.LogAuditRecord(c, "login_failed", "auth", username, fmt.Sprintf("Rate limit lockout (%ds)", retryAfter), false, nil)
 		s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
 		return
 	}
 
 	if locked, retryAfter := s.checkAccountLockout(username); locked {
-		s.LogAuditRecord(c, "login_failed", "auth", username, fmt.Sprintf("Account lockout (%ds)", retryAfter), false, nil)
 		s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter), username, rememberMe)
 		return
 	}
@@ -67,23 +87,46 @@ func (s *Server) handleLogin(c *gin.Context) {
 		return
 	}
 
+	if middleware.RequireTLSForAuth && !middleware.IsSecureConnection(c) {
+		slog.Warn("Login blocked: RequireTLSForAuth=true but connection is not TLS",
+			"username", username, "ip", c.ClientIP())
+		s.renderLoginError(c, "Login requires a secure (HTTPS) connection", username, rememberMe)
+		return
+	}
+
 	var user db.User
 	result := s.db.Where("username = ?", username).First(&user)
 	if result.Error != nil {
-		slog.Warn("Login failed: user not found", "username", username, "ip", c.ClientIP())
+		// Equalize timing with the wrong-password branch (bcrypt compare).
+		if h := dummyHash(); h != "" {
+			middleware.CheckPassword(h, password)
+		}
+		slog.Warn("Login failed: invalid credentials", "ip", c.ClientIP())
 		s.LogAuditRecord(c, "login_failed", "auth", username, "User not found", false, nil)
+		if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
+			s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
+			return
+		}
 		s.renderLoginError(c, "Invalid username or password", username, false)
 		return
 	}
 
 	if !user.IsActive {
-		slog.Warn("Login failed: account inactive", "username", username, "ip", c.ClientIP())
+		// Equalize timing with the wrong-password branch.
+		if h := dummyHash(); h != "" {
+			middleware.CheckPassword(h, password)
+		}
+		slog.Warn("Login failed: invalid credentials", "ip", c.ClientIP())
 		s.LogAuditRecord(c, "login_failed", "auth", username, "Account disabled", false, nil)
 		s.renderLoginError(c, "Invalid username or password", username, false)
 		return
 	}
 
 	if user.PasswordHash == "" {
+		if err := s.validatePasswordComplexity(password); err != nil {
+			s.renderLoginError(c, err.Error(), username, rememberMe)
+			return
+		}
 		hash, err := middleware.HashPassword(password)
 		if err != nil {
 			s.renderLoginError(c, "Failed to set password", username, rememberMe)
@@ -99,17 +142,16 @@ func (s *Server) handleLogin(c *gin.Context) {
 		user.PasswordHash = hash
 		slog.Info("Password set for user", "username", username)
 	} else if !middleware.CheckPassword(user.PasswordHash, password) {
-		slog.Warn("Login failed: wrong password",
-			"username", username,
-			"ip", c.ClientIP(),
-		)
+		slog.Warn("Login failed: invalid credentials", "ip", c.ClientIP())
 		s.LogAuditRecord(c, "login_failed", "auth", username, "Wrong password", false, nil)
-		s.db.Model(&user).UpdateColumn("login_attempts", gorm.Expr("login_attempts + 1"))
+		if err := s.db.Model(&user).UpdateColumn("login_attempts", gorm.Expr("login_attempts + 1")).Error; err != nil {
+			slog.Error("Failed to increment login attempts", "user_id", user.ID, "err", err)
+		}
 		if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
 			s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
 			return
 		}
-		if locked, retryAfter := s.recordAccountLoginFailure(username); locked {
+		if locked, retryAfter := s.recordAccountLoginFailure(username, clientIP); locked {
 			s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter), username, rememberMe)
 			return
 		}
@@ -125,9 +167,14 @@ func (s *Server) handleLogin(c *gin.Context) {
 		}
 	}
 
+	s.configMu.RLock()
+	jwtSecret := s.cfg.Server.JWTSecret
+	sessionMaxAgeHours := s.cfg.Server.SessionMaxAgeHours
+	s.configMu.RUnlock()
+
 	if user.TOTPSecret != "" {
 		if totpCode != "" {
-			decryptedSecret, err := decryptSecret(user.TOTPSecret, s.cfg.Server.JWTSecret)
+			decryptedSecret, err := decryptSecret(user.TOTPSecret, jwtSecret)
 			if err != nil {
 				slog.Error("Failed to decrypt TOTP secret", "username", username, "err", err)
 				s.renderLoginError(c, "2FA configuration error", username, rememberMe)
@@ -136,7 +183,15 @@ func (s *Server) handleLogin(c *gin.Context) {
 			if !totp.VerifyCode(decryptedSecret, totpCode) {
 				slog.Warn("Login failed: invalid 2FA code", "username", username, "ip", c.ClientIP())
 				s.LogAuditRecord(c, "login_failed", "auth", username, "Invalid 2FA code", false, nil)
-				s.renderLoginError(c, "Invalid two-factor authentication code", username, rememberMe)
+				if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
+					s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
+					return
+				}
+				if locked, retryAfter := s.recordAccountLoginFailure(username, clientIP); locked {
+					s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter), username, rememberMe)
+					return
+				}
+				s.renderLoginError(c, "Invalid username or password", username, rememberMe)
 				return
 			}
 		} else if backupCode != "" {
@@ -144,15 +199,31 @@ func (s *Server) handleLogin(c *gin.Context) {
 			if err := s.db.Where("user_id = ? AND used = false", user.ID).Find(&codes).Error; err != nil || len(codes) == 0 {
 				slog.Warn("Login failed: no unused backup codes", "username", username, "ip", c.ClientIP())
 				s.LogAuditRecord(c, "login_failed", "auth", username, "No unused backup codes", false, nil)
-				s.recordLoginFailure(clientIP, username)
-				s.renderLoginError(c, "Invalid two-factor authentication code", username, rememberMe)
+				if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
+					s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
+					return
+				}
+				s.renderLoginError(c, "Invalid username or password", username, rememberMe)
 				return
 			}
 			matched := false
 			for _, bc := range codes {
 				if totp.VerifyBackupCode(bc.CodeHash, backupCode) {
+					result := s.db.Model(&db.BackupCode{}).
+						Where("id = ? AND used = ?", bc.ID, false).
+						Updates(map[string]interface{}{"used": true, "used_at": time.Now()})
+					if result.Error != nil {
+						slog.Error("Failed to mark backup code as used", "code_id", bc.ID, "err", result.Error)
+						s.renderLoginError(c, "Authentication error", username, rememberMe)
+						return
+					}
+					if result.RowsAffected == 0 {
+						slog.Warn("Backup code already used (race condition)", "code_id", bc.ID, "username", username)
+						s.recordLoginFailure(clientIP, username)
+						s.renderLoginError(c, "Invalid username or password", username, rememberMe)
+						return
+					}
 					matched = true
-					s.db.Model(&bc).Updates(map[string]interface{}{"used": true, "used_at": time.Now()})
 					break
 				}
 			}
@@ -163,11 +234,11 @@ func (s *Server) handleLogin(c *gin.Context) {
 					s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
 					return
 				}
-				if locked, retryAfter := s.recordAccountLoginFailure(username); locked {
+				if locked, retryAfter := s.recordAccountLoginFailure(username, clientIP); locked {
 					s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter), username, rememberMe)
 					return
 				}
-				s.renderLoginError(c, "Invalid two-factor authentication code", username, rememberMe)
+				s.renderLoginError(c, "Invalid username or password", username, rememberMe)
 				return
 			}
 			slog.Info("Login via backup code", "username", username, "ip", c.ClientIP())
@@ -178,20 +249,13 @@ func (s *Server) handleLogin(c *gin.Context) {
 		}
 	}
 
-	if middleware.RequireTLSForAuth && !middleware.IsSecureConnection(c) {
-		slog.Warn("Login blocked: RequireTLSForAuth=true but connection is not TLS",
-			"username", username, "ip", c.ClientIP())
-		s.renderLoginError(c, "Login requires a secure (HTTPS) connection", username, rememberMe)
-		return
-	}
-
-	token, err := middleware.GenerateToken(user, rememberMe, s.cfg.Server.SessionMaxAgeHours)
+	token, err := middleware.GenerateToken(user, rememberMe, sessionMaxAgeHours)
 	if err != nil {
 		s.renderLoginError(c, "Token generation error", username, rememberMe)
 		return
 	}
 
-	sessionHours := s.cfg.Server.SessionMaxAgeHours
+	sessionHours := sessionMaxAgeHours
 	if sessionHours < 1 {
 		sessionHours = DefaultSessionHours
 	}
@@ -201,7 +265,11 @@ func (s *Server) handleLogin(c *gin.Context) {
 	}
 	middleware.SetCookieWithSameSite(c, "forgec2_session", token, maxAge, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
 
-	s.createSession(token, user.ID, c.ClientIP(), c.Request.UserAgent(), "", maxAge)
+	if err := s.createSession(token, user.ID, c.ClientIP(), c.Request.UserAgent(), "", maxAge); err != nil {
+		slog.Error("Failed to create session during login", "user_id", user.ID, "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to create session")
+		return
+	}
 
 	var csrfBuf [32]byte
 	if _, err := rand.Read(csrfBuf[:]); err != nil {
@@ -291,6 +359,11 @@ func (s *Server) handleGetCurrentUser(c *gin.Context) {
 	var user db.User
 	if err := s.db.First(&user, userID).Error; err != nil {
 		respondError(c, http.StatusUnauthorized, "user not found")
+		return
+	}
+
+	if !user.IsActive {
+		respondError(c, http.StatusForbidden, "account is disabled")
 		return
 	}
 

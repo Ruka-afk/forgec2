@@ -353,8 +353,8 @@ export default function ScannerPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.results.map((r, i) => (
-                    <TableRow key={i}>
+                  {data.results.map((r) => (
+                    <TableRow key={`${r.ip}-${r.port}-${r.protocol}`}>
                       <TableCell className="font-mono text-muted-foreground">{r.ip ?? "-"}</TableCell>
                       <TableCell className="font-mono font-medium text-blue-600 dark:text-blue-400">{r.port ?? "-"}</TableCell>
                       <TableCell className="text-muted-foreground">{r.protocol ?? "-"}</TableCell>

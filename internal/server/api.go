@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/errgroup"
@@ -16,6 +17,9 @@ import (
 // ── REST API: Agents ──
 
 func (s *Server) apiListAgents(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	search := c.Query("search")
 	statusFilter := c.Query("status")
 	osFilter := c.Query("os")
@@ -138,6 +142,9 @@ func computeTaskStats(database *gorm.DB, ids []string) map[string]*db.TaskStats 
 }
 
 func (s *Server) apiGetAgent(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	var agent db.Implant
 	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
@@ -166,8 +173,11 @@ func (s *Server) apiDeleteAgent(c *gin.Context) {
 // ── REST API: Tasks ──
 
 func (s *Server) apiListTasks(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	var tasks []db.Task
-	query := s.db.Order("created_at desc")
+	query := s.db.Order("created_at desc").Preload("Agent")
 
 	if agentID := c.Query("agent_id"); agentID != "" {
 		query = query.Where("agent_id = ?", agentID)
@@ -178,13 +188,15 @@ func (s *Server) apiListTasks(c *gin.Context) {
 	if status := c.Query("status"); status != "" {
 		query = query.Where("status = ?", status)
 	}
-	if limit := c.Query("limit"); limit != "" {
-		if n, err := strconv.Atoi(limit); err == nil {
-			query = query.Limit(n)
+
+	limit := APITaskListLimit
+	if l := c.Query("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 && n < limit {
+			limit = n
 		}
 	}
 
-	if err := query.Limit(APITaskListLimit).Find(&tasks).Error; err != nil {
+	if err := query.Limit(limit).Find(&tasks).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "database error")
 		return
 	}
@@ -192,22 +204,22 @@ func (s *Server) apiListTasks(c *gin.Context) {
 }
 
 func (s *Server) apiGetTask(c *gin.Context) {
-	id := c.Param("id")
-	var task db.Task
-	if err := s.db.First(&task, id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "task not found")
+	if !s.requireOperator(c) {
 		return
 	}
-	if task.AgentID != "" {
-		var agent db.Implant
-		if err := s.db.First(&agent, "id = ?", task.AgentID).Error; err == nil {
-			task.Agent = agent
-		}
+	id := c.Param("id")
+	var task db.Task
+	if err := s.db.Preload("Agent").First(&task, id).Error; err != nil {
+		respondError(c, http.StatusNotFound, "task not found")
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": task})
 }
 
 func (s *Server) apiCreateTask(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	var req struct {
 		AgentID string `json:"agent_id" binding:"required"`
 		Type    string `json:"type" binding:"required"`
@@ -238,6 +250,9 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 // ── REST API: Credentials ──
 
 func (s *Server) apiListCredentials(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	var creds []db.CredentialEntry
 	query := s.db.Order("created_at desc")
 
@@ -261,12 +276,18 @@ func (s *Server) apiListCredentials(c *gin.Context) {
 // ── REST API: Listeners ──
 
 func (s *Server) apiListListeners(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	s.handleListListeners(c)
 }
 
 // ── REST API: Dashboard Stats ──
 
 func (s *Server) apiDashboardStats(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	offlineCutoff := time.Now().Add(-s.offlineThreshold())
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
@@ -328,8 +349,10 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 	onlineUsers := int64(len(onlineUsersList))
 
 	var recentTasks []db.Task
-	s.db.Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
-		Order("created_at desc").Limit(DashboardRecentTasks).Find(&recentTasks)
+	if err := s.db.Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
+		Order("created_at desc").Limit(DashboardRecentTasks).Find(&recentTasks).Error; err != nil {
+		slog.Error("API: failed to query recent tasks", "err", err)
+	}
 	if len(recentTasks) > 0 {
 		agentIDs := make([]string, 0, len(recentTasks))
 		for _, t := range recentTasks {
@@ -339,7 +362,9 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 		}
 		if len(agentIDs) > 0 {
 			var agents []db.Implant
-			s.db.Where("id IN ?", agentIDs).Find(&agents)
+			if err := s.db.Where("id IN ?", agentIDs).Find(&agents).Error; err != nil {
+				slog.Error("API: failed to query agents for recent tasks", "err", err)
+			}
 			agentMap := make(map[string]db.Implant, len(agents))
 			for _, a := range agents {
 				agentMap[a.ID] = a
@@ -380,6 +405,11 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 // ── REST API: Audit Logs ──
 
 func (s *Server) apiListAuditLogs(c *gin.Context) {
+	role, _ := c.Get("user_role")
+	if role != "admin" {
+		respondError(c, http.StatusForbidden, "admin required")
+		return
+	}
 	var logs []db.AuditLog
 	query := s.db.Order("created_at desc")
 
@@ -400,6 +430,13 @@ func (s *Server) apiListAuditLogs(c *gin.Context) {
 // ── REST API: Bulk Results ──
 
 func (s *Server) apiBulkResults(c *gin.Context) {
+	role, _ := c.Get("user_role")
+	roleStr, _ := role.(string)
+	if roleStr != "admin" && !db.RoleHasPermission(roleStr, db.PermTasksRead) {
+		respondError(c, http.StatusForbidden, "insufficient permissions")
+		return
+	}
+
 	s.bulkHistoryMu.Lock()
 	results := make([]BulkResult, len(s.bulkHistory))
 	copy(results, s.bulkHistory)
@@ -432,20 +469,49 @@ func (s *Server) apiHealth(c *gin.Context) {
 // registerAPIRoutes registers all REST API routes under the given group
 func (s *Server) registerAPIRoutes(api *gin.RouterGroup) {
 	api.GET("/health", s.apiHealth)
-	api.GET("/dashboard", s.apiDashboardStats)
 
-	api.GET("/agents", s.apiListAgents)
-	api.GET("/agents/:id", s.apiGetAgent)
-	api.DELETE("/agents/:id", s.apiDeleteAgent)
+	agentsRead := api.Group("/")
+	agentsRead.Use(middleware.RequirePermission(db.PermAgentsRead))
+	{
+		agentsRead.GET("/dashboard", s.apiDashboardStats)
+		agentsRead.GET("/agents", s.apiListAgents)
+		agentsRead.GET("/agents/:id", s.apiGetAgent)
+	}
 
-	api.GET("/tasks", s.apiListTasks)
-	api.GET("/tasks/:id", s.apiGetTask)
-	api.POST("/tasks", s.apiCreateTask)
-	api.GET("/task-types", s.apiListTaskTypes)
-	api.POST("/tasks/status", s.apiBulkTaskStatus)
+	agentsWrite := api.Group("/")
+	agentsWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
+	{
+		agentsWrite.POST("/tasks", s.apiCreateTask)
+	}
 
-	api.GET("/credentials", s.apiListCredentials)
-	api.GET("/listeners", s.apiListListeners)
+	agentsDelete := api.Group("/")
+	agentsDelete.Use(middleware.RequirePermission(db.PermAgentsDelete))
+	{
+		agentsDelete.DELETE("/agents/:id", s.apiDeleteAgent)
+	}
+
+	tasksRead := api.Group("/")
+	tasksRead.Use(middleware.RequirePermission(db.PermTasksRead))
+	{
+		tasksRead.GET("/tasks", s.apiListTasks)
+		tasksRead.GET("/tasks/:id", s.apiGetTask)
+		tasksRead.GET("/task-types", s.apiListTaskTypes)
+		tasksRead.POST("/tasks/status", s.apiBulkTaskStatus)
+	}
+
+	credsRead := api.Group("/")
+	credsRead.Use(middleware.RequirePermission(db.PermCredsRead))
+	{
+		credsRead.GET("/credentials", s.apiListCredentials)
+	}
+
+	listenersRead := api.Group("/")
+	listenersRead.Use(middleware.RequirePermission(db.PermListenersRead))
+	{
+		listenersRead.GET("/listeners", s.apiListListeners)
+	}
+
+	// These handlers enforce their own checks (admin / PermTasksRead).
 	api.GET("/audit", s.apiListAuditLogs)
 	api.GET("/bulk/results", s.apiBulkResults)
 }

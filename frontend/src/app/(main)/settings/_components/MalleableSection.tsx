@@ -2,6 +2,7 @@ import { MalleableForm } from "./types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import Toggle from "./Toggle";
 import { AlertTriangle, Save, Shield } from "lucide-react";
@@ -31,12 +32,12 @@ export default function MalleableSection({
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <span className="block text-xs text-muted-foreground mb-1.5">HTTP Status Code</span>
-              <Input aria-label="HTTP status code" name="input-0" type="number" min={100} max={599} value={form.status_code} onChange={(e) => setForm({ ...form, status_code: Number(e.target.value) })}  />
+              <Label htmlFor="malleable-http-status-code" className="block text-xs text-muted-foreground mb-1.5">HTTP Status Code</Label>
+              <Input id="malleable-http-status-code" type="number" min={100} max={599} value={form.status_code} onChange={(e) => setForm({ ...form, status_code: Number(e.target.value) })}  />
             </div>
             <div>
-              <span className="block text-xs text-muted-foreground mb-1.5">Content-Type</span>
-              <Input aria-label="application/json" name="application-json-1" type="text" placeholder="application/json" value={form.content_type} onChange={(e) => setForm({ ...form, content_type: e.target.value })} className="font-mono" />
+              <Label htmlFor="malleable-content-type" className="block text-xs text-muted-foreground mb-1.5">Content-Type</Label>
+              <Input id="malleable-content-type" type="text" placeholder="application/json" value={form.content_type} onChange={(e) => setForm({ ...form, content_type: e.target.value })} className="font-mono" />
             </div>
           </div>
           <div>

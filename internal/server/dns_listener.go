@@ -62,9 +62,11 @@ func (dl *DNSBeaconListener) Start() error {
 		Handler: mux,
 	}
 
-	dl.running = true
 	slog.Info("DNS C2 listener starting", "domain", dl.Domain, "addr", dl.Addr)
 	go func() {
+		dl.Lock()
+		dl.running = true
+		dl.Unlock()
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))

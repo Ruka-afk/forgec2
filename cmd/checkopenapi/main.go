@@ -29,6 +29,10 @@ var (
 	registerCallRe = regexp.MustCompile(`s\.(\w+)\((\w+)\)`)
 )
 
+// Debug endpoints from the standard library that are intentionally not part of
+// the public REST API documentation (e.g. net/http/pprof handlers).
+var skippedRoutePrefixes = []string{"/debug/pprof"}
+
 // Core routes that must always appear in OpenAPI (hard CI gate).
 var coreRoutes = []string{
 	"post /login",
@@ -336,7 +340,10 @@ func extractRoutesFromFile(src string, callPrefixes map[string]string, out map[s
 		for _, m := range routerCallRe.FindAllStringSubmatch(line, -1) {
 			method := strings.ToLower(m[1])
 			route := normalizePath(m[2])
-			out[method+" "+route] = true
+			key := method + " " + route
+			if !skipRoute(key) {
+				out[key] = true
+			}
 		}
 	}
 
@@ -398,7 +405,10 @@ func extractRoutesFromFile(src string, callPrefixes map[string]string, out map[s
 			recv, method, rpath := m[1], strings.ToLower(m[2]), m[3]
 			if recv == "router" {
 				// handled by routerCallRe possibly as bare router
-				out[method+" "+normalizePath(rpath)] = true
+				key := method + " " + normalizePath(rpath)
+				if !skipRoute(key) {
+					out[key] = true
+				}
 				continue
 			}
 			pref, ok := cur.vars[recv]
@@ -438,13 +448,35 @@ func extractRoutesFromFile(src string, callPrefixes map[string]string, out map[s
 			}
 			if !ok {
 				// Unresolved: keep relative path so we don't invent wrong prefixes
-				out[method+" "+normalizePath(rpath)] = true
+				key := method + " " + normalizePath(rpath)
+				if !skipRoute(key) {
+					out[key] = true
+				}
 				continue
 			}
 			full := joinRoute(pref, rpath)
-			out[method+" "+normalizePath(full)] = true
+			key := method + " " + normalizePath(full)
+			if !skipRoute(key) {
+				out[key] = true
+			}
 		}
 	}
+}
+
+// skipRoute reports whether a registered route should be excluded from the
+// OpenAPI documentation coverage check (stdlib debug endpoints).
+// route is a "<method> <path>" key.
+func skipRoute(route string) bool {
+	path := route
+	if i := strings.IndexByte(route, ' '); i >= 0 {
+		path = route[i+1:]
+	}
+	for _, p := range skippedRoutePrefixes {
+		if path == p || strings.HasPrefix(path, p+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func joinRoute(prefix, path string) string {

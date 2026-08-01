@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Award, CheckCircle, CircleAlert, Code, Copy, Download, FileUp, FileDown, Globe, Info, Mail, Pencil, Plug, Plus, Rocket, Save, Server, Share2, ShieldCheck, Terminal, Trash2, WandSparkles } from "lucide-react";
+import { DataState } from "@/components/ui/data-state";
 import { useInfrastructureData } from "./_components/useInfrastructureData";
 import { useInfrastructureDialogs } from "./_components/useInfrastructureDialogs";
 import { useInfrastructureConfigForm } from "./_components/useInfrastructureConfigForm";
@@ -23,7 +24,7 @@ import { useInfrastructureRedirectorForm } from "./_components/useInfrastructure
 
 export default function InfrastructurePage() {
   const { t } = useI18n();
-  const { listeners, redirectors, loadListeners, loadRedirectors } = useInfrastructureData();
+  const { listeners, redirectors, loading, error, loadListeners, loadRedirectors } = useInfrastructureData();
   const { showGenModal, setShowGenModal, cfm, setCfm, editingRd, setEditingRd } = useInfrastructureDialogs();
   const {
     selectedListener, setSelectedListener, domain, setDomain, port, setPort,
@@ -67,6 +68,7 @@ export default function InfrastructurePage() {
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={<><Server className="w-4 h-4" />{t("infra.title")}</>} subtitle={t("infra.subtitle")} />
 
+      <DataState loading={loading} error={error} onRetry={() => { loadListeners(); if (activeSection === "redirectors") loadRedirectors(); }}>
       <Tabs value={activeSection} onValueChange={setActiveSection}>
         <TabsList className="flex w-full justify-start rounded-none border-b border-border bg-transparent p-0 h-auto">
           {sections.map(s => (
@@ -515,6 +517,7 @@ export default function InfrastructurePage() {
       </TabsContent>
       </Tabs>
       <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      </DataState>
     </div>
   );
 }

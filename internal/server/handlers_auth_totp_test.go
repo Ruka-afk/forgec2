@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/forgec2/forgec2/internal/config"
+	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -36,6 +37,7 @@ func newAuthTestDB(t *testing.T) *gorm.DB {
 func newAuthTestServer(t *testing.T) *Server {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
+	crypto.InitLootEncryption("test-secret-for-auth", "")
 	db := newAuthTestDB(t)
 	s := &Server{db: db, cfg: &config.Config{}}
 	s.cfg.Server.JWTSecret = "test-secret-for-auth"

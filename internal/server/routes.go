@@ -12,18 +12,18 @@ import (
 // registerPublicRoutes registers unauthenticated routes.
 func (s *Server) registerPublicRoutes() {
 	s.router.GET("/login", s.handleLoginPage)
-	s.router.POST("/login", s.handleLogin)
-	s.router.POST("/api/login", s.handleLogin)
+	s.router.POST("/login", middleware.RequestBodyLimit(MaxJSONBodySize), s.handleLogin)
+	s.router.POST("/api/login", middleware.RequestBodyLimit(MaxJSONBodySize), s.handleLogin)
 	healthRateLimiter := middleware.NewRateLimiter(s.ctx, 30, time.Minute)
 	s.router.GET("/health", healthRateLimiter.Limit(), s.handleHealthCheck)
 	s.router.GET("/ready", healthRateLimiter.Limit(), s.handleReadyCheck)
 	s.router.GET("/lang/set", s.handleSetLanguage)
 	langRateLimiter := middleware.NewRateLimiter(s.ctx, 10, time.Minute)
-	s.router.POST("/lang/set", langRateLimiter.Limit(), s.handleSetLanguage)
+	s.router.POST("/lang/set", middleware.RequestBodyLimit(MaxJSONBodySize), langRateLimiter.Limit(), s.handleSetLanguage)
 	s.router.GET("/payloads/:id/:filename", s.handleServePayload)
 	// Public phishing landing (credential capture) — no auth by design
 	s.router.GET("/phishing/l/:token", s.handlePhishingLanding)
-	s.router.POST("/phishing/l/:token", s.handlePhishingLanding)
+	s.router.POST("/phishing/l/:token", middleware.RequestBodyLimit(MaxJSONBodySize), s.handlePhishingLanding)
 
 	// WebSocket endpoints: auth handled inside the handler (via cookie/query token)
 	// to avoid redirect loops and support cookie-less connections.
@@ -288,6 +288,7 @@ func (s *Server) registerReconRoutes(auth *gin.RouterGroup) {
 		reconRead.GET("/timeline", s.handleTimelinePage)
 		reconRead.GET("/api/timeline/data", s.handleTimelineData)
 		reconRead.GET("/api/timeline/export", s.handleTimelineExport)
+		reconRead.POST("/api/timeline/export", s.handleTimelineExport)
 		reconRead.GET("/report", s.handleReportPage)
 		reconRead.GET("/api/report/agents", s.handleAPIGetReportAgents)
 		reconRead.GET("/api/report/tasks", s.handleAPIGetReportTasks)
@@ -606,10 +607,11 @@ func (s *Server) registerMiscRoutes(auth *gin.RouterGroup) {
 	auth.GET("/api/update-check/version", s.handleCheckVersion)
 	auth.POST("/api/update-check/refresh", s.handleRefreshUpdateCheck)
 
+	auth.POST("/api/update-check/hot-update", middleware.RequireRole(db.RoleAdmin), s.handleHotUpdate)
+
 	miscWrite := auth.Group("/")
 	miscWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
 	{
-		miscWrite.POST("/api/update-check/hot-update", s.handleHotUpdate)
 		miscWrite.POST("/api/agents/:id/profile-rotate", s.handleProfileRotate)
 	}
 
@@ -694,6 +696,13 @@ func (s *Server) registerTaskRoutes(auth *gin.RouterGroup) {
 		tasksRead.POST("/tasks/batch-status", s.handleBatchTaskStatus)
 	}
 
+	tasksWrite := auth.Group("/")
+	tasksWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
+	{
+		tasksWrite.POST("/tasks/:taskId/approve", s.handleApproveTask)
+		tasksWrite.POST("/tasks/:taskId/reject", s.handleRejectTask)
+	}
+
 	auth.POST("/logout", s.handleLogout)
 }
 
@@ -765,7 +774,6 @@ func (s *Server) registerUserRoutes(auth *gin.RouterGroup) {
 		usersWrite.POST("/users/:id/edit", s.handleEditUser)
 		usersWrite.POST("/users/:id/toggle", s.handleToggleUser)
 		usersWrite.POST("/users/:id/password", s.handleSetUserPassword)
-		usersWrite.POST("/users/:id/kick", s.handleKickUser)
 		usersWrite.POST("/users/:id/force-logout", s.handleForceLogoutUser)
 		usersWrite.GET("/users/:id/sessions", s.handleListUserSessions)
 		usersWrite.POST("/users/:id/sessions/:sessionId/revoke", s.handleRevokeSession)
@@ -968,9 +976,10 @@ func (s *Server) registerIntegrationRoutes(auth *gin.RouterGroup) {
 	auth.POST("/rd/:id/screenshot", s.handleRDAPIScreenshot)
 }
 
-// registerAPIKeyRoutes registers API key management routes.
+// registerAPIKeyRoutes registers API key management routes (admin only).
 func (s *Server) registerAPIKeyRoutes(auth *gin.RouterGroup) {
 	apiKeys := auth.Group("/")
+	apiKeys.Use(middleware.RequirePermission(db.PermSettingsWrite))
 	{
 		apiKeys.GET("/api/api-keys", s.handleListAPIKeys)
 		apiKeys.POST("/api/api-keys", s.handleCreateAPIKey)

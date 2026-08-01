@@ -8,6 +8,7 @@ import { Spinner } from "@/components/UI";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Toggle from "./Toggle";
 import { FlaskConical, LogIn, Save } from "lucide-react";
@@ -126,10 +127,10 @@ export default function SIEMSection() {
 
         {/* Endpoint */}
         <div>
-          <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">
+          <Label htmlFor="siem-endpoint" className="text-(--font-size-micro-sm) font-medium text-muted-foreground">
             {config.type === "syslog" ? t("settings.siem.syslogServer") : t("settings.siem.endpointUrl")}
-          </span>
-          <Input aria-label="SIEM endpoint URL" name="input-1" className="h-9 text-xs" placeholder={
+          </Label>
+          <Input id="siem-endpoint" className="h-9 text-xs" placeholder={
             config.type === "syslog" ? "192.168.1.100:514" :
             config.type === "splunk_hec" ? "https://splunk.example.com:8088" :
             config.type === "elastic" ? "https://elastic.example.com:9200" :
@@ -140,25 +141,25 @@ export default function SIEMSection() {
         {/* Auth Token */}
         {(config.type === "splunk_hec" || config.type === "elastic" || config.type === "generic") && (
           <div>
-            <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">
+            <Label htmlFor="siem-auth-token" className="text-(--font-size-micro-sm) font-medium text-muted-foreground">
               {config.type === "splunk_hec" ? t("settings.siem.hecToken") : t("settings.siem.authToken")}
-            </span>
-            <Input aria-label="????????" name="input-2" type="password" className="h-9 text-xs" placeholder="????????" value={config.token} onChange={(e) => update("token", e.target.value)} />
+            </Label>
+            <Input id="siem-auth-token" type="password" className="h-9 text-xs" placeholder="????????" value={config.token} onChange={(e) => update("token", e.target.value)} />
           </div>
         )}
 
         {/* Index (Splunk/Elastic only) */}
         {(config.type === "splunk_hec" || config.type === "elastic") && (
           <div>
-            <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">{t("settings.siem.indexName")}</span>
-            <Input aria-label="Index name" name="input-3" className="h-9 text-xs" placeholder={config.type === "splunk_hec" ? "forgec2" : "forgec2-logs"} value={config.index} onChange={(e) => update("index", e.target.value)} />
+            <Label htmlFor="siem-index" className="text-(--font-size-micro-sm) font-medium text-muted-foreground">{t("settings.siem.indexName")}</Label>
+            <Input id="siem-index" className="h-9 text-xs" placeholder={config.type === "splunk_hec" ? "forgec2" : "forgec2-logs"} value={config.index} onChange={(e) => update("index", e.target.value)} />
           </div>
         )}
 
         {/* Source name */}
         <div>
-          <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">{t("settings.siem.sourceIdentifier")}</span>
-          <Input aria-label="forgec2" name="forgec2-4" className="h-9 text-xs" placeholder="forgec2" value={config.source} onChange={(e) => update("source", e.target.value)} />
+          <Label htmlFor="siem-source" className="text-(--font-size-micro-sm) font-medium text-muted-foreground">{t("settings.siem.sourceIdentifier")}</Label>
+          <Input id="siem-source" className="h-9 text-xs" placeholder="forgec2" value={config.source} onChange={(e) => update("source", e.target.value)} />
         </div>
 
         {/* Log level filter */}

@@ -133,6 +133,10 @@ func (s *Server) handlePluginInstall(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "manifest file is required")
 		return
 	}
+	if manifestFile.Size > MaxUploadSize {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("manifest file too large (max %d bytes)", MaxUploadSize))
+		return
+	}
 
 	mf, err := manifestFile.Open()
 	if err != nil {
@@ -176,6 +180,10 @@ func (s *Server) handlePluginInstall(c *gin.Context) {
 
 	scriptFile, err := c.FormFile("script")
 	if err == nil {
+		if scriptFile.Size > MaxUploadSize {
+			respondError(c, http.StatusBadRequest, fmt.Sprintf("script file too large (max %d bytes)", MaxUploadSize))
+			return
+		}
 		sf, err := scriptFile.Open()
 		if err != nil {
 			respondError(c, http.StatusInternalServerError, "failed to open script")

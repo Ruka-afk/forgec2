@@ -40,7 +40,7 @@ export default function AgentPersistencePage() {
   const loadAgent = useCallback(async () => {
     if (!id) return;
     try {
-      const data = await api.get(`/agents/${id}?format=json`);
+      const data = await api.get(`/agents/${id}`);
       setAgent(data.agent || data);
     } catch {
       toast.error(t("agents.persistence_load_failed"));
@@ -116,11 +116,11 @@ export default function AgentPersistencePage() {
     return (
       <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
         <div className="text-center py-20">
-          <Bug className="w-4 h-4" />
-          <h2 className="text-xl font-semibold text-foreground mb-2">Agent Not Found</h2>
-          <p className="text-sm text-muted-foreground mb-6">The requested agent does not exist or has been removed.</p>
+          <Bug className="w-4 h-4" aria-hidden="true" />
+          <h2 className="text-xl font-semibold text-foreground mb-2">{t("agents.persistence_not_found_title")}</h2>
+          <p className="text-sm text-muted-foreground mb-6">{t("agents.persistence_not_found_desc")}</p>
           <Button render={<Link href="/agents" />}>
-              Back to Agents
+              {t("agents.persistence_back_to_agents")}
           </Button>
         </div>
       </div>
@@ -129,17 +129,11 @@ export default function AgentPersistencePage() {
 
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href={`/agents/${id}`} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Agent
-        </Link>
-      </div>
-
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-xl bg-primary/15 flex items-center justify-center">
-              <LinkIcon className="w-4 h-4" />
+              <LinkIcon className="w-4 h-4" aria-hidden="true" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -155,7 +149,7 @@ export default function AgentPersistencePage() {
             size="sm"
             className="flex items-center gap-1.5"
           >
-            <RotateCw className="w-4 h-4" /> Refresh List
+            <RotateCw className="w-4 h-4" aria-hidden="true" /> {t("agents.persistence_refresh_list")}
           </Button>
         </div>
       </Card>
@@ -163,7 +157,7 @@ export default function AgentPersistencePage() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Card className="p-4 sm:p-5">
           <div className="flex items-center gap-2 mb-4">
-            <Plug className="w-4 h-4" />
+            <Plug className="w-4 h-4" aria-hidden="true" />
             <h3 className="text-sm font-semibold text-foreground">{t("agents.persistence_install")}</h3>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -190,7 +184,7 @@ export default function AgentPersistencePage() {
         <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <ListChecks className="w-4 h-4" />
+              <ListChecks className="w-4 h-4" aria-hidden="true" />
               <h3 className="text-sm font-semibold text-foreground">{t("agents.persistence_installed")}</h3>
             </div>
             <Badge variant="secondary" className="text-(--font-size-micro-sm)">{installedMethods.length}</Badge>
@@ -198,7 +192,7 @@ export default function AgentPersistencePage() {
           {installedMethods.length === 0 ? (
             <div className="text-center py-8">
               <Info className="w-4 h-4 mb-2" />
-              <p className="text-xs text-muted-foreground">No persistence methods installed yet. Use the buttons on the left to install persistence.</p>
+              <p className="text-xs text-muted-foreground">{t("agents.persistence_no_methods")}</p>
             </div>
           ) : (
             <div className="space-y-2 max-h-[400px] overflow-y-auto">

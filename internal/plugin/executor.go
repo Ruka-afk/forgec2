@@ -37,13 +37,12 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = pluginDir
 
-	cmd.Env = []string{
-		"HOME=" + os.TempDir(),
-		"TMPDIR=" + os.TempDir(),
-		"PATH=" + os.Getenv("PATH"),
-		"PLUGIN_NAME=" + m.Name,
-		"PLUGIN_VERSION=" + m.Version,
-	}
+	cmd.Env = append(os.Environ(),
+		"HOME="+os.TempDir(),
+		"TMPDIR="+os.TempDir(),
+		"PLUGIN_NAME="+m.Name,
+		"PLUGIN_VERSION="+m.Version,
+	)
 
 	stdinData, err := json.Marshal(input)
 	if err != nil {

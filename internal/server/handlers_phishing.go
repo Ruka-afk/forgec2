@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log/slog"
 	"net/http"
 	"net/smtp"
@@ -17,19 +18,25 @@ import (
 
 func (s *Server) handleAPIPhishingTemplates(c *gin.Context) {
 	var templates []db.PhishingTemplate
-	s.db.Order("created_at desc").Limit(200).Find(&templates)
+	if err := s.db.Order("created_at desc").Limit(200).Find(&templates).Error; err != nil {
+		slog.Error("Failed to list phishing templates", "err", err)
+	}
 	respond(c, gin.H{"data": templates})
 }
 
 func (s *Server) handleAPIPhishingCampaigns(c *gin.Context) {
 	var campaigns []db.PhishingCampaign
-	s.db.Order("created_at desc").Limit(200).Find(&campaigns)
+	if err := s.db.Order("created_at desc").Limit(200).Find(&campaigns).Error; err != nil {
+		slog.Error("Failed to list phishing campaigns", "err", err)
+	}
 	respond(c, gin.H{"data": campaigns})
 }
 
 func (s *Server) handleAPIPhishingCaptures(c *gin.Context) {
 	var events []db.PhishingEvent
-	s.db.Where("event_type = ?", "capture").Order("created_at desc").Limit(500).Find(&events)
+	if err := s.db.Where("event_type = ?", "capture").Order("created_at desc").Limit(500).Find(&events).Error; err != nil {
+		slog.Error("Failed to query phishing captures", "err", err)
+	}
 	type captureEntry struct {
 		ID        uint   `json:"id"`
 		Username  string `json:"username"`
@@ -44,7 +51,9 @@ func (s *Server) handleAPIPhishingCaptures(c *gin.Context) {
 		user, pass := "", ""
 		var payload map[string]string
 		if e.Payload != "" {
-			_ = json.Unmarshal([]byte(e.Payload), &payload)
+			if err := json.Unmarshal([]byte(e.Payload), &payload); err != nil {
+			slog.Warn("Failed to parse phishing payload", "event_id", e.ID, "error", err)
+		}
 			user = payload["username"]
 			pass = payload["password"]
 		}
@@ -208,7 +217,9 @@ func parsePhishingTargets(raw string) []string {
 	}
 	var list []string
 	if strings.HasPrefix(raw, "[") {
-		_ = json.Unmarshal([]byte(raw), &list)
+		if err := json.Unmarshal([]byte(raw), &list); err != nil {
+			slog.Warn("Failed to parse phishing targets as JSON, falling back to text parsing", "error", err)
+		}
 	}
 	if len(list) == 0 {
 		// newline / comma / semicolon separated
@@ -404,21 +415,31 @@ func (s *Server) runPhishingCampaign(campID uint, tpl db.PhishingTemplate, targe
 		if err := sendPhishingMail(smtpHost, smtpPort, smtpUser, smtpPass, from, email, subject, body, isHTML); err != nil {
 			slog.Warn("Phishing send failed", "campaign", campID, "to", email, "err", err)
 			evt.EventType = "send_failed"
-			payload, _ := json.Marshal(map[string]string{"error": err.Error()})
-			evt.Payload = string(payload)
+			payload, jsonErr := json.Marshal(map[string]string{"error": err.Error()})
+			if jsonErr != nil {
+				slog.Error("Phishing: failed to marshal error payload", "error", jsonErr)
+			} else {
+				evt.Payload = string(payload)
+			}
 		} else {
 			sent++
-			s.db.Model(&db.PhishingCampaign{}).Where("id = ?", campID).
-				Updates(map[string]interface{}{"sent_count": sent, "updated_at": time.Now()})
+			if err := s.db.Model(&db.PhishingCampaign{}).Where("id = ?", campID).
+				Updates(map[string]interface{}{"sent_count": sent, "updated_at": time.Now()}).Error; err != nil {
+				slog.Error("Failed to update phishing campaign sent_count", "campaign_id", campID, "err", err)
+			}
 		}
-		s.db.Create(&evt)
+		if err := s.db.Create(&evt).Error; err != nil {
+			slog.Error("Failed to log phishing event", "campaign", campID, "type", evt.EventType, "err", err)
+		}
 
 		// light throttle to avoid SMTP rate limits
 		time.Sleep(200 * time.Millisecond)
 	}
 
-	s.db.Model(&db.PhishingCampaign{}).Where("id = ? AND status = ?", campID, "running").
-		Updates(map[string]interface{}{"status": "completed", "updated_at": time.Now()})
+	if err := s.db.Model(&db.PhishingCampaign{}).Where("id = ? AND status = ?", campID, "running").
+		Updates(map[string]interface{}{"status": "completed", "updated_at": time.Now()}).Error; err != nil {
+		slog.Error("Failed to complete phishing campaign", "campaign_id", campID, "err", err)
+	}
 	slog.Info("Phishing campaign finished", "campaign", campID, "sent", sent, "total", len(targets))
 }
 
@@ -471,10 +492,18 @@ func (s *Server) handlePhishingLanding(c *gin.Context) {
 			UserAgent:  c.GetHeader("User-Agent"),
 			CreatedAt:  time.Now(),
 		}
-		s.db.Create(&open)
-		s.db.Exec("UPDATE phishing_campaigns SET open_count = open_count + 1, updated_at = ? WHERE id = ?", time.Now(), evt.CampaignID)
+		if err := s.db.Create(&open).Error; err != nil {
+			slog.Error("Failed to log phishing open event", "campaign", evt.CampaignID, "err", err)
+		}
+		if err := s.db.Exec("UPDATE phishing_campaigns SET open_count = open_count + 1, updated_at = ? WHERE id = ?", time.Now(), evt.CampaignID).Error; err != nil {
+			slog.Error("Failed to increment open_count", "campaign_id", evt.CampaignID, "err", err)
+		}
 
 		c.Header("Content-Type", "text/html; charset=utf-8")
+		// Escape attacker-influenced values (target email, token) to prevent
+		// stored XSS in the landing page markup.
+		escapedEmail := html.EscapeString(evt.Email)
+		escapedToken := html.EscapeString(token)
 		c.String(http.StatusOK, `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sign in</title>
 <style>body{font-family:system-ui,sans-serif;background:#f5f5f5;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
 .card{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);width:100%%;max-width:360px}
@@ -486,7 +515,7 @@ button{margin-top:1.25rem;width:100%%;padding:.7rem;border:0;border-radius:8px;b
 <label>Email</label><input name="username" type="email" value="%s" required>
 <label>Password</label><input name="password" type="password" required>
 <button type="submit">Continue</button>
-</form></div></body></html>`, token, evt.Email)
+</form></div></body></html>`, escapedToken, escapedEmail)
 		return
 	}
 
@@ -496,10 +525,13 @@ button{margin-top:1.25rem;width:100%%;padding:.7rem;border:0;border-radius:8px;b
 	if username == "" {
 		username = c.PostForm("email")
 	}
-	payload, _ := json.Marshal(map[string]string{
+	payload, jsonErr := json.Marshal(map[string]string{
 		"username": username,
 		"password": password,
 	})
+	if jsonErr != nil {
+		slog.Error("Phishing: failed to marshal capture payload", "error", jsonErr)
+	}
 	cap := db.PhishingEvent{
 		CampaignID: evt.CampaignID,
 		Token:      token,
@@ -510,8 +542,12 @@ button{margin-top:1.25rem;width:100%%;padding:.7rem;border:0;border-radius:8px;b
 		UserAgent:  c.GetHeader("User-Agent"),
 		CreatedAt:  time.Now(),
 	}
-	s.db.Create(&cap)
-	s.db.Exec("UPDATE phishing_campaigns SET cred_count = cred_count + 1, updated_at = ? WHERE id = ?", time.Now(), evt.CampaignID)
+	if err := s.db.Create(&cap).Error; err != nil {
+		slog.Error("Failed to log phishing credential capture", "campaign", evt.CampaignID, "err", err)
+	}
+	if err := s.db.Exec("UPDATE phishing_campaigns SET cred_count = cred_count + 1, updated_at = ? WHERE id = ?", time.Now(), evt.CampaignID).Error; err != nil {
+		slog.Error("Failed to increment cred_count", "campaign_id", evt.CampaignID, "err", err)
+	}
 
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.String(http.StatusOK, `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Thank you</title></head>

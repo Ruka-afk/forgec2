@@ -36,6 +36,7 @@ import (
 
 type Server struct {
 	cfg            *config.Config
+	configMu       sync.RWMutex
 	db             *gorm.DB
 	router         *gin.Engine
 	wsClients      map[*websocket.Conn]*wsClientConn
@@ -153,8 +154,8 @@ type Server struct {
 	agentStatusCooldown   map[string]time.Time
 	agentStatusCooldownMu sync.Mutex
 
-	// Pending TOTP setup state (between generate and enable)
-	pendingTOTP   *pendingTOTPState
+	// Pending TOTP setup state (between generate and enable), keyed by userID
+	pendingTOTP   map[uint]*pendingTOTPState
 	pendingTOTPMu sync.Mutex
 
 	// Reusable HTTP clients with connection pooling
@@ -222,13 +223,25 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		slog.Error("Failed to initialize JWT secret", "err", err)
 		os.Exit(1)
 	}
-	crypto.InitLootEncryption(cfg.Server.JWTSecret)
+	crypto.InitLootEncryption(cfg.Server.JWTSecret, cfg.Crypto.LootKey)
 	crypto.InitExtC2Encryption(cfg.Server.JWTSecret)
 
 	inFlight := middleware.NewInFlightTracker()
 
 	r := gin.New()
 	r.RedirectTrailingSlash = false
+	// Secure default: do NOT trust X-Forwarded-For / X-Real-IP headers unless the
+	// operator explicitly configures trusted proxy IPs/CIDRs. Otherwise any client
+	// can spoof the header to bypass login lockout, account lockout, and rate limits.
+	if len(cfg.Server.TrustedProxies) > 0 {
+		if err := r.SetTrustedProxies(cfg.Server.TrustedProxies); err != nil {
+			slog.Error("Invalid trusted_proxies config, ignoring", "error", err, "proxies", cfg.Server.TrustedProxies)
+		}
+		middleware.SetTrustedProxyIPs(cfg.Server.TrustedProxies)
+	} else {
+		r.SetTrustedProxies(nil)
+		middleware.SetTrustedProxyIPs(nil)
+	}
 	r.Use(gin.Recovery())
 	r.Use(inFlight.Middleware())
 	r.Use(middleware.RequestID())
@@ -273,6 +286,9 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 				MaxIdleConns:        HTTPMaxIdleConns,
 				MaxIdleConnsPerHost: HTTPMaxIdleConnsPerHost,
 				IdleConnTimeout:     HTTPIdleConnTimeout,
+				TLSClientConfig: &tls.Config{
+					MinVersion: tls.VersionTLS12,
+				},
 			},
 		},
 		httpClientLong: &http.Client{
@@ -281,6 +297,9 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 				MaxIdleConns:        10,
 				MaxIdleConnsPerHost: 3,
 				IdleConnTimeout:     HTTPIdleConnTimeout,
+				TLSClientConfig: &tls.Config{
+					MinVersion: tls.VersionTLS12,
+				},
 			},
 		},
 	}
@@ -288,7 +307,9 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	s.ctx, s.ctxCancel = context.WithCancel(context.Background())
 
 	// Beacon dedup cache cleanup (bounded to prevent memory exhaustion)
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		ticker := time.NewTicker(BeaconDedupCleanup)
 		defer ticker.Stop()
 		for {
@@ -302,6 +323,14 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 					}
 				}
 				s.beaconDedupMu.Unlock()
+
+				s.pwdChangeTimesMu.Lock()
+				for k, t := range s.pwdChangeTimes {
+					if now.Sub(t) > 10*time.Minute {
+						delete(s.pwdChangeTimes, k)
+					}
+				}
+				s.pwdChangeTimesMu.Unlock()
 			case <-s.ctx.Done():
 				return
 			}
@@ -315,7 +344,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	s.apiRateLimiter = middleware.NewAPIRateLimiter(s.ctx, cfg.RateLimit.API.Capacity, cfg.RateLimit.API.Rate)
 
 	// Start periodic cleanup for login lockout entries
-	s.loginLockout.startCleanup(s.ctx)
+	s.loginLockout.startCleanup(s.ctx, cfg.RateLimit.Login.Window)
 
 	// Beacon payload encryption via ECDH session (cfg.Crypto.Key = "ecdh:")
 	if strings.HasPrefix(cfg.Crypto.Key, "ecdh:") {
@@ -336,6 +365,24 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 				"max_messages", sm.MaxMessages(),
 				"max_age", sm.MaxAge())
 		}
+	}
+
+	// Periodic cleanup of stale ECDH sessions to prevent unbounded map growth
+	if s.sessionManager != nil {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			ticker := time.NewTicker(5 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					s.sessionManager.CleanupExpiredSessions(30 * time.Minute)
+				case <-s.ctx.Done():
+					return
+				}
+			}
+		}()
 	}
 
 	s.apiRateLimiter.SetWhitelist(cfg.RateLimit.API.Whitelist)
@@ -436,8 +483,21 @@ func (s *Server) dispatchEvent(evt Event, includeAlert bool) {
 
 func (s *Server) InitOptimizations(configPath string) {
 	s.configPath = configPath
-	s.configReloader = NewConfigReloader(s.cfg, configPath, func(cfg *config.Config) {
-		slog.Info("Config reloaded, applying runtime changes")
+	s.configReloader = NewConfigReloader(s.cfg, configPath, func(cfg *config.Config, changed []string) {
+		slog.Info("Config reloaded, applying runtime changes", "changed", changed)
+
+		s.configMu.Lock()
+		s.cfg.CopyFrom(cfg)
+		s.configMu.Unlock()
+
+		for _, field := range changed {
+			switch field {
+			case "crypto.key", "server.jwt_secret":
+				crypto.InitLootEncryption(s.cfg.Server.JWTSecret, s.cfg.Crypto.LootKey)
+				crypto.InitExtC2Encryption(s.cfg.Server.JWTSecret)
+				slog.Info("Crypto primitives re-initialized after config change (existing ECDH sessions invalidated)", "field", field)
+			}
+		}
 
 		// Invalidate automation rule cache so next request fetches fresh rules
 		s.automationRulesMu.Lock()
@@ -456,13 +516,9 @@ func (s *Server) InitOptimizations(configPath string) {
 	}
 
 	backupDir := filepath.Join(s.cfg.Server.DataDir, "backups")
-	var backupKey string
-	if s.cfg.Crypto.Key != "" {
-		backupKey = s.cfg.Crypto.Key
-	}
 
 	var err error
-	s.backupManager, err = NewBackupManager(s.db, s.cfg.Database.Path, backupDir, backupKey)
+	s.backupManager, err = NewBackupManager(s.db, s.cfg.Database.Path, backupDir, s.backupKeyHex())
 	if err != nil {
 		slog.Warn("Failed to initialize backup manager", "error", err)
 		return
@@ -515,6 +571,7 @@ func (s *Server) SetupRoutes() {
 	beaconAPI := s.router.Group("/api/v1")
 	beaconAPI.Use(s.rateLimiter.Limit())
 	beaconAPI.Use(s.trafficMiddleware())
+	beaconAPI.Use(middleware.RequestBodyLimit(BeaconMaxBodySize))
 	{
 		beaconAPI.POST("/beacon", s.handleBeacon)
 		beaconAPI.POST("/screen_frame", s.handleScreenFrame)
@@ -537,15 +594,19 @@ func (s *Server) SetupRoutes() {
 	}
 
 	// Root-level malleable profile routes (agent beacon_uri does NOT include /api/v1/ prefix)
-	s.router.POST("/generate_204", s.handleBeacon)
+	s.router.POST("/generate_204", middleware.RequestBodyLimit(BeaconMaxBodySize), s.handleBeacon)
 	s.router.GET("/generate_204", s.handleBeacon)
 
 	// Catch-all for profile-defined beacon URIs (e.g. bing /th?id=...)
 	s.router.GET("/th", s.handleBeacon)
-	s.router.POST("/th", s.handleBeacon)
+	s.router.POST("/th", middleware.RequestBodyLimit(BeaconMaxBodySize), s.handleBeacon)
 	if s.cfg.Malleable.Enabled {
 		s.router.NoRoute(func(c *gin.Context) {
-			if c.Request.Method == "POST" && c.GetHeader("Accept") != "application/json" {
+			if c.GetHeader("Accept") != "application/json" {
+				middleware.RequestBodyLimit(BeaconMaxBodySize)(c)
+				if c.IsAborted() {
+					return
+				}
 				s.rateLimiter.Limit()(c)
 				if c.IsAborted() {
 					return
@@ -598,6 +659,12 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "invalid token"})
 		return
 	}
+
+	if s.isSessionRevoked(tokenStr) {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "session_revoked"})
+		return
+	}
+
 	username := claims.Username
 
 	conn, err := s.wsUpgrader.Upgrade(c.Writer, c.Request, nil)
@@ -606,6 +673,7 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 		return
 	}
 
+	conn.SetReadLimit(WSMaxMessageSize)
 	conn.SetReadDeadline(time.Now().Add(WSReadDeadline))
 	conn.SetPongHandler(func(string) error {
 		conn.SetReadDeadline(time.Now().Add(WSReadDeadline))
@@ -743,13 +811,16 @@ func (s *Server) broadcastToClients(message []byte) {
 	s.wsMutex.RUnlock()
 
 	for _, client := range clients {
-		select {
-		case <-s.ctx.Done():
-			return
-		case client.ch <- message:
-		default:
-			slog.Debug("WebSocket write channel full, dropping message", "user", client.session.Username)
-		}
+		func() {
+			defer func() { recover() }()
+			select {
+			case <-s.ctx.Done():
+				return
+			case client.ch <- message:
+			default:
+				slog.Debug("WebSocket write channel full, dropping message", "user", client.session.Username)
+			}
+		}()
 	}
 }
 
@@ -898,7 +969,9 @@ func (s *Server) cleanupOldData() {
 		if err := sqlDB.Ping(); err == nil {
 			dbName := s.cfg.Database.Driver
 			if dbName == "" || dbName == "sqlite" {
+				s.wg.Add(1)
 				go func() {
+					defer s.wg.Done()
 					if _, err := sqlDB.Exec("PRAGMA optimize"); err != nil {
 						slog.Debug("SQLite ANALYZE failed", "err", err)
 					}
@@ -970,6 +1043,7 @@ func (s *Server) cleanupStaleMapEntries() {
 func (s *Server) offlineThreshold() time.Duration {
 	d := s.cfg.Server.OfflineThreshold
 	if d < 1 {
+		slog.Warn("OfflineThreshold is invalid, using default", "configured", d, "default", DefaultOfflineThresholdSec)
 		d = DefaultOfflineThresholdSec
 	}
 	return time.Duration(d) * time.Second
@@ -1113,7 +1187,9 @@ func (s *Server) Shutdown() {
 	if s.httpServer != nil {
 		// Wait briefly for in-flight requests to drain before forced shutdown
 		done := make(chan struct{})
+		s.wg.Add(1)
 		go func() {
+			defer s.wg.Done()
 			s.inFlight.Wait()
 			close(done)
 		}()
@@ -1152,6 +1228,9 @@ func (s *Server) Shutdown() {
 	}
 	if s.marketplace != nil {
 		s.marketplace.StopUpdateChecker()
+	}
+	if s.siem != nil {
+		s.siem.Stop()
 	}
 	if s.eventManager != nil {
 		s.eventManager.Shutdown()
@@ -1213,6 +1292,7 @@ func (s *Server) Run() error {
 				return
 			case <-ticker.C:
 				s.requeueStaleTasks()
+				s.failStaleAcknowledgedTasks()
 				s.reconcilePendingTaskCounts()
 			}
 		}
@@ -1294,8 +1374,9 @@ func (s *Server) Run() error {
 		il.SetHandler(s.makeBeaconHandler())
 		if err := il.Start(); err != nil {
 			slog.Error("Failed to start ICMP listener", "err", err)
+		} else {
+			s.icmpListener = il
 		}
-		s.icmpListener = il
 	}
 
 	// Start DNS C2 listener if enabled
@@ -1327,6 +1408,8 @@ func (s *Server) Run() error {
 			if err := s.cfg.Save(s.configPath); err == nil {
 				slog.Info("Auto-generated ExtC2 API token")
 			}
+		} else {
+			slog.Error("Failed to generate ExtC2 API token", "err", err)
 		}
 	}
 
@@ -1661,6 +1744,36 @@ func (s *Server) requeueStaleTasks() {
 	slog.Info("Requeued stale running tasks to pending", "count", len(staleTasks))
 }
 
+// failStaleAcknowledgedTasks marks tasks that were acknowledged by an agent but
+// never produced a result. Acknowledged tasks may still be executing, so they
+// must never be dispatched twice; after AckedTaskResultTimeout they are failed
+// rather than left "running" forever.
+func (s *Server) failStaleAcknowledgedTasks() {
+	cutoff := time.Now().Add(-AckedTaskResultTimeout)
+	var staleTasks []db.Task
+	if err := s.db.Where("status = ? AND acknowledged_at IS NOT NULL AND acknowledged_at < ?", "running", cutoff).Limit(1000).Find(&staleTasks).Error; err != nil {
+		slog.Error("Failed to find stale acknowledged tasks", "error", err)
+		return
+	}
+	if len(staleTasks) == 0 {
+		return
+	}
+	taskIDs := make([]uint, len(staleTasks))
+	for i, t := range staleTasks {
+		taskIDs[i] = t.ID
+	}
+	if err := s.db.Model(&db.Task{}).Where("id IN ?", taskIDs).
+		Updates(map[string]interface{}{
+			"status": "failed",
+			"error":  "task acknowledged but no result received within timeout",
+			"result": "",
+		}).Error; err != nil {
+		slog.Error("Failed to fail stale acknowledged tasks", "count", len(taskIDs), "error", err)
+		return
+	}
+	slog.Info("Failed stale acknowledged tasks with no result", "count", len(staleTasks))
+}
+
 // reconcilePendingTaskCounts recomputes the in-memory pending task counter
 // from the DB to fix any drift caused by unusual task completion paths.
 func (s *Server) reconcilePendingTaskCounts() {
@@ -1721,16 +1834,21 @@ func (s *Server) startTCPListener() {
 				continue
 			}
 		}
+		s.wg.Add(1)
 		go s.handleTCPConnection(conn)
 	}
 }
 
 func (s *Server) handleTCPConnection(conn net.Conn) {
+	defer s.wg.Done()
 	defer conn.Close()
 	slog.Info("TCP agent connected", "remote", conn.RemoteAddr().String())
 
 	for {
 		conn.SetReadDeadline(time.Now().Add(TCPReadDeadline))
+		if err := conn.SetWriteDeadline(time.Now().Add(TCPWriteDeadline)); err != nil {
+			slog.Error("TCP set write deadline error", "remote", conn.RemoteAddr().String(), "error", err)
+		}
 
 		// Read length prefix (big endian uint32)
 		var msgLen uint32
@@ -1746,18 +1864,20 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 			return
 		}
 
-		var req beaconRequest
-		if err := json.Unmarshal(buf, &req); err != nil {
-			slog.Error("TCP bad beacon json", "err", err)
+		envelope, req, useECDH, ok := s.decodeBeaconEnvelope(buf, "")
+		if !ok {
 			return
 		}
 
 		resp := s.processBeacon(req, "")
 
-		respBytes, ok := marshalJSONSafe(resp)
+		// Wrap the response in the same transport envelope as HTTP so the
+		// agent-side ECDH handshake/decryption logic works over TCP too.
+		respBytes, ok := s.buildBeaconResponse(req, resp, useECDH, envelope.ECDHPub != "" && !useECDH)
 		if !ok {
 			return
 		}
+
 		if err := binary.Write(conn, binary.BigEndian, uint32(len(respBytes))); err != nil {
 			return
 		}
@@ -1840,6 +1960,11 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 	// Validate task type against the registry
 	if !IsKnownTaskType(taskType) && !protocol.ValidTaskType(taskType) {
 		return nil, fmt.Errorf("unknown task type: %s", taskType)
+	}
+
+	// Validate command length to prevent abuse
+	if len(command) > MaxCommandLength {
+		return nil, fmt.Errorf("command too long (max %d characters)", MaxCommandLength)
 	}
 
 	// Validate required parameters from the registry metadata
@@ -1931,6 +2056,11 @@ func (s *Server) dispatchTask(c *gin.Context, task *db.Task, auditAction, detail
 
 // handleHealthCheck provides health/ready endpoints for monitoring
 func (s *Server) handleHealthCheck(c *gin.Context) {
+	sqlDB, err := s.db.DB()
+	if err != nil || sqlDB.Ping() != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "db_unavailable"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "ok",
 		"version": ServerVersion,

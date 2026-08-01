@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -13,8 +14,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Server.Port != 8000 {
 		t.Errorf("expected port 8000, got %d", cfg.Server.Port)
 	}
-	if cfg.Server.Host != "0.0.0.0" {
-		t.Errorf("expected host 0.0.0.0, got %s", cfg.Server.Host)
+	if cfg.Server.Host != "127.0.0.1" {
+		t.Errorf("expected host 127.0.0.1, got %s", cfg.Server.Host)
 	}
 	if cfg.Server.TLSEnabled != false {
 		t.Errorf("expected tls_enabled false, got %v", cfg.Server.TLSEnabled)
@@ -138,6 +139,8 @@ func TestIsWeakSecret(t *testing.T) {
 		{"short", true},
 		{"change_me", true},
 		{"forgec2_secret_key_change_this_in_production", true},
+		{"REDACTED_PLACEHOLDER_REPLACE_IN_PRODUCTION", true},
+		{"my_placeholder_key_goes_here", true},
 		{"secret", true},
 		{"password", true},
 		{"a]32chars-----------------------------------", false},
@@ -211,6 +214,9 @@ func TestValidate(t *testing.T) {
 		{"negative AI max_tool_rounds", func(c *Config) { c.AI.MaxToolRounds = -1 }, true, "max_tool_rounds"},
 		{"negative AI max_duplicate_tool_calls", func(c *Config) { c.AI.MaxDuplicateToolCalls = -1 }, true, "max_duplicate_tool_calls"},
 		{"zero AI limits (unlimited)", func(c *Config) { c.AI.MaxConversationTurns = 0; c.AI.MaxToolRounds = 0; c.AI.MaxDuplicateToolCalls = 0 }, false, ""},
+		{"backup_key too short", func(c *Config) { c.Crypto.BackupKey = "aabb" }, true, "backup_key"},
+		{"backup_key not hex", func(c *Config) { c.Crypto.BackupKey = strings.Repeat("zz", 32) }, true, "backup_key"},
+		{"backup_key valid 64 hex", func(c *Config) { c.Crypto.BackupKey = strings.Repeat("ab", 32) }, false, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

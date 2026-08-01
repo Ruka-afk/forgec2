@@ -4,6 +4,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -59,8 +60,12 @@ func (s *Server) handleRegenerateCert(c *gin.Context) {
 	keyPath = filepath.Join(filepath.Dir(certPath), "server.key")
 
 	// Remove existing files
-	os.Remove(certPath)
-	os.Remove(keyPath)
+	if err := os.Remove(certPath); err != nil && !os.IsNotExist(err) {
+		slog.Warn("Failed to remove existing cert", "path", certPath, "err", err)
+	}
+	if err := os.Remove(keyPath); err != nil && !os.IsNotExist(err) {
+		slog.Warn("Failed to remove existing key", "path", keyPath, "err", err)
+	}
 
 	if err := crypto.GenerateSelfSignedCert(certPath, keyPath); err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to regenerate certificate")

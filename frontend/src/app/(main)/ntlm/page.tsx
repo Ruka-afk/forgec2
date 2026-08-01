@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { DataState } from "@/components/ui/data-state";
 import { ArrowLeftRight, BarChart2, Database, Megaphone, Play, RefreshCw, Square, Zap } from "lucide-react";
 
 import type { Agent } from "@/types/agent";
@@ -30,14 +31,19 @@ export default function NtlmPage() {
   const [relayTarget, setRelayTarget] = useState("");
   const [relayFlags, setRelayFlags] = useState("");
   const [loading, setLoading] = useState(false);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("coerce");
   const [relayStatus, setRelayStatus] = useState<{ active: Record<string, unknown>[]; count: number; running: boolean }>({ active: [], count: 0, running: false });
 
   const loadAgents = useCallback(async () => {
+    setAgentsError(null);
     try {
       const data = await api.get(`/agents`);
       setAgents((data.agents || data || []) as Agent[]);
-    } catch { toast.error(t("ntlm.toast.load_agents_failed")); }
+    } catch {
+      setAgentsError(t("ntlm.toast.load_agents_failed"));
+      toast.error(t("ntlm.toast.load_agents_failed"));
+    }
   }, [t]);
 
   useEffect(() => { loadAgents(); }, [loadAgents]);
@@ -115,6 +121,13 @@ export default function NtlmPage() {
         <div className="font-semibold">{t("ntlm.experimental_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("ntlm.experimental_desc")}</div>
       </Card>
+
+      {agentsError && (
+        <div className="mb-4 px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/30 text-sm text-destructive flex items-center justify-between">
+          <span>{agentsError}</span>
+          <Button variant="ghost" size="sm" onClick={() => setAgentsError(null)} aria-label="Dismiss">&times;</Button>
+        </div>
+      )}
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>

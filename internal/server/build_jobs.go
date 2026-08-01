@@ -72,7 +72,9 @@ func (s *Server) cleanupBuildJobs() {
 			for id, job := range s.buildJobs {
 				if job.Status != "building" && job.CompletedAt.Before(cutoff) {
 					if job.Output != "" {
-						os.Remove(job.Output)
+						if err := os.Remove(job.Output); err != nil {
+							slog.Error("Build jobs: failed to remove output file", "job_id", id, "err", err)
+						}
 					}
 					delete(s.buildJobs, id)
 				}
@@ -271,8 +273,18 @@ func clampIntervalJitter(interval, jitter, beaconTime int) (int, int) {
 
 // parseArchitecture returns the normalized architecture string.
 func parseArchitecture(arch string) string {
-	if strings.TrimSpace(arch) == "" {
+	arch = strings.TrimSpace(arch)
+	if arch == "" {
 		return "amd64"
 	}
-	return strings.TrimSpace(arch)
+	// Normalize common aliases
+	switch arch {
+	case "x86_64":
+		return "amd64"
+	case "aarch64":
+		return "arm64"
+	case "i386", "x86":
+		return "386"
+	}
+	return arch
 }

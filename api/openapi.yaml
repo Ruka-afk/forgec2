@@ -1433,28 +1433,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
 
-  /users/{id}/kick:
-    post:
-      tags: [Users]
-      summary: Kick user
-      description: Kick a user (invalidate sessions)
-      operationId: kickUser
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: User kicked
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-
   /users/{id}/force-logout:
     post:
       tags: [Users]
@@ -1984,6 +1962,111 @@ paths:
                 $ref: '#/components/schemas/Task'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /tasks/{taskId}/approve:
+    post:
+      tags: [Tasks]
+      summary: Approve AI-generated task
+      description: Approve a task that is awaiting operator approval (status pending_approval). Only approved tasks are picked up by the agent.
+      operationId: approveTask
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Task approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tasks/{taskId}/reject:
+    post:
+      tags: [Tasks]
+      summary: Reject AI-generated task
+      description: Reject a task awaiting operator approval. The task is cancelled and never reaches the agent.
+      operationId: rejectTask
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Task rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tasks/batch-status:
+    post:
+      tags: [Tasks]
+      summary: Batch task status
+      description: Return the status of multiple tasks in a single request.
+      operationId: batchTaskStatus
+      security:
+        - SessionCookie: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [task_ids]
+              properties:
+                task_ids:
+                  type: string
+                  description: Comma-separated task IDs (e.g. "1,2,3")
+      responses:
+        '200':
+          description: Task statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    status:
+                      type: string
+                    result:
+                      type: string
+                    error:
+                      type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
   /api/automation/rules:
     get:
@@ -6412,6 +6495,46 @@ paths:
         '200':
           description: OK
 
+  /api/agents/{id}/screenshots:
+    get:
+      tags: [Agents]
+      summary: List agent screenshots
+      description: List screenshot filenames for an agent
+      operationId: listAgentScreenshots
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer }
+        - name: page_size
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Screenshot list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  screenshots:
+                    type: array
+                    items:
+                      type: string
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  page_size:
+                    type: integer
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /agents/{id}/rportfwd/status:
     get:
       tags: [Agents]
@@ -8355,6 +8478,147 @@ paths:
       responses:
         '200':
           description: Deleted
+  /api/api-keys:
+    get:
+      tags: [Settings]
+      summary: List API keys
+      description: List the current user's API keys
+      operationId: listApiKeys
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: API keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+                    prefix:
+                      type: string
+                    last_used:
+                      type: string
+                    expires_at:
+                      type: string
+                    active:
+                      type: boolean
+                    created_at:
+                      type: string
+    post:
+      tags: [Settings]
+      summary: Create API key
+      description: Create a new API key. The plaintext key is returned once and will not be shown again.
+      operationId: createApiKey
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                expires_at:
+                  type: string
+                  description: RFC3339 expiry timestamp
+      responses:
+        '200':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                      key:
+                        type: string
+                        description: Plaintext API key (shown once)
+                      prefix:
+                        type: string
+                      created_at:
+                        type: string
+                      expires_at:
+                        type: string
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/api-keys/{id}:
+    delete:
+      tags: [Settings]
+      summary: Revoke API key
+      operationId: revokeApiKey
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Revoked
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/api-keys/{id}/rotate:
+    post:
+      tags: [Settings]
+      summary: Rotate API key
+      description: Deactivate the current key and issue a new one. The new plaintext key is returned once.
+      operationId: rotateApiKey
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                      key:
+                        type: string
+                      prefix:
+                        type: string
+                      created_at:
+                        type: string
+                      expires_at:
+                        type: string
+                  message:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
   /notifications:
     get:
       tags: [Monitor]

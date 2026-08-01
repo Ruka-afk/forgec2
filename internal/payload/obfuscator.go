@@ -336,26 +336,10 @@ func FormatEvasionBuildNote(payload string) string {
 
 // GenerateEvasionReport creates an evasion analysis report
 func (pg *PayloadGenerator) GenerateEvasionReport(payload string) *EvasionReport {
-	techniques := []string{
-		"Variable name randomization",
-		"String encryption (XOR + Base64)",
-		"Control flow flattening",
-		"Opaque predicate insertion",
-		"Junk code insertion",
-	}
-
-	recommendations := []string{
-		"Use domain fronting for C2 communication",
-		"Implement process hollowing for injection",
-		"Add AMSI bypass for PowerShell payloads",
-		"Use indirect syscalls for NT APIs",
-		"Implement API hashing for imports",
-	}
-
 	return &EvasionReport{
-		Techniques:      techniques,
-		Obfuscation:     "High",
-		AVDetection:     "Estimated < 30% (test environment)",
-		Recommendations: recommendations,
+		Techniques:      []string{"Real-time analysis not implemented"},
+		Obfuscation:     "Unknown",
+		AVDetection:     "Not analyzed (real analysis not implemented)",
+		Recommendations: []string{"Run external scanner for actual evasion analysis"},
 	}
 }

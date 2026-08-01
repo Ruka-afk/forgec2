@@ -297,8 +297,8 @@ export default function OpsecPage() {
               <p className="text-xs text-muted-foreground mb-2">{testResult.messages || t("opsec.no_rule")}</p>
               {testResult.results && testResult.results.length > 0 && (
                 <div className="space-y-1">
-                  {testResult.results.map((r, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs">
+                  {testResult.results.map((r) => (
+                    <div key={r.rule_name} className="flex items-center gap-2 text-xs">
                       <span className={cn("w-2 h-2 rounded-full", r.allowed ? "bg-emerald-500" : "bg-red-500")}></span>
                       <code className="text-muted-foreground">{r.rule_name}</code>
                       <span className="opacity-60">- {r.message}</span>

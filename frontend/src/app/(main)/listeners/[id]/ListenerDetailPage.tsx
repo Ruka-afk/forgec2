@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Plug } from "lucide-react";
+import { Plug } from "lucide-react";
 
 interface ListenerDetail {
   ID?: string;
@@ -97,9 +97,6 @@ export default function ListenerDetailPage() {
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <div className="flex items-center gap-x-4 mb-6">
-        <Link href="/listeners" className="text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-4 h-4" />
-        </Link>
         <div>
           <PageHeader title={name} subtitle={`${scheme}://${host}:${port}`} />
         </div>

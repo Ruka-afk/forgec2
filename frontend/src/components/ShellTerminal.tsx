@@ -48,10 +48,12 @@ export default function ShellTerminal({
 
   const [promptChar] = useState(() => PROMPT_CHARS[Math.floor(Math.random() * PROMPT_CHARS.length)]);
   const promptRef = useRef(`\x1b[94m${promptChar}\x1b[0m `);
+  const plainPromptRef = useRef(`${promptChar} `);
   const execRef = useRef<(cmd: string) => Promise<void>>(async () => {});
   const writePromptRef = useRef<() => void>(() => {});
   const lastCommandRef = useRef<string>("");
   const abortRef = useRef<AbortController | null>(null);
+  const termCleanupRef = useRef<(() => void)>(() => {});
   const [isDragging, setIsDragging] = useState(false);
 
   const writeln = useCallback(
@@ -170,8 +172,8 @@ export default function ShellTerminal({
         if (!t) return;
         if (data === "\r") {
           const cmd = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString().trim() || "";
-          if (cmd.startsWith(promptRef.current.trim())) {
-            const trimmed = cmd.slice(promptRef.current.trim().length).trim();
+          if (cmd.startsWith(plainPromptRef.current.trim())) {
+            const trimmed = cmd.slice(plainPromptRef.current.trim().length).trim();
             if (trimmed) {
               t.writeln("");
               saveCommandHistory(trimmed);
@@ -191,7 +193,7 @@ export default function ShellTerminal({
 
         if (data === "\u007f") {
           const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
-          const promptLen = promptRef.current.trim().length;
+          const promptLen = plainPromptRef.current.length;
           if (line.length > promptLen) {
             t.write("\b \b");
           }
@@ -203,7 +205,7 @@ export default function ShellTerminal({
             histIdxRef.current--;
             const cmd = historyRef.current[histIdxRef.current];
             const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
-            const promptLen = promptRef.current.trim().length;
+            const promptLen = plainPromptRef.current.length;
             for (let i = line.length; i > promptLen; i--) t.write("\b \b");
             t.write(cmd);
           }
@@ -215,13 +217,13 @@ export default function ShellTerminal({
             histIdxRef.current++;
             const cmd = historyRef.current[histIdxRef.current];
             const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
-            const promptLen = promptRef.current.trim().length;
+            const promptLen = plainPromptRef.current.length;
             for (let i = line.length; i > promptLen; i--) t.write("\b \b");
             t.write(cmd);
           } else {
             histIdxRef.current = historyRef.current.length;
             const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
-            const promptLen = promptRef.current.trim().length;
+            const promptLen = plainPromptRef.current.length;
             for (let i = line.length; i > promptLen; i--) t.write("\b \b");
           }
           return;
@@ -236,7 +238,7 @@ export default function ShellTerminal({
         if (data === "\x09") {
           const line = t.buffer.active.getLine(t.buffer.active.cursorY);
           if (!line) return;
-          const promptLen = promptRef.current.trim().length;
+          const promptLen = plainPromptRef.current.length;
           const currentInput = line.translateToString().substring(promptLen).trim();
           const matches = getCompletions(currentInput, osType || "windows");
 
@@ -266,11 +268,9 @@ export default function ShellTerminal({
       const ro = new ResizeObserver(() => fit?.fit());
       if (containerRef.current) ro.observe(containerRef.current);
 
-      return () => {
+      termCleanupRef.current = () => {
         ro.disconnect();
         term?.dispose();
-        termRef.current = null;
-        fitRef.current = null;
       };
     };
 
@@ -278,7 +278,7 @@ export default function ShellTerminal({
 
     return () => {
       disposed = true;
-      term?.dispose();
+      termCleanupRef.current();
       termRef.current = null;
       fitRef.current = null;
     };

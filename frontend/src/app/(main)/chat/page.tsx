@@ -102,9 +102,10 @@ export default function ChatPage() {
         <div className="w-[200px] shrink-0 bg-card p-3 border-r border-border overflow-y-auto">
           <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2 m-0">{t("chat.channels")}</h4>
           {channels.map(c => (
-            <div key={c.channel}
+            <div key={c.channel} role="button" tabIndex={0}
               className={`flex justify-between px-2.5 py-2 rounded-lg text-xs cursor-pointer transition-colors ${c.channel === currentChannel ? "bg-primary text-primary-foreground" : "hover:bg-secondary text-muted-foreground"}`}
-              onClick={() => setCurrentChannel(c.channel)}>
+              onClick={() => setCurrentChannel(c.channel)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrentChannel(c.channel); } }}>
               <span># {c.channel}</span>
               <span className="text-(--font-size-xs-sm) text-muted-foreground">{c.message_count}</span>
             </div>

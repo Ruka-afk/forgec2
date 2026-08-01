@@ -26,8 +26,9 @@ function PanelHeader({ bg, icon, title, subtitle }: { bg: string; icon: string; 
 
 function ResultDisplay({ result }: { result: ReactNode }) {
   if (!result) return null;
+  const isError = typeof result === "string" && (result.startsWith("Error") || result.startsWith("error") || result.startsWith("ERROR"));
   return (
-    <Alert variant="destructive" className="mt-3">
+    <Alert variant={isError ? "destructive" : "default"} className="mt-3">
       <AlertDescription>
         <pre className="whitespace-pre-wrap font-mono">{result}</pre>
       </AlertDescription>

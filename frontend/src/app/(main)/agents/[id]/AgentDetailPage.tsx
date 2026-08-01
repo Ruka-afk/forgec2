@@ -303,6 +303,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     const KONAMI = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
     let buf: string[] = [];
     let timer: ReturnType<typeof setTimeout>;
+    const partyTimers: ReturnType<typeof setTimeout>[] = [];
 
     function handler(e: KeyboardEvent) {
       buf.push(e.key);
@@ -316,14 +317,18 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         const cx = window.innerWidth / 2;
         const cy = window.innerHeight / 2;
         for (let i = 0; i < 5; i++) {
-          setTimeout(() => partyConfetti(cx + Math.random() * 200 - 100, cy + Math.random() * 200 - 100, 25), i * 200);
+          partyTimers.push(setTimeout(() => partyConfetti(cx + Math.random() * 200 - 100, cy + Math.random() * 200 - 100, 25), i * 200));
         }
-        setTimeout(() => setPartyMode(false), 10000);
+        partyTimers.push(setTimeout(() => setPartyMode(false), 10000));
       }
     }
 
     window.addEventListener("keydown", handler);
-    return () => { window.removeEventListener("keydown", handler); clearTimeout(timer); };
+    return () => {
+      window.removeEventListener("keydown", handler);
+      clearTimeout(timer);
+      partyTimers.forEach(clearTimeout);
+    };
   }, [partyConfetti, t]);
 
   const agent = data?.agent || ({} as AgentDetail);
@@ -398,14 +403,14 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
 
    const quickAction = async (action: string, label: string) => {
      setActionLoading(action);
-     try { await api.postJson(`/agents/${id}/command`, { type: action, command: "" }); toast.success(t("agents.detail_action_sent").replace("{label}", label)); }
+      try {       await api.postJson(`/agents/${id}/command`, { type: action, command: "" }); toast.success(t("agents.detail_action_sent").replace("{label}", label)); }
      catch (err) { console.error("quickAction failed:", err); toast.error(t("agents.detail_action_failed").replace("{label}", label)); } finally { setActionLoading(null); }
    };
 
    const forceKeyRotation = async () => {
      setActionLoading("key_rotate");
      try {
-       await api.postJson("/tasks", { agent_id: id, type: "key_rotate" });
+        await api.postJson(`/api/v1/tasks`, { agent_id: id, type: "key_rotate" });
        toast.success(t("agents.force_key_rotation_sent"));
      } catch (err) { console.error("forceKeyRotation failed:", err); toast.error(t("agents.force_key_rotation_failed")); }
      setActionLoading(null);

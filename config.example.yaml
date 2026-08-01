@@ -18,6 +18,7 @@ server:
   enable_metrics: false
   socks_listen_host: "127.0.0.1"
   allowed_origins: []
+  # trusted_proxies: ["127.0.0.1", "10.0.0.0/8"]  # reverse proxy IPs/CIDRs for X-Forwarded-For (empty = use direct client IP)
   cookie_domain: ""
   beacon_key: ""
   tcp_enabled: false
@@ -51,6 +52,8 @@ password_policy:
 
 crypto:
   key: ""
+  loot_key: ""
+  backup_key: ""
 
 malleable:
   enabled: false

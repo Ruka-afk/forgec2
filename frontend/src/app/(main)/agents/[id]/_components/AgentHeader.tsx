@@ -68,10 +68,14 @@ export default function AgentHeader({
   const agentEmoji = getAgentEmoji(status, lastSeenMinutes);
   const agentEmojiLabel = getAgentEmojiLabel(status, lastSeenMinutes);
 
-  const handleStatusClick = useCallback((e: React.MouseEvent) => {
-    const rect = e.currentTarget.getBoundingClientRect();
+  const triggerConfetti = useCallback((el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
     confetti(rect.left + rect.width / 2, rect.top + rect.height / 2, 35);
   }, [confetti]);
+
+  const handleStatusClick = useCallback((e: React.MouseEvent) => {
+    triggerConfetti(e.currentTarget as HTMLElement);
+  }, [triggerConfetti]);
 
   const quickActions = [
     { action: "screenshot", label: t("agents.header_screenshot"), icon: <Camera className="w-5 h-5" /> },
@@ -87,21 +91,6 @@ export default function AgentHeader({
 
   return (
     <>
-      <div className="flex items-center gap-2 mb-4">
-        {onClose ? (
-          <button type="button" onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="w-4 h-4" /> {t("agents.header_agents")}
-          </button>
-        ) : (
-          <Link href="/agents" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="w-4 h-4" /> {t("agents.header_agents")}
-          </Link>
-        )}
-        <ChevronRight className="w-4 h-4" />
-        <span className="text-sm text-foreground font-medium">{hostname}</span>
-        {agentAge && <span className="text-(--font-size-micro-sm) text-muted-foreground/70 ml-1">(alive {agentAge})</span>}
-      </div>
-
       <Card className="mb-4 overflow-hidden border-border/70 bg-card/90 shadow-sm">
         <div className="h-1 w-full bg-gradient-to-r from-primary via-cyan-500 to-emerald-500" />
         <div className="p-4 sm:p-5">
@@ -109,7 +98,10 @@ export default function AgentHeader({
             <div className="flex min-w-0 flex-1 items-start gap-4">
               <div
                 className="w-14 h-14 rounded-2xl bg-primary/10 ring-1 ring-primary/10 flex items-center justify-center shrink-0 cursor-pointer hover:scale-105 transition-transform select-none shadow-sm"
-                onDoubleClick={() => setShowEasterEgg(true)}
+                role="button"
+                tabIndex={0}
+                onClick={() => setShowEasterEgg(true)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowEasterEgg(true); } }}
                 title={t("agents.header_double_click")}
               >
                 {getOSIcon(os)}
@@ -118,7 +110,7 @@ export default function AgentHeader({
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-xl font-bold text-foreground truncate">{hostname}</h1>
                   <span className="text-lg select-none cursor-default" title={agentEmojiLabel}>{agentEmoji}</span>
-                  <span className="cursor-pointer" onClick={handleStatusClick} title={t("agents.header_click_confetti")}>
+                  <span role="button" tabIndex={0} className="cursor-pointer" onClick={handleStatusClick} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); triggerConfetti(e.currentTarget as HTMLElement); } }} title={t("agents.header_click_confetti")}>
                     <StatusBadge status={status} pulse={status === "online"} />
                   </span>
                   {integrity && (

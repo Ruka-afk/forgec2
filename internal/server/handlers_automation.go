@@ -18,7 +18,9 @@ import (
 func (s *Server) handleAutomationPage(c *gin.Context) {
 	rules := s.loadAutomationRules()
 	var webhooks []db.WebhookConfig
-	s.db.Limit(500).Find(&webhooks)
+	if err := s.db.Limit(500).Find(&webhooks).Error; err != nil {
+		slog.Error("Failed to list webhooks for automation page", "err", err)
+	}
 	s.renderPageOrJSON(c, gin.H{
 		"Title":     "Automation",
 		"ActiveNav": "automation",
@@ -30,9 +32,13 @@ func (s *Server) handleAutomationPage(c *gin.Context) {
 func (s *Server) handleListAutomationRules(c *gin.Context) {
 	p := parsePagination(c, 50, 200)
 	var total int64
-	s.db.Model(&db.AutomationRule{}).Count(&total)
+	if err := s.db.Model(&db.AutomationRule{}).Count(&total).Error; err != nil {
+		slog.Error("Failed to count automation rules", "err", err)
+	}
 	var dbRules []db.AutomationRule
-	s.db.Offset(p.Offset).Limit(p.PageSize).Find(&dbRules)
+	if err := s.db.Offset(p.Offset).Limit(p.PageSize).Find(&dbRules).Error; err != nil {
+		slog.Error("Failed to list automation rules", "err", err)
+	}
 	var rules []AutomationRule
 	for _, dr := range dbRules {
 		var conditions []RuleCondition
@@ -118,7 +124,9 @@ func (s *Server) handleToggleAutomationRule(c *gin.Context) {
 
 func (s *Server) handleListWebhooks(c *gin.Context) {
 	var webhooks []db.WebhookConfig
-	s.db.Limit(500).Find(&webhooks)
+	if err := s.db.Limit(500).Find(&webhooks).Error; err != nil {
+		slog.Error("Failed to list webhooks", "err", err)
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": webhooks})
 }
 
@@ -200,7 +208,9 @@ func (s *Server) handlePluginList(c *gin.Context) {
 		query = query.Where("type = ?", pluginType)
 	}
 
-	query.Limit(200).Find(&plugins)
+	if err := query.Limit(200).Find(&plugins).Error; err != nil {
+		slog.Error("Failed to list marketplace plugins", "err", err)
+	}
 
 	s.marketplace.BatchEnrichPlugins(plugins)
 
@@ -455,6 +465,10 @@ func (s *Server) handlePluginImport(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "no file provided")
 		return
 	}
+	if file.Size > MaxUploadSize {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("file too large (max %d bytes)", MaxUploadSize))
+		return
+	}
 
 	f, err := file.Open()
 	if err != nil {
@@ -485,7 +499,9 @@ func (s *Server) handlePluginCheckUpdates(c *gin.Context) {
 
 func (s *Server) handlePluginUpdateSummary(c *gin.Context) {
 	var plugins []db.Plugin
-	s.db.Limit(200).Find(&plugins)
+	if err := s.db.Limit(200).Find(&plugins).Error; err != nil {
+		slog.Error("Failed to list plugins for update summary", "err", err)
+	}
 
 	var availableCount int
 	var lastChecked time.Time

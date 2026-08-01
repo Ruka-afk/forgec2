@@ -148,8 +148,8 @@ export default function WorkflowsPage() {
               </div>
               {w.description && <p className="text-xs text-muted-foreground mt-2 mb-0">{w.description}</p>}
               <div className="flex flex-col gap-1 mt-2">
-                {w.steps.map((s, i) => (
-                  <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-muted text-xs">
+                {w.steps.map((s) => (
+                  <div key={s.step_order} className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-muted text-xs">
                     <span className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center text-(--font-size-micro-sm) font-semibold">{s.step_order}</span>
                     <span className="font-semibold text-indigo-600 dark:text-indigo-400 min-w-[80px]">{s.task_type}</span>
                     <span className="flex-1 font-mono text-foreground truncate">{s.command?.substring(0, 60)}</span>

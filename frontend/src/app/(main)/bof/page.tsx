@@ -7,15 +7,17 @@ import { ConfirmModal, PageHeader, Spinner } from "@/components/UI";
 import { useBOFData } from "./_components/useBOFData";
 import { quickBOFLibrary } from "./_components/types";
 import type { QuickBOF } from "./_components/types";
-import BOFListTab from "./_components/BOFListTab";
-import BOFRepoTab from "./_components/BOFRepoTab";
-import BOFLibraryTab from "./_components/BOFLibraryTab";
-import BOFExecutionsTab from "./_components/BOFExecutionsTab";
+import dynamic from "next/dynamic";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { BookOpen, Box, Check, Layers, PieChart, Terminal, Zap } from "lucide-react";
+
+const BOFListTab = dynamic(() => import("./_components/BOFListTab"), { ssr: false });
+const BOFRepoTab = dynamic(() => import("./_components/BOFRepoTab"), { ssr: false });
+const BOFLibraryTab = dynamic(() => import("./_components/BOFLibraryTab"), { ssr: false });
+const BOFExecutionsTab = dynamic(() => import("./_components/BOFExecutionsTab"), { ssr: false });
 
 export default function BOFPage() {
   const { t } = useI18n();

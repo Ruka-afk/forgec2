@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -29,7 +30,9 @@ func parseIntegrationConfig(headers string) integrationConfig {
 	if headers == "" {
 		return cfg
 	}
-	_ = json.Unmarshal([]byte(headers), &cfg)
+	if err := json.Unmarshal([]byte(headers), &cfg); err != nil {
+		slog.Warn("Failed to parse integration config", "error", err)
+	}
 	return cfg
 }
 
@@ -74,7 +77,9 @@ func integrationToMap(wh db.WebhookConfig) map[string]interface{} {
 // handleIntegrationsList returns configured integrations from DB plus capability catalog.
 func (s *Server) handleIntegrationsList(c *gin.Context) {
 	var webhooks []db.WebhookConfig
-	s.db.Order("updated_at desc").Limit(200).Find(&webhooks)
+	if err := s.db.Order("updated_at desc").Limit(200).Find(&webhooks).Error; err != nil {
+		slog.Error("Failed to list webhooks for integrations", "err", err)
+	}
 
 	integrations := make([]map[string]interface{}, 0, len(webhooks)+1)
 	for _, wh := range webhooks {

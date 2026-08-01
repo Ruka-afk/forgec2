@@ -540,7 +540,7 @@ export default function ProfilesPage() {
                           </div>
                           <div className="space-y-2">
                             {Object.entries(editing.headers).map(([key, value], i) => (
-                              <div key={i} className="flex gap-2 items-start">
+                              <div key={key} className="flex gap-2 items-start">
                                 <Input aria-label="Header name" name="header-name-15"
                                   type="text" placeholder="Header name"
                                   value={key} onChange={(e) => updateHeader(i, e.target.value, value)}

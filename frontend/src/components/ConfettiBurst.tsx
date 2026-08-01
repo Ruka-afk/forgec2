@@ -1,10 +1,12 @@
 "use client"
 
-import { useCallback } from "react"
+import { useCallback, useEffect, useRef } from "react"
 
 const COLORS = ["#ff6b6b", "#4ecdc4", "#45b7d1", "#f9ca24", "#6c5ce7", "#fd79a8", "#00cec9", "#e17055"]
 
 export function useConfetti() {
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
   const burst = useCallback((x: number, y: number, count = 40) => {
     const container = document.createElement("div")
     container.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:9999"
@@ -35,7 +37,13 @@ export function useConfetti() {
       })
     }
 
-    setTimeout(() => container.remove(), 2000)
+    const timer = setTimeout(() => container.remove(), 2000)
+    timersRef.current.push(timer)
+  }, [])
+
+  useEffect(() => {
+    const timers = timersRef.current
+    return () => { timers.forEach(clearTimeout); }
   }, [])
 
   return burst

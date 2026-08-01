@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -11,7 +12,9 @@ import (
 func (s *Server) handleCloudResults(c *gin.Context) {
 	agentID := c.Param("agentId")
 	var creds []db.CloudCred
-	s.db.Where("agent_id = ?", agentID).Order("created_at desc").Limit(500).Find(&creds)
+	if err := s.db.Where("agent_id = ?", agentID).Order("created_at desc").Limit(500).Find(&creds).Error; err != nil {
+		slog.Error("Failed to query cloud creds", "err", err)
+	}
 	respond(c, gin.H{"results": creds})
 }
 

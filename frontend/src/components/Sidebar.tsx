@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useWebSocket } from "@/lib/useWebSocket";
 import { useEffect, useState, useCallback, memo } from "react";
+import { useShallow } from "zustand/shallow";
 import { useI18n } from "@/lib/i18n";
 import { useAppStore } from "@/lib/store";
 import { api } from "@/lib/api";
@@ -171,7 +172,7 @@ const SidebarLogo = memo(function SidebarLogo({
   collapseLabel: string;
 }) {
   return (
-    <div className={`border-b border-border flex items-center ${collapsed ? 'justify-center px-0 py-3' : 'px-4 py-3'}`}>
+    <div className={`border-b border-border flex items-center ${collapsed ? 'justify-center px-0 py-2' : 'px-3 py-2.5'}`}>
       <Button variant="ghost" onClick={onToggle}
         className={`flex items-center gap-x-2.5 hover:opacity-80 transition-all duration-200 ${collapsed ? 'justify-center w-full' : ''}`}
         aria-label={collapsed ? expandLabel : collapseLabel}
@@ -181,8 +182,8 @@ const SidebarLogo = memo(function SidebarLogo({
         </div>
         {!collapsed && (
           <div className="text-left">
-            <span className="font-bold text-base tracking-tight text-foreground">Forge</span>
-            <span className="font-bold text-base tracking-tight text-primary">C2</span>
+            <span className="font-bold text-xs tracking-tight text-foreground">Forge</span>
+            <span className="font-bold text-xs tracking-tight text-primary">C2</span>
           </div>
         )}
       </Button>
@@ -217,7 +218,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
     : navSections;
 
   return (
-    <nav className={collapsed ? 'flex flex-col items-center gap-1' : 'space-y-0.5 text-(--font-size-body-sm)'}>
+    <nav className={collapsed ? 'flex flex-col items-center gap-1' : 'space-y-0 text-(--font-size-body-sm)'}>
       {filteredSections.map((section) => (
         <div key={section.titleKey} className={collapsed ? 'w-full' : ''}>
           {!collapsed && (
@@ -225,10 +226,10 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
               variant="ghost"
               size="sm"
               onClick={() => toggleSection(section.titleKey)}
-              className="w-full flex items-center gap-x-1 px-3 pt-2 pb-0.5 cursor-pointer select-none transition-colors hover:text-foreground justify-start"
+              className="w-full flex items-center gap-x-1 px-2 pt-1 pb-0.5 cursor-pointer select-none transition-colors hover:text-foreground justify-start"
             >
               <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform duration-200 ${(searching || sections[section.titleKey]) ? '' : '-rotate-90'}`} />
-              <span className="text-(--font-size-micro-sm) uppercase tracking-(--tracking-label) text-muted-foreground/60 font-semibold">
+              <span className="text-(--font-size-micro) uppercase tracking-(--tracking-label) text-muted-foreground/60 font-semibold">
                 {t("section." + section.titleKey)}
               </span>
               {section.titleKey === "lab" && (
@@ -245,7 +246,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
                 key={item.href}
                 href={item.href}
                 className={`flex items-center gap-x-2.5 rounded-lg transition-all duration-150 hover:translate-x-0.5 ${collapsed ? 'group relative' : ''}
-                  ${collapsed ? 'justify-center px-0 py-2 mx-auto w-10 h-10' : 'px-3 py-1.5'}
+                  ${collapsed ? 'justify-center px-0 py-2 mx-auto w-10 h-10' : 'px-2 py-1'}
                   ${isActive(item.href)
                     ? 'bg-primary/10 text-primary font-medium border-l-2 border-primary shadow-sm'
                     : 'text-muted-foreground hover:bg-secondary/80 hover:text-foreground'}`}
@@ -261,7 +262,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
                 </span>
                 {!collapsed && (
                   <>
-                    <span className="truncate flex-1 text-(--font-size-body-sm)">{t(item.labelKey)}</span>
+                    <span className="truncate flex-1 text-(--font-size-micro-sm)">{t(item.labelKey)}</span>
                     {item.badge === "agents" && stats != null && (
                       <Badge variant="secondary" className="px-1.5 py-px text-(--font-size-micro) leading-none rounded bg-primary/20 text-primary font-mono">
                         {stats.online_agents ?? 0}
@@ -298,7 +299,7 @@ const SidebarFooter = memo(function SidebarFooter({ collapsed, connected, reconn
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
   return (
-    <div className={`border-t border-border ${collapsed ? 'px-2 py-3' : 'px-4 py-3'} space-y-2`}>
+    <div className={`border-t border-border ${collapsed ? 'px-2 py-2' : 'px-3 py-2'} space-y-1.5`}>
       {!collapsed && connected && (
         <div className="space-y-1">
           <div className="text-(--font-size-micro-sm) uppercase tracking-wider text-muted-foreground/70 font-semibold">{t("sidebar.online_operators")}</div>
@@ -340,7 +341,7 @@ export default function Sidebar() {
   const mobileMenuOpen = useAppStore((s) => s.mobileMenuOpen);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const setMobileMenuOpen = useAppStore((s) => s.setMobileMenuOpen);
-  const onlineUsers = useAppStore((s) => s.onlineUsers);
+  const onlineUsers = useAppStore(useShallow((s) => s.onlineUsers));
   const setOnlineUsers = useAppStore((s) => s.setOnlineUsers);
   const currentUsername = useAppStore((s) => s.currentUsername);
   const setCurrentUsername = useAppStore((s) => s.setCurrentUsername);
@@ -399,18 +400,18 @@ export default function Sidebar() {
         collapseLabel={t("a11y.collapse_sidebar")}
       />
       {!collapsed && (
-        <div className="px-3 pt-2">
+        <div className="px-2 pt-2">
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t("common.search") + "..."}
             aria-label={t("common.search")}
-            className="w-full h-9 px-3 text-[13px] bg-secondary/50 border border-border rounded-xl placeholder:text-muted-foreground/70 focus:bg-card focus:border-border transition-colors"
+            className="w-full h-8 px-2.5 text-[11px] bg-secondary/50 border border-border rounded-xl placeholder:text-muted-foreground/70 focus:bg-card focus:border-border transition-colors"
           />
         </div>
       )}
-      <div className={`flex-1 overflow-hidden ${collapsed ? 'p-2' : 'p-3'}`}>
+      <div className={`flex-1 overflow-hidden ${collapsed ? 'p-1' : 'p-2'}`}>
         <ScrollArea className="h-full">
           <SidebarNav
             collapsed={collapsed}
@@ -439,7 +440,7 @@ export default function Sidebar() {
     return (
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
         <SheetContent side="left" showCloseButton={false}
-          className="w-56 p-0 bg-sidebar border-r border-border">
+          className="w-48 p-0 bg-sidebar border-r border-border">
           <SheetTitle className="sr-only">{t("a11y.navigation")}</SheetTitle>
           <div className="flex flex-col h-full">
             {navContent}
@@ -453,7 +454,7 @@ export default function Sidebar() {
   return (
     <aside className={`flex flex-col overflow-hidden transition-all duration-200 ease-in-out h-screen
       bg-sidebar border-r border-border fixed left-0 top-0 z-40
-      ${collapsed ? 'w-16' : 'w-56'}`}
+      ${collapsed ? 'w-16' : 'w-48'}`}
     >
       {navContent}
     </aside>

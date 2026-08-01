@@ -15,8 +15,8 @@ const EN_FILE = path.join(I18N_DIR, "en.ts");
 const ZH_FILE = path.join(I18N_DIR, "zh.ts");
 
 const KEY_RE = /"([A-Za-z_][A-Za-z0-9_]*\.[A-Za-z0-9_]+)":/g;
-const USE_DOUBLE = /t\(\s*"([A-Za-z_][A-Za-z0-9_]*\.[A-Za-z0-9_]+)"\s*\)/g;
-const USE_TICK = /t\(\s*`([A-Za-z_][A-Za-z0-9_]*\.[A-Za-z0-9_]+)`\s*\)/g;
+const USE_DOUBLE = /t\(\s*"([A-Za-z_][A-Za-z0-9_]*\.[A-Za-z0-9_]+)"\s*[),]/g;
+const USE_TICK = /t\(\s*`([A-Za-z_][A-Za-z0-9_]*\.[A-Za-z0-9_]+)`\s*[),]/g;
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

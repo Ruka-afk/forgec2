@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
@@ -42,7 +43,7 @@ func (sc *SlackExternalC2) Start() error {
 	channelID := "extc2-slack-" + sc.channelID
 	slog.Info("Slack External C2 starting", "channel_id", sc.channelID)
 
-	sc.client = slack.New(sc.botToken)
+	sc.client = slack.New(sc.botToken, slack.OptionHTTPClient(&http.Client{Timeout: 10 * time.Second}))
 
 	sc.server.extC2ChannelsMu.Lock()
 	sc.server.extC2Channels[channelID] = &extC2WSChannel{
@@ -77,6 +78,7 @@ func (sc *SlackExternalC2) runLoop(channelID string) {
 }
 
 func (sc *SlackExternalC2) connectAndRun(channelID string) {
+	defer sc.cleanupChannel(channelID)
 	sc.rtm = sc.client.NewRTM()
 	go sc.rtm.ManageConnection()
 
@@ -164,6 +166,16 @@ func (sc *SlackExternalC2) processMessage(text, channelID string) {
 	if extMsg.Type == "result" {
 		sc.server.processExternalC2Result(extMsg.AgentID, extMsg.TaskID, extMsg.Result)
 	}
+}
+
+func (sc *SlackExternalC2) cleanupChannel(channelID string) {
+	sc.server.extC2TaskMu.Lock()
+	if q, ok := sc.server.extC2TaskQueue[channelID]; ok && len(q) > 0 {
+		slog.Warn("Slack ExtC2 channel closing with pending tasks", "channel", channelID, "count", len(q))
+	}
+	delete(sc.server.extC2TaskQueue, channelID)
+	delete(sc.server.extC2Notify, channelID)
+	sc.server.extC2TaskMu.Unlock()
 }
 
 func (sc *SlackExternalC2) Stop() {

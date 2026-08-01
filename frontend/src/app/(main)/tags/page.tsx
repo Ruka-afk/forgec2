@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { EmptyState, PageHeader, ConfirmModal } from "@/components/UI";
+import { DataState } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pencil, Plus, Tag, Trash2, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { toast } from "sonner";
 
 interface Tag {
   id: string;
@@ -36,6 +38,7 @@ export default function TagsPage() {
   const { t } = useI18n();
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<{ mode: "create" | "edit"; tag?: Tag } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<Tag | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
@@ -44,13 +47,18 @@ export default function TagsPage() {
 
   const loadTags = useCallback(() => {
     setLoading(true);
+    setError(null);
     fetchTags()
       .then((data) => {
         setTags((data.tags || []) as Tag[]);
       })
-      .catch(() => setTags([]))
+      .catch(() => {
+        setTags([]);
+        setError(t("tags.toast.load_failed"));
+        toast.error(t("tags.toast.load_failed"));
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   useEffect(() => { loadTags(); }, [loadTags]);
 
@@ -130,74 +138,69 @@ export default function TagsPage() {
 
       
 
-      {/* Tags Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {loading && Array.from({ length: 6 }).map((_, i) => (
-          <Card key={"skel-" + i} className="p-4 sm:p-5">
-            <div className="flex items-center gap-3 mb-3">
-              <Skeleton className="w-8 h-8 rounded-full" />
-              <Skeleton className="h-5 w-24" />
-            </div>
-            <Skeleton className="h-4 w-16" />
-          </Card>
-        ))}
-        {!loading && tags.map((tag) => (
-          <Card key={tag.id} className="p-4 sm:p-5 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30 transition-all cursor-pointer">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm"
-                  style={{ backgroundColor: tag.color }}
-                >
-                  <Tag className="w-4 h-4" />
+      <DataState loading={loading} error={error} onRetry={loadTags} empty={!loading && !error && tags.length === 0} emptyIcon={Tag} emptyTitle={t("tags.empty")} emptyMessage={t("tags.empty_desc")} emptyAction={<Button onClick={openCreate} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl min-w-[2.75rem] min-h-[2.75rem]"><Plus className="w-4 h-4" /><span>{t("tags.create")}</span></Button>} loadingSkeleton={
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={"skel-" + i} className="p-4 sm:p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <Skeleton className="w-8 h-8 rounded-full" />
+                <Skeleton className="h-5 w-24" />
+              </div>
+              <Skeleton className="h-4 w-16" />
+            </Card>
+          ))}
+        </div>
+      }>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {tags.map((tag) => (
+            <Card key={tag.id} className="p-4 sm:p-5 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30 transition-all cursor-pointer">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm"
+                    style={{ backgroundColor: tag.color }}
+                  >
+                    <Tag className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-sm text-foreground">{tag.name}</h3>
+                    <span className="text-xs text-muted-foreground">{tag.agent_count} agent{tag.agent_count !== 1 ? "s" : ""}</span>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-sm text-foreground">{tag.name}</h3>
-                  <span className="text-xs text-muted-foreground">{tag.agent_count} agent{tag.agent_count !== 1 ? "s" : ""}</span>
+                <div className="flex items-center gap-1">
+                  <Tooltip>
+                    <TooltipTrigger render={<Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEdit(tag)}
+                        className="w-8 h-8 text-muted-foreground hover:text-primary min-w-[2.75rem] min-h-[2.75rem]"
+                        aria-label="Edit tag"
+                      />}>
+                      <Pencil className="w-4 h-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>Edit</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger render={<Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setDeleteConfirm(tag)}
+                        className="w-8 h-8 text-muted-foreground hover:text-destructive min-w-[2.75rem] min-h-[2.75rem]"
+                        aria-label="Delete tag"
+                      />}>
+                      <Trash2 className="w-4 h-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>Delete</TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
-              <div className="flex items-center gap-1">
-                <Tooltip>
-                  <TooltipTrigger render={<Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openEdit(tag)}
-                      className="w-8 h-8 text-muted-foreground hover:text-primary min-w-[2.75rem] min-h-[2.75rem]"
-                      aria-label="Edit tag"
-                    />}>
-                    <Pencil className="w-4 h-4" />
-                  </TooltipTrigger>
-                  <TooltipContent>Edit</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger render={<Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setDeleteConfirm(tag)}
-                      className="w-8 h-8 text-muted-foreground hover:text-destructive min-w-[2.75rem] min-h-[2.75rem]"
-                      aria-label="Delete tag"
-                    />}>
-                    <Trash2 className="w-4 h-4" />
-                  </TooltipTrigger>
-                  <TooltipContent>Delete</TooltipContent>
-                </Tooltip>
+              <div className="text-xs text-muted-foreground">
+                <span>{t("tags.created")} {tag.created_at ? new Date(tag.created_at).toLocaleDateString() : "-"}</span>
               </div>
-            </div>
-            <div className="text-xs text-muted-foreground">
-              <span>{t("tags.created")} {tag.created_at ? new Date(tag.created_at).toLocaleDateString() : "-"}</span>
-            </div>
-          </Card>
-        ))}
-        {!loading && tags.length === 0 && (
-          <div className="col-span-full py-16 sm:py-20 text-center">
-            <EmptyState icon={Tag} title={t("tags.empty")} message={t("tags.empty_desc")} />
-            <Button onClick={openCreate} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl min-w-[2.75rem] min-h-[2.75rem]">
-              <Plus className="w-4 h-4" />
-              <span>{t("tags.create")}</span>
-            </Button>
-          </div>
-        )}
-      </div>
+            </Card>
+          ))}
+        </div>
+      </DataState>
 
       <Dialog open={!!modal} onOpenChange={() => setModal(null)}>
         <DialogContent>

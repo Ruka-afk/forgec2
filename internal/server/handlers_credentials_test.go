@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
@@ -15,6 +16,7 @@ import (
 func newCredentialsTestServer(t *testing.T) *Server {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
+	crypto.InitLootEncryption("test-secret-for-credentials-tests", "")
 	return &Server{db: newContractDB(t)}
 }
 

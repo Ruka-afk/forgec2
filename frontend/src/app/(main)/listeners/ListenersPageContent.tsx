@@ -80,7 +80,8 @@ export default function ListenersPageContent() {
     setLoading(false);
   }, [t]);
 
-  const handleCreate = async () => {
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!createForm.name || !createForm.host || !createForm.port) {
       toast.error(t("listeners.toast_name_host_port_required"));
       return;
@@ -132,7 +133,8 @@ export default function ListenersPageContent() {
     setShowEdit(true);
   };
 
-  const handleEditSave = async () => {
+  const handleEditSave = async (e: React.FormEvent) => {
+    e.preventDefault();
     const id = editingListener?.id || editingListener?.ID || "";
     if (!id || !editForm.name || !editForm.host || !editForm.port) {
       toast.error(t("listeners.toast_name_host_port_required"));
@@ -332,8 +334,8 @@ export default function ListenersPageContent() {
                     </TableCell>
                     <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4">
                       <div className="flex flex-wrap gap-1">
-                        {tagList.length > 0 ? tagList.map((tag, i) => (
-                          <Badge key={i} variant="secondary" className="text-(--font-size-micro-sm) font-medium">{tag}</Badge>
+                        {tagList.length > 0 ? tagList.map((tag) => (
+                          <Badge key={tag} variant="secondary" className="text-(--font-size-micro-sm) font-medium">{tag}</Badge>
                         )) : <span className="text-xs text-muted-foreground">-</span>}
                       </div>
                     </TableCell>
@@ -393,68 +395,70 @@ export default function ListenersPageContent() {
           <DialogHeader>
             <DialogTitle>{t("listeners.create_dialog_title")}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs mb-1">{t("listeners.field_name")}</Label>
-              <Input aria-label="my-listener" name="input-2" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                placeholder="my-listener" />
+          <form onSubmit={handleCreate}>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs mb-1" htmlFor="create-name">{t("listeners.field_name")}</Label>
+                <Input id="create-name" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                  placeholder="my-listener" />
+              </div>
+              <div>
+                <Label className="text-xs mb-1" htmlFor="create-type">{t("listeners.field_type")}</Label>
+                <Select value={createForm.type} onValueChange={(val) => handleTypeChange(typeof val === "string" ? val : "http")}>
+                  <SelectTrigger id="create-type" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="http">HTTP</SelectItem>
+                    <SelectItem value="https">HTTPS</SelectItem>
+                    <SelectItem value="tcp">TCP</SelectItem>
+                    <SelectItem value="dns">DNS</SelectItem>
+                    <SelectItem value="smb">SMB</SelectItem>
+                    <SelectItem value="icmp">ICMP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs mb-1" htmlFor="create-host">{t("listeners.field_host")}</Label>
+                <Input id="create-host" value={createForm.host} onChange={(e) => setCreateForm({ ...createForm, host: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs mb-1" htmlFor="create-port">{t("listeners.field_port")}</Label>
+                <Input id="create-port" type="number" min="1" max="65535" value={createForm.port} onChange={(e) => setCreateForm({ ...createForm, port: e.target.value })}
+                  placeholder="8443" />
+              </div>
+              <div>
+                <Label className="text-xs mb-1" htmlFor="create-tags">{t("listeners.field_tags")}</Label>
+                <Input id="create-tags" value={createForm.tags} onChange={(e) => setCreateForm({ ...createForm, tags: e.target.value })}
+                  placeholder="prod, internal, http" />
+              </div>
+              <div>
+                <Label className="text-xs mb-1" htmlFor="create-color">{t("listeners.field_color")}</Label>
+                <Select value={createForm.color} onValueChange={(val) => setCreateForm({ ...createForm, color: val ?? "" })}>
+                  <SelectTrigger id="create-color" className="w-full">
+                    <SelectValue placeholder={t("listeners.color_none")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">{t("listeners.color_none")}</SelectItem>
+                    <SelectItem value="red">Red</SelectItem>
+                    <SelectItem value="orange">Orange</SelectItem>
+                    <SelectItem value="yellow">Yellow</SelectItem>
+                    <SelectItem value="green">Green</SelectItem>
+                    <SelectItem value="blue">Blue</SelectItem>
+                    <SelectItem value="purple">Purple</SelectItem>
+                    <SelectItem value="pink">Pink</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <Label className="text-xs mb-1">{t("listeners.field_type")}</Label>
-              <Select value={createForm.type} onValueChange={(val) => handleTypeChange(typeof val === "string" ? val : "http")}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="http">HTTP</SelectItem>
-                  <SelectItem value="https">HTTPS</SelectItem>
-                  <SelectItem value="tcp">TCP</SelectItem>
-                  <SelectItem value="dns">DNS</SelectItem>
-                  <SelectItem value="smb">SMB</SelectItem>
-                  <SelectItem value="icmp">ICMP</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs mb-1">{t("listeners.field_host")}</Label>
-              <Input aria-label="Host" name="input-4" value={createForm.host} onChange={(e) => setCreateForm({ ...createForm, host: e.target.value })} />
-            </div>
-            <div>
-              <Label className="text-xs mb-1">{t("listeners.field_port")}</Label>
-              <Input aria-label="8443" name="input-5" type="number" min="1" max="65535" required value={createForm.port} onChange={(e) => setCreateForm({ ...createForm, port: e.target.value })}
-                placeholder="8443" />
-            </div>
-            <div>
-              <Label className="text-xs mb-1">{t("listeners.field_tags")}</Label>
-              <Input aria-label="Tags" name="input-tags-create" value={createForm.tags} onChange={(e) => setCreateForm({ ...createForm, tags: e.target.value })}
-                placeholder="prod, internal, http" />
-            </div>
-            <div>
-              <Label className="text-xs mb-1">{t("listeners.field_color")}</Label>
-              <Select value={createForm.color} onValueChange={(val) => setCreateForm({ ...createForm, color: val ?? "" })}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t("listeners.color_none")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">{t("listeners.color_none")}</SelectItem>
-                  <SelectItem value="red">Red</SelectItem>
-                  <SelectItem value="orange">Orange</SelectItem>
-                  <SelectItem value="yellow">Yellow</SelectItem>
-                  <SelectItem value="green">Green</SelectItem>
-                  <SelectItem value="blue">Blue</SelectItem>
-                  <SelectItem value="purple">Purple</SelectItem>
-                  <SelectItem value="pink">Pink</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)} className="flex-1">{t("listeners.cancel")}</Button>
-            <Button onClick={handleCreate} disabled={creating || !createForm.name || !createForm.port}
-              className="flex-1">
-              {creating ? t("listeners.creating") : t("listeners.create_listener")}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setShowCreate(false)} className="flex-1">{t("listeners.cancel")}</Button>
+              <Button type="submit" disabled={creating || !createForm.name || !createForm.port}
+                className="flex-1">
+                {creating ? t("listeners.creating") : t("listeners.create_listener")}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -463,67 +467,69 @@ export default function ListenersPageContent() {
           <DialogHeader>
             <DialogTitle>{t("listeners.edit_dialog_title")}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs mb-1">{t("listeners.field_name")}</Label>
-              <Input aria-label="Name" name="input-6" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+          <form onSubmit={handleEditSave}>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs mb-1" htmlFor="edit-name">{t("listeners.field_name")}</Label>
+                <Input id="edit-name" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs mb-1" htmlFor="edit-type">{t("listeners.field_type")}</Label>
+                <Select value={editForm.type} onValueChange={(val) => handleEditTypeChange(typeof val === "string" ? val : "http")}>
+                  <SelectTrigger id="edit-type" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="http">HTTP</SelectItem>
+                    <SelectItem value="https">HTTPS</SelectItem>
+                    <SelectItem value="tcp">TCP</SelectItem>
+                    <SelectItem value="dns">DNS</SelectItem>
+                    <SelectItem value="smb">SMB</SelectItem>
+                    <SelectItem value="icmp">ICMP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs mb-1" htmlFor="edit-host">{t("listeners.field_host")}</Label>
+                <Input id="edit-host" value={editForm.host} onChange={(e) => setEditForm({ ...editForm, host: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs mb-1" htmlFor="edit-port">{t("listeners.field_port")}</Label>
+                <Input id="edit-port" type="number" min="1" max="65535" value={editForm.port} onChange={(e) => setEditForm({ ...editForm, port: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs mb-1" htmlFor="edit-notes">{t("listeners.field_notes")}</Label>
+                <Input id="edit-notes" value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs mb-1" htmlFor="edit-tags">{t("listeners.field_tags")}</Label>
+                <Input id="edit-tags" value={editForm.tags} onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })}
+                  placeholder="prod, internal, http" />
+              </div>
+              <div>
+                <Label className="text-xs mb-1" htmlFor="edit-color">{t("listeners.field_color")}</Label>
+                <Select value={editForm.color} onValueChange={(val) => setEditForm({ ...editForm, color: val ?? "" })}>
+                  <SelectTrigger id="edit-color" className="w-full">
+                    <SelectValue placeholder={t("listeners.color_none")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">{t("listeners.color_none")}</SelectItem>
+                    <SelectItem value="red">Red</SelectItem>
+                    <SelectItem value="orange">Orange</SelectItem>
+                    <SelectItem value="yellow">Yellow</SelectItem>
+                    <SelectItem value="green">Green</SelectItem>
+                    <SelectItem value="blue">Blue</SelectItem>
+                    <SelectItem value="purple">Purple</SelectItem>
+                    <SelectItem value="pink">Pink</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <Label className="text-xs mb-1">{t("listeners.field_type")}</Label>
-              <Select value={editForm.type} onValueChange={(val) => handleEditTypeChange(typeof val === "string" ? val : "http")}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="http">HTTP</SelectItem>
-                  <SelectItem value="https">HTTPS</SelectItem>
-                  <SelectItem value="tcp">TCP</SelectItem>
-                  <SelectItem value="dns">DNS</SelectItem>
-                  <SelectItem value="smb">SMB</SelectItem>
-                  <SelectItem value="icmp">ICMP</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs mb-1">{t("listeners.field_host")}</Label>
-              <Input aria-label="Host" name="input-8" value={editForm.host} onChange={(e) => setEditForm({ ...editForm, host: e.target.value })} />
-            </div>
-            <div>
-              <Label className="text-xs mb-1">{t("listeners.field_port")}</Label>
-              <Input aria-label="Port" name="input-9" type="number" min="1" max="65535" required value={editForm.port} onChange={(e) => setEditForm({ ...editForm, port: e.target.value })} />
-            </div>
-            <div>
-              <Label className="text-xs mb-1">{t("listeners.field_notes")}</Label>
-              <Input aria-label="Notes" name="input-10" value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
-            </div>
-            <div>
-              <Label className="text-xs mb-1">{t("listeners.field_tags")}</Label>
-              <Input aria-label="Tags" name="input-tags-edit" value={editForm.tags} onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })}
-                placeholder="prod, internal, http" />
-            </div>
-            <div>
-              <Label className="text-xs mb-1">{t("listeners.field_color")}</Label>
-              <Select value={editForm.color} onValueChange={(val) => setEditForm({ ...editForm, color: val ?? "" })}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t("listeners.color_none")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">{t("listeners.color_none")}</SelectItem>
-                  <SelectItem value="red">Red</SelectItem>
-                  <SelectItem value="orange">Orange</SelectItem>
-                  <SelectItem value="yellow">Yellow</SelectItem>
-                  <SelectItem value="green">Green</SelectItem>
-                  <SelectItem value="blue">Blue</SelectItem>
-                  <SelectItem value="purple">Purple</SelectItem>
-                  <SelectItem value="pink">Pink</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowEdit(false); setEditingListener(null); }} className="flex-1">{t("listeners.cancel")}</Button>
-            <Button onClick={handleEditSave} className="flex-1">{t("listeners.save")}</Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => { setShowEdit(false); setEditingListener(null); }} className="flex-1">{t("listeners.cancel")}</Button>
+              <Button type="submit" className="flex-1">{t("listeners.save")}</Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
       <ConfirmModal open={!!cfm} title={t("listeners.confirm_title")} message={cfm?.msg || ""} confirmText={t("listeners.confirm_delete_text")} cancelText={t("listeners.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />

@@ -8,6 +8,7 @@ import { EmptyState, Spinner } from "@/components/UI";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Bell, FlaskConical, Plus, Save, Trash2 } from "lucide-react";
 
@@ -128,7 +129,7 @@ export default function NotificationsSection() {
         )}
 
         {targets.map((t, i) => (
-          <div key={i} className="p-4 bg-muted rounded-xl space-y-3 border border-border">
+          <div key={`${t.type}-${i}`} className="p-4 bg-muted rounded-xl space-y-3 border border-border">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Select value={t.type} onValueChange={(v) => update(i, "type", v)}>
@@ -149,8 +150,8 @@ export default function NotificationsSection() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Name</span>
-                <Input aria-label="e.g. Slack Ops" name="e-g-slack-ops-1" className="h-9 text-xs" placeholder="e.g. Slack Ops" value={t.name} onChange={(e) => update(i, "name", e.target.value)} />
+                <Label htmlFor={`notif-name-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Name</Label>
+                <Input id={`notif-name-${i}`} className="h-9 text-xs" placeholder="e.g. Slack Ops" value={t.name} onChange={(e) => update(i, "name", e.target.value)} />
               </div>
               <div>
                 <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Enabled</span>
@@ -168,15 +169,15 @@ export default function NotificationsSection() {
 
             {t.type !== "email" && (
               <div>
-                <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Webhook URL</span>
-                <Input aria-label="https://hooks.example.com/..." name="https-hooks-example-com-3" className="h-9 text-xs" placeholder="https://hooks.example.com/..." value={t.url} onChange={(e) => update(i, "url", e.target.value)} />
+                <Label htmlFor={`notif-url-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Webhook URL</Label>
+                <Input id={`notif-url-${i}`} className="h-9 text-xs" placeholder="https://hooks.example.com/..." value={t.url} onChange={(e) => update(i, "url", e.target.value)} />
               </div>
             )}
 
             {t.type === "generic" && (
               <div>
-                <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">HMAC Secret (optional)</span>
-                <Input aria-label="Signing key" name="signing-key-4" className="h-9 text-xs" placeholder="Signing key" value={t.secret} onChange={(e) => update(i, "secret", e.target.value)} />
+                <Label htmlFor={`notif-secret-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">HMAC Secret (optional)</Label>
+                <Input id={`notif-secret-${i}`} className="h-9 text-xs" placeholder="Signing key" value={t.secret} onChange={(e) => update(i, "secret", e.target.value)} />
               </div>
             )}
 
@@ -184,32 +185,32 @@ export default function NotificationsSection() {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">SMTP Server</span>
-                    <Input aria-label="smtp.gmail.com" name="smtp-gmail-com-5" className="h-9 text-xs" placeholder="smtp.gmail.com" value={t.smtp_host} onChange={(e) => update(i, "smtp_host", e.target.value)} />
+                    <Label htmlFor={`notif-smtp-host-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">SMTP Server</Label>
+                    <Input id={`notif-smtp-host-${i}`} className="h-9 text-xs" placeholder="smtp.gmail.com" value={t.smtp_host} onChange={(e) => update(i, "smtp_host", e.target.value)} />
                   </div>
                   <div>
-                    <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Port</span>
-                    <Input aria-label="587" name="587-6" type="number" className="h-9 text-xs" placeholder="587" value={t.smtp_port} onChange={(e) => update(i, "smtp_port", parseInt(e.target.value) || 587)} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Username</span>
-                    <Input aria-label="user@gmail.com" name="user-gmail-com-7" className="h-9 text-xs" placeholder="user@gmail.com" value={t.smtp_user} onChange={(e) => update(i, "smtp_user", e.target.value)} />
-                  </div>
-                  <div>
-                    <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Password</span>
-                    <Input aria-label="App password" name="app-password-8" type="password" className="h-9 text-xs" placeholder="App password" value={t.smtp_pass} onChange={(e) => update(i, "smtp_pass", e.target.value)} />
+                    <Label htmlFor={`notif-smtp-port-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Port</Label>
+                    <Input id={`notif-smtp-port-${i}`} type="number" className="h-9 text-xs" placeholder="587" value={t.smtp_port} onChange={(e) => update(i, "smtp_port", parseInt(e.target.value) || 587)} />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">From Address</span>
-                    <Input aria-label="alerts@example.com" name="alerts-example-com-9" className="h-9 text-xs" placeholder="alerts@example.com" value={t.from} onChange={(e) => update(i, "from", e.target.value)} />
+                    <Label htmlFor={`notif-smtp-user-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Username</Label>
+                    <Input id={`notif-smtp-user-${i}`} className="h-9 text-xs" placeholder="user@gmail.com" value={t.smtp_user} onChange={(e) => update(i, "smtp_user", e.target.value)} />
                   </div>
                   <div>
-                    <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">To Address(es)</span>
-                    <Input aria-label="admin@example.com" name="admin-example-com-10" className="h-9 text-xs" placeholder="admin@example.com" value={t.to} onChange={(e) => update(i, "to", e.target.value)} />
+                    <Label htmlFor={`notif-smtp-pass-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Password</Label>
+                    <Input id={`notif-smtp-pass-${i}`} type="password" className="h-9 text-xs" placeholder="App password" value={t.smtp_pass} onChange={(e) => update(i, "smtp_pass", e.target.value)} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor={`notif-from-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">From Address</Label>
+                    <Input id={`notif-from-${i}`} className="h-9 text-xs" placeholder="alerts@example.com" value={t.from} onChange={(e) => update(i, "from", e.target.value)} />
+                  </div>
+                  <div>
+                    <Label htmlFor={`notif-to-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">To Address(es)</Label>
+                    <Input id={`notif-to-${i}`} className="h-9 text-xs" placeholder="admin@example.com" value={t.to} onChange={(e) => update(i, "to", e.target.value)} />
                   </div>
                 </div>
               </>

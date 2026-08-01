@@ -111,14 +111,6 @@ export default function AgentTrafficPage() {
 
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
-      <div className="flex items-center gap-3">
-        <Link href={`/agents/${id}`} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-4 h-4" /> {t("agents.traffic_breadcrumb_agent")}
-        </Link>
-        <span className="text-muted-foreground/70">/</span>
-        <span className="text-sm font-medium text-foreground">{t("agents.traffic_title")}</span>
-      </div>
-
       <Card className="p-4 sm:p-5">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-foreground">{t("agents.traffic_title")}</h2>

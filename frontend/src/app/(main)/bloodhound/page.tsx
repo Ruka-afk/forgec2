@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { ConfirmModal, EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +46,8 @@ export default function BloodHoundPage() {
   const { agents, refresh: refreshAgents } = useAgentList();
   const [results, setResults] = useState<BHResult[]>([]);
   const [binaryStatus, setBinaryStatus] = useState<{ uploaded: boolean; filename: string }>({ uploaded: false, filename: "" });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [method, setMethod] = useState("DCOnly");
   const [collecting, setCollecting] = useState(false);
@@ -52,6 +55,8 @@ export default function BloodHoundPage() {
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
 
   const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       let failed = 0;
       const [resultsRes, statusRes] = await Promise.all([
@@ -60,8 +65,15 @@ export default function BloodHoundPage() {
       ]);
       if (resultsRes) setResults((resultsRes.data || []) as BHResult[]);
       if (statusRes) setBinaryStatus(statusRes);
-      if (failed > 0 && !resultsRes && !statusRes) toast.error(t("bloodhound.toast.load_failed"));
-    } catch { toast.error(t("bloodhound.toast.load_failed")); }
+      if (failed === 2) {
+        setError(t("bloodhound.toast.load_failed"));
+        toast.error(t("bloodhound.toast.load_failed"));
+      }
+    } catch {
+      setError(t("bloodhound.toast.load_failed"));
+      toast.error(t("bloodhound.toast.load_failed"));
+    }
+    setLoading(false);
   }, [t]);
 
   useEffect(() => { loadData(); refreshAgents(); }, [loadData, refreshAgents]);
@@ -215,6 +227,7 @@ export default function BloodHoundPage() {
             <RefreshCw className="w-4 h-4" />Refresh
           </Button>
         </div>
+        <DataState loading={loading} error={error} onRetry={loadData} empty={!loading && !error && results.length === 0} emptyIcon={PawPrint} emptyTitle={t("bloodhound.empty_title")} emptyMessage={t("bloodhound.empty_message")}>
         <div>
           {results.length > 0 ? (
             <Table>
@@ -281,6 +294,7 @@ export default function BloodHoundPage() {
             </div>
           )}
         </div>
+        </DataState>
       </Card>
       <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.delete")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
     </div>

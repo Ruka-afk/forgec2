@@ -152,7 +152,7 @@ export default function UsersPage() {
   const handleKick = (id: string) => {
     setCfm({msg: t("users.confirm.kick"), cb: async () => {
       try {
-        await api.post(`/users/${id}/kick`);
+        await api.post(`/users/${id}/force-logout`);
         toast.success(t("users.toast.kick_success"));
       } catch { toast.error(t("users.toast.kick_failed")); }
     }});

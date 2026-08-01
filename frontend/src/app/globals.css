@@ -50,6 +50,12 @@
   --avatar-7: oklch(0.55 0.18 255);
   --avatar-8: oklch(0.60 0.14 180);
   --content-width: 80rem;
+  --z-scroll-to-top: 70;
+  --z-skip-link: 100;
+  --tracking-wide: 0.3em;
+  --tracking-label: 0.12em;
+  --tracking-sublabel: 0.08em;
+  --blur-orb: 60px;
 }
 
 .dark {
@@ -79,12 +85,6 @@
   --info-foreground: oklch(0.15 0.02 240);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --z-scroll-to-top: 70;
-  --z-skip-link: 100;
-  --tracking-wide: 0.3em;
-  --tracking-label: 0.12em;
-  --tracking-sublabel: 0.08em;
-  --blur-orb: 60px;
 }
 
 /* ── Base ── */
@@ -161,6 +161,33 @@ body {
   }
   .animate-orb-float {
     animation: orbFloat 8s ease-in-out infinite;
+  }
+}
+
+/* ══════════════════════════════════════════
+   REDUCED MOTION (WCAG 2.3.3)
+   ══════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-pulse-glow,
+  .animate-float,
+  .animate-orb-float,
+  .animate-bounce,
+  .animate-ping {
+    animation: none !important;
+  }
+  .party-rainbow {
+    animation: none !important;
+  }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
   }
 }
 

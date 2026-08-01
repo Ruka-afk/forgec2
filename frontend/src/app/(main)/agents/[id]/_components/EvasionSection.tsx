@@ -29,7 +29,7 @@ export default function EvasionSection({ agentId, online }: EvasionSectionProps)
     }
     setSending(true);
     try {
-      await api.post(`/api/agents/${agentId}/run_evasion`, { technique: selectedTechnique });
+      await api.post(`/agents/${agentId}/run_evasion`, { technique: selectedTechnique });
       const tech = EVASION_TECHNIQUES.find(tech => tech.value === selectedTechnique);
       toast.success(t("agents.evasion_sent").replace("{technique}", t(tech?.labelKey || "")));
       setSelectedTechnique("");

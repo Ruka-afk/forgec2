@@ -618,7 +618,9 @@ func (s *Server) handleGetSocksSessions(c *gin.Context) {
 	if agentID := c.Query("agent_id"); agentID != "" {
 		q = q.Where("agent_id = ?", agentID)
 	}
-	q.Limit(50).Find(&sessions)
+	if err := q.Limit(50).Find(&sessions).Error; err != nil {
+		slog.Error("Failed to query SOCKS sessions", "err", err)
+	}
 
 	// Enrich with live status
 	type enrichedSession struct {
@@ -672,7 +674,9 @@ func (s *Server) cleanupStaleSocks() {
 	for {
 		select {
 		case <-ticker.C:
-			s.socksEngine.cleanup()
+			if s.socksEngine != nil {
+				s.socksEngine.cleanup()
+			}
 		case <-s.ctx.Done():
 			return
 		}

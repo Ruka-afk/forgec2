@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"log/slog"
@@ -42,22 +43,33 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 	}
 
 	var tasks []db.Task
-	query.Preload("Agent").
-		Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&tasks)
+	if err := query.Preload("Agent").
+		Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&tasks).Error; err != nil {
+		slog.Error("Failed to query tasks", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to query tasks")
+		return
+	}
 
-	// Collect distinct task types for filter dropdown
+	// Collect distinct task types for filter dropdown (degraded gracefully on error)
 	var taskTypes []string
-	s.db.Model(&db.Task{}).
+	if err := s.db.Model(&db.Task{}).
 		Where("type NOT IN ?", silentTypes).
-		Distinct("type").Pluck("type", &taskTypes)
+		Distinct("type").Pluck("type", &taskTypes).Error; err != nil {
+		slog.Warn("Failed to pluck task types", "err", err)
+		taskTypes = []string{}
+	}
 
-	// Collect agents for filter dropdown
+	// Collect agents for filter dropdown (degraded gracefully on error)
 	var agents []db.Implant
-	s.db.Select("id, hostname, ip").Order("hostname").Limit(500).Find(&agents)
+	if err := s.db.Select("id, hostname, ip").Order("hostname").Limit(500).Find(&agents).Error; err != nil {
+		slog.Warn("Failed to query agent filter list", "err", err)
+	}
 
-	// Count failed tasks for "retry all" button
+	// Count failed tasks for "retry all" button (degraded gracefully on error)
 	var failedCount int64
-	s.db.Model(&db.Task{}).Where("status = ?", "failed").Count(&failedCount)
+	if err := s.db.Model(&db.Task{}).Where("status = ?", "failed").Count(&failedCount).Error; err != nil {
+		slog.Warn("Failed to count failed tasks", "err", err)
+	}
 
 	totalPages := int(total) / p.PageSize
 	if int(total)%p.PageSize > 0 {
@@ -91,14 +103,16 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 // handleExportTasks exports tasks as CSV for reporting
 func (s *Server) handleExportTasks(c *gin.Context) {
 	var tasks []db.Task
-	s.db.Preload("Agent").
+	if err := s.db.Preload("Agent").
 		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
-		Order("created_at desc").Limit(ExportTaskLimit).Find(&tasks) // cap to avoid huge exports
+		Order("created_at desc").Limit(ExportTaskLimit).Find(&tasks).Error; err != nil {
+		slog.Error("Failed to export tasks", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to export tasks")
+		return
+	}
 
-	c.Header("Content-Type", "text/csv; charset=utf-8")
-	c.Header("Content-Disposition", `attachment; filename="forgec2_tasks_`+time.Now().Format("2006-01-02")+`.csv"`)
-
-	writer := csv.NewWriter(c.Writer)
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
 	writer.Write([]string{"Time", "Agent", "Type", "Command", "Result", "Error", "Status"})
 
 	for _, t := range tasks {
@@ -118,8 +132,14 @@ func (s *Server) handleExportTasks(c *gin.Context) {
 	}
 	writer.Flush()
 	if err := writer.Error(); err != nil {
-		slog.Error("Failed to flush CSV export", "error", err)
+		slog.Error("Failed to write CSV export", "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to export tasks")
+		return
 	}
+
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", `attachment; filename="forgec2_tasks_`+time.Now().Format("2006-01-02")+`.csv"`)
+	c.String(http.StatusOK, buf.String())
 }
 
 func (s *Server) apiBulkTaskStatus(c *gin.Context) {
@@ -135,7 +155,11 @@ func (s *Server) apiBulkTaskStatus(c *gin.Context) {
 		return
 	}
 	var tasks []db.Task
-	s.db.Where("id IN ?", req.TaskIDs).Select("id, status, result, error, updated_at").Find(&tasks)
+	if err := s.db.Where("id IN ?", req.TaskIDs).Select("id, status, result, error, updated_at").Find(&tasks).Error; err != nil {
+		slog.Error("Failed to bulk query task status", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to query task status")
+		return
+	}
 	result := make(map[uint]db.Task, len(tasks))
 	for i := range tasks {
 		result[tasks[i].ID] = tasks[i]

@@ -66,7 +66,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   getSidebarWidth: () => {
     const state = get();
     if (state.isMobile && !state.mobileMenuOpen) return 0;
-    return state.sidebarCollapsed ? 64 : 224;
+    return state.sidebarCollapsed ? 64 : 192;
   },
 
   setOnlineUsers: (users) => set({ onlineUsers: users }),

@@ -96,7 +96,11 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	}
 
 	var existingAgents []db.Implant
-	s.db.Select("id").Where("id IN ?", uniqueIDs).Find(&existingAgents)
+	if err := s.db.Select("id").Where("id IN ?", uniqueIDs).Find(&existingAgents).Error; err != nil {
+		slog.Error("Failed to query existing agents for batch", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to query agents")
+		return
+	}
 	existingSet := make(map[string]bool, len(existingAgents))
 	for _, a := range existingAgents {
 		existingSet[a.ID] = true

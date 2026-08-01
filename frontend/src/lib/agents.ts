@@ -31,7 +31,7 @@ function toNormalized(r: Record<string, unknown>): NormalizedAgent {
 
 export async function fetchAgentList(onlineOnly = false): Promise<NormalizedAgent[]> {
   try {
-    const data = await api.get("/api/v1/agents");
+    const data = await api.get("/api/agents");
     const list = normalizeAgentList(data)
       .map((a) => toNormalized(a as Record<string, unknown>))
       .filter((a) => a.id);

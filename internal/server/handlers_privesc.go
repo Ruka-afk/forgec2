@@ -2,7 +2,9 @@ package server
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -134,31 +136,146 @@ func (s *Server) handlePrivescPage(c *gin.Context) {
 
 	// Get available agents
 	var agents []db.Implant
-	s.db.Where("status = 'online'").Limit(5000).Find(&agents)
+	if err := s.db.Where("status = 'online'").Limit(5000).Find(&agents).Error; err != nil {
+		slog.Error("Failed to query privesc agents", "err", err)
+	}
+
+	var tasks []db.Task
+	s.db.Where("type IN ?", []string{"privesc_check", "privesc_execute"}).
+		Order("created_at desc").
+		Limit(50).
+		Find(&tasks)
 
 	data := gin.H{
 		"Title":     "ForgeC2 - Privilege Escalation",
 		"ActiveNav": "privesc",
 		"Stats":     stats,
 		"Agents":    agents,
+		"History":   s.buildPrivescHistory(tasks),
+		"Findings":  s.buildPrivescFindings(tasks),
 	}
 	s.renderPageOrJSON(c, data)
 }
 
-// handlePrivescHistory returns privesc check history
-func (s *Server) handlePrivescHistory(c *gin.Context) {
-	agentID := c.Param("id")
+// privescHistoryEntry is the JSON shape the frontend privesc page expects for history rows.
+type privescHistoryEntry struct {
+	ID            uint      `json:"id"`
+	AgentID       string    `json:"agent_id"`
+	CheckType     string    `json:"check_type"`
+	Status        string    `json:"status"`
+	Result        string    `json:"result"`
+	FindingsCount int       `json:"findings_count"`
+	CreatedAt     time.Time `json:"created_at"`
+}
 
-	var tasks []db.Task
-	s.db.Where("agent_id = ? AND type = 'privesc_check'", agentID).
-		Order("created_at desc").
-		Limit(50).
-		Find(&tasks)
+// buildPrivescHistory maps privesc tasks to the frontend history shape.
+func (s *Server) buildPrivescHistory(tasks []db.Task) []privescHistoryEntry {
+	out := make([]privescHistoryEntry, 0, len(tasks))
+	for _, t := range tasks {
+		checkType := strings.TrimPrefix(t.Command, "privesc_check:")
+		if checkType == t.Command {
+			checkType = "all"
+		}
+		out = append(out, privescHistoryEntry{
+			ID:            t.ID,
+			AgentID:       t.AgentID,
+			CheckType:     checkType,
+			Status:        t.Status,
+			Result:        t.Result,
+			FindingsCount: len(s.parsePrivescFindings(t.Result)),
+			CreatedAt:     t.CreatedAt,
+		})
+	}
+	return out
+}
+
+// handlePrivescHistory returns privesc check history for a single task.
+func (s *Server) handlePrivescHistory(c *gin.Context) {
+	id := c.Param("id")
+
+	var task db.Task
+	if err := s.db.Where("id = ? AND type IN ?", id, []string{"privesc_check", "privesc_execute"}).First(&task).Error; err != nil {
+		respondError(c, http.StatusNotFound, "privesc task not found")
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"tasks": tasks,
-		"total": len(tasks),
+		"tasks":    []privescHistoryEntry{s.buildPrivescHistory([]db.Task{task})[0]},
+		"findings": s.parsePrivescFindings(task.Result),
+		"total":    1,
 	})
+}
+
+// buildPrivescFindings collects parsed findings across a set of privesc tasks.
+func (s *Server) buildPrivescFindings(tasks []db.Task) []gin.H {
+	out := make([]gin.H, 0)
+	for _, t := range tasks {
+		out = append(out, s.parsePrivescFindings(t.Result)...)
+	}
+	return out
+}
+
+// privescFinding is the JSON shape the frontend findings panel expects.
+type privescFinding struct {
+	Title          string `json:"title"`
+	Severity       string `json:"severity"`
+	CVEID          string `json:"cve_id"`
+	Description    string `json:"description"`
+	Recommendation string `json:"recommendation"`
+}
+
+// parsePrivescFindings best-effort parses structured findings from agent privesc result text.
+func (s *Server) parsePrivescFindings(result string) []gin.H {
+	findings := make([]gin.H, 0)
+	lines := strings.Split(result, "\n")
+
+	var currentCVE string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Track CVE section headers: "--- CVE-2021-4034 (pkexec/pwnkit) ---"
+		if strings.HasPrefix(trimmed, "--- CVE-") {
+			rest := strings.TrimPrefix(trimmed, "---")
+			rest = strings.TrimSuffix(rest, "---")
+			fields := strings.SplitN(strings.TrimSpace(rest), " ", 2)
+			if len(fields) > 0 && strings.HasPrefix(fields[0], "CVE-") {
+				currentCVE = strings.TrimRight(fields[0], ":")
+				continue
+			}
+			continue
+		}
+
+		isFinding := strings.Contains(trimmed, "[!]") ||
+			strings.Contains(trimmed, "WRITABLE") ||
+			strings.Contains(trimmed, "vulnerable") ||
+			strings.Contains(trimmed, "potentially vulnerable")
+
+		if !isFinding || strings.TrimSpace(trimmed) == "" {
+			continue
+		}
+
+		severity := "high"
+		if strings.Contains(trimmed, "WRITABLE") || strings.Contains(trimmed, "possible") {
+			severity = "medium"
+		}
+		if strings.Contains(trimmed, "potentially vulnerable") {
+			severity = "medium"
+		}
+
+		title := strings.Trim(strings.TrimPrefix(trimmed, "[!]"), " -")
+		if currentCVE != "" {
+			title = fmt.Sprintf("%s (%s)", currentCVE, title)
+		}
+
+		findings = append(findings, gin.H{
+			"title":          title,
+			"severity":       severity,
+			"cve_id":         currentCVE,
+			"description":    trimmed,
+			"recommendation": "",
+		})
+	}
+	return findings
 }
 
 // handlePrivescRun creates a privesc check task for the given agent.

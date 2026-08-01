@@ -124,7 +124,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
           ) : (
             <div className="flex flex-col gap-2">
               {executions.map(ex => (
-                <div key={ex.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted hover:bg-muted/80 cursor-pointer transition-colors" onClick={() => viewExecution(ex.id)}>
+                <div key={ex.id} role="button" tabIndex={0} className="flex items-center gap-3 p-3 rounded-lg bg-muted hover:bg-muted/80 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => viewExecution(ex.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); viewExecution(ex.id); } }}>
                   {statusBadge(ex.status)}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{ex.workflow_name}</div>

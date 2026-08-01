@@ -516,12 +516,12 @@ function CampaignDetailView({
               <div className="mt-3">
                 <h4 className="text-xs font-semibold text-muted-foreground mb-2">{t("campaign.steps")}</h4>
                 <div className="flex flex-wrap gap-1">
-                  {templates.find((t) => t.name === selectedTemplate)?.steps.map((step, i) => (
-                    <Badge key={i} variant="secondary" className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs">
+                  {templates.find((t) => t.name === selectedTemplate)?.steps?.map((step, i) => (
+                    <Badge key={`${step.task_type}-${i}`} variant="secondary" className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs">
                       <span className="w-2 h-2 rounded-full" style={{ background: PHASE_PHASE_COLORS[step.phase] || "gray" }} />
                       {step.task_type}
                     </Badge>
-                  ))}
+                  )) ?? null}
                 </div>
               </div>
             )}

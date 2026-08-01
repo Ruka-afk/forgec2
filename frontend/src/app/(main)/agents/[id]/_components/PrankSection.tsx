@@ -53,7 +53,7 @@ export default function PrankSection({ agentId, online }: PrankSectionProps) {
       const payload = selectedAction.buildPayload
         ? selectedAction.buildPayload(inputValue)
         : { command: inputValue };
-      await api.postJson(`/api/agents/${agentId}${selectedAction.route}`, payload);
+      await api.postJson(`/agents/${agentId}${selectedAction.route}`, payload);
       toast.success(t("agents.prank_sent").replace("{action}", t(selectedAction.labelKey)));
       setSelectedAction(null);
       setInputValue("");
@@ -66,7 +66,7 @@ export default function PrankSection({ agentId, online }: PrankSectionProps) {
   const handleQuickExecute = async (action: PrankAction) => {
     setSending(true);
     try {
-      await api.postJson(`/api/agents/${agentId}${action.route}`, { command: "" });
+      await api.postJson(`/agents/${agentId}${action.route}`, { command: "" });
       toast.success(t("agents.prank_sent").replace("{action}", t(action.labelKey)));
     } catch {
       toast.error(t("agents.prank_failed"));
@@ -112,8 +112,9 @@ export default function PrankSection({ agentId, online }: PrankSectionProps) {
           </DialogHeader>
           {selectedAction?.needsInput && (
             <div className="space-y-2">
-              <label className="text-xs text-muted-foreground">{selectedAction.inputLabel ? t(selectedAction.inputLabel) : ""}</label>
+              <label htmlFor="prank-input" className="text-xs text-muted-foreground">{selectedAction.inputLabel ? t(selectedAction.inputLabel) : ""}</label>
               <Input
+                id="prank-input"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 placeholder={selectedAction.inputPlaceholder}

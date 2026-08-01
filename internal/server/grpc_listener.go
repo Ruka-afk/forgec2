@@ -10,6 +10,7 @@ import (
 	"os"
 	"runtime/debug"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -55,6 +56,9 @@ func beaconHandler(srv interface{}, ctx context.Context, dec func(interface{}) e
 	var agentID string
 	if err := json.Unmarshal(req.Payload, &envelope); err == nil {
 		agentID = envelope.UUID
+	} else {
+		slog.Warn("gRPC beacon failed to unmarshal envelope, using fallback agentID", "err", err)
+		agentID = "unknown-" + uuid.New().String()
 	}
 
 	respPayload := svc.handler(agentID, req.Payload)
@@ -142,35 +146,34 @@ func (s *Server) startGRPCListener() {
 	addr := s.cfg.Server.GRPCAddr
 	listener := NewGRPCListener(addr)
 	if s.cfg.Server.TLSEnabled && s.cfg.Server.CertFile != "" && s.cfg.Server.KeyFile != "" {
-		if _, err := os.Stat(s.cfg.Server.CertFile); err == nil {
-			if cert, err := tls.LoadX509KeyPair(s.cfg.Server.CertFile, s.cfg.Server.KeyFile); err == nil {
-				tlsCfg := &tls.Config{
-					Certificates: []tls.Certificate{cert},
-					MinVersion:   tls.VersionTLS12,
-				}
+		if cert, err := tls.LoadX509KeyPair(s.cfg.Server.CertFile, s.cfg.Server.KeyFile); err == nil {
+			tlsCfg := &tls.Config{
+				Certificates: []tls.Certificate{cert},
+				MinVersion:   tls.VersionTLS12,
+			}
 
-				// mTLS: load client CA for mutual TLS verification
-				if s.cfg.Server.ClientCAFile != "" && s.cfg.Server.RequireClientCert {
-					caCert, caErr := os.ReadFile(s.cfg.Server.ClientCAFile)
-					if caErr != nil {
-						slog.Warn("gRPC mTLS: failed to load client CA", "err", caErr)
+			// mTLS: load client CA for mutual TLS verification
+			if s.cfg.Server.ClientCAFile != "" && s.cfg.Server.RequireClientCert {
+				caCert, caErr := os.ReadFile(s.cfg.Server.ClientCAFile)
+				if caErr != nil {
+					slog.Warn("gRPC mTLS: failed to load client CA", "err", caErr)
+				} else {
+					caPool := x509.NewCertPool()
+					if !caPool.AppendCertsFromPEM(caCert) {
+						slog.Warn("gRPC mTLS: failed to parse client CA")
 					} else {
-						caPool := x509.NewCertPool()
-						if !caPool.AppendCertsFromPEM(caCert) {
-							slog.Warn("gRPC mTLS: failed to parse client CA")
-						} else {
-							tlsCfg.ClientCAs = caPool
-							tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
-							slog.Info("gRPC mTLS enabled", "client_ca", s.cfg.Server.ClientCAFile)
-						}
+						tlsCfg.ClientCAs = caPool
+						tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
+						slog.Info("gRPC mTLS enabled", "client_ca", s.cfg.Server.ClientCAFile)
 					}
 				}
-
-				listener.SetTLS(credentials.NewTLS(tlsCfg))
-				slog.Info("gRPC TLS credentials loaded", "cert", s.cfg.Server.CertFile)
-			} else {
-				slog.Warn("gRPC TLS load failed; using insecure", "err", err)
 			}
+
+			listener.SetTLS(credentials.NewTLS(tlsCfg))
+			slog.Info("gRPC TLS credentials loaded", "cert", s.cfg.Server.CertFile)
+		} else {
+			slog.Error("gRPC TLS load failed; refusing to start in insecure mode", "err", err)
+			return
 		}
 	}
 	listener.SetHandler(func(agentID string, reqJSON []byte) []byte {
@@ -193,7 +196,8 @@ func (s *Server) startGRPCListener() {
 	})
 	if err := listener.Start(); err != nil {
 		slog.Error("Failed to start gRPC listener", "addr", addr, "err", err)
+	} else {
+		s.grpcListener = listener
+		slog.Info("gRPC listener registered", "addr", addr)
 	}
-	s.grpcListener = listener
-	slog.Info("gRPC listener registered", "addr", addr)
 }

@@ -73,7 +73,9 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 	currentUserID, _ := c.Get("user_id")
 
 	var totalUsers int64
-	s.db.Model(&db.User{}).Count(&totalUsers)
+	if err := s.db.Model(&db.User{}).Count(&totalUsers).Error; err != nil {
+		slog.Error("Failed to count users", "err", err)
+	}
 
 	var profileUser db.User
 	profileInfo := gin.H{}
@@ -170,6 +172,22 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 	s.renderPageOrJSON(c, data)
 }
 
+// validateAndSaveConfig validates the running config before persisting it so an
+// invalid value entered via the UI cannot be written to disk and break startup.
+func (s *Server) validateAndSaveConfig(c *gin.Context, action string) bool {
+	if err := s.cfg.Validate(); err != nil {
+		slog.Warn("Config validation failed before save", "action", action, "err", err)
+		respondError(c, http.StatusBadRequest, "Config validation failed")
+		return false
+	}
+	if err := s.cfg.Save(s.configPath); err != nil {
+		slog.Error("Failed to save config", "action", action, "err", err)
+		respondError(c, http.StatusInternalServerError, "Failed to save config")
+		return false
+	}
+	return true
+}
+
 func (s *Server) handleSaveAgentConfig(c *gin.Context) {
 	interval := c.PostForm("interval")
 	jitter := c.PostForm("jitter")
@@ -207,8 +225,7 @@ func (s *Server) handleSaveAgentConfig(c *gin.Context) {
 	s.cfg.Implant.DefaultWorkingEnd = workingEnd
 	s.cfg.Implant.DefaultWorkingTZ = workingTZ
 
-	if err := s.cfg.Save(s.configPath); err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to save config")
+	if !s.validateAndSaveConfig(c, "agent_config") {
 		return
 	}
 
@@ -258,7 +275,9 @@ func (s *Server) handleChangePassword(c *gin.Context) {
 	}
 
 	var recentHistory []db.PasswordHistory
-	s.db.Where("user_id = ?", user.ID).Order("created_at DESC").Limit(5).Find(&recentHistory)
+	if err := s.db.Where("user_id = ?", user.ID).Order("created_at DESC").Limit(5).Find(&recentHistory).Error; err != nil {
+		slog.Error("Failed to query password history", "err", err)
+	}
 	for _, entry := range recentHistory {
 		if middleware.CheckPassword(entry.PasswordHash, newPass) {
 			respondError(c, http.StatusBadRequest, "Cannot reuse a recent password")
@@ -278,17 +297,23 @@ func (s *Server) handleChangePassword(c *gin.Context) {
 		return
 	}
 
-	s.db.Create(&db.PasswordHistory{
+	if err := s.db.Create(&db.PasswordHistory{
 		UserID:       user.ID,
 		PasswordHash: hash,
 		CreatedAt:    time.Now(),
-	})
+	}).Error; err != nil {
+		slog.Error("Failed to record password history", "user_id", user.ID, "err", err)
+	}
 
 	var count int64
-	s.db.Model(&db.PasswordHistory{}).Where("user_id = ?", user.ID).Count(&count)
+	if err := s.db.Model(&db.PasswordHistory{}).Where("user_id = ?", user.ID).Count(&count).Error; err != nil {
+		slog.Error("Failed to count password history", "user_id", user.ID, "err", err)
+	}
 	if count > PasswordHistoryMax {
 		var oldest []db.PasswordHistory
-		s.db.Where("user_id = ?", user.ID).Order("created_at ASC").Limit(int(count - PasswordHistoryMax)).Find(&oldest)
+		if err := s.db.Where("user_id = ?", user.ID).Order("created_at ASC").Limit(int(count - PasswordHistoryMax)).Find(&oldest).Error; err != nil {
+			slog.Error("Failed to query oldest password history", "err", err)
+		}
 		ids := make([]uint, len(oldest))
 		for i, h := range oldest {
 			ids[i] = h.ID
@@ -301,6 +326,8 @@ func (s *Server) handleChangePassword(c *gin.Context) {
 	s.pwdChangeTimesMu.Lock()
 	s.pwdChangeTimes[user.ID] = time.Now()
 	s.pwdChangeTimesMu.Unlock()
+
+	s.revokeAllUserSessions(user.ID)
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
@@ -344,8 +371,7 @@ func (s *Server) handleSaveServerConfig(c *gin.Context) {
 		}
 	}
 
-	if err := s.cfg.Save(s.configPath); err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to save config")
+	if !s.validateAndSaveConfig(c, "server_config") {
 		return
 	}
 
@@ -386,8 +412,7 @@ func (s *Server) handleSaveMalleableProfile(c *gin.Context) {
 		}
 	}
 
-	if err := s.cfg.Save(s.configPath); err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to save config")
+	if !s.validateAndSaveConfig(c, "malleable_profile") {
 		return
 	}
 
@@ -400,6 +425,9 @@ func (s *Server) handlePurgeTasks(c *gin.Context) {
 	days, err := strconv.Atoi(daysStr)
 	if err != nil || days < 1 {
 		days = 30
+	}
+	if days > 365 {
+		days = 365
 	}
 	cutoff := time.Now().AddDate(0, 0, -days)
 	result := s.db.Where("created_at < ?", cutoff).
@@ -422,6 +450,9 @@ func (s *Server) handlePurgeAuditLogs(c *gin.Context) {
 	if days < 90 {
 		days = 90
 	}
+	if days > 730 {
+		days = 730
+	}
 	cutoff := time.Now().AddDate(0, 0, -days)
 	result := s.db.Where("created_at < ?", cutoff).Delete(&db.AuditLog{})
 	if result.Error != nil {
@@ -441,8 +472,7 @@ func (s *Server) handleRegenerateJWT(c *gin.Context) {
 	}
 	oldSecret := s.cfg.Server.JWTSecret
 	s.cfg.Server.JWTSecret = hex.EncodeToString(b)
-	if err := s.cfg.Save(s.configPath); err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to save config")
+	if !s.validateAndSaveConfig(c, "regenerate_jwt") {
 		return
 	}
 	if err := middleware.InitJWTSecret(s.cfg, s.configPath); err != nil {
@@ -451,7 +481,9 @@ func (s *Server) handleRegenerateJWT(c *gin.Context) {
 	}
 
 	var users []db.User
-	s.db.Where("totp_secret != ''").Limit(500).Find(&users)
+	if err := s.db.Where("totp_secret != ''").Limit(500).Find(&users).Error; err != nil {
+		slog.Error("Settings: failed to query users for TOTP re-encrypt", "err", err)
+	}
 	for _, u := range users {
 		if u.TOTPSecret == "" {
 			continue
@@ -466,7 +498,9 @@ func (s *Server) handleRegenerateJWT(c *gin.Context) {
 			slog.Error("Failed to re-encrypt TOTP secret", "user_id", u.ID, "err", err)
 			continue
 		}
-		s.db.Model(&u).Update("totp_secret", newEncrypted)
+		if err := s.db.Model(&u).Update("totp_secret", newEncrypted).Error; err != nil {
+			slog.Error("Failed to update TOTP secret", "user_id", u.ID, "err", err)
+		}
 	}
 
 	slog.Info("JWT secret regenerated, TOTP secrets re-encrypted")
@@ -484,7 +518,9 @@ func (s *Server) handleDBVacuum(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "VACUUM failed")
 		return
 	}
-	s.db.Raw("SELECT page_count * page_size as size FROM pragma_page_count, pragma_page_size").Scan(&dbSize)
+	if err := s.db.Raw("SELECT page_count * page_size as size FROM pragma_page_count, pragma_page_size").Scan(&dbSize).Error; err != nil {
+		slog.Error("Failed to query database size after vacuum", "err", err)
+	}
 	slog.Info("Database vacuum completed")
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Database vacuum completed", "size": dbSize})
 }
@@ -552,7 +588,9 @@ func (s *Server) handleDownloadConfig(c *gin.Context) {
 func (s *Server) handleAuditLogPage(c *gin.Context) {
 	stats := s.getNavStats()
 	var users []db.User
-	s.db.Model(&db.User{}).Select("username, role").Where("is_active = ?", true).Limit(100).Find(&users)
+	if err := s.db.Model(&db.User{}).Select("username, role").Where("is_active = ?", true).Limit(100).Find(&users).Error; err != nil {
+		slog.Error("Settings: failed to query users for audit page", "err", err)
+	}
 
 	data := gin.H{
 		"Title":     "ForgeC2 - Security Audit",
@@ -602,8 +640,10 @@ func (s *Server) handleGetAuditLogs(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    logs,
-		"total":   total,
+		"data": gin.H{
+			"logs":  logs,
+			"total": total,
+		},
 	})
 }
 
@@ -614,7 +654,13 @@ func (s *Server) handleGetSettingsWebhooks(c *gin.Context) {
 		respond(c, gin.H{"data": gin.H{"notifications": []interface{}{}}})
 		return
 	}
-	respond(c, gin.H{"data": gin.H{"notifications": cfg.Value}})
+	var targets []interface{}
+	if err := json.Unmarshal([]byte(cfg.Value), &targets); err != nil {
+		slog.Error("Failed to parse stored notification targets", "err", err)
+		respond(c, gin.H{"data": gin.H{"notifications": []interface{}{}}})
+		return
+	}
+	respond(c, gin.H{"data": gin.H{"notifications": targets}})
 }
 
 func (s *Server) handleSaveSettingsWebhooks(c *gin.Context) {

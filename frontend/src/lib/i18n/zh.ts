@@ -1,4 +1,43 @@
 export const zh: Record<string, string> = {
+    "agents.agents_count": "Agent（{count}）",
+    "agents.files_deleted": "已删除 {filename}",
+    "agents.files_downloaded": "已下载 {filename}",
+    "agents.files_found_results": "找到 {n} 个结果",
+    "agents.files_free_of": "可用 {free} / 总计 {total}",
+    "agents.files_upload_failed_status": "上传失败（HTTP {status}）",
+    "agents.files_uploaded": "已上传 {name}",
+    "agents.recording_recording_fmt": "录制 #{id}",
+    "agents.recording_task_fmt": "任务 #{id}",
+    "agents.token_subtitle": "{hostname} 的 Token",
+    "agents.traffic_baseline_val": "基线：{value} 字节",
+    "agents.traffic_beacon_timeline": "信标时间线（{count}）",
+    "agents.traffic_mean": "均值：{value}秒",
+    "agents.traffic_stddev": "标准差：{value}秒",
+    "agents.traffic_suggest_interval": "建议间隔：{value}秒",
+    "agents.traffic_suggest_jitter": "建议抖动：{value}%",
+    "agents.traffic_suggest_pad": "建议填充：{value} 字节",
+    "auto.rule_conditions_actions": "（{conditions} 条件，{actions} 动作）",
+    "auto.rules_count": "{count} 条规则",
+    "auto.webhooks_count": "{count} 个 Webhook",
+    "autotag.applied": "已为 {count} 个 Agent 应用自动标签",
+    "cb.listener_reset": "已重置监听器 {id} 的熔断器",
+    "cb.listener_toggled": "监听器 {id} 已{state}",
+    "cb.probes_every": "每 {seconds} 秒探测一次",
+    "chain.parent_set": "父节点已设为 {id}",
+    "chain.select_parent_desc": "父节点：{name}",
+    "container.task_dispatched": "已分发任务 #{id}",
+    "cred.batch_desc": "已选 {count} 项",
+    "domain_fronting.remove_domain": "删除域名 {domain}？",
+    "login.footer_version": "ForgeC2 v{version}",
+    "loot.delete_selected": "删除已选的 {count} 项",
+    "notifications.mark_n_read": "标记 {count} 条为已读",
+    "packer.exe_loaded": "已加载 EXE（{size} KB）",
+    "plugins.subtitle": "已安装 {count} 个插件",
+    "screenshots.confirm_delete": "删除 {count} 张截图？",
+    "scripting.run_history": "历史记录（{count}）",
+    "sidebar.current_operator": "操作员：{username}",
+    "stager.tokens_count": "{count} 个 Token",
+    "users.showing": "显示 {filtered} / 共 {total}",
     "attack.techniques": "技术",
     "infra.about": "基础设施说明",
     "infra.about_desc": "管理监听器、重定向器、证书和外部 C2 设置",
@@ -153,7 +192,7 @@ export const zh: Record<string, string> = {
     "error.title": "出现问题",
     "error.try_again": "重试",
     "sidebar.online_operators": "在线操作员",
-    "sidebar.current_operator": "{username}（当前用户）",
+
     "sidebar.offline": "离线",
     "sidebar.reconnecting": "正在重连",
     "settings.about.system_information": "系统信息",
@@ -183,13 +222,13 @@ export const zh: Record<string, string> = {
     "login.error_failed": "登录失败",
     "login.error_network": "网络错误，请重试。",
     "login.footer": "ForgeC2 — 仅限授权访问",
-    "login.footer_version": "ForgeC2 v{version} — 仅限授权访问",
+
     "login.session_expired": "会话已过期 — 请重新登录",
 
     "generate.shared_title": "共享设置",
     "generate.shared_subtitle": "选择监听器并配置公共参数",
     "generate.create_listener": "创建监听器",
-    "generate.listener": "监听器",
+
     "generate.listener_required": "监听器 *",
     "generate.select_listener": "-- 选择监听器 --",
     "generate.unknown_listener": "未知",
@@ -276,13 +315,13 @@ export const zh: Record<string, string> = {
     "section.build-deploy": "构建与部署",
     "section.post-exploitation": "后渗透",
     "section.intel-analysis": "情报分析",
-    "section.lab": "实验 / 半成品",
-    "section.lab_badge": "实验",
+    "section.lab": "高级战术",
+    "section.lab_badge": "高级",
     "section.system": "系统管理",
 
     "common.search": "搜索",
     "common.actions": "操作",
-    "common.status": "状态",
+
     "common.refresh": "刷新",
     "common.create": "创建",
     "common.edit": "编辑",
@@ -295,30 +334,23 @@ export const zh: Record<string, string> = {
     "common.confirm": "确认",
     "common.online": "在线",
     "common.offline": "离线",
-    "common.all": "全部",
+
     "common.live": "实时",
     "common.disconnected": "断开",
     "common.total": "总计",
-    "common.success": "成功",
-    "common.failed": "失败",
-    "common.pending": "等待中",
-    "common.completed": "已完成",
+
     "common.type": "类型",
-    "common.time": "时间",
-    "common.result": "结果",
+
     "common.command": "命令",
-    "common.notes": "备注",
-    "common.tags": "标签",
+
     "common.remove": "移除",
     "common.disconnect": "断开",
     "common.disable": "禁用",
-    "common.clear_all": "清除全部",
-    "common.are_you_sure": "确定要执行此操作吗？",
-    "common.yes_delete": "确认删除",
+
     "common.error": "出了点问题",
     "common.try_again": "重试",
     "common.no_data": "暂无数据",
-    "common.check_connection": "请检查网络连接后重试。",
+
     "common.dismiss": "关闭",
     "common.export_png": "导出 PNG",
     "common.scroll_to_top": "回到顶部",
@@ -332,9 +364,7 @@ export const zh: Record<string, string> = {
     "a11y.collapse_sidebar": "折叠侧栏",
     "a11y.navigation": "导航",
     "a11y.shortcuts": "键盘快捷键",
-    "shortcuts.group_nav": "导航",
-    "shortcuts.group_actions": "操作",
-    "shortcuts.group_general": "通用",
+
     "chart.load_failed": "图表加载失败",
     "chart.try_later": "请稍后重试",
 
@@ -346,7 +376,7 @@ export const zh: Record<string, string> = {
     "phishing.delete_campaign": "删除此活动？",
     "bof.delete_library": "从库中删除此 BOF？",
     "bloodhound.delete_report": "删除此 BloodHound 报告？",
-    "domain_fronting.remove_domain": "移除域名 {domain}？",
+
     "pivoting.disconnect_socks": "断开当前 SOCKS 中继？活跃连接将被中断。",
     "settings.disable_totp": "禁用双因素认证？您将失去账户的 2FA 保护。",
     "campaign.delete_confirm": "删除此战役？",
@@ -373,20 +403,11 @@ export const zh: Record<string, string> = {
     "topbar.theme_dark": "深色",
     "topbar.theme_system": "跟随系统",
 
-    "beacons.title": "Beacon 管理",
-    "beacons.total": "Beacon 总数",
-    "beacons.online": "在线 Beacon",
-    "beacons.hostname": "主机名",
-    "beacons.username": "用户",
-    "beacons.ip": "内网 IP",
-    "beacons.os": "操作系统",
-    "beacons.last_seen": "最后上线",
 
     "dashboard.title": "作战仪表盘",
-    "dashboard.total_beacons": "Beacon 总数",
-    "dashboard.online_beacons": "在线 Beacon",
+
     "dashboard.tasks_today": "今日任务",
-    "dashboard.pending_tasks": "待执行",
+
     "dashboard.subtitle": "C2 作战概览",
     "dashboard.total_tasks_suffix": "个任务",
     "dashboard.beacons": "Beacon",
@@ -407,10 +428,9 @@ export const zh: Record<string, string> = {
     "dashboard.beacon_geo": "Beacon 地理分布",
     "dashboard.attack_path": "攻击路径",
     "dashboard.active_alerts": "活跃告警",
-    "dashboard.retry": "重试",
+
     "dashboard.load_failed": "加载仪表盘数据失败",
     "dashboard.refresh_failed": "刷新仪表盘数据失败",
-    "dashboard.dismiss_error": "关闭错误",
 
     "agents.title": "Beacon 管理",
     "agents.total_label": "共",
@@ -438,9 +458,9 @@ export const zh: Record<string, string> = {
     "agents.col_last_seen": "最后在线",
     "agents.col_window": "窗口",
     "agents.col_lock": "锁定",
-    "agents.col_tags": "标签",
+
     "agents.col_tasks": "任务",
-    "agents.col_last_task": "最后任务",
+
     "agents.col_version": "版本",
     "agents.col_status": "状态",
     "agents.col_actions": "操作",
@@ -471,8 +491,7 @@ export const zh: Record<string, string> = {
     "agents.locks_failed": "加载锁定信息失败",
     "agents.tags_load_failed": "加载标签失败",
     "agents.bulk_results_failed": "加载批量结果失败",
-    "agents.retry": "重试",
-    "agents.dismiss": "关闭",
+
     "agents.kill_sent": "终止命令已发送",
     "agents.kill_failed": "终止失败",
     "agents.deleted": "Agent 已删除",
@@ -522,7 +541,7 @@ export const zh: Record<string, string> = {
     "agents.locked_by": "被 {user} 锁定",
     "agents.quick_sleep": "快速休眠",
     "agents.edit_notes": "编辑备注",
-    "agents.details": "详情",
+
     "agents.tasks_label": "任务",
     "agents.n_tasks": "{n} 个任务",
     "agents.send_command_to": "向 {n} 个 Agent{s} 发送命令",
@@ -543,7 +562,6 @@ export const zh: Record<string, string> = {
     "agents.task_completed": "已完成",
     "agents.task_failed": "失败",
     "agents.total_tasks": "共 {n} 个任务",
-    "agents.last_task_label": "最近",
 
     "agents.config_hot_config": "热配置",
     "agents.config_current_config": "当前配置 (只读)",
@@ -567,7 +585,7 @@ export const zh: Record<string, string> = {
     "agents.config_load_failed": "加载配置失败",
     "agents.shell_title": "终端",
     "agents.shell_select_agent": "选择代理...",
-    "agents.shell_loading": "加载中...",
+
     "agents.files_title": "文件浏览器",
     "agents.files_uploading": "上传中...",
     "agents.files_upload": "上传",
@@ -580,12 +598,9 @@ export const zh: Record<string, string> = {
     "agents.files_image": "图片：",
     "agents.files_confirm_delete": "确定要删除此文件吗？",
     "agents.files_detect_os_failed": "检测操作系统失败",
-    "agents.files_downloaded": "已下载 {filename}",
-    "agents.files_deleted": "已删除 {filename}",
-    "agents.files_uploaded": "已上传 {name}",
-    "agents.files_upload_failed_status": "上传失败：{status}",
+
     "agents.files_upload_failed_network": "上传失败：网络错误",
-    "agents.files_found_results": "找到 {n} 个结果",
+
     "agents.files_go": "前往",
     "agents.files_up": "上级",
     "agents.files_quick": "快捷：",
@@ -602,7 +617,7 @@ export const zh: Record<string, string> = {
     "agents.files_col_size": "大小",
     "agents.files_col_modified": "修改时间",
     "agents.files_no_drives": "无可用磁盘",
-    "agents.files_free_of": "{free} 可用 / 共 {total}",
+
     "agents.files_download_content": "下载内容",
     "agents.files_download": "下载",
     "agents.screen_title": "屏幕监控",
@@ -622,7 +637,7 @@ export const zh: Record<string, string> = {
     "agents.screen_stop_failed": "停止监控失败",
     "agents.screen_capture_failed": "截图失败",
     "agents.screen_no_screenshots": "暂无截图",
-    "agents.screen_seconds": "{n}秒",
+
     "agents.rdp_title": "远程桌面",
     "agents.rdp_experimental_title": "实验功能：屏幕控制",
     "agents.rdp_experimental_desc": "当前为截图流 + remote_input 任务，并非完整 RDP/VNC。输入注入效果取决于 implant 版本与操作系统。",
@@ -631,7 +646,7 @@ export const zh: Record<string, string> = {
     "agents.rdp_connected": "已连接",
     "agents.rdp_start": "启动",
     "agents.rdp_stop": "停止",
-    "agents.rdp_resolution": "分辨率",
+
     "agents.rdp_low": "低 (480p)",
     "agents.rdp_medium": "中 (720p)",
     "agents.rdp_high": "高 (1080p)",
@@ -681,7 +696,7 @@ export const zh: Record<string, string> = {
     "agents.token_make_failed": "创建令牌失败",
     "agents.token_revert_success": "已恢复至自身",
     "agents.token_revert_failed": "恢复失败",
-    "agents.token_whoami_success": "身份已检查",
+
     "agents.token_whoami_failed": "检查身份失败",
     "agents.token_drop_success": "令牌已丢弃",
     "agents.token_drop_failed": "丢弃令牌失败",
@@ -691,20 +706,18 @@ export const zh: Record<string, string> = {
     "agents.persistence_install": "安装",
     "agents.persistence_remove": "卸载",
     "agents.persistence_installed": "已安装方法",
-    "agents.persistence_registry": "注册表启动键",
-    "agents.persistence_scheduled_task": "计划任务",
-    "agents.persistence_startup_folder": "启动文件夹",
-    "agents.persistence_wmi": "WMI 事件订阅",
-    "agents.persistence_service": "Windows 服务",
-    "agents.persistence_ifeo": "IFEO 调试器",
-    "agents.persistence_com_hijack": "COM 劫持",
-    "agents.persistence_dll_hijack": "DLL 搜索顺序劫持",
+
     "agents.persistence_install_success": "持久化已安装",
     "agents.persistence_list_success": "持久化列表已加载",
     "agents.persistence_install_failed": "安装持久化失败",
     "agents.persistence_remove_success": "持久化已移除",
     "agents.persistence_remove_failed": "移除持久化失败",
     "agents.persistence_load_failed": "加载持久化状态失败",
+    "agents.persistence_not_found_title": "Agent 未找到",
+    "agents.persistence_not_found_desc": "请求的 Agent 不存在或已被移除。",
+    "agents.persistence_back_to_agents": "返回 Agent 列表",
+    "agents.persistence_refresh_list": "刷新列表",
+    "agents.persistence_no_methods": "尚未安装持久化方法。请使用左侧按钮安装持久化。",
     "agents.recording_title": "会话录制",
     "agents.recording_total_actions": "总操作数",
     "agents.recording_shell_commands": "Shell 命令",
@@ -716,8 +729,7 @@ export const zh: Record<string, string> = {
     "agents.recording_reset": "重置",
     "agents.recording_result": "结果",
     "agents.recording_no_result": "暂无结果 — 任务可能仍在等待中",
-    "agents.recording_recording_fmt": "录制 #{id}",
-    "agents.recording_task_fmt": "任务 #{id}",
+
     "agents.recording_no_recordings": "暂无录制",
     "agents.recording_load_failed": "加载录制失败",
     "agents.recording_filter_all": "全部操作",
@@ -736,28 +748,24 @@ export const zh: Record<string, string> = {
     "agents.traffic_moderate": "中等",
     "agents.traffic_natural": "自然",
     "agents.traffic_load_failed": "加载流量配置失败",
-    "agents.traffic_adapt_success": "适应任务已加入队列",
+
     "agents.traffic_adapt_failed": "触发适应失败",
     "agents.traffic_auto_adapt_enabled": "自动适应已启用",
     "agents.traffic_auto_adapt_disabled": "自动适应已禁用",
     "agents.traffic_adapt_queued": "适应任务已加入队列: {message}",
     "agents.traffic_adapt_error": "适应失败: {error}",
     "agents.traffic_no_data": "暂无流量数据。Beacon 将自动记录通信数据。",
-    "agents.traffic_mean": "均值: {value}s",
-    "agents.traffic_baseline_val": "基线: {value}b",
-    "agents.traffic_stddev": "标准差: {value}s",
+
     "agents.traffic_current_suggestion": "当前建议",
-    "agents.traffic_suggest_interval": "间隔: {value}s",
-    "agents.traffic_suggest_jitter": "抖动: {value}%",
-    "agents.traffic_suggest_pad": "填充: +{value}b",
+
     "agents.traffic_collecting_baseline": "正在收集基线数据...",
-    "agents.traffic_beacon_timeline": "Beacon 时间线（最近 {count} 条记录）",
+
     "agents.traffic_col_time": "时间",
     "agents.traffic_col_size": "大小",
     "agents.traffic_col_interval": "间隔",
     "agents.traffic_col_jitter": "抖动",
     "agents.traffic_col_transport": "传输",
-    "agents.traffic_breadcrumb_agent": "Agent",
+
     "agents.detail_total_tasks": "任务总数",
     "agents.detail_completed": "已完成",
     "agents.detail_pending": "待处理",
@@ -773,10 +781,10 @@ export const zh: Record<string, string> = {
     "agents.detail_child_agents": "子代理",
     "agents.detail_no_tags": "无标签",
     "agents.detail_no_notes": "无备注",
-    "agents.detail_no_activity": "无活动数据",
+
     "agents.detail_collapse": "收起",
     "agents.detail_expand": "展开",
-    "agents.detail_show_full_result": "查看完整结果",
+
     "agents.detail_hide": "隐藏",
     "agents.detail_load": "加载",
     "agents.detail_edit": "编辑",
@@ -799,12 +807,12 @@ export const zh: Record<string, string> = {
     "agents.detail_retry": "重试",
     "agents.detail_back_to_agents": "返回代理列表",
     "agents.header_agents": "代理",
-    "agents.header_alive": "(存活 {duration})",
+
     "agents.header_more": "更多",
     "agents.header_elevated": "提权",
     "agents.header_screenshot": "截图",
     "agents.header_processes": "进程列表",
-    "agents.header_hash_dump": "哈希转储",
+
     "agents.header_creds_dump": "凭据转储",
     "agents.header_clipboard": "剪贴板",
     "agents.header_privesc": "提权",
@@ -814,23 +822,7 @@ export const zh: Record<string, string> = {
 
     "agents.prank_title": "整蛊操作",
     "agents.prank_honesty": "仅限实验室/噪声 — 高可见度、差 OPSEC。实战请用正规工具，勿依赖整蛊。",
-    "agents.prank_wallpaper": "换壁纸",
-    "agents.prank_wallpaper_hint": "图片 URL 或本地路径",
-    "agents.prank_msgbox": "弹窗",
-    "agents.prank_msgbox_hint": "弹窗内容",
-    "agents.prank_sound": "播放声音",
-    "agents.prank_sound_hint": "WAV 文件路径（空=蜂鸣）",
-    "agents.prank_open_url": "打开网页",
-    "agents.prank_url_hint": "要打开的 URL",
-    "agents.prank_screen_rotate": "旋转屏幕",
-    "agents.prank_cdrom": "光驱托盘",
-    "agents.prank_cdrom_hint": "open 或 close",
-    "agents.prank_notepad": "记事本轰炸",
-    "agents.prank_notepad_hint": "窗口数量 (1-20)",
-    "agents.prank_lock": "锁屏",
-    "agents.prank_volume": "调节音量",
-    "agents.prank_volume_hint": "音量等级 (0-100)",
-    "agents.prank_cursor": "鼠标翻转",
+
     "agents.prank_sent": "{action} 已发送",
     "agents.prank_failed": "操作失败",
 
@@ -861,7 +853,7 @@ export const zh: Record<string, string> = {
     "agents.prank_cancel": "取消",
     "agents.prank_execute": "执行",
     "agents.prank_sending": "发送中...",
-    "agents.agents_count": "{count} 个代理",
+
     "agents.set": "设置",
     "agents.header_double_click": "双击我试试...",
     "agents.header_click_confetti": "点我撒花",
@@ -885,7 +877,7 @@ export const zh: Record<string, string> = {
     "agents.stats_jitter": "抖动",
     "agents.stats_uptime": "运行时间",
     "agents.stats_last_seen": "最后在线",
-    "agents.stats_active_window": "活动窗口",
+
     "agents.stats_parent": "父代理",
     "agents.stats_peers": "对等",
     "agents.stats_children": "子代理",
@@ -897,14 +889,7 @@ export const zh: Record<string, string> = {
     "agents.stats_copy_all": "复制全部",
     "agents.tasklist_recent": "最近任务",
     "agents.tasklist_view_all": "查看全部",
-    "agents.tasklist_id": "ID",
-    "agents.tasklist_type": "类型",
-    "agents.tasklist_created": "创建时间",
-    "agents.tasklist_command": "命令",
-    "agents.tasklist_by": "执行者",
-    "agents.tasklist_result": "结果",
-    "agents.tasklist_error": "错误",
-    "agents.tasklist_pending": "待处理",
+
     "agents.screenshots_title": "截图",
     "agents.screenshots_view_all": "查看全部",
     "agents.screenshots_prev": "上一张截图",
@@ -1081,7 +1066,7 @@ export const zh: Record<string, string> = {
     "ai.calling_tool": "调用中",
     "ai.tool_result": "结果",
     "ai.tool": "工具",
-    "ai.not_configured": "未配置",
+
     "ai.clear": "清除",
     "ai.export": "导出",
     "ai.config_title": "AI 配置",
@@ -1239,7 +1224,7 @@ export const zh: Record<string, string> = {
     "timeline.description": "描述",
     "timeline.user": "用户",
     "timeline.type": "类型",
-    "cred.domain_none": "无",
+
     "cred.title": "凭据管理",
     "cred.subtitle": "凭据保险库与管理",
     "cred.export_csv": "导出 CSV",
@@ -1283,7 +1268,7 @@ export const zh: Record<string, string> = {
     "cred.ph_tags": "admin, high-value",
     "cred.btn.add": "添加",
     "cred.batch_title": "批量添加标签",
-    "cred.batch_desc": "向 {count} 个已选凭据添加标签",
+
     "cred.batch_btn": "添加标签",
     "cred.delete_title": "删除凭据？",
     "cred.delete_message": "此操作不可撤销。",
@@ -1304,7 +1289,7 @@ export const zh: Record<string, string> = {
     "templates.subtitle": "管理可复用的命令模板，快速下发任务",
     "templates.add_template": "新增模板",
     "templates.add_title": "新增模板",
-    "templates.add_desc": "创建一个新的命令模板",
+
     "templates.empty_title": "暂无模板",
     "templates.empty_desc": "创建你的第一个命令模板开始使用",
     "templates.count_unit": "个模板",
@@ -1583,6 +1568,11 @@ export const zh: Record<string, string> = {
     "tasks.release": "释放",
     "tasks.cancel": "取消",
     "tasks.rerun": "重新执行",
+    "tasks.approve": "审批通过",
+    "tasks.reject": "拒绝",
+    "tasks.approval_pending": "待审批",
+    "tasks.toast_approve_failed": "审批任务失败",
+    "tasks.toast_reject_failed": "拒绝任务失败",
     "tasks.detail_agent": "Agent",
     "tasks.detail_created": "创建时间",
     "tasks.detail_duration": "耗时",
@@ -1619,14 +1609,14 @@ export const zh: Record<string, string> = {
     "users.user_desc_2": "文件浏览、凭据收集",
     "users.user_desc_3": "生成载荷、创建监听器",
     "users.user_desc_4": "锁定 Agent 进行专属作业",
-    "users.showing": "显示 {filtered} / {total} 个用户",
+
     "users.col_username": "用户名",
     "users.col_role": "角色",
     "users.col_active": "状态",
     "users.col_last_activity": "最近活动",
     "users.col_created_at": "创建时间",
     "users.col_actions": "操作",
-    "users.add_title": "添加用户",
+
     "users.edit_title": "编辑用户",
     "users.label_username": "用户名",
     "users.label_password": "密码",
@@ -1670,7 +1660,7 @@ export const zh: Record<string, string> = {
     "notifications.title": "通知记录",
     "notifications.total": "总计",
     "notifications.mark_all_read": "全部已读",
-    "notifications.mark_n_read": "标记 {count} 条已读",
+
     "notifications.clear_all": "清除全部",
     "notifications.all_types": "所有类型",
     "notifications.all_severity": "所有严重度",
@@ -1729,14 +1719,12 @@ export const zh: Record<string, string> = {
     "loot.all_agents": "所有 Agent",
     "loot.export_json": "导出 JSON",
     "loot.export_csv": "导出 CSV",
-    "loot.delete_selected": "删除已选 ({count})",
+
     "loot.select_all": "全选",
     "loot.empty_screenshots": "暂无截图",
     "loot.empty_keylogs": "暂无键盘记录",
     "loot.empty_downloads": "暂无下载",
     "loot.search_keylogs": "搜索键盘记录...",
-    "loot.collapse": "收起",
-    "loot.expand": "展开",
 
     "builds.title": "构建日志",
     "builds.subtitle": "Implant 构建记录",
@@ -1748,8 +1736,7 @@ export const zh: Record<string, string> = {
     "builds.success_rate": "成功率",
     "builds.version_dist": "Agent 版本分布",
     "builds.agents_unit": "台",
-    "builds.building": "构建中",
-    "builds.pending": "等待中",
+
     "builds.filter_all": "全部",
     "builds.filter_building": "构建中",
     "builds.clear": "清除",
@@ -1834,7 +1821,7 @@ export const zh: Record<string, string> = {
     "stager.field_dns_domain": "DNS 域名",
     "stager.field_dns_server": "DNS 服务器",
     "stager.field_skip_tls": "跳过 TLS 验证",
-    "stager.tokens_count": "Stager 令牌 ({count})",
+
     "stager.empty_tokens": "暂无 Stager 令牌",
     "stager.col_id": "ID",
     "stager.col_os": "系统",
@@ -1912,10 +1899,6 @@ export const zh: Record<string, string> = {
     "workflows.toast.toggle_failed": "切换工作流状态失败",
     "workflows.toast.execute_failed": "执行工作流失败",
     "workflows.toast.load_exec_failed": "加载执行历史失败",
-    "workflows.repeat_count": "重复",
-    "workflows.repeat_delay": "延迟(秒)",
-    "workflows.history": "执行历史",
-    "workflows.executions": "执行记录",
 
     "topology.title": "网络拓扑",
     "topology.p2p_view": "P2P Mesh 拓扑（数据库）",
@@ -1927,9 +1910,9 @@ export const zh: Record<string, string> = {
     "topology.node_details": "节点详情",
     "topology.legend": "图例",
     "topology.quick_actions": "快捷操作",
-    "topology.id": "ID",
+
     "topology.group": "分组",
-    "topology.p2p_mode": "P2P 模式",
+
     "topology.peers": "对等节点",
     "topology.set_parent": "设置首选父节点：",
     "topology.set": "设置",
@@ -1942,7 +1925,7 @@ export const zh: Record<string, string> = {
     "topology.edge_p2p": "P2P 链路",
     "topology.edge_mesh": "Mesh 边",
     "topology.physics": "物理模拟",
-    "topology.stabilize": "稳定化",
+
     "topology.export_png": "导出 PNG",
     "topology.on": "开",
     "topology.off": "关",
@@ -2046,7 +2029,7 @@ export const zh: Record<string, string> = {
 
     "opsec.title": "OPSEC 守卫",
     "opsec.subtitle": "Agent 操作的预飞安全检查",
-    "opsec.rules_active": "条规则活跃",
+
     "opsec.active_rules": "活跃规则",
     "opsec.new_rule": "新建规则",
     "opsec.col_name": "名称",
@@ -2105,7 +2088,6 @@ export const zh: Record<string, string> = {
     "search.hint": "输入查询词以搜索代理、监听器、凭据、BOF、用户和任务。",
     "search.searching": "搜索中...",
     "search.no_results": "未找到结果",
-    "search.loading": "加载中...",
 
     "files.title": "文件浏览器",
     "files.subtitle": "浏览所有代理的文件",
@@ -2144,7 +2126,7 @@ export const zh: Record<string, string> = {
     "attack.kill_chain_title": "杀伤链阶段覆盖",
     "attack.kill_chain_subtitle": "所有 14 个 MITRE ATT&CK 阶段的战役覆盖",
     "attack.fetch_failed": "获取覆盖率失败",
-    "attack.load_agents_failed": "加载代理失败",
+
     "attack.load_phases_failed": "加载 MITRE 阶段失败",
 
     "chain.subtitle": "配置代理链，通过其他代理路由流量（代理 → 代理 → C2）",
@@ -2154,12 +2136,12 @@ export const zh: Record<string, string> = {
     "chain.set_parent": "设置父代理",
     "chain.clear_chain": "清除链路（直连 C2）",
     "chain.set_proxy_parent": "设置代理父节点",
-    "chain.select_parent_desc": "选择 {name} 将路由经过的父代理：",
+
     "chain.no_other_agents": "没有其他可用代理",
     "chain.topology_view": "链路拓扑视图",
     "chain.load_failed": "加载链路数据失败",
     "chain.load_proxy_failed": "加载代理链失败",
-    "chain.parent_set": "已设置链路父节点为 {id}",
+
     "chain.set_failed": "设置链路父节点失败",
     "chain.cleared": "链路已清除 - 代理现在直连 C2",
     "chain.clear_failed": "清除链路失败",
@@ -2187,7 +2169,7 @@ export const zh: Record<string, string> = {
     "autotag.toggle_failed": "切换失败",
     "autotag.delete_confirm": "删除此规则？",
     "autotag.delete_failed": "删除失败",
-    "autotag.applied": "已应用 {count} 个标签",
+
     "autotag.apply_failed": "应用失败",
 
     "screenshots.title": "截屏",
@@ -2199,6 +2181,7 @@ export const zh: Record<string, string> = {
     "screenshots.screenshots_count": "截屏",
     "screenshots.empty_title": "未找到截屏",
     "screenshots.empty_message": "代理签入后，捕获的截屏将显示在此处。",
+    "screenshots.load_failed": "加载截屏失败",
     "screenshots.delete_failed": "删除截屏失败",
 
     "scheduler.title": "任务调度器",
@@ -2283,7 +2266,7 @@ export const zh: Record<string, string> = {
     "cloud.copied": "云凭据已复制",
     "cloud.empty_title": "未找到云凭据",
     "cloud.empty_message": "选择代理并下发云凭据窃取任务以查看结果。",
-    "cloud.load_agents_failed": "加载代理失败",
+
     "cloud.load_results_failed": "加载结果失败",
     "cloud.steal_failed": "窃取凭据失败",
     "cloud.steal_dispatched": "云凭据窃取任务已下发",
@@ -2307,12 +2290,10 @@ export const zh: Record<string, string> = {
     "container.dispatching": "下发中...",
     "container.detect_btn": "检测环境",
     "container.escape_desc": "选择逃逸方法并执行。",
-    "container.escape_method": "逃逸方法",
+
     "container.escape_btn": "执行逃逸",
     "container.result": "结果",
-    "container.result_desc": "操作结果",
-    "container.load_failed": "加载代理失败",
-    "container.task_dispatched": "任务已下发。任务 ID: {id}。正在轮询 agent 结果…",
+
     "container.poll_pending": "等待中",
     "container.poll_running": "执行中",
     "container.poll_completed": "已完成",
@@ -2360,7 +2341,7 @@ export const zh: Record<string, string> = {
     "cb.half_open_desc": "探测中 — 允许有限流量",
     "cb.open_desc": "已阻断 — 触发自动故障转移",
     "cb.check_interval": "检查间隔",
-    "cb.probes_every": "每 {seconds}s 探测",
+
     "cb.monitored_listeners": "已监控的监听器",
     "cb.config": "配置",
     "cb.col_target": "目标",
@@ -2385,9 +2366,9 @@ export const zh: Record<string, string> = {
     "cb.save_config": "保存配置",
     "cb.config_saved": "配置已保存",
     "cb.config_save_failed": "保存断路器配置失败",
-    "cb.listener_reset": "监听器 {id} 已重置",
+
     "cb.reset_failed": "重置断路器监听器失败",
-    "cb.listener_toggled": "监听器 {id} 已切换为 {state}",
+
     "cb.toggle_failed": "切换断路器监听器失败",
     "cb.load_failed": "加载断路器数据失败",
 
@@ -2423,7 +2404,7 @@ export const zh: Record<string, string> = {
     "scripting.output": "输出",
     "scripting.clear": "清空",
     "scripting.editor": "编辑器",
-    "scripting.run_history": "运行历史（{count}）",
+
     "scripting.no_history": "暂无运行历史",
     "scripting.toast.save_failed": "保存脚本失败",
     "scripting.toast.delete_failed": "删除脚本失败",
@@ -2493,7 +2474,7 @@ export const zh: Record<string, string> = {
     "packer.building": "构建中...",
     "packer.build_artifact": "构建 Artifact",
     "packer.payload_exe": "载荷 EXE",
-    "packer.exe_loaded": "EXE 已加载（{size} KB）",
+
     "packer.icon": "图标",
     "packer.optional": "（可选）",
     "packer.icon_loaded": "图标已加载",
@@ -2525,9 +2506,7 @@ export const zh: Record<string, string> = {
     "toolkit.agent_info": "代理信息",
     "toolkit.no_results": "暂无任务结果",
     "toolkit.run": "运行",
-    "toolkit.select_first": "请先选择代理",
-    "toolkit.load_failed": "工具集：加载数据失败",
-    "toolkit.action_failed": "执行操作失败",
+
     "toolkit.cat_system_recon": "系统侦察",
     "toolkit.cat_process_service": "进程与服务",
     "toolkit.cat_network_recon": "网络侦察",
@@ -2575,7 +2554,7 @@ export const zh: Record<string, string> = {
     "toolkit.desc_persistence": "安装持久化",
 
     "plugins.title": "插件",
-    "plugins.subtitle": "共 {count} 个插件 · 管理、安装和配置",
+
     "plugins.check_updates": "检查更新",
     "plugins.create": "创建",
     "plugins.import": "导入",
@@ -2849,7 +2828,7 @@ export const zh: Record<string, string> = {
     "status_banner.online": "在线",
     "status_banner.commands_paused": "交互式命令已暂停",
     "status_banner.toggle_details": "切换详情",
-    "status_banner.details": "详情",
+
     "status_banner.dismiss": "关闭",
     "status_banner.dismiss_hint": "关闭（计数变化时会重新显示）",
     "status_banner.expanded_message": "Shell、文件浏览、截图和其他交互式命令在 agent 回传 beacon 前将无法返回结果。请确保 agent 可执行文件正在目标主机上运行。",
@@ -2886,11 +2865,12 @@ export const zh: Record<string, string> = {
     "timeline.empty_title": "暂无时间线事件",
     "timeline.empty_message": "开始执行操作后，时间线事件将显示在此处。",
     "loot.page_title": "截图收集",
-    "agents.token_subtitle": "管理 agent {hostname} 的令牌",
+
     "settings.backup.empty_title": "未找到备份",
     "settings.backup.empty_message": "创建一个备份以开始使用。",
     "settings.notifications.empty_title": "未配置通知目标",
     "settings.notifications.empty_message": "在下方添加一个以开始使用",
     "common.execute": "执行",
     "network.offline": "您已离线。恢复网络连接前，部分功能可能无法使用。",
+    "common.error_hint": "请重试或检查您的权限设置。",
 };

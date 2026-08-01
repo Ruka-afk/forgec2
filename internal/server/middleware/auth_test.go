@@ -123,7 +123,7 @@ func TestAuthRequired(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	testDB.AutoMigrate(&db.User{})
+	testDB.AutoMigrate(&db.User{}, &db.UserSession{})
 
 	t.Run("no cookie", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -184,6 +184,7 @@ func TestAuthRequired(t *testing.T) {
 		testDB.Create(&user)
 
 		token, _ := GenerateToken(user, false, 24)
+		testDB.Create(&db.UserSession{UserID: user.ID, TokenHash: TokenHash(token)})
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -255,6 +256,7 @@ func TestAuthRequired(t *testing.T) {
 		testDB.Create(&user)
 
 		token, _ := GenerateToken(user, false, 24)
+		testDB.Create(&db.UserSession{UserID: user.ID, TokenHash: TokenHash(token)})
 
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -283,7 +285,7 @@ func TestInitJWTSecret(t *testing.T) {
 		t.Fatalf("InitJWTSecret() error = %v", err)
 	}
 
-	if string(jwtSecret) != "my-custom-secret-key-for-test-32chars" {
+	if string(jwtSecret.Load().([]byte)) != "my-custom-secret-key-for-test-32chars" {
 		t.Error("jwtSecret was not initialized from config")
 	}
 

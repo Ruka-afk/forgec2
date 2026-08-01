@@ -28,6 +28,7 @@ type StagerTokenData struct {
 type StagerConfig struct {
 	ListenerID    uint
 	C2URL         string
+	Protocol      string // http, tcp, p2p (default "http")
 	Architecture  string
 	OS            string
 	Format        string // exe, dll, shellcode
@@ -46,12 +47,22 @@ type StagerResult struct {
 }
 
 var (
-	stagerKey     []byte
-	stagerKeyOnce sync.Once
+	stagerKey       []byte
+	stagerKeyOnce   sync.Once
+	stagerKeyPath   = filepath.Join("data", "stager.key")
 )
 
-func ensureStagerKey() {
+func init() {
+	InitStagerKey()
+}
+
+func InitStagerKey() {
 	stagerKeyOnce.Do(func() {
+		if data, err := os.ReadFile(stagerKeyPath); err == nil && len(data) == 32 {
+			stagerKey = data
+			slog.Info("Stager key loaded from disk")
+			return
+		}
 		key := make([]byte, 32)
 		if _, err := rand.Read(key); err != nil {
 			slog.Error("crypto/rand.Read failed for stager key, using zeros (insecure)", "error", err)
@@ -59,12 +70,18 @@ func ensureStagerKey() {
 			return
 		}
 		stagerKey = key
-		slog.Info("Stager key initialized")
+		if err := os.MkdirAll(filepath.Dir(stagerKeyPath), 0750); err == nil {
+			if err := os.WriteFile(stagerKeyPath, stagerKey, 0640); err != nil {
+				slog.Error("Failed to persist stager key", "error", err)
+			} else {
+				slog.Info("Stager key initialized and persisted")
+			}
+		}
 	})
 }
 
 func GetStagerKey() []byte {
-	ensureStagerKey()
+	InitStagerKey()
 	return stagerKey
 }
 
@@ -163,9 +180,13 @@ func DecryptStage2Payload(data []byte, key []byte) ([]byte, error) {
 }
 
 func GenerateStagerStage2(cfg StagerConfig, outputDir string) (string, error) {
+	proto := cfg.Protocol
+	if proto == "" {
+		proto = "http"
+	}
 	implantCfg := ImplantConfig{
 		C2URL:         cfg.C2URL,
-		Protocol:      "http",
+		Protocol:      proto,
 		Interval:      10,
 		Jitter:        20,
 		UserAgent:     cfg.UserAgent,
@@ -197,9 +218,13 @@ func GenerateStagerStage2(cfg StagerConfig, outputDir string) (string, error) {
 }
 
 func GenerateStagerStage2Linux(cfg StagerConfig, outputDir string) (string, error) {
+	proto := cfg.Protocol
+	if proto == "" {
+		proto = "http"
+	}
 	implantCfg := ImplantConfig{
 		C2URL:         cfg.C2URL,
-		Protocol:      "http",
+		Protocol:      proto,
 		Interval:      10,
 		Jitter:        20,
 		UserAgent:     cfg.UserAgent,

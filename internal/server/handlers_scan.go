@@ -106,7 +106,9 @@ func (s *Server) handleScanResults(c *gin.Context) {
 	taskID := c.Param("taskId")
 
 	var results []db.ScanResult
-	s.db.Where("task_id = ?", taskID).Order("port asc").Limit(65535).Find(&results)
+	if err := s.db.Where("task_id = ?", taskID).Order("port asc").Limit(65535).Find(&results).Error; err != nil {
+		slog.Error("Failed to query scan results", "err", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"results": results,
@@ -119,7 +121,9 @@ func (s *Server) handleScanResultsByAgent(c *gin.Context) {
 	agentID := c.Param("agentId")
 
 	var results []db.ScanResult
-	s.db.Where("agent_id = ?", agentID).Order("created_at desc").Limit(1000).Find(&results)
+	if err := s.db.Where("agent_id = ?", agentID).Order("created_at desc").Limit(1000).Find(&results).Error; err != nil {
+		slog.Error("Failed to query agent scan results", "err", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"results": results,
@@ -195,7 +199,9 @@ func (s *Server) handleExportScanResults(c *gin.Context) {
 	taskID := c.Param("taskId")
 
 	var results []db.ScanResult
-	s.db.Where("task_id = ?", taskID).Order("port asc").Find(&results)
+	if err := s.db.Where("task_id = ?", taskID).Order("port asc").Find(&results).Error; err != nil {
+		slog.Error("Failed to query scan results for export", "err", err)
+	}
 
 	// Build CSV
 	var b strings.Builder

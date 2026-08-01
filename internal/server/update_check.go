@@ -255,6 +255,8 @@ func (s *Server) handleHotUpdate(c *gin.Context) {
 		return
 	}
 
+	s.LogAuditRecord(c, "hot_update", "server", "self", fmt.Sprintf("hot update to %s triggered", latest), true, nil)
+
 	// Trigger async hot-update
 	go func() {
 		defer func() {

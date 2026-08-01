@@ -452,8 +452,8 @@ export default function ReportPage() {
                   <TableBody>
                     {taskStats.length === 0 ? (
                       <TableRow><TableCell colSpan={5} className="py-16 sm:py-20 text-center text-muted-foreground"><Inbox className="w-4 h-4" />{t("report.no_data")}</TableCell></TableRow>
-                    ) : taskStats.map((ts, i) => (
-                      <TableRow key={i}>
+                    ) : taskStats.map((ts) => (
+                      <TableRow key={ts.type}>
                         <TableCell className="font-medium">{ts.type || "-"}</TableCell>
                         <TableCell>{ts.total ?? 0}</TableCell>
                         <TableCell className="text-emerald-600 dark:text-emerald-400">{ts.success ?? 0}</TableCell>
@@ -489,8 +489,8 @@ export default function ReportPage() {
                   <TableBody>
                     {creds.length === 0 ? (
                       <TableRow><TableCell colSpan={3} className="py-16 sm:py-20 text-center text-muted-foreground"><Inbox className="w-4 h-4" />{t("report.no_data")}</TableCell></TableRow>
-                    ) : creds.map((c, i) => (
-                      <TableRow key={i}>
+                    ) : creds.map((c) => (
+                      <TableRow key={c.type}>
                         <TableCell className="font-medium">{c.type || "-"}</TableCell>
                         <TableCell className="text-indigo-600 dark:text-indigo-400 font-semibold">{c.count ?? 0}</TableCell>
                         <TableCell>{c.source || "-"}</TableCell>

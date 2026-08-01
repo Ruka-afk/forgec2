@@ -15,9 +15,13 @@ import (
 func (s *Server) handleOpsecHistory(c *gin.Context) {
 	p := parsePagination(c, 50, 200)
 	var total int64
-	s.db.Model(&db.OpsecHistory{}).Count(&total)
+	if err := s.db.Model(&db.OpsecHistory{}).Count(&total).Error; err != nil {
+		slog.Error("Failed to count OPSEC history", "err", err)
+	}
 	var history []db.OpsecHistory
-	s.db.Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&history)
+	if err := s.db.Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&history).Error; err != nil {
+		slog.Error("Failed to query OPSEC history", "err", err)
+	}
 	respond(c, gin.H{"history": history, "total": total, "page": p.Page, "page_size": p.PageSize})
 }
 
@@ -96,13 +100,13 @@ func (s *Server) handleOpsecRuleDelete(c *gin.Context) {
 	}
 
 	result := s.db.Where("name = ?", name).Delete(&db.OpsecRule{})
-	if result.RowsAffected == 0 {
-		respondError(c, http.StatusNotFound, "rule not found")
-		return
-	}
 	if result.Error != nil {
 		slog.Error("Failed to delete OPSEC rule", "name", name, "err", result.Error)
 		respondError(c, http.StatusInternalServerError, "failed to delete rule")
+		return
+	}
+	if result.RowsAffected == 0 {
+		respondError(c, http.StatusNotFound, "rule not found")
 		return
 	}
 
@@ -114,6 +118,8 @@ func (s *Server) handleOpsecRuleDelete(c *gin.Context) {
 // GET /api/opsec/rules (or /opsec/rules)
 func (s *Server) handleOpsecRulesList(c *gin.Context) {
 	var rules []db.OpsecRule
-	s.db.Order("risk_level desc, name").Limit(200).Find(&rules)
+	if err := s.db.Order("risk_level desc, name").Limit(200).Find(&rules).Error; err != nil {
+		slog.Error("Failed to list OPSEC rules", "err", err)
+	}
 	respond(c, gin.H{"rules": rules})
 }

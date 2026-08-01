@@ -12,6 +12,7 @@ const STATUS_CONFIG: Record<string, { dot: string; bg: string; text: string }> =
   pending:   { dot: "bg-muted-foreground", bg: "bg-muted/50", text: "text-muted-foreground" },
   running:   { dot: "bg-blue-500", bg: "bg-blue-500/10 dark:bg-blue-500/10", text: "text-blue-700 dark:text-blue-400" },
   cancelled: { dot: "bg-muted-foreground", bg: "bg-muted/50", text: "text-muted-foreground" },
+  pending_approval: { dot: "bg-amber-500", bg: "bg-amber-500/10 dark:bg-amber-500/10", text: "text-amber-700 dark:text-amber-400" },
 };
 
 export const StatusBadge = memo(function StatusBadge({ status, pulse }: { status: string; pulse?: boolean }) {

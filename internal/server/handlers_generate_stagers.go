@@ -1,33 +1,46 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func (s *Server) handleGenerateStager(c *gin.Context) {
 	var form struct {
-		C2URL         string `form:"c2_url"`
-		Protocol      string `form:"protocol"`
-		Interval      int    `form:"interval"`
-		Jitter        int    `form:"jitter"`
-		BeaconTime    int    `form:"beacon_time"`
-		UserAgent     string `form:"user_agent"`
-		Persist       bool   `form:"persist"`
-		SkipTLSVerify bool   `form:"skip_tls_verify"`
-		Filename      string `form:"filename"`
-		Profile       string `form:"profile"`
-		ListenerID    uint   `form:"listener_id"`
-		DNSDomain     string `form:"dns_domain"`
-		DNSServer     string `form:"dns_server"`
+		C2URL           string `form:"c2_url"`
+		Protocol        string `form:"protocol"`
+		Interval        int    `form:"interval"`
+		Jitter          int    `form:"jitter"`
+		BeaconTime      int    `form:"beacon_time"`
+		UserAgent       string `form:"user_agent"`
+		Persist         bool   `form:"persist"`
+		SkipTLSVerify   bool   `form:"skip_tls_verify"`
+		Filename        string `form:"filename"`
+		Profile         string `form:"profile"`
+		ListenerID      uint   `form:"listener_id"`
+		DNSDomain       string `form:"dns_domain"`
+		DNSServer       string `form:"dns_server"`
+		BeaconTransport string `form:"beacon_transport"`
+		Proxy           string `form:"proxy"`
+		CryptoKey       string `form:"crypto_key"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request parameters")
 		return
+	}
+
+	// Sanitize filename to block path traversal and build collisions.
+	if form.Filename != "" {
+		form.Filename = sanitizeFilename(form.Filename)
+		shortID := strings.Replace(uuid.New().String()[:8], "-", "", -1)
+		form.Filename = fmt.Sprintf("%s_%s", shortID, form.Filename)
 	}
 
 	isDNS := form.DNSDomain != "" || form.DNSServer != ""
@@ -63,17 +76,20 @@ func (s *Server) handleGenerateStager(c *gin.Context) {
 	}
 
 	cfg := payload.ImplantConfig{
-		C2URL:         form.C2URL,
-		Protocol:      proto,
-		Interval:      interval,
-		Jitter:        form.Jitter,
-		UserAgent:     form.UserAgent,
-		Persist:       form.Persist,
-		SkipTLSVerify: form.SkipTLSVerify,
-		Filename:      "forgec2_stage.exe",
-		Debug:         false,
-		Profile:       form.Profile,
-		ListenerID:    form.ListenerID,
+		C2URL:           form.C2URL,
+		Protocol:        proto,
+		Interval:        interval,
+		Jitter:          form.Jitter,
+		UserAgent:       form.UserAgent,
+		Persist:         form.Persist,
+		SkipTLSVerify:   form.SkipTLSVerify,
+		Filename:        "forgec2_stage.exe",
+		Debug:           false,
+		Profile:         form.Profile,
+		ListenerID:      form.ListenerID,
+		BeaconTransport: form.BeaconTransport,
+		Proxy:           form.Proxy,
+		CryptoKey:       form.CryptoKey,
 	}
 
 	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")
@@ -116,23 +132,33 @@ func (s *Server) handleGenerateStager(c *gin.Context) {
 
 func (s *Server) handleGenerateStagerLinux(c *gin.Context) {
 	var form struct {
-		C2URL         string `form:"c2_url"`
-		Protocol      string `form:"protocol"`
-		Interval      int    `form:"interval"`
-		Jitter        int    `form:"jitter"`
-		BeaconTime    int    `form:"beacon_time"`
-		UserAgent     string `form:"user_agent"`
-		Persist       bool   `form:"persist"`
-		SkipTLSVerify bool   `form:"skip_tls_verify"`
-		Filename      string `form:"filename"`
-		Profile       string `form:"profile"`
-		ListenerID    uint   `form:"listener_id"`
-		DNSDomain     string `form:"dns_domain"`
-		DNSServer     string `form:"dns_server"`
+		C2URL           string `form:"c2_url"`
+		Protocol        string `form:"protocol"`
+		Interval        int    `form:"interval"`
+		Jitter          int    `form:"jitter"`
+		BeaconTime      int    `form:"beacon_time"`
+		UserAgent       string `form:"user_agent"`
+		Persist         bool   `form:"persist"`
+		SkipTLSVerify   bool   `form:"skip_tls_verify"`
+		Filename        string `form:"filename"`
+		Profile         string `form:"profile"`
+		ListenerID      uint   `form:"listener_id"`
+		DNSDomain       string `form:"dns_domain"`
+		DNSServer       string `form:"dns_server"`
+		BeaconTransport string `form:"beacon_transport"`
+		Proxy           string `form:"proxy"`
+		CryptoKey       string `form:"crypto_key"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request parameters")
 		return
+	}
+
+	// Sanitize filename to block path traversal and build collisions.
+	if form.Filename != "" {
+		form.Filename = sanitizeFilename(form.Filename)
+		shortID := strings.Replace(uuid.New().String()[:8], "-", "", -1)
+		form.Filename = fmt.Sprintf("%s_%s", shortID, form.Filename)
 	}
 
 	isDNS := form.DNSDomain != "" || form.DNSServer != ""
@@ -168,17 +194,20 @@ func (s *Server) handleGenerateStagerLinux(c *gin.Context) {
 	}
 
 	cfg := payload.ImplantConfig{
-		C2URL:         form.C2URL,
-		Protocol:      proto,
-		Interval:      interval,
-		Jitter:        form.Jitter,
-		UserAgent:     form.UserAgent,
-		Persist:       form.Persist,
-		SkipTLSVerify: form.SkipTLSVerify,
-		Filename:      "forgec2_stage",
-		Debug:         false,
-		Profile:       form.Profile,
-		ListenerID:    form.ListenerID,
+		C2URL:           form.C2URL,
+		Protocol:        proto,
+		Interval:        interval,
+		Jitter:          form.Jitter,
+		UserAgent:       form.UserAgent,
+		Persist:         form.Persist,
+		SkipTLSVerify:   form.SkipTLSVerify,
+		Filename:        "forgec2_stage",
+		Debug:           false,
+		Profile:         form.Profile,
+		ListenerID:      form.ListenerID,
+		BeaconTransport: form.BeaconTransport,
+		Proxy:           form.Proxy,
+		CryptoKey:       form.CryptoKey,
 	}
 
 	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")

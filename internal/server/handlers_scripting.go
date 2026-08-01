@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -166,15 +167,21 @@ func (s *Server) handleAPIExecuteScript(c *gin.Context) {
 	}
 
 	var agents []db.Implant
-	s.db.Select("id, hostname, ip, os, status").Limit(100).Find(&agents)
+	if err := s.db.Select("id, hostname, ip, os, status").Limit(100).Find(&agents).Error; err != nil {
+		slog.Error("Scripting: failed to query agents", "err", err)
+	}
 	context["agents"] = agents
 
 	var tasks []db.Task
-	s.db.Select("id, agent_id, type, command, status").Order("created_at desc").Limit(50).Find(&tasks)
+	if err := s.db.Select("id, agent_id, type, command, status").Order("created_at desc").Limit(50).Find(&tasks).Error; err != nil {
+		slog.Error("Scripting: failed to query tasks", "err", err)
+	}
 	context["tasks"] = tasks
 
 	var creds []db.CredentialEntry
-	s.db.Select("agent_id, domain, username, type, source").Limit(50).Find(&creds)
+	if err := s.db.Select("agent_id, domain, username, type, source").Limit(50).Find(&creds).Error; err != nil {
+		slog.Error("Scripting: failed to query credentials", "err", err)
+	}
 	context["credentials"] = creds
 
 	engine := scripting.GetEngine()
@@ -187,7 +194,9 @@ func (s *Server) handleAPIExecuteScript(c *gin.Context) {
 				_ = engine.LoadScript(row.ID, row.Name, row.Code)
 				row.RunCount++
 				row.LastRun = time.Now()
-				s.db.Save(&row)
+				if err := s.db.Save(&row).Error; err != nil {
+					slog.Error("Failed to update script run count", "script_id", uid, "err", err)
+				}
 			}
 		}
 		result = engine.Execute(req.ScriptID, context)

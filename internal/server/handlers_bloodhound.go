@@ -96,7 +96,9 @@ func (s *Server) handleBloodHoundDelete(c *gin.Context) {
 	}
 	if result.FilePath != "" {
 		if err := validateFilePath(result.FilePath, bloodHoundDir); err == nil {
-			os.Remove(result.FilePath)
+			if err := os.Remove(result.FilePath); err != nil {
+				slog.Warn("Failed to remove bloodhound result file", "path", result.FilePath, "err", err)
+			}
 		}
 	}
 	if err := s.db.Delete(&result).Error; err != nil {

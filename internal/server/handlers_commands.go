@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
@@ -34,7 +35,12 @@ func validateCallbackURL(rawURL string) error {
 		if err != nil || len(ips) == 0 {
 			return fmt.Errorf("cannot resolve host")
 		}
-		ip = ips[0]
+		for _, resolved := range ips {
+			if isPrivateIP(resolved.String()) {
+				return fmt.Errorf("private/internal IP addresses are not allowed")
+			}
+		}
+		return nil
 	}
 	if isPrivateIP(ip.String()) {
 		return fmt.Errorf("private/internal IP addresses are not allowed")
@@ -106,6 +112,10 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 	}
 	id := c.Param("id")
 	cmd := c.PostForm("command")
+	if len(cmd) > MaxCommandLength {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("command too long (max %d characters)", MaxCommandLength))
+		return
+	}
 	shell := c.PostForm("shell")
 	callbackURL := c.PostForm("callback_url")
 	callbackMethod := c.PostForm("callback_method")
@@ -113,7 +123,7 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 		shell = "cmd.exe"
 	}
 
-	slog.Info("HandleSendCommand called", "agent_id", id, "command", truncateString(cmd, 100))
+	slog.Debug("HandleSendCommand called", "agent_id", id, "command", truncateString(cmd, 100))
 
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -129,17 +139,21 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 	// Set callback fields if provided
 	if callbackURL != "" {
 		if err := validateCallbackURL(callbackURL); err != nil {
-			respondError(c, http.StatusBadRequest, "invalid callback URL: "+err.Error())
+			respondError(c, http.StatusBadRequest, "invalid callback URL")
 			return
 		}
 		if err := validateCallbackMethod(callbackMethod); err != nil {
-			respondError(c, http.StatusBadRequest, err.Error())
+			respondError(c, http.StatusBadRequest, "invalid callback method")
 			return
 		}
-		s.db.Model(&task).Updates(map[string]interface{}{
+		if err := s.db.Model(&task).Updates(map[string]interface{}{
 			"callback_url":    callbackURL,
 			"callback_method": callbackMethod,
-		})
+		}).Error; err != nil {
+			slog.Error("Failed to update task callback", "task_id", task.ID, "error", err)
+			respondError(c, http.StatusInternalServerError, "failed to update task callback")
+			return
+		}
 		task.CallbackURL = callbackURL
 		if callbackMethod != "" {
 			task.CallbackMethod = callbackMethod
@@ -152,30 +166,30 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 
 func (s *Server) handleGetAgentTasks(c *gin.Context) {
 	id := c.Param("id")
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "0"))
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > MaxTaskPageSize {
-		pageSize = DefaultTaskPageSize
-	}
+	p := parsePagination(c, DefaultTaskPageSize, MaxTaskPageSize)
 
 	query := s.db.Where("agent_id = ?", id).
 		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"})
 
 	var total int64
-	query.Model(&db.Task{}).Count(&total)
+	if err := query.Model(&db.Task{}).Count(&total).Error; err != nil {
+		slog.Error("Failed to count agent tasks", "agent_id", id, "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to query tasks")
+		return
+	}
 
 	var tasks []db.Task
-	offset := (page - 1) * pageSize
-	query.Order("created_at desc").Offset(offset).Limit(pageSize).Find(&tasks)
+	if err := query.Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&tasks).Error; err != nil {
+		slog.Error("Failed to query agent tasks", "agent_id", id, "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to query tasks")
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"tasks":    tasks,
 		"total":    total,
-		"page":     page,
-		"pageSize": pageSize,
+		"page":     p.Page,
+		"pageSize": p.PageSize,
 	})
 }
 
@@ -236,7 +250,11 @@ func (s *Server) handleBatchTaskStatus(c *gin.Context) {
 	}
 
 	var tasks []db.Task
-	s.db.Where("id IN ?", ids).Find(&tasks)
+	if err := s.db.Where("id IN ?", ids).Find(&tasks).Error; err != nil {
+		slog.Error("Failed to query tasks for batch status", "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to query tasks")
+		return
+	}
 
 	type taskStatus struct {
 		ID     uint   `json:"id"`
@@ -271,7 +289,7 @@ func (s *Server) handleSuspendProcess(c *gin.Context) {
 		return
 	}
 	if err := validatePID(target); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid PID: "+err.Error())
+		respondError(c, http.StatusBadRequest, "invalid PID")
 		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
@@ -297,7 +315,7 @@ func (s *Server) handleResumeProcess(c *gin.Context) {
 		return
 	}
 	if err := validatePID(target); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid PID: "+err.Error())
+		respondError(c, http.StatusBadRequest, "invalid PID")
 		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
@@ -323,7 +341,7 @@ func (s *Server) handleKillProcess(c *gin.Context) {
 		return
 	}
 	if err := validatePID(target); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid PID: "+err.Error())
+		respondError(c, http.StatusBadRequest, "invalid PID")
 		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
@@ -633,11 +651,33 @@ func (s *Server) handleInject(c *gin.Context) {
 	}
 	id := c.Param("id")
 	pidStr := c.PostForm("pid")
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil || pid <= 0 {
+		respondError(c, http.StatusBadRequest, "invalid pid: must be a positive integer")
+		return
+	}
 	tech := c.PostForm("tech")
 	if tech == "" {
 		tech = "createremotethread"
 	}
+	if err := validateCommandArg(tech, MaxTechniqueLength, "technique"); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	scB64 := c.PostForm("shellcode") // base64 shellcode
+	scBytes, err := base64.StdEncoding.DecodeString(scB64)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "shellcode is not valid base64")
+		return
+	}
+	if len(scBytes) == 0 {
+		respondError(c, http.StatusBadRequest, "shellcode is empty")
+		return
+	}
+	if len(scBytes) > MaxShellcodeSize {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("shellcode too large: %d bytes (max %d)", len(scBytes), MaxShellcodeSize))
+		return
+	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
@@ -660,9 +700,17 @@ func (s *Server) handleSpawn(c *gin.Context) {
 	if target == "" {
 		target = "rundll32.exe"
 	}
+	if err := validateCommandArg(target, MaxTargetLength, "target"); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	technique := c.PostForm("technique")
 	if technique == "" {
 		technique = "CreateRemoteThread"
+	}
+	if err := validateCommandArg(technique, MaxTechniqueLength, "technique"); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
 	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
@@ -761,21 +809,31 @@ func (s *Server) handleCancelTask(c *gin.Context) {
 		return
 	}
 
-	s.db.Model(&task).Updates(map[string]interface{}{
+	wasRunning := task.Status == "running"
+
+	if err := s.db.Model(&task).Updates(map[string]interface{}{
 		"status": "cancelled",
 		"error":  "cancelled by operator",
-	})
+	}).Error; err != nil {
+		slog.Error("Failed to update task status to cancelled", "agent_id", agentID, "task", taskID, "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to cancel task")
+		return
+	}
 
-	if task.Status == "running" {
+	if wasRunning {
 		abortTask := db.Task{
-			AgentID:  agentID,
-			Type:     "abort",
-			Command:  fmt.Sprintf("%d", taskID),
-			Status:   "pending",
-			Priority: 3,
+			AgentID:   agentID,
+			Type:      "abort",
+			Command:   fmt.Sprintf("%d", taskID),
+			Status:    "pending",
+			Priority:  3,
+			ClaimedBy: agentID,
+			ClaimedAt: time.Now(),
 			CreatedBy: c.GetString("user"),
 		}
-		if err := s.db.Create(&abortTask).Error; err == nil {
+		if err := s.db.Create(&abortTask).Error; err != nil {
+			slog.Error("Failed to inject abort task", "agent_id", agentID, "original_task", taskID, "err", err)
+		} else {
 			s.agentPendingTasksMu.Lock()
 			s.agentPendingTasks[agentID]++
 			s.agentPendingTasksMu.Unlock()
@@ -1338,6 +1396,19 @@ func (s *Server) createOneParamTask(c *gin.Context, def oneParamTaskDef) bool {
 	return true
 }
 
+// validateCommandArg rejects values that could break the agent's `|`-delimited
+// command parsing or abuse field sizes. Applies to free-form command args such
+// as injection techniques and spawn targets.
+func validateCommandArg(v string, maxLen int, field string) error {
+	if len(v) > maxLen {
+		return fmt.Errorf("%s too long (max %d characters)", field, maxLen)
+	}
+	if strings.ContainsAny(v, "|\x00\r\n\t") {
+		return fmt.Errorf("%s contains invalid characters", field)
+	}
+	return nil
+}
+
 // allowedUploadExtensions maps field names to their allowed file extensions.
 // This prevents arbitrary file uploads that could be used as attack vectors.
 var allowedUploadExtensions = map[string][]string{
@@ -1357,12 +1428,13 @@ func validateUploadExtension(fieldName, filename string) error {
 		allowed = []string{".txt", ".bin", ".dat", ".csv", ".json", ".xml", ".log", ".ps1", ".bat", ".sh", ".c", ".h"}
 	}
 	lower := strings.ToLower(filename)
+	actualExt := filepath.Ext(lower)
 	for _, ext := range allowed {
-		if strings.HasSuffix(lower, ext) {
+		if actualExt == ext {
 			return nil
 		}
 	}
-	return fmt.Errorf("file extension not allowed for %s: %s (allowed: %s)", fieldName, filepath.Ext(filename), strings.Join(allowed, ", "))
+	return fmt.Errorf("file extension not allowed for %s: %s (allowed: %s)", fieldName, actualExt, strings.Join(allowed, ", "))
 }
 
 // validateUploadMagicBytes reads the first 16 bytes and rejects obviously dangerous content.
@@ -1415,7 +1487,7 @@ func (s *Server) handleFileUpload(c *gin.Context, fieldName string) (filename, b
 
 	// Validate file extension before reading content
 	if err := validateUploadExtension(fieldName, file.Filename); err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondError(c, http.StatusBadRequest, "invalid file extension for "+fieldName)
 		return
 	}
 
@@ -1433,7 +1505,7 @@ func (s *Server) handleFileUpload(c *gin.Context, fieldName string) (filename, b
 
 	// Validate magic bytes for defense-in-depth
 	if err := validateUploadMagicBytes(fieldName, file.Filename, data); err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
+		respondError(c, http.StatusBadRequest, "file content does not match expected type")
 		return
 	}
 

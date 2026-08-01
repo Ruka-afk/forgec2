@@ -5,10 +5,40 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
+
+// sensitivePatterns matches common sensitive field names in JSON or URL-encoded data.
+// It replaces the value portion with "*****" to prevent secret leakage in audit logs.
+var sensitivePatterns = []*regexp.Regexp{
+	// JSON: "password":"secretvalue"
+	regexp.MustCompile(`"(password|secret|token|api_key|api_secret|jwt|session_key|loot_key|private_key)"\s*:\s*"[^"]+"`),
+	// JSON with escaped quotes
+	regexp.MustCompile(`"(password|secret|token|api_key|api_secret|jwt|session_key|loot_key|private_key)"\s*:\s*'[^']+'`),
+	// URL-encoded or plain: password=secretvalue
+	regexp.MustCompile(`(?i)(password|secret|token|api_key|api_secret|jwt|session_key|loot_key|private_key)\s*[:=]\s*\S{4,}`),
+	// Key material hex/blobs
+	regexp.MustCompile(`(?i)(-----BEGIN.*?KEY-----)(.|\n)*?(-----END.*?KEY-----)`),
+}
+
+// sanitizeDetails masks sensitive field values in audit log details.
+// This is a defense-in-depth measure — callers should also avoid sending secrets,
+// but this catches accidental leakage.
+func sanitizeDetails(details string) string {
+	if details == "" || !strings.ContainsAny(details, "=:") {
+		return details
+	}
+	result := details
+	for _, re := range sensitivePatterns {
+		result = re.ReplaceAllString(result, "$1:*****")
+	}
+	return result
+}
 
 // LogAuditRecord creates an audit log entry
 // c may be nil for non-HTTP paths (e.g. TCP transport beacons)
@@ -67,8 +97,8 @@ func (s *Server) buildAuditEntries(c *gin.Context, entries []auditEntry) []db.Au
 			AgentID:  e.agentID,
 			IP:       ip,
 			Success:  e.success,
-			Error:    errorMsg,
-			Details:  e.details,
+			Error:    sanitizeDetails(errorMsg),
+			Details:  sanitizeDetails(e.details),
 		}
 		result = append(result, logEntry)
 	}
@@ -79,22 +109,26 @@ func (s *Server) flushAuditEntries(entries []db.AuditLog) {
 	if len(entries) == 0 {
 		return
 	}
-	// Compute append-only hash chain for tamper detection
-	var lastHash string
-	var lastEntry db.AuditLog
-	if err := s.db.Order("id DESC").First(&lastEntry).Error; err == nil {
-		lastHash = lastEntry.EntryHash
-	}
-	for i := range entries {
-		entries[i].PrevHash = lastHash
-		h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s|%s|%t|%s|%s",
-			entries[i].User, entries[i].Action, entries[i].Resource,
-			entries[i].AgentID, entries[i].IP, entries[i].Success,
-			entries[i].Error, entries[i].Details)))
-		entries[i].EntryHash = fmt.Sprintf("%x", h)
-		lastHash = entries[i].EntryHash
-	}
-	if err := s.db.CreateInBatches(entries, 50).Error; err != nil {
+	// Compute append-only hash chain for tamper detection within a transaction
+	// to ensure atomicity of the hash chain.
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var lastHash string
+		var lastEntry db.AuditLog
+		if err := tx.Order("id DESC").First(&lastEntry).Error; err == nil {
+			lastHash = lastEntry.EntryHash
+		}
+		for i := range entries {
+			entries[i].PrevHash = lastHash
+			h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s|%s|%t|%s|%s",
+				entries[i].User, entries[i].Action, entries[i].Resource,
+				entries[i].AgentID, entries[i].IP, entries[i].Success,
+				entries[i].Error, entries[i].Details)))
+			entries[i].EntryHash = fmt.Sprintf("%x", h)
+			lastHash = entries[i].EntryHash
+		}
+		return tx.CreateInBatches(entries, 50).Error
+	})
+	if err != nil {
 		slog.Error("Failed to batch-create audit logs", "count", len(entries), "err", err)
 	}
 	if s.siem != nil {
@@ -223,7 +257,7 @@ func (s *Server) LogOperatorAction(c *gin.Context, action OperatorAction) {
 		ip = c.ClientIP()
 	}
 
-	details := action.Details
+	details := sanitizeDetails(action.Details)
 	if action.TargetID != "" {
 		details = "target=" + action.TargetID + " " + details
 	}

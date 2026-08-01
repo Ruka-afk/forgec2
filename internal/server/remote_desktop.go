@@ -103,16 +103,25 @@ func (h *RDHub) SendInput(s *Server, agentID string, inputType string, data map[
 			"data":       data,
 		}
 		if payloadJSON, err := json.Marshal(payload); err == nil {
-			select {
-			case beacon.Send <- payloadJSON:
-			default:
-			}
+			func() {
+				defer func() { recover() }()
+				select {
+				case beacon.Send <- payloadJSON:
+				default:
+				}
+			}()
 		}
 	}
 }
 
 // handleRDWebSocket handles operator WebSocket connections for remote desktop.
 func (s *Server) handleRDWebSocket(c *gin.Context) {
+	// Remote desktop streams screen content and relays operator input to agents,
+	// so viewer-role users must not access it.
+	if !s.requireOperator(c) {
+		return
+	}
+
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		slog.Error("RD WebSocket upgrade failed", "error", err)
@@ -128,6 +137,13 @@ func (s *Server) handleRDWebSocket(c *gin.Context) {
 
 	rdHub.Join(agentID, operatorID, conn)
 	defer rdHub.Leave(agentID, operatorID)
+
+	conn.SetReadLimit(WSMaxMessageSize)
+	conn.SetReadDeadline(time.Now().Add(RemoteDesktopReadDeadline))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(RemoteDesktopReadDeadline))
+		return nil
+	})
 
 	// Listen for input events from operator
 	for {
@@ -153,6 +169,9 @@ func (s *Server) handleRDWebSocket(c *gin.Context) {
 
 // handleRDAPIGetFrame returns the latest screen frame for an agent (HTTP fallback).
 func (s *Server) handleRDAPIGetFrame(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	agentID := c.Param("id")
 
 	// Get frame from the frame buffer
@@ -180,6 +199,9 @@ func getFrameBuffer(agentID string) []byte {
 
 // handleRDAPIScreenshot triggers a screenshot request for an agent.
 func (s *Server) handleRDAPIScreenshot(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
 	id := c.Param("id")
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return

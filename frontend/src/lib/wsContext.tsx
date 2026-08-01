@@ -178,13 +178,17 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           setReconnectFailed(true);
         }
       };
-      ws.onerror = (e) => { console.error("[WS] error", e); ws.close(); };
+      ws.onerror = () => { ws.close(); };
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data) as WSMessage;
           if (msg.type === "pong") { lastPongRef.current = Date.now(); return; }
-          listenersRef.current.forEach((fn) => fn(msg));
-          globalListeners.forEach((fn) => fn(msg));
+          for (const fn of listenersRef.current) {
+            try { fn(msg); } catch { /* listener error: skip */ }
+          }
+          for (const fn of globalListeners) {
+            try { fn(msg); } catch { /* listener error: skip */ }
+          }
         } catch {
           // Silently ignore malformed WS frames
         }

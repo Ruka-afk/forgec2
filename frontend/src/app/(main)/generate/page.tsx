@@ -5,14 +5,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { PageHeader, PageSpinner } from "@/components/UI";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
-import SharedSettings from "./_components/SharedSettings";
 import { BinaryPanel, UnixPanel, StagerPanel, PS1Panel, ShellcodePanel, DonutPanel } from "./_components/BuildPanels";
-import OneLinerPanel from "./_components/OneLinerPanel";
-import QuickPresets from "./_components/QuickPresets";
-import BuildHistorySection from "./_components/BuildHistorySection";
+import dynamic from "next/dynamic";
 import { usePayloadGenerator } from "./hooks/usePayloadGenerator";
 import type { PayloadKey } from "@/types/generate";
 import { ChevronRight, Cpu, Info, PackageOpen, X } from "lucide-react";
+
+const SharedSettings = dynamic(() => import("./_components/SharedSettings"), { ssr: false });
+const OneLinerPanel = dynamic(() => import("./_components/OneLinerPanel"), { ssr: false });
+const QuickPresets = dynamic(() => import("./_components/QuickPresets"), { ssr: false });
+const BuildHistorySection = dynamic(() => import("./_components/BuildHistorySection"), { ssr: false });
 
 const BANNER_DISMISS_KEY = "forgec2_gen_banner_dismissed";
 

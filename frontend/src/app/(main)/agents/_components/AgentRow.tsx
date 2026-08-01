@@ -66,7 +66,10 @@ export const AgentRow = memo(function AgentRow({
 
   return (
     <tr
-      className={`group hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-all duration-150 cursor-pointer ${borderLeft} even:bg-muted/30 hover:shadow-sm`}
+      className={`group hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-all duration-150 cursor-pointer ${borderLeft} even:bg-muted/30 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:bg-indigo-50/50 dark:focus-visible:bg-indigo-900/20`}
+      tabIndex={0}
+      role="button"
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(id); } }}
     >
       <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5" data-label="">
         <Checkbox aria-label={t("common.select_item")} name={`select-${id}`}
@@ -206,7 +209,7 @@ export const AgentRow = memo(function AgentRow({
               <Button
                 variant="secondary"
                 size="icon"
-                className="min-w-[36px] min-h-[36px] hover:bg-primary/10 hover:text-primary"
+                className="min-w-[44px] min-h-[44px] hover:bg-primary/10 hover:text-primary"
                 aria-label={t("agents.screenshot")}
                 onClick={(e) => { e.stopPropagation(); onScreenshot(id); }}
               >
@@ -220,7 +223,7 @@ export const AgentRow = memo(function AgentRow({
               <Button
                 variant="secondary"
                 size="icon"
-                className="min-w-[36px] min-h-[36px] hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-700 dark:hover:text-violet-400"
+                className="min-w-[44px] min-h-[44px] hover:bg-violet-100 dark:hover:bg-violet-900/40 hover:text-violet-700 dark:hover:text-violet-400"
                 aria-label={t("agents.quick_sleep")}
                 onClick={(e) => { e.stopPropagation(); onQuickSleep(e, beacon); }}
               >
@@ -234,7 +237,7 @@ export const AgentRow = memo(function AgentRow({
               <Button
                 variant="secondary"
                 size="icon"
-                className="min-w-[36px] min-h-[36px] hover:bg-amber-100 dark:hover:bg-amber-900/40 hover:text-amber-700 dark:hover:text-amber-400"
+                className="min-w-[44px] min-h-[44px] hover:bg-amber-100 dark:hover:bg-amber-900/40 hover:text-amber-700 dark:hover:text-amber-400"
                 aria-label={t("agents.edit_notes")}
                 onClick={(e) => { e.stopPropagation(); onNotes(e, beacon); }}
               >
@@ -248,7 +251,7 @@ export const AgentRow = memo(function AgentRow({
               <Button
                 variant="secondary"
                 size="icon"
-                className="min-w-[36px] min-h-[36px] hover:bg-destructive/10 hover:text-destructive"
+                className="min-w-[44px] min-h-[44px] hover:bg-destructive/10 hover:text-destructive"
                 aria-label={t("agents.delete")}
                 onClick={(e) => { e.stopPropagation(); onConfirm("delete", id, hostname); }}
               >

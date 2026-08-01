@@ -1,0 +1,250 @@
+package server
+
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/forgec2/forgec2/internal/config"
+	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/testutil"
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+)
+
+func newListenerCRUDTestServer(t *testing.T) *Server {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	cfg := config.DefaultConfig()
+	cfg.Server.Host = "127.0.0.1"
+	cfg.Server.Port = 8000
+	return &Server{
+		db:                testutil.SetupTestDB(t),
+		cfg:               cfg,
+		extraListeners:    make(map[string]io.Closer),
+		wsClients:         make(map[*websocket.Conn]*wsClientConn),
+		rportfwdListeners: make(map[string]*rportfwdRelay),
+	}
+}
+
+func newJSONRequest(method, path, body string) (*httptest.ResponseRecorder, *gin.Context) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	req, _ := http.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	c.Request = req
+	return w, c
+}
+
+func TestHandleCreateListener_Validation(t *testing.T) {
+	s := newListenerCRUDTestServer(t)
+
+	t.Run("missing name auto-generates name", func(t *testing.T) {
+		w, c := newJSONRequest(http.MethodPost, "/api/listeners", `{}`)
+		s.handleCreateListener(c)
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			Success  bool        `json:"success"`
+			Listener db.Listener `json:"listener"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+		}
+		if resp.Listener.Name != "Listener 0" && resp.Listener.Name != "" {
+			t.Errorf("expected auto-generated name, got %q", resp.Listener.Name)
+		}
+	})
+
+	t.Run("valid minimal listener created", func(t *testing.T) {
+		body := `{"name":"test-http","scheme":"http","host":"127.0.0.1","port":8080}`
+		w, c := newJSONRequest(http.MethodPost, "/api/listeners", body)
+		s.handleCreateListener(c)
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			Success  bool        `json:"success"`
+			Listener db.Listener `json:"listener"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+		}
+		if !resp.Success {
+			t.Fatal("expected success=true")
+		}
+		if resp.Listener.Name != "test-http" {
+			t.Errorf("expected name=test-http, got %q", resp.Listener.Name)
+		}
+		if resp.Listener.Port != 8080 {
+			t.Errorf("expected port=8080, got %d", resp.Listener.Port)
+		}
+	})
+}
+
+func TestHandleListenerDetail(t *testing.T) {
+	s := newListenerCRUDTestServer(t)
+
+	listener := db.Listener{
+		Name:   "detail-test",
+		Scheme: "https",
+		Host:   "c2.example.com",
+		Port:   443,
+		Status: "running",
+	}
+	if err := s.db.Create(&listener).Error; err != nil {
+		t.Fatalf("seed listener: %v", err)
+	}
+
+	t.Run("existing listener returns detail", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/api/listeners/detail", nil)
+		c.Params = gin.Params{{Key: "id", Value: itoa(int(listener.ID))}}
+		s.handleListenerDetail(c)
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("nonexistent listener returns 404", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/api/listeners/detail", nil)
+		c.Params = gin.Params{{Key: "id", Value: "99999"}}
+		s.handleListenerDetail(c)
+		if w.Code != http.StatusNotFound {
+			t.Errorf("expected 404, got %d; body=%s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestHandleDeleteListener(t *testing.T) {
+	s := newListenerCRUDTestServer(t)
+
+	listener := db.Listener{
+		Name:   "delete-me",
+		Scheme: "http",
+		Host:   "127.0.0.1",
+		Port:   9090,
+		Status: "stopped",
+		Enabled: false,
+	}
+	if err := s.db.Create(&listener).Error; err != nil {
+		t.Fatalf("seed listener: %v", err)
+	}
+
+	t.Run("delete existing listener", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodDelete, "/api/listeners", nil)
+		c.Params = gin.Params{{Key: "id", Value: itoa(int(listener.ID))}}
+		s.handleDeleteListener(c)
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("delete nonexistent listener", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodDelete, "/api/listeners", nil)
+		c.Params = gin.Params{{Key: "id", Value: "99999"}}
+		s.handleDeleteListener(c)
+		if w.Code != http.StatusNotFound {
+			t.Errorf("expected 404, got %d; body=%s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestHandleEnableDisableListener(t *testing.T) {
+	s := newListenerCRUDTestServer(t)
+
+	listener := db.Listener{
+		Name:   "toggle-me",
+		Scheme: "http",
+		Host:   "127.0.0.1",
+		Port:   7070,
+		Status: "stopped",
+		Enabled: false,
+	}
+	if err := s.db.Create(&listener).Error; err != nil {
+		t.Fatalf("seed listener: %v", err)
+	}
+
+	enableDisable := func(t *testing.T, id uint, enable bool) int {
+		t.Helper()
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodPost, "/api/listeners/toggle", nil)
+		c.Params = gin.Params{{Key: "id", Value: itoa(int(id))}}
+		if enable {
+			s.handleEnableListener(c)
+		} else {
+			s.handleDisableListener(c)
+		}
+		return w.Code
+	}
+
+	if code := enableDisable(t, listener.ID, true); code != http.StatusOK {
+		t.Errorf("enable: expected 200, got %d", code)
+	}
+	var enabled db.Listener
+	s.db.First(&enabled, listener.ID)
+	if !enabled.Enabled {
+		t.Error("listener should be enabled after handleEnableListener")
+	}
+
+	if code := enableDisable(t, listener.ID, false); code != http.StatusOK {
+		t.Errorf("disable: expected 200, got %d", code)
+	}
+	var disabled db.Listener
+	s.db.First(&disabled, listener.ID)
+	if disabled.Enabled {
+		t.Error("listener should be disabled after handleDisableListener")
+	}
+}
+
+func TestHandleUpdateListener(t *testing.T) {
+	s := newListenerCRUDTestServer(t)
+
+	listener := db.Listener{
+		Name:   "update-me",
+		Scheme: "http",
+		Host:   "127.0.0.1",
+		Port:   6060,
+		Status: "running",
+		Enabled: true,
+	}
+	if err := s.db.Create(&listener).Error; err != nil {
+		t.Fatalf("seed listener: %v", err)
+	}
+
+	t.Run("update name and port", func(t *testing.T) {
+		body := `{"name":"updated-name","port":9090}`
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodPut, "/api/listeners", strings.NewReader(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Params = gin.Params{{Key: "id", Value: itoa(int(listener.ID))}}
+		s.handleUpdateListener(c)
+		if w.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("verify update persisted", func(t *testing.T) {
+		var updated db.Listener
+		s.db.First(&updated, listener.ID)
+		if updated.Name != "updated-name" {
+			t.Errorf("expected name=updated-name, got %q", updated.Name)
+		}
+		if updated.Port != 9090 {
+			t.Errorf("expected port=9090, got %d", updated.Port)
+		}
+	})
+}

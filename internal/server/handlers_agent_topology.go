@@ -13,8 +13,10 @@ import (
 // handlePivoting shows SOCKS / proxy status and agents useful for pivoting
 func (s *Server) handlePivoting(c *gin.Context) {
 	var recentAgents []db.Implant
-	s.db.Select("id", "hostname", "ip", "os", "arch", "last_seen").
-		Where("last_seen > ?", time.Now().Add(-30*time.Minute)).Limit(30).Find(&recentAgents)
+	if err := s.db.Select("id", "hostname", "ip", "os", "arch", "last_seen").
+		Where("last_seen > ?", time.Now().Add(-30*time.Minute)).Limit(30).Find(&recentAgents).Error; err != nil {
+		slog.Error("Failed to query recent agents for topology", "err", err)
+	}
 
 	stats := s.getNavStats()
 	data := gin.H{
@@ -46,10 +48,14 @@ func (s *Server) handleTopologyPage(c *gin.Context) {
 // handleTopologyData returns JSON nodes and edges for the topology graph
 func (s *Server) handleTopologyData(c *gin.Context) {
 	var listeners []db.Listener
-	s.db.Where("enabled = ?", true).Limit(500).Find(&listeners)
+	if err := s.db.Where("enabled = ?", true).Limit(500).Find(&listeners).Error; err != nil {
+		slog.Error("Failed to query listeners for topology", "err", err)
+	}
 
 	var agents []db.Implant
-	s.db.Select("id, hostname, os, ip, user, status, last_seen, listener_id, parent_id").Limit(TopologyAgentLimit).Find(&agents)
+	if err := s.db.Select("id, hostname, os, ip, user, status, last_seen, listener_id, parent_id").Order("last_seen desc").Limit(TopologyAgentLimit).Find(&agents).Error; err != nil {
+		slog.Error("Failed to query agents for topology", "err", err)
+	}
 
 	onlineCutoff := time.Now().Add(-s.offlineThreshold())
 

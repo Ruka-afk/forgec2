@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus, ChevronUp, ChevronDown } from "lucide-react";
 
 interface WorkflowStep {
+  _key?: number;
   id?: number;
   step_order: number;
   task_type: string;
@@ -49,11 +50,15 @@ interface WorkflowEditorDialogProps {
 
 export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSave }: WorkflowEditorDialogProps) {
   const { t } = useI18n();
+  const stepKeyRef = useRef(0);
+  const nextKey = () => ++stepKeyRef.current;
   const [formName, setFormName] = useState(editWf?.name || "");
   const [formDesc, setFormDesc] = useState(editWf?.description || "");
   const [formScope, setFormScope] = useState(editWf?.scope_type || "all");
-  const [formSteps, setFormSteps] = useState<WorkflowStep[]>(
-    editWf?.steps?.length ? editWf.steps.map((s, i) => ({ ...DEFAULT_STEP, ...s, step_order: i + 1 })) : [{ ...DEFAULT_STEP }]
+  const [formSteps, setFormSteps] = useState<WorkflowStep[]>(() =>
+    editWf?.steps?.length
+      ? editWf.steps.map((s, i) => ({ ...DEFAULT_STEP, ...s, step_order: i + 1 }))
+      : [{ ...DEFAULT_STEP, _key: nextKey() }]
   );
 
   const syncFromEdit = () => {
@@ -61,12 +66,12 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
       setFormName(editWf.name);
       setFormDesc(editWf.description);
       setFormScope(editWf.scope_type);
-      setFormSteps(editWf.steps.length > 0 ? editWf.steps.map((s, i) => ({ ...DEFAULT_STEP, ...s, step_order: i + 1 })) : [{ ...DEFAULT_STEP }]);
+      setFormSteps(editWf.steps.length > 0 ? editWf.steps.map((s, i) => ({ ...DEFAULT_STEP, ...s, step_order: i + 1 })) : [{ ...DEFAULT_STEP, _key: nextKey() }]);
     } else {
       setFormName("");
       setFormDesc("");
       setFormScope("all");
-      setFormSteps([{ ...DEFAULT_STEP }]);
+      setFormSteps([{ ...DEFAULT_STEP, _key: nextKey() }]);
     }
   };
 
@@ -76,7 +81,7 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
   };
 
   function addStep() {
-    setFormSteps([...formSteps, { ...DEFAULT_STEP, step_order: formSteps.length + 1 }]);
+    setFormSteps([...formSteps, { ...DEFAULT_STEP, _key: nextKey(), step_order: formSteps.length + 1 }]);
   }
 
   function removeStep(idx: number) {
@@ -138,7 +143,7 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
             </div>
             <div className="space-y-2">
               {formSteps.map((step, idx) => (
-                <div key={idx} className="p-2 rounded-lg bg-muted space-y-2">
+                <div key={step.id ?? step._key ?? idx} className="p-2 rounded-lg bg-muted space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-xs text-muted-foreground min-w-[20px]">#{step.step_order}</span>
                     <Button variant="ghost" size="icon-xs" onClick={() => moveStep(idx, "up")} disabled={idx === 0} aria-label="Move up"><ChevronUp className="w-3 h-3" /></Button>

@@ -8,11 +8,14 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"math/big"
 	mrand "math/rand"
 	"sync"
 	"time"
 )
+
+// jitterRng is a non-cryptographic RNG seeded once from crypto/rand for beacon
+// jitter calculations. crypto/rand is too expensive for millisecond-level timing.
+var jitterRng = mrand.New(mrand.NewSource(time.Now().UnixNano()))
 
 const (
 	DefaultSessionMaxMessages = 100
@@ -20,7 +23,8 @@ const (
 )
 
 var (
-	ErrNoSession          = errors.New("no session for agent")
+	ErrNoSession     = errors.New("no session for agent")
+	ErrSessionActive = errors.New("an active session already exists for agent")
 	ErrCiphertextTooShort = errors.New("ciphertext too short")
 	ErrDecryptFailed      = errors.New("decryption failed")
 )
@@ -80,7 +84,12 @@ func (sm *SessionManager) MaxMessages() int { return sm.maxMessages }
 // MaxAge returns the configured max session age before rotation
 func (sm *SessionManager) MaxAge() time.Duration { return sm.maxAge }
 
-// EstablishSession performs ECDH key exchange with an agent
+// EstablishSession performs ECDH key exchange with an agent.
+//
+// A handshake may only establish a session for an agent that has no session
+// yet, or whose existing session has expired or never been used. Overwriting an
+// in-use session (e.g. from a replayed or injected handshake frame) would
+// silently replace the live session key and break the real agent's next beacon.
 func (sm *SessionManager) EstablishSession(agentID string, agentPublicKey []byte) error {
 	curve := ecdh.X25519()
 
@@ -89,16 +98,21 @@ func (sm *SessionManager) EstablishSession(agentID string, agentPublicKey []byte
 		return err
 	}
 
+	// Lock around privateKey access to prevent race with RotateKeyPair
+	sm.mu.Lock()
+	if existing, ok := sm.sessions[agentID]; ok && existing.MessageCount > 0 && time.Since(existing.CreatedAt) < sm.maxAge {
+		sm.mu.Unlock()
+		return ErrSessionActive
+	}
+
 	sharedSecret, err := sm.privateKey.ECDH(agentPub)
 	if err != nil {
+		sm.mu.Unlock()
 		return err
 	}
 
 	hash := sha256.Sum256(sharedSecret)
 	sessionKey := hash[:]
-
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
 
 	sm.sessions[agentID] = &Session{
 		AgentID:      agentID,
@@ -107,6 +121,7 @@ func (sm *SessionManager) EstablishSession(agentID string, agentPublicKey []byte
 		MessageCount: 0,
 		LastUsed:     time.Now(),
 	}
+	sm.mu.Unlock()
 
 	return nil
 }
@@ -169,6 +184,48 @@ func (sm *SessionManager) RotateSessionKey(agentID string, agentPublicKey []byte
 	return nil
 }
 
+// TryRotateSessionKey attempts to re-key an active session using a new agent
+// public key. The candidate session key is derived from the agent's new public
+// key, but it is only committed if the provided ciphertext authenticates under
+// it (AES-256-GCM). On success the rotated key replaces the old one and the
+// plaintext is returned; otherwise the existing session key is left intact and
+// an error is returned. This makes ECDH rotation non-destructive: a forged or
+// replayed `ecdh_pub` cannot silently destroy the real agent's session key.
+func (sm *SessionManager) TryRotateSessionKey(agentID string, agentPublicKey, ciphertext []byte) ([]byte, error) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, exists := sm.sessions[agentID]
+	if !exists {
+		return nil, ErrNoSession
+	}
+
+	curve := ecdh.X25519()
+	agentPub, err := curve.NewPublicKey(agentPublicKey)
+	if err != nil {
+		return nil, err
+	}
+
+	sharedSecret, err := sm.privateKey.ECDH(agentPub)
+	if err != nil {
+		return nil, err
+	}
+
+	hash := sha256.Sum256(sharedSecret)
+	candidate := hash[:]
+
+	plaintext, err := decryptAESGCM(candidate, ciphertext)
+	if err != nil {
+		return nil, ErrDecryptFailed
+	}
+
+	session.SessionKey = candidate
+	session.CreatedAt = time.Now()
+	session.MessageCount = 1
+
+	return plaintext, nil
+}
+
 // IncrementMessageCount tracks message count for rotation
 func (sm *SessionManager) IncrementMessageCount(agentID string) {
 	sm.mu.Lock()
@@ -218,15 +275,11 @@ func (sm *SessionManager) EncryptB64(agentID string, plaintext []byte) (string, 
 	return base64.StdEncoding.EncodeToString(raw), nil
 }
 
-// Decrypt decrypts data using AES-256-GCM with the session key
-// Input is raw bytes: nonce(12) + ciphertext
-func (sm *SessionManager) Decrypt(agentID string, ciphertext []byte) ([]byte, error) {
-	session := sm.GetSession(agentID)
-	if session == nil {
-		return nil, ErrNoSession
-	}
-
-	block, err := aes.NewCipher(session.SessionKey)
+// decryptAESGCM authenticates and decrypts AES-256-GCM ciphertext (raw bytes
+// of nonce(12)+ciphertext) using the provided key. It does not touch session
+// bookkeeping, so callers can test a candidate key without committing to it.
+func decryptAESGCM(key, ciphertext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
@@ -245,6 +298,21 @@ func (sm *SessionManager) Decrypt(agentID string, ciphertext []byte) ([]byte, er
 	plaintext, err := aesGCM.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
 		return nil, ErrDecryptFailed
+	}
+	return plaintext, nil
+}
+
+// Decrypt decrypts data using AES-256-GCM with the session key
+// Input is raw bytes: nonce(12) + ciphertext
+func (sm *SessionManager) Decrypt(agentID string, ciphertext []byte) ([]byte, error) {
+	session := sm.GetSession(agentID)
+	if session == nil {
+		return nil, ErrNoSession
+	}
+
+	plaintext, err := decryptAESGCM(session.SessionKey, ciphertext)
+	if err != nil {
+		return nil, err
 	}
 
 	sm.IncrementMessageCount(agentID)
@@ -291,11 +359,7 @@ func (to *TrafficObfuscator) AddJitter(baseDelay time.Duration) time.Duration {
 		return baseDelay
 	}
 	jitter := float64(baseDelay) * to.JitterPercent
-	randInt, err := rand.Int(rand.Reader, big.NewInt(int64(jitter*2)))
-	if err != nil {
-		return baseDelay
-	}
-	randomJitter := float64(randInt.Int64()) - jitter
+	randomJitter := jitterRng.Float64()*jitter*2 - jitter
 	return baseDelay + time.Duration(randomJitter)
 }
 
@@ -303,7 +367,7 @@ func (to *TrafficObfuscator) AddPadding(data []byte) []byte {
 	if to.PaddingSize == 0 {
 		return data
 	}
-	padding := make([]byte, mrand.Intn(to.PaddingSize))
+	padding := make([]byte, jitterRng.Intn(to.PaddingSize))
 	return append(data, padding...)
 }
 

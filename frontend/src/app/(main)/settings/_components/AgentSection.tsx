@@ -2,6 +2,7 @@ import { AgentForm } from "./types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import Toggle from "./Toggle";
 import { Bot, Save } from "lucide-react";
 
@@ -25,13 +26,13 @@ export default function AgentSection({
         <form onSubmit={onSave} className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
-              <span className="block text-xs text-muted-foreground mb-1.5">Heartbeat Interval (sec)</span>
-              <Input aria-label="Heartbeat interval in seconds" name="input-0" type="number" min={0} max={300} value={form.interval} onChange={(e) => setForm({ ...form, interval: Number(e.target.value) })}  />
+              <Label htmlFor="agent-heartbeat-interval" className="block text-xs text-muted-foreground mb-1.5">Heartbeat Interval (sec)</Label>
+              <Input id="agent-heartbeat-interval" type="number" min={0} max={300} value={form.interval} onChange={(e) => setForm({ ...form, interval: Number(e.target.value) })}  />
               <p className="text-(--font-size-micro-sm) text-muted-foreground mt-1">0 = real-time mode</p>
             </div>
             <div>
-              <span className="block text-xs text-muted-foreground mb-1.5">Jitter (%)</span>
-              <Input aria-label="Jitter percentage" name="input-1" type="number" min={0} max={100} value={form.jitter} onChange={(e) => setForm({ ...form, jitter: Number(e.target.value) })}  />
+              <Label htmlFor="agent-jitter" className="block text-xs text-muted-foreground mb-1.5">Jitter (%)</Label>
+              <Input id="agent-jitter" type="number" min={0} max={100} value={form.jitter} onChange={(e) => setForm({ ...form, jitter: Number(e.target.value) })}  />
             </div>
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">Skip TLS Verification</span>
@@ -42,23 +43,23 @@ export default function AgentSection({
             </div>
           </div>
           <div>
-            <span className="block text-xs text-muted-foreground mb-1.5">Default User-Agent</span>
-            <Input aria-label="Default User-Agent string" name="input-2" type="text" value={form.user_agent} onChange={(e) => setForm({ ...form, user_agent: e.target.value })} className="font-mono" />
+              <Label htmlFor="agent-user-agent" className="block text-xs text-muted-foreground mb-1.5">Default User-Agent</Label>
+              <Input id="agent-user-agent" type="text" value={form.user_agent} onChange={(e) => setForm({ ...form, user_agent: e.target.value })} className="font-mono" />
           </div>
           <div className="border-t pt-4">
             <h3 className="text-sm font-medium text-muted-foreground mb-3">Working Hours</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div>
-                <span className="block text-xs text-muted-foreground mb-1.5">Start Time (HH:MM)</span>
-                <Input aria-label="Working hours start time" type="time" value={form.working_start} onChange={(e) => setForm({ ...form, working_start: e.target.value })}  />
+                <Label htmlFor="agent-working-start" className="block text-xs text-muted-foreground mb-1.5">Start Time (HH:MM)</Label>
+                <Input id="agent-working-start" type="time" value={form.working_start} onChange={(e) => setForm({ ...form, working_start: e.target.value })}  />
               </div>
               <div>
-                <span className="block text-xs text-muted-foreground mb-1.5">End Time (HH:MM)</span>
-                <Input aria-label="Working hours end time" type="time" value={form.working_end} onChange={(e) => setForm({ ...form, working_end: e.target.value })}  />
+                <Label htmlFor="agent-working-end" className="block text-xs text-muted-foreground mb-1.5">End Time (HH:MM)</Label>
+                <Input id="agent-working-end" type="time" value={form.working_end} onChange={(e) => setForm({ ...form, working_end: e.target.value })}  />
               </div>
               <div>
-                <span className="block text-xs text-muted-foreground mb-1.5">Timezone</span>
-                <Input aria-label="Working hours timezone" type="text" placeholder="UTC" value={form.working_tz} onChange={(e) => setForm({ ...form, working_tz: e.target.value })} className="font-mono" />
+                <Label htmlFor="agent-working-tz" className="block text-xs text-muted-foreground mb-1.5">Timezone</Label>
+                <Input id="agent-working-tz" type="text" placeholder="UTC" value={form.working_tz} onChange={(e) => setForm({ ...form, working_tz: e.target.value })} className="font-mono" />
                 <p className="text-(--font-size-micro-sm) text-muted-foreground mt-1">IANA tz (e.g. America/New_York)</p>
               </div>
             </div>

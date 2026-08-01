@@ -32,8 +32,8 @@ export default function AboutSection({
             { label: t("settings.about.total_alloc"), value: data.total_alloc_mem ? (data.total_alloc_mem / 1024 / 1024).toFixed(1) + " MB" : "-" },
             { label: t("settings.about.cpu_cores"), value: data.num_cpu ?? "-" },
             { label: t("settings.about.implants"), value: t("settings.about.implants_value", { total: data.total_agents ?? 0, online: data.online_agents ?? 0 }) },
-          ].map((stat, i) => (
-            <div key={i} className={`bg-muted rounded-xl p-4 border border-border ${stat.label === t("settings.about.implants") ? "col-span-2" : ""}`}>
+          ].map((stat) => (
+            <div key={stat.label} className={`bg-muted rounded-xl p-4 border border-border ${stat.label === t("settings.about.implants") ? "col-span-2" : ""}`}>
               <div className="text-xs text-muted-foreground">{stat.label}</div>
               <div className="font-medium text-foreground mt-1 font-mono text-xs">{stat.value}</div>
             </div>
