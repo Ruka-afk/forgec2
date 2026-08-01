@@ -72,5 +72,7 @@ dev_check.ps1
 
 # Session artifacts
 SUMMARY.md
+ANCHORED_SUMMARY.md
+.omo/
 
 __pycache__/

@@ -635,7 +635,6 @@ export const zh: Record<string, string> = {
     "agents.screen_stopped": "屏幕监控已停止",
     "agents.screen_start_failed": "启动监控失败",
     "agents.screen_stop_failed": "停止监控失败",
-    "agents.screen_capture_failed": "截图失败",
     "agents.screen_no_screenshots": "暂无截图",
 
     "agents.rdp_title": "远程桌面",
@@ -1434,7 +1433,6 @@ export const zh: Record<string, string> = {
     "privesc.no_findings": "暂无发现",
     "privesc.no_findings_hint": "执行提权任务以查看结果",
     "privesc.no_history": "暂无任务历史",
-    "privesc.process_result": "处理结果中...",
     "privesc.recommendation_label": "建议",
     "privesc.stat_critical": "严重",
     "privesc.stat_high": "高危",

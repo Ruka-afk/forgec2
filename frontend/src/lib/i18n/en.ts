@@ -615,7 +615,6 @@ export const en: Record<string, string> = {
     "agents.screen_stopped": "Screen monitoring stopped",
     "agents.screen_start_failed": "Failed to start monitoring",
     "agents.screen_stop_failed": "Failed to stop monitoring",
-    "agents.screen_capture_failed": "Failed to capture screenshot",
     "agents.screen_no_screenshots": "No screenshots yet",
 
     "agents.rdp_title": "Remote Desktop",
@@ -1418,7 +1417,6 @@ export const en: Record<string, string> = {
     "privesc.no_findings": "No findings",
     "privesc.no_findings_hint": "Run a privesc task to see results",
     "privesc.no_history": "No task history",
-    "privesc.process_result": "Processing result...",
     "privesc.recommendation_label": "Recommendation",
     "privesc.stat_critical": "Critical",
     "privesc.stat_high": "High",
