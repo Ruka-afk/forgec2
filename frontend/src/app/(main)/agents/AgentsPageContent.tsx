@@ -294,7 +294,7 @@ export default function AgentsPageContent() {
     } catch {
       setActionMsg(t("agents.screenshot_failed"));
     }
-  }, []);
+  }, [t]);
 
   const submitQuickSleep = async () => {
     if (!quickSleepAgent) return;

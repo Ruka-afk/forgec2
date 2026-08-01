@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { EmptyState, PageHeader, ConfirmModal } from "@/components/UI";
+import { PageHeader, ConfirmModal } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";

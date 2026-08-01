@@ -52,16 +52,6 @@ function collectUsedKeys() {
   return used;
 }
 
-function readBlock(content, lang) {
-  // Find the const en = { ... } or const zh = { ... } block
-  const match = content.match(new RegExp(`const\\s+${lang}\\s*=\\s*\\{([\\s\\S]*?)\\};`));
-  if (!match) throw new Error(`Cannot find const ${lang} block`);
-  const body = match[1];
-  const start = match.index + match[0].indexOf('{');
-  const end = match.index + match[0].length - 1; // position of '}'
-  return { body, start, end };
-}
-
 function pruneFile(filePath, lang, usedKeys) {
   const content = fs.readFileSync(filePath, "utf8");
   const defined = collectKeys(content);
@@ -82,7 +72,7 @@ function pruneFile(filePath, lang, usedKeys) {
     const escapedKey = key.replace(/\./g, "\\.");
     // Match from the key definition to the end of its value (non-greedy, stop at next key or closing brace)
     const lineRe = new RegExp(`^[ \\t]*"${escapedKey}":\\s*"[^"]*",?\\s*$`, "gm");
-    result = result.replace(lineRe, (match) => {
+    result = result.replace(lineRe, () => {
       removed++;
       return "";
     });

@@ -13,7 +13,7 @@ interface UseSelectionSetResult {
 
 export function useSelectionSet(): UseSelectionSetResult {
   const ref = useRef(new Set<string>());
-  const [version, setVersion] = useState(0);
+  const [, setVersion] = useState(0);
 
   const toggleSelect = useCallback((id: string) => {
     const s = ref.current;

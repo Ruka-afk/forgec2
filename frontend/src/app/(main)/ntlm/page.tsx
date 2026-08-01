@@ -12,11 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { DataState } from "@/components/ui/data-state";
 import { ArrowLeftRight, BarChart2, Database, Megaphone, Play, RefreshCw, Square, Zap } from "lucide-react";
 
 import type { Agent } from "@/types/agent";
-
 
 type TabType = "coerce" | "relay" | "status";
 

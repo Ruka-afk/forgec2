@@ -85,8 +85,9 @@ function MenubarTrigger({ className, onClick, ...props }: MenubarTriggerProps) {
   const btnRef = React.useRef<HTMLButtonElement>(null);
 
   React.useEffect(() => {
-    if (btnRef.current) triggerRefs.current.set(id, btnRef.current);
-    return () => { triggerRefs.current.delete(id); };
+    const map = triggerRefs.current;
+    if (btnRef.current) map.set(id, btnRef.current);
+    return () => { map.delete(id); };
   }, [id, triggerRefs]);
 
   React.useEffect(() => {

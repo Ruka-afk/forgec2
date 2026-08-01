@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api, getCsrfToken, buildUrl } from "@/lib/api";
 import { downloadFromResponse } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
-import { ConfirmModal, EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { ConfirmModal, PageHeader, Spinner } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,7 +21,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { CardGridSkeleton } from "@/components/ui/skeletons";
 import { Anchor, ArrowUp, Bug, CheckCircle, Clock, CloudUpload, Download, FileDown, Info, Key, LayoutGrid, Layers, Link, List, Play, Plus, Puzzle, Search, Star, Terminal, Trash2 } from "lucide-react";
 
 interface Plugin {

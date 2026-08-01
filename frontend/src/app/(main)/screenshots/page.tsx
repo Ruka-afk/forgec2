@@ -46,7 +46,7 @@ export default function ScreenshotsPage() {
       toast.error(t("screenshots.load_failed"));
     }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => { loadData(); }, [loadData]);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef, memo } from "react";
+import { useEffect, useState, useMemo, useRef, memo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
@@ -225,7 +225,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
       }
     });
     return () => unsub();
-  }, [subscribe, id, loadDetail, loadScreenshots]);
+  }, [subscribe, id, loadDetail, loadScreenshots, setData]);
 
   useEffect(() => {
     if (!lbOpen) return;

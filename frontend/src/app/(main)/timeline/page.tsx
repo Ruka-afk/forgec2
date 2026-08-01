@@ -43,7 +43,7 @@ export default function TimelinePage() {
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [, setTotalPages] = useState(1);
   const [totalEvents, setTotalEvents] = useState(0);
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());

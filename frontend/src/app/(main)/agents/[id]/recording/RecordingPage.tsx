@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import { api } from "@/lib/api";
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";

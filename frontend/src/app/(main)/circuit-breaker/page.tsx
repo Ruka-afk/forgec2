@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Activity, AlertCircle, AlertTriangle, ArrowLeftRight, ArrowRight, Gauge, Hand, History, MoreHorizontal, Radio, RotateCw, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { Activity, AlertCircle, AlertTriangle, ArrowLeftRight, ArrowRight, Gauge, History, MoreHorizontal, Radio, RotateCw, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { useI18n } from "@/lib/i18n";

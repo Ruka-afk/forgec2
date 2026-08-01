@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import { api } from "@/lib/api";
 import type { AgentDetail } from "@/types/agent";
 import { useI18n } from "@/lib/i18n";
@@ -14,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Clock, Info, Plus, RotateCcw, Send, SlidersHorizontal, X } from "lucide-react";
+import { Clock, Info, Plus, RotateCcw, Send, SlidersHorizontal, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const COMMON_UAS = [
@@ -54,7 +53,7 @@ const defaultConfig: EffectiveConfig = {
 export default function AgentConfigPage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useI18n();
-  const [agent, setAgent] = useState<Partial<AgentDetail> | null>(null);
+  const [, setAgent] = useState<Partial<AgentDetail> | null>(null);
   const [effective, setEffective] = useState<EffectiveConfig>(defaultConfig);
   const [hasPending, setHasPending] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -153,9 +152,6 @@ export default function AgentConfigPage() {
       setPushing(false);
     }
   };
-
-  const hostname = agent?.hostname || id;
-  const os = agent?.os || "";
 
   if (loading) {
     return <PageSpinner />;

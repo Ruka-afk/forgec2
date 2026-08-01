@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { downloadText, downloadJSON } from "@/lib/download";
@@ -59,7 +59,7 @@ export default function LootPage() {
 
   useEffect(() => { loadLoot(); }, [loadLoot]);
 
-  const filteredScreenshots = data?.screenshots?.filter(s => !agentFilter || s.agent_id === agentFilter) || [];
+  const filteredScreenshots = useMemo(() => data?.screenshots?.filter(s => !agentFilter || s.agent_id === agentFilter) || [], [data, agentFilter]);
   const filteredKeylogs = data?.keylog_tasks?.filter(k => {
     if (agentFilter && k.agent_id !== agentFilter) return false;
     if (keylogSearch) {
@@ -70,7 +70,7 @@ export default function LootPage() {
     }
     return true;
   }) || [];
-  const filteredDownloads = data?.download_tasks?.filter(d => !agentFilter || d.agent_id === agentFilter) || [];
+  const filteredDownloads = useMemo(() => data?.download_tasks?.filter(d => !agentFilter || d.agent_id === agentFilter) || [], [data, agentFilter]);
 
   const allAgents = [...new Set([
     ...(data?.screenshots?.map(s => s.agent_id) || []),

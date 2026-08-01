@@ -12,7 +12,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CalendarCheck, Cog, Boxes, FolderOpen, Puzzle, Server, Settings } from "lucide-react";
-import { ArrowLeft, Bug, Info, Link as LinkIcon, ListChecks, Plug, RotateCw, Trash2 } from "lucide-react";
+import { Bug, Info, Link as LinkIcon, ListChecks, Plug, RotateCw, Trash2 } from "lucide-react";
 
 import type { AgentDetail } from "@/types/agent";
 

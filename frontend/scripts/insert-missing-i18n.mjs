@@ -114,7 +114,6 @@ function insertKeys(filePath, missingMap) {
   const insertBlock = toInsert.map((k) => `    "${k}": "${missingMap[k]}",`);
 
   // Find insertion position: before the first defined key that sorts after the insertion key
-  const allDefined = [...existingKeys].sort();
   let insertionIdx = -1;
   for (let i = 0; i < lines.length; i++) {
     const match = lines[i].match(/^\s*"([A-Za-z_][A-Za-z0-9_]*\.[A-Za-z0-9_]+)":/);

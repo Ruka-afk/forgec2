@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
-import { ConfirmModal, EmptyState, PageHeader, Pagination } from "@/components/UI";
+import { ConfirmModal, PageHeader, Pagination } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { CopyButton, StatusBadge, Spinner } from "@/components/UI";
 import type { AgentDetail, AgentStatus } from "@/types/agent";
-import { Activity, Apple, ArrowLeft, Camera, ChevronRight, Clipboard, Crown, Database, FolderOpen, History, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, RefreshCw, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
+import { Activity, Apple, Camera, Clipboard, Crown, Database, FolderOpen, History, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, RefreshCw, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -40,8 +40,8 @@ export interface AgentHeaderProps {
 }
 
 export default function AgentHeader({
-  agent, agentId, agentAge, status,
-  actionLoading, onQuickAction, credCount, onKill, onUninstall, onKeyRotate, onClose,
+  agent, agentId, status,
+  actionLoading, onQuickAction, credCount, onKill, onUninstall, onKeyRotate,
 }: AgentHeaderProps) {
   const { t } = useI18n();
   const hostname = agent.hostname || "\u2014";
