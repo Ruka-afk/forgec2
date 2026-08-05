@@ -21,7 +21,6 @@ type KillSwitchStatus = {
 export default function EmergencySection() {
   const { t } = useI18n();
   const [status, setStatus] = useState<KillSwitchStatus | null>(null);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [password, setPassword] = useState("");
 
