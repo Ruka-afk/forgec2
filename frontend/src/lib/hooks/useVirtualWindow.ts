@@ -30,6 +30,7 @@ export function useVirtualWindow({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(480);
+  const rafRef = useRef<number | null>(null);
 
   const virtualized = enabled && count >= threshold;
 
@@ -41,10 +42,17 @@ export function useVirtualWindow({
   }, []);
 
   const onScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setScrollTop(el.scrollTop);
-  }, []);
+    // rAF-throttle so a scroll storm triggers at most one re-render per frame,
+    // and bail out entirely when windowing is inactive.
+    if (!virtualized) return;
+    if (rafRef.current != null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const el = scrollRef.current;
+      if (!el) return;
+      setScrollTop(el.scrollTop);
+    });
+  }, [virtualized]);
 
   useEffect(() => {
     if (!virtualized) return;
@@ -53,7 +61,11 @@ export function useVirtualWindow({
     if (!el || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => measure());
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    };
   }, [virtualized, measure, count]);
 
   const range = virtualized

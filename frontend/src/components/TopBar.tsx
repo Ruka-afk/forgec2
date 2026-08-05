@@ -306,7 +306,7 @@ function UserDropdown() {
             name={name}
             size="md"
             shape="square"
-            className="bg-gradient-to-br from-primary to-primary/80 shadow-sm shadow-primary/20"
+            className="bg-gradient-to-br from-primary to-primary/80 shadow-sm shadow-primary/20 text-white"
           />
         </div>
         <div className="hidden md:block text-left">

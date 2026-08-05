@@ -30,10 +30,12 @@ function ListenerTrafficInner({ range }: { range: string }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     setLoadError(false);
-    api.get<TrafficPoint[] | { data: TrafficPoint[] } | { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] }>(`/api/dashboard/listener-traffic?range=${range}`)
+    api.get<TrafficPoint[] | { data: TrafficPoint[] } | { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] }>(`/api/dashboard/listener-traffic?range=${range}`, { signal: controller.signal })
       .then((d) => {
+        if (controller.signal.aborted) return;
         const o = (d as { data?: { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] } })?.data ?? d;
         const obj = (o as { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] }) || {};
         const labels = obj.labels || [];
@@ -42,10 +44,14 @@ function ListenerTrafficInner({ range }: { range: string }) {
         setData(labels.map((t, i) => ({ time: t, value: (Number(bins[i]) || 0) + (Number(bouts[i]) || 0) })));
       })
       .catch(() => {
+        if (controller.signal.aborted) return;
         setData([]);
         setLoadError(true);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [range]);
   if (loading) return <div className="h-24 flex items-center justify-center text-muted-foreground/70 text-xs"><Spinner size="sm" /></div>;
   if (loadError && data.length === 0) {

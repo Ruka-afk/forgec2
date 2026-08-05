@@ -14,9 +14,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Clock, Type, Trash2, Keyboard } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { useTheme } from "@/lib/theme";
 
 const PROMPT_CHARS = ["$", "#", ">", "%"];
 const KEY = "forgec2_shell_fontsize";
+
+function buildTerminalTheme() {
+  const cs = typeof window === "undefined" ? null : getComputedStyle(document.documentElement);
+  const v = (name: string, fallback: string) => cs?.getPropertyValue(name).trim() || fallback;
+  const primary = v("--primary", "#4f46e5");
+  return {
+    background: v("--background", "#020617"),
+    foreground: v("--foreground", "#e2e8f0"),
+    cursor: primary,
+    cursorAccent: v("--background", "#020617"),
+    selectionBackground: `color-mix(in oklch, ${primary} 35%, transparent)`,
+  };
+}
 
 function clearCommandHistory() {
   try { localStorage.removeItem("forgec2_shell_history"); } catch { /* ignore */ }
@@ -33,6 +47,7 @@ export default function ShellTerminal({
   showHeader?: boolean;
   osType?: string;
 }) {
+  const { resolved } = useTheme();
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -50,6 +65,18 @@ export default function ShellTerminal({
   const osTypeRef = useRef(osType);
   osTypeRef.current = osType;
   const [beaconHint, setBeaconHint] = useState("");
+  const a11yLogRef = useRef<HTMLDivElement>(null);
+
+  // xterm renders to canvas, which screen readers cannot see. Mirror plain-text
+  // output into an off-screen live region so AT users hear command results.
+  const announce = useCallback((text: string) => {
+    const el = a11yLogRef.current;
+    if (!el || !text) return;
+    const line = document.createElement("div");
+    line.textContent = text;
+    el.appendChild(line);
+    while (el.childElementCount > 30) el.removeChild(el.firstElementChild!);
+  }, []);
 
   const [promptChar] = useState(() => PROMPT_CHARS[Math.floor(Math.random() * PROMPT_CHARS.length)]);
   const promptRef = useRef(`\x1b[94m${promptChar}\x1b[0m `);
@@ -62,8 +89,11 @@ export default function ShellTerminal({
   const [isDragging, setIsDragging] = useState(false);
 
   const writeln = useCallback(
-    (text: string, color = "37") => termRef.current?.writeln(`\x1b[${color}m${text}\x1b[0m`),
-    [],
+    (text: string, color = "37") => {
+      termRef.current?.writeln(`\x1b[${color}m${text}\x1b[0m`);
+      announce(text);
+    },
+    [announce],
   );
 
   const writePrompt = useCallback(() => termRef.current?.write(promptRef.current), []);
@@ -100,19 +130,22 @@ export default function ShellTerminal({
           const highlighted = highlightOutput(st.result, lastCommandRef.current);
           termRef.current?.write(highlighted.replace(/\n/g, "\r\n"));
           termRef.current?.write("\r\n");
+          announce(st.result);
         } else {
           writeln("(no output)", "33");
         }
       } catch (e) {
-        writeln(String(e), "31");
+        if (!ac.signal.aborted) writeln(String(e), "31");
       } finally {
         loadingRef.current = false;
         setLoading(false);
-        writePrompt();
-        termRef.current?.focus();
+        if (!ac.signal.aborted) {
+          writePrompt();
+          termRef.current?.focus();
+        }
       }
     },
-    [agentId, shellType, writeln, writePrompt],
+    [agentId, shellType, writeln, writePrompt, announce],
   );
 
   useEffect(() => { execRef.current = executeCommand; }, [executeCommand]);
@@ -147,12 +180,7 @@ export default function ShellTerminal({
         cursorBlink: true,
         fontSize: fontSizeRef.current,
         fontFamily: "'JetBrains Mono', 'Cascadia Code', Consolas, monospace",
-        theme: {
-          background: "#020617",
-          foreground: "#e2e8f0",
-          cursor: "#34d399",
-          selectionBackground: "#334155",
-        },
+        theme: buildTerminalTheme(),
         scrollback: 5000,
         convertEol: true,
         allowProposedApi: false,
@@ -168,13 +196,25 @@ export default function ShellTerminal({
 
       historyRef.current = loadCommandHistory();
       term.writeln("\x1b[90mForgeC2 Shell \u00b7 xterm.js \u00b7 Enter to run \u00b7 \u2191\u2193 history \u00b7 Ctrl+L clear\x1b[0m");
-      writePrompt();
+      writePromptRef.current();
 
       term.onData((data: string) => {
-        if (loadingRef.current) return;
-
         const t = term;
         if (!t) return;
+        if (data === "\x03") {
+          // Ctrl+C — interrupt the in-flight command (if any)
+          if (abortRef.current) {
+            abortRef.current.abort();
+            abortRef.current = null;
+          }
+          t.writeln("^C");
+          loadingRef.current = false;
+          setLoading(false);
+          writePromptRef.current();
+          return;
+        }
+        if (loadingRef.current) return;
+
         if (data === "\r") {
           const cmd = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString().trim() || "";
           if (cmd.startsWith(plainPromptRef.current.trim())) {
@@ -279,25 +319,41 @@ export default function ShellTerminal({
       };
     };
 
-    initTerminal();
+    initTerminal().catch((err) => {
+      if (!disposed) termRef.current?.writeln(`\x1b[31mTerminal init failed: ${String(err)}\x1b[0m`);
+    });
 
     return () => {
       disposed = true;
+      abortRef.current?.abort();
+      abortRef.current = null;
       termCleanupRef.current();
       termRef.current = null;
       fitRef.current = null;
     };
-  }, [agentId, executeCommand, writeln, writePrompt]);
+  }, [agentId]);
 
   useEffect(() => {
     if (termRef.current) termRef.current.options.fontSize = fontSize;
+    requestAnimationFrame(() => fitRef.current?.fit());
   }, [fontSize]);
 
   useEffect(() => {
+    if (termRef.current) termRef.current.options.theme = buildTerminalTheme();
+  }, [resolved]);
+
+  useEffect(() => {
     if (!agentId) return;
-    fetchAgentBeaconTiming(agentId).then(({ interval, jitter }) => {
-      setBeaconHint(interval === 0 ? `Real-time \u00b1${jitter}%` : `${interval}s \u00b1${jitter}%`);
-    });
+    let cancelled = false;
+    fetchAgentBeaconTiming(agentId)
+      .then(({ interval, jitter }) => {
+        if (cancelled) return;
+        setBeaconHint(interval === 0 ? `Real-time \u00b1${jitter}%` : `${interval}s \u00b1${jitter}%`);
+      })
+      .catch(() => {
+        if (!cancelled) setBeaconHint("");
+      });
+    return () => { cancelled = true; };
   }, [agentId]);
 
   const quickCommands =
@@ -400,6 +456,7 @@ export default function ShellTerminal({
           <span className="text-primary font-medium">{t("shell.drop_file")}</span>
         </div>
       )}
+      <div ref={a11yLogRef} role="log" aria-live="polite" aria-atomic="false" className="sr-only" />
       {loading && (
         <div className="shrink-0 bg-card border-t border-border px-4 py-1.5 text-xs text-emerald-400 flex items-center gap-2">
            <Spinner size="xs" /> Executing...

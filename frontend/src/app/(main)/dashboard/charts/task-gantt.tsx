@@ -33,14 +33,22 @@ export default function TaskGanttSection({ range }: { range: string }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   useEffect(() => {
+    const controller = new AbortController();
     setLoadError(false);
-    api.get<GanttItem[] | { data: GanttItem[] }>(`/api/dashboard/task-gantt?range=${range}`)
-      .then((d) => setItems((d as { data: GanttItem[] }).data || (d as GanttItem[]) || []))
+    api.get<GanttItem[] | { data: GanttItem[] }>(`/api/dashboard/task-gantt?range=${range}`, { signal: controller.signal })
+      .then((d) => {
+        if (controller.signal.aborted) return;
+        setItems((d as { data: GanttItem[] }).data || (d as GanttItem[]) || []);
+      })
       .catch(() => {
+        if (controller.signal.aborted) return;
         setItems([]);
         setLoadError(true);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [range]);
   return (
     <ChartCard title={t("dashboard.task_gantt")} icon={BarChart3} iconColor="text-violet-500 dark:text-violet-400" loading={loading} exportFilename="task-gantt.png">

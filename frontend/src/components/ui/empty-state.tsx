@@ -17,7 +17,7 @@ export function EmptyState({ icon, title, message, action, className }: {
         <IconComponent className="w-8 h-8 text-muted-foreground/60" aria-hidden="true" />
       </div>
       <p className="text-(--fs-body-sm) font-semibold text-foreground mb-1.5">{title}</p>
-      {message && <p className="text-[12.5px] text-muted-foreground mb-5 max-w-xs leading-relaxed">{message}</p>}
+      {message && <p className="text-(--fs-compact) text-muted-foreground mb-5 max-w-xs leading-relaxed">{message}</p>}
       {action && <div>{action}</div>}
     </div>
   );

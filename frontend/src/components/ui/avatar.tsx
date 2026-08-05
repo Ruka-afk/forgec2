@@ -22,16 +22,16 @@ function getInitial(name: string): string {
   return (name || "?").charAt(0).toUpperCase();
 }
 
-function hashColor(name: string): string {
+function hashColor(name: string): { bg: string; fg: string } {
   const palette = [
-    "bg-[var(--avatar-1)]",
-    "bg-[var(--avatar-2)]",
-    "bg-[var(--avatar-3)]",
-    "bg-[var(--avatar-4)]",
-    "bg-[var(--avatar-5)]",
-    "bg-[var(--avatar-6)]",
-    "bg-[var(--avatar-7)]",
-    "bg-[var(--avatar-8)]",
+    { bg: "bg-avatar-1", fg: "text-avatar-1-fg" },
+    { bg: "bg-avatar-2", fg: "text-avatar-2-fg" },
+    { bg: "bg-avatar-3", fg: "text-avatar-3-fg" },
+    { bg: "bg-avatar-4", fg: "text-avatar-4-fg" },
+    { bg: "bg-avatar-5", fg: "text-avatar-5-fg" },
+    { bg: "bg-avatar-6", fg: "text-avatar-6-fg" },
+    { bg: "bg-avatar-7", fg: "text-avatar-7-fg" },
+    { bg: "bg-avatar-8", fg: "text-avatar-8-fg" },
   ];
   let hash = 0;
   for (let i = 0; i < (name || "").length; i++) {
@@ -51,8 +51,9 @@ const AvatarRoot = React.forwardRef<HTMLSpanElement, AvatarRootProps>(
     <span
       ref={ref}
       role="img"
+      aria-label={props["aria-label"] || props.title || undefined}
       className={cn(
-        "relative inline-flex shrink-0 items-center justify-center font-bold text-white overflow-hidden",
+        "relative inline-flex shrink-0 items-center justify-center font-bold overflow-hidden",
         AVATAR_SIZES[size],
         AVATAR_SHAPES[shape],
         className
@@ -99,8 +100,9 @@ function AvatarFallback({
   className,
   ...props
 }: AvatarFallbackProps) {
+  const { bg, fg } = color ? { bg: color, fg: "text-avatar-1-fg" } : hashColor(name);
   return (
-    <AvatarRoot size={size} shape={shape} className={cn(color || hashColor(name), className)} {...props}>
+    <AvatarRoot size={size} shape={shape} aria-label={name} className={cn(bg, fg, className)} {...props}>
       <span className="select-none">{getInitial(name)}</span>
     </AvatarRoot>
   );

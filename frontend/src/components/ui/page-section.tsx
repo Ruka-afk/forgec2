@@ -27,7 +27,7 @@ export function PageSection({
         <div className={cn("flex items-start justify-between gap-4", headerClassName)}>
           <div className="flex-1 min-w-0">
             {title && <h3 className="text-sm font-semibold text-foreground tracking-tight">{title}</h3>}
-            {description && <p className="text-[12.5px] text-muted-foreground mt-0.5">{description}</p>}
+            {description && <p className="text-(--fs-compact) text-muted-foreground mt-0.5">{description}</p>}
           </div>
           {action && <div className="flex items-center gap-2 shrink-0">{action}</div>}
         </div>

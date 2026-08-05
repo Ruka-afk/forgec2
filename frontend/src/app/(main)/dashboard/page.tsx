@@ -102,14 +102,18 @@ export default function DashboardPage() {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    Promise.all([
-      api.get<DashboardPageStats>("/api/v1/dashboard", { signal: controller.signal }).catch(() => {
+    // Stats are global counters and do not depend on the time range; only the
+    // range-aware charts (listener-traffic, task-gantt) re-fetch on range change.
+    api.get<DashboardPageStats>("/api/v1/dashboard", { signal: controller.signal })
+      .then((d) => setStats(d))
+      .catch(() => {
         if (!controller.signal.aborted) setError(t("dashboard.load_failed"));
-        return {};
-      }),
-    ]).then(([d]) => setStats(d)).finally(() => setLoading(false));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
     return () => controller.abort();
-  }, [timeRange, t]);
+  }, [t]);
 
   useVisibleInterval(() => {
     api.get<DashboardPageStats>("/api/v1/dashboard")

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
@@ -102,23 +102,33 @@ export function useAgentData(t: (key: string) => string) {
     return () => ac.abort();
   }, [t]);
 
+  const idsKey = useMemo(() => beacons.map((b) => b.id || "").filter(Boolean).sort().join(","), [beacons]);
+
   useEffect(() => {
     if (beacons.length === 0) {
       setTagsByAgent({});
       return;
     }
-    const ids = beacons.map((b) => b.id || "").filter(Boolean);
     const ac = new AbortController();
-    api
-      .postJson<{ tags: Record<string, AgentTag[]> }>(paths.agents.batchTags, { agent_ids: ids })
-      .then((d) => { if (!ac.signal.aborted) setTagsByAgent(d.tags || {}); })
-      .catch(() => {
-        if (!ac.signal.aborted) {
-          setTagsByAgent({});
-        }
-      });
-    return () => ac.abort();
-  }, [beacons]);
+    const ids = beacons.map((b) => b.id || "").filter(Boolean);
+    // Debounce so rapid list refreshes (sorting, pagination, polling) coalesce
+    // into a single batch request instead of a burst.
+    const timer = setTimeout(() => {
+      if (ac.signal.aborted) return;
+      api
+        .postJson<{ tags: Record<string, AgentTag[]> }>(paths.agents.batchTags, { agent_ids: ids })
+        .then((d) => { if (!ac.signal.aborted) setTagsByAgent(d.tags || {}); })
+        .catch(() => {
+          if (!ac.signal.aborted) setTagsByAgent({});
+        });
+    }, 200);
+    return () => {
+      clearTimeout(timer);
+      ac.abort();
+    };
+    // Only refetch when the set of agent ids actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
 
   return {
     beacons,

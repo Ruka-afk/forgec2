@@ -62,6 +62,15 @@
   --avatar-7: oklch(0.58 0.18 255);
   --avatar-8: oklch(0.60 0.14 180);
 
+  --avatar-1-fg: oklch(0.985 0 0);
+  --avatar-2-fg: oklch(0.15 0.04 158);
+  --avatar-3-fg: oklch(0.33 0.1 70);
+  --avatar-4-fg: oklch(0.985 0 0);
+  --avatar-5-fg: oklch(0.18 0.03 220);
+  --avatar-6-fg: oklch(0.985 0 0);
+  --avatar-7-fg: oklch(0.985 0 0);
+  --avatar-8-fg: oklch(0.15 0.04 180);
+
   --elevation-1: 0 1px 2px oklch(0.2 0.02 265 / 0.05), 0 1px 1px oklch(0.2 0.02 265 / 0.04);
   --elevation-2: 0 2px 4px oklch(0.2 0.02 265 / 0.06), 0 4px 12px oklch(0.2 0.02 265 / 0.05);
   --elevation-3: 0 4px 8px oklch(0.2 0.02 265 / 0.07), 0 12px 32px oklch(0.2 0.02 265 / 0.10);
@@ -76,7 +85,7 @@
   --content-width: 80rem;
   --z-scroll-to-top: 70;
   --z-skip-link: 100;
-  --tracking-wide: 0.3em;
+  --tracking-wide: 0.08em;
   --tracking-label: 0.12em;
   --tracking-sublabel: 0.08em;
   --blur-orb: 60px;
@@ -363,13 +372,21 @@ body {
   --color-avatar-6: var(--avatar-6);
   --color-avatar-7: var(--avatar-7);
   --color-avatar-8: var(--avatar-8);
-  --z-scroll-to-top: var(--z-scroll-to-top);
-  --z-skip-link: var(--z-skip-link);
-  --tracking-wide: var(--tracking-wide);
-  --tracking-label: var(--tracking-label);
-  --tracking-sublabel: var(--tracking-sublabel);
-  --blur-orb: var(--blur-orb);
-  --content-width: var(--content-width);
+  --color-avatar-1-fg: var(--avatar-1-fg);
+  --color-avatar-2-fg: var(--avatar-2-fg);
+  --color-avatar-3-fg: var(--avatar-3-fg);
+  --color-avatar-4-fg: var(--avatar-4-fg);
+  --color-avatar-5-fg: var(--avatar-5-fg);
+  --color-avatar-6-fg: var(--avatar-6-fg);
+  --color-avatar-7-fg: var(--avatar-7-fg);
+  --color-avatar-8-fg: var(--avatar-8-fg);
+  --z-scroll-to-top: 70;
+  --z-skip-link: 100;
+  --tracking-wide: 0.08em;
+  --tracking-label: 0.12em;
+  --tracking-sublabel: 0.08em;
+  --blur-orb: 60px;
+  --content-width: 80rem;
 }
 
 @layer base {
