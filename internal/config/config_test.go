@@ -32,6 +32,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Logging.Level != "info" {
 		t.Errorf("expected level info, got %s", cfg.Logging.Level)
 	}
+	if cfg.Server.UpdateCheckEnabled {
+		t.Errorf("expected update_check_enabled false (egress hygiene default), got %v", cfg.Server.UpdateCheckEnabled)
+	}
 	if cfg.Listeners.MTLS.Addr != ":8443" {
 		t.Errorf("expected mTLS addr :8443, got %s", cfg.Listeners.MTLS.Addr)
 	}

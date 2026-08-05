@@ -458,7 +458,11 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 
 	// Initialize plugin marketplace
 	s.marketplace = plugin.NewMarketplace(database)
-	s.marketplace.StartUpdateChecker(PluginUpdateCheckInterval)
+	if s.cfg.Server.UpdateCheckEnabled {
+		// Both the marketplace and the version checker phone home to
+		// api.github.com — strictly opt-in for egress hygiene.
+		s.marketplace.StartUpdateChecker(PluginUpdateCheckInterval)
+	}
 
 	// Initialize plugin execution manager
 	s.pluginManager = plugin.NewManager(database)
@@ -1378,8 +1382,12 @@ func (s *Server) Run() error {
 	})
 	s.circuitBreaker.Start()
 
-	// start update checker
-	s.initUpdateChecker()
+	// start update checker (opt-in; phones home to GitHub releases)
+	if s.cfg.Server.UpdateCheckEnabled {
+		s.initUpdateChecker()
+	} else {
+		slog.Info("Update check disabled (server.update_check_enabled=false); no outbound GitHub traffic")
+	}
 
 	// periodic cleanup of hosted one-liner payloads
 	s.wg.Add(1)

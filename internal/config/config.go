@@ -50,6 +50,7 @@ type Config struct {
 		SessionMaxAgeHours   int           `yaml:"session_max_age_hours"`  // JWT expiry
 		CleanupRetentionDays int           `yaml:"cleanup_retention_days"` // auto-purge cutoff
 		UpdateCheckRepo      string        `yaml:"update_check_repo"`      // GitHub repo for update checks (e.g. "owner/repo")
+		UpdateCheckEnabled   bool          `yaml:"update_check_enabled"`   // OPT-IN: phone home to GitHub releases (default OFF for egress hygiene)
 		VantagePoints        []string      `yaml:"vantage_points"`         // external proxy URLs for circuit breaker probing
 		SSHEnabled           bool          `yaml:"ssh_enabled"`            // enable SSH transport listener
 		SSHPort              int           `yaml:"ssh_port"`               // SSH listener port (default 2222)
@@ -231,6 +232,7 @@ func DefaultConfig() *Config {
 	cfg.Server.SessionMaxAgeHours = 24
 	cfg.Server.CleanupRetentionDays = 30
 	cfg.Server.UpdateCheckRepo = "forgec2/forgec2"
+	cfg.Server.UpdateCheckEnabled = false // update checks phone home to api.github.com — opt-in only
 	cfg.Server.FrontCheckInterval = 60
 	cfg.Server.EnablePprof = false
 	cfg.Server.EnableMetrics = false

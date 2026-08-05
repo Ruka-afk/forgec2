@@ -81,3 +81,5 @@ plugins/**/Caches/
 plugins/**/*.db
 
 __pycache__/
+
+deploy-manifest.json

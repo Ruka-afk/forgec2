@@ -22,6 +22,8 @@ server:
   # trusted_proxies: ["127.0.0.1", "10.0.0.0/8"]  # reverse proxy IPs/CIDRs for X-Forwarded-For (empty = use direct client IP)
   cookie_domain: ""
   beacon_key: ""
+  # Egress hygiene: update checks phone home to api.github.com — opt-in only.
+  update_check_enabled: false
   tcp_enabled: false
   dns_enabled: false
   grpc_enabled: false
