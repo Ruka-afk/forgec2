@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -23,8 +24,12 @@ import (
 // newTestFileServer creates a minimal Server suitable for file handler tests.
 func newTestFileServer(t *testing.T, database *gorm.DB) *Server {
 	t.Helper()
+	cfg := config.DefaultConfig()
+	cfg.Server.BeaconKey = strings.Repeat("ab", 32) // 64 hex chars = 32 bytes
 	return &Server{
 		db:                  database,
+		cfg:                 cfg,
+		fileChains:          newFileChainState(),
 		wsClients:           make(map[*websocket.Conn]*wsClientConn),
 		agentPendingTasks:   make(map[string]int),
 		ctx:                 context.Background(),

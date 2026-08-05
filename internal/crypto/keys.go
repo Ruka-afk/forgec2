@@ -24,6 +24,12 @@ const (
 	// implant embeds a unique random secret instead of the fleet master key,
 	// so extracting one binary no longer compromises the whole engagement.
 	regSecretStoreSaltV3 = "forgec2-regstore-v3"
+
+	// fileChainSalt / fileChainInfo derive the per-implant file-transfer
+	// integrity key from the registration key (see DeriveFileChainKey).
+	// The agent mirrors this in internal/payload/agent/agent_fileops.go.
+	fileChainSalt = "forgec2-filechain-v1"
+	fileChainInfo = "file-transfer"
 )
 
 // DeriveRegistrationKey derives the per-agent registration key from the
@@ -78,5 +84,34 @@ func ComputeRegHMAC(regKey []byte, agentID, identityPub string, ts int64) []byte
 		buf[7-i] = byte(ts >> (8 * i))
 	}
 	mac.Write(buf[:])
+	return mac.Sum(nil)
+}
+
+// DeriveFileChainKey derives the per-implant key for the chunked file-transfer
+// integrity chain from the agent's registration key. Both the server and the
+// agent (standard-library HKDF mirror) derive the identical value.
+func DeriveFileChainKey(regKey []byte) []byte {
+	if len(regKey) == 0 {
+		return nil
+	}
+	out := make([]byte, 32)
+	r := hkdf.New(sha256.New, regKey, []byte(fileChainSalt), []byte(fileChainInfo))
+	if _, err := io.ReadFull(r, out); err != nil {
+		return nil
+	}
+	return out
+}
+
+// FileChunkMAC computes the next link of the chunked file-transfer integrity
+// chain: HMAC-SHA256(chainKey, prevMAC || chunkData). The chain is seeded with
+// 32 zero bytes for the first chunk, so any missing, reordered, or tampered
+// chunk breaks the chain at the server.
+func FileChunkMAC(chainKey, prevMAC, chunkData []byte) []byte {
+	if len(chainKey) == 0 {
+		return nil
+	}
+	mac := hmac.New(sha256.New, chainKey)
+	mac.Write(prevMAC)
+	mac.Write(chunkData)
 	return mac.Sum(nil)
 }

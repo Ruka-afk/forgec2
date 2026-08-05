@@ -210,11 +210,27 @@ func (s *Server) handleUploadFile(c *gin.Context) {
 	if offsetStr := c.PostForm("offset"); offsetStr != "" {
 		if off, err := strconv.ParseInt(offsetStr, 10, 64); err == nil {
 			task.Offset = off
-			if err := s.db.Save(task).Error; err != nil {
-				respondError(c, http.StatusInternalServerError, "failed to save upload offset")
-				return
-			}
 		}
+	}
+	// HMAC integrity chain: the agent refuses to write the chunk unless the
+	// recomputed MAC matches, so tampering with a pushed chunk is detected
+	// before it touches disk. (Push size is already bounded by MaxUploadSize.)
+	rawChunk, err := base64.StdEncoding.DecodeString(fileData)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "failed to decode file data")
+		return
+	}
+	if prevMAC, mac, err := s.chainForPush(id, task.ID, rawChunk); err != nil {
+		slog.Error("Failed to build upload integrity chain", "agent_id", id, "task_id", task.ID, "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to sign upload chunk")
+		return
+	} else {
+		task.PrevMAC = prevMAC
+		task.MAC = mac
+	}
+	if err := s.db.Save(task).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to save upload offset")
+		return
 	}
 	s.LogAuditRecord(c, "file_upload_push", "agent", id, targetPath, true, nil)
 

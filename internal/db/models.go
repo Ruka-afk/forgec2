@@ -186,7 +186,11 @@ type Task struct {
 	Data     string `json:"data,omitempty"`
 	Offset   int64  `json:"offset,omitempty"`
 	Size     int64  `json:"size,omitempty"`
-	Status   string `gorm:"index" json:"status"`
+	// PrevMAC/MAC carry the chunked file-transfer HMAC integrity chain on
+	// push-upload tasks (hex); the agent verifies Data against them.
+	PrevMAC string `json:"prev_mac,omitempty"`
+	MAC     string `json:"mac,omitempty"`
+	Status  string `gorm:"index" json:"status"`
 	Priority int    `gorm:"default:1" json:"priority"` // 0=low, 1=normal, 2=high, 3=urgent
 	Result   string `json:"result"`
 	Error    string `json:"error"`

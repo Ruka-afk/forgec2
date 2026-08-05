@@ -4,12 +4,84 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"sync"
 )
+
+// File-transfer resource limits (server mirrors them; see internal/server).
+const (
+	maxReadFileSize      = 64 << 20 // whole-file "read" task cap (use the download task instead)
+	maxDownloadChunkSize = 4 << 20  // per-chunk cap for offset-based file pulls
+	maxURLDownloadSize   = 256 << 20 // agent-side HTTP download cap
+	maxUploadPushSize    = 50 << 20  // single push-chunk decode cap (mirrors server MaxUploadSize)
+)
+
+// file-chain integrity key, derived per agent from its registration key so it
+// mirrors the server's crypto.DeriveFileChainKey (same HKDF parameters).
+var fileChainKeyDerived []byte
+
+// chunkChain tracks the last committed HMAC per task so batches of results for
+// the same task (offset continuation) form one continuous integrity chain.
+var chunkChain = struct {
+	sync.Mutex
+	prevByTask map[uint][]byte
+}{prevByTask: make(map[uint][]byte)}
+
+func fileChainKey() []byte {
+	if len(fileChainKeyDerived) == 0 {
+		fileChainKeyDerived = hkdfSHA256(loadAgentRegKey(), []byte("forgec2-filechain-v1"), []byte("file-transfer"))
+	}
+	return fileChainKeyDerived
+}
+
+func chainPrev(taskID uint) []byte {
+	chunkChain.Lock()
+	defer chunkChain.Unlock()
+	if prev, ok := chunkChain.prevByTask[taskID]; ok {
+		return prev
+	}
+	return make([]byte, 32) // chain seed
+}
+
+func chainCommit(taskID uint, mac []byte) {
+	chunkChain.Lock()
+	defer chunkChain.Unlock()
+	chunkChain.prevByTask[taskID] = mac
+}
+
+// fileChunkMAC computes HMAC-SHA256(chainKey, prevMAC || data), the next link
+// of the chunked file-transfer integrity chain.
+func fileChunkMAC(chainKey, prevMAC, data []byte) []byte {
+	mac := hmac.New(sha256.New, chainKey)
+	mac.Write(prevMAC)
+	mac.Write(data)
+	return mac.Sum(nil)
+}
+
+// verifyFileChunk verifies an expected chain MAC over chunkData when non-empty.
+// Returns nil when no MAC was supplied (legacy task) or when it matches.
+func verifyFileChunk(taskID uint, expectedHexHex string, chunkData []byte) error {
+	if expectedHexHex == "" {
+		return nil
+	}
+	want, err := hex.DecodeString(expectedHexHex)
+	if err != nil || len(want) != 32 {
+		return fmt.Errorf("malformed chain MAC")
+	}
+	got := fileChunkMAC(fileChainKey(), chainPrev(taskID), chunkData)
+	if hmac.Equal(got, want) {
+		chainCommit(taskID, got)
+		return nil
+	}
+	return fmt.Errorf("chunk HMAC mismatch (tampered/reordered data)")
+}
 
 // deleteFileOrDir removes file or directory (recursive)
 func deleteFileOrDir(path string) error {
@@ -19,15 +91,25 @@ func deleteFileOrDir(path string) error {
 	return os.RemoveAll(path)
 }
 
-// readFileContent returns raw bytes of a file (for "read" task)
+// readFileContent returns raw bytes of a file (for "read" task). Files larger
+// than maxReadFileSize are refused to avoid pulling multi-GB blobs into memory.
 func readFileContent(path string) ([]byte, error) {
 	if path == "" {
 		return nil, fmt.Errorf("path required")
 	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if fi.Size() > maxReadFileSize {
+		return nil, fmt.Errorf("file too large (%d bytes, max %d) — use the download task for chunked exfil", fi.Size(), maxReadFileSize)
+	}
 	return os.ReadFile(path)
 }
 
-// downloadFileChunk reads a chunk from file
+// downloadFileChunk reads a chunk from file, enforcing a per-chunk size cap so
+// a malicious/compromised server cannot force the agent to allocate arbitrarily
+// large buffers.
 func downloadFileChunk(path string, offset, size int64) ([]byte, error) {
 	if path == "" {
 		return nil, fmt.Errorf("path required")
@@ -42,8 +124,11 @@ func downloadFileChunk(path string, offset, size int64) ([]byte, error) {
 			return nil, err
 		}
 	}
-	if size == 0 {
+	if size <= 0 {
 		size = 1024 * 1024 // default 1MB
+	}
+	if size > maxDownloadChunkSize {
+		size = maxDownloadChunkSize
 	}
 	buf := make([]byte, size)
 	n, err := f.Read(buf)
@@ -53,11 +138,26 @@ func downloadFileChunk(path string, offset, size int64) ([]byte, error) {
 	return buf[:n], nil
 }
 
-// uploadFileChunk writes base64 chunk at offset
-func uploadFileChunk(path string, offset int64, b64Content string) error {
+// uploadFileChunk verifies the push chunk's HMAC (when supplied) and writes the
+// base64 chunk at offset. The chain is seeded with 32 zero bytes server-side.
+func uploadFileChunk(taskID uint, path string, offset int64, b64Content string, prevMACHex, expectedMACHex string) error {
 	data, err := base64.StdEncoding.DecodeString(b64Content)
 	if err != nil {
 		return fmt.Errorf("base64 decode failed: %w", err)
+	}
+	if len(data) > maxUploadPushSize {
+		return fmt.Errorf("chunk too large (%d bytes, max %d)", len(data), maxUploadPushSize)
+	}
+	if prevMACHex != "" {
+		prev, perr := hex.DecodeString(prevMACHex)
+		if perr == nil && len(prev) == 32 {
+			chunkChain.Lock()
+			chunkChain.prevByTask[taskID] = prev
+			chunkChain.Unlock()
+		}
+	}
+	if err := verifyFileChunk(taskID, expectedMACHex, data); err != nil {
+		return err // refuse to write unverified data
 	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -73,7 +173,8 @@ func uploadFileChunk(path string, offset int64, b64Content string) error {
 	return err
 }
 
-// downloadFromURL downloads a file from HTTP URL to dest path on disk
+// downloadFromURL downloads a file from HTTP URL to dest path on disk,
+// enforcing a response size cap.
 func downloadFromURL(urlStr, destPath string) error {
 	if destPath == "" {
 		return fmt.Errorf("destination path required")
@@ -94,9 +195,12 @@ func downloadFromURL(urlStr, destPath string) error {
 		return fmt.Errorf("http status %d", resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxURLDownloadSize+1))
 	if err != nil {
 		return err
+	}
+	if len(data) > maxURLDownloadSize {
+		return fmt.Errorf("download exceeds size cap (%d bytes)", maxURLDownloadSize)
 	}
 	return os.WriteFile(destPath, data, 0644)
 }

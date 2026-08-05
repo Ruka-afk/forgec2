@@ -104,9 +104,9 @@ func (sc *streamCipher) generateKeystream(nonce []byte, length int) []byte {
 
 // --- v2 key derivation (standard-library HKDF-SHA256, mirrors internal/crypto) ---
 
-// hkdfSHA256 implements HKDF-SHA256 using only the standard library so the
-// agent (which must not depend on x/crypto in a standalone binary context)
-// derives keys identically to the server.
+// hkdfSHA256 implements HKDF-SHA256 (Extract-and-Expand) using only the
+// standard library so the agent (which must not depend on x/crypto in a
+// standalone binary context) derives keys identically to the server.
 func hkdfSHA256(secret, salt, info []byte) []byte {
 	if len(secret) == 0 {
 		return nil
@@ -115,24 +115,20 @@ func hkdfSHA256(secret, salt, info []byte) []byte {
 	extract.Write(secret)
 	prk := extract.Sum(nil)
 
-	out := make([]byte, 32)
+	out := make([]byte, 0, 32)
 	var prev []byte
-	for counter := byte(1); len(prev) < len(out); counter++ {
+	for counter := byte(1); len(out) < 32; counter++ {
 		expand := hmac.New(sha256.New, prk)
 		expand.Write(prev)
 		expand.Write(info)
 		expand.Write([]byte{counter})
-		block := expand.Sum(nil)
-		out = append(out[:0:0], out[:len(prev)]...)
-		out = append(out, block[:len(out)-len(prev)]...)
-		prev = block
+		prev = expand.Sum(nil)
+		out = append(out, prev...)
 	}
+	out = out[:32]
 	return out
 }
 
-// deriveAgentRegKey derives the per-agent registration key from the compiled-in
-// beacon key (hex string, same value as the server's cfg.Server.BeaconKey).
-// Mirrors crypto.DeriveRegistrationKey. Returns nil for an empty/invalid key.
 func deriveAgentRegKey(beaconKeyHex, agentID string) []byte {
 	master, err := hex.DecodeString(beaconKeyHex)
 	if err != nil || len(master) == 0 {

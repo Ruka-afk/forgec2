@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"path/filepath"
 	"strings"
 )
@@ -89,6 +90,11 @@ func handleDownload(task Task, res *TaskResult) {
 			res.Offset = offset
 			res.Size = int64(len(data))
 			res.Filename = filepath.Base(path)
+			// Integrity chain: mac = HMAC(chainKey, prevMAC || chunk). The
+			// server verifies this link before committing the chunk to disk.
+			mac := fileChunkMAC(fileChainKey(), chainPrev(task.ID), data)
+			res.MAC = hex.EncodeToString(mac)
+			chainCommit(task.ID, mac)
 		}
 	}
 }
@@ -104,7 +110,9 @@ func handleUpload(task Task, res *TaskResult) {
 		if b64 == "" {
 			b64 = task.Shell
 		}
-		err := uploadFileChunk(path, offset, b64)
+		// Push path: the chunk is HMAC-signed by the server; refuse to write
+		// unless the signature verifies over the previous chain link.
+		err := uploadFileChunk(task.ID, path, offset, b64, task.PrevMAC, task.MAC)
 		if err != nil {
 			res.Error = err.Error()
 		} else {
@@ -127,6 +135,9 @@ func handleUpload(task Task, res *TaskResult) {
 			res.Offset = offset
 			res.Size = int64(len(data))
 			res.Filename = filepath.Base(path)
+			mac := fileChunkMAC(fileChainKey(), chainPrev(task.ID), data)
+			res.MAC = hex.EncodeToString(mac)
+			chainCommit(task.ID, mac)
 		}
 	}
 }

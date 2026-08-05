@@ -226,6 +226,9 @@ type Server struct {
 	// OPSEC adaptive threat manager
 	opsecAdaptive *opsec.AdaptiveManager
 
+	// Chunked file-transfer HMAC integrity chain state
+	fileChains *fileChainState
+
 	// Transport obfuscation (DNS/ICMP)
 	transportObfuscation *TransportObfuscationManager
 }
@@ -444,6 +447,8 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	// OPSEC adaptive threat manager
 	s.opsecAdaptive = opsec.NewAdaptiveManager()
 	s.opsecAdaptive.StartDecayLoop()
+
+	s.fileChains = newFileChainState()
 
 	// Transport obfuscation (DNS/ICMP)
 	s.transportObfuscation = NewTransportObfuscationManager()
