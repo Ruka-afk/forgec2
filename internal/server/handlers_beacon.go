@@ -113,6 +113,7 @@ type beaconEnvelope struct {
 	Mac         string `json:"mac,omitempty"`      // HMAC(regKey, uuid||ecdh_pub||ts) for handshake frames
 	IdentityPub string `json:"id_pub,omitempty"`   // registration: agent identity public key
 	RegHMAC     string `json:"reg_hmac,omitempty"` // registration: HMAC(regKey, uuid||id_pub||ts)
+	SecretID    string `json:"secret_id,omitempty"` // v3 registration: per-implant secret id ("" = legacy v2 master-key path)
 }
 
 // beaconFrameKind classifies a decoded envelope.
@@ -133,9 +134,17 @@ const beaconTsTolerance = 300 // seconds
 // frame is rejected as a replay flood / desync indicator.
 const maxSeqJump = 1000
 
-// deriveRegKey returns the per-agent registration key derived from the master
-// beacon key. nil when the master key is unset or invalid.
+// deriveRegKey returns the per-agent registration key. v3: when the implant
+// has a bound per-implant secret, that secret is used directly (the master key
+// is never embedded in v3 payloads). v2 legacy: derived from the master beacon
+// key. nil when neither is available.
 func (s *Server) deriveRegKey(agentID string) []byte {
+	var secretID string
+	if err := s.db.Model(&db.Implant{}).Where("id = ?", agentID).Pluck("secret_id", &secretID).Error; err == nil && secretID != "" {
+		if key := s.regSecretByID(secretID); key != nil {
+			return key
+		}
+	}
 	return crypto.DeriveRegistrationKeyFromHex(s.serverBeaconKey(), agentID)
 }
 
@@ -274,6 +283,16 @@ func (s *Server) ensureBeaconImplantRow(agentID string) {
 // envelope and ok=false on any authentication/state failure.
 func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]byte, bool) {
 	regKey := s.deriveRegKey(env.UUID)
+	if kind == frameRegister && env.SecretID != "" {
+		// v3: the implant carries only its own per-implant secret id, so the
+		// registration key must come from the secret store, not the master key.
+		if key := s.regSecretByID(env.SecretID); key != nil {
+			regKey = key
+		} else {
+			slog.Warn("Beacon registration rejected: unknown secret_id", "agent_id", env.UUID)
+			return nil, false
+		}
+	}
 	if regKey == nil {
 		slog.Warn("Beacon rejected: no master beacon key configured", "agent_id", env.UUID)
 		return nil, false
@@ -292,25 +311,34 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 			slog.Warn("Beacon registration rejected: invalid identity key", "agent_id", env.UUID)
 			return nil, false
 		}
+		updates := map[string]interface{}{
+			"identity_pub": env.IdentityPub,
+			"registered":   true,
+			"last_seq":     env.Seq,
+		}
+		if env.SecretID != "" {
+			updates["secret_id"] = env.SecretID
+		}
 		// Bind identity: only the first registration (registered=false) wins.
 		res := s.db.Model(&db.Implant{}).
 			Where("id = ? AND registered = ? AND last_seq < ?", env.UUID, false, env.Seq).
-			Updates(map[string]interface{}{
-				"identity_pub": env.IdentityPub,
-				"registered":   true,
-				"last_seq":     env.Seq,
-			})
+			Updates(updates)
 		if res.Error != nil || res.RowsAffected != 1 {
 			slog.Warn("Beacon registration rejected: already registered or replay", "agent_id", env.UUID)
 			return nil, false
 		}
+		s.bindRegSecret(env.SecretID, env.UUID)
 		if s.sessionManager != nil {
 			if err := s.sessionManager.EstablishSession(env.UUID, pub); err != nil {
 				slog.Warn("Beacon registration: session establish failed", "agent_id", env.UUID, "err", err)
 				return nil, false
 			}
 		}
-		slog.Info("Beacon registered (v2)", "agent_id", env.UUID)
+		if env.SecretID != "" {
+			slog.Info("Beacon registered (v3 per-implant secret)", "agent_id", env.UUID)
+		} else {
+			slog.Info("Beacon registered (v2 master key)", "agent_id", env.UUID)
+		}
 	} else { // frameHandshake
 		// The handshake must bind the presented ecdh_pub to the registration key.
 		expected := computeAuthMAC(regKey, env.UUID, env.ECDHPub, strconv.FormatInt(env.Ts, 10))

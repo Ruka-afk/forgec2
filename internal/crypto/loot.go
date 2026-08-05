@@ -43,9 +43,17 @@ func InitLootEncryption(jwtSecret, lootKeyHex string) {
 
 // InitExtC2Encryption initializes (or re-initializes) a separate encryption key
 // for ExtC2 channels, derived independently to limit key compromise blast radius.
-func InitExtC2Encryption(jwtSecret string) {
+// If extc2KeyHex is non-empty, uses that 32-byte hex key directly (recommended).
+// Otherwise derives the key from the JWT secret (backward compatible).
+func InitExtC2Encryption(jwtSecret, extc2KeyHex string) {
 	extc2KeyMu.Lock()
 	defer extc2KeyMu.Unlock()
+	if extc2KeyHex != "" {
+		if b, err := hex.DecodeString(extc2KeyHex); err == nil && len(b) == 32 {
+			extc2Key = b
+			return
+		}
+	}
 	h := sha256.Sum256([]byte("extc2:" + jwtSecret))
 	extc2Key = h[:32]
 }

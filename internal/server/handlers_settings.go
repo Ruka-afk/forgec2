@@ -494,7 +494,7 @@ func (s *Server) handleRegenerateJWT(c *gin.Context) {
 	// Re-derive crypto keys in-process so the new JWT secret takes effect
 	// immediately (re-entrant, unlike the previous sync.Once behavior).
 	crypto.InitLootEncryption(s.cfg.Server.JWTSecret, s.cfg.Crypto.LootKey)
-	crypto.InitExtC2Encryption(s.cfg.Server.JWTSecret)
+	crypto.InitExtC2Encryption(s.cfg.Server.JWTSecret, s.cfg.Crypto.ExtC2Key)
 
 	// Re-encrypt all TOTP secrets with the new JWT secret. Paginate without a
 	// hard limit so no 2FA user is locked out regardless of user count.

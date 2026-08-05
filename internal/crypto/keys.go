@@ -19,6 +19,11 @@ import (
 const (
 	regKeySalt  = "forgec2-reg-v2"
 	sessKeySalt = "forgec2-session-v2"
+
+	// v3 per-implant registration secrets (see RegSecretStore). Each built
+	// implant embeds a unique random secret instead of the fleet master key,
+	// so extracting one binary no longer compromises the whole engagement.
+	regSecretStoreSaltV3 = "forgec2-regstore-v3"
 )
 
 // DeriveRegistrationKey derives the per-agent registration key from the

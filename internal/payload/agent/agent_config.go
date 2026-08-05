@@ -37,6 +37,8 @@ var (
 	ProxyStr             string   = ""                            // HTTP proxy URL (e.g. "http://proxy:8080")
 	CryptoKeyStr         string   = ""                            // 32-byte hex key for beacon payload encryption ("" = disabled)
 	BeaconKeyStr         string   = ""                            // pre-shared key sent as envelope "key" and X-Beacon-Key header ("" = no PSK auth)
+	RegSecretIDStr       string   = ""                            // v3: per-implant registration secret id ("" = v2 master-key derivation)
+	RegSecretStr         string   = ""                            // v3: per-implant registration secret, base64 ("" = v2 master-key derivation)
 	DomainFront          string   = ""                            // Domain fronting: override HTTP Host header ("" = disabled)
 	ContentLengthJitter  int      = 0                             // Max random padding bytes for HTTP body (0=disabled)
 	ExpiryDateStr        string   = ""                            // Compile-time expiry date: "YYYY-MM-DD" — implant auto-exits after this date
@@ -161,6 +163,8 @@ type agentConfigBlob struct {
 	Proxy            string `json:"proxy"`
 	CryptoKey        string `json:"crypto_key"`
 	BeaconKey        string `json:"beacon_key"`
+	RegSecretID      string `json:"reg_secret_id"`
+	RegSecret        string `json:"reg_secret"`
 	ExpiryDate       string `json:"expiry"`
 	Evasion          string `json:"evasion"`
 	DomainFront      string `json:"domain_front"`
@@ -258,6 +262,12 @@ func (b *agentConfigBlob) apply() {
 	}
 	if b.BeaconKey != "" {
 		BeaconKeyStr = b.BeaconKey
+	}
+	if b.RegSecretID != "" {
+		RegSecretIDStr = b.RegSecretID
+	}
+	if b.RegSecret != "" {
+		RegSecretStr = b.RegSecret
 	}
 	if b.ExpiryDate != "" {
 		ExpiryDateStr = b.ExpiryDate

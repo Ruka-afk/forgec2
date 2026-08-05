@@ -159,8 +159,20 @@ type Implant struct {
 	IdentityPub string    `gorm:"size:64;default:''" json:"identity_pub,omitempty"` // base64 X25519 identity public key (registered)
 	Registered  bool      `gorm:"default:false" json:"registered"`                  // v2 registration handshake completed
 	LastSeq     uint64    `gorm:"default:0" json:"last_seq,omitempty"`              // last accepted beacon seq (replay window)
+	SecretID    string    `gorm:"size:64;default:''" json:"secret_id,omitempty"`    // v3 per-implant registration secret id (bound at registration)
 	CreatedAt   time.Time `gorm:"index" json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// RegSecret is a v3 per-implant registration secret generated at build time.
+// Only the secret_id is public (compiled into the implant); the sealed secret
+// lives here at rest and is unsealed server-side to verify beacon frames.
+type RegSecret struct {
+	ID        string    `gorm:"primaryKey" json:"id"` // public secret id (compiled into the implant)
+	SecretEnc string    `gorm:"type:text" json:"-"`   // AES-256-GCM sealed registration secret
+	AgentID   string    `gorm:"size:36;default:''" json:"agent_id,omitempty"` // bound after first registration
+	Bound     bool      `gorm:"default:false" json:"bound"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Task represents a command/task sent to an agent
