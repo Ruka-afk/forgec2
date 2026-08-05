@@ -115,3 +115,37 @@ func FileChunkMAC(chainKey, prevMAC, chunkData []byte) []byte {
 	mac.Write(chunkData)
 	return mac.Sum(nil)
 }
+
+// Kill-switch derivation parameters. The agent mirrors these byte-for-byte
+// (internal/payload/agent/cipher.go) — see agent_killswitch_test.go.
+const (
+	killSwitchSalt = "forgec2-killswitch-v1"
+	killSwitchInfo = "killswitch"
+)
+
+// DeriveKillSwitchKey derives the per-implant key that authenticates the fleet
+// kill-switch broadcast from the agent's registration key. Only a party holding
+// the registration key (the server, and the implant itself) can produce or
+// verify a kill-switch token.
+func DeriveKillSwitchKey(regKey []byte) []byte {
+	if len(regKey) == 0 {
+		return nil
+	}
+	out := make([]byte, 32)
+	r := hkdf.New(sha256.New, regKey, []byte(killSwitchSalt), []byte(killSwitchInfo))
+	if _, err := io.ReadFull(r, out); err != nil {
+		return nil
+	}
+	return out
+}
+
+// KillSwitchHMAC authenticates a kill-switch token: HMAC-SHA256(ksKey, token).
+// The token is regenerated on every arm so old broadcasts cannot be replayed.
+func KillSwitchHMAC(ksKey, token []byte) []byte {
+	if len(ksKey) == 0 {
+		return nil
+	}
+	mac := hmac.New(sha256.New, ksKey)
+	mac.Write(token)
+	return mac.Sum(nil)
+}

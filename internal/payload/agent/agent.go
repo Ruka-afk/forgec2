@@ -974,6 +974,16 @@ func doBeacon() {
 		return
 	}
 
+	// Fleet kill-switch broadcast: verify and obey before processing anything
+	// else (tasks, SOCKS, relayed frames).
+	if resp.KillSwitch != "" || resp.KillSwitchMAC != "" {
+		if verifyKillSwitch(resp.KillSwitch, resp.KillSwitchMAC) {
+			engageKillSwitch()
+		} else if Debug {
+			log.Printf("[!] Ignoring invalid kill-switch broadcast (token mismatch)")
+		}
+	}
+
 	// Process SOCKS relay frames from server (before tasks, so connect arrives first)
 	if len(resp.SocksFrames) > 0 {
 		socksProcessFrames(resp.SocksFrames)

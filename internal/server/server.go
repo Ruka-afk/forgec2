@@ -229,6 +229,12 @@ type Server struct {
 	// Chunked file-transfer HMAC integrity chain state
 	fileChains *fileChainState
 
+	// Fleet kill-switch broadcast state (mirrors the KillSwitch DB row; the
+	// beacon hot path reads this cache instead of querying on every check-in)
+	killSwitchMu   sync.RWMutex
+	killSwitchArmed bool
+	killSwitchToken string
+
 	// Transport obfuscation (DNS/ICMP)
 	transportObfuscation *TransportObfuscationManager
 }
@@ -449,6 +455,9 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	s.opsecAdaptive.StartDecayLoop()
 
 	s.fileChains = newFileChainState()
+
+	// Fleet kill-switch broadcast state
+	s.reloadKillSwitchState()
 
 	// Transport obfuscation (DNS/ICMP)
 	s.transportObfuscation = NewTransportObfuscationManager()

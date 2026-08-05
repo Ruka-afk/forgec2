@@ -82,6 +82,13 @@ type BeaconResponse struct {
 	Relayed         []RelayedTask `json:"relayed,omitempty"`
 	ExtC2Data       []string      `json:"extc2_data,omitempty"`
 
+	// Fleet kill-switch broadcast (set only while armed): KillSwitch is the
+	// per-arm token (hex), KillSwitchMAC its per-implant authentication tag
+	// HMAC-SHA256(regKey-derived kill-switch key, token). The agent verifies
+	// both before self-destructing.
+	KillSwitch    string `json:"kill_switch,omitempty"`
+	KillSwitchMAC string `json:"kill_switch_mac,omitempty"`
+
 	ECDHPub   string `json:"ecdh_pub,omitempty"`
 	CipherB64 string `json:"c,omitempty"`
 }

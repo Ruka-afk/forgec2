@@ -99,6 +99,14 @@ type beaconResponse struct {
 	SocksFastMode   bool          `json:"socks_fast,omitempty"`
 	Relayed         []relayedTask `json:"relayed,omitempty"` // P2P: tasks for children
 
+	// Fleet kill-switch broadcast: both fields are set only while the
+	// kill-switch is armed. KillSwitch is the per-arm token (hex) and
+	// KillSwitchMAC its per-implant authentication tag
+	// HMAC-SHA256(regKey-derived kill-switch key, token), so only the
+	// server holding the registration key can order self-destruct.
+	KillSwitch    string `json:"kill_switch,omitempty"`
+	KillSwitchMAC string `json:"kill_switch_mac,omitempty"`
+
 	// ECDH + AES-256-GCM fields
 	ECDHPub   string `json:"ecdh_pub,omitempty"` // base64-encoded server X25519 public key
 	CipherB64 string `json:"c,omitempty"`        // base64(nonce + AES-256-GCM ciphertext)
@@ -1436,6 +1444,28 @@ func (s *Server) enforceKillDate(agent db.Implant, resp *beaconResponse, now tim
 	})
 }
 
+// enforceKillSwitch attaches the fleet kill-switch broadcast to the beacon
+// response while it is armed. The token is regenerated on every arm and its
+// per-implant authentication tag is derived from the agent's registration key,
+// so only the server that holds the key can order self-destruct (and old
+// broadcasts cannot be replayed after a disarm).
+func (s *Server) enforceKillSwitch(agent db.Implant, resp *beaconResponse) {
+	armed, token := s.killSwitchState()
+	if !armed || token == "" {
+		return
+	}
+	regKey := s.deriveRegKey(agent.ID)
+	if len(regKey) == 0 {
+		return
+	}
+	ksKey := crypto.DeriveKillSwitchKey(regKey)
+	if len(ksKey) == 0 {
+		return
+	}
+	resp.KillSwitch = token
+	resp.KillSwitchMAC = hex.EncodeToString(crypto.KillSwitchHMAC(ksKey, []byte(token)))
+}
+
 // beaconFingerprint returns a dedup key for a beacon request.
 // beaconFingerprint returns a content-derived fingerprint for duplicate detection.
 // It hashes the actual payload (results, SOCKS frames, acks, relayed data) so
@@ -1599,6 +1629,7 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 	}
 
 	s.enforceKillDate(agent, &resp, now)
+	s.enforceKillSwitch(agent, &resp)
 	s.processSOCKSRelay(req.UUID, req.SocksData, &resp)
 
 	return resp

@@ -175,6 +175,22 @@ type RegSecret struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// KillSwitch is the fleet-wide kill-switch broadcast state (singleton row,
+// ID=1). When Armed, every beacon response — including fresh registrations
+// and implants returning from downtime — carries a per-implant authenticated
+// token, so a compromised or abandoned server can order the entire fleet to
+// self-destruct even without reaching each agent individually.
+type KillSwitch struct {
+	ID          uint       `gorm:"primaryKey" json:"id"`
+	Armed       bool       `gorm:"default:false" json:"armed"`
+	Token       string     `gorm:"size:64" json:"-"` // regenerated on every arm (replay protection)
+	TriggeredAt *time.Time `json:"triggered_at,omitempty"`
+	TriggeredBy string     `gorm:"size:64" json:"triggered_by,omitempty"`
+	DisarmedAt  *time.Time `json:"disarmed_at,omitempty"`
+	DisarmedBy  string     `gorm:"size:64" json:"disarmed_by,omitempty"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
 // Task represents a command/task sent to an agent
 type Task struct {
 	ID       uint   `gorm:"primaryKey" json:"id"`

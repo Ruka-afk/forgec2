@@ -9245,6 +9245,42 @@ paths:
       responses:
         '200':
           description: OK
+  /admin/killswitch/status:
+    get:
+      tags: [Settings]
+      summary: Fleet kill-switch status
+      operationId: get__admin_killswitch_status
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+  /admin/killswitch:
+    post:
+      tags: [Settings]
+      summary: Arm or disarm the fleet kill-switch broadcast
+      operationId: post__admin_killswitch
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, password]
+              properties:
+                action:
+                  type: string
+                  enum: [arm, disarm]
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: OK
+        '401':
+          description: Invalid password
   /scheduler/tasks:
     get:
       tags: [Settings]

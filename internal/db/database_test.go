@@ -48,6 +48,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&AgentLock{},
 		&ExtC2Channel{},
 		&BackupCode{},
+		&KillSwitch{},
 	)
 	if err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)

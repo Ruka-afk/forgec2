@@ -181,6 +181,8 @@ export const paths = {
     totpGenerate: "/settings/totp/generate",
     totpEnable: "/settings/totp/enable",
     totpDisable: "/settings/totp/disable",
+    killSwitch: "/settings/admin/killswitch",
+    killSwitchStatus: "/settings/admin/killswitch/status",
   },
   generate: {
     profiles: "/api/generate/profiles",

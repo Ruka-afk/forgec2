@@ -400,6 +400,10 @@ func (s *Server) registerSettingsRoutes(auth *gin.RouterGroup) {
 		settingsWrite.POST("/admin/emergency-stop", middleware.RequireRole(db.RoleAdmin), s.handleEmergencyStop)
 		settingsWrite.GET("/admin/emergency-status", s.handleEmergencyStatus)
 
+		// Fleet kill-switch broadcast (arm/disarm) — admin only.
+		settingsWrite.POST("/admin/killswitch", middleware.RequireRole(db.RoleAdmin), s.handleKillSwitch)
+		settingsWrite.GET("/admin/killswitch/status", middleware.RequireRole(db.RoleAdmin), s.handleKillSwitchStatus)
+
 		settingsWrite.POST("/settings/totp/generate", s.handleTOTPGenerate)
 		settingsWrite.POST("/settings/totp/enable", s.handleTOTPEnable)
 		settingsWrite.POST("/settings/totp/disable", s.handleTOTPDisable)
