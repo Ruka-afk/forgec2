@@ -3,8 +3,8 @@
   "go_version": "go1.25.4",
   "build_os": "windows",
   "build_arch": "amd64",
-  "config_hash": "4ce2661accebe7b2",
-  "start_time": "2026-07-27T20:20:37.7570915+08:00",
+  "config_hash": "1a6cf3e160ad5781",
+  "start_time": "2026-08-04T16:56:58.7586739+08:00",
   "hostname": "张剑飞",
   "protocol_version": 1
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 
 interface ShellHistoryEntry {
   command: string;
@@ -16,6 +17,12 @@ export function useAgentQuickShell(agentId: string, successMessage: string, erro
   const [history, setHistory] = useState<ShellHistoryEntry[]>([]);
   const [sending, setSending] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const sendCommand = useCallback(async () => {
     if (!command.trim() || !agentId) return;
@@ -23,11 +30,12 @@ export function useAgentQuickShell(agentId: string, successMessage: string, erro
     const cmd = command.trim();
     const entry: ShellHistoryEntry = { command: cmd, shell, result: "", timestamp: new Date().toISOString() };
     try {
-      const response = await api.postJson(`/agents/${agentId}/command`, { command: cmd, shell }) as { output?: string; result?: string; message?: string };
+      const response = await api.postJson(paths.agents.command(agentId), { command: cmd, shell }) as { output?: string; result?: string; message?: string };
       entry.result = response?.output || response?.result || response?.message || successMessage;
     } catch {
       entry.result = errorMessage;
     }
+    if (!mountedRef.current) return;
     setHistory((prev) => [entry, ...prev].slice(0, 5));
     setCommand("");
     setSending(false);

@@ -18,11 +18,12 @@ const SPINNER_COLORS: Record<string, string> = {
   red: "border-red-500 border-t-transparent",
 };
 
-export function Spinner({ size = "md", color = "indigo", className = "" }: { size?: SpinnerSize; color?: string; className?: string }) {
+export function Spinner({ size = "md", color = "indigo", className = "", label }: { size?: SpinnerSize; color?: string; className?: string; label?: string }) {
   return (
     <div
-      role="status"
-      aria-label="Loading"
+      role={label ? "status" : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
       className={`animate-spin rounded-full ${SPINNER_SIZES[size]} ${SPINNER_COLORS[color] || SPINNER_COLORS.indigo} ${className}`}
     />
   );

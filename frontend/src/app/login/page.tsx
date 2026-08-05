@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,15 +11,14 @@ import { Spinner } from "@/components/UI";
 import { AlertCircle, Lock, Shield, User } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useForm } from "@/lib/hooks/useForm";
+import { isLoginSuccessResponse, parseLoginErrorBody, safeNextPath } from "@/lib/login";
 import { z } from "zod";
 
-const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
-  totpCode: z.string().regex(/^[0-9]{0,6}$/, "Invalid TOTP code").optional().or(z.literal("")),
-});
-
-type LoginFormValues = z.infer<typeof loginSchema>;
+type LoginFormValues = {
+  username: string;
+  password: string;
+  totpCode: string;
+};
 
 function LoginForm() {
   const { t } = useI18n();
@@ -27,6 +26,16 @@ function LoginForm() {
   const [version, setVersion] = useState("");
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const loginSchema = useMemo(
+    () =>
+      z.object({
+        username: z.string().min(1, t("login.username_required")),
+        password: z.string().min(1, t("login.password_required")),
+        totpCode: z.string().regex(/^[0-9]{0,6}$/, t("login.totp_invalid")),
+      }),
+    [t],
+  );
 
   const {
     values,
@@ -58,9 +67,8 @@ function LoginForm() {
           redirect: "manual",
         });
 
-        if (response.status === 302 || response.status === 0 || (response.status >= 200 && response.status < 400 && response.ok)) {
-          const next = searchParams.get("next");
-          const dest = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+        if (isLoginSuccessResponse(response)) {
+          const dest = safeNextPath(searchParams.get("next"));
           router.push(dest);
           router.refresh();
           return;
@@ -70,8 +78,9 @@ function LoginForm() {
         try {
           const ct = response.headers.get("content-type") || "";
           if (ct.includes("application/json")) {
-            const data = await response.json() as { error?: string };
-            if (data.error) msg = data.error;
+            const data = await response.json();
+            const parsed = parseLoginErrorBody(data);
+            if (parsed) msg = parsed;
           }
         } catch { /* keep default */ }
         setError(msg);
@@ -110,8 +119,8 @@ function LoginForm() {
 
       <div className="relative z-10 w-full max-w-[22rem] mx-4 animate-fade-slide-up">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-xl shadow-indigo-500/25 animate-float">
-            <Shield className="w-7 h-7 text-white" aria-hidden="true" />
+          <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-xl shadow-primary/25 ring-1 ring-primary/20 animate-float">
+            <Shield className="w-7 h-7 text-primary-foreground" aria-hidden="true" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Forge<span className="text-primary">C2</span>

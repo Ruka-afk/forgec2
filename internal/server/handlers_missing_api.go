@@ -301,6 +301,10 @@ func (s *Server) handleAPISendChatMessage(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "message is required")
 		return
 	}
+	if len(req.Message) > MaxChatMessageBytes {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("message too long (max %d bytes)", MaxChatMessageBytes))
+		return
+	}
 	if req.Channel == "" {
 		req.Channel = "general"
 	}
@@ -588,7 +592,10 @@ func (s *Server) handlePackerBundle(c *gin.Context) {
 		for i := range dlls {
 			dlls[i] = strings.TrimSpace(dlls[i])
 		}
-		payload.AddBenignImports(artifact, dlls)
+		if err := payload.AddBenignImports(artifact, dlls); err != nil {
+			respondErrorSafe(c, http.StatusBadRequest, err, "import manipulation failed")
+			return
+		}
 	}
 
 	s.LogAuditRecord(c, "packer_bundle", "packer", "", fmt.Sprintf("Bundled payload (%d bytes)", len(artifact)), true, nil)

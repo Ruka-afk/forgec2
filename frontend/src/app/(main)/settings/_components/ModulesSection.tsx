@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
@@ -10,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EmptyState, Spinner } from "@/components/UI";
+import { EmptyState, Spinner, ConfirmModal } from "@/components/UI";
 import { FileCode, Rocket, Trash2, Upload } from "lucide-react";
 
 interface ModuleInfo {
@@ -39,6 +40,7 @@ export default function ModulesSection() {
   const [deployAgent, setDeployAgent] = useState("");
   const [deployPath, setDeployPath] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [cfm, setCfm] = useState<{ name: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,7 +91,7 @@ export default function ModulesSection() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      await api.postFormData("/api/modules", fd);
+      await api.postFormData(paths.modules.list, fd);
       toast.success(t("settings.modules.uploaded"));
       load();
     } catch (err) {
@@ -99,9 +101,13 @@ export default function ModulesSection() {
     e.target.value = "";
   };
 
-  const handleDelete = async (name: string) => {
+  const handleDelete = (name: string) => {
+    setCfm({ name });
+  };
+
+  const confirmDelete = async (name: string) => {
     try {
-      await api.del(`/api/modules/${encodeURIComponent(name)}`);
+      await api.del(paths.modules.one(name));
       toast.success(t("settings.modules.deleted"));
       if (deployModule === name) setDeployModule("");
       load();
@@ -119,7 +125,7 @@ export default function ModulesSection() {
     try {
       const path = deployPath.trim() || `C:\\Windows\\Temp\\${deployModule}`;
       const res = await api.postJson<{ success?: boolean; task_id?: number }>(
-        `/agents/${encodeURIComponent(deployAgent)}/modules/deploy`,
+        paths.agents.modulesDeploy(deployAgent),
         { name: deployModule, path }
       );
       const taskId = res?.task_id;
@@ -149,13 +155,13 @@ export default function ModulesSection() {
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-gradient-to-r from-violet-500 to-purple-600 px-6 py-4">
+      <div className="bg-violet-500/10 border-b border-violet-500/20 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center">
-            <FileCode className="w-4 h-4 text-white" />
+            <FileCode className="w-4 h-4 text-violet-600 dark:text-violet-400" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-white">{t("settings.modules.title")}</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t("settings.modules.title")}</h2>
             <p className="text-xs text-violet-100">{t("settings.modules.subtitle")}</p>
           </div>
         </div>
@@ -180,8 +186,7 @@ export default function ModulesSection() {
         </div>
         {loading ? (
           <div className="flex justify-center py-8"><Spinner /></div>
-        ) : modules.length === 0 ? (
-          <EmptyState icon={FileCode} title={t("settings.modules.empty")} message={t("settings.modules.empty_desc")} />
+        ) : modules.length === 0 ? (          <EmptyState icon={FileCode} title={t("settings.modules.empty")} message={t("settings.modules.empty_desc")} />
         ) : (
           <Table>
             <TableHeader>
@@ -201,7 +206,7 @@ export default function ModulesSection() {
                     {m.updated_at ? new Date(m.updated_at).toLocaleString() : "-"}
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(m.name)} aria-label="Delete">
+                    <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(m.name)} aria-label={t("common.delete")}>
                       <Trash2 className="w-3.5 h-3.5 text-destructive" />
                     </Button>
                   </TableCell>
@@ -210,6 +215,15 @@ export default function ModulesSection() {
             </TableBody>
           </Table>
         )}
+
+        <ConfirmModal
+          open={cfm !== null}
+          title={t("settings.modules.delete_title")}
+          message={cfm ? t("settings.modules.delete_confirm", { name: cfm.name }) : ""}
+          danger
+          onConfirm={() => { const name = cfm?.name; setCfm(null); if (name) confirmDelete(name); }}
+          onCancel={() => setCfm(null)}
+        />
 
         {modules.length > 0 && (
           <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
@@ -222,7 +236,7 @@ export default function ModulesSection() {
               <div className="space-y-1.5">
                 <Label className="text-xs">{t("settings.modules.deploy_module")}</Label>
                 <Select value={deployModule} onValueChange={(v) => { setDeployModule(v || ""); setDeployPath(v ? `C:\\Windows\\Temp\\${v}` : ""); }}>
-                  <SelectTrigger className="h-9 text-xs">
+                  <SelectTrigger className="text-xs">
                     <SelectValue placeholder={t("settings.modules.deploy_module")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -235,7 +249,7 @@ export default function ModulesSection() {
               <div className="space-y-1.5">
                 <Label className="text-xs">{t("settings.modules.deploy_agent")}</Label>
                 <Select value={deployAgent} onValueChange={(v) => setDeployAgent(v || "")}>
-                  <SelectTrigger className="h-9 text-xs">
+                  <SelectTrigger className="text-xs">
                     <SelectValue placeholder={t("settings.modules.deploy_agent_placeholder")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -252,7 +266,7 @@ export default function ModulesSection() {
               <div className="space-y-1.5 sm:col-span-2">
                 <Label className="text-xs">{t("settings.modules.deploy_path")}</Label>
                 <Input
-                  className="h-9 text-xs font-mono"
+                  className="text-xs font-mono"
                   value={deployPath}
                   onChange={(e) => setDeployPath(e.target.value)}
                   placeholder={`C:\\Windows\\Temp\\${deployModule || "module.ps1"}`}

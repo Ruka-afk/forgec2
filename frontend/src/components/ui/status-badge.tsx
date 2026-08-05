@@ -19,8 +19,6 @@ export const StatusBadge = memo(function StatusBadge({ status, pulse }: { status
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.offline;
   return (
     <span
-      role="status"
-      aria-label={`Status: ${status}`}
       className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold tracking-wide ${cfg.bg} ${cfg.text}`}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${pulse ? "animate-pulse-glow" : ""}`} />

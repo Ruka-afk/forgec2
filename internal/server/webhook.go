@@ -82,14 +82,12 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 		defer resp.Body.Close()
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			if err := s.db.Create(&db.AuditLog{
+			s.flushAuditEntries([]db.AuditLog{{
 				User:    "system",
 				Action:  "webhook",
 				Success: true,
 				Details: fmt.Sprintf("Webhook %s -> %s: %d", wh.Name, wh.URL, resp.StatusCode),
-			}).Error; err != nil {
-				slog.Error("Failed to log webhook audit", "name", wh.Name, "err", err)
-			}
+			}})
 			return
 		}
 		if attempt < webhookMaxRetries && resp.StatusCode >= 500 {
@@ -103,14 +101,12 @@ func (s *Server) fireWebhook(wh db.WebhookConfig, evt Event) {
 		}
 
 		slog.Error("Webhook delivery failed with non-retryable status", "name", wh.Name, "status", resp.StatusCode)
-		if err := s.db.Create(&db.AuditLog{
+		s.flushAuditEntries([]db.AuditLog{{
 			User:    "system",
 			Action:  "webhook",
 			Success: false,
 			Details: fmt.Sprintf("Webhook %s -> %s: %d", wh.Name, wh.URL, resp.StatusCode),
-		}).Error; err != nil {
-			slog.Error("Failed to log webhook audit", "name", wh.Name, "err", err)
-		}
+		}})
 		return
 	}
 }

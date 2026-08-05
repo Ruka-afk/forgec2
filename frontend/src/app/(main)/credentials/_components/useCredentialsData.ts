@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
-import { emptyCredentialData, type CredentialData, type VaultEntry } from "./types";
+import { paths } from "@/lib/api-paths";
+import { emptyCredentialData, normalizeCredentialData, type CredentialData } from "./types";
 
 export function useCredentialsData() {
   const { t } = useI18n();
@@ -16,19 +17,8 @@ export function useCredentialsData() {
     setLoading(true);
     setError(null);
     try {
-      const result = await api.get<{
-        VaultEntries?: VaultEntry[];
-        vault_entries?: VaultEntry[];
-        VaultCount?: number;
-        vault_count?: number;
-        AllTags?: string[];
-        all_tags?: string[];
-      }>("/credentials?format=json", { signal });
-      setData({
-        VaultEntries: result.vault_entries || result.VaultEntries || [],
-        VaultCount: result.vault_count ?? result.VaultCount ?? 0,
-        AllTags: result.all_tags || result.AllTags || [],
-      });
+      const result = await api.get(paths.credentials.list("format=json"), { signal });
+      setData(normalizeCredentialData(result as Parameters<typeof normalizeCredentialData>[0]));
     } catch (e) {
       if (signal?.aborted) return;
       setData(emptyCredentialData());

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
@@ -17,7 +18,7 @@ func newCredentialsTestServer(t *testing.T) *Server {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	crypto.InitLootEncryption("test-secret-for-credentials-tests", "")
-	return &Server{db: newContractDB(t)}
+	return &Server{db: newContractDB(t), cfg: config.DefaultConfig()}
 }
 
 func TestHandleListCredentials_Empty(t *testing.T) {
@@ -239,5 +240,83 @@ func TestHandleDeleteCredential_NotFound(t *testing.T) {
 	}
 	if !resp.Success {
 		t.Fatal("expected success=true")
+	}
+}
+
+func TestHandleCredentialsPage_AgentIDFilter(t *testing.T) {
+	s := newCredentialsTestServer(t)
+
+	entries := []db.CredentialEntry{
+		{AgentID: "agent-A", Domain: "CORP", Username: "admin", Password: "pw1", Type: "cleartext", Source: "manual"},
+		{AgentID: "agent-A", Domain: "CORP", Username: "backup", Password: "pw2", Type: "cleartext", Source: "manual"},
+		{AgentID: "agent-B", Domain: "LAB", Username: "john", Hash: "aad3b435b51404eeaad3b435b51404ee", Type: "ntlm", Source: "mimikatz"},
+	}
+	if err := s.db.Create(&entries).Error; err != nil {
+		t.Fatalf("seed credentials: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/credentials?agent_id=agent-A&limit=1", nil)
+
+	s.handleCredentialsPage(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Total        int                  `json:"total"`
+		VaultCount   int                  `json:"vault_count"`
+		VaultEntries []db.CredentialEntry `json:"vault_entries"`
+		AgentFilter  string               `json:"agent_filter"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+	}
+	if resp.AgentFilter != "agent-A" {
+		t.Fatalf("agent_filter = %q, want agent-A", resp.AgentFilter)
+	}
+	if resp.Total != 2 {
+		t.Fatalf("expected total=2 for agent-A, got %d", resp.Total)
+	}
+	if resp.VaultCount != 1 {
+		t.Fatalf("expected vault_count=1 (limit=1), got %d", resp.VaultCount)
+	}
+	if len(resp.VaultEntries) != 1 {
+		t.Fatalf("expected 1 vault entry (limit=1), got %d", len(resp.VaultEntries))
+	}
+	if resp.VaultEntries[0].AgentID != "agent-A" {
+		t.Fatalf("expected entry for agent-A, got %q", resp.VaultEntries[0].AgentID)
+	}
+}
+
+func TestHandleCredentialsPage_NoAgentFilter(t *testing.T) {
+	s := newCredentialsTestServer(t)
+
+	entries := []db.CredentialEntry{
+		{AgentID: "agent-A", Username: "admin", Password: "pw1", Type: "cleartext", Source: "manual"},
+		{AgentID: "agent-B", Username: "john", Hash: "aad3b435b51404eeaad3b435b51404ee", Type: "ntlm", Source: "mimikatz"},
+	}
+	if err := s.db.Create(&entries).Error; err != nil {
+		t.Fatalf("seed credentials: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/credentials", nil)
+
+	s.handleCredentialsPage(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Total int `json:"total"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+	}
+	if resp.Total != 2 {
+		t.Fatalf("expected total=2 without filter, got %d", resp.Total)
 	}
 }

@@ -316,6 +316,10 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 						c.Set("user_id", user.ID)
 						c.Set("user", user.Username)
 						c.Set("user_role", user.Role)
+						// API-key requests carry no session cookie; CSRFProtect
+						// skips validation for them (the bearer header itself
+						// is not attachable cross-origin).
+						c.Set("auth_via_api_key", true)
 						c.Next()
 						return
 					}
@@ -403,6 +407,9 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 		c.Set("user_id", user.ID)
 		c.Set("user", user.Username)
 		c.Set("user_role", user.Role)
+		if claims.ExpiresAt != nil {
+			c.Set("session_exp", claims.ExpiresAt.Time)
+		}
 		c.Next()
 	}
 }

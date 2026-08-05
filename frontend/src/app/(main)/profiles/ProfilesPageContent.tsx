@@ -2,9 +2,11 @@
 
 import { useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { downloadJSON } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { DataError } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,8 +37,10 @@ export default function ProfilesPage() {
     loadingProfiles,
     activeConfig,
     loadingActiveConfig,
+    profilesError,
     loadActiveConfig,
     loadMalleableSettings,
+    loadProfiles,
   } = useProfilesData();
   const [savingMalleable, setSavingMalleable] = useState(false);
   const [search, setSearch] = useState("");
@@ -52,7 +56,7 @@ export default function ProfilesPage() {
   const handleReloadConfig = useCallback(async () => {
     setReloading(true);
     try {
-      const data = await api.post("/config/reload");
+      const data = await api.post(paths.config.reload);
       if (!data.success) {
         toast.error((data.error as string) || t("profiles.toast.reload_failed"));
         return;
@@ -82,7 +86,7 @@ export default function ProfilesPage() {
     e.preventDefault();
     setSavingMalleable(true);
     try {
-      await api.post("/settings/malleable", {
+      await api.post(paths.settings.malleable, {
         enabled: String(malleableForm.enabled),
         status_code: String(malleableForm.status_code),
         content_type: malleableForm.content_type,
@@ -138,7 +142,7 @@ export default function ProfilesPage() {
     const fd = new FormData();
     fd.append("profile", file);
     try {
-      const d = await api.postFormData("/api/generate/profile/import", fd) as { success?: boolean; error?: string; profile?: AgentProfile };
+      const d = await api.postFormData(paths.generate.profileImport, fd) as { success?: boolean; error?: string; profile?: AgentProfile };
       if (!d.success) {
         toast.error(d.error || t("profiles.toast.import_failed"));
         return;
@@ -199,13 +203,13 @@ export default function ProfilesPage() {
 
       {/* Active Config Hot-Reload Card */}
       <Card className="overflow-hidden mb-6">
-        <div className="bg-gradient-to-r from-emerald-600 to-emerald-800 px-6 py-4">
+        <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><RotateCw className="w-4 h-4" /></div>
               <div>
-                <h2 className="text-lg font-semibold text-white">Active Malleable Config</h2>
-                <p className="text-xs text-emerald-200">Currently loaded in-memory configuration</p>
+                <h2 className="text-lg font-semibold text-foreground">{t("profiles.active_config")}</h2>
+                <p className="text-xs text-emerald-200">{t("profiles.active_config_desc")}</p>
               </div>
             </div>
             <Button
@@ -214,7 +218,7 @@ export default function ProfilesPage() {
               className="h-10 px-5 bg-secondary/60 hover:bg-secondary/80 text-foreground rounded-xl text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
             >
               {reloading ? <Spinner size="xs" /> : <RotateCw className="w-4 h-4" />}
-              {reloading ? "Reloading..." : "Reload Config"}
+              {reloading ? t("profiles.reloading") : t("profiles.reload_config")}
             </Button>
           </div>
         </div>
@@ -222,24 +226,24 @@ export default function ProfilesPage() {
           {loadingActiveConfig ? (
             <div className="flex items-center justify-center py-6">
               <Spinner color="emerald" />
-              <span className="ml-3 text-sm text-muted-foreground">Loading active config...</span>
+              <span className="ml-3 text-sm text-muted-foreground">{t("profiles.loading_active")}</span>
             </div>
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                 <div className="bg-secondary rounded-xl p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">Malleable Enabled</div>
+                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.malleable_enabled")}</div>
                   <div className="flex items-center gap-2">
                     <span className={"inline-block w-2 h-2 rounded-full " + (activeConfig.malleable_enabled ? "bg-emerald-500" : "bg-muted-foreground")}></span>
                     <span className="text-sm font-medium">{activeConfig.malleable_enabled ? "Enabled" : "Disabled"}</span>
                   </div>
                 </div>
                 <div className="bg-secondary rounded-xl p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">Profile Name</div>
+                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.profile_name_label")}</div>
                   <div className="text-sm font-medium font-mono">{activeConfig.malleable_profile || "N/A"}</div>
                 </div>
                 <div className="bg-secondary rounded-xl p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">User-Agent</div>
+                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.user_agent_label")}</div>
                   <Tooltip>
                     <TooltipTrigger>
                       <div className="text-sm font-mono truncate">{activeConfig.user_agent || "N/A"}</div>
@@ -248,15 +252,15 @@ export default function ProfilesPage() {
                   </Tooltip>
                 </div>
                 <div className="bg-secondary rounded-xl p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">Beacon Interval / Jitter</div>
+                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.beacon_interval")}</div>
                   <div className="text-sm font-medium">{activeConfig.interval}s / {activeConfig.jitter}%</div>
                 </div>
                 <div className="bg-secondary rounded-xl p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">Status Code</div>
+                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.status_code")}</div>
                   <div className="text-sm font-medium font-mono">{activeConfig.status_code}</div>
                 </div>
                 <div className="bg-secondary rounded-xl p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">Content-Type</div>
+                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.content_type")}</div>
                   <div className="text-sm font-medium font-mono">{activeConfig.content_type}</div>
                 </div>
               </div>
@@ -264,12 +268,12 @@ export default function ProfilesPage() {
               <div className="bg-secondary rounded-xl p-3 border border-border mb-4">
                 <div className="text-xs text-muted-foreground mb-2">Headers ({headerEntries.length})</div>
                 {headerEntries.length === 0 ? (
-                  <span className="text-xs text-muted-foreground italic">No custom headers configured</span>
+                  <span className="text-xs text-muted-foreground italic">{t("profiles.no_headers")}</span>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {headerEntries.map(([key, value]) => (
                       <div key={key} className="flex items-center gap-2 text-xs font-mono">
-                        <span className="text-indigo-500">{key}:</span>
+                        <span className="text-primary">{key}:</span>
                         <span className="text-muted-foreground truncate">{value}</span>
                       </div>
                     ))}
@@ -318,10 +322,10 @@ export default function ProfilesPage() {
 
       <TabsContent value="server">
         <Card className="overflow-hidden">
-          <div className="bg-gradient-to-r from-violet-600 to-violet-800 px-6 py-4">
+          <div className="bg-violet-500/10 border-b border-violet-500/20 px-6 py-4">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Shield className="w-4 h-4" /></div>
-              <div><h2 className="text-lg font-semibold text-white">Malleable C2 Profile</h2><p className="text-xs text-violet-200">Customize beacon traffic characteristics</p></div>
+              <div><h2 className="text-lg font-semibold text-foreground">Malleable C2 Profile</h2><p className="text-xs text-violet-200">Customize beacon traffic characteristics</p></div>
             </div>
           </div>
           <CardContent className="p-4 sm:p-5">
@@ -334,7 +338,7 @@ export default function ProfilesPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1.5">HTTP Status Code</Label>
-                  <Input aria-label="HTTP status code" name="input-1" type="number" min={100} max={599} value={malleableForm.status_code} onChange={(e) => setMalleableForm({ ...malleableForm, status_code: Number(e.target.value) })} />
+                  <Input aria-label={t("profiles.http_status")} name="input-1" type="number" min={100} max={599} value={malleableForm.status_code} onChange={(e) => setMalleableForm({ ...malleableForm, status_code: Number(e.target.value) })} />
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1.5">Content-Type</Label>
@@ -343,16 +347,16 @@ export default function ProfilesPage() {
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground mb-1.5">Custom Headers (one per line)</Label>
-                <Textarea aria-label="Custom HTTP headers, one per line" name="textarea-3" rows={3} value={malleableForm.headers_text} onChange={(e) => setMalleableForm({ ...malleableForm, headers_text: e.target.value })} placeholder={"Server: nginx/1.24.0\nX-Powered-By: ASP.NET"} className="font-mono" />
+                <Textarea aria-label={t("profiles.custom_headers")} name="textarea-3" rows={3} value={malleableForm.headers_text} onChange={(e) => setMalleableForm({ ...malleableForm, headers_text: e.target.value })} placeholder={"Server: nginx/1.24.0\nX-Powered-By: ASP.NET"} className="font-mono" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1.5">Prepend Content</Label>
-                  <Textarea aria-label="Prepend content before response" name="textarea-4" rows={2} value={malleableForm.prepend} onChange={(e) => setMalleableForm({ ...malleableForm, prepend: e.target.value })} placeholder="<html><body><!--" className="font-mono" />
+                  <Textarea aria-label={t("profiles.prepend_content")} name="textarea-4" rows={2} value={malleableForm.prepend} onChange={(e) => setMalleableForm({ ...malleableForm, prepend: e.target.value })} placeholder="<html><body><!--" className="font-mono" />
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1.5">Append Content</Label>
-                  <Textarea aria-label="Append content after response" name="textarea-5" rows={2} value={malleableForm.append} onChange={(e) => setMalleableForm({ ...malleableForm, append: e.target.value })} placeholder="--></body></html>" className="font-mono" />
+                  <Textarea aria-label={t("profiles.append_content")} name="textarea-5" rows={2} value={malleableForm.append} onChange={(e) => setMalleableForm({ ...malleableForm, append: e.target.value })} placeholder="--></body></html>" className="font-mono" />
                 </div>
               </div>
               <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400">
@@ -372,16 +376,16 @@ export default function ProfilesPage() {
           {/* Left sidebar - profile list */}
           <div className="w-full lg:w-72 shrink-0">
             <Card className="overflow-hidden">
-              <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 px-5 py-3">
+              <div className="bg-primary/10 border-b border-primary/20 px-5 py-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <List className="w-4 h-4" />
-                    <span className="text-sm font-semibold text-white">Profiles</span>
-                    <span className="text-xs text-indigo-200 ml-1">({profiles.length})</span>
+                    <span className="text-sm font-semibold text-foreground">Profiles</span>
+                    <span className="text-xs text-primary ml-1">({profiles.length})</span>
                   </div>
                   <div className="flex gap-1">
                     <Tooltip>
-                      <TooltipTrigger render={<Button onClick={() => fileInputRef.current?.click()} className="w-7 h-7 bg-secondary/50 hover:bg-secondary/70 rounded-xl flex items-center justify-center transition-colors" aria-label="Import profile" size="icon" />}>
+                      <TooltipTrigger render={<Button onClick={() => fileInputRef.current?.click()} className="w-7 h-7 bg-secondary/50 hover:bg-secondary/70 rounded-xl flex items-center justify-center transition-colors" aria-label={t("profiles.import_btn")} size="icon" />}>
                         <FileDown className="w-4 h-4" />
                       </TooltipTrigger>
                       <TooltipContent>Import Profile</TooltipContent>
@@ -393,7 +397,7 @@ export default function ProfilesPage() {
                           setProfiles((prev) => [...prev, p]);
                           setSelectedIdx(idx);
                           setEditing(p);
-                        }} className="w-7 h-7 bg-secondary/50 hover:bg-secondary/70 rounded-xl flex items-center justify-center transition-colors" aria-label="New profile" size="icon" />}>
+                        }} className="w-7 h-7 bg-secondary/50 hover:bg-secondary/70 rounded-xl flex items-center justify-center transition-colors" aria-label={t("profiles.new_profile")} size="icon" />}>
                         <Plus className="w-4 h-4" />
                       </TooltipTrigger>
                       <TooltipContent>New Profile</TooltipContent>
@@ -404,19 +408,21 @@ export default function ProfilesPage() {
               <CardContent className="p-4 sm:p-5">
                 <div className="relative mb-3">
                   <Search className="w-4 h-4" />
-                  <Input aria-label="Filter by name..." name="filter-by-name-6"
-                    type="text" placeholder="Filter by name..."
+                  <Input aria-label={t("profiles.filter_ph")} name="filter-by-name-6"
+                    type="text" placeholder={t("profiles.filter_ph")}
                     value={search} onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 h-9 text-xs"
+                    className="w-full pl-9 pr-4 text-xs"
                   />
                 </div>
                 <div className="space-y-1 max-h-[500px] overflow-y-auto">
                   {loadingProfiles ? (
                     <div className="flex items-center justify-center py-16 sm:py-20"><Spinner size="sm" /></div>
+                  ) : profilesError ? (
+                    <DataError message={profilesError} onRetry={loadProfiles} className="py-10" />
                   ) : filteredProfiles.length === 0 ? (
                     <div className="text-center py-16 sm:py-20 text-xs text-muted-foreground">
-                      <FileWarning className="w-4 h-4" />
-                      {search ? "No matching profiles" : "No profiles loaded"}
+                      <FileWarning className="w-4 h-4 mx-auto mb-2" />
+                      {search ? t("profiles.no_match") : t("profiles.none_loaded")}
                     </div>
                   ) : (
                     filteredProfiles.map((p) => {
@@ -427,14 +433,14 @@ export default function ProfilesPage() {
                           size="sm"
                           key={p.name}
                           onClick={() => selectProfile(realIdx)}
-                          className={"w-full text-left px-3 py-2.5 rounded-xl text-xs transition-colors " + (selectedIdx === realIdx ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800" : "hover:bg-secondary text-muted-foreground border border-transparent")}
+                          className={"w-full text-left px-3 py-2.5 rounded-xl text-xs transition-colors " + (selectedIdx === realIdx ? "bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary border border-primary/30 dark:border-primary/40" : "hover:bg-secondary text-muted-foreground border border-transparent")}
                         >
                           <div className="flex items-center gap-2">
-                            <FileCode className={`w-4 h-4 ${selectedIdx === realIdx ? "text-indigo-500" : "text-muted-foreground"}`} />
+                            <FileCode className={`w-4 h-4 ${selectedIdx === realIdx ? "text-primary" : "text-muted-foreground"}`} />
                             <span className="font-medium truncate">{p.name}</span>
                           </div>
                           {p.description && (
-                            <p className="text-(--font-size-micro-sm) text-muted-foreground mt-0.5 truncate pl-6">{p.description}</p>
+                            <p className="text-(--fs-micro-sm) text-muted-foreground mt-0.5 truncate pl-6">{p.description}</p>
                           )}
                         </Button>
                       );
@@ -451,17 +457,17 @@ export default function ProfilesPage() {
             ) : (
               <div className="space-y-5">
                 <Card className="overflow-hidden">
-                  <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 px-6 py-4">
+                  <div className="bg-primary/10 border-b border-primary/20 px-6 py-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><FileCode className="w-4 h-4" /></div>
                         <div>
-                          <h2 className="text-lg font-semibold text-white">Editing: {editing.name || "untitled"}</h2>
-                          <p className="text-xs text-indigo-200">{editing.description || "No description"}</p>
+                          <h2 className="text-lg font-semibold text-foreground">Editing: {editing.name || "untitled"}</h2>
+                          <p className="text-xs text-primary">{editing.description || "No description"}</p>
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button onClick={handleSaveProfile} className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5">
+                        <Button onClick={handleSaveProfile} className="h-9 px-4 rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5">
                           <Download className="w-4 h-4" />Save (Export JSON)
                         </Button>
                         <Button onClick={handleDuplicateProfile} variant="secondary" className="h-9 px-4 rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5">
@@ -481,19 +487,19 @@ export default function ProfilesPage() {
                       <div className="space-y-4">
                         <div>
                           <Label className="text-xs text-muted-foreground mb-1.5">Profile Name</Label>
-                          <Input aria-label="profile_name" name="input-7" type="text" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="profile_name" />
+                          <Input aria-label={t("profiles.name_ph")} name="input-7" type="text" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder={t("profiles.name_ph")} />
                         </div>
                         <div>
                           <Label className="text-xs text-muted-foreground mb-1.5">Description</Label>
-                          <Textarea aria-label="Brief description of this profile" name="textarea-8" rows={2} value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} placeholder="Brief description of this profile" />
+                          <Textarea aria-label={t("profiles.brief_desc")} name="textarea-8" rows={2} value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} placeholder={t("profiles.brief_desc")} />
                         </div>
                         <div>
                           <Label className="text-xs text-muted-foreground mb-1.5">User-Agent</Label>
                           <div className="flex gap-2">
-                            <Input aria-label="User-Agent string" name="input-9" type="text" value={editing.user_agent} onChange={(e) => setEditing({ ...editing, user_agent: e.target.value })} className="font-mono text-xs" />
+                            <Input aria-label={t("agents.config.ua")} name="input-9" type="text" value={editing.user_agent} onChange={(e) => setEditing({ ...editing, user_agent: e.target.value })} className="font-mono text-xs" />
                             <Select value="" onValueChange={(v) => { if (v) setEditing({ ...editing, user_agent: v }); }}>
                               <SelectTrigger className="shrink-0 w-[180px] h-11 text-xs">
-                                <SelectValue placeholder="Common UAs..." />
+                                <SelectValue placeholder={t("profiles.ua_ph")} />
                               </SelectTrigger>
                               <SelectContent>
                                 {commonUAs.map((ua) => (
@@ -524,11 +530,11 @@ export default function ProfilesPage() {
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <Label className="text-xs text-muted-foreground mb-1.5">Sleep Interval (sec)</Label>
-                            <Input aria-label="Sleep interval in seconds" name="input-13" type="number" min={0} max={86400} value={editing.sleep} onChange={(e) => setEditing({ ...editing, sleep: Number(e.target.value) })} />
+                            <Input aria-label={t("agents.config.sleep")} name="input-13" type="number" min={0} max={86400} value={editing.sleep} onChange={(e) => setEditing({ ...editing, sleep: Number(e.target.value) })} />
                           </div>
                           <div>
                             <Label className="text-xs text-muted-foreground mb-1.5">Jitter (%)</Label>
-                            <Input aria-label="Jitter percentage" name="input-14" type="number" min={0} max={100} value={editing.jitter} onChange={(e) => setEditing({ ...editing, jitter: Number(e.target.value) })} />
+                            <Input aria-label={t("agents.config.jitter")} name="input-14" type="number" min={0} max={100} value={editing.jitter} onChange={(e) => setEditing({ ...editing, jitter: Number(e.target.value) })} />
                           </div>
                         </div>
                         <div>
@@ -541,18 +547,18 @@ export default function ProfilesPage() {
                           <div className="space-y-2">
                             {Object.entries(editing.headers).map(([key, value], i) => (
                               <div key={key} className="flex gap-2 items-start">
-                                <Input aria-label="Header name" name="header-name-15"
-                                  type="text" placeholder="Header name"
+                                <Input aria-label={t("agents.config.header_name")} name="header-name-15"
+                                  type="text" placeholder={t("agents.config.header_name")}
                                   value={key} onChange={(e) => updateHeader(i, e.target.value, value)}
-                                  className="w-2/5 h-9 text-xs font-mono"
+                                  className="w-2/5 text-xs font-mono"
                                 />
-                                <Input aria-label="Value" name="value-16"
-                                  type="text" placeholder="Value"
+                                <Input aria-label={t("agents.config.header_value")} name="value-16"
+                                  type="text" placeholder={t("agents.config.header_value")}
                                   value={value} onChange={(e) => updateHeader(i, key, e.target.value)}
-                                  className="flex-1 h-9 text-xs font-mono"
+                                  className="flex-1 text-xs font-mono"
                                 />
                                 {Object.entries(editing.headers).length > 1 && (
-                                   <Button onClick={() => removeHeader(i)} className="w-9 h-9 flex items-center justify-center text-destructive/50 hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors" variant="ghost" size="icon" aria-label="Remove header">
+                                   <Button onClick={() => removeHeader(i)} className="w-9 h-9 flex items-center justify-center text-destructive/50 hover:text-destructive hover:bg-destructive/10 rounded-xl transition-colors" variant="ghost" size="icon" aria-label={t("agents.config.remove_header")}>
                                     <X className="w-4 h-4" />
                                   </Button>
                                 )}
@@ -567,10 +573,10 @@ export default function ProfilesPage() {
 
                 {/* JSON Preview */}
                 <Card className="overflow-hidden">
-                  <div className="bg-gradient-to-r from-muted to-secondary px-6 py-3">
+                  <div className="bg-secondary/60 border-b border-border px-6 py-3">
                     <div className="flex items-center gap-2">
                       <Code className="w-4 h-4" />
-                      <span className="text-sm font-semibold text-white">Profile JSON Preview</span>
+                      <span className="text-sm font-semibold text-foreground">Profile JSON Preview</span>
                     </div>
                   </div>
                   <div className="p-4 bg-card">
@@ -581,7 +587,7 @@ export default function ProfilesPage() {
             )}
           </div>
 
-          <input aria-label="Import profile JSON file" name="input-17" ref={fileInputRef} type="file" accept=".json,application/json" className="" onChange={handleImportProfile} />
+          <input aria-label={t("profiles.import_json")} name="input-17" ref={fileInputRef} type="file" accept=".json,application/json" className="" onChange={handleImportProfile} />
         </div>
       </TabsContent>
       </Tabs>
@@ -595,12 +601,12 @@ export default function ProfilesPage() {
             <Button onClick={async () => {
               setLoadingAgents(true);
               try {
-                const d = await api.get("/agents?size=500");
+                const d = await api.get(paths.agents.list("page=1&pageSize=500"));
                 const list = (d.agents || d.data || []) as Record<string, unknown>[];
                 setPushAgents(list.map((a) => ({ id: String(a.id || ""), hostname: String(a.hostname || a.ip || ""), ip: String(a.ip || "") })));
               } catch { toast.error(t("profiles.toast.load_agents_failed")); }
               setLoadingAgents(false);
-            }} disabled={loadingAgents} variant="link" size="sm" className="text-xs text-indigo-500 hover:underline disabled:opacity-50">{loadingAgents ? "Loading..." : "Load agents"}</Button>
+            }} disabled={loadingAgents} variant="link" size="sm" className="text-xs text-primary hover:underline disabled:opacity-50">{loadingAgents ? "Loading..." : "Load agents"}</Button>
           </div>
           <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
             {pushAgents.length === 0 ? (
@@ -624,7 +630,7 @@ export default function ProfilesPage() {
               let success = 0, fail = 0;
               for (const agentId of pushSelected) {
                 try {
-                  const d = await api.postJson(`/agents/${agentId}/profile-rotate`, {
+                  const d = await api.postJson(paths.agents.profileRotate(agentId), {
                     beacon_uri: editing.beacon_uri,
                     beacon_method: editing.method,
                     user_agent: editing.user_agent,

@@ -151,7 +151,9 @@ func BuildArtifact(req BuildArtifactRequest, dataDir string) ([]byte, string, er
 			ApplyPESectionNames(payloadData, tmpl.PESections)
 		}
 		if tmpl.ImportManipulation && len(tmpl.BenignImports) > 0 {
-			AddBenignImports(payloadData, tmpl.BenignImports)
+			if err := AddBenignImports(payloadData, tmpl.BenignImports); err != nil {
+				return nil, "", err
+			}
 		}
 	}
 

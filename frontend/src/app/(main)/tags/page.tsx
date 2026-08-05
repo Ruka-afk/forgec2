@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { PageHeader, ConfirmModal } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
@@ -25,7 +26,7 @@ interface Tag {
 }
 
 async function fetchTags() {
-  return api.get("/api/tags");
+  return api.get(paths.tags.list);
 }
 
 const TAG_COLORS = [
@@ -120,9 +121,9 @@ export default function TagsPage() {
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       {actionMsg && (
-        <div className="mb-3 px-4 py-2 bg-primary/10 dark:bg-indigo-900/20 border border-primary/20 dark:border-indigo-800 rounded-xl text-sm text-primary dark:text-indigo-300 flex items-center justify-between">
+        <div className="mb-3 px-4 py-2 bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/40 rounded-xl text-sm text-primary dark:text-primary flex items-center justify-between">
           <span>{actionMsg}</span>
-          <Button variant="ghost" size="icon-sm" onClick={() => setActionMsg(null)} className="text-indigo-400 hover:text-indigo-600" aria-label="Dismiss"><X className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon-sm" onClick={() => setActionMsg(null)} className="text-primary hover:text-primary" aria-label={t("common.dismiss")}><X className="w-4 h-4" /></Button>
         </div>
       )}
 
@@ -174,7 +175,7 @@ export default function TagsPage() {
                         size="icon"
                         onClick={() => openEdit(tag)}
                         className="w-8 h-8 text-muted-foreground hover:text-primary min-w-[2.75rem] min-h-[2.75rem]"
-                        aria-label="Edit tag"
+                        aria-label={t("tags.a11y_edit")}
                       />}>
                       <Pencil className="w-4 h-4" />
                     </TooltipTrigger>
@@ -186,7 +187,7 @@ export default function TagsPage() {
                         size="icon"
                         onClick={() => setDeleteConfirm(tag)}
                         className="w-8 h-8 text-muted-foreground hover:text-destructive min-w-[2.75rem] min-h-[2.75rem]"
-                        aria-label="Delete tag"
+                        aria-label={t("tags.a11y_delete")}
                       />}>
                       <Trash2 className="w-4 h-4" />
                     </TooltipTrigger>
@@ -210,7 +211,7 @@ export default function TagsPage() {
           <div className="space-y-4">
             <div>
               <Label className="text-xs font-medium mb-1">{t("tags.field_name")}</Label>
-              <Input aria-label="Tag name" name="input-0"
+              <Input aria-label={t("tags.a11y_name")} name="input-0"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder={t("tags.name_placeholder")}
@@ -228,7 +229,7 @@ export default function TagsPage() {
                     size="icon"
                     key={color}
                     onClick={() => setFormColor(color)}
-                    className={"w-8 h-8 rounded-full transition-all min-w-[2.75rem] min-h-[2.75rem] " + (formColor === color ? "ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-background" : "hover:scale-110")}
+                    className={"w-8 h-8 rounded-full transition-all min-w-[2.75rem] min-h-[2.75rem] " + (formColor === color ? "ring-2 ring-offset-2 ring-primary dark:ring-offset-background" : "hover:scale-110")}
                     style={{ backgroundColor: color }}
                     aria-label={`Select color ${color}`}
                   />
@@ -236,7 +237,7 @@ export default function TagsPage() {
               </div>
               <div className="mt-2 flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">{t("tags.color_custom")}</span>
-                <input aria-label="color" name="input-1"
+                <input aria-label={t("groups.a11y_color")} name="input-1"
                   type="color"
                   value={formColor}
                   onChange={(e) => setFormColor(e.target.value)}

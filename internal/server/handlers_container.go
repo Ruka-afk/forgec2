@@ -87,15 +87,18 @@ func (s *Server) handleContainerAgents(c *gin.Context) {
 	}
 	// Also match agents with container-related hostnames or notes
 	var extra []db.Implant
-	if err := s.db.Where("hostname LIKE ? OR note LIKE ?", "%container%", "%docker%").Limit(500).Find(&extra).Error; err == nil {
-		seen := make(map[string]struct{}, len(agents))
-		for i := range agents {
-			seen[agents[i].ID] = struct{}{}
-		}
-		for i := range extra {
-			if _, ok := seen[extra[i].ID]; !ok {
-				agents = append(agents, extra[i])
-			}
+	if err := s.db.Where("hostname LIKE ? OR notes LIKE ?", "%container%", "%docker%").Limit(500).Find(&extra).Error; err != nil {
+		slog.Error("Failed to query container-hinted agents", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to query container-hinted agents")
+		return
+	}
+	seen := make(map[string]struct{}, len(agents))
+	for i := range agents {
+		seen[agents[i].ID] = struct{}{}
+	}
+	for i := range extra {
+		if _, ok := seen[extra[i].ID]; !ok {
+			agents = append(agents, extra[i])
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": agents, "count": len(agents)})

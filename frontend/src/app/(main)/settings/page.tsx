@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { downloadBlob } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { PageHeader, PageSpinner } from "@/components/UI";
@@ -83,13 +84,13 @@ export default function SettingsPage() {
 
   const handleSaveAgent = withSaveTimeout(async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.post("/settings/agent", { interval: String(agentForm.interval), jitter: String(agentForm.jitter), skip_tls: String(agentForm.skip_tls), user_agent: agentForm.user_agent, working_start: agentForm.working_start, working_end: agentForm.working_end, working_tz: agentForm.working_tz });
+    await api.post(paths.settings.agent, { interval: String(agentForm.interval), jitter: String(agentForm.jitter), skip_tls: String(agentForm.skip_tls), user_agent: agentForm.user_agent, working_start: agentForm.working_start, working_end: agentForm.working_end, working_tz: agentForm.working_tz });
     toast.success(t("settings.toast.agent_saved"));
   });
 
   const handleSaveServer = withSaveTimeout(async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.post("/settings/server", {
+    await api.post(paths.settings.server, {
       log_level: serverForm.log_level, tcp_enabled: String(serverForm.tcp_enabled), tcp_addr: serverForm.tcp_addr,
       offline_threshold: String(serverForm.offline_threshold), session_max_age: String(serverForm.session_max_age), cleanup_retention: String(serverForm.cleanup_retention),
     });
@@ -98,7 +99,7 @@ export default function SettingsPage() {
 
   const handleSaveMalleable = withSaveTimeout(async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.post("/settings/malleable", {
+    await api.post(paths.settings.malleable, {
       enabled: String(malleableForm.enabled), status_code: String(malleableForm.status_code), content_type: malleableForm.content_type,
       headers_text: malleableForm.headers_text, prepend: malleableForm.prepend, append: malleableForm.append,
     });
@@ -110,7 +111,7 @@ export default function SettingsPage() {
     if (passwordForm.next !== passwordForm.confirm) { toast.error(t("settings.toast.password_mismatch")); return; }
     setSaving(true);
     try {
-      await api.post("/settings/password", { current_password: passwordForm.current, new_password: passwordForm.next, confirm_password: passwordForm.confirm });
+      await api.post(paths.settings.password, { current_password: passwordForm.current, new_password: passwordForm.next, confirm_password: passwordForm.confirm });
       toast.success(t("settings.toast.password_changed"));
       setPasswordForm({ current: "", next: "", confirm: "" });
     } catch { toast.error(t("settings.toast.password_change_failed")); }
@@ -120,7 +121,7 @@ export default function SettingsPage() {
   const handleRegenerateJWT = () => {
     setCfm({msg: t("settings.confirm.jwt"), cb: async () => {
       setSaving(true);
-      try { await api.post("/settings/jwt/regenerate"); toast.success(t("settings.toast.jwt_regenerated")); loadSettings(); }
+      try { await api.post(paths.settings.jwtRegenerate); toast.success(t("settings.toast.jwt_regenerated")); loadSettings(); }
       catch { toast.error(t("settings.toast.jwt_failed")); }
       finally { setSaving(false); }
     }});
@@ -150,7 +151,7 @@ export default function SettingsPage() {
 
   const handleVacuum = async () => {
     setSaving(true);
-    try { await api.post("/settings/db/vacuum"); toast.success(t("settings.toast.vacuum_done")); }
+    try { await api.post(paths.settings.dbVacuum); toast.success(t("settings.toast.vacuum_done")); }
     catch { toast.error(t("settings.toast.vacuum_failed")); }
     finally { setSaving(false); }
   };
@@ -158,7 +159,7 @@ export default function SettingsPage() {
   const handleBackup = async () => {
     setSaving(true);
     try {
-      const { blob } = await api.download("/settings/db/backup");
+      const { blob } = await api.download(paths.settings.dbBackup);
       downloadBlob(blob, `forgec2_backup_${Date.now()}.db`);
       toast.success(t("settings.toast.backup_done"));
     } catch { toast.error(t("settings.toast.backup_failed")); }
@@ -167,7 +168,7 @@ export default function SettingsPage() {
 
   const handleDownloadDB = async () => {
     try {
-      const { blob } = await api.downloadGet("/settings/config/download");
+      const { blob } = await api.downloadGet(paths.settings.configDownload);
       downloadBlob(blob, "forgec2.db");
     } catch { toast.error(t("settings.toast.download_failed")); }
   };
@@ -177,7 +178,9 @@ export default function SettingsPage() {
     setCfm({msg: t("settings.confirm.purge", { type, days }), cb: async () => {
       setSaving(true);
       try {
-        const path = type === "screenshots" ? "/settings/maintenance/purge" : `/settings/purge/${type}`;
+        const path = type === "screenshots"
+          ? paths.settings.maintenancePurge
+          : paths.settings.purge(type);
         await api.post(path, { days });
         toast.success(t("settings.toast.purge_done", { type }));
       } catch { toast.error(t("settings.toast.purge_failed", { type })); }
@@ -187,7 +190,7 @@ export default function SettingsPage() {
 
   const handleCheckUpdate = async () => {
     try {
-      const d = await api.get("/api/update-check");
+      const d = await api.get(paths.updateCheck);
       if (d.update_available) toast.success(t("settings.toast.update_new", { version: String(d.version) }));
       else toast.success(t("settings.toast.update_latest"));
     } catch { toast.error(t("settings.toast.update_failed")); }
@@ -221,7 +224,7 @@ export default function SettingsPage() {
         <div className="flex flex-col lg:flex-row gap-4">
           <div className="w-48 shrink-0 hidden lg:block">
             <div className="sticky top-6 space-y-1">
-              <div className="text-(--font-size-micro-sm) uppercase tracking-wider text-muted-foreground px-3 mb-2 font-semibold">{t("settings.sidebar_header")}</div>
+              <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground px-3 mb-2 font-semibold">{t("settings.sidebar_header")}</div>
               <TabsList className="flex-col bg-transparent p-0 gap-1 w-full h-auto">
                 {sections.map((s) => (
                   <TabsTrigger key={s.key} value={s.key}

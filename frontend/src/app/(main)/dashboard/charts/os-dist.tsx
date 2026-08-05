@@ -2,10 +2,12 @@
 
 import { withChartData } from "@/components/withChartData";
 import { OS_CHART_COLORS } from "@/lib/colors";
+import { useI18n } from "@/lib/i18n";
 
 interface OSPoint { name: string; value: number; color: string }
 
 function OSBody({ data }: { data: OSPoint[] }) {
+  const { t } = useI18n();
   const total = data.reduce((s, d) => s + d.value, 0);
   const colors: Record<string, string> = { Windows: "#3b82f6", Linux: "#f59e0b", macOS: "#8b5cf6", darwin: "#8b5cf6" };
   const items = data.map((d) => ({ ...d, color: colors[d.name] || d.color || "#6b7280" }));
@@ -18,7 +20,7 @@ function OSBody({ data }: { data: OSPoint[] }) {
         <div className="absolute inset-2 rounded-full bg-card flex items-center justify-center text-xs font-bold text-foreground">{total}</div>
       </div>
       <div className="flex-1 space-y-1.5">
-        {items.length === 0 ? <p className="text-xs text-muted-foreground/70">No data</p> : items.map((d) => (
+        {items.length === 0 ? <p className="text-xs text-muted-foreground/70">{t("common.no_data")}</p> : items.map((d) => (
           <div key={d.name} className="flex items-center gap-2 text-xs">
             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }}></span>
             <span className="text-foreground truncate flex-1">{d.name}</span>

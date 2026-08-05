@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { Spinner } from "@/components/UI";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,7 +64,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
     setExecLogs([]);
     setLoading(true);
     try {
-      const data = await api.get(`/workflows/${wfId}/executions`);
+      const data = await api.get(`${paths.workflows.one(wfId)}/executions`);
       setExecutions((data.executions || []) as WorkflowExecution[]);
     } catch {
       setExecutions([]);
@@ -80,7 +81,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
   const viewExecution = useCallback(async (execId: number) => {
     setSelectedExec(execId);
     try {
-      const data = await api.get(`/workflows/${workflowId}/executions/${execId}`);
+      const data = await api.get(`${paths.workflows.one(String(workflowId))}/executions/${execId}`);
       setExecLogs((data.logs || []) as StepLog[]);
     } catch {
       setExecLogs([]);
@@ -110,7 +111,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
           <DialogTitle className="flex items-center gap-2">
             <History className="w-4 h-4" /> Execution History
             {selectedExec !== null && (
-              <Button variant="ghost" size="icon-xs" onClick={() => { setSelectedExec(null); setExecLogs([]); }} aria-label="Back to list">
+              <Button variant="ghost" size="icon-xs" onClick={() => { setSelectedExec(null); setExecLogs([]); }} aria-label={t("workflows.back_to_list")}>
                 <X className="w-3 h-3" />
               </Button>
             )}
@@ -120,7 +121,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
           <div className="flex justify-center py-8"><Spinner /></div>
         ) : selectedExec === null ? (
           executions.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">No executions yet.</p>
+            <p className="text-sm text-muted-foreground py-4 text-center">{t("workflows.no_executions")}</p>
           ) : (
             <div className="flex flex-col gap-2">
               {executions.map(ex => (
@@ -138,13 +139,13 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
         ) : (
           <div className="space-y-3">
             {execLogs.map(log => (
-              <div key={log.id} className="p-3 rounded-lg bg-muted border-l-2 border-l-indigo-500">
+              <div key={log.id} className="p-3 rounded-lg bg-muted border-l-2 border-l-primary">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center text-(--font-size-micro-sm) font-semibold">{log.step_order}</span>
-                  <span className="font-semibold text-xs text-indigo-600 dark:text-indigo-400">{log.task_type}</span>
-                  <Badge variant={log.status === "completed" ? "default" : log.status === "failed" ? "destructive" : "secondary"} className="text-(--font-size-micro-sm)">{log.status}</Badge>
+                  <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-(--fs-micro-sm) font-semibold">{log.step_order}</span>
+                  <span className="font-semibold text-xs text-primary">{log.task_type}</span>
+                  <Badge variant={log.status === "completed" ? "default" : log.status === "failed" ? "destructive" : "secondary"} className="text-(--fs-micro-sm)">{log.status}</Badge>
                   {log.branch_action && log.branch_action !== "continue" && (
-                    <Badge variant="outline" className="text-(--font-size-micro-sm)">
+                    <Badge variant="outline" className="text-(--fs-micro-sm)">
                       {log.branch_action}{log.branch_target ? ` → ${log.branch_target}` : ""}
                     </Badge>
                   )}
@@ -152,7 +153,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
                 </div>
                 {log.command && <div className="text-xs font-mono text-foreground truncate mb-1">{log.command.substring(0, 120)}</div>}
                 {log.result && <div className="text-xs text-muted-foreground whitespace-pre-wrap max-h-24 overflow-y-auto">{log.result.substring(0, 500)}</div>}
-                {log.completed_at && <div className="text-(--font-size-micro-sm) text-muted-foreground mt-1">{new Date(log.completed_at).toLocaleString()}</div>}
+                {log.completed_at && <div className="text-(--fs-micro-sm) text-muted-foreground mt-1">{new Date(log.completed_at).toLocaleString()}</div>}
               </div>
             ))}
           </div>

@@ -31,6 +31,7 @@ export interface SharedState {
   proxy: string;
   failover: string;
   crypto_key: string;
+  beacon_key: string;
   profile: string;
   dns_doh_url: string;
   dns_dot_addr: string;

@@ -13,6 +13,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func (s *Server) handleAgents(c *gin.Context) {
@@ -47,7 +48,8 @@ func (s *Server) handleAgents(c *gin.Context) {
 
 	var agents []db.Implant
 	if err := query.Order("last_seen desc").Offset(p.Offset).Limit(p.PageSize).Find(&agents).Error; err != nil {
-		slog.Error("Failed to list agents", "err", err)
+		handleQueryError(c, err, "Failed to list agents")
+		return
 	}
 
 	for i := range agents {
@@ -93,7 +95,8 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 	if err := s.db.Where("agent_id = ?", id).
 		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
 		Order("created_at desc").Limit(AgentDetailTaskLimit).Find(&tasks).Error; err != nil {
-		slog.Error("Failed to query agent detail tasks", "err", err)
+		handleQueryError(c, err, "Failed to query agent detail tasks")
+		return
 	}
 
 	var screenshots []string
@@ -103,7 +106,8 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 
 	var totalTaskCount int64
 	if err := s.db.Model(&db.Task{}).Where("agent_id = ?", id).Count(&totalTaskCount).Error; err != nil {
-		slog.Error("Failed to count agent tasks", "agent_id", id, "error", err)
+		handleQueryError(c, err, "Failed to count agent tasks")
+		return
 	}
 	taskStats := computeTaskStats(s.db, []string{id})[id]
 	if taskStats == nil {
@@ -175,14 +179,16 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 	// Fetch children for P2P chain
 	var children []db.Implant
 	if err := s.db.Where("parent_id = ?", id).Limit(500).Find(&children).Error; err != nil {
-		slog.Error("Failed to query agent children", "err", err)
+		handleQueryError(c, err, "Failed to query agent children")
+		return
 	}
 
 	// Fetch unlinked agents (for linking dropdown) - optimized
 	var unlinkedAgents []db.Implant
 	if err := s.db.Select("id", "hostname", "ip", "os").
 		Where("(parent_id = '' OR parent_id IS NULL) AND id != ?", id).Order("hostname asc").Limit(500).Find(&unlinkedAgents).Error; err != nil {
-		slog.Error("Failed to query unlinked agents", "error", err)
+		handleQueryError(c, err, "Failed to query unlinked agents")
+		return
 	}
 
 	data := gin.H{
@@ -364,39 +370,58 @@ func (s *Server) handleDeleteAgent(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
-func (s *Server) deleteAgentRecord(id string) bool {
-	tx := s.db.Begin()
+// deleteAgentRecordTx deletes an agent and all of its dependent rows within the
+// given transaction. It does not commit or roll back — the caller owns the
+// transaction lifecycle (single-agent or whole-batch atomicity).
+func (s *Server) deleteAgentRecordTx(tx *gorm.DB, id string) error {
 	if err := tx.Where("agent_id = ?", id).Delete(&db.Task{}).Error; err != nil {
-		tx.Rollback()
-		slog.Error("Failed to delete tasks", "agent_id", id, "err", err)
-		return false
+		return fmt.Errorf("delete tasks: %w", err)
 	}
 	if err := tx.Where("agent_id = ?", id).Delete(&db.CredentialEntry{}).Error; err != nil {
-		tx.Rollback()
-		slog.Error("Failed to delete credentials", "agent_id", id, "err", err)
-		return false
+		return fmt.Errorf("delete credentials: %w", err)
 	}
 	if err := tx.Where("agent_id = ?", id).Delete(&db.TokenEntry{}).Error; err != nil {
-		tx.Rollback()
-		slog.Error("Failed to delete tokens", "agent_id", id, "err", err)
-		return false
+		return fmt.Errorf("delete tokens: %w", err)
 	}
 	if err := tx.Where("agent_id = ?", id).Delete(&db.SocksSession{}).Error; err != nil {
-		tx.Rollback()
-		slog.Error("Failed to delete socks sessions", "agent_id", id, "err", err)
-		return false
+		return fmt.Errorf("delete socks sessions: %w", err)
 	}
 	if err := tx.Where("agent_id = ?", id).Delete(&db.ScanResult{}).Error; err != nil {
-		tx.Rollback()
-		slog.Error("Failed to delete scan results", "agent_id", id, "err", err)
-		return false
+		return fmt.Errorf("delete scan results: %w", err)
 	}
 	if err := tx.Where("agent_id = ?", id).Delete(&db.NetworkHost{}).Error; err != nil {
-		tx.Rollback()
-		slog.Error("Failed to delete network hosts", "agent_id", id, "err", err)
-		return false
+		return fmt.Errorf("delete network hosts: %w", err)
+	}
+	if err := tx.Where("implant_id = ?", id).Delete(&db.AgentTagAssignment{}).Error; err != nil {
+		return fmt.Errorf("delete tag assignments: %w", err)
+	}
+	if err := tx.Where("implant_id = ?", id).Delete(&db.AgentGroupAssignment{}).Error; err != nil {
+		return fmt.Errorf("delete group assignments: %w", err)
+	}
+	if err := tx.Where("agent_id = ?", id).Delete(&db.Notification{}).Error; err != nil {
+		return fmt.Errorf("delete notifications: %w", err)
+	}
+	if err := tx.Where("agent_id = ?", id).Delete(&db.AgentLock{}).Error; err != nil {
+		return fmt.Errorf("delete agent locks: %w", err)
+	}
+	if err := tx.Where("agent_id = ?", id).Delete(&db.OpsecHistory{}).Error; err != nil {
+		return fmt.Errorf("delete opsec history: %w", err)
+	}
+	if err := tx.Where("agent_id = ?", id).Delete(&db.SessionRecording{}).Error; err != nil {
+		return fmt.Errorf("delete session recordings: %w", err)
+	}
+	if err := tx.Where("agent_id = ?", id).Delete(&db.BloodHoundResult{}).Error; err != nil {
+		return fmt.Errorf("delete bloodhound results: %w", err)
 	}
 	if err := tx.Delete(&db.Implant{}, "id = ?", id).Error; err != nil {
+		return fmt.Errorf("delete agent: %w", err)
+	}
+	return nil
+}
+
+func (s *Server) deleteAgentRecord(id string) bool {
+	tx := s.db.Begin()
+	if err := s.deleteAgentRecordTx(tx, id); err != nil {
 		tx.Rollback()
 		slog.Error("Failed to delete agent", "agent_id", id, "err", err)
 		return false
@@ -420,7 +445,7 @@ func (s *Server) deleteAgentRecord(id string) bool {
 // handleListAgents returns all agents as JSON for dropdowns
 func (s *Server) handleListAgents(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "0"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", c.DefaultQuery("pageSize", "0")))
 	if page < 1 {
 		page = 1
 	}
@@ -430,14 +455,14 @@ func (s *Server) handleListAgents(c *gin.Context) {
 
 	var total int64
 	if err := s.db.Model(&db.Implant{}).Count(&total).Error; err != nil {
-		slog.Error("Failed to count agents", "err", err)
+		handleQueryError(c, err, "Failed to count agents")
+		return
 	}
 
 	var agents []db.Implant
 	offset := (page - 1) * pageSize
 	if err := s.db.Order("hostname asc").Offset(offset).Limit(pageSize).Find(&agents).Error; err != nil {
-		slog.Error("Failed to list agents", "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to list agents")
+		handleQueryError(c, err, "Failed to list agents")
 		return
 	}
 	type agentBrief struct {
@@ -458,10 +483,10 @@ func (s *Server) handleListAgents(c *gin.Context) {
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"agents":   results,
-		"total":    total,
-		"page":     page,
-		"pageSize": pageSize,
+		"agents":    results,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
 	})
 }
 
@@ -469,8 +494,7 @@ func (s *Server) handleListAgents(c *gin.Context) {
 func (s *Server) handleListUnlinkedAgents(c *gin.Context) {
 	var agents []db.Implant
 	if err := s.db.Where("parent_id = '' OR parent_id IS NULL").Order("hostname asc").Limit(500).Find(&agents).Error; err != nil {
-		slog.Error("Failed to list unlinked agents", "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to list agents")
+		handleQueryError(c, err, "Failed to list unlinked agents")
 		return
 	}
 	c.JSON(http.StatusOK, agents)

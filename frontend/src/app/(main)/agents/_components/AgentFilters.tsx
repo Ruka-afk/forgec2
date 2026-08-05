@@ -2,13 +2,13 @@
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { SearchInput } from "@/components/framework/SearchInput";
 import { useI18n } from "@/lib/i18n";
 import type { Tag } from "./types";
-import { Apple, Columns, Monitor, Search, Terminal, Wifi, X } from "lucide-react";
+import { Apple, Columns, Monitor, Terminal, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface AgentFiltersProps {
@@ -39,24 +39,16 @@ export function AgentFilters({
     <Card className="p-3 sm:p-4 mb-4 gap-0">
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex gap-2 flex-wrap">
-          <div className="relative flex-1 sm:max-w-xs">
-            <Search className="w-4 h-4" />
-            <Input
-              id="agent-search"
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder={t("agents.search_placeholder_short")}
-              className="h-11 pl-9"
-            />
-            {searchInput && (
-              <Button variant="ghost" size="icon-xs" onClick={() => setSearchInput("")} className="absolute right-1 top-1/2 -translate-y-1/2" aria-label="Clear search">
-                <X className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            onClear={() => setSearchInput("")}
+            placeholder={t("agents.search_placeholder_short")}
+            className="flex-1 sm:max-w-xs"
+            label={t("common.search")}
+          />
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? "")}>
-            <SelectTrigger aria-label="Status filter" className="flex-1 sm:flex-none h-11">
+            <SelectTrigger aria-label={t("agents.filter_status_aria")} className="flex-1 sm:flex-none">
               <SelectValue placeholder={t("agents.all_status")} />
             </SelectTrigger>
             <SelectContent>
@@ -67,7 +59,7 @@ export function AgentFilters({
             </SelectContent>
           </Select>
           <Select value={osFilter} onValueChange={(v) => setOsFilter(v ?? "")}>
-            <SelectTrigger aria-label="OS filter" className="flex-1 sm:flex-none h-11">
+            <SelectTrigger aria-label={t("agents.filter_os_aria")} className="flex-1 sm:flex-none">
               <SelectValue placeholder={t("agents.all_os")} />
             </SelectTrigger>
             <SelectContent>
@@ -78,7 +70,7 @@ export function AgentFilters({
             </SelectContent>
           </Select>
           <Select value={tagFilter} onValueChange={(v) => setTagFilter(v ?? "")}>
-            <SelectTrigger aria-label="Tag filter" className="flex-1 sm:flex-none h-11">
+            <SelectTrigger aria-label={t("agents.filter_tag_aria")} className="flex-1 sm:flex-none">
               <SelectValue placeholder={t("agents.all_tags")} />
             </SelectTrigger>
             <SelectContent>
@@ -89,7 +81,7 @@ export function AgentFilters({
             </SelectContent>
           </Select>
           <Select value={linkedFilter} onValueChange={(v) => setLinkedFilter(v ?? "")}>
-            <SelectTrigger aria-label="Link filter" className="flex-1 sm:flex-none h-11">
+            <SelectTrigger aria-label={t("agents.filter_link_aria")} className="flex-1 sm:flex-none">
               <SelectValue placeholder={t("agents.all_links")} />
             </SelectTrigger>
             <SelectContent>
@@ -99,7 +91,7 @@ export function AgentFilters({
             </SelectContent>
           </Select>
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="secondary" size="lg" className="flex-1 sm:flex-none gap-2" aria-label="Toggle columns" />}>
+            <DropdownMenuTrigger render={<Button variant="secondary" size="lg" className="flex-1 sm:flex-none gap-2" aria-label={t("agents.toggle_columns_aria")} />}>
               <Columns className="w-4 h-4" />
               <span className="hidden sm:inline">{t("agents.columns")}</span>
             </DropdownMenuTrigger>
@@ -115,7 +107,7 @@ export function AgentFilters({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <div className="hidden sm:flex items-center gap-1.5 ml-auto text-(--font-size-xs-sm)">
+          <div className="hidden sm:flex items-center gap-1.5 ml-auto text-(--fs-xs-sm)">
             {onlineCount > 0 && <Badge variant="secondary" className="gap-1 text-emerald-600 dark:text-emerald-400"><Wifi className="w-4 h-4" />{onlineCount}</Badge>}
             {windowsCount > 0 && <Badge variant="secondary" className="gap-1"><Monitor className="w-4 h-4" />{windowsCount}</Badge>}
             {linuxCount > 0 && <Badge variant="secondary" className="gap-1"><Terminal className="w-4 h-4" />{linuxCount}</Badge>}

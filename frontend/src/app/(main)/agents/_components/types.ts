@@ -65,7 +65,7 @@ export const COMMAND_TYPES = [
 ];
 
 export function avatarColor(hostname: string) {
-  const colors = ["bg-indigo-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-cyan-500"];
+  const colors = ["bg-primary/100", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-cyan-500"];
   let h = 0;
   for (let i = 0; i < hostname.length; i++) h = hostname.charCodeAt(i) + ((h << 5) - h);
   return colors[Math.abs(h) % colors.length];

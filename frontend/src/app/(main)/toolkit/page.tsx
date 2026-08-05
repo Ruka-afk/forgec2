@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,7 +47,7 @@ export default function ToolkitPage() {
       return;
     }
     try {
-      const data = await api.post(`/toolkit/agents/${selectedAgent}/action`, { action, param });
+      const data = await api.post(paths.toolkit.action(selectedAgent), { action, param });
       if (data.success) {
         toast.success(t("toolkit.toast.action_dispatched", { action: action, task_id: String(data.task_id) }));
         loadData();
@@ -68,8 +69,8 @@ export default function ToolkitPage() {
   const loadData = useCallback(async () => {
     try {
       const [agentsData, tasksData] = await Promise.all([
-        api.get("/agents"),
-        api.get("/toolkit/results"),
+        api.get(paths.agents.list()),
+        api.get(paths.toolkit.results),
       ]);
       setToolkitAgents((agentsData.agents || []) as ToolkitAgent[]);
       setRecentTasks((tasksData.tasks || tasksData.results || tasksData.data || []) as RecentTask[]);
@@ -205,7 +206,7 @@ export default function ToolkitPage() {
                       <span className="text-xs font-bold">{cat.name[0]}</span>
                     </div>
                     <span className="font-semibold text-sm text-foreground">{cat.name}</span>
-                    <Badge variant="secondary" className="text-(--font-size-micro-sm) px-2 py-0.5">{cat.commands.length}</Badge>
+                    <Badge variant="secondary" className="text-(--fs-micro-sm) px-2 py-0.5">{cat.commands.length}</Badge>
                   </div>
                 </div>
                 <div className="px-5 pb-4 space-y-1">
@@ -213,7 +214,7 @@ export default function ToolkitPage() {
                     <Button key={c.cmd} variant="ghost" onClick={() => runAction(c.cmd)} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl justify-start text-left border border-transparent hover:border-border transition-all">
                       <span className={`text-xs font-mono font-medium w-28 shrink-0 ${colorMap[cat.color]?.split(" ")[1] || "text-blue-600 dark:text-blue-400"}`}>{c.cmd}</span>
                       <span className="text-xs text-muted-foreground">{c.desc}</span>
-                      <span className="ml-auto text-(--font-size-micro-sm) text-muted-foreground">{t("toolkit.run")}</span>
+                      <span className="ml-auto text-(--fs-micro-sm) text-muted-foreground">{t("toolkit.run")}</span>
                     </Button>
                   ))}
                 </div>
@@ -235,7 +236,7 @@ export default function ToolkitPage() {
           <Card className="overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
               <span className="text-sm font-semibold text-muted-foreground">{t("toolkit.recent_results")}</span>
-              <Badge variant="secondary" className="text-(--font-size-micro-sm) px-1.5 py-0.5">{recentTasks.length}</Badge>
+              <Badge variant="secondary" className="text-(--fs-micro-sm) px-1.5 py-0.5">{recentTasks.length}</Badge>
             </div>
             <div className="max-h-[600px] overflow-y-auto">
               {recentTasks.length === 0 ? (
@@ -244,7 +245,7 @@ export default function ToolkitPage() {
                 recentTasks.map((t, i) => (
                   <div key={i} className="px-4 py-3 border-b border-border last:border-0 hover:bg-muted transition-colors">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-(--font-size-micro-sm) font-mono text-muted-foreground">{(t.agent_id || "").toString().slice(0, 8)}</span>
+                      <span className="text-(--fs-micro-sm) font-mono text-muted-foreground">{(t.agent_id || "").toString().slice(0, 8)}</span>
                       <StatusBadge status={t.status || ""} />
                     </div>
                     <div className="text-xs font-medium text-muted-foreground truncate">{t.type}: {t.command}</div>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -70,14 +71,14 @@ export default function AgentTokenPage() {
 
   const loadTokens = useCallback(async () => {
     try {
-      const data = await api.get<{ Tokens?: Token[]; tokens?: Token[] }>(`/agents/${agentId}/token/list?format=json`);
+      const data = await api.get<{ Tokens?: Token[]; tokens?: Token[] }>(paths.agents.tokenList(agentId));
       setTokens(data.tokens || []);
     } catch { toast.error(t("agents.token_load_failed")); }
   }, [agentId, t]);
 
   const loadProcesses = useCallback(async () => {
     try {
-      const data = await api.post<{ processes?: Process[]; data?: Process[] }>(`/agents/${agentId}/token/list_procs`);
+      const data = await api.post<{ processes?: Process[]; data?: Process[] }>(paths.agents.tokenListProcs(agentId));
       setProcesses(data.processes || data.data || []);
     } catch { toast.error(t("agents.token_load_processes_failed")); }
   }, [agentId, t]);
@@ -94,7 +95,7 @@ export default function AgentTokenPage() {
     try {
       const body = new URLSearchParams();
       body.append("pid", stealPid);
-      await api.post(`/agents/${agentId}/token/steal`, Object.fromEntries(body.entries()));
+      await api.post(paths.agents.tokenSteal(agentId), Object.fromEntries(body.entries()));
       setStealPid("");
       toast.success(t("agents.token_steal_success"));
       await loadTokens();
@@ -110,7 +111,7 @@ export default function AgentTokenPage() {
       const body = new URLSearchParams();      body.append("username", makeUser);
       body.append("domain", makeDomain);
       body.append("password", makePass);
-      await api.post(`/agents/${agentId}/token/make`, Object.fromEntries(body.entries()));
+      await api.post(paths.agents.tokenMake(agentId), Object.fromEntries(body.entries()));
       setMakeUser(""); setMakeDomain(""); setMakePass("");
       toast.success(t("agents.token_make_success"));
       await loadTokens();
@@ -123,7 +124,7 @@ export default function AgentTokenPage() {
   const handleRevert = async () => {
     setActiveAction("revert");
     try {
-      await api.post(`/agents/${agentId}/token/revert`);
+      await api.post(paths.agents.tokenRevert(agentId));
       toast.success(t("agents.token_revert_success"));
       setWhoamiResult(null);
       await loadTokens();
@@ -134,7 +135,7 @@ export default function AgentTokenPage() {
   };  const handleDrop = async (tokenId: string) => {
     setActiveAction(`drop-${tokenId}`);
     try {
-      await api.del(`/agents/${agentId}/token/${tokenId}`);
+      await api.del(paths.agents.tokenOne(agentId, tokenId));
       toast.success(t("agents.token_drop_success"));
       await loadTokens();
     } catch {
@@ -146,7 +147,7 @@ export default function AgentTokenPage() {
 
   const handleImpersonate = async (tokenId: string) => {
     setActiveAction(`impersonate-${tokenId}`);    try {
-      await api.post(`/agents/${agentId}/token/${tokenId}/impersonate`);
+      await api.post(paths.agents.tokenImpersonate(agentId, tokenId));
       toast.success(t("agents.token_impersonate"));
       await loadTokens();
     } catch {
@@ -157,7 +158,7 @@ export default function AgentTokenPage() {
   const handleWhoami = async () => {
     setActiveAction("whoami");
     try {
-      const data = await api.post(`/agents/${agentId}/token/whoami`);
+      const data = await api.post(paths.agents.tokenWhoami(agentId));
       const d = data as Record<string, unknown>;
       const user = String(d.user || d.username || d.name || JSON.stringify(data));
       setWhoamiResult(user);
@@ -172,7 +173,7 @@ export default function AgentTokenPage() {
     try {
       const body = new URLSearchParams();
       body.append("note", noteText || "");
-      await api.post(`/agents/${agentId}/token/${tokenId}/note`, Object.fromEntries(body.entries()));
+      await api.post(paths.agents.tokenNote(agentId, tokenId), Object.fromEntries(body.entries()));
       toast.success(noteText ? t("agents.token_notes") : t("agents.token_notes"));
       await loadTokens();
     } catch {
@@ -221,7 +222,7 @@ export default function AgentTokenPage() {
       <PageHeader title={t("agents.token_title")} subtitle={t("agents.token_subtitle", { hostname: agentId.substring(0, 12) })} icon={<BadgeInfo className="w-4 h-4" />}>
         <Button variant="outline" size="sm" onClick={handleWhoami} disabled={activeAction === "whoami"}>
           {activeAction === "whoami" ? (
-            <><Spinner size="sm" /> Checking...</>
+            <><Spinner size="sm" /> {t("agents.token_checking")}</>
           ) : (
             <><UserCheck className="w-4 h-4" /> {t("agents.token_whoami")}</>
           )}
@@ -234,10 +235,10 @@ export default function AgentTokenPage() {
       {whoamiResult && (
         <div className={`border rounded-xl px-4 py-3 text-sm flex items-center gap-2 ${
           whoamiResult.startsWith("Error")            ? "border-destructive/30 bg-destructive/10 text-destructive"
-            : "border-primary/20 bg-primary/10 dark:border-indigo-800 dark:bg-indigo-900/20 text-primary dark:text-indigo-400"
+            : "border-primary/20 bg-primary/10 dark:border-primary/40 dark:bg-primary/20 text-primary"
         }`}>
           {whoamiResult.startsWith("Error") ? <AlertCircle className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-          <span>Current context: <strong>{whoamiResult}</strong></span>
+          <span>{t("agents.token_current_context")} <strong>{whoamiResult}</strong></span>
           <Button variant="ghost" size="sm" onClick={() => setWhoamiResult(null)} className="ml-auto opacity-60 hover:opacity-100">
             <X className="w-4 h-4" />
           </Button>
@@ -250,9 +251,9 @@ export default function AgentTokenPage() {
           </h2>
           <form onSubmit={handleStealToken} className="space-y-3">
             <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">{t("agents.token_pid")}</Label>
+              <Label htmlFor="steal-pid" className="text-xs text-muted-foreground mb-1 block">{t("agents.token_pid")}</Label>
               <Select value={stealPid} onValueChange={(v) => setStealPid(v ?? "")}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="steal-pid" className="w-full">
                   <SelectValue placeholder={t("agents.token_steal")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -272,16 +273,16 @@ export default function AgentTokenPage() {
           </h2>
           <form onSubmit={handleMakeToken} className="space-y-3">
             <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">{t("agents.token_username")} <span className="text-destructive">*</span></Label>
-              <Input type="text" value={makeUser} onChange={(e) => setMakeUser(e.target.value)} placeholder={t("agents.token_username")} />
+              <Label htmlFor="make-user" className="text-xs text-muted-foreground mb-1 block">{t("agents.token_username")} <span className="text-destructive">*</span></Label>
+              <Input id="make-user" type="text" value={makeUser} onChange={(e) => setMakeUser(e.target.value)} placeholder={t("agents.token_username")} />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">{t("agents.token_domain")}</Label>
-              <Input type="text" value={makeDomain} onChange={(e) => setMakeDomain(e.target.value)} placeholder={t("agents.token_domain")} />
+              <Label htmlFor="make-domain" className="text-xs text-muted-foreground mb-1 block">{t("agents.token_domain")}</Label>
+              <Input id="make-domain" type="text" value={makeDomain} onChange={(e) => setMakeDomain(e.target.value)} placeholder={t("agents.token_domain")} />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">{t("agents.token_password")}</Label>
-              <Input type="password" value={makePass} onChange={(e) => setMakePass(e.target.value)} placeholder={t("agents.token_password")} />
+              <Label htmlFor="make-pass" className="text-xs text-muted-foreground mb-1 block">{t("agents.token_password")}</Label>
+              <Input id="make-pass" type="password" value={makePass} onChange={(e) => setMakePass(e.target.value)} placeholder={t("agents.token_password")} />
             </div>
             <Button type="submit" disabled={!makeUser || activeAction === "make"} className="w-full" variant="default">
               {activeAction === "make" ? <><Spinner size="sm" />Creating...</> : <><Plus className="w-4 h-4" />{t("agents.token_make")}</>}
@@ -289,17 +290,17 @@ export default function AgentTokenPage() {
           </form>
         </Card>        <Card className="p-5">
           <h2 className="text-sm font-semibold text-foreground mb-3">
-            <RotateCcw className="w-4 h-4" />Quick Actions          </h2>
+            <RotateCcw className="w-4 h-4" />{t("agents.token_quick_actions")}          </h2>
           <div className="space-y-3">
             <Button onClick={handleRevert} disabled={activeAction === "revert"} className="w-full" variant="default">
               {activeAction === "revert" ? <><Spinner size="sm" />Reverting...</> : <><RotateCcw className="w-4 h-4" />{t("agents.token_revert")}</>}
             </Button>
             <Button onClick={handleWhoami} disabled={activeAction === "whoami"} className="w-full" variant="secondary">
-              {activeAction === "whoami" ? <><Spinner size="sm" />Querying...</> : <><UserCheck className="w-4 h-4" />{t("agents.token_whoami")}</>}
+              {activeAction === "whoami" ? <><Spinner size="sm" />{t("agents.token_querying")}</> : <><UserCheck className="w-4 h-4" />{t("agents.token_whoami")}</>}
             </Button>
             <div className="text-xs text-muted-foreground bg-muted/50 rounded-xl p-3 flex items-start gap-2">
               <Info className="w-4 h-4" />
-              <span>Impersonate which token is used by all agent operations. Use revert to return to original context.</span>
+              <span>{t("agents.token_impersonate_hint")}</span>
             </div>
           </div>        </Card>
       </div>
@@ -321,13 +322,13 @@ export default function AgentTokenPage() {
             <TableHeader className="bg-muted/50 border-b border-border">
               <TableRow className="text-xs text-muted-foreground">
                 <TableHead className="text-left px-5 py-3 font-normal">{t("agents.token_username")}</TableHead>
-                <TableHead className="text-left px-4 py-3 font-normal">Integrity</TableHead>
+                <TableHead className="text-left px-4 py-3 font-normal">{t("agents.token_integrity")}</TableHead>
                 <TableHead className="text-left px-4 py-3 font-normal">{t("agents.token_type")}</TableHead>
                 <TableHead className="text-left px-4 py-3 font-normal">{t("agents.token_source")}</TableHead>
-                <TableHead className="text-left px-4 py-3 font-normal">Process</TableHead>
+                <TableHead className="text-left px-4 py-3 font-normal">{t("agents.token_process")}</TableHead>
                 <TableHead className="text-left px-4 py-3 font-normal">{t("agents.token_status")}</TableHead>
                 <TableHead className="text-left px-4 py-3 font-normal">{t("agents.token_notes")}</TableHead>
-                <TableHead className="text-left px-4 py-3 font-normal">Created</TableHead>
+                <TableHead className="text-left px-4 py-3 font-normal">{t("agents.token_created")}</TableHead>
                 <TableHead className="text-left px-4 py-3 font-normal">{t("agents.token_actions")}</TableHead>
               </TableRow>
             </TableHeader>
@@ -361,9 +362,9 @@ export default function AgentTokenPage() {
                     <TableCell className="px-4 py-3 text-xs font-mono text-muted-foreground">{pid ? `[${pid}]` : ""} {procName || ""}</TableCell>
                     <TableCell className="px-4 py-3">
                       {active ? (
-                        <Badge variant="secondary" className="text-xs gap-1.5"><span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>Active</Badge>
+                        <Badge variant="secondary" className="text-xs gap-1.5"><span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>{t("agents.token_active")}</Badge>
                       ) : (
-                        <Badge variant="secondary" className="text-xs gap-1.5"><span className="w-2 h-2 bg-muted rounded-full"></span>Inactive</Badge>
+                        <Badge variant="secondary" className="text-xs gap-1.5"><span className="w-2 h-2 bg-muted rounded-full"></span>{t("agents.token_inactive")}</Badge>
                       )}
                     </TableCell>
                     <TableCell className="px-4 py-3">
@@ -374,7 +375,7 @@ export default function AgentTokenPage() {
                             value={tokenNotes[tid] || ""}
                             onChange={(e) => setTokenNotes(prev => ({ ...prev, [tid]: e.target.value }))}
                             className="w-24 h-7 text-xs"
-                            placeholder="Note..."
+                            placeholder={t("agents.token_note_ph")}
                             autoFocus
                           />
                           <Button variant="ghost" size="sm" onClick={() => handleNote(tid)} className="h-7 w-7 p-0 text-emerald-500 hover:text-emerald-600">
@@ -390,12 +391,12 @@ export default function AgentTokenPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => { setNoteTargetId(tid); setTokenNotes(prev => ({ ...prev, [tid]: noteText })); }}
-                              className="text-xs text-muted-foreground hover:text-indigo-500"
+                              className="text-xs text-muted-foreground hover:text-primary"
                             />}>
                               <Pencil className="w-4 h-4" />
-                              {noteText ? <span className="truncate max-w-20">{noteText}</span> : <span className="text-muted-foreground">Add note</span>}
+                              {noteText ? <span className="truncate max-w-20">{noteText}</span> : <span className="text-muted-foreground">{t("agents.token_add_note")}</span>}
                           </TooltipTrigger>
-                          <TooltipContent>Edit note</TooltipContent>
+                          <TooltipContent>{t("agents.token_edit_note")}</TooltipContent>
                         </Tooltip>
                       )}
                     </TableCell>

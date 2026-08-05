@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 
 export type TaskPollStatus = "idle" | "pending" | "running" | "completed" | "failed" | "timeout";
 
@@ -54,7 +55,7 @@ export function useTaskResult(agentId: string, pollMs = 2000, maxAttempts = 45) 
         return;
       }
       try {
-        const data = await api.get<TaskStatusResponse>(`/agents/${agentId}/tasks/${taskId}`);
+        const data = await api.get<TaskStatusResponse>(paths.agents.task(agentId, taskId));
         const st = (data.status || "").toLowerCase();
         if (st === "completed" || st === "success" || st === "done") {
           setStatus("completed");

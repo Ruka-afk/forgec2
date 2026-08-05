@@ -241,9 +241,6 @@ const (
 	TaskTypeAdminSDHolder    = "adminsdholder"
 	TaskTypeDCSyncMachine    = "dcsync_machine"
 
-	// Crypto Key Rotation
-	TaskTypeKeyRotate = "key_rotate"
-
 	// Prank / Fun Tasks
 	TaskTypeWallpaperChange = "wallpaper_change"
 	TaskTypeMsgBox          = "msgbox"
@@ -462,7 +459,6 @@ func AllTaskTypes() []string {
 		TaskTypeEdrStatus,
 		TaskTypeGhostModeStatus,
 		TaskTypeGhostModeExit,
-		TaskTypeKeyRotate,
 
 		// Prank / Fun Tasks
 		TaskTypeWallpaperChange,

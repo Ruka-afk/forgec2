@@ -66,12 +66,12 @@ export default function BOFPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5 mb-6">
         <Card className="p-4 sm:p-5 flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/20 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-primary/10 dark:bg-primary/15 rounded-xl flex items-center justify-center">
             <Box className="w-4 h-4" />
           </div>
           <div>
             <div className="text-2xl font-bold tabular-nums text-foreground">{files.length}</div>
-            <div className="text-xs text-muted-foreground">Uploaded BOFs</div>
+            <div className="text-xs text-muted-foreground">{t("bof.stat_uploaded")}</div>
           </div>
         </Card>
         <Card className="p-4 sm:p-5 flex items-center gap-3">
@@ -80,7 +80,7 @@ export default function BOFPage() {
           </div>
           <div>
             <div className="text-2xl font-bold tabular-nums text-foreground">{executions.length}</div>
-            <div className="text-xs text-muted-foreground">Executions</div>
+            <div className="text-xs text-muted-foreground">{t("bof.stat_executions")}</div>
           </div>
         </Card>
         <Card className="p-4 sm:p-5 flex items-center gap-3">
@@ -91,7 +91,7 @@ export default function BOFPage() {
             <div className="text-2xl font-bold tabular-nums text-foreground">
               {executions.length > 0 ? `${Math.round((executions.filter((e) => (e.status) === "success").length / executions.length) * 100)}%` : "N/A"}
             </div>
-            <div className="text-xs text-muted-foreground">Success Rate</div>
+            <div className="text-xs text-muted-foreground">{t("bof.stat_success_rate")}</div>
           </div>
         </Card>
         <Card className="p-4 sm:p-5 flex items-center gap-3">
@@ -100,7 +100,7 @@ export default function BOFPage() {
           </div>
           <div>
             <div className="text-2xl font-bold tabular-nums text-foreground">{agents.length}</div>
-            <div className="text-xs text-muted-foreground">Available Agents</div>
+            <div className="text-xs text-muted-foreground">{t("bof.stat_available_agents")}</div>
           </div>
         </Card>
       </div>
@@ -108,11 +108,11 @@ export default function BOFPage() {
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList className="mb-6">
           {[
-            { key: "bof", Icon: Box, label: "BOF Library" },
-            { key: "exec", Icon: Terminal, label: "Executions" },
-            { key: "quick", Icon: Zap, label: "Quick BOF" },
-            { key: "repo", Icon: BookOpen, label: "Repository" },
-            { key: "library", Icon: Layers, label: "Library" },
+            { key: "bof", Icon: Box, label: t("bof.tab_library") },
+            { key: "exec", Icon: Terminal, label: t("bof.tab_exec") },
+            { key: "quick", Icon: Zap, label: t("bof.tab_quick") },
+            { key: "repo", Icon: BookOpen, label: t("bof.tab_repo") },
+            { key: "library", Icon: Layers, label: t("bof.tab_lib") },
           ].map((tab) => (
             <TabsTrigger key={tab.key} value={tab.key} className="gap-1.5">
               <tab.Icon className="w-3 h-3" />
@@ -143,15 +143,15 @@ export default function BOFPage() {
               <Card key={bof.name} className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-medium text-foreground font-mono">{bof.name}</div>
-                  <Badge variant={isUploaded ? "default" : "secondary"} className="text-(--font-size-micro-sm)">
-                    {isUploaded ? "Ready" : "Not Installed"}
+                  <Badge variant={isUploaded ? "default" : "secondary"} className="text-(--fs-micro-sm)">
+                    {isUploaded ? t("bof.uploaded_ready") : t("bof.not_installed")}
                   </Badge>
                 </div>
                 <div className="text-xs text-muted-foreground mb-1">{bof.desc}</div>
                 <div className="flex items-center justify-between mt-3">
-                  <Badge variant="secondary" className="text-(--font-size-micro-sm) font-mono">{bof.arch}</Badge>
+                  <Badge variant="secondary" className="text-(--fs-micro-sm) font-mono">{bof.arch}</Badge>
                   <Button size="sm" onClick={() => handleQuickRun(bof)} disabled={!isUploaded}>
-                    <Zap className="w-4 h-4" />Quick Run
+                    <Zap className="w-4 h-4" />{t("bof.quick_run")}
                   </Button>
                 </div>
               </Card>

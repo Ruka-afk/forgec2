@@ -44,26 +44,26 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
             tabIndex={0}
             onClick={() => onSelect(id)}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(id); } }}
-            className={`p-4 cursor-pointer hover:ring-2 hover:ring-indigo-500/50 hover:shadow-md transition-all duration-200 border-l-4 ${borderColor} group ring-0 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/70`}
+            className={`p-4 cursor-pointer hover:ring-2 hover:ring-primary/50 hover:shadow-md transition-all duration-200 border-l-4 ${borderColor} group ring-0 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70`}
           >
             <div className="flex items-start justify-between mb-2">
               <div className="flex items-center gap-2.5 min-w-0">
                 <AvatarFallback name={hostname} size="md" shape="xl" color={avatarColor(hostname)} />
                 <div className="min-w-0">
-                  <span className="font-semibold text-sm text-indigo-600 dark:text-indigo-400 truncate block group-hover:underline">{hostname}</span>
-                  <span className="text-(--font-size-xs-sm) text-muted-foreground/70 truncate block">{beacon.username || ""}</span>
+                  <span className="font-semibold text-sm text-primary truncate block group-hover:underline">{hostname}</span>
+                  <span className="text-(--fs-xs-sm) text-muted-foreground/70 truncate block">{beacon.username || ""}</span>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className={`w-2 h-2 rounded-full ${status === "online" ? "bg-emerald-500 animate-pulse" : status === "stale" ? "bg-amber-500" : "bg-red-500"}`} />
-                <span className="text-(--font-size-micro-sm) text-muted-foreground/70 capitalize">{status}</span>
+                <span className="text-(--fs-micro-sm) text-muted-foreground/70 capitalize">{status}</span>
               </div>
             </div>
             <div className="space-y-1.5 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5">
                 <OsIcon className="w-3 h-3 text-muted-foreground/50" aria-hidden="true" />
                 <span>{os}{beacon.arch ? ` ${beacon.arch}` : ""}</span>
-                {beacon.integrity && <span className={`px-1 py-0.5 rounded text-(--font-size-micro) font-semibold ${
+                {beacon.integrity && <span className={`px-1 py-0.5 rounded text-(--fs-micro) font-semibold ${
                   beacon.integrity === "System" ? "bg-destructive/10 text-destructive" :
                   beacon.integrity === "High" ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400" :
                   "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400"
@@ -76,14 +76,14 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
               <div className="flex items-center gap-1.5">
                 <Clock className="w-3 h-3 text-muted-foreground/50" aria-hidden="true" />
                 <span title={beacon.last_seen ? new Date(beacon.last_seen).toLocaleString() : ""}>{timeAgo(beacon.last_seen || "", t)}</span>
-                {beacon.created_at && <span className="text-(--font-size-micro) text-muted-foreground/70 ml-1">{t("format.uptime.up")} {formatUptime(beacon.last_seen || beacon.created_at, t)}</span>}
+                {beacon.created_at && <span className="text-(--fs-micro) text-muted-foreground/70 ml-1">{t("format.uptime.up")} {formatUptime(beacon.last_seen || beacon.created_at, t)}</span>}
               </div>
             </div>
             <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-border/40">
               {(tagsByAgent[id] || []).slice(0, 5).map((tag) => (
                 <span key={tag.id} className="w-2.5 h-2.5 rounded-full ring-1.5 ring-white dark:ring-border shadow-sm" style={{ backgroundColor: tag.color }} title={tag.name} />
               ))}
-              <span className="ml-auto text-(--font-size-micro-sm) text-muted-foreground/70">{t("agents.n_tasks").replace("{n}", String(taskCountMap[id] ?? 0))}</span>
+              <span className="ml-auto text-(--fs-micro-sm) text-muted-foreground/70">{t("agents.n_tasks").replace("{n}", String(taskCountMap[id] ?? 0))}</span>
             </div>
           </Card>
         );

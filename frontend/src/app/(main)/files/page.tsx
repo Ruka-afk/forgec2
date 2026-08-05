@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { formatTime } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState, PageHeader, Spinner } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { NormalizedAgent as Agent } from "@/types/agent";
+import { normalizeAgentList } from "@/lib/agents";
+import { paths } from "@/lib/api-paths";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { File, FolderOpen, MousePointerClick, Search } from "lucide-react";
@@ -23,6 +25,11 @@ interface FileEntry {
 export default function FilesPage() {
   const { t } = useI18n();
   const [agents, setAgents] = useState<Agent[]>([]);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [currentPath, setCurrentPath] = useState("C:\\");
   const [files, setFiles] = useState<FileEntry[]>([]);
@@ -33,17 +40,18 @@ export default function FilesPage() {
   const loadAgents = useCallback(() => {
     setLoading(true);
     setError(null);
-    api.get("/agents?page=1&pageSize=200")
+    api.get(paths.agents.list("page=1&pageSize=200"))
       .then((data) => {
-        const list = data.agents || data || [];
-        setAgents(list as Agent[]);
+        if (mountedRef.current) setAgents(normalizeAgentList(data) as Agent[]);
       })
-      .catch(() => {
+      .catch((e) => {
+        if (!mountedRef.current) return;
         setAgents([]);
-        setError(t("files.toast.load_agents_failed"));
-        toast.error(t("files.toast.load_agents_failed"));
+        const msg = e instanceof Error ? e.message : t("files.toast.load_agents_failed");
+        setError(msg);
+        toast.error(msg);
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (mountedRef.current) setLoading(false); });
   }, [t]);
 
   useEffect(() => { loadAgents(); }, [loadAgents]);
@@ -51,7 +59,7 @@ export default function FilesPage() {
   const loadFiles = useCallback((agentId: string, path: string) => {
     if (!agentId) return;
     setFilesLoading(true);
-    api.post(`/agents/${agentId}/files/ls`, { path })
+    api.post(paths.agents.filesLs(agentId), { path })
       .then((data) => {
         const items: FileEntry[] = (data.files || data.entries || data.data || []) as FileEntry[];
         setFiles(items);
@@ -117,7 +125,7 @@ export default function FilesPage() {
                     variant="ghost"
                     onClick={() => selectAgent(a)}
                     className={`w-full justify-start text-left px-3 py-3 hover:bg-muted transition-colors rounded-none ${
-                      selectedAgent?.id === a.id ? "bg-primary/10 dark:bg-indigo-900/20 border-l-2 border-indigo-500" : ""
+                      selectedAgent?.id === a.id ? "bg-primary/10 border-l-2 border-primary" : ""
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -141,7 +149,7 @@ export default function FilesPage() {
             <Card className="">
               <div className="px-4 py-3 border-b border-border flex items-center gap-2">
                 <Tooltip>
-                  <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={navigateUp} aria-label="Navigate to parent directory" />}>
+                  <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={navigateUp} aria-label={t("files.navigate_up")} />}>
                   <FolderOpen className="w-4 h-4" />
                   </TooltipTrigger>
                   <TooltipContent>Up</TooltipContent>

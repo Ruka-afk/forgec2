@@ -1,6 +1,8 @@
 package db
 
 import (
+	"fmt"
+
 	"github.com/go-gormigrate/gormigrate/v2"
 	"gorm.io/gorm"
 )
@@ -222,6 +224,61 @@ var schemaMigrations = []*gormigrate.Migration{
 		Rollback: func(tx *gorm.DB) error {
 			execMigration(tx, "ALTER TABLE audit_logs DROP COLUMN prev_hash", "drop_audit_logs_prev_hash")
 			execMigration(tx, "ALTER TABLE audit_logs DROP COLUMN entry_hash", "drop_audit_logs_entry_hash")
+			return nil
+		},
+	},
+	{
+		ID: "2026-08-02-dedupe-listener-names",
+		Migrate: func(tx *gorm.DB) error {
+			// Listener.Name is promoted to a unique index (via AutoMigrate).
+			// Disambiguate any pre-existing duplicates (keep the oldest row's
+			// name, suffix the rest) so the unique index creation succeeds.
+			// Legacy databases may lack the table entirely at this stage.
+			if !tx.Migrator().HasTable("listeners") {
+				return nil
+			}
+			rows := []struct {
+				Name string
+				Min  uint
+			}{}
+			if err := tx.Table("listeners").Select("name, MIN(id) AS min").Group("name").Having("COUNT(*) > 1").Scan(&rows).Error; err != nil {
+				return err
+			}
+			for _, r := range rows {
+				var dupIDs []uint
+				if err := tx.Table("listeners").Where("name = ? AND id != ?", r.Name, r.Min).Order("id").Pluck("id", &dupIDs).Error; err != nil {
+					return err
+				}
+				for i, id := range dupIDs {
+					suffix := fmt.Sprintf(" (%d)", i+2)
+					newname := r.Name + suffix
+					if len(newname) > 128 {
+						newname = r.Name[:128-len(suffix)] + suffix
+					}
+					if err := tx.Table("listeners").Where("id = ?", id).Update("name", newname).Error; err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			// Irreversible: original duplicate names are not tracked.
+			return nil
+		},
+	},
+	{
+		ID: "2026-08-02-add-beacon-v2-columns",
+		Migrate: func(tx *gorm.DB) error {
+			execMigration(tx, "ALTER TABLE implants ADD COLUMN identity_pub VARCHAR(64) DEFAULT ''", "add_implants_identity_pub")
+			execMigration(tx, "ALTER TABLE implants ADD COLUMN registered BOOLEAN DEFAULT FALSE", "add_implants_registered")
+			execMigration(tx, "ALTER TABLE implants ADD COLUMN last_seq INTEGER DEFAULT 0", "add_implants_last_seq")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "ALTER TABLE implants DROP COLUMN identity_pub", "drop_implants_identity_pub")
+			execMigration(tx, "ALTER TABLE implants DROP COLUMN registered", "drop_implants_registered")
+			execMigration(tx, "ALTER TABLE implants DROP COLUMN last_seq", "drop_implants_last_seq")
 			return nil
 		},
 	},
@@ -457,6 +514,21 @@ var indexMigrations = []*gormigrate.Migration{
 		Rollback: func(tx *gorm.DB) error {
 			execMigration(tx, "DROP INDEX IF EXISTS idx_agent_tag_assignments_implant", "drop_idx_agent_tag_assignments_implant")
 			execMigration(tx, "DROP INDEX IF EXISTS idx_agent_group_assignments_implant", "drop_idx_agent_group_assignments_implant")
+			return nil
+		},
+	},
+	{
+		ID: "2026-08-02-add-data-integrity-indexes",
+		Migrate: func(tx *gorm.DB) error {
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_agent_status_events_agent_time ON agent_status_events(agent_id, timestamp)", "idx_agent_status_events_agent_time")
+			execMigration(tx, "CREATE INDEX IF NOT EXISTS idx_credential_entries_expires ON credential_entries(expires_at)", "idx_credential_entries_expires")
+			execMigration(tx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_listeners_name_unique ON listeners(name)", "idx_listeners_name_unique")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "DROP INDEX IF EXISTS idx_agent_status_events_agent_time", "drop_idx_agent_status_events_agent_time")
+			execMigration(tx, "DROP INDEX IF EXISTS idx_credential_entries_expires", "drop_idx_credential_entries_expires")
+			execMigration(tx, "DROP INDEX IF EXISTS idx_listeners_name_unique", "drop_idx_listeners_name_unique")
 			return nil
 		},
 	},

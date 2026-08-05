@@ -93,10 +93,15 @@ func (sc *SlackExternalC2) connectAndRun(channelID string) {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		for {
+			// Snapshot under the lock: the notify map is mutated concurrently
+			// by QueueExtC2Task and channel cleanup goroutines.
+			sc.server.extC2TaskMu.Lock()
+			notifyCh := sc.server.extC2Notify[channelID]
+			sc.server.extC2TaskMu.Unlock()
 			select {
 			case <-sc.stopCh:
 				return
-			case <-sc.server.extC2Notify[channelID]:
+			case <-notifyCh:
 			case <-ticker.C:
 			}
 			sc.server.extC2TaskMu.Lock()

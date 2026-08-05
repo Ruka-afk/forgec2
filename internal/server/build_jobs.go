@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 // BuildJob tracks an asynchronous binary build.
@@ -31,7 +31,7 @@ type BuildJob struct {
 // startBuildJob creates a build job, stores it, and returns its ID.
 func (s *Server) startBuildJob(platform, format, c2URL string, listenerID uint, filename string) *BuildJob {
 	job := &BuildJob{
-		ID:         uuid.New().String(),
+		ID:         protocol.UUIDv7(),
 		Status:     "building",
 		Platform:   platform,
 		Format:     format,
@@ -58,6 +58,14 @@ func (s *Server) completeBuildJob(job *BuildJob, outputPath string, err error) {
 		job.Status = "completed"
 		job.Output = outputPath
 	}
+}
+
+// abandonBuildJob removes a job that was never submitted (e.g. queue full), so
+// it does not linger as a phantom failed build.
+func (s *Server) abandonBuildJob(job *BuildJob) {
+	s.buildJobsMu.Lock()
+	delete(s.buildJobs, job.ID)
+	s.buildJobsMu.Unlock()
 }
 
 // cleanupBuildJobs removes completed jobs older than 1 hour.
@@ -89,10 +97,12 @@ func (s *Server) cleanupBuildJobs() {
 // handleBuildStatus returns the current status of an async build.
 func (s *Server) handleBuildStatus(c *gin.Context) {
 	buildID := c.Param("id")
+	// Snapshot all fields under the lock: completeBuildJob mutates the job
+	// from the build goroutine, so lock-free reads would race with it.
 	s.buildJobsMu.RLock()
 	job, ok := s.buildJobs[buildID]
-	s.buildJobsMu.RUnlock()
 	if !ok {
+		s.buildJobsMu.RUnlock()
 		respondError(c, http.StatusNotFound, "build not found")
 		return
 	}
@@ -111,6 +121,7 @@ func (s *Server) handleBuildStatus(c *gin.Context) {
 		resp["error"] = job.Error
 		resp["completed_at"] = job.CompletedAt
 	}
+	s.buildJobsMu.RUnlock()
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -119,16 +130,21 @@ func (s *Server) handleBuildDownload(c *gin.Context) {
 	buildID := c.Param("id")
 	s.buildJobsMu.RLock()
 	job, ok := s.buildJobs[buildID]
+	var status, output string
+	if ok {
+		status = job.Status
+		output = job.Output
+	}
 	s.buildJobsMu.RUnlock()
 	if !ok {
 		respondError(c, http.StatusNotFound, "build not found")
 		return
 	}
-	if job.Status != "completed" {
+	if status != "completed" {
 		respondError(c, http.StatusNotFound, "build not ready")
 		return
 	}
-	cleanPath := filepath.Clean(job.Output)
+	cleanPath := filepath.Clean(output)
 	if _, err := os.Stat(cleanPath); err != nil {
 		respondError(c, http.StatusNotFound, "build output file not found")
 		return
@@ -138,13 +154,6 @@ func (s *Server) handleBuildDownload(c *gin.Context) {
 
 // handleBuildList returns all active build jobs for the caller.
 func (s *Server) handleBuildList(c *gin.Context) {
-	s.buildJobsMu.RLock()
-	jobs := make([]*BuildJob, 0, len(s.buildJobs))
-	for _, j := range s.buildJobs {
-		jobs = append(jobs, j)
-	}
-	s.buildJobsMu.RUnlock()
-
 	type jobResp struct {
 		ID          string    `json:"id"`
 		Status      string    `json:"status"`
@@ -155,8 +164,12 @@ func (s *Server) handleBuildList(c *gin.Context) {
 		CreatedAt   time.Time `json:"created_at"`
 		CompletedAt time.Time `json:"completed_at,omitempty"`
 	}
-	resp := make([]jobResp, 0, len(jobs))
-	for _, j := range jobs {
+
+	// Copy every field under the lock so the build goroutine's mutations
+	// cannot race our reads.
+	s.buildJobsMu.RLock()
+	resp := make([]jobResp, 0, len(s.buildJobs))
+	for _, j := range s.buildJobs {
 		resp = append(resp, jobResp{
 			ID:          j.ID,
 			Status:      j.Status,
@@ -168,6 +181,7 @@ func (s *Server) handleBuildList(c *gin.Context) {
 			CompletedAt: j.CompletedAt,
 		})
 	}
+	s.buildJobsMu.RUnlock()
 	c.JSON(http.StatusOK, gin.H{"success": true, "builds": resp})
 }
 
@@ -208,6 +222,53 @@ func (s *Server) runBuildAndUpdateJob(job *BuildJob, buildFn func() (string, err
 		}
 		s.wsHub.Broadcast(msg)
 	}
+}
+
+// Build queue: binary generation runs the Go/garble toolchain, which is
+// expensive and must not run unbounded goroutines per request. Jobs are
+// enqueued and executed by a small fixed worker pool in FIFO order.
+const (
+	maxQueuedBuilds = 32
+	buildWorkers    = 1
+)
+
+// queuedBuild is a build job waiting for a worker slot.
+type queuedBuild struct {
+	job        *BuildJob
+	buildFn    func() (string, error)
+	platform   string
+	format     string
+	c2URL      string
+	listenerID uint
+	filename   string
+}
+
+// submitBuild enqueues a build on the serialized worker queue. The job is
+// registered with startBuildJob BEFORE submission so the frontend can poll its
+// status immediately. Returns false when the queue is full.
+func (s *Server) submitBuild(job *BuildJob, fn func() (string, error), platform, format, c2URL string, listenerID uint, filename string) bool {
+	s.ensureBuildQueue()
+	select {
+	case s.buildQueue <- &queuedBuild{job, fn, platform, format, c2URL, listenerID, filename}:
+		return true
+	default:
+		return false
+	}
+}
+
+// ensureBuildQueue lazily starts the worker pool (safe for Server values
+// constructed literally in tests, which never submit builds).
+func (s *Server) ensureBuildQueue() {
+	s.buildQueueOnce.Do(func() {
+		s.buildQueue = make(chan *queuedBuild, maxQueuedBuilds)
+		for i := 0; i < buildWorkers; i++ {
+			go func() {
+				for q := range s.buildQueue {
+					s.runBuildAndUpdateJob(q.job, q.buildFn, q.platform, q.format, q.c2URL, q.listenerID, q.filename)
+				}
+			}()
+		}
+	})
 }
 
 // extractAgentsDir returns the absolute path to the agents output directory.

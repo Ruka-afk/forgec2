@@ -2,18 +2,20 @@
 
 import { withChartData } from "@/components/withChartData";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useI18n } from "@/lib/i18n";
 
 interface TaskCounts { completed: number; pending: number; failed: number; running: number }
 
 function TaskBody({ data }: { data: TaskCounts }) {
+  const { t } = useI18n();
   const items = [
-    { label: "Completed", value: Number(data.completed) || 0, color: "bg-emerald-500" },
-    { label: "Pending", value: Number(data.pending) || 0, color: "bg-amber-500" },
-    { label: "Failed", value: Number(data.failed) || 0, color: "bg-red-500" },
-    { label: "Running", value: Number(data.running) || 0, color: "bg-blue-500" },
+    { label: t("tasks.completed"), value: Number(data.completed) || 0, color: "bg-emerald-500" },
+    { label: t("tasks.pending"), value: Number(data.pending) || 0, color: "bg-amber-500" },
+    { label: t("tasks.failed"), value: Number(data.failed) || 0, color: "bg-red-500" },
+    { label: t("tasks.running"), value: Number(data.running) || 0, color: "bg-blue-500" },
   ];
   const total = items.reduce((s, i) => s + i.value, 0);
-  if (total === 0) return <p className="text-xs text-muted-foreground/70 text-center py-4">No tasks yet</p>;
+  if (total === 0) return <p className="text-xs text-muted-foreground/70 text-center py-4">{t("dashboard.no_tasks_yet")}</p>;
   return (
     <div className="space-y-2">
       <div className="h-4 rounded-full overflow-hidden flex bg-secondary">
@@ -21,7 +23,7 @@ function TaskBody({ data }: { data: TaskCounts }) {
           <Tooltip key={i.label}><TooltipTrigger><div className={`${i.color} h-full transition-all`} style={{ width: `${(i.value / total) * 100}%` }}></div></TooltipTrigger><TooltipContent>{`${i.label}: ${i.value}`}</TooltipContent></Tooltip>
         ))}
       </div>
-      <div className="grid grid-cols-4 gap-1 text-(--font-size-micro-sm) text-center">
+      <div className="grid grid-cols-4 gap-1 text-(--fs-micro-sm) text-center">
         {items.map((i) => (
           <div key={i.label} className="flex flex-col items-center gap-0.5">
             <span className={`w-2 h-2 rounded-full ${i.color}`}></span>

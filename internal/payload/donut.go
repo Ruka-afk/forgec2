@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,7 +30,11 @@ func GenerateDonutShellcode(cfg DonutConfig) ([]byte, error) {
 	if donutPath != "" {
 		return generateWithDonutCLI(donutPath, cfg)
 	}
-	// Fallback: PowerShell download + execute shellcode
+	// Fallback: PowerShell download + execute shellcode. This behaves very
+	// differently (network download indicator, no PE entropy), so it is
+	// logged explicitly instead of silently substituting.
+	slog.Warn("donut CLI not found; falling back to PowerShell-based shellcode",
+		"hint", "install donut (https://github.com/TheWover/donut) and place it in PATH, tools/, or bin/")
 	return generateFallbackShellcode(cfg)
 }
 

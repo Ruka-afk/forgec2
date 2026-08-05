@@ -1,14 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import StatCard from "@/components/StatCard";
 import { api } from "@/lib/api";
-import { MITRE_PHASE_COLORS } from "@/lib/colors";
+import { paths } from "@/lib/api-paths";
 
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { ConfirmModal, EmptyState, PageHeader, Spinner } from "@/components/UI";
-import { NormalizedAgent as Agent } from "@/types/agent";
 import { toast } from "sonner";
 
 import { Card } from "@/components/ui/card";
@@ -40,166 +39,56 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
-
-interface Campaign {
-  id: string;
-  name: string;
-  description: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  agents: Agent[];
-}
-
-interface PhaseEvent {
-  phase: string;
-  first_seen: string;
-  task_count: number;
-}
-
-interface AgentStat {
-  agent_id: string;
-  hostname: string;
-  username: string;
-  ip: string;
-  task_count: number;
-  phases: Record<string, number>;
-}
-
-interface CampaignStats {
-  total_agents: number;
-  total_tasks: number;
-  completed_tasks: number;
-  failed_tasks: number;
-  kill_chain_summary: Record<string, number>;
-  phase_timeline: PhaseEvent[];
-  agent_breakdown: AgentStat[];
-}
-
-interface KillChainPhaseStatus {
-  phase: string;
-  status: "pending" | "completed";
-  task_count: number;
-}
-
-interface CampaignMITRE {
-  campaign_id: string;
-  campaign_name: string;
-  phases: KillChainPhaseStatus[];
-  timeline: PhaseEvent[];
-}
-
-interface KillChainTemplate {
-  name: string;
-  description: string;
-  steps: KillChainStepDef[];
-}
-
-interface KillChainStepDef {
-  phase: string;
-  task_type: string;
-  params: Record<string, string>;
-  wait_time: number;
-}
-
-interface PhaseTask {
-  phase: string;
-  task_type: string;
-  status: string;
-  hostname?: string;
-  agent_id?: string;
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  active: "#6366f1",
-  completed: "#059669",
-  archived: "#64748b",
-};
-
-const PHASE_ORDER = [
-  "Reconnaissance", "Resource Development", "Initial Access", "Execution",
-  "Persistence", "Privilege Escalation", "Defense Evasion", "Credential Access",
-  "Discovery", "Lateral Movement", "Collection", "Command and Control",
-  "Exfiltration", "Impact",
-];
-
-const PHASE_PHASE_COLORS = MITRE_PHASE_COLORS;
+import {
+  PHASE_ORDER,
+  PHASE_PHASE_COLORS,
+  STATUS_COLORS,
+  type Campaign,
+  type CampaignMITRE,
+  type CampaignStats,
+  type KillChainTemplate,
+  type PhaseEvent,
+  type AgentStat,
+  type PhaseTask,
+} from "./_components/types";
+import { useCampaignData } from "./_components/useCampaignData";
 
 export default function CampaignPageContent() {
   const { t } = useI18n();
+  const {
+    campaigns,
+    loading,
+    selectedCampaign,
+    setSelectedCampaign,
+    campaignStats,
+    creating,
+    createCampaign,
+    deleteCampaign,
+    updateStatus,
+  } = useCampaignData();
 
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedCampaign, setSelectedCampaign] = useState<string | null>(null);
-  const [campaignStats, setCampaignStats] = useState<CampaignStats | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [creating, setCreating] = useState(false);
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
-  const loadCampaigns = async (signal?: AbortSignal) => {
-    try {
-      const data = await api.get<{success: boolean; data?: Campaign[]}>(`/campaigns`, { signal });
-      if (data.success) setCampaigns(data.data || []);
-    } catch {
-      toast.error(t("campaign.toast.load_failed"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadCampaignDetail = useCallback(async (id: string, signal?: AbortSignal) => {
-    try {
-      const data = await api.get<{stats?: CampaignStats}>(`/campaigns/${id}`, { signal });
-      setCampaignStats(data.stats || null);
-    } catch {
-      toast.error(t("campaign.toast.load_stats_failed"));
-    }
-  }, [t]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    loadCampaigns(controller.signal);
-    return () => controller.abort();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const controller = new AbortController();
-    if (selectedCampaign) loadCampaignDetail(selectedCampaign, controller.signal);
-    else setCampaignStats(null);
-    return () => controller.abort();
-  }, [selectedCampaign, loadCampaignDetail]);
 
   const handleCreate = async () => {
-    if (!newName.trim()) return;
-    setCreating(true);
-    try {
-      await api.postJson("/campaigns", { name: newName, description: newDesc });
-      setNewName(""); setNewDesc(""); setShowCreate(false);
-      loadCampaigns();
-      toast.success(t("campaign.toast.created"));
-    } catch { toast.error(t("campaign.toast.load_failed")); }
-    setCreating(false);
+    const ok = await createCampaign(newName, newDesc);
+    if (ok) {
+      setNewName("");
+      setNewDesc("");
+      setShowCreate(false);
+    }
   };
 
   const handleDelete = (id: string) => {
     setCfm({msg: t("campaign.delete_confirm"), cb: async () => {
-      try {
-        await api.del(`/campaigns/${id}`);
-        if (selectedCampaign === id) setSelectedCampaign(null);
-        loadCampaigns();
-        toast.success(t("campaign.toast.deleted"));
-      } catch { toast.error(t("campaign.toast.load_failed")); }
+      await deleteCampaign(id);
     }});
   };
 
   const handleStatusChange = async (id: string, status: string) => {
-    try {
-      await api.postJson(`/campaigns/${id}`, { status });
-      loadCampaigns();
-      if (selectedCampaign === id) loadCampaignDetail(id);
-      toast.success(t("campaign.toast.status_updated"));
-    } catch { toast.error(t("campaign.toast.status_updated")); }
+    await updateStatus(id, status);
   };
 
   const selected = campaigns.find((c) => c.id === selectedCampaign);
@@ -221,9 +110,9 @@ export default function CampaignPageContent() {
             <DialogTitle>{t("campaign.dialog_create")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <Input aria-label="Campaign name" name="campaign-name-0" placeholder={t("campaign.field_name")} value={newName}
+            <Input aria-label={t("campaign.a11y_name")} name="campaign-name-0" placeholder={t("campaign.field_name")} value={newName}
               onChange={(e) => setNewName(e.target.value)} />
-            <Textarea aria-label="Description (optional)" name="description-optional-1" rows={2} placeholder={t("campaign.field_desc")} value={newDesc}
+            <Textarea aria-label={t("campaign.desc_optional")} name="description-optional-1" rows={2} placeholder={t("campaign.field_desc")} value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)} />
           </div>
           <DialogFooter>
@@ -275,7 +164,7 @@ export default function CampaignPageContent() {
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-muted-foreground text-sm">{formatTime(c.created_at)}</TableCell>
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-right">
                     <Button variant="ghost" size="icon-xs" className="text-destructive"
-                      onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} aria-label="Delete campaign">
+                      onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }} aria-label={t("campaign.a11y_delete")}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </TableCell>
@@ -315,8 +204,8 @@ function CampaignDetailView({
     (async () => {
       try {
         const [mitreJson, tplJson] = await Promise.all([
-          api.get<{success: boolean; data?: CampaignMITRE}>(`/campaigns/${campaign.id}/mitre`, { signal: controller.signal }),
-          api.get<{success: boolean; data?: KillChainTemplate[]}>(`/mitre/templates`, { signal: controller.signal }),
+          api.get<{success: boolean; data?: CampaignMITRE}>(paths.campaigns.mitre(campaign.id), { signal: controller.signal }),
+          api.get<{success: boolean; data?: KillChainTemplate[]}>(paths.mitre.templates, { signal: controller.signal }),
         ]);
         if (mitreJson.success) setMitreData(mitreJson.data ?? null);
         if (tplJson.success) setTemplates(tplJson.data || []);
@@ -327,7 +216,7 @@ function CampaignDetailView({
 
   const loadPhaseTasks = async (phase: string) => {
     try {
-      const json = await api.get<{success: boolean; data?: PhaseTask[]}>(`/mitre/timeline?campaign_id=${campaign.id}`);
+      const json = await api.get<{success: boolean; data?: PhaseTask[]}>(paths.mitre.timeline(`campaign_id=${campaign.id}`));
       if (json.success) {
         const tasks = (json.data || []).filter((e: PhaseTask) => e.phase === phase);
         setPhaseTasks((prev) => ({ ...prev, [phase]: tasks }));
@@ -348,8 +237,8 @@ function CampaignDetailView({
     if (!selectedTemplate) return;
     setExecuting(true);
     try {
-          await api.postJson(`/campaigns/${campaign.id}/killchain`, { template: selectedTemplate });
-      const mitreJson = await api.get<{success: boolean; data?: CampaignMITRE}>(`/campaigns/${campaign.id}/mitre`);
+          await api.postJson(paths.campaigns.killchain(campaign.id), { template: selectedTemplate });
+      const mitreJson = await api.get<{success: boolean; data?: CampaignMITRE}>(paths.campaigns.mitre(campaign.id));
       if (mitreJson.success) setMitreData(mitreJson.data ?? null);
     } catch { toast.error(t("campaign.toast.load_failed")); }
     setExecuting(false);
@@ -361,7 +250,7 @@ function CampaignDetailView({
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back to campaigns list"><ArrowLeft className="w-4 h-4" /></Button>
+        <Button variant="ghost" size="icon" onClick={onBack} aria-label={t("campaign.a11y_back")}><ArrowLeft className="w-4 h-4" /></Button>
         <div className="flex-1">
           <h2 className="text-2xl font-semibold tracking-tight text-foreground leading-tight">{campaign.name}</h2>
           {campaign.description && <p className="text-muted-foreground text-sm">{campaign.description}</p>}
@@ -377,7 +266,7 @@ function CampaignDetailView({
               <SelectItem value="archived">{t("campaign.status_archived")}</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="ghost" size="icon" className="text-destructive" onClick={onDelete} aria-label="Delete campaign">
+          <Button variant="ghost" size="icon" className="text-destructive" onClick={onDelete} aria-label={t("campaign.a11y_delete")}>
             <Trash2 className="w-4 h-4" />
           </Button>
         </div>
@@ -419,21 +308,20 @@ function CampaignDetailView({
                         key={phase}
                         onClick={() => handlePhaseClick(phase)}
                         className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all cursor-pointer min-w-[80px] h-auto ${
-                          expandedPhase === phase ? "ring-2 ring-indigo-500" : ""
+                          expandedPhase === phase ? "ring-2 ring-primary" : ""
                         } ${isCompleted ? "bg-emerald-500/15" : isPending ? "" : "bg-amber-500/15"}`}
                         title={phase}
-                        aria-label="Action"
                       >
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white transition-colors ${
                             isCompleted ? "bg-emerald-500" : isPending ? "bg-muted-foreground" : "bg-amber-500"
                           }`}>
                             {isCompleted ? <Check className="w-4 h-4" /> : isPending ? "" : <Play className="w-4 h-4" />}
                           </div>
-                          <span className={`text-(--font-size-micro-sm) text-center leading-tight ${isCompleted ? "text-emerald-700 dark:text-emerald-400 font-medium" : isPending ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"}`}>
+                          <span className={`text-(--fs-micro-sm) text-center leading-tight ${isCompleted ? "text-emerald-700 dark:text-emerald-400 font-medium" : isPending ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"}`}>
                             {phase.split(" ").slice(0, 2).join("\n")}
                           </span>
                           {found && (
-                            <span className="text-(--font-size-micro) text-muted-foreground">{found.task_count}</span>
+                            <span className="text-(--fs-micro) text-muted-foreground">{found.task_count}</span>
                           )}
                           </Button>
                       );
@@ -534,7 +422,7 @@ function CampaignDetailView({
               <p className="text-muted-foreground">{t("campaign.empty_timeline")}</p>
             ) : (
               <div className="relative pl-6 border-l-2 border-border">
-                {stats.phase_timeline.map((event, i) => (
+                {stats.phase_timeline.map((event: PhaseEvent, i: number) => (
                   <div key={i} className="mb-4 relative">
                     <div className="absolute -left-[calc(1.5rem+1px)] top-1 w-3 h-3 rounded-full border-2 border-card"
                       style={{ background: PHASE_PHASE_COLORS[event.phase] || "#6366f1" }} />
@@ -555,15 +443,15 @@ function CampaignDetailView({
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-                    <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">Hostname</TableHead>
-                    <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">User</TableHead>
+                    <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_hostname")}</TableHead>
+                    <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_user")}</TableHead>
                     <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">IP</TableHead>
-                    <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">Tasks</TableHead>
-                    <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">Phases</TableHead>
+                    <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_tasks")}</TableHead>
+                    <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_phases")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stats.agent_breakdown.map((a) => (
+                  {stats.agent_breakdown.map((a: AgentStat) => (
                     <TableRow key={a.agent_id}>
                       <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-foreground truncate max-w-[200px]">{a.hostname}</TableCell>
                       <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-muted-foreground truncate max-w-[200px]">{a.username}</TableCell>
@@ -572,7 +460,7 @@ function CampaignDetailView({
                       <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-xs">
                         {Object.entries(a.phases || {}).map(([phase, count]) => (
                           <Badge key={phase} variant="secondary" className="inline-block mr-1 mb-1 px-1.5 py-0.5 rounded text-xs">
-                            {phase}:{count}
+                            {phase}:{String(count)}
                           </Badge>
                         ))}
                       </TableCell>

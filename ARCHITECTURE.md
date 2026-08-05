@@ -160,7 +160,6 @@ Request flows through these middleware in order:
 
 - ECDH key exchange during agent registration
 - Per-session AES-256-GCM encryption
-- Session key rotation after configurable message count
 - Loot encrypted at rest with server-derived key
 
 ## Deployment Architecture

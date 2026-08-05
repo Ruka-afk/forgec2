@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/forgec2/forgec2/internal/config"
+	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/gin-gonic/gin"
 )
 
@@ -37,11 +38,11 @@ func respondSuccess(c *gin.Context, data interface{}) {
 // respondSuccessWithTotal wraps data with pagination metadata.
 func respondSuccessWithTotal(c *gin.Context, data interface{}, total int64, page, pageSize int) {
 	c.JSON(http.StatusOK, gin.H{
-		"success":  true,
-		"data":     data,
-		"total":    total,
-		"page":     page,
-		"pageSize": pageSize,
+		"success":   true,
+		"data":      data,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
 	})
 }
 
@@ -54,6 +55,28 @@ func respondError(c *gin.Context, status int, msg string) {
 // through sanitizeError, so raw err.Error() is never exposed to clients.
 func respondErrorSafe(c *gin.Context, status int, err error, context string) {
 	respondError(c, status, sanitizeError(err, context))
+}
+
+// handleQueryError logs a database/query failure and returns a 500 to the
+// client. Use it instead of the "log and fall through to an empty 200"
+// pattern so transient failures are never reported as successful empty lists.
+func handleQueryError(c *gin.Context, err error, msg string) {
+	slog.Error(msg, "err", err)
+	respondError(c, http.StatusInternalServerError, "Query failed")
+}
+
+// csvSafe neutralizes spreadsheet formula injection in CSV exports: cells
+// beginning with = + - @ or a tab/carriage return are prefixed with a single
+// quote so spreadsheet applications treat them as text.
+func csvSafe(s string) string {
+	if s == "" {
+		return s
+	}
+	switch s[0] {
+	case '=', '+', '-', '@', '\t', '\r':
+		return "'" + s
+	}
+	return s
 }
 
 // sanitizeError maps known internal errors to safe user-facing messages.
@@ -448,4 +471,30 @@ func marshalJSONSafe(v interface{}) ([]byte, bool) {
 		return nil, false
 	}
 	return b, true
+}
+
+// encryptCredNotes encrypts sensitive credential notes with the loot key
+// before storage. Falls back to plaintext if encryption is unavailable.
+func encryptCredNotes(s string) string {
+	if s == "" {
+		return ""
+	}
+	enc, err := crypto.EncryptLoot(s)
+	if err != nil {
+		return s
+	}
+	return enc
+}
+
+// decryptCredNotes decrypts credential notes stored via encryptCredNotes.
+// Legacy plaintext values pass through unchanged.
+func decryptCredNotes(s string) string {
+	if s == "" {
+		return ""
+	}
+	plain, err := crypto.DecryptLoot(s)
+	if err != nil {
+		return s
+	}
+	return plain
 }

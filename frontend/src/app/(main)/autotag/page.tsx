@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { ConfirmModal, EmptyState, PageHeader } from "@/components/UI";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -95,22 +96,22 @@ export default function AutoTagPage() {
     const body = { name, enabled: true, condition: conditions, tag_id: tagId, priority };
     try {
       if (editingId) {
-        await api.putJson(`/api/autotag/rules/${editingId}`, body);
+        await api.putJson(paths.autotag.rule(editingId), body);
       } else {
-        await api.postJson("/api/autotag/rules", body);
+        await api.postJson(paths.autotag.rules, body);
       }
       resetForm(); setShowForm(false); setMessage(t("autotag.saved")); fetchData();
     } catch { setMessage(t("autotag.save_failed")); }
   }
 
   async function handleToggle(id: string) {
-      try { await api.postJson(`/api/autotag/rules/${id}/toggle`, {}); fetchData(); }
+      try { await api.postJson(paths.autotag.toggle(id), {}); fetchData(); }
     catch { setMessage(t("autotag.toggle_failed")); }
   }
 
   function handleDelete(id: string) {
     setCfm({msg: t("autotag.delete_confirm"), cb: async () => {
-      try { await api.del(`/api/autotag/rules/${id}`); fetchData(); }
+      try { await api.del(paths.autotag.rule(id)); fetchData(); }
       catch { setMessage(t("autotag.delete_failed")); }
     }});
   }
@@ -151,9 +152,9 @@ export default function AutoTagPage() {
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       {message && (
-        <div className="mb-4 px-4 py-2 rounded-xl bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 text-sm border border-indigo-500/20 flex items-center justify-between">
+        <div className="mb-4 px-4 py-2 rounded-xl bg-info/8 text-info text-sm border border-info/20 flex items-center justify-between animate-fade-in">
           <span>{message}</span>
-          <Button variant="ghost" size="icon-sm" onClick={() => setMessage("")} aria-label="Dismiss">
+          <Button variant="ghost" size="icon-sm" onClick={() => setMessage("")} aria-label={t("common.dismiss")}>
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -176,13 +177,13 @@ export default function AutoTagPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <Label className="mb-1 text-xs">{t("autotag.name")}</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
+              <Label htmlFor="autotag-name" className="mb-1 text-xs">{t("autotag.name")}</Label>
+              <Input id="autotag-name" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div>
-              <Label className="mb-1 text-xs">{t("autotag.tag")}</Label>
+              <Label htmlFor="autotag-tag" className="mb-1 text-xs">{t("autotag.tag")}</Label>
               <Select value={tagId} onValueChange={(v) => setTagId(v ?? "")}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="autotag-tag" className="w-full">
                   <SelectValue placeholder={t("autotag.select_tag")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -193,8 +194,8 @@ export default function AutoTagPage() {
               </Select>
             </div>
             <div>
-              <Label className="mb-1 text-xs">{t("autotag.priority")}</Label>
-              <Input type="number" value={priority} onChange={(e) => setPriority(parseInt(e.target.value) || 0)} />
+              <Label htmlFor="autotag-priority" className="mb-1 text-xs">{t("autotag.priority")}</Label>
+              <Input id="autotag-priority" type="number" value={priority} onChange={(e) => setPriority(parseInt(e.target.value) || 0)} />
             </div>
           </div>
 
@@ -223,10 +224,10 @@ export default function AutoTagPage() {
                 <Input
                   value={c.value}
                   onChange={(e) => updateCondition(i, "value", e.target.value)}
-                  placeholder="Value"
+                  placeholder={t("autotag.value_ph")}
                   className="flex-1"
                 />
-                <Button variant="ghost" size="icon-sm" onClick={() => removeCondition(i)} className="text-destructive hover:text-destructive hover:bg-destructive/10" aria-label="Remove">
+                <Button variant="ghost" size="icon-sm" onClick={() => removeCondition(i)} className="text-destructive hover:text-destructive hover:bg-destructive/10" aria-label={t("common.remove")}>
                   <X className="w-4 h-4" />
                 </Button>
               </div>
@@ -270,7 +271,7 @@ export default function AutoTagPage() {
           {rules.map((rule) => (
             <Card key={rule.id} className="p-4 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
               <div className="flex items-center gap-4">
-                <Switch checked={rule.enabled} onCheckedChange={() => handleToggle(rule.id)} />
+                <Switch checked={rule.enabled} onCheckedChange={() => handleToggle(rule.id)} aria-label={t("autotag.toggle_rule")} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm text-foreground">{rule.name}</span>
@@ -279,17 +280,17 @@ export default function AutoTagPage() {
                         {rule.tag.name}
                       </Badge>
                     )}
-                    <span className="text-(--font-size-xs-sm) text-muted-foreground">{t("autotag.priority_label")} {rule.priority}</span>
+                    <span className="text-(--fs-xs-sm) text-muted-foreground">{t("autotag.priority_label")} {rule.priority}</span>
                   </div>
-                  <div className="text-[12px] text-muted-foreground mt-0.5 font-mono truncate">
+                  <div className="text-(--fs-compact) text-muted-foreground mt-0.5 font-mono truncate">
                     {(() => { try { const c = JSON.parse(rule.condition); return c.map((cc: TagCondition) => `${cc.field} ${cc.op} "${cc.value}"`).join(" AND "); } catch { return rule.condition; } })()}
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <Button variant="outline" size="icon" onClick={() => editRule(rule)} aria-label="Edit">
+                  <Button variant="outline" size="icon" onClick={() => editRule(rule)} aria-label={t("common.edit")}>
                     <Pencil className="w-4 h-4" />
                   </Button>
-                  <Button variant="destructive" size="icon" onClick={() => handleDelete(rule.id)} aria-label="Delete">
+                  <Button variant="destructive" size="icon" onClick={() => handleDelete(rule.id)} aria-label={t("common.delete")}>
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>

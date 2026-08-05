@@ -21,6 +21,8 @@ export const StatCard = memo(function StatCard({
   sub,
   subColor,
   icon,
+  dot,
+  dotTone,
   className,
   style,
 }: {
@@ -30,6 +32,8 @@ export const StatCard = memo(function StatCard({
   sub?: string;
   subColor?: string;
   icon?: React.ReactNode;
+  dot?: boolean;
+  dotTone?: string;
   className?: string;
   style?: React.CSSProperties;
 }) {
@@ -70,14 +74,19 @@ export const StatCard = memo(function StatCard({
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <p className="text-(--font-size-xs-sm) font-semibold text-muted-foreground uppercase tracking-(--tracking-sublabel)">{label}</p>
-          <p className="text-[1.625rem] font-bold mt-1.5 text-foreground font-variant-numeric tabular-nums" aria-live="polite">{displayValue}</p>
-          {sub && <p className={cn("text-xs mt-1", subColor || colors.text)}>{sub}</p>}
+          <p className="mono-eyebrow text-muted-foreground/70">{label}</p>
+          <p className="mt-1.5 text-[1.625rem] font-bold leading-none text-foreground font-mono font-variant-numeric tabular-nums" aria-live="polite">{displayValue}</p>
+          <div className="flex items-center gap-1.5 mt-2 min-h-4">
+            {dot && (
+              <span className={`w-1.5 h-1.5 rounded-full ${dotTone === "ok" ? "bg-emerald-500" : dotTone === "warn" ? "bg-amber-500" : dotTone === "crit" ? "bg-destructive" : "bg-info"} animate-pulse`} />
+            )}
+            {sub && <p className={cn("text-xs", subColor || colors.text)}>{sub}</p>}
+          </div>
         </div>
         {icon && (
           <div
             className={cn(
-              "w-9 h-9 rounded-lg flex items-center justify-center shrink-0 shadow-sm",
+              "w-9 h-9 rounded-lg flex items-center justify-center shrink-0 shadow-sm ring-1 ring-border/50",
               colors.bg,
               colors.glow
             )}

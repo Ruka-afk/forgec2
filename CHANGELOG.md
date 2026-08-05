@@ -4,6 +4,33 @@ All notable changes to ForgeC2 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.0] - 2026-08-04
+
+### Added
+
+- Payload Generator workspace redesign: two-pane layout with sticky Connection panel (listener/C2, transport, malleable profile, timing, keys & OPSEC) + grouped payload card grid
+- New UI primitives: `PayloadCard`, `BuildResult`, `BuildStatusBadge` (ready/compiling/done/failed), `ConnectionPanel` (replaces `SharedSettings`)
+- Artifact sections: Agent Binaries (EXE/DLL/PS1/ELF/macOS), Artifact Kit (stagers), Shellcode/Donut, One-Liner, Quick Presets, Build History
+- Deep links: `?listener_id=` preselects a listener from the listener detail page
+- One-Liner result `"success"` state rendered as an inline success alert instead of an empty card
+
+### Changed
+
+- Macro generator: AMSI/STARTUPINFO detection stubs injected into VBA source, binary shellcode payload support, complete import table (`KERNEL32`/`USER32`/`ADVAPI32`/`WININET`/`OLEAUT32`)
+- PE processing: section names randomized, `AddBenignImports` applied in-place (no longer depends on `vsjitdebugger` symbol resolution)
+- Stager key initialization no longer exits the process on failure (server keeps running)
+- Entropy: `crypto/rand` replaces `math/rand` for payload seed material
+- Donut loader falls back with a warning when the shellcode path is unavailable
+- Generate page toasts fully i18n'd (no hardcoded English strings); en/zh key coverage enforced by CI (`check-i18n`)
+- Build history shows an empty state with an import hint; Apple (macOS) preset import restored
+- Fake step indicator removed from the Generate page; emoji icons replaced with lucide-react throughout
+- Profile import input styled consistently; `<details>` sections migrated to `Collapsible`
+
+### Fixed
+
+- Shellcode/command input validation and security hardening batch (server-side)
+- Build history auto-refresh after payload generation completes
+
 ## [2.4.1] - 2026-07-25
 
 ### Security

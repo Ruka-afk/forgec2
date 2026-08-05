@@ -15,7 +15,11 @@ import (
 type RDSession struct {
 	AgentID   string
 	Operators map[string]*websocket.Conn
-	mu        sync.RWMutex
+	// writeMu serializes writes per operator connection. gorilla/websocket
+	// allows only one concurrent writer per connection, and frames can be
+	// produced concurrently (agent screen_frame POST + operator session).
+	writeMu map[string]*sync.Mutex
+	mu      sync.RWMutex
 }
 
 // RDHub manages all remote desktop sessions.
@@ -36,6 +40,7 @@ func (h *RDHub) Join(agentID, operatorID string, conn *websocket.Conn) {
 		session = &RDSession{
 			AgentID:   agentID,
 			Operators: make(map[string]*websocket.Conn),
+			writeMu:   make(map[string]*sync.Mutex),
 		}
 		h.sessions[agentID] = session
 	}
@@ -43,6 +48,7 @@ func (h *RDHub) Join(agentID, operatorID string, conn *websocket.Conn) {
 
 	session.mu.Lock()
 	session.Operators[operatorID] = conn
+	session.writeMu[operatorID] = &sync.Mutex{}
 	session.mu.Unlock()
 
 	slog.Info("Operator joined remote desktop", "agent_id", agentID, "user", operatorID)
@@ -59,6 +65,7 @@ func (h *RDHub) Leave(agentID, operatorID string) {
 
 	session.mu.Lock()
 	delete(session.Operators, operatorID)
+	delete(session.writeMu, operatorID)
 	empty := len(session.Operators) == 0
 	session.mu.Unlock()
 
@@ -80,14 +87,26 @@ func (h *RDHub) BroadcastFrame(agentID string, frameData []byte) {
 
 	session.mu.RLock()
 	operators := make(map[string]*websocket.Conn, len(session.Operators))
+	locks := make(map[string]*sync.Mutex, len(session.writeMu))
 	for id, conn := range session.Operators {
 		operators[id] = conn
+	}
+	for id, mu := range session.writeMu {
+		locks[id] = mu
 	}
 	session.mu.RUnlock()
 
 	for operatorID, conn := range operators {
+		mu := locks[operatorID]
+		if mu == nil {
+			// Operator left concurrently; skip.
+			continue
+		}
 		conn.SetWriteDeadline(time.Now().Add(RemoteDesktopWriteDeadline))
-		if err := conn.WriteMessage(websocket.BinaryMessage, frameData); err != nil {
+		mu.Lock()
+		err := conn.WriteMessage(websocket.BinaryMessage, frameData)
+		mu.Unlock()
+		if err != nil {
 			slog.Debug("Failed to send frame", "user", operatorID, "error", err)
 			h.Leave(agentID, operatorID)
 		}

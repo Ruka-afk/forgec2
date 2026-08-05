@@ -2,6 +2,7 @@
 
 import { API_BASE } from "./constants";
 import { onWSMessage } from "./wsContext";
+import { paths } from "./api-paths";
 
 const TIMEOUT_MS = 30000;
 
@@ -25,7 +26,7 @@ function buildUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
-function unwrapBody<T>(body: unknown): T {
+export function unwrapBody<T>(body: unknown): T {
   if (body && typeof body === "object" && "success" in body && (body as Record<string, unknown>).success === true && "data" in body) {
     return (body as Record<string, unknown>).data as T;
   }
@@ -45,7 +46,30 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 let authRedirecting = false;
 let authRedirectTimer: ReturnType<typeof setTimeout> | null = null;
 
-function handleUnauthorized(res: Response): void {
+/** Test-only: reset 401 redirect debounce state between cases. */
+export function resetAuthRedirectState(): void {
+  authRedirecting = false;
+  if (authRedirectTimer) {
+    clearTimeout(authRedirectTimer);
+    authRedirectTimer = null;
+  }
+}
+
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+export function isForbiddenError(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 403;
+}
+
+export function handleUnauthorized(res: Pick<Response, "status">): void {
+  // Only session expiry (401) forces re-login. 403 = authenticated but denied — stay put.
   if (res.status !== 401 || typeof window === "undefined") return;
   const p = window.location.pathname;
   if (p === "/login" || p === "/login/") return;
@@ -126,14 +150,14 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
             rateLimitRetryAfter = Math.floor(Date.now() / 1000) + parseInt(retryAfter, 10);
           }
         }
-        let errorMsg = `HTTP ${res.status}`;
+        let errorMsg = res.status === 403 ? "Forbidden" : `HTTP ${res.status}`;
         try {
           const errBody = await res.json();
           if (errBody && typeof errBody === "object" && "error" in errBody) {
             errorMsg = String(errBody.error);
           }
         } catch { /* ignore parse error */ }
-        throw new Error(errorMsg);
+        throw new ApiError(errorMsg, res.status);
       }
 
       if (options.raw) {
@@ -159,17 +183,18 @@ export const api = {
     return request<T>(path, { method: "GET", retries: opts?.retries ?? 0, signal: opts?.signal });
   },
 
-  post<T = Record<string, unknown>>(path: string, data?: Record<string, string>): Promise<T> {
+  post<T = Record<string, unknown>>(path: string, data?: Record<string, string>, opts?: { signal?: AbortSignal }): Promise<T> {
     const body = data ? new URLSearchParams(data).toString() : undefined;
     return request<T>(path, {
       method: "POST",
       headers: body ? { "Content-Type": "application/x-www-form-urlencoded" } : {},
       body,
+      signal: opts?.signal,
     });
   },
 
-  postJson<T = Record<string, unknown>>(path: string, body: unknown): Promise<T> {
-    return request<T>(path, { method: "POST", body });
+  postJson<T = Record<string, unknown>>(path: string, body: unknown, opts?: { signal?: AbortSignal }): Promise<T> {
+    return request<T>(path, { method: "POST", body, signal: opts?.signal });
   },
 
   postFormData<T = Record<string, unknown>>(path: string, body: FormData): Promise<T> {
@@ -270,6 +295,7 @@ function pollTaskWithCancel(
   let done = false;
   let unsub: (() => void) | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let rejectRef: ((err: Error) => void) | null = null;
 
   const cleanup = () => {
     done = true;
@@ -280,13 +306,14 @@ function pollTaskWithCancel(
 
   const finalFetch = async (fallback: TaskStatus): Promise<TaskStatus> => {
     try {
-      return await api.get<TaskStatus>(`/agents/${agentId}/tasks/${taskId}`);
+      return await api.get<TaskStatus>(paths.agents.task(agentId, taskId));
     } catch {
       return fallback;
     }
   };
 
   const promise = new Promise<TaskStatus>((resolve, reject) => {
+    rejectRef = reject;
     const finish = async (st: TaskStatus) => {
       if (done) return;
       cleanup();
@@ -320,7 +347,7 @@ function pollTaskWithCancel(
       if (signal.aborted) return fail(new Error("cancelled"));
       if (Date.now() > deadline) return fail(new Error("Agent did not respond within the timeout (is it online?)"));
       try {
-        const st = await api.get<TaskStatus>(`/agents/${agentId}/tasks/${taskId}`);
+        const st = await api.get<TaskStatus>(paths.agents.task(agentId, taskId));
         opts.onStatus?.(st);
         if (st.status === "completed" || st.status === "failed") return finish(st);
       } catch (err) {
@@ -331,7 +358,14 @@ function pollTaskWithCancel(
     tick();
   });
 
-  return { promise, cancel: cleanup };
+  return {
+    promise,
+    cancel: () => {
+      if (done) return;
+      cleanup();
+      rejectRef?.(new Error("cancelled"));
+    },
+  };
 }
 
 import type { AgentStatus } from "@/types/agent";
@@ -343,7 +377,7 @@ export async function getAgentStatus(agentId: string): Promise<AgentStatus | "un
     Agent?: { status?: string };
     status?: string;
     data?: { status?: string };
-  }>(`/agents/${agentId}`);
+  }>(paths.agents.one(agentId));
   const agent = data.data || data;
   const raw = agent?.status || data.status || "unknown";
   return (VALID_STATUSES.includes(raw) ? raw : "unknown") as AgentStatus | "unknown";
@@ -435,12 +469,12 @@ import type { Agent, Task as TaskType } from "./api-schemas";
 
 export const typedApi = {
   async getAgent(id: string): Promise<Agent> {
-    const data = await api.get(`/agents/${id}`);
+    const data = await api.get(paths.agents.one(id));
     return parseResponse(AgentSchema, data);
   },
 
   async getTask(agentId: string, taskId: string): Promise<TaskType> {
-    const data = await api.get(`/agents/${agentId}/tasks/${taskId}`);
+    const data = await api.get(paths.agents.task(agentId, taskId));
     return parseResponse(TaskSchema, data);
   },
 };

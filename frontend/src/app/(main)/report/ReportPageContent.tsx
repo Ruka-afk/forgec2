@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { API_BASE } from "@/lib/constants";
 import { api } from "@/lib/api";
-import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { PageHeader, Spinner, PageSpinner } from "@/components/UI";
 import { toast } from "sonner";
@@ -20,100 +20,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CircleAlert, Clock, Download, FileText, Info, Inbox, Key, Lightbulb, ListChecks, PieChart, Radio, Bot, ShieldCheck, TriangleAlert, Trash2, Wand2 } from "lucide-react";
 import { Accordion, AccordionItem, AccordionHeader, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
-
-interface ReportStats {
-  total_agents?: number;
-  online_agents?: number;
-  total_tasks?: number;
-  success_tasks?: number;
-  failed_tasks?: number;
-  total_creds?: number;
-  total_audits?: number;
-  total_listeners?: number;
-  total_findings?: number;
-  critical_findings?: number;
-  high_findings?: number;
-  medium_findings?: number;
-}
-
-interface AgentRow {
-  id?: string;
-  hostname?: string;
-  ip?: string;
-  os?: string;
-  last_seen?: string;
-  status?: string;
-}
-
-interface TaskStatRow {
-  type?: string;
-  total?: number;
-  success?: number;
-  failed?: number;
-  success_rate?: number;
-}
-
-interface CredRow {
-  type?: string;
-  count?: number;
-  source?: string;
-}
-
-interface ListenerRow {
-  id?: string;
-  name?: string;
-  protocol?: string;
-  status?: string;
-  agent_count?: number;
-  traffic?: string;
-}
-
-interface FindingRow {
-  id?: string;
-  title?: string;
-  severity?: string;
-  cve_id?: string;
-  description?: string;
-  recommendation?: string;
-}
-
-interface ReportHistoryRow {
-  id?: string;
-  template?: string;
-  format?: string;
-  created_at?: string;
-  sections?: string[];
-  size?: string;
-}
-
-interface ScheduledReport {
-  id: string;
-  name: string;
-  enabled: boolean;
-  schedule: string;
-  format: string;
-  last_run: string;
-  next_run: string;
-  run_count: number;
-  delivery_type: string;
-}
+import { severityColor } from "./_components/types";
+import { useReportData } from "./_components/useReportData";
 
 export default function ReportPage() {
   const [activeSection, setActiveSection] = useState("overview");
-  const [stats, setStats] = useState<ReportStats>({});
-  const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [datePreset, setDatePreset] = useState("30d");
-  const [customStart, setCustomStart] = useState("");
-  const [customEnd, setCustomEnd] = useState("");
-  const [template, setTemplate] = useState("full");
-  const [agents, setAgents] = useState<AgentRow[]>([]);
-  const [taskStats, setTaskStats] = useState<TaskStatRow[]>([]);
-  const [creds, setCreds] = useState<CredRow[]>([]);
-  const [listeners, setListeners] = useState<ListenerRow[]>([]);
-  const [findings, setFindings] = useState<FindingRow[]>([]);
-  const [history, setHistory] = useState<ReportHistoryRow[]>([]);
-  const [scheduledReports, setScheduledReports] = useState<ScheduledReport[]>([]);
   const [schedName, setSchedName] = useState("");
   const [schedSchedule, setSchedSchedule] = useState("daily 08:00");
   const [schedFormat, setSchedFormat] = useState("html");
@@ -123,6 +34,30 @@ export default function ReportPage() {
   const [schedActionId, setSchedActionId] = useState<string | null>(null);
 
   const { t } = useI18n();
+  const {
+    stats,
+    loading,
+    generating,
+    datePreset,
+    setDatePreset,
+    customStart,
+    setCustomStart,
+    customEnd,
+    setCustomEnd,
+    template,
+    setTemplate,
+    agents,
+    taskStats,
+    creds,
+    listeners,
+    findings,
+    history,
+    scheduledReports,
+    loadScheduledReports,
+    generateReport,
+    deleteReport,
+    pdfExportUrl,
+  } = useReportData();
 
   const SECTIONS = [
     { key: "overview", label: t("report.sec_overview"), icon: <PieChart className="w-5 h-5" /> },
@@ -147,133 +82,24 @@ export default function ReportPage() {
     { value: "custom", label: t("report.preset_custom") },
   ];
 
-  const computeDateRange = useCallback(() => {
-    if (datePreset === "custom") {
-      return { start: customStart, end: customEnd };
-    }
-    const days = parseInt(datePreset);
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - days);
-    return {
-      start: start.toISOString().split("T")[0],
-      end: end.toISOString().split("T")[0],
-    };
-  }, [datePreset, customStart, customEnd]);
-
-  const loadOverview = useCallback(async () => {
-    try {
-      const data: ReportStats = await api.get("/report");
-      setStats(data);
-    } catch {
-      toast.error(t("report.toast.load_overview_failed"));
-    }
-  }, [t]);
-
-  const loadPreview = useCallback(async () => {
-    try {
-      const { start, end } = computeDateRange();
-      const qs = new URLSearchParams();
-      if (start) qs.set("start", start);
-      if (end) qs.set("end", end);
-      const q = qs.toString();
-
-      const [agentsResp, tasksResp, credsResp, netResp, findResp] = await Promise.all([
-        api.get<{ agents?: AgentRow[] }>(`/api/report/agents${q ? "?" + q : ""}`),
-        api.get<{ stats?: TaskStatRow[] }>(`/api/report/tasks${q ? "?" + q : ""}`),
-        api.get<{ credentials?: CredRow[] }>(`/api/report/credentials${q ? "?" + q : ""}`),
-        api.get<{ listeners?: ListenerRow[] }>(`/api/report/network${q ? "?" + q : ""}`),
-        api.get<{ findings?: FindingRow[] }>(`/api/report/findings${q ? "?" + q : ""}`),
-      ]);
-      setAgents(agentsResp.agents || []);
-      setTaskStats(tasksResp.stats || []);
-      setCreds(credsResp.credentials || []);
-      setListeners(netResp.listeners || []);
-      setFindings(findResp.findings || []);
-    } catch {
-      toast.error(t("report.toast.load_preview_failed"));
-    }
-  }, [computeDateRange, t]);
-
-  const loadHistory = useCallback(async () => {
-    try {
-      const data: { reports?: ReportHistoryRow[]; Reports?: ReportHistoryRow[] } = await api.get("/api/report/history");
-      setHistory(data.reports || []);
-    } catch {
-      toast.error(t("report.toast.load_history_failed"));
-    }
-  }, [t]);
-
-  const loadAll = useCallback(async () => {
-    setLoading(true);
-    await Promise.all([loadOverview(), loadPreview(), loadHistory()]);
-    setLoading(false);
-  }, [loadOverview, loadPreview, loadHistory]);
-
-  const loadScheduledReports = useCallback(async () => {
-    try {
-      const d: { reports?: ScheduledReport[] } = await api.get<{ reports?: ScheduledReport[] }>("/scheduled-reports");
-      setScheduledReports(d.reports || []);
-    } catch { toast.error(t("report.toast.load_scheduled_failed")); }
-  }, [t]);
-
-  useEffect(() => {
-    const ac = new AbortController();
-    loadAll();
-    loadScheduledReports();
-    return () => ac.abort();
-  }, [loadAll, loadScheduledReports]);
-  useVisibleInterval(loadOverview, 30000);
-
-  useEffect(() => {
-    if (!loading) loadPreview();
-  }, [datePreset, customStart, customEnd, loading, loadPreview]);
-
   const handleGenerate = async () => {
-    setGenerating(true);
-    try {
-      const { start, end } = computeDateRange();
-      let sections: string[];
-      if (template === "technical") {
-        sections = ["agents", "tasks", "credentials", "network", "recommendations"];
-      } else if (template === "executive") {
-        sections = ["overview", "recommendations"];
-      } else {
-        sections = SECTIONS.map((s) => s.key);
-      }
-      await api.postJson("/api/report/generate", { start_date: start, end_date: end, template, sections, format: "html" });
-      await loadHistory();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("report.toast.generate_failed"));
-    } finally {
-      setGenerating(false);
+    let sections: string[];
+    if (template === "technical") {
+      sections = ["agents", "tasks", "credentials", "network", "recommendations"];
+    } else if (template === "executive") {
+      sections = ["overview", "recommendations"];
+    } else {
+      sections = SECTIONS.map((s) => s.key);
     }
+    await generateReport(sections);
   };
 
   const handleExportPDF = () => {
-    const { start, end } = computeDateRange();
-    const params = new URLSearchParams({ format: "json" });
-    if (start) params.set("start", start);
-    if (end) params.set("end", end);
-    params.set("template", template);
-    window.open(`${API_BASE}/report/export/pdf?${params}`, "_blank");
+    window.open(`${API_BASE}${pdfExportUrl()}`, "_blank");
   };
 
   const handleDeleteReport = async (id: string) => {
-    try {
-      await api.del(`/api/report/${id}`);
-      loadHistory();
-    } catch {
-      toast.error(t("report.toast.delete_failed"));
-    }
-  };
-
-  const severityColor = (s: string) => {
-    if (s === "critical") return "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20";
-    if (s === "high") return "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20";
-    if (s === "medium") return "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20";
-    if (s === "low") return "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20";
-    return "bg-secondary/50 text-muted-foreground border-border";
+    await deleteReport(id);
   };
 
   if (loading) {
@@ -310,7 +136,7 @@ export default function ReportPage() {
               <TabsList className="flex-col bg-transparent p-0 gap-1 w-full h-auto">
                 {SECTIONS.map((s) => (
                   <TabsTrigger key={s.key} value={s.key}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-colors data-[selected]:bg-indigo-50 data-[selected]:dark:bg-indigo-900/20 data-[selected]:text-indigo-700 data-[selected]:dark:text-indigo-300 text-muted-foreground hover:bg-muted/50">
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-colors data-[selected]:bg-primary/10 data-[selected]:text-primary text-muted-foreground hover:bg-muted/50">
                     {s.icon}
                     {s.label}
                   </TabsTrigger>
@@ -328,7 +154,7 @@ export default function ReportPage() {
                   <Label className="text-sm font-medium mb-3">{t("report.report_template")}</Label>
                   <RadioGroup value={template} onValueChange={setTemplate} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {TEMPLATES.map((tpl) => (
-                      <div key={tpl.value} className={`flex flex-col items-start p-4 rounded-xl cursor-pointer transition-colors ${template === tpl.value ? "border-2 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20" : "border border-border hover:bg-muted/50"}`}>
+                      <div key={tpl.value} className={`flex flex-col items-start p-4 rounded-xl cursor-pointer transition-colors ${template === tpl.value ? "border-2 border-primary bg-primary/10" : "border border-border hover:bg-muted/50"}`}>
                         <div className="flex items-center space-x-2 mb-2">
                           <RadioGroupItem value={tpl.value} id={`tpl-${tpl.value}`} />
                           <Label htmlFor={`tpl-${tpl.value}`} className="text-sm font-medium text-foreground cursor-pointer">{tpl.label}</Label>
@@ -377,10 +203,10 @@ export default function ReportPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <a href={`${API_BASE}/report/${id}/download?format=html`} download className="p-2 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors">
+                              <a href={`${API_BASE}/report/${id}/download?format=html`} download className="p-2 text-primary hover:bg-primary/10 dark:hover:bg-primary/20 rounded-lg transition-colors">
                                 <Download className="w-4 h-4" />
                               </a>
-                              <Button variant="ghost" size="icon" onClick={() => handleDeleteReport(id)} className="text-destructive hover:bg-destructive/10" aria-label="Delete report">
+                              <Button variant="ghost" size="icon" onClick={() => handleDeleteReport(id)} className="text-destructive hover:bg-destructive/10" aria-label={t("report.a11y_delete")}>
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
@@ -492,7 +318,7 @@ export default function ReportPage() {
                     ) : creds.map((c) => (
                       <TableRow key={c.type}>
                         <TableCell className="font-medium">{c.type || "-"}</TableCell>
-                        <TableCell className="text-indigo-600 dark:text-indigo-400 font-semibold">{c.count ?? 0}</TableCell>
+                        <TableCell className="text-primary font-semibold">{c.count ?? 0}</TableCell>
                         <TableCell>{c.source || "-"}</TableCell>
                       </TableRow>
                     ))}
@@ -566,10 +392,10 @@ export default function ReportPage() {
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-sm font-medium text-foreground">{f.title || "-"}</span>
-                                  <Badge variant="outline" className={`text-(--font-size-micro-sm) ${severityColor(f.severity || "low")}`}>
+                                  <Badge variant="outline" className={`text-(--fs-micro-sm) ${severityColor(f.severity || "low")}`}>
                                     {(f.severity || "unknown").toUpperCase()}
                                   </Badge>
-                                  {f.cve_id && <Badge variant="secondary" className="text-(--font-size-micro-sm) font-mono">{f.cve_id}</Badge>}
+                                  {f.cve_id && <Badge variant="secondary" className="text-(--fs-micro-sm) font-mono">{f.cve_id}</Badge>}
                                 </div>
                               </div>
                             </div>
@@ -579,7 +405,7 @@ export default function ReportPage() {
                           <div className="space-y-2">
                             <p className="text-sm text-muted-foreground">{f.description || ""}</p>
                             {f.recommendation && (
-                              <p className="text-sm text-indigo-600 dark:text-indigo-400">
+                              <p className="text-sm text-primary">
                                 <Lightbulb className="w-4 h-4" />{t("report.recommendation_label")} {f.recommendation}
                               </p>
                             )}
@@ -599,7 +425,7 @@ export default function ReportPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label className="mb-1">{t("report.name")}</Label>
-                    <Input value={schedName} onChange={e => setSchedName(e.target.value)} placeholder="Daily Summary Report" />
+                    <Input value={schedName} onChange={e => setSchedName(e.target.value)} placeholder={t("report.sched_name_ph")} />
                   </div>
                   <div>
                     <Label className="mb-1">{t("report.schedule")}</Label>
@@ -631,7 +457,7 @@ export default function ReportPage() {
                   <div>
                     <Label className="mb-1">{t("report.delivery_method")}</Label>
                     <div className="flex gap-2">
-                      <Input value={schedDeliveryTo} onChange={e => setSchedDeliveryTo(e.target.value)} placeholder="Email / Webhook URL" className="flex-1" />
+                      <Input value={schedDeliveryTo} onChange={e => setSchedDeliveryTo(e.target.value)} placeholder={t("report.dest_ph")} className="flex-1" />
                       <Select value={schedDeliveryType} onValueChange={(v) => setSchedDeliveryType(v ?? "")}>
                         <SelectTrigger className="w-28">
                           <SelectValue />
@@ -650,8 +476,8 @@ export default function ReportPage() {
                   if (!schedName.trim()) return;
                   setCreatingSched(true);
                   try {
-                    const d: { success?: boolean; error?: string } = await api.postJson("/scheduled-reports", { name: schedName, schedule: schedSchedule, format: schedFormat, delivery_type: schedDeliveryType, delivery_to: schedDeliveryTo, include_agents: true, include_tasks: true, include_creds: true, include_audit: true });
-                     if (d.success) { setSchedName(""); loadScheduledReports(); toast.success(t("report.toast.scheduled_created")); }
+                    const d: { success?: boolean; error?: string } = await api.postJson(paths.report.scheduled, { name: schedName, schedule: schedSchedule, format: schedFormat, delivery_type: schedDeliveryType, delivery_to: schedDeliveryTo, include_agents: true, include_tasks: true, include_creds: true, include_audit: true });
+                     if (d.success) { setSchedName(""); void loadScheduledReports(); toast.success(t("report.toast.scheduled_created")); }
                    } catch { toast.error(t("report.toast.create_scheduled_failed")); }
                   setCreatingSched(false);
                 }} disabled={creatingSched} className="mt-4">{creatingSched ? "Creating..." : t("report.create_scheduled")}</Button>
@@ -678,12 +504,12 @@ export default function ReportPage() {
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm" onClick={async () => {
                           setSchedActionId(r.id);
-                          try { await api.post(`/scheduled-reports/${r.id}/toggle`); loadScheduledReports(); } catch { toast.error(t("report.toast.load_scheduled_failed")); }
+                          try { await api.post(paths.report.scheduledToggle(r.id)); void loadScheduledReports(); } catch { toast.error(t("report.toast.load_scheduled_failed")); }
                           setSchedActionId(null);
                         }} disabled={schedActionId === r.id} className={r.enabled ? "border-emerald-500 text-emerald-600" : ""}>{schedActionId === r.id ? "Toggling..." : r.enabled ? "Enabled" : "Disabled"}</Button>
                         <Button variant="outline" size="sm" onClick={async () => {
                           setSchedActionId(r.id);
-                          try { await api.del(`/scheduled-reports/${r.id}`); loadScheduledReports(); } catch { toast.error(t("report.toast.load_scheduled_failed")); }
+                          try { await api.del(paths.report.scheduledOne(r.id)); void loadScheduledReports(); } catch { toast.error(t("report.toast.load_scheduled_failed")); }
                           setSchedActionId(null);
                         }} disabled={schedActionId === r.id} className="border-destructive/30 text-destructive">{schedActionId === r.id ? "Deleting..." : "Delete"}</Button>
                       </div>

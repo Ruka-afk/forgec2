@@ -19,9 +19,11 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func (s *Server) handleSettingsPage(c *gin.Context) {
@@ -464,6 +466,15 @@ func (s *Server) handlePurgeAuditLogs(c *gin.Context) {
 }
 
 func (s *Server) handleRegenerateJWT(c *gin.Context) {
+	// Guard against silently breaking all loot/credential ciphertext. When no
+	// explicit crypto.loot_key is configured, the loot key is derived from the
+	// JWT secret, so rotating the JWT would make existing FC2ENC:/FC2EXT: data
+	// undecryptable after restart. Require an explicit loot key in that case.
+	if s.cfg.Crypto.LootKey == "" {
+		respondError(c, http.StatusConflict, "JWT rotation requires an explicit crypto.loot_key (see config.example.yaml) — otherwise all encrypted credentials/loot would become undecryptable")
+		return
+	}
+
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		slog.Error("Failed to generate JWT secret", "err", err)
@@ -480,30 +491,37 @@ func (s *Server) handleRegenerateJWT(c *gin.Context) {
 		return
 	}
 
-	var users []db.User
-	if err := s.db.Where("totp_secret != ''").Limit(500).Find(&users).Error; err != nil {
-		slog.Error("Settings: failed to query users for TOTP re-encrypt", "err", err)
-	}
-	for _, u := range users {
-		if u.TOTPSecret == "" {
-			continue
+	// Re-derive crypto keys in-process so the new JWT secret takes effect
+	// immediately (re-entrant, unlike the previous sync.Once behavior).
+	crypto.InitLootEncryption(s.cfg.Server.JWTSecret, s.cfg.Crypto.LootKey)
+	crypto.InitExtC2Encryption(s.cfg.Server.JWTSecret)
+
+	// Re-encrypt all TOTP secrets with the new JWT secret. Paginate without a
+	// hard limit so no 2FA user is locked out regardless of user count.
+	var batch []db.User
+	if err := s.db.Where("totp_secret != ''").FindInBatches(&batch, 100, func(tx *gorm.DB, batchIdx int) error {
+		for i := range batch {
+			u := &batch[i]
+			plaintext, err := decryptSecret(u.TOTPSecret, oldSecret)
+			if err != nil {
+				slog.Error("Failed to decrypt TOTP secret for re-encryption", "user_id", u.ID, "err", err)
+				continue
+			}
+			newEncrypted, err := encryptSecret(plaintext, s.cfg.Server.JWTSecret)
+			if err != nil {
+				slog.Error("Failed to re-encrypt TOTP secret", "user_id", u.ID, "err", err)
+				continue
+			}
+			if err := tx.Model(u).Update("totp_secret", newEncrypted).Error; err != nil {
+				slog.Error("Failed to update TOTP secret", "user_id", u.ID, "err", err)
+			}
 		}
-		plaintext, err := decryptSecret(u.TOTPSecret, oldSecret)
-		if err != nil {
-			slog.Error("Failed to decrypt TOTP secret for re-encryption", "user_id", u.ID, "err", err)
-			continue
-		}
-		newEncrypted, err := encryptSecret(plaintext, s.cfg.Server.JWTSecret)
-		if err != nil {
-			slog.Error("Failed to re-encrypt TOTP secret", "user_id", u.ID, "err", err)
-			continue
-		}
-		if err := s.db.Model(&u).Update("totp_secret", newEncrypted).Error; err != nil {
-			slog.Error("Failed to update TOTP secret", "user_id", u.ID, "err", err)
-		}
+		return nil
+	}).Error; err != nil {
+		slog.Error("Settings: failed to re-encrypt TOTP secrets", "err", err)
 	}
 
-	slog.Info("JWT secret regenerated, TOTP secrets re-encrypted")
+	slog.Info("JWT secret regenerated, crypto keys and TOTP secrets re-encrypted")
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "JWT secret regenerated successfully"})
 }
 

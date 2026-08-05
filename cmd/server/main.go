@@ -13,6 +13,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/forgec2/forgec2/internal/server"
 	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/forgec2/forgec2/internal/webdist"
@@ -76,6 +77,18 @@ func main() {
 	database, err := db.InitDBWithDriver(cfg.Database.Driver, cfg.Database.DSN, cfg.Database.Path, logLevel, cfg.Server.DBMaxOpenConns, cfg.Server.DBMaxIdleConns, cfg.Server.DBConnMaxLifetime, cfg.Auth.DefaultPasswd)
 	if err != nil {
 		slog.Error("Failed to initialize database", "err", err)
+		os.Exit(1)
+	}
+
+	// Persist the stager key under the configured data directory so stage
+	// tokens survive restarts regardless of the process working directory.
+	dataDir := cfg.Server.DataDir
+	if dataDir == "" {
+		dataDir = "data"
+	}
+	payload.SetStagerKeyFile(filepath.Join(dataDir, "stager.key"))
+	if err := payload.InitStagerKey(); err != nil {
+		slog.Error("Stager key initialization failed", "err", err)
 		os.Exit(1)
 	}
 

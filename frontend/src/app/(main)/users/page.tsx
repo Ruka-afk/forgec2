@@ -2,16 +2,21 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
-import { ConfirmModal, EmptyState, PageHeader, StatCard, StatusBadge, PageSpinner } from "@/components/UI";
+import { paths } from "@/lib/api-paths";
+import { firstField, normalizeListEnvelope } from "@/lib/envelope";
+import { ConfirmModal, EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/UI";
+import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/framework/SearchInput";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Ban, Check, Crown, Key, LogOut, Pencil, Plus, Trash2, User as UserIcon, Users } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
@@ -27,7 +32,7 @@ interface User {
 
 function getRoleBadge(role: string) {
   if (role === "admin")
-    return { icon: <Crown className="w-2.5 h-2.5" />, key: "users.role_admin", cls: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300" };
+    return { icon: <Crown className="w-2.5 h-2.5" />, key: "users.role_admin", cls: "bg-primary/10 text-primary dark:bg-primary/25 dark:text-primary" };
   return { icon: <UserIcon className="w-2.5 h-2.5" />, key: "users.role_user", cls: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" };
 }
 
@@ -38,6 +43,7 @@ export default function UsersPage() {
   const [showEdit, setShowEdit] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ username: "", password: "", role: "user" });
   const [role, setUserRole] = useState("admin");
   const [customRoles, setCustomRoles] = useState<string[]>([]);
@@ -49,21 +55,26 @@ export default function UsersPage() {
   const { t } = useI18n();
 
   const loadUsers = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const data = await api.get("/users") as Record<string, unknown>;
-      setUsers((data.users || []) as User[]);
-      if (data.UserRole) setUserRole(data.UserRole as string);
-    } catch {
+      const data = await api.get(paths.users.list);
+      setUsers(normalizeListEnvelope(data, ["users", "Users", "data"]) as User[]);
+      const role = firstField<string>(data, ["user_role", "UserRole", "CurrentUserRole"]);
+      if (role) setUserRole(String(role));
+    } catch (e) {
       setUsers([]);
-      toast.error(t("users.toast.load_failed"));
+      const msg = e instanceof Error ? e.message : t("users.toast.load_failed");
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
   }, [t]);
 
   useEffect(() => {
-    loadUsers();
-    api.get("/api/roles")
+    void loadUsers();
+    api.get(paths.roles.list)
       .then((d: Record<string, unknown>) => { if (d.success) setCustomRoles(((d.data as unknown[]) || []).map((r: unknown) => (r as { name: string }).name as string)); })
       .catch(() => toast.error(t("users.toast.load_roles_failed")));
   }, [loadUsers, t]);
@@ -83,7 +94,7 @@ export default function UsersPage() {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post("/users/add", form);
+      await api.post(paths.users.add, form);
       toast.success(t("users.toast.created"));
       setShowAdd(false);
       setForm({ username: "", password: "", role: "user" });
@@ -96,7 +107,7 @@ export default function UsersPage() {
     if (!editUser) return;
     try {
       const uid = editUser.id;
-      await api.post(`/users/${uid}/edit`, { username: form.username, role: form.role, ...(form.password ? { password: form.password } : {}) });
+      await api.post(paths.users.edit(String(uid)), { username: form.username, role: form.role, ...(form.password ? { password: form.password } : {}) });
       toast.success(t("users.toast.updated"));
       setShowEdit(false);
       setEditUser(null);
@@ -108,7 +119,7 @@ export default function UsersPage() {
     setCfm({msg: t("users.confirm.toggle"), cb: async () => {
       setActionLoading(id + "_toggle");
       try {
-        await api.post(`/users/${id}/toggle`, {});
+        await api.post(paths.users.toggle(id), {});
         toast.success(t("users.toast.toggle_success"));
         loadUsers();
       } catch { toast.error(t("users.toast.toggle_failed")); }
@@ -120,7 +131,7 @@ export default function UsersPage() {
     setCfm({msg: t("users.confirm.delete"), cb: async () => {
       setActionLoading(id + "_delete");
       try {
-        await api.del(`/users/${id}`);
+        await api.del(paths.users.one(id));
         toast.success(t("users.toast.deleted"));
         loadUsers();
       } catch { toast.error(t("users.toast.delete_failed")); }
@@ -132,7 +143,7 @@ export default function UsersPage() {
     e.preventDefault();
     if (!passwordUserId) return;
     try {
-      await api.post(`/users/${passwordUserId}/password`, { password: newPassword });
+      await api.post(paths.users.password(passwordUserId), { password: newPassword });
       toast.success(t("users.toast.password_updated"));
       setShowPasswordModal(false);
       setNewPassword("");
@@ -143,7 +154,7 @@ export default function UsersPage() {
   const handleForceLogout = (id: string) => {
     setCfm({msg: t("users.confirm.force_logout"), cb: async () => {
       try {
-        await api.post(`/users/${id}/force-logout`);
+        await api.post(paths.users.forceLogout(id));
         toast.success(t("users.toast.force_logout_success"));
       } catch { toast.error(t("users.toast.force_logout_failed")); }
     }});
@@ -152,20 +163,17 @@ export default function UsersPage() {
   const handleKick = (id: string) => {
     setCfm({msg: t("users.confirm.kick"), cb: async () => {
       try {
-        await api.post(`/users/${id}/force-logout`);
+        await api.post(paths.users.forceLogout(id));
         toast.success(t("users.toast.kick_success"));
       } catch { toast.error(t("users.toast.kick_failed")); }
     }});
   };
 
-  if (loading)
-    return <PageSpinner />;
-
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={<><Users className="w-4 h-4" />{t("users.title")}</>} subtitle={t("users.subtitle")}>
         <div className="flex items-center gap-2">
-          <Input placeholder={t("users.search_placeholder")} value={search} onChange={(e) => setSearch(e.target.value)} className="w-48" />
+          <SearchInput value={search} onChange={setSearch} placeholder={t("users.search_placeholder")} className="w-48" label={t("common.search")} />
           {role === "admin" && (
             <Button onClick={() => setShowAdd(true)}>
               <Plus className="w-4 h-4" /> {t("users.add_user")}
@@ -185,9 +193,9 @@ export default function UsersPage() {
         <Card className="p-4">
           <div className="flex items-center gap-2 mb-2">
             <Crown className="w-4 h-4" />
-            <span className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">{t("users.role_admin")}</span>
+            <span className="text-sm font-semibold text-primary dark:text-primary">{t("users.role_admin")}</span>
           </div>
-          <ul className="text-xs text-indigo-700 dark:text-indigo-400 space-y-1">
+          <ul className="text-xs text-primary space-y-1">
             <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.admin_desc_1")}</li>
             <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.admin_desc_2")}</li>
             <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.admin_desc_3")}</li>
@@ -214,6 +222,22 @@ export default function UsersPage() {
         </div>
       </div>
 
+      <DataState
+        loading={loading}
+        error={error}
+        onRetry={() => void loadUsers()}
+        empty={!loading && !error && users.length === 0}
+        emptyIcon={Users}
+        emptyTitle={t("users.empty_title")}
+        emptyMessage={t("users.empty_message")}
+        loadingSkeleton={
+          <Card className="p-4 space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </Card>
+        }
+      >
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
         <Table>
@@ -291,6 +315,7 @@ export default function UsersPage() {
         </Table>
         </div>
       </Card>
+      </DataState>
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="sm:max-w-md">
@@ -299,17 +324,17 @@ export default function UsersPage() {
           </DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
             <div>
-              <Label>{t("users.label_username")}</Label>
-              <Input type="text" required minLength={3} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+              <Label htmlFor="add-username">{t("users.label_username")}</Label>
+              <Input id="add-username" type="text" required minLength={3} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
             </div>
             <div>
-              <Label>{t("users.label_password")}</Label>
-              <Input type="password" required minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <Label htmlFor="add-password">{t("users.label_password")}</Label>
+              <Input id="add-password" type="password" required minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
             </div>
             <div>
-              <Label>{t("users.label_role")}</Label>
+              <Label htmlFor="add-role">{t("users.label_role")}</Label>
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v ?? "user" })}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="add-role" className="w-full">
                   <SelectValue placeholder={t("users.label_role")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -331,17 +356,17 @@ export default function UsersPage() {
           </DialogHeader>
           <form onSubmit={handleEdit} className="space-y-4">
             <div>
-              <Label>{t("users.label_username")}</Label>
-              <Input type="text" required minLength={3} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+              <Label htmlFor="edit-username">{t("users.label_username")}</Label>
+              <Input id="edit-username" type="text" required minLength={3} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
             </div>
             <div>
-              <Label>{t("users.label_password")}</Label>
-              <Input type="password" placeholder={t("users.placeholder.leave_blank")} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <Label htmlFor="edit-password">{t("users.label_password")}</Label>
+              <Input id="edit-password" type="password" placeholder={t("users.placeholder.leave_blank")} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
             </div>
             <div>
-              <Label>{t("users.label_role")}</Label>
+              <Label htmlFor="edit-role">{t("users.label_role")}</Label>
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v ?? "user" })}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="edit-role" className="w-full">
                   <SelectValue placeholder={t("users.label_role")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -366,8 +391,8 @@ export default function UsersPage() {
           </DialogHeader>
           <form onSubmit={handleSetPassword} className="space-y-4">
             <div>
-              <Label>{t("users.password_label")}</Label>
-              <Input type="password" required minLength={8} placeholder={t("users.password_placeholder")} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+              <Label htmlFor="pw-new">{t("users.password_label")}</Label>
+              <Input id="pw-new" type="password" required minLength={8} placeholder={t("users.password_placeholder")} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
             </div>
             <DialogFooter>
               <Button variant="outline" type="button" onClick={() => setShowPasswordModal(false)}>{t("users.btn.cancel")}</Button>

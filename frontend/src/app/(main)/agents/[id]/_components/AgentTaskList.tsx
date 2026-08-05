@@ -43,7 +43,7 @@ function getTaskTypeIcon(type: string): React.ReactNode {
 
 function getTaskTypeColor(type: string): string {
   switch (type) {
-    case "shell": return "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400";
+    case "shell": return "bg-primary/10 text-primary";
     case "screenshot": return "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400";
     case "ps": return "bg-muted text-muted-foreground";
     case "kill": return "bg-destructive/10 text-destructive";
@@ -73,7 +73,7 @@ export default function AgentTaskList({ tasks, agentId, expandedTaskId, onToggle
       <div className="h-1 w-full bg-gradient-to-r from-primary via-cyan-500 to-emerald-500" />
       <div className="px-4 py-3 flex items-center justify-between border-b border-border/70">
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><ListChecks className="w-3.5 h-3.5 text-primary" />{t("agents.tasklist_recent")}</h3>
-        <Link href={`/tasks?agent_id=${agentId}`} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">{t("agents.tasklist_view_all")} &rarr;</Link>
+        <Link href={`/tasks?agent_id=${agentId}`} className="text-xs text-primary hover:underline">{t("agents.tasklist_view_all")} &rarr;</Link>
       </div>
       <div className="divide-y divide-border/70">
         {tasks.slice(0, MAX_VISIBLE_TASKS).map((task, i) => {
@@ -97,12 +97,12 @@ export default function AgentTaskList({ tasks, agentId, expandedTaskId, onToggle
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-xs font-semibold text-foreground truncate">{tType}</span>
                           {(task.command) && (
-                            <span className="text-(--font-size-micro-sm) text-muted-foreground/70 font-mono truncate max-w-[220px]">
+                            <span className="text-(--fs-micro-sm) text-muted-foreground/70 font-mono truncate max-w-[220px]">
                               {command}
                             </span>
                           )}
                         </div>
-                        <div className="mt-1 flex items-center gap-2 text-(--font-size-micro-sm) text-muted-foreground/70">
+                        <div className="mt-1 flex items-center gap-2 text-(--fs-micro-sm) text-muted-foreground/70">
                           <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 font-mono">#{taskId}</span>
                           {task.created_by && <span className="truncate">{task.created_by}</span>}
                         </div>
@@ -112,7 +112,7 @@ export default function AgentTaskList({ tasks, agentId, expandedTaskId, onToggle
                       <StatusBadge status={task.status || "pending"} />
                       <Tooltip>
                         <TooltipTrigger>
-                          <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-1 text-(--font-size-micro-sm) text-muted-foreground/70 whitespace-nowrap">
+                          <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-1 text-(--fs-micro-sm) text-muted-foreground/70 whitespace-nowrap">
                             {(task.created_at) ? timeAgo(String(task.created_at)) : ""}
                           </span>
                         </TooltipTrigger>

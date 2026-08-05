@@ -1,8 +1,6 @@
 package server
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net"
@@ -10,6 +8,7 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
 )
 
@@ -203,12 +202,11 @@ func (s *Server) handleAPIStagerRegister(c *gin.Context) {
 		return
 	}
 
-	buf := make([]byte, 32)
-	if _, err := rand.Read(buf); err != nil {
+	tokenHex, sig, keyHex, err := payload.NewStageToken()
+	if err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Domain front operation"))
 		return
 	}
-	tokenHex := hex.EncodeToString(buf)
 
 	expiresAt := time.Now().Add(time.Duration(req.TTLMinutes) * time.Minute)
 	st := db.StagerToken{
@@ -229,10 +227,12 @@ func (s *Server) handleAPIStagerRegister(c *gin.Context) {
 	if scheme == "" {
 		scheme = "http"
 	}
-	stagerURL := fmt.Sprintf("%s://%s:%d/stage/%s", scheme, listener.Host, listener.Port, tokenHex)
+	stagerURL := fmt.Sprintf("%s://%s:%d/stage/%s?s=%s", scheme, listener.Host, listener.Port, tokenHex, sig)
 
 	respond(c, gin.H{
 		"token":       tokenHex,
+		"sig":         sig,
+		"key":         keyHex,
 		"stager_url":  stagerURL,
 		"stage2_size": 0,
 		"expires_at":  expiresAt.Format(time.RFC3339),

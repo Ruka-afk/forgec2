@@ -31,6 +31,7 @@ func (s *Server) registerPublicRoutes() {
 	s.router.GET("/ws", wsRateLimiter.Limit(), s.handleWebSocket)
 	s.router.GET("/ws/beacon", wsRateLimiter.Limit(), s.handleWebSocketBeacon)
 	s.router.GET("/extc2/ws", wsRateLimiter.Limit(), s.handleExternalC2WebSocket)
+	s.router.GET("/ws/operator", wsRateLimiter.Limit(), s.handleOperatorWS)
 }
 
 // registerAgentRoutes registers dashboard, search, and agent CRUD routes.
@@ -38,7 +39,9 @@ func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 	auth.GET("/", s.handleDashboard)
 	auth.GET("/dashboard", s.handleDashboard)
 	auth.GET("/search", s.handleSearchPage)
-	auth.GET("/api/search", s.handleAPISearch)
+	// Search indexes agents, tasks and credentials (decrypted in results):
+	// require both read permissions.
+	auth.GET("/api/search", middleware.RequireAllPermissions(db.PermAgentsRead, db.PermCredsRead), s.handleAPISearch)
 
 	agentsRead := auth.Group("/")
 	agentsRead.Use(middleware.RequirePermission(db.PermAgentsRead))
@@ -259,11 +262,13 @@ func (s *Server) registerListenerRoutes(auth *gin.RouterGroup) {
 	}
 
 	auth.GET("/infrastructure", s.handleInfrastructurePage)
-	auth.POST("/infrastructure/generate/nginx", s.handleGenerateNginx)
-	auth.POST("/infrastructure/generate/apache", s.handleGenerateApache)
-	auth.POST("/infrastructure/generate/haproxy", s.handleGenerateHAProxy)
-	auth.POST("/infrastructure/acme/provision", s.handleACMECertProvision)
-	auth.GET("/infrastructure/profile/export", s.handleProfileExport)
+	auth.POST("/infrastructure/generate/nginx", middleware.RequirePermission(db.PermSettingsWrite), s.handleGenerateNginx)
+	auth.POST("/infrastructure/generate/apache", middleware.RequirePermission(db.PermSettingsWrite), s.handleGenerateApache)
+	auth.POST("/infrastructure/generate/haproxy", middleware.RequirePermission(db.PermSettingsWrite), s.handleGenerateHAProxy)
+	// ACME provisioning writes certificates to disk and makes outbound network
+	// requests — admin-only.
+	auth.POST("/infrastructure/acme/provision", middleware.RequireRole(db.RoleAdmin), s.handleACMECertProvision)
+	auth.GET("/infrastructure/profile/export", middleware.RequirePermission(db.PermSettingsWrite), s.handleProfileExport)
 }
 
 // registerReconRoutes registers pivoting, topology, loot, scanner, toolkit, timeline, report, lateral, templates, audit routes.
@@ -338,7 +343,9 @@ func (s *Server) registerDebugRoutes(auth *gin.RouterGroup) {
 	}
 	if s.cfg.Server.EnablePprof {
 		pprofGroup := auth.Group("/debug/pprof")
-		pprofGroup.Use(middleware.RequirePermission(db.PermSettingsWrite))
+		// pprof dumps process memory (JWT secret, loot keys, decrypted
+		// credentials) — admin only.
+		pprofGroup.Use(middleware.RequireRole(db.RoleAdmin))
 		pprofGroup.GET("/", func(c *gin.Context) { pprof.Index(c.Writer, c.Request) })
 		pprofGroup.GET("/cmdline", func(c *gin.Context) { pprof.Cmdline(c.Writer, c.Request) })
 		pprofGroup.GET("/profile", func(c *gin.Context) { pprof.Profile(c.Writer, c.Request) })
@@ -360,6 +367,9 @@ func (s *Server) registerSettingsRoutes(auth *gin.RouterGroup) {
 		settingsRead.GET("/settings", s.handleSettingsPage)
 		settingsRead.GET("/settings/webhooks", s.handleGetSettingsWebhooks)
 		settingsRead.GET("/api/modules", s.handleModulesList)
+		// The beacon PSK lets the holder mint authenticating implants: gate it
+		// to roles that can actually build payloads.
+		settingsRead.GET("/settings/beacon-key", middleware.RequirePermission(db.PermAgentsWrite), s.handleGetBeaconKey)
 	}
 	settingsWrite := auth.Group("/")
 	settingsWrite.Use(middleware.RequirePermission(db.PermSettingsWrite))
@@ -369,21 +379,25 @@ func (s *Server) registerSettingsRoutes(auth *gin.RouterGroup) {
 		settingsWrite.POST("/settings/server", s.handleSaveServerConfig)
 		settingsWrite.POST("/settings/malleable", s.handleSaveMalleableProfile)
 		settingsWrite.POST("/config/reload", s.handleConfigReload)
-		settingsWrite.POST("/settings/purge/tasks", s.handlePurgeTasks)
-		settingsWrite.POST("/settings/purge/audit", s.handlePurgeAuditLogs)
-		settingsWrite.POST("/settings/jwt/regenerate", s.handleRegenerateJWT)
+		// Destructive / team-wide actions are admin-only.
+		settingsWrite.POST("/settings/purge/tasks", middleware.RequireRole(db.RoleAdmin), s.handlePurgeTasks)
+		settingsWrite.POST("/settings/purge/audit", middleware.RequireRole(db.RoleAdmin), s.handlePurgeAuditLogs)
+		settingsWrite.POST("/settings/jwt/regenerate", middleware.RequireRole(db.RoleAdmin), s.handleRegenerateJWT)
 		settingsWrite.POST("/settings/db/vacuum", s.handleDBVacuum)
 		settingsWrite.POST("/settings/db/backup", s.handleDBBackup)
-		settingsWrite.GET("/settings/db/backups", s.handleDBBackupList)
-		settingsWrite.GET("/settings/db/backups/download", s.handleDBBackupDownload)
-		settingsWrite.POST("/settings/db/restore", s.handleDBRestore)
+		// The raw database contains every secret (users, TOTP, API-key hashes,
+		// encrypted creds) and restore swaps the live DB — admin only.
+		settingsWrite.GET("/settings/db/backups", middleware.RequireRole(db.RoleAdmin), s.handleDBBackupList)
+		settingsWrite.GET("/settings/db/backups/download", middleware.RequireRole(db.RoleAdmin), s.handleDBBackupDownload)
+		settingsWrite.POST("/settings/db/restore", middleware.RequireRole(db.RoleAdmin), s.handleDBRestore)
 		settingsWrite.GET("/settings/config/download", s.handleDownloadConfig)
 		settingsWrite.POST("/settings/webhooks", s.handleSaveSettingsWebhooks)
 		settingsWrite.POST("/settings/webhooks/test", s.handleTestSettingsWebhook)
 
 		settingsWrite.POST("/settings/maintenance/purge", s.handleSettingsMaintenancePurge)
 
-		settingsWrite.POST("/admin/emergency-stop", s.handleEmergencyStop)
+		// Mass agent self-destruct — admin only.
+		settingsWrite.POST("/admin/emergency-stop", middleware.RequireRole(db.RoleAdmin), s.handleEmergencyStop)
 		settingsWrite.GET("/admin/emergency-status", s.handleEmergencyStatus)
 
 		settingsWrite.POST("/settings/totp/generate", s.handleTOTPGenerate)
@@ -415,7 +429,8 @@ func (s *Server) registerExtendedRoutes(auth *gin.RouterGroup) {
 	{
 		extRead.GET("/packer/templates", s.handleAPIPackerTemplates)
 		extRead.GET("/packer/info", s.handleAPIPackerInfo)
-		extRead.GET("/api/settings", s.handleAPISettings)
+		// Exposes server configuration internals — settings.read.
+		extRead.GET("/api/settings", middleware.RequirePermission(db.PermSettingsRead), s.handleAPISettings)
 		extRead.GET("/mesh/topology", s.handleAPIMeshTopology)
 		extRead.GET("/translations/stats", s.handleAPITranslationsStats)
 		extRead.GET("/api/privesc/results", s.handleAPIPrivesc)
@@ -615,8 +630,8 @@ func (s *Server) registerMiscRoutes(auth *gin.RouterGroup) {
 		miscWrite.POST("/api/agents/:id/profile-rotate", s.handleProfileRotate)
 	}
 
-	s.router.GET("/stage/:xorKey", s.handleServeStage)
-	s.router.GET("/screenshots/:agent_id/:filename", middleware.AuthRequired(s.db), s.handleServeScreenshot)
+	s.router.GET("/stage/:token", s.handleServeStage)
+	s.router.GET("/screenshots/:agent_id/:filename", middleware.AuthRequired(s.db), middleware.RequirePermission(db.PermAgentsRead), s.handleServeScreenshot)
 }
 
 // registerAutomationRoutes registers automation rules and BOF repository routes.

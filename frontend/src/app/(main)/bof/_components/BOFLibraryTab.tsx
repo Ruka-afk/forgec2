@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Cpu, Layers, Play, Trash2, Upload, User } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 interface BOFLibraryTabProps {
   libraryItems: BOFLibraryItem[];
@@ -23,6 +24,7 @@ interface BOFLibraryTabProps {
 }
 
 export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadLibrary, onRunLibrary, onDeleteLibrary }: BOFLibraryTabProps) {
+  const { t } = useI18n();
   const [showLibUpload, setShowLibUpload] = useState(false);
   const [showLibRun, setShowLibRun] = useState(false);
   const [libUploadName, setLibUploadName] = useState("");
@@ -68,18 +70,18 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
       <div className="flex justify-end mb-4">
         <Button onClick={() => setShowLibUpload(true)}>
           <Upload className="w-4 h-4" />
-          Upload to Library
+          {t("bof.upload_library_title")}
         </Button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Card className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/20 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-primary/10 dark:bg-primary/15 rounded-xl flex items-center justify-center">
             <Layers className="w-4 h-4" />
           </div>
           <div>
             <div className="text-xl font-bold text-foreground">{libraryItems.length}</div>
-            <div className="text-xs text-muted-foreground">Library BOFs</div>
+            <div className="text-xs text-muted-foreground">{t("bof.library_bofs")}</div>
           </div>
         </Card>
         <Card className="p-4 flex items-center gap-3">
@@ -88,7 +90,7 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
           </div>
           <div>
             <div className="text-xl font-bold text-foreground">{libraryItems.filter((i) => i.arch === "x64").length}</div>
-            <div className="text-xs text-muted-foreground">x64 BOFs</div>
+            <div className="text-xs text-muted-foreground">{t("bof.stat_x64")}</div>
           </div>
         </Card>
         <Card className="p-4 flex items-center gap-3">
@@ -97,7 +99,7 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
           </div>
           <div>
             <div className="text-xl font-bold text-foreground">{new Set(libraryItems.map((i) => i.author).filter(Boolean)).size}</div>
-            <div className="text-xs text-muted-foreground">Authors</div>
+            <div className="text-xs text-muted-foreground">{t("bof.authors")}</div>
           </div>
         </Card>
       </div>
@@ -107,13 +109,13 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
           <Table>
             <TableHeader>
               <TableRow className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <TableHead className="px-5 py-3">Name</TableHead>
-                <TableHead className="px-5 py-3">Description</TableHead>
-                <TableHead className="px-5 py-3">Arch</TableHead>
-                <TableHead className="px-5 py-3">Author</TableHead>
-                <TableHead className="px-5 py-3">Size</TableHead>
-                <TableHead className="px-5 py-3">Uploaded</TableHead>
-                <TableHead className="px-5 py-3 text-right">Actions</TableHead>
+                <TableHead className="px-5 py-3">{t("bof.col_name")}</TableHead>
+                <TableHead className="px-5 py-3">{t("bof.col_description")}</TableHead>
+                <TableHead className="px-5 py-3">{t("bof.col_arch")}</TableHead>
+                <TableHead className="px-5 py-3">{t("bof.col_author")}</TableHead>
+                <TableHead className="px-5 py-3">{t("bof.col_size")}</TableHead>
+                <TableHead className="px-5 py-3">{t("bof.col_uploaded")}</TableHead>
+                <TableHead className="px-5 py-3 text-right">{t("bof.col_actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -121,10 +123,10 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
                 const itemId = item.id ?? 0;
                 return (
                   <TableRow key={String(itemId)}>
-                    <TableCell className="px-5 py-3 font-medium text-foreground">{item.name || "Unnamed"}</TableCell>
+                    <TableCell className="px-5 py-3 font-medium text-foreground">{item.name || t("bof.unnamed")}</TableCell>
                     <TableCell className="px-5 py-3 text-muted-foreground max-w-xs truncate">{item.description || "-"}</TableCell>
                     <TableCell className="px-5 py-3">
-                      <Badge variant="secondary" className="text-(--font-size-micro-sm) font-mono">{item.arch || "x64"}</Badge>
+                      <Badge variant="secondary" className="text-(--fs-micro-sm) font-mono">{item.arch || "x64"}</Badge>
                     </TableCell>
                     <TableCell className="px-5 py-3 text-muted-foreground">{item.author || "-"}</TableCell>
                     <TableCell className="px-5 py-3 text-muted-foreground">{formatBytes(item.size)}</TableCell>
@@ -140,9 +142,9 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
                           }}
                           className="px-3 py-1.5 text-xs bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-lg border border-emerald-200 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
                         >
-                          <Play className="w-4 h-4" />Execute
+                          <Play className="w-4 h-4" />{t("bof.run")}
                         </Button>
-                        <Button onClick={() => onDeleteLibrary(itemId)} className="px-3 py-1.5 text-xs bg-destructive/10 text-destructive rounded-lg border border-destructive/20 hover:bg-destructive/10 transition-colors">
+                        <Button onClick={() => onDeleteLibrary(itemId)} aria-label={t("common.delete")} className="px-3 py-1.5 text-xs bg-destructive/10 text-destructive rounded-lg border border-destructive/20 hover:bg-destructive/10 transition-colors">
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -155,8 +157,8 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
         ) : (
           <div className="text-center py-12 text-muted-foreground">
             <Layers className="w-4 h-4" />
-            <p>No BOFs in library</p>
-            <p className="text-xs mt-1">Upload BOFs with arch/author metadata</p>
+            <p>{t("bof.no_files")}</p>
+            <p className="text-xs mt-1">{t("bof.no_files_lib_hint")}</p>
           </div>
         )}
       </Card>
@@ -164,33 +166,33 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
       <Dialog open={showLibUpload} onOpenChange={setShowLibUpload}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Upload to BOF Library</DialogTitle>
+            <DialogTitle>{t("bof.upload_library_title")}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleLibUpload} className="space-y-4">
             <div>
-              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">BOF File (.o)</span>
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.bof_file")} (.o)</span>
               <input
                 type="file"
                 accept=".o"
                 onChange={(e) => setLibUploadFile(e.target.files?.[0] || null)}
                 required
-                aria-label="BOF file"
-                className="w-full bg-muted border border-border rounded-xl px-4 h-10 text-sm file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-indigo-50 file:text-indigo-600 dark:file:bg-indigo-900/20 dark:file:text-indigo-400"
+                aria-label={t("bof.bof_file")}
+                className="w-full bg-muted border border-border rounded-xl px-4 h-10 text-sm file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary/10 file:text-primary dark:file:bg-primary/20 dark:file:text-primary"
               />
             </div>
             <div>
-              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Name</span>
-              <Input placeholder="BOF name" required value={libUploadName} onChange={(e) => setLibUploadName(e.target.value)} className="w-full h-10" />
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.name")}</span>
+              <Input aria-label={t("bof.bof_name")} placeholder={t("bof.bof_name")} required value={libUploadName} onChange={(e) => setLibUploadName(e.target.value)} className="w-full h-10" />
             </div>
             <div>
-              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Description</span>
-              <Input placeholder="Brief description" value={libUploadDesc} onChange={(e) => setLibUploadDesc(e.target.value)} className="w-full h-10" />
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.description")}</span>
+              <Input aria-label={t("bof.description")} placeholder={t("bof.brief_desc")} value={libUploadDesc} onChange={(e) => setLibUploadDesc(e.target.value)} className="w-full h-10" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Architecture</span>
+                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.architecture")}</span>
                 <Select value={libUploadArch} onValueChange={(v) => setLibUploadArch(v ?? "")}>
-                  <SelectTrigger className="w-full h-10">
+                  <SelectTrigger aria-label={t("bof.architecture")} className="w-full h-10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -201,13 +203,13 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
                 </Select>
               </div>
               <div>
-                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Author</span>
-                <Input placeholder="Author name" value={libUploadAuthor} onChange={(e) => setLibUploadAuthor(e.target.value)} className="w-full h-10" />
+                <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.author")}</span>
+                <Input aria-label={t("bof.author")} placeholder={t("bof.author_placeholder")} value={libUploadAuthor} onChange={(e) => setLibUploadAuthor(e.target.value)} className="w-full h-10" />
               </div>
             </div>
             <DialogFooter>
               <Button type="submit" className="w-full h-10 rounded-xl text-sm font-medium transition-colors">
-                Upload to Library
+                {t("bof.upload_library_title")}
               </Button>
             </DialogFooter>
           </form>
@@ -217,14 +219,14 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
       <Dialog open={showLibRun} onOpenChange={setShowLibRun}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Execute BOF from Library</DialogTitle>
+            <DialogTitle>{t("bof.execute_library_title")}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleLibExecute} className="space-y-4">
             <div>
-              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Agent</span>
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.agent")}</span>
               <Select value={libRunAgent} onValueChange={(v) => setLibRunAgent(v ?? "")}>
-                <SelectTrigger className="w-full h-10">
-                  <SelectValue placeholder="Select Agent..." />
+                <SelectTrigger aria-label={t("bof.agent")} className="w-full h-10">
+                  <SelectValue placeholder={t("bof.select_agent")} />
                 </SelectTrigger>
                 <SelectContent>
                   {agents.map((a: { id: string; hostname: string }) => (
@@ -236,12 +238,12 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
               </Select>
             </div>
             <div>
-              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Arguments</span>
-              <Input placeholder="BOF arguments" value={libRunArgs} onChange={(e) => setLibRunArgs(e.target.value)} className="w-full h-10 font-mono" />
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.arguments")}</span>
+              <Input aria-label={t("bof.bof_args")} placeholder={t("bof.bof_args")} value={libRunArgs} onChange={(e) => setLibRunArgs(e.target.value)} className="w-full h-10 font-mono" />
             </div>
             <DialogFooter>
-              <Button type="submit" className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 rounded-xl text-sm text-white font-medium transition-colors">
-                Execute
+              <Button type="submit" className="w-full h-10 rounded-xl text-sm font-medium transition-colors">
+                {t("bof.run")}
               </Button>
             </DialogFooter>
           </form>

@@ -177,13 +177,14 @@ const SidebarLogo = memo(function SidebarLogo({
         className={`flex items-center gap-x-2.5 hover:opacity-80 transition-all duration-200 ${collapsed ? 'justify-center w-full' : ''}`}
         aria-label={collapsed ? expandLabel : collapseLabel}
         aria-expanded={!collapsed}>
-        <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/25 shrink-0">
-          <Shield className="w-4 h-4 text-white" />
+        <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary/75 rounded-xl flex items-center justify-center shadow-lg shadow-primary/25 ring-1 ring-primary/20 shrink-0">
+          <Shield className="w-4 h-4 text-primary-foreground" />
         </div>
         {!collapsed && (
-          <div className="text-left">
-            <span className="font-bold text-xs tracking-tight text-foreground">Forge</span>
-            <span className="font-bold text-xs tracking-tight text-primary">C2</span>
+          <div className="text-left leading-tight">
+            <span className="font-bold text-xs tracking-tight text-foreground font-mono">Forge</span>
+            <span className="font-bold text-xs tracking-tight text-primary font-mono">C2</span>
+            <div className="mono-eyebrow text-muted-foreground/50">net · ops</div>
           </div>
         )}
       </Button>
@@ -218,22 +219,20 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
     : navSections;
 
   return (
-    <nav className={collapsed ? 'flex flex-col items-center gap-1' : 'space-y-0 text-(--font-size-body-sm)'}>
-      {filteredSections.map((section) => (
+    <nav className={collapsed ? 'flex flex-col items-center gap-1' : 'space-y-0 text-(--fs-body-sm)'}>
+      {filteredSections.map((section, idx) => (
         <div key={section.titleKey} className={collapsed ? 'w-full' : ''}>
           {!collapsed && (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => toggleSection(section.titleKey)}
-              className="w-full flex items-center gap-x-1 px-2 pt-1 pb-0.5 cursor-pointer select-none transition-colors hover:text-foreground justify-start"
+              className={`w-full flex items-center gap-x-1 px-2 pt-1 pb-0.5 cursor-pointer select-none transition-colors hover:text-foreground justify-start ${idx > 0 ? 'mt-2.5 border-t border-border/40 pt-2.5' : ''}`}
             >
               <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform duration-200 ${(searching || sections[section.titleKey]) ? '' : '-rotate-90'}`} />
-              <span className="text-(--font-size-micro) uppercase tracking-(--tracking-label) text-muted-foreground/60 font-semibold">
-                {t("section." + section.titleKey)}
-              </span>
+              <span className="mono-eyebrow text-muted-foreground/60">{t("section." + section.titleKey)}</span>
               {section.titleKey === "lab" && (
-                <Badge variant="secondary" className="ml-auto px-1.5 py-px text-(--font-size-micro) leading-none rounded bg-warning/15 text-warning-foreground font-medium">
+                <Badge variant="secondary" className="ml-auto px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/15 text-warning-foreground font-medium">
                   {t("section.lab_badge")}
                 </Badge>
               )}
@@ -248,8 +247,8 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
                 className={`flex items-center gap-x-2.5 rounded-lg transition-all duration-150 hover:translate-x-0.5 ${collapsed ? 'group relative' : ''}
                   ${collapsed ? 'justify-center px-0 py-2 mx-auto w-10 h-10' : 'px-2 py-1'}
                   ${isActive(item.href)
-                    ? 'bg-primary/10 text-primary font-medium border-l-2 border-primary shadow-sm'
-                    : 'text-muted-foreground hover:bg-secondary/80 hover:text-foreground'}`}
+                    ? 'bg-primary/12 text-primary font-medium border-l-2 border-primary shadow-sm'
+                    : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}`}
               >
                 <span className="relative inline-flex">
                   <Icon className={collapsed ? 'w-5 h-5' : 'w-4 h-4'} />
@@ -262,14 +261,14 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
                 </span>
                 {!collapsed && (
                   <>
-                    <span className="truncate flex-1 text-(--font-size-micro-sm)">{t(item.labelKey)}</span>
+                    <span className="truncate flex-1 text-xs">{t(item.labelKey)}</span>
                     {item.badge === "agents" && stats != null && (
-                      <Badge variant="secondary" className="px-1.5 py-px text-(--font-size-micro) leading-none rounded bg-primary/20 text-primary font-mono">
+                      <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-primary/20 text-primary font-mono">
                         {stats.online_agents ?? 0}
                       </Badge>
                     )}
                     {item.badge === "listeners" && stats != null && (
-                      <Badge variant="secondary" className="px-1.5 py-px text-(--font-size-micro) leading-none rounded bg-primary/10 text-primary font-mono">
+                      <Badge variant="secondary" className="px-1.5 py-px text-(--fs-micro) leading-none rounded bg-primary/10 text-primary font-mono">
                         {stats.total_listeners ?? 0}
                       </Badge>
                     )}
@@ -299,30 +298,30 @@ const SidebarFooter = memo(function SidebarFooter({ collapsed, connected, reconn
   t: (key: string, params?: Record<string, string | number>) => string;
 }) {
   return (
-    <div className={`border-t border-border ${collapsed ? 'px-2 py-2' : 'px-3 py-2'} space-y-1.5`}>
+    <div className={`border-t border-border/60 ${collapsed ? 'px-2 py-2' : 'px-3 py-2.5'} space-y-2`}>
       {!collapsed && connected && (
         <div className="space-y-1">
-          <div className="text-(--font-size-micro-sm) uppercase tracking-wider text-muted-foreground/70 font-semibold">{t("sidebar.online_operators")}</div>
+          <div className="mono-eyebrow text-muted-foreground/50">{t("sidebar.online_operators")}</div>
           {currentUsername && (
-            <div className="flex items-center gap-x-2 text-(--font-size-xs-sm) text-foreground font-medium">
+            <div className="flex items-center gap-x-2 text-(--fs-xs-sm) text-foreground font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
-              <span className="truncate">{t("sidebar.current_operator", { username: currentUsername })}</span>
+              <span className="truncate mono-cell">{t("sidebar.current_operator", { username: currentUsername })}</span>
             </div>
           )}
           {onlineUsers.filter((u) => u.username !== currentUsername).map((u) => (
-            <div key={u.username} className="flex items-center gap-x-2 text-(--font-size-xs-sm) text-muted-foreground">
+            <div key={u.username} className="flex items-center gap-x-2 text-(--fs-xs-sm) text-muted-foreground">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
               <span className="truncate">{u.username}</span>
             </div>
           ))}
         </div>
       )}
-      <div className="flex items-center gap-x-2">
+      <div className="flex items-center gap-x-2 rounded-md bg-secondary/50 dark:bg-secondary/30 border border-border/40 px-2 py-1.5">
         <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : reconnectFailed ? "bg-red-500" : "bg-amber-500 animate-pulse"}`} />
-        <span className="text-(--font-size-micro-sm) text-muted-foreground/70">
+        <span className="mono-cell text-(--fs-micro-sm) text-muted-foreground/80">
           {connected ? t("common.live") : t("common.disconnected")}
         </span>
-        {!connected && <span className={`ml-auto text-(--font-size-micro) font-medium ${reconnectFailed ? "text-destructive" : "text-amber-500"}`}>{reconnectFailed ? t("sidebar.offline") : t("sidebar.reconnecting")}</span>}
+        {!connected && <span className={`ml-auto text-(--fs-micro) font-medium ${reconnectFailed ? "text-destructive" : "text-amber-500"}`}>{reconnectFailed ? t("sidebar.offline") : t("sidebar.reconnecting")}</span>}
       </div>
     </div>
   );
@@ -407,7 +406,7 @@ export default function Sidebar() {
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t("common.search") + "..."}
             aria-label={t("common.search")}
-            className="w-full h-8 px-2.5 text-[11px] bg-secondary/50 border border-border rounded-xl placeholder:text-muted-foreground/70 focus:bg-card focus:border-border transition-colors"
+            className="w-full h-8 px-2.5 text-(--fs-xs-sm) bg-secondary/50 border border-border rounded-xl placeholder:text-muted-foreground/70 focus:bg-card focus:border-border transition-colors"
           />
         </div>
       )}

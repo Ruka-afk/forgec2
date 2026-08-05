@@ -3,6 +3,7 @@
 import { toast } from "sonner";
 import { useState, useMemo, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { downloadText } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { PageHeader } from "@/components/UI";
@@ -10,6 +11,7 @@ import { DataState } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/framework/SearchInput";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -60,7 +62,7 @@ export default function CredentialsPage() {
   const handleAdd = async () => {
     if (!form.username) return showToastNotify(t("cred.toast.username_required"), "error");
     try {
-      await api.post("/credentials/add", {
+      await api.post(paths.credentials.add, {
         domain: form.domain,
         username: form.username,
         password: form.password,
@@ -85,7 +87,7 @@ export default function CredentialsPage() {
       const body: Record<string, string> = {};
       if (form.tags) body.tags = form.tags;
       if (form.notes) body.notes = form.notes;
-      await api.put(`/credentials/${editTarget.id}`, body);
+      await api.put(paths.credentials.one(editTarget.id), body);
       showToastNotify(t("cred.toast.updated"), "success");
       setShowEditModal(false);
       setEditTarget(null);
@@ -100,7 +102,7 @@ export default function CredentialsPage() {
 
   const handleDelete = useCallback(async (id: string) => {
     try {
-      await api.del(`/credentials/${id}`);
+      await api.del(paths.credentials.one(id));
       showToastNotify(t("cred.toast.deleted"), "success");
       setShowDeleteConfirm(null);
       loadData();
@@ -111,7 +113,7 @@ export default function CredentialsPage() {
 
   const handleToggleConfirm = useCallback(async (entry: VaultEntry) => {
     try {
-      await api.post(`/credentials/${entry.id}/confirm`);
+      await api.post(paths.credentials.confirm(entry.id));
       loadData();
     } catch { toast.error(t("cred.toast.confirm_failed")); }
   }, [loadData, t]);
@@ -119,7 +121,7 @@ export default function CredentialsPage() {
   const handleBatchTags = async () => {
     if (!batchTags || selectedIds.size === 0) return;
     try {
-      await api.postJson("/credentials/batch/tags", {
+      await api.postJson(paths.credentials.batchTags, {
         ids: Array.from(selectedIds).map((id) => Number(id)),
         tags: batchTags.split(",").map((tag) => tag.trim()).filter(Boolean),
       });
@@ -281,11 +283,13 @@ export default function CredentialsPage() {
 
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex flex-wrap items-center gap-3">
-          <Input
+          <SearchInput
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={setSearchQuery}
+            onClear={() => setSearchQuery("")}
             placeholder={t("cred.search_placeholder")}
             className="flex-1 min-w-[200px]"
+            label={t("common.search")}
           />
           <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v ?? "")}>
             <SelectTrigger className="w-[140px]">
@@ -445,37 +449,42 @@ export default function CredentialsPage() {
                 </Select>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_username")} *</Label>
+                <Label htmlFor="add-cred-username" className="text-xs text-muted-foreground block mb-1">{t("cred.field_username")} *</Label>
                 <Input
+                  id="add-cred-username"
                   value={form.username}
                   onChange={e => setForm({ ...form, username: e.target.value })}
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_password")}</Label>
+                <Label htmlFor="add-cred-password" className="text-xs text-muted-foreground block mb-1">{t("cred.field_password")}</Label>
                 <Input
+                  id="add-cred-password"
                   value={form.password}
                   onChange={e => setForm({ ...form, password: e.target.value })}
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_domain")}</Label>
+                <Label htmlFor="add-cred-domain" className="text-xs text-muted-foreground block mb-1">{t("cred.field_domain")}</Label>
                 <Input
+                  id="add-cred-domain"
                   value={form.domain}
                   onChange={e => setForm({ ...form, domain: e.target.value })}
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_source")}</Label>
+                <Label htmlFor="add-cred-source" className="text-xs text-muted-foreground block mb-1">{t("cred.field_source")}</Label>
                 <Input
+                  id="add-cred-source"
                   value={form.source}
                   onChange={e => setForm({ ...form, source: e.target.value })}
                   placeholder={t("cred.ph_source")}
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_hash")}</Label>
+                <Label htmlFor="add-cred-hash" className="text-xs text-muted-foreground block mb-1">{t("cred.field_hash")}</Label>
                 <Input
+                  id="add-cred-hash"
                   value={form.hash}
                   onChange={e => setForm({ ...form, hash: e.target.value })}
                   className="font-mono text-xs"
@@ -483,16 +492,18 @@ export default function CredentialsPage() {
               </div>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_tags")}</Label>
+              <Label htmlFor="add-cred-tags" className="text-xs text-muted-foreground block mb-1">{t("cred.field_tags")}</Label>
               <Input
+                id="add-cred-tags"
                 value={form.tags}
                 onChange={e => setForm({ ...form, tags: e.target.value })}
                 placeholder={t("cred.ph_tags")}
               />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_notes")}</Label>
+              <Label htmlFor="add-cred-notes" className="text-xs text-muted-foreground block mb-1">{t("cred.field_notes")}</Label>
               <Textarea
+                id="add-cred-notes"
                 value={form.notes}
                 onChange={e => setForm({ ...form, notes: e.target.value })}
                 rows={2}
@@ -532,36 +543,41 @@ export default function CredentialsPage() {
                 </Select>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_username")} *</Label>
+                <Label htmlFor="edit-cred-username" className="text-xs text-muted-foreground block mb-1">{t("cred.field_username")} *</Label>
                 <Input
+                  id="edit-cred-username"
                   value={form.username}
                   onChange={e => setForm({ ...form, username: e.target.value })}
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_password")}</Label>
+                <Label htmlFor="edit-cred-password" className="text-xs text-muted-foreground block mb-1">{t("cred.field_password")}</Label>
                 <Input
+                  id="edit-cred-password"
                   value={form.password}
                   onChange={e => setForm({ ...form, password: e.target.value })}
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_domain")}</Label>
+                <Label htmlFor="edit-cred-domain" className="text-xs text-muted-foreground block mb-1">{t("cred.field_domain")}</Label>
                 <Input
+                  id="edit-cred-domain"
                   value={form.domain}
                   onChange={e => setForm({ ...form, domain: e.target.value })}
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_source")}</Label>
+                <Label htmlFor="edit-cred-source" className="text-xs text-muted-foreground block mb-1">{t("cred.field_source")}</Label>
                 <Input
+                  id="edit-cred-source"
                   value={form.source}
                   onChange={e => setForm({ ...form, source: e.target.value })}
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_hash")}</Label>
+                <Label htmlFor="edit-cred-hash" className="text-xs text-muted-foreground block mb-1">{t("cred.field_hash")}</Label>
                 <Input
+                  id="edit-cred-hash"
                   value={form.hash}
                   onChange={e => setForm({ ...form, hash: e.target.value })}
                   className="font-mono text-xs"
@@ -569,15 +585,17 @@ export default function CredentialsPage() {
               </div>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_tags")}</Label>
+              <Label htmlFor="edit-cred-tags" className="text-xs text-muted-foreground block mb-1">{t("cred.field_tags")}</Label>
               <Input
+                id="edit-cred-tags"
                 value={form.tags}
                 onChange={e => setForm({ ...form, tags: e.target.value })}
               />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_notes")}</Label>
+              <Label htmlFor="edit-cred-notes" className="text-xs text-muted-foreground block mb-1">{t("cred.field_notes")}</Label>
               <Textarea
+                id="edit-cred-notes"
                 value={form.notes}
                 onChange={e => setForm({ ...form, notes: e.target.value })}
                 rows={2}
@@ -609,7 +627,7 @@ export default function CredentialsPage() {
             <Input
               value={batchTags}
               onChange={e => setBatchTags(e.target.value)}
-              placeholder="high-value, production, dc"
+              placeholder={t("credentials.tags_ph")}
             />
           </div>
           <DialogFooter>

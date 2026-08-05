@@ -1,9 +1,10 @@
-﻿"use client";
+"use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { useWS } from "@/lib/wsContext";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { EmptyState, Spinner } from "@/components/UI";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -20,19 +21,29 @@ interface ResolutionOption {
   interval: number;
 }
 
+const INTERVAL_BY_RES: Record<string, number> = {
+  low: 2000,
+  medium: 1000,
+  high: 500,
+  ultra: 250,
+};
+
 export default function RemoteDesktopPage() {
   const { t } = useI18n();
   const params = useParams();
   const id = params.id as string;
 
-  // Experimental: screenshot stream + remote_input tasks 鈥?not a full RDP stack.
+  // Experimental: screenshot stream + remote_input tasks — not a full RDP stack.
 
-  const RESOLUTIONS: ResolutionOption[] = [
-    { value: "low", label: t("agents.rdp_low"), interval: 2000 },
-    { value: "medium", label: t("agents.rdp_medium"), interval: 1000 },
-    { value: "high", label: t("agents.rdp_high"), interval: 500 },
-    { value: "ultra", label: t("agents.rdp_ultra"), interval: 250 },
-  ];
+  const RESOLUTIONS: ResolutionOption[] = useMemo(
+    () => [
+      { value: "low", label: t("agents.rdp_low"), interval: INTERVAL_BY_RES.low },
+      { value: "medium", label: t("agents.rdp_medium"), interval: INTERVAL_BY_RES.medium },
+      { value: "high", label: t("agents.rdp_high"), interval: INTERVAL_BY_RES.high },
+      { value: "ultra", label: t("agents.rdp_ultra"), interval: INTERVAL_BY_RES.ultra },
+    ],
+    [t],
+  );
 
   const [monitoring, setMonitoring] = useState(false);
   const [status, setStatus] = useState<"waiting" | "capturing" | "connected" | "error">("waiting");
@@ -53,11 +64,12 @@ export default function RemoteDesktopPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { subscribe } = useWS();
 
+  const pollInterval = INTERVAL_BY_RES[resolution] ?? 1000;
 
   const captureFrame = useCallback(async () => {
     if (!id) return;
     try {
-      const data = await api.get(`/agents/${id}/screenshot?format=json`);
+      const data = await api.get(paths.agents.screenshot(id));
       const imgData = (data.image || data.data || data.screenshot || "") as string;
       if (imgData) {
         const fullData = imgData.startsWith("data:") ? imgData : `data:image/png;base64,${imgData}`;
@@ -78,12 +90,10 @@ export default function RemoteDesktopPage() {
     setMonitoring(true);
     setStatus("capturing");
     try {
-      const resOpt = RESOLUTIONS.find((r) => r.value === resolution);
-      await api.post(`/agents/${id}/screen/start`, { interval: String(resOpt?.interval ?? 1000) });
+      await api.post(paths.agents.screenStart(id), { interval: String(pollInterval) });
       await captureFrame();
-      const resOpt2 = RESOLUTIONS.find((r) => r.value === resolution);
       if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = setInterval(captureFrame, resOpt2?.interval ?? 1000);
+      timerRef.current = setInterval(captureFrame, pollInterval);
     } catch {
       setStatus("error");
       setMonitoring(false);
@@ -100,7 +110,7 @@ export default function RemoteDesktopPage() {
       timerRef.current = null;
     }
     try {
-      await api.post(`/agents/${id}/screen/stop`);
+      await api.post(paths.agents.screenStop(id));
     } catch {
       toast.error(t("agents.rdp_stop_failed"));
     }
@@ -108,13 +118,12 @@ export default function RemoteDesktopPage() {
 
   useEffect(() => {
     if (!monitoring) return;
-    const resOpt = RESOLUTIONS.find((r) => r.value === resolution);
     if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(captureFrame, resOpt?.interval ?? 1000);
+    timerRef.current = setInterval(captureFrame, pollInterval);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [resolution, monitoring, captureFrame]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [resolution, monitoring, captureFrame, pollInterval]);
 
   useEffect(() => {
     if (!id) return;
@@ -137,7 +146,7 @@ export default function RemoteDesktopPage() {
     return () => {
       if (moveThrottleRef.current) clearTimeout(moveThrottleRef.current);
       if (!id) return;
-      api.post(`/agents/${id}/screen/stop`).catch((e) => { console.error("RemoteDesktop stop failed:", e); });
+      api.post(paths.agents.screenStop(id)).catch((e) => { console.error("RemoteDesktop stop failed:", e); });
     };
   }, [id]);
 
@@ -156,7 +165,7 @@ export default function RemoteDesktopPage() {
     if (!monitoring || !id) return;
     const { x, y } = getRelativeCoords(e);
     try {
-      await api.postJson(`/agents/${id}/input`, { type: "click", x, y });
+      await api.postJson(paths.agents.remoteInput(id), { type: "click", x, y });
     } catch {
       toast.error(t("agents.rdp_capture_failed"));
     }
@@ -176,7 +185,7 @@ export default function RemoteDesktopPage() {
       moveThrottleRef.current = setTimeout(() => {
         moveThrottleRef.current = null;
         const { x, y } = getRelativeCoords(e);
-        api.postJson(`/agents/${id}/input`, { type: "move", x, y }).catch(() => {});
+        api.postJson(paths.agents.remoteInput(id), { type: "move", x, y }).catch(() => {});
       }, 50);
     },
     [monitoring, id, getRelativeCoords],
@@ -196,7 +205,7 @@ export default function RemoteDesktopPage() {
       if (modifierKeys.includes(e.key)) {
         const keyMap: Record<string, string> = { Shift: "shift", Control: "ctrl", Alt: "alt", Meta: "meta", CapsLock: "capslock" };
         const key = keyMap[e.key] || e.key;
-        api.postJson(`/agents/${id}/input`, { type: "key", key }).catch(() => {});
+        api.postJson(paths.agents.remoteInput(id), { type: "key", key }).catch(() => {});
         return;
       }
       if (e.ctrlKey || e.metaKey) return;
@@ -213,7 +222,8 @@ export default function RemoteDesktopPage() {
         ArrowRight: "right",
       };
       const key = keyMap[e.key] || e.key;
-      api.postJson(`/agents/${id}/input`, { type: "key", key }).catch(() => {});
+      if (e.key !== "Escape") e.preventDefault();
+      api.postJson(paths.agents.remoteInput(id), { type: "key", key }).catch(() => {});
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -365,7 +375,7 @@ export default function RemoteDesktopPage() {
                 <Tooltip>
                   <TooltipTrigger>
                     <span
-                      className="text-(--font-size-micro-sm) text-emerald-400 flex items-center gap-1"
+                      className="text-(--fs-micro-sm) text-emerald-400 flex items-center gap-1"
                     >
                       <Zap className="w-4 h-4" /> WS
                     </span>
@@ -374,7 +384,7 @@ export default function RemoteDesktopPage() {
                 </Tooltip>
               )}
               {monitoring && (
-                <span className="text-(--font-size-micro-sm) text-indigo-400 flex items-center gap-1">
+                <span className="text-(--fs-micro-sm) text-primary flex items-center gap-1">
                   <Mouse className="w-4 h-4" /> {t("agents.rdp_interactive_label")}
                 </span>
               )}
@@ -432,7 +442,7 @@ export default function RemoteDesktopPage() {
                   </div>
                 )}
                 {monitoring && (
-                  <div className="absolute bottom-3 left-3 flex items-center gap-2 text-(--font-size-xs-sm) text-white/70 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg pointer-events-none">
+                  <div className="absolute bottom-3 left-3 flex items-center gap-2 text-(--fs-xs-sm) text-white/70 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg pointer-events-none">
                     <Mouse className="w-4 h-4" />
                     {t("agents.rdp_click_to_interact")}
                     <span className="text-white/40 mx-1">|</span>
@@ -460,11 +470,11 @@ export default function RemoteDesktopPage() {
 
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
           <Card className="px-4 py-3 flex flex-row items-center gap-3 rounded-2xl">
-            <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary shrink-0">
               <Mouse className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-(--font-size-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
+              <div className="text-(--fs-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
                 {t("agents.rdp_mouse")}
               </div>
               <div className="text-sm text-foreground">
@@ -473,11 +483,11 @@ export default function RemoteDesktopPage() {
             </div>
           </Card>
           <Card className="px-4 py-3 flex flex-row items-center gap-3 rounded-2xl">
-            <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary shrink-0">
               <Keyboard className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-(--font-size-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
+              <div className="text-(--fs-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
                 {t("agents.rdp_keyboard")}
               </div>
               <div className="text-sm text-foreground">
@@ -486,11 +496,11 @@ export default function RemoteDesktopPage() {
             </div>
           </Card>
           <Card className="px-4 py-3 flex flex-row items-center gap-3 rounded-2xl">
-            <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary shrink-0">
               <Wifi className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-(--font-size-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
+              <div className="text-(--fs-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
                 {t("agents.rdp_connection")}
               </div>
               <div className="text-sm text-foreground">

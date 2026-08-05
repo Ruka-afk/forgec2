@@ -1,8 +1,6 @@
 package server
 
 import (
-	"encoding/json"
-	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -82,23 +80,7 @@ func (s *Server) handleDNSStart(c *gin.Context) {
 	s.cfg.Unlock()
 
 	dl := NewDNSBeaconListener(domain, s.cfg.Server.Host, 0, addr)
-	dl.SetHandler(func(agentID string, reqJSON []byte) []byte {
-		var req beaconRequest
-		if len(reqJSON) > 0 {
-			if err := json.Unmarshal(reqJSON, &req); err != nil {
-				slog.Error("DNS beacon handler unmarshal error", "err", err)
-			}
-		}
-		if req.UUID == "" {
-			req.UUID = agentID
-		}
-		resp := s.processBeacon(req, "")
-		respJSON, ok := marshalJSONSafe(resp)
-		if !ok {
-			return nil
-		}
-		return respJSON
-	})
+	dl.SetHandler(s.makeBeaconHandler())
 
 	if err := dl.Start(); err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "DNS"))

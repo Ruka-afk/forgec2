@@ -136,11 +136,11 @@ type Implant struct {
 	// Agent metadata (reported every beacon)
 	Version         string `json:"version"`          // agent build version
 	ProtocolVersion uint   `json:"protocol_version"` // wire protocol version
-	PID         int    `json:"pid"`          // agent process ID
-	ProcessName string `json:"process_name"` // e.g. forgec2.exe
-	Integrity   string `json:"integrity"`    // Low / Medium / High / System
-	Elevated    bool   `json:"elevated"`     // running as admin/root
-	Domain      string `json:"domain"`       // AD domain or workgroup
+	PID             int    `json:"pid"`              // agent process ID
+	ProcessName     string `json:"process_name"`     // e.g. forgec2.exe
+	Integrity       string `json:"integrity"`        // Low / Medium / High / System
+	Elevated        bool   `json:"elevated"`         // running as admin/root
+	Domain          string `json:"domain"`           // AD domain or workgroup
 	// Per-agent sleep config (server-side tracking)
 	CurrentInterval int    `json:"current_interval"` // current sleep interval (seconds)
 	CurrentJitter   int    `json:"current_jitter"`   // current jitter percentage
@@ -155,8 +155,12 @@ type Implant struct {
 	EnvThreatScore int    `json:"env_threat_score" gorm:"default:0"`   // 0-100 agent-reported threat level
 	EnvHoneypot    bool   `json:"env_honeypot" gorm:"default:false"`   // agent detected honeypot env
 	EnvClass       string `json:"env_class" gorm:"size:32;default:''"` // environment classification
-	CreatedAt      time.Time `gorm:"index" json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	// Protocol v2 identity & replay protection
+	IdentityPub string    `gorm:"size:64;default:''" json:"identity_pub,omitempty"` // base64 X25519 identity public key (registered)
+	Registered  bool      `gorm:"default:false" json:"registered"`                  // v2 registration handshake completed
+	LastSeq     uint64    `gorm:"default:0" json:"last_seq,omitempty"`              // last accepted beacon seq (replay window)
+	CreatedAt   time.Time `gorm:"index" json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // Task represents a command/task sent to an agent
@@ -194,15 +198,15 @@ type Task struct {
 // AuditLog represents a security audit log entry
 type AuditLog struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	User      string    `json:"user"`                  // username or "system"
-	Action    string    `gorm:"index" json:"action"`   // action type: login, logout, command, delete, etc.
-	Resource  string    `json:"resource"`              // affected resource
-	AgentID   string    `gorm:"index" json:"agent_id"` // related agent ID if applicable
-	IP        string    `json:"ip"`                    // client IP address
-	Success   bool      `json:"success"`               // whether the action succeeded
-	Error     string    `json:"error"`                 // error message if failed
-	Details   string    `json:"details"`               // additional details
-	PrevHash  string    `gorm:"size:64" json:"prev_hash"` // SHA-256 of the previous audit entry (append-only hash chain)
+	User      string    `json:"user"`                      // username or "system"
+	Action    string    `gorm:"index" json:"action"`       // action type: login, logout, command, delete, etc.
+	Resource  string    `json:"resource"`                  // affected resource
+	AgentID   string    `gorm:"index" json:"agent_id"`     // related agent ID if applicable
+	IP        string    `json:"ip"`                        // client IP address
+	Success   bool      `json:"success"`                   // whether the action succeeded
+	Error     string    `json:"error"`                     // error message if failed
+	Details   string    `json:"details"`                   // additional details
+	PrevHash  string    `gorm:"size:64" json:"prev_hash"`  // SHA-256 of the previous audit entry (append-only hash chain)
 	EntryHash string    `gorm:"size:64" json:"entry_hash"` // SHA-256 hash of this entry (covers all fields)
 	CreatedAt time.Time `gorm:"index" json:"created_at"`
 }
@@ -214,7 +218,7 @@ type AuditLog struct {
 // "Type" is kept for backward compatibility and derived from Scheme.
 type Listener struct {
 	ID       uint   `gorm:"primaryKey" json:"id"`
-	Name     string `json:"name"`
+	Name     string `gorm:"uniqueIndex;size:128" json:"name"`
 	Scheme   string `json:"scheme"` // "http", "https", "tcp", "tls"  (preferred)
 	Type     string `json:"type"`   // "http", "tcp", "dns", "icmp" (derived, kept for compat)
 	Host     string `json:"host"`   // IP or domain
@@ -453,7 +457,7 @@ type CredentialEntry struct {
 	Type      string    `json:"type"`   // cleartext, ntlm, aes, kerberos
 	Notes     string    `json:"notes"`
 	Tags      string    `json:"tags"` // comma separated tags
-	ExpiresAt time.Time `json:"expires_at"`
+	ExpiresAt time.Time `gorm:"index" json:"expires_at"`
 	Confirmed bool      `json:"confirmed"` // whether credential has been verified
 	TaskID    uint      `json:"task_id"`   // originating task (0 = manual)
 	CreatedAt time.Time `json:"created_at"`
@@ -1333,9 +1337,9 @@ func (ExtC2Channel) TableName() string { return "extc2_channels" }
 // AgentStatusEvent records when an agent changes online/offline status.
 type AgentStatusEvent struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	AgentID   string    `gorm:"index;size:36;not null" json:"agent_id"`
+	AgentID   string    `gorm:"index:idx_status_agent_time,priority:1;size:36;not null" json:"agent_id"`
 	Status    string    `gorm:"size:20;not null" json:"status"` // "online", "offline", "stale"
-	Timestamp time.Time `gorm:"index" json:"timestamp"`
+	Timestamp time.Time `gorm:"index:idx_status_agent_time,priority:2" json:"timestamp"`
 }
 
 func (AgentStatusEvent) TableName() string { return "agent_status_events" }
@@ -1366,10 +1370,10 @@ type UserSession struct {
 func (UserSession) TableName() string { return "user_sessions" }
 
 type PasswordHistory struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	UserID    uint      `gorm:"index;not null" json:"user_id"`
-	PasswordHash string `gorm:"size:256;not null" json:"-"`
-	CreatedAt time.Time `json:"created_at"`
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	UserID       uint      `gorm:"index;not null" json:"user_id"`
+	PasswordHash string    `gorm:"size:256;not null" json:"-"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 func (PasswordHistory) TableName() string { return "password_history" }

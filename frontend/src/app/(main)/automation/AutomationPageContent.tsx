@@ -1,105 +1,35 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { PageHeader, ConfirmModal, EmptyState, StatusBadge, PageSpinner, Spinner } from "@/components/UI";
+import { PageHeader, ConfirmModal, EmptyState, StatusBadge, PageSpinner } from "@/components/UI";
+import { DataError } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertTriangle, Bell, FlaskConical, Globe, Link, Plus, Trash2, Zap } from "lucide-react";
-
-interface Rule {
-  id?: string;
-  ID?: string;
-  name?: string;
-  Name?: string;
-  event_type?: string;
-  EventType?: string;
-  enabled?: boolean;
-  Enabled?: boolean;
-  conditions?: unknown[];
-  Conditions?: unknown[];
-  actions?: unknown[];
-  Actions?: unknown[];
-}
-
-interface Webhook {
-  id?: number;
-  ID?: number;
-  name?: string;
-  Name?: string;
-  url?: string;
-  URL?: string;
-  enabled?: boolean;
-  Enabled?: boolean;
-  event_type?: string;
-  EventType?: string;
-  method?: string;
-  Method?: string;
-}
-
-interface AlertRule {
-  id?: number;
-  name?: string;
-  type?: string;
-  threshold?: number;
-  enabled?: boolean;
-  description?: string;
-}
-
-interface MonitorAlert {
-  id?: number;
-  title?: string;
-  message?: string;
-  severity?: string;
-  status?: string;
-  source_name?: string;
-  created_at?: string;
-}
-
-type WebhookType = "generic" | "slack" | "discord" | "email";
-
-interface WebhookActionParams {
-  type: WebhookType;
-  url: string;
-  secret: string;
-  to: string;
-  smtp_host: string;
-  smtp_port: number;
-  smtp_user: string;
-  smtp_pass: string;
-  from: string;
-}
-
-const defaultWebhookParams: WebhookActionParams = {
-  type: "generic",
-  url: "",
-  secret: "",
-  to: "",
-  smtp_host: "",
-  smtp_port: 587,
-  smtp_user: "",
-  smtp_pass: "",
-  from: "",
-};
+import { defaultWebhookParams, type AlertRule, type Rule, type Webhook } from "./_components/types";
+import { useAutomationData } from "./_components/useAutomationData";
+import { RuleDialog } from "./_components/RuleDialog";
+import { WebhookDialog } from "./_components/WebhookDialog";
+import { AlertRuleDialog } from "./_components/AlertRuleDialog";
 
 export default function AutomationPage() {
   const { t } = useI18n();
-  const [rules, setRules] = useState<Rule[]>([]);
-  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
-  const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
-  const [alerts, setAlerts] = useState<MonitorAlert[]>([]);
+  const {
+    rules, setRules,
+    webhooks, setWebhooks,
+    alertRules, setAlertRules,
+    alerts, setAlerts,
+    loading, error, loadData,
+  } = useAutomationData();
   const [showAlertRuleModal, setShowAlertRuleModal] = useState(false);
   const [alertRuleForm, setAlertRuleForm] = useState({ name: "", type: "agent_offline", threshold: 300, description: "" });
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [showWebhookModal, setShowWebhookModal] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [sendingTest, setSendingTest] = useState(false);
 
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
@@ -111,31 +41,6 @@ export default function AutomationPage() {
     webhook: { ...defaultWebhookParams },
   });
   const [webhookForm, setWebhookForm] = useState({ name: "", url: "", event_type: "agent.checkin", method: "POST" });
-
-  const loadData = useCallback(async (signal?: AbortSignal) => {
-    try {
-      let failed = 0;
-      const [ruleData, whResp, alertRuleResp, alertsResp] = await Promise.all([
-        api.get<{ rules?: Rule[]; data?: Rule[] }>("/api/automation/rules", { signal }).catch(() => { failed++; return null; }),
-        api.get<{ webhooks?: Webhook[]; data?: Webhook[] }>("/api/webhooks", { signal }).catch(() => { failed++; return null; }),
-        api.get<{ rules?: AlertRule[] }>("/api/monitor/alert-rules", { signal }).catch(() => { failed++; return null; }),
-        api.get<{ alerts?: MonitorAlert[] }>("/api/monitor/alerts", { signal }).catch(() => { failed++; return null; }),
-      ]);
-      if (ruleData) setRules((ruleData.rules || ruleData.data || []) as Rule[]);
-      if (whResp) setWebhooks((whResp.webhooks || whResp.data || []) as Webhook[]);
-      if (alertRuleResp) setAlertRules((alertRuleResp.rules || []) as AlertRule[]);
-      if (alertsResp) setAlerts((alertsResp.alerts || []) as MonitorAlert[]);
-      if (failed > 0) toast.error(t("automation.toast.load_failed"));
-    } catch { toast.error(t("automation.toast.load_failed")); } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    loadData(controller.signal);
-    return () => controller.abort();
-  }, [loadData]);
 
   const buildAction = () => {
     if (ruleForm.action_type === "webhook") {
@@ -173,7 +78,7 @@ export default function AutomationPage() {
         conditions: [] as unknown[],
         enabled: true,
       };
-      await api.postJson("/api/automation/rules", payload);
+      await api.postJson(paths.automation.rules, payload);
       setShowRuleModal(false);
       setRuleForm({ name: "", event_type: "agent.checkin", action_type: "command", action_config: "", webhook: { ...defaultWebhookParams } });
       loadData();
@@ -182,7 +87,7 @@ export default function AutomationPage() {
 
   const handleSaveWebhook = async () => {
     try {
-      await api.postJson("/api/webhooks", webhookForm);
+      await api.postJson(paths.automation.webhooks, webhookForm);
       setShowWebhookModal(false);
       setWebhookForm({ name: "", url: "", event_type: "agent.checkin", method: "POST" });
       loadData();
@@ -215,7 +120,7 @@ export default function AutomationPage() {
   const handleDeleteRule = (id: string) => {
     setCfm({msg: t("automation.confirm_delete_rule"), cb: async () => {
       try {
-        await api.del(`/api/automation/rules/${id}`);
+        await api.del(paths.automation.rule(id));
         loadData();
       } catch { toast.error(t("automation.toast.delete_rule_failed")); }
     }});
@@ -224,7 +129,7 @@ export default function AutomationPage() {
   const handleDeleteWebhook = (id: number) => {
     setCfm({msg: t("automation.confirm_delete_webhook"), cb: async () => {
       try {
-        await api.del(`/api/webhooks/${id}`);
+        await api.del(paths.automation.webhook(id));
         loadData();
       } catch { toast.error(t("automation.toast.delete_webhook_failed")); }
     }});
@@ -232,7 +137,7 @@ export default function AutomationPage() {
 
   const handleSaveAlertRule = async () => {
     try {
-      await api.postJson("/api/monitor/alert-rules", alertRuleForm);
+      await api.postJson(paths.automation.alertRules, alertRuleForm);
       setShowAlertRuleModal(false);
       setAlertRuleForm({ name: "", type: "agent_offline", threshold: 300, description: "" });
       loadData();
@@ -242,7 +147,7 @@ export default function AutomationPage() {
   const handleDeleteAlertRule = (id: number) => {
     setCfm({ msg: t("automation.confirm_delete_alert_rule"), cb: async () => {
       try {
-        await api.del(`/api/monitor/alert-rules/${id}`);
+        await api.del(paths.automation.alertRule(id));
         loadData();
       } catch { toast.error(t("automation.toast.delete_alert_rule_failed")); }
     }});
@@ -251,28 +156,28 @@ export default function AutomationPage() {
   const handleToggleAlertRule = async (rule: AlertRule) => {
     if (!rule.id) return;
     try {
-      await api.putJson(`/api/monitor/alert-rules/${rule.id}`, { enabled: !rule.enabled, name: rule.name, threshold: rule.threshold, description: rule.description });
+      await api.putJson(paths.automation.alertRule(rule.id), { enabled: !rule.enabled, name: rule.name, threshold: rule.threshold, description: rule.description });
       loadData();
     } catch { toast.error(t("automation.toast.toggle_alert_rule_failed")); }
   };
 
   const handleAckAlert = async (id: number) => {
     try {
-      await api.post(`/api/monitor/alerts/${id}/acknowledge`);
+      await api.post(paths.automation.alertAck(id));
       loadData();
     } catch { toast.error(t("automation.toast.acknowledge_alert_failed")); }
   };
 
   const handleResolveAlert = async (id: number) => {
     try {
-      await api.post(`/api/monitor/alerts/${id}/resolve`);
+      await api.post(paths.automation.alertResolve(id));
       loadData();
     } catch { toast.error(t("automation.toast.resolve_alert_failed")); }
   };
 
   const handleToggleRule = async (id: string) => {
     try {
-      await api.post(`/api/automation/rules/${id}/toggle`);
+      await api.post(paths.automation.ruleToggle(id));
       loadData();
     } catch { toast.error(t("automation.toast.toggle_rule_failed")); }
   };
@@ -289,6 +194,15 @@ export default function AutomationPage() {
     return (
       <PageSpinner />
     );
+
+  if (error && rules.length === 0 && webhooks.length === 0) {
+    return (
+      <div className="max-w-(--content-width) mx-auto pb-12">
+        <PageHeader title={t("auto.title")} subtitle={t("auto.subtitle")} />
+        <DataError message={error} onRetry={() => loadData()} />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -358,7 +272,7 @@ export default function AutomationPage() {
                         <Button onClick={() => handleToggleRule(rid)} variant="ghost" size="sm">
                           {enabled ? t("auto.disable") : t("auto.enable")}
                         </Button>
-                        <Button onClick={() => handleDeleteRule(rid)} variant="destructive" size="icon-sm" aria-label="Delete rule">
+                        <Button onClick={() => handleDeleteRule(rid)} variant="destructive" size="icon-sm" aria-label={t("automation.delete_rule")}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -418,7 +332,7 @@ export default function AutomationPage() {
                         }}
                         variant="ghost"
                         size="icon-sm"
-                        aria-label="Test webhook"
+                        aria-label={t("automation.test_webhook")}
                       >
                         <Tooltip>
                           <TooltipTrigger>
@@ -427,7 +341,7 @@ export default function AutomationPage() {
                           <TooltipContent>{t("auto.test_webhook")}</TooltipContent>
                         </Tooltip>
                       </Button>
-                      <Button onClick={() => handleDeleteWebhook(Number(wid))} variant="destructive" size="icon-sm" aria-label="Delete webhook">
+                      <Button onClick={() => handleDeleteWebhook(Number(wid))} variant="destructive" size="icon-sm" aria-label={t("automation.delete_webhook")}>
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
@@ -439,179 +353,24 @@ export default function AutomationPage() {
         </div>
       </Card>
 
-      <Dialog open={showRuleModal} onOpenChange={setShowRuleModal}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{t("auto.new_automation_rule")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>{t("auto.rule_name")}</Label>
-              <Input aria-label="e.g. Auto deploy on checkin" name="input-0" value={ruleForm.name} onChange={(e) => setRuleForm({ ...ruleForm, name: e.target.value })} placeholder={t("auto.rule_name_placeholder")} className="mt-1" />
-            </div>
-            <div>
-              <Label>{t("auto.event_type")}</Label>
-              <Select value={ruleForm.event_type} onValueChange={(v) => setRuleForm({ ...ruleForm, event_type: v ?? "" })}>
-                <SelectTrigger className="w-full mt-1" aria-label="Event type" name="select-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="agent.checkin">agent.checkin</SelectItem>
-                  <SelectItem value="agent.disconnect">agent.disconnect</SelectItem>
-                  <SelectItem value="task.complete">task.complete</SelectItem>
-                  <SelectItem value="task.fail">task.fail</SelectItem>
-                  <SelectItem value="credential.found">credential.found</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>{t("auto.action_type")}</Label>
-              <Select value={ruleForm.action_type} onValueChange={(v) => setRuleForm({ ...ruleForm, action_type: v ?? "" })}>
-                <SelectTrigger className="w-full mt-1" aria-label="Action type" name="select-2"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="command">{t("auto.action_send_command")}</SelectItem>
-                  <SelectItem value="webhook">{t("auto.action_send_webhook")}</SelectItem>
-                  <SelectItem value="notify">{t("auto.action_show_alert")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      <RuleDialog
+        open={showRuleModal}
+        onOpenChange={setShowRuleModal}
+        ruleForm={ruleForm}
+        setRuleForm={setRuleForm}
+        sendingTest={sendingTest}
+        onTestWebhook={handleTestWebhookAction}
+        onSave={handleSaveRule}
+      />
 
-            {ruleForm.action_type === "command" && (
-              <div>
-                <Label>{t("auto.command")}</Label>
-                <Input aria-label="e.g. whoami" name="e-g-whoami-3" placeholder={t("auto.command_placeholder")} value={ruleForm.action_config} onChange={(e) => setRuleForm({ ...ruleForm, action_config: e.target.value })} className="mt-1" />
-              </div>
-            )}
+      <WebhookDialog
+        open={showWebhookModal}
+        onOpenChange={setShowWebhookModal}
+        webhookForm={webhookForm}
+        setWebhookForm={setWebhookForm}
+        onSave={handleSaveWebhook}
+      />
 
-            {ruleForm.action_type === "notify" && (
-              <div>
-                <Label>{t("auto.notification_message")}</Label>
-                <Input aria-label="Alert message text" name="alert-message-text-4" placeholder={t("auto.notification_placeholder")} value={ruleForm.action_config} onChange={(e) => setRuleForm({ ...ruleForm, action_config: e.target.value })} className="mt-1" />
-              </div>
-            )}
-
-            {ruleForm.action_type === "webhook" && (
-              <div className="space-y-4">
-                <div>
-                  <Label>{t("auto.webhook_type")}</Label>
-                  <Select value={ruleForm.webhook.type} onValueChange={(v) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, type: v as WebhookType } })}>
-                    <SelectTrigger className="w-full mt-1" aria-label="Webhook type" name="select-5"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="generic">{t("auto.webhook_type_generic")}</SelectItem>
-                      <SelectItem value="slack">Slack</SelectItem>
-                      <SelectItem value="discord">Discord</SelectItem>
-                      <SelectItem value="email">{t("auto.webhook_type_email")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {ruleForm.webhook.type !== "email" && (
-                  <>
-                    <div>
-                      <Label>{t("auto.webhook_url")}</Label>
-                      <Input aria-label="https://hooks.example.com/..." name="https-hooks-example-com-6" placeholder="https://hooks.example.com/..." value={ruleForm.webhook.url} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, url: e.target.value } })} className="mt-1" />
-                    </div>
-                    <div>
-                      <Label>{t("auto.webhook_secret")}</Label>
-                      <Input aria-label="HMAC signing key" name="hmac-signing-key-7" placeholder="HMAC signing key" value={ruleForm.webhook.secret} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, secret: e.target.value } })} className="mt-1" />
-                    </div>
-                  </>
-                )}
-
-                {ruleForm.webhook.type === "email" && (
-                  <>
-                    <div>
-                      <Label>{t("auto.smtp_server")}</Label>
-                      <Input aria-label="smtp.gmail.com" name="smtp-gmail-com-8" placeholder="smtp.gmail.com" value={ruleForm.webhook.smtp_host} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, smtp_host: e.target.value } })} className="mt-1" />
-                    </div>
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <Label>{t("auto.smtp_port")}</Label>
-                        <Input aria-label="587" name="587-9" type="number" placeholder="587" value={ruleForm.webhook.smtp_port} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, smtp_port: parseInt(e.target.value) || 587 } })} className="mt-1" />
-                      </div>
-                      <div className="flex-1">
-                        <Label>{t("auto.smtp_from")}</Label>
-                        <Input aria-label="alerts@example.com" name="alerts-example-com-10" placeholder="alerts@example.com" value={ruleForm.webhook.from} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, from: e.target.value } })} className="mt-1" />
-                      </div>
-                    </div>
-                    <div>
-                      <Label>{t("auto.smtp_username")}</Label>
-                      <Input aria-label="user@gmail.com" name="user-gmail-com-11" placeholder="user@gmail.com" value={ruleForm.webhook.smtp_user} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, smtp_user: e.target.value } })} className="mt-1" />
-                    </div>
-                    <div>
-                      <Label>{t("auto.smtp_password")}</Label>
-                      <Input aria-label="App password" name="app-password-12" type="password" placeholder="App password" value={ruleForm.webhook.smtp_pass} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, smtp_pass: e.target.value } })} className="mt-1" />
-                    </div>
-                    <div>
-                      <Label>{t("auto.smtp_to")}</Label>
-                      <Input aria-label="admin@example.com" name="admin-example-com-13" placeholder="admin@example.com" value={ruleForm.webhook.to} onChange={(e) => setRuleForm({ ...ruleForm, webhook: { ...ruleForm.webhook, to: e.target.value } })} className="mt-1" />
-                    </div>
-                  </>
-                )}
-
-                <div className="flex justify-end">
-                  <Button
-                    onClick={handleTestWebhookAction}
-                    disabled={sendingTest}
-                    variant="ghost"
-                    size="sm"
-                  >
-                    {sendingTest ? <Spinner size="xs" /> : <FlaskConical className="w-4 h-4" />}
-                    {sendingTest ? t("auto.sending") : t("auto.test_notification")}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setShowRuleModal(false)} variant="ghost">{t("auto.cancel")}</Button>
-            <Button onClick={handleSaveRule}>{t("auto.save_rule")}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showWebhookModal} onOpenChange={setShowWebhookModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("auto.new_webhook_dialog")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>{t("auto.name")}</Label>
-              <Input aria-label="e.g. Slack alert" name="input-14" value={webhookForm.name} onChange={(e) => setWebhookForm({ ...webhookForm, name: e.target.value })} placeholder="e.g. Slack alert" className="mt-1" />
-            </div>
-            <div>
-              <Label>{t("auto.url")}</Label>
-              <Input aria-label="https://hooks.example.com/forgec2" name="https-hooks-example-com-forgec2-15" placeholder="https://hooks.example.com/forgec2" value={webhookForm.url} onChange={(e) => setWebhookForm({ ...webhookForm, url: e.target.value })} className="mt-1" />
-            </div>
-            <div>
-              <Label>{t("auto.event_type")}</Label>
-              <Select value={webhookForm.event_type} onValueChange={(v) => setWebhookForm({ ...webhookForm, event_type: v ?? "" })}>
-                <SelectTrigger className="w-full mt-1" aria-label="Webhook event type" name="select-16"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="agent.checkin">agent.checkin</SelectItem>
-                  <SelectItem value="agent.disconnect">agent.disconnect</SelectItem>
-                  <SelectItem value="task.complete">task.complete</SelectItem>
-                  <SelectItem value="task.fail">task.fail</SelectItem>
-                  <SelectItem value="credential.found">credential.found</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>{t("auto.request_method")}</Label>
-              <Select value={webhookForm.method} onValueChange={(v) => setWebhookForm({ ...webhookForm, method: v ?? "" })}>
-                <SelectTrigger className="w-full mt-1" aria-label="Request method" name="select-17"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="POST">POST</SelectItem>
-                  <SelectItem value="PUT">PUT</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setShowWebhookModal(false)} variant="ghost">{t("auto.cancel")}</Button>
-            <Button onClick={handleSaveWebhook}>{t("auto.save")}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:p-5">
         <Card className="rounded-2xl overflow-hidden">
@@ -640,7 +399,7 @@ export default function AutomationPage() {
                   <Button onClick={() => handleToggleAlertRule(r)} variant="ghost" size="sm">
                     {r.enabled ? t("auto.on") : t("auto.off")}
                   </Button>
-                  <Button onClick={() => r.id && handleDeleteAlertRule(r.id)} variant="destructive" size="icon-sm" aria-label="Delete"><Trash2 className="w-4 h-4" /></Button>
+                  <Button onClick={() => r.id && handleDeleteAlertRule(r.id)} variant="destructive" size="icon-sm" aria-label={t("automation.delete_alert_rule")}><Trash2 className="w-4 h-4" /></Button>
                 </div>
               </div>
             ))}
@@ -679,44 +438,15 @@ export default function AutomationPage() {
         </Card>
       </div>
 
-      <Dialog open={showAlertRuleModal} onOpenChange={setShowAlertRuleModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("auto.new_alert_rule")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>{t("auto.name")}</Label>
-              <Input aria-label="Alert rule name" name="input-18" value={alertRuleForm.name} onChange={(e) => setAlertRuleForm({ ...alertRuleForm, name: e.target.value })} className="mt-1" />
-            </div>
-            <div>
-              <Label>{t("auto.type")}</Label>
-              <Select value={alertRuleForm.type} onValueChange={(v) => setAlertRuleForm({ ...alertRuleForm, type: v ?? "" })}>
-                <SelectTrigger className="w-full mt-1" aria-label="Alert rule type" name="select-19"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="agent_offline">{t("auto.type_agent_offline")}</SelectItem>
-                  <SelectItem value="agent_online">{t("auto.type_agent_online")}</SelectItem>
-                  <SelectItem value="cpu_high">{t("auto.type_cpu_high")}</SelectItem>
-                  <SelectItem value="memory_high">{t("auto.type_memory_high")}</SelectItem>
-                  <SelectItem value="credential_found">{t("auto.type_credential_found")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>{t("auto.threshold")}</Label>
-              <Input aria-label="Threshold in seconds" name="input-20" type="number" value={alertRuleForm.threshold} onChange={(e) => setAlertRuleForm({ ...alertRuleForm, threshold: Number(e.target.value) })} className="mt-1" />
-            </div>
-            <div>
-              <Label>{t("auto.description")}</Label>
-              <Input aria-label="Alert rule description" name="input-21" value={alertRuleForm.description} onChange={(e) => setAlertRuleForm({ ...alertRuleForm, description: e.target.value })} className="mt-1" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setShowAlertRuleModal(false)} variant="ghost">{t("auto.cancel")}</Button>
-            <Button onClick={handleSaveAlertRule}>{t("auto.save")}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
+      <AlertRuleDialog
+        open={showAlertRuleModal}
+        onOpenChange={setShowAlertRuleModal}
+        alertRuleForm={alertRuleForm}
+        setAlertRuleForm={setAlertRuleForm}
+        onSave={handleSaveAlertRule}
+      />
+
 
       <ConfirmModal open={!!cfm} title={t("automation.confirm")} message={cfm?.msg || ""} confirmText={t("automation.delete")} cancelText={t("automation.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
     </div>

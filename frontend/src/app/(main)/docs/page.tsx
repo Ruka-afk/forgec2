@@ -12,7 +12,7 @@ export default function DocsPage() {
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up h-[calc(100vh-8rem)]">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 bg-gradient-to-br from-sky-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-sky-500/20">
+        <div className="w-10 h-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center ring-1 ring-border/50">
           <BookOpen className="w-4 h-4" />
         </div>
         <div>
@@ -38,12 +38,12 @@ export default function DocsPage() {
         <Card className="p-3 text-xs">
           <div className="font-semibold text-foreground mb-1">{t("docs.cap_matrix_title")}</div>
           <p className="text-muted-foreground mb-2">{t("docs.cap_matrix_desc")}</p>
-          <code className="text-(--font-size-xs-sm) font-mono text-primary">docs/CAPABILITY_MATRIX.md</code>
+          <code className="text-(--fs-xs-sm) font-mono text-primary">docs/CAPABILITY_MATRIX.md</code>
         </Card>
         <Card className="p-3 text-xs">
           <div className="font-semibold text-foreground mb-1">{t("docs.transport_e2e_title")}</div>
           <p className="text-muted-foreground mb-2">{t("docs.transport_e2e_desc")}</p>
-          <code className="text-(--font-size-xs-sm) font-mono text-primary">docs/TRANSPORT_E2E.md</code>
+          <code className="text-(--fs-xs-sm) font-mono text-primary">docs/TRANSPORT_E2E.md</code>
         </Card>
       </div>
       <Card className="overflow-hidden h-[calc(100%-8rem)]">

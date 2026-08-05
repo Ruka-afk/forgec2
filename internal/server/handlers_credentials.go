@@ -17,11 +17,11 @@ import (
 
 // Pre-compiled regex patterns for credential parsing (performance optimization)
 var (
-	credReBlock    *regexp.Regexp
-	credReDomain   *regexp.Regexp
-	credReNTLM     *regexp.Regexp
-	credReSHA1     *regexp.Regexp
-	credRePassword *regexp.Regexp
+	credReBlock       *regexp.Regexp
+	credReDomain      *regexp.Regexp
+	credReNTLM        *regexp.Regexp
+	credReSHA1        *regexp.Regexp
+	credRePassword    *regexp.Regexp
 	credReSAM         *regexp.Regexp
 	credReSplitBlocks *regexp.Regexp
 	credReSimple      *regexp.Regexp
@@ -238,12 +238,17 @@ func parseCredentialsFromText(raw string, agentID string, taskID uint) []db.Cred
 // handleCredentialsPage renders the credentials vault page (DB-backed)
 func (s *Server) handleCredentialsPage(c *gin.Context) {
 	var creds []db.CredentialEntry
-	query := s.db.Order("created_at desc").Limit(500)
+	query := s.db.Model(&db.CredentialEntry{}).Order("created_at desc")
 
 	tagFilter := c.Query("tag")
 	searchQuery := c.Query("search")
 	expiryFilter := c.Query("expiry")
 	confirmedFilter := c.Query("confirmed")
+	agentFilter := c.Query("agent_id")
+
+	if agentFilter != "" {
+		query = query.Where("agent_id = ?", agentFilter)
+	}
 
 	if tagFilter != "" {
 		query = query.Where("tags LIKE ? ESCAPE '\\'", "%"+escapeLike(tagFilter)+"%")
@@ -255,13 +260,20 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 	}
 
 	if expiryFilter != "" {
+		// Compare against Go-derived timestamps instead of SQLite
+		// datetime('now'): stored times carry the local offset (e.g. +08:00)
+		// while datetime('now') is UTC, making naive string comparison
+		// timezone-dependent. Passing time.Time parameters keeps both sides
+		// on the same storage format.
+		now := time.Now()
+		weekAhead := now.Add(7 * 24 * time.Hour)
 		switch expiryFilter {
 		case "expired":
-			query = query.Where("expires_at IS NOT NULL AND expires_at < datetime('now')")
+			query = query.Where("expires_at IS NOT NULL AND expires_at < ?", now)
 		case "expiring":
-			query = query.Where("expires_at IS NOT NULL AND expires_at BETWEEN datetime('now') AND datetime('now', '+7 days')")
+			query = query.Where("expires_at IS NOT NULL AND expires_at BETWEEN ? AND ?", now, weekAhead)
 		case "valid":
-			query = query.Where("expires_at IS NULL OR expires_at > datetime('now')")
+			query = query.Where("expires_at IS NULL OR expires_at > ?", now)
 		}
 	}
 
@@ -274,8 +286,26 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 		}
 	}
 
-	if err := query.Limit(5000).Find(&creds).Error; err != nil {
-		slog.Error("Failed to query credentials page", "err", err)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		handleQueryError(c, err, "Failed to count credentials page")
+		return
+	}
+
+	limit := 5000
+	if l := c.Query("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= limit {
+			limit = n
+		}
+	}
+
+	if err := query.Limit(limit).Find(&creds).Error; err != nil {
+		handleQueryError(c, err, "Failed to query credentials page")
+		return
+	}
+
+	for i := range creds {
+		creds[i].Notes = decryptCredNotes(creds[i].Notes)
 	}
 
 	var allTags []string
@@ -301,14 +331,16 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 	if err := s.db.Preload("Agent").
 		Where("type = ?", "creds").
 		Order("created_at desc").Limit(100).Find(&credsTasks).Error; err != nil {
-		slog.Error("Failed to query creds tasks", "err", err)
+		handleQueryError(c, err, "Failed to query creds tasks")
+		return
 	}
 
 	var related []db.Task
 	if err := s.db.Preload("Agent").
 		Where("type = ? AND (command LIKE ? OR command LIKE ? OR command LIKE ?)", "shell", "%mimikatz%", "%sekurlsa%", "%lsass%").
 		Order("created_at desc").Limit(30).Find(&related).Error; err != nil {
-		slog.Error("Failed to query related creds tasks", "err", err)
+		handleQueryError(c, err, "Failed to query related creds tasks")
+		return
 	}
 
 	stats := s.getNavStats()
@@ -319,10 +351,12 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 		"CredsTasks":   credsTasks,
 		"RelatedTasks": related,
 		"VaultCount":   len(creds),
+		"Total":        int(total),
 		"AllTags":      allTags,
 		"TagFilter":    tagFilter,
 		"search_query": searchQuery,
 		"ExpiryFilter": expiryFilter,
+		"AgentFilter":  agentFilter,
 	}
 	for k, v := range stats {
 		data[k] = v
@@ -333,9 +367,9 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 
 // exportRateLimit tracks credential export requests per IP to prevent abuse.
 var (
-	exportRateMu    sync.Mutex
-	exportRateMap   = make(map[string][]time.Time)
-	exportRateLimit = 5           // max exports per window
+	exportRateMu     sync.Mutex
+	exportRateMap    = make(map[string][]time.Time)
+	exportRateLimit  = 5           // max exports per window
 	exportRateWindow = time.Minute // sliding window
 )
 
@@ -377,13 +411,15 @@ func (s *Server) handleExportCredentials(c *gin.Context) {
 	}
 
 	if expiryFilter != "" {
+		now := time.Now()
+		weekAhead := now.Add(7 * 24 * time.Hour)
 		switch expiryFilter {
 		case "expired":
-			query = query.Where("expires_at IS NOT NULL AND expires_at < datetime('now')")
+			query = query.Where("expires_at IS NOT NULL AND expires_at < ?", now)
 		case "expiring":
-			query = query.Where("expires_at IS NOT NULL AND expires_at BETWEEN datetime('now') AND datetime('now', '+7 days')")
+			query = query.Where("expires_at IS NOT NULL AND expires_at BETWEEN ? AND ?", now, weekAhead)
 		case "valid":
-			query = query.Where("expires_at IS NULL OR expires_at > datetime('now')")
+			query = query.Where("expires_at IS NULL OR expires_at > ?", now)
 		}
 	}
 
@@ -449,6 +485,7 @@ func (s *Server) handleGetCredential(c *gin.Context) {
 	if !s.findOrFail(c, &cred, idStr, "credential") {
 		return
 	}
+	cred.Notes = decryptCredNotes(cred.Notes)
 	c.JSON(http.StatusOK, cred)
 }
 

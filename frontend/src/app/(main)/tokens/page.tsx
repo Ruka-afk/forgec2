@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState, PageHeader } from "@/components/UI";
 import { formatTime } from "@/lib/utils";
@@ -46,8 +47,8 @@ export default function TokensPage() {
     setLoading(true);
     try {
       const [tokenData, agentData] = await Promise.all([
-        api.get("/tokens"),
-        api.get("/agents?page=1&pageSize=200"),
+        api.get(paths.tokens.list),
+        api.get(paths.agents.list("page=1&pageSize=200")),
       ]) as Record<string, unknown>[];
       setTokens((tokenData.tokens || tokenData.data || tokenData || []) as Token[]);
       setAgents((agentData.agents || agentData.data || agentData || []) as Agent[]);
@@ -73,7 +74,7 @@ export default function TokensPage() {
 
   const handleRevert = async (tokenId: string) => {
     try {
-      await api.post(`/agents/${tokenId}/token/revert`);
+      await api.post(paths.agents.tokenRevert(tokenId));
       loadData();
     } catch { toast.error(t("tokens.revert_failed")); }
   };
@@ -108,7 +109,7 @@ export default function TokensPage() {
         <CardContent className="p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row gap-3">
             <Select value={integrityFilter || "all"} onValueChange={(v) => setIntegrityFilter(v === "all" ? "" : v ?? "")}>
-              <SelectTrigger className="w-full sm:w-48" aria-label="Filter by integrity">
+              <SelectTrigger className="w-full sm:w-48" aria-label={t("tokens.integrity_filter")}>
                 <SelectValue placeholder={t("tokens.all_integrity")} />
               </SelectTrigger>
               <SelectContent>
@@ -120,7 +121,7 @@ export default function TokensPage() {
               </SelectContent>
             </Select>
             <Select value={sourceFilter || "all"} onValueChange={(v) => setSourceFilter(v === "all" ? "" : v ?? "")}>
-              <SelectTrigger className="w-full sm:w-48" aria-label="Filter by source">
+              <SelectTrigger className="w-full sm:w-48" aria-label={t("tokens.source_filter")}>
                 <SelectValue placeholder={t("tokens.all_sources")} />
               </SelectTrigger>
               <SelectContent>
@@ -137,7 +138,14 @@ export default function TokensPage() {
         {["System", "High", "Medium", "Low"].map((level) => {
           const count = tokens.filter((t) => (t.integrity || "Medium") === level).length;
           return (
-            <Card key={level} className={`p-3 cursor-pointer transition-all ${integrityFilter === level ? "ring-2 ring-indigo-500" : ""}`} onClick={() => setIntegrityFilter(integrityFilter === level ? "" : level)}>
+            <Card key={level} className={`relative p-3 transition-all ${integrityFilter === level ? "ring-2 ring-primary" : ""}`}>
+              <button
+                type="button"
+                onClick={() => setIntegrityFilter(integrityFilter === level ? "" : level)}
+                aria-pressed={integrityFilter === level}
+                aria-label={level}
+                className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
               <div className="text-xs text-muted-foreground">{level}</div>
               <div className="text-lg font-bold">{count}</div>
             </Card>
@@ -174,7 +182,7 @@ export default function TokensPage() {
                 const agentHostname = agentMap[token.agent_id] || token.agent_id?.substring(0, 8) || "-";
                 return (
                   <TableRow key={tid}>
-                    <TableCell><span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 font-medium">{agentHostname}</span></TableCell>
+                    <TableCell><span className="text-xs font-mono text-primary font-medium">{agentHostname}</span></TableCell>
                     <TableCell><span className="font-semibold text-sm">{domain}\{username}</span></TableCell>
                     <TableCell><Badge variant={getIntegrityVariant(integrity)}>{integrity}</Badge></TableCell>
                     <TableCell><Badge variant={getSourceVariant(source)}>{source}</Badge></TableCell>
@@ -191,7 +199,7 @@ export default function TokensPage() {
                     <TableCell className="text-xs font-mono text-muted-foreground">{createdAt ? formatTime(createdAt) : "-"}</TableCell>
                     <TableCell>
                       <Tooltip>
-                        <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleRevert(tid)} aria-label="Revert token to self" />}>
+                        <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleRevert(tid)} aria-label={t("tokens.revert")} />}>
                         <RotateCcw className="w-4 h-4" />
                         </TooltipTrigger>
                         <TooltipContent>Revert to Self</TooltipContent>

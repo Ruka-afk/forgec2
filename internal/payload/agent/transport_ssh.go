@@ -61,7 +61,7 @@ func initSSHConfig() {
 }
 
 // sshHostKeyCallback pins the server key when SSHHostKeyStr was set at build time;
-// otherwise falls back to lab-only insecure ignore (must regenerate with pin for production).
+// otherwise it fails closed — no silent InsecureIgnoreHostKey fallback (MITM surface).
 func sshHostKeyCallback() ssh.HostKeyCallback {
 	initSSHConfig()
 	if sshHostKey != nil {
@@ -72,7 +72,9 @@ func sshHostKeyCallback() ssh.HostKeyCallback {
 			return fmt.Errorf("ssh: host key mismatch for %s", hostname)
 		}
 	}
-	return ssh.InsecureIgnoreHostKey()
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		return fmt.Errorf("ssh: no host key pin configured, refusing connection to %s", hostname)
+	}
 }
 
 func subtleEqualSSHKeys(a, b ssh.PublicKey) bool {

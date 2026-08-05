@@ -29,25 +29,27 @@ export default function DNSPage() {
   const [server, setServer] = useState("8.8.8.8:53");
   const [txtPrefix, setTxtPrefix] = useState(".dns");
 
-  const fetchStatus = useCallback(async () => {
+  const fetchStatus = useCallback(async (seedFields = false, silent = false) => {
     try {
       const data = await api.get<DNSStatus>("/api/dns/status");
       setStatus(data);
-      if (data.domain) setDomain(data.domain);
-      if (data.addr) setAddr(data.addr);
+      if (seedFields) {
+        if (data.domain) setDomain(data.domain);
+        if (data.addr) setAddr(data.addr);
+      }
     } catch {
-      toast.error(t("dns.toast.load_failed"));
+      if (!silent) toast.error(t("dns.toast.load_failed"));
     } finally {
       setLoading(false);
     }
   }, [t]);
 
   useEffect(() => {
-    fetchStatus();
+    fetchStatus(true);
   }, [fetchStatus]);
 
   useEffect(() => {
-    const interval = setInterval(fetchStatus, 5000);
+    const interval = setInterval(() => fetchStatus(false, true), 5000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
 
@@ -121,7 +123,7 @@ export default function DNSPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="p-3">
             <CardContent className="p-0">
-              <div className="text-(--font-size-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.status_title")}</div>
+              <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.status_title")}</div>
               <div className="flex items-center gap-x-2">
                 <span className={`w-2 h-2 rounded-full ${status?.running ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
                 <span className="text-sm font-semibold text-foreground">{status?.running ? t("common.online") : t("common.offline")}</span>
@@ -130,19 +132,19 @@ export default function DNSPage() {
           </Card>
           <Card className="p-3">
             <CardContent className="p-0">
-              <div className="text-(--font-size-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.domain")}</div>
+              <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.domain")}</div>
               <div className="text-sm font-semibold text-foreground font-mono">{status?.domain || '\u2014'}</div>
             </CardContent>
           </Card>
           <Card className="p-3">
             <CardContent className="p-0">
-              <div className="text-(--font-size-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.listen_addr")}</div>
+              <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.listen_addr")}</div>
               <div className="text-sm font-semibold text-foreground font-mono">{status?.addr || '\u2014'}</div>
             </CardContent>
           </Card>
           <Card className="p-3">
             <CardContent className="p-0">
-              <div className="text-(--font-size-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.beacon_count")}</div>
+              <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.beacon_count")}</div>
               <div className="flex items-center gap-x-2">
                 <Activity className="w-3.5 h-3.5 text-primary" />
                 <span className="text-sm font-semibold text-foreground">{status?.beacon_count ?? 0}</span>

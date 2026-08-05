@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { PageHeader, Spinner } from "@/components/UI";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useTaskResult } from "@/lib/hooks/useTaskResult";
@@ -36,7 +37,7 @@ export default function ContainerPage() {
     setDispatchMsg(null);
     taskPoll.reset();
     try {
-      const data = await api.postJson<{ task_id?: string | number }>(`/agents/${selectedAgent}/container_detect`, {});
+      const data = await api.postJson<{ task_id?: string | number }>(paths.agents.cmd(selectedAgent, "container_detect"), {});
       const tid = data.task_id;
       setDispatchMsg(t("container.task_dispatched", { id: String(tid ?? "") }));
       if (tid != null) taskPoll.start(tid);
@@ -51,11 +52,11 @@ export default function ContainerPage() {
     setLoading(true);
     setDispatchMsg(null);
     taskPoll.reset();
-    let endpoint = "/container_escape";
-    if (escapeMethod === "docker") endpoint = "/container_docker";
-    else if (escapeMethod === "k8s") endpoint = "/container_k8s";
+    let endpoint = "container_escape";
+    if (escapeMethod === "docker") endpoint = "container_docker";
+    else if (escapeMethod === "k8s") endpoint = "container_k8s";
     try {
-      const data = await api.postJson<{ task_id?: string | number }>(`/agents/${selectedAgent}${endpoint}`, {});
+      const data = await api.postJson<{ task_id?: string | number }>(paths.agents.cmd(selectedAgent, endpoint), {});
       const tid = data.task_id;
       setDispatchMsg(t("container.task_dispatched", { id: String(tid ?? "") }));
       if (tid != null) taskPoll.start(tid);

@@ -2,9 +2,12 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
+import { useI18n } from "@/lib/i18n";
 import type { BOFFile, BOFLibraryItem, Execution, RepoItem } from "./types";
 
 export function useBOFData() {
+  const { t } = useI18n();
   const [files, setFiles] = useState<BOFFile[]>([]);
   const [repoItems, setRepoItems] = useState<RepoItem[]>([]);
   const [libraryItems, setLibraryItems] = useState<BOFLibraryItem[]>([]);
@@ -72,7 +75,7 @@ export function useBOFData() {
       formData.append("description", desc);
       formData.append("architecture", arch);
       try {
-        await api.postFormData("/api/bof/upload?format=json", formData);
+        await api.postFormData(paths.bof.upload, formData);
       } catch (e) {
         if (process.env.NODE_ENV === "development") console.error("BOF: upload failed", e);
       }
@@ -84,7 +87,7 @@ export function useBOFData() {
   const deleteBOF = useCallback(
     async (id: string) => {
       try {
-        await api.del(`/api/bof/${id}`);
+        await api.del(paths.bof.one(id));
       } catch (e) {
         if (process.env.NODE_ENV === "development") console.error("BOF: delete failed", e);
       }
@@ -96,7 +99,7 @@ export function useBOFData() {
   const runBOF = useCallback(
     async (id: string, agentId: string, args: string) => {
       try {
-        await api.post(`/api/bof/${id}/run`, { agent_id: agentId, args });
+        await api.post(paths.bof.run(id), { agent_id: agentId, args });
       } catch (e) {
         if (process.env.NODE_ENV === "development") console.error("BOF: run failed", e);
       }
@@ -108,7 +111,7 @@ export function useBOFData() {
   const editBOF = useCallback(
     async (id: string, name: string, description: string) => {
       try {
-        await api.post(`/api/bof/${id}/edit`, { name, description });
+        await api.post(paths.bof.edit(id), { name, description });
       } catch (e) {
         if (process.env.NODE_ENV === "development") console.error("BOF: edit failed", e);
       }
@@ -120,38 +123,38 @@ export function useBOFData() {
   const importFromUrl = useCallback(
     async (url: string, name?: string) => {
       try {
-        const data = await api.postJson("/api/bof/repos/import", { url, name: name || undefined });
+        const data = await api.postJson(paths.bof.reposImport, { url, name: name || undefined });
         loadRepo();
         loadFiles();
-        return { success: true, message: (data.message as string) || "Import completed successfully" };
+        return { success: true, message: (data.message as string) || t("bof.toast.import_success") };
       } catch {
-        return { success: false, message: "Import failed - check URL and try again" };
+        return { success: false, message: t("bof.toast.import_failed_url") };
       }
     },
-    [loadRepo, loadFiles]
+    [loadRepo, loadFiles, t]
   );
 
   const importFromRepo = useCallback(
     async (item: RepoItem) => {
       try {
-        await api.postJson("/api/bof/repos/import", {
+        await api.postJson(paths.bof.reposImport, {
           url: item.url,
           name: item.name,
         });
         loadRepo();
         loadFiles();
-        return { success: true, message: `${item.name} imported successfully` };
+        return { success: true, message: t("bof.toast.imported_name", { name: item.name || t("bof.unnamed") }) };
       } catch {
-        return { success: false, message: "Import failed" };
+        return { success: false, message: t("bof.toast.import_failed") };
       }
     },
-    [loadRepo, loadFiles]
+    [loadRepo, loadFiles, t]
   );
 
   const rateRepoItem = useCallback(
     async (itemId: string, rating: number) => {
       try {
-        await api.postJson(`/api/bof/repos/${itemId}/rate`, { rating });
+        await api.postJson(paths.bof.reposRate(itemId), { rating });
         loadRepo();
       } catch (e) {
         if (process.env.NODE_ENV === "development") console.error("BOF Repo: rating failed", e);
@@ -169,7 +172,7 @@ export function useBOFData() {
       formData.append("arch", arch);
       formData.append("author", author);
       try {
-        await api.postFormData("/api/bof/upload?format=json", formData);
+        await api.postFormData(paths.bof.upload, formData);
       } catch (e) {
         if (process.env.NODE_ENV === "development") console.error("BOFLibrary: upload failed", e);
       }
@@ -181,7 +184,7 @@ export function useBOFData() {
   const runLibrary = useCallback(
     async (id: number | string, agentId: string, args: string) => {
       try {
-        await api.post(`/api/bof/${id}/run`, { agent_id: agentId, args });
+        await api.post(paths.bof.run(id), { agent_id: agentId, args });
       } catch (e) {
         if (process.env.NODE_ENV === "development") console.error("BOFLibrary: execute failed", e);
       }
@@ -192,7 +195,7 @@ export function useBOFData() {
   const deleteLibrary = useCallback(
     async (id: number | string) => {
       try {
-        await api.del(`/api/bof/${id}`);
+        await api.del(paths.bof.one(id));
       } catch (e) {
         if (process.env.NODE_ENV === "development") console.error("BOFLibrary: delete failed", e);
       }

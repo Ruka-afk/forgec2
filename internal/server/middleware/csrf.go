@@ -27,6 +27,13 @@ func CSRFProtect() gin.HandlerFunc {
 
 		// Only protect state-changing methods
 		if method != "GET" && method != "HEAD" && method != "OPTIONS" {
+			// Requests authenticated via API key (X-API-Key) carry no session
+			// cookie: the secret bearer header cannot be attached cross-origin,
+			// so CSRF is not applicable.
+			if c.GetBool("auth_via_api_key") {
+				c.Next()
+				return
+			}
 			headerToken := c.GetHeader(csrfHeaderName)
 			sessionToken, err := c.Cookie("forgec2_session")
 			if sessionToken == "" || err != nil {

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import type { Beacon } from "./types";
 
@@ -27,18 +28,23 @@ export function useAgentData(t: (key: string) => string) {
   const [tagsByAgent, setTagsByAgent] = useState<Record<string, AgentTag[]>>({});
   const [taskCountMap, setTaskCountMap] = useState<Record<string, number>>({});
   const [agentLocks, setAgentLocks] = useState<Record<string, string>>({});
+  const loadAbortRef = useRef<AbortController | null>(null);
 
   const loadBeacons = useCallback(
-    (search = "", status = "", os = "", page = 1, pageSize = 20, tag_id = "") => {
-      setLoading(true);
+    (search = "", status = "", os = "", page = 1, pageSize = 20, tag_id = "", opts?: { background?: boolean }) => {
+      loadAbortRef.current?.abort();
+      const ac = new AbortController();
+      loadAbortRef.current = ac;
+      if (!opts?.background) setLoading(true);
       const p = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
       if (search) p.set("search", search);
       if (status) p.set("status", status);
       if (os) p.set("os", os);
       if (tag_id) p.set("tag_id", tag_id);
       api
-        .get(`/api/agents?${p.toString()}`)
+        .get(`/api/agents?${p.toString()}`, { signal: ac.signal })
         .then((data) => {
+          if (ac.signal.aborted) return;
           const list = (data.agents || []) as Beacon[];
           setBeacons(list);
           setTotal(Number(data.total) || list.length);
@@ -55,11 +61,14 @@ export function useAgentData(t: (key: string) => string) {
           setTaskCountMap(countMap);
         })
         .catch(() => {
+          if (ac.signal.aborted) return;
           setBeacons([]);
           setTotal(0);
           setError(t("agents.load_failed"));
         })
-        .finally(() => setLoading(false));
+        .finally(() => {
+          if (!ac.signal.aborted) setLoading(false);
+        });
     },
     [t],
   );
@@ -82,7 +91,7 @@ export function useAgentData(t: (key: string) => string) {
 
   useEffect(() => {
     const ac = new AbortController();
-    api.get("/api/tags", { signal: ac.signal })
+    api.get(paths.tags.list, { signal: ac.signal })
       .then((d) => { if (!ac.signal.aborted) setAllTags((d.tags || []) as AgentTag[]); })
       .catch(() => {
         if (!ac.signal.aborted) {
@@ -101,7 +110,7 @@ export function useAgentData(t: (key: string) => string) {
     const ids = beacons.map((b) => b.id || "").filter(Boolean);
     const ac = new AbortController();
     api
-      .postJson<{ tags: Record<string, AgentTag[]> }>("/agents/batch/tags", { agent_ids: ids })
+      .postJson<{ tags: Record<string, AgentTag[]> }>(paths.agents.batchTags, { agent_ids: ids })
       .then((d) => { if (!ac.signal.aborted) setTagsByAgent(d.tags || {}); })
       .catch(() => {
         if (!ac.signal.aborted) {

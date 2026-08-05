@@ -66,10 +66,7 @@ export const AgentRow = memo(function AgentRow({
 
   return (
     <tr
-      className={`group hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-all duration-150 cursor-pointer ${borderLeft} even:bg-muted/30 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:bg-indigo-50/50 dark:focus-visible:bg-indigo-900/20`}
-      tabIndex={0}
-      role="button"
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(id); } }}
+      className={`group hover:bg-secondary/60 transition-all duration-150 ${borderLeft} even:bg-muted/30 hover:shadow-sm`}
     >
       <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5" data-label="">
         <Checkbox aria-label={t("common.select_item")} name={`select-${id}`}
@@ -94,14 +91,14 @@ export const AgentRow = memo(function AgentRow({
               variant="ghost"
               size="icon-xs"
               onClick={(e) => { e.stopPropagation(); onCopy(`host-${id}`, hostname); }}
-              className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="ml-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
               aria-label={t("agents.copy_hostname")}
             >
               {copiedField === `host-${id}` ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
             </Button>
             {notes && <span className="ml-1.5" title={notes}><StickyNote className="w-4 h-4" /></span>}
             {beacon.parent_id && (
-              <span className="ml-1 text-(--font-size-micro-sm) text-purple-600 dark:text-purple-400" title={t("agents.p2p_chained")}>
+              <span className="ml-1 text-(--fs-micro-sm) text-purple-600 dark:text-purple-400" title={t("agents.p2p_chained")}>
                 <LinkIcon className="w-4 h-4" />
               </span>
             )}
@@ -114,7 +111,7 @@ export const AgentRow = memo(function AgentRow({
       {visibleCols.os && (
       <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4" data-label="OS">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <Badge variant="secondary" className="text-(--font-size-xs-sm) gap-1.5 whitespace-nowrap bg-secondary/60">
+          <Badge variant="secondary" className="text-(--fs-xs-sm) gap-1.5 whitespace-nowrap bg-secondary/60">
             <OsIcon className="w-3 h-3 text-muted-foreground" />
             {os}{arch ? ` ${arch}` : ""}
           </Badge>
@@ -124,9 +121,9 @@ export const AgentRow = memo(function AgentRow({
               integrity === "High" ? "success" :
               integrity === "Medium" ? "warning" :
               "secondary"
-            } className="text-(--font-size-micro-sm) font-medium">{integrity}</Badge>
+            } className="text-(--fs-micro-sm) font-medium">{integrity}</Badge>
           )}
-          {elevated && <Badge variant="destructive" className="text-(--font-size-micro-sm) font-bold" title={t("agents.elevated")}><Shield className="w-3 h-3" /></Badge>}
+          {elevated && <Badge variant="destructive" className="text-(--fs-micro-sm) font-bold" title={t("agents.elevated")}><Shield className="w-3 h-3" /></Badge>}
         </div>
       </TableCell>
       )}
@@ -137,7 +134,7 @@ export const AgentRow = memo(function AgentRow({
           variant="ghost"
           size="icon-xs"
           onClick={(e) => { e.stopPropagation(); onCopy(`ip-${id}`, ip); }}
-          className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="ml-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
           aria-label={t("agents.copy_ip")}
         >
           {copiedField === `ip-${id}` ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
@@ -164,10 +161,10 @@ export const AgentRow = memo(function AgentRow({
         {lockUser ? (
           <span className="inline-flex items-center gap-1 text-xs" title={t("agents.locked_by").replace("{user}", lockUser)}>
             <Lock className="w-4 h-4" />
-            <span className="text-(--font-size-micro-sm) text-amber-600 dark:text-amber-400 font-medium truncate max-w-[80px]">{lockUser}</span>
+            <span className="text-(--fs-micro-sm) text-amber-600 dark:text-amber-400 font-medium truncate max-w-[80px]">{lockUser}</span>
           </span>
         ) : (
-          <span className="text-muted-foreground/70 text-(--font-size-xs-sm)">
+          <span className="text-muted-foreground/70 text-(--fs-xs-sm)">
             <Unlock className="w-4 h-4" />
           </span>
         )}

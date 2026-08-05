@@ -2,15 +2,17 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { formatTime } from "@/lib/utils";
-import { EmptyState, PageHeader, Pagination, ConfirmModal } from "@/components/UI";
+import { PageHeader, Pagination, ConfirmModal } from "@/components/UI";
+import { DataState } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { ChevronLeft, ChevronRight, Download, Images, Minus, Pause, Play, Plus, Trash2, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -24,6 +26,7 @@ export default function ScreenshotsPage() {
   const { t } = useI18n();
   const [screenshots, setScreenshots] = useState<Screenshot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [agentFilter, setAgentFilter] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -36,19 +39,30 @@ export default function ScreenshotsPage() {
   const slideshowRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [resolutions, setResolutions] = useState<Record<string, Resolution>>({});
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
+    setError(null);
     try {
-      const result = await api.get("/loot");
+      // Dual-use /loot — same as loot page (not /api/loot)
+      const result = await api.get(paths.loot.page, { signal });
+      if (signal?.aborted) return;
       setScreenshots((result.screenshots || []) as Screenshot[]);
-    } catch {
+    } catch (e) {
+      if (signal?.aborted) return;
       setScreenshots([]);
-      toast.error(t("screenshots.load_failed"));
+      const msg = e instanceof Error ? e.message : t("screenshots.load_failed");
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      if (!signal?.aborted) setLoading(false);
     }
-    setLoading(false);
   }, [t]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    const ac = new AbortController();
+    void loadData(ac.signal);
+    return () => ac.abort();
+  }, [loadData]);
 
   useEffect(() => {
     return () => {
@@ -131,9 +145,9 @@ export default function ScreenshotsPage() {
       msg: t("screenshots.confirm_delete", { count: selectedIds.size }),
       cb: async () => {
         try {
-          await api.postJson("/loot/bulk-delete", { ids: [...selectedIds] });
+          await api.postJson(paths.loot.bulkDelete, { ids: [...selectedIds] });
           setSelectedIds(new Set());
-          loadData();
+          void loadData();
         } catch { toast.error(t("screenshots.delete_failed")); }
         setCfm(null);
       },
@@ -178,18 +192,27 @@ export default function ScreenshotsPage() {
         </div>
       </PageHeader>
 
-      {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <Skeleton key={i} className="rounded-xl border border-border h-28" />
-          ))}
-        </div>
-      ) : currentItems.length > 0 ? (
+      <DataState
+        loading={loading}
+        error={error}
+        onRetry={() => void loadData()}
+        empty={!loading && !error && currentItems.length === 0}
+        emptyIcon={Images}
+        emptyTitle={t("screenshots.empty_title")}
+        emptyMessage={t("screenshots.empty_message")}
+        loadingSkeleton={
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <Skeleton key={i} className="rounded-xl border border-border h-28" />
+            ))}
+          </div>
+        }
+      >
         <>
           <div className="flex items-center justify-between mb-3">
             {currentItems.length > 0 && (
               <Label className="flex items-center gap-x-2 text-xs text-muted-foreground cursor-pointer">
-                <Checkbox aria-label="Select all screenshots" checked={currentItems.length > 0 && currentItems.every(s => selectedIds.has(s.id))} onCheckedChange={toggleSelectAll} />
+                <Checkbox aria-label={t("loot.select_all_screenshots")} checked={currentItems.length > 0 && currentItems.every(s => selectedIds.has(s.id))} onCheckedChange={toggleSelectAll} />
                 {t("screenshots.select_all")}
               </Label>
             )}
@@ -217,15 +240,12 @@ export default function ScreenshotsPage() {
             <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
           </div>
         </>
-      ) : (
-        <div className="text-center py-16 sm:py-20">
-          <EmptyState icon={Images} title={t("screenshots.empty_title")} message={t("screenshots.empty_message")} />
-        </div>
-      )}
+      </DataState>
 
       {lbOpen && current && (
         <Dialog open={true} onOpenChange={() => setLbOpen(false)}>
           <DialogContent className="max-w-[100vw] w-full h-full bg-black/95 border-0 rounded-none p-0 gap-0 flex flex-col" showCloseButton={false}>
+            <DialogTitle className="sr-only">{current.filename}</DialogTitle>
             <div className="flex items-center justify-between px-4 py-2 bg-black/80 border-b border-white/10 shrink-0">
               <div className="flex items-center gap-3 text-xs text-white/70">
                 <span className="font-medium text-white">{lbIndex + 1} / {lbImages.length}</span>

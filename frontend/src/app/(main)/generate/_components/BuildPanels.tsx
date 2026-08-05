@@ -1,40 +1,20 @@
 import React from "react";
 import type { ReactNode } from "react";
 import { Spinner } from "@/components/UI";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CopyButton } from "@/components/ui/copy-button";
 import type { BinaryForm, UnixForm, PS1Form, StagerForm, ShellcodeForm, DonutForm, BinaryVariant, UnixVariant, StagerVariant } from "@/types/generate";
-import { CheckCircle, Copy, Download, Info, Link, Wand2 } from "lucide-react";
+import { AppWindow, Apple, Binary, CheckCircle2, Disc, Download, HardDrive, Info, Package, PackageOpen, Puzzle, Terminal, Wand2 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
+import { AdvancedSection, FieldLabel, PayloadCard } from "./PayloadCard";
+import { BuildResult, BuildStatusBadge } from "./BuildResult";
 
-function PanelHeader({ bg, icon, title, subtitle }: { bg: string; icon: string; title: string; subtitle: string }) {
-  return (
-    <div className="flex items-center gap-x-3 mb-4 pb-4 border-b border-border">
-      <div className={`w-11 h-11 ${bg} rounded-xl flex items-center justify-center text-2xl`}>{icon}</div>
-      <div>
-        <div className="font-semibold text-base text-foreground">{title}</div>
-        <div className="text-xs text-muted-foreground">{subtitle}</div>
-      </div>
-    </div>
-  );
-}
-
-function ResultDisplay({ result }: { result: ReactNode }) {
-  if (!result) return null;
-  const isError = typeof result === "string" && (result.startsWith("Error") || result.startsWith("error") || result.startsWith("ERROR"));
-  return (
-    <Alert variant={isError ? "destructive" : "default"} className="mt-3">
-      <AlertDescription>
-        <pre className="whitespace-pre-wrap font-mono">{result}</pre>
-      </AlertDescription>
-    </Alert>
-  );
-}
+const BTN_CLASS = "w-full h-10 rounded-xl font-medium flex items-center justify-center gap-x-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50";
 
 // ─── BinaryPanel (exe / dll) ───────────────────────────────────
 
@@ -47,136 +27,134 @@ interface BinaryPanelProps {
   onGenerate: () => void;
 }
 
-const VARIANT_CONFIG: Record<BinaryVariant, { bg: string; icon: string; title: string; subtitle: string; btnColor: string; btnLabel: string; showP2P: boolean }> = {
-  exe: { bg: "bg-amber-500/10", icon: "\u{1F5A5}\uFE0F", title: "Windows EXE", subtitle: "Native Go payload", btnColor: "bg-warning hover:bg-warning/80 text-white", btnLabel: "Generate EXE", showP2P: true },
-  dll: { bg: "bg-destructive/10", icon: "🧩", title: "Windows DLL", subtitle: "rundll32 / regsvr32 / LoadLibrary", btnColor: "bg-destructive hover:bg-destructive/90", btnLabel: "Generate DLL", showP2P: false },
+const VARIANT_CONFIG: Record<BinaryVariant, { tint: string; icon: ReactNode; titleKey: string; subtitleKey: string; btnKey: string; showP2P: boolean }> = {
+  exe: { tint: "bg-warning/10 text-amber-600 dark:text-amber-400", icon: <AppWindow className="w-5 h-5" />, titleKey: "generate.panel.exe_title", subtitleKey: "generate.panel.exe_subtitle", btnKey: "generate.panel.generate_exe", showP2P: true },
+  dll: { tint: "bg-destructive/10 text-destructive", icon: <Puzzle className="w-5 h-5" />, titleKey: "generate.panel.dll_title", subtitleKey: "generate.panel.dll_subtitle", btnKey: "generate.panel.generate_dll", showP2P: false },
 };
 
 export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setForm, busy, result, onGenerate }: BinaryPanelProps) {
+  const { t } = useI18n();
   const cfg = VARIANT_CONFIG[variant];
   const id = `binary-${variant}`;
   return (
-    <Card className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
-      <PanelHeader bg={cfg.bg} icon={cfg.icon} title={cfg.title} subtitle={cfg.subtitle} />
-      <div className="space-y-3">
-        <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Filename</span>
-          <Input aria-label="Output filename" name={`${id}-filename`} value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
-        </div>
-        {cfg.showP2P && (
-          <div className="mt-2 pt-2 border-t border-border">
-            <details className="group">
-              <summary className="text-xs text-muted-foreground cursor-pointer hover:text-indigo-600 transition-colors select-none"><Link className="w-4 h-4" /> P2P / DNS Config (opt)</summary>
-              <div className="mt-2 space-y-2">
-                <div>
-                  <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Mode</span>
-                  <Select value={form.p2p_mode} onValueChange={(val) => val != null && setForm({ ...form, p2p_mode: val })}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Direct (HTTP/TCP)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Direct (HTTP/TCP)</SelectItem>
-                      <SelectItem value="parent">P2P Parent</SelectItem>
-                      <SelectItem value="child">P2P Child</SelectItem>
-                      <SelectItem value="dns">DNS Tunnel</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {form.p2p_mode === "child" && (
-                  <div>
-                    <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Parent Address</span>
-                    <Input aria-label="tcp://192.168.1.100:4444" name={`${id}-parent`} type="text" placeholder="tcp://192.168.1.100:4444" value={form.p2p_parent} onChange={(e) => setForm({ ...form, p2p_parent: e.target.value })} className="font-mono text-xs" />
-                  </div>
-                )}
-                {form.p2p_mode === "parent" && (
-                  <div>
-                    <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Listen Address</span>
-                    <Input aria-label="TCP: :4444 / SMB: pipe_name" name={`${id}-listen`} type="text" placeholder="TCP: :4444 / SMB: pipe_name" value={form.p2p_listen_addr} onChange={(e) => setForm({ ...form, p2p_listen_addr: e.target.value })} className="font-mono text-xs" />
-                  </div>
-                )}
-                {form.p2p_mode === "dns" && (
-                  <div className="space-y-2">
-                    <div>
-                      <span className="block text-xs font-semibold text-muted-foreground mb-1.5">DNS Domain</span>
-                      <Input aria-label="c2.example.com" name={`${id}-dns-domain`} type="text" placeholder="c2.example.com" value={form.dns_domain} onChange={(e) => setForm({ ...form, dns_domain: e.target.value })} className="font-mono text-xs" />
-                    </div>
-                    <div>
-                      <span className="block text-xs font-semibold text-muted-foreground mb-1.5">DNS Server</span>
-                      <Input aria-label="192.168.1.100" name={`${id}-dns-server`} type="text" placeholder="192.168.1.100" value={form.dns_server} onChange={(e) => setForm({ ...form, dns_server: e.target.value })} className="font-mono text-xs" />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </details>
+    <PayloadCard
+      icon={cfg.icon}
+      tint={cfg.tint}
+      title={t(cfg.titleKey)}
+      subtitle={t(cfg.subtitleKey)}
+      badge={<BuildStatusBadge busy={busy} result={result} />}
+      footer={
+        <>
+          <Button type="button" onClick={onGenerate} disabled={busy} className={BTN_CLASS}>
+            {busy ? <><Spinner /> {t("generate.panel.generating")}</> : <><Download className="w-4 h-4" /> {t(cfg.btnKey)}</>}
+          </Button>
+          <BuildResult busy={busy} result={result} />
+        </>
+      }
+    >
+      <div>
+        <FieldLabel>{t("generate.panel.filename")}</FieldLabel>
+        <Input aria-label={t("generate.panel.output_filename")} name={`${id}-filename`} value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
+      </div>
+      {cfg.showP2P && (
+        <AdvancedSection title={t("generate.panel.p2p_config")}>
+          <div>
+            <FieldLabel>{t("generate.panel.mode")}</FieldLabel>
+            <Select value={form.p2p_mode} onValueChange={(val) => val != null && setForm({ ...form, p2p_mode: val })}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t("generate.panel.direct")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">{t("generate.panel.direct")}</SelectItem>
+                <SelectItem value="parent">{t("generate.panel.p2p_parent")}</SelectItem>
+                <SelectItem value="child">{t("generate.panel.p2p_child")}</SelectItem>
+                <SelectItem value="dns">{t("generate.panel.dns_tunnel")}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        )}
-        <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Architecture</span>
-          <Select value={form.arch} onValueChange={(val) => val != null && setForm({ ...form, arch: val })}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="amd64">x64 (amd64)</SelectItem>
-              <SelectItem value="arm64">ARM64</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-x-2">
-          <Checkbox id={`${id}-persist`} aria-label="Enable persistence" checked={form.persist} onCheckedChange={(checked) => setForm({ ...form, persist: checked === true })} />
-          <Label htmlFor={`${id}-persist`} className="text-sm text-foreground">Persist</Label>
-        </div>
-        <div className="flex items-center gap-x-2">
-          <Checkbox id={`${id}-skip-tls`} aria-label="Skip TLS verification" checked={form.skip_tls} onCheckedChange={(checked) => setForm({ ...form, skip_tls: checked === true })} />
-          <Label htmlFor={`${id}-skip-tls`} className="text-sm text-muted-foreground">Skip TLS Verify</Label>
-        </div>
+          {form.p2p_mode === "child" && (
+            <div>
+              <FieldLabel>{t("generate.panel.parent_address")}</FieldLabel>
+              <Input aria-label="tcp://192.168.1.100:4444" name={`${id}-parent`} type="text" placeholder="tcp://192.168.1.100:4444" value={form.p2p_parent} onChange={(e) => setForm({ ...form, p2p_parent: e.target.value })} className="font-mono text-xs" />
+            </div>
+          )}
+          {form.p2p_mode === "parent" && (
+            <div>
+              <FieldLabel>{t("generate.panel.listen_address")}</FieldLabel>
+              <Input aria-label="TCP: :4444 / SMB: pipe_name" name={`${id}-listen`} type="text" placeholder="TCP: :4444 / SMB: pipe_name" value={form.p2p_listen_addr} onChange={(e) => setForm({ ...form, p2p_listen_addr: e.target.value })} className="font-mono text-xs" />
+            </div>
+          )}
+          {form.p2p_mode === "dns" && (
+            <>
+              <div>
+                <FieldLabel>{t("generate.panel.dns_domain")}</FieldLabel>
+                <Input aria-label="c2.example.com" name={`${id}-dns-domain`} type="text" placeholder="c2.example.com" value={form.dns_domain} onChange={(e) => setForm({ ...form, dns_domain: e.target.value })} className="font-mono text-xs" />
+              </div>
+              <div>
+                <FieldLabel>{t("generate.panel.dns_server")}</FieldLabel>
+                <Input aria-label="192.168.1.100" name={`${id}-dns-server`} type="text" placeholder="192.168.1.100" value={form.dns_server} onChange={(e) => setForm({ ...form, dns_server: e.target.value })} className="font-mono text-xs" />
+              </div>
+            </>
+          )}
+        </AdvancedSection>
+      )}
+      <div>
+        <FieldLabel>{t("generate.panel.architecture")}</FieldLabel>
+        <Select value={form.arch} onValueChange={(val) => val != null && setForm({ ...form, arch: val })}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="amd64">x64 (amd64)</SelectItem>
+            <SelectItem value="arm64">ARM64</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex items-center gap-x-2">
+        <Checkbox id={`${id}-persist`} aria-label={t("generate.panel.persist_aria")} checked={form.persist} onCheckedChange={(checked) => setForm({ ...form, persist: checked === true })} />
+        <Label htmlFor={`${id}-persist`} className="text-sm text-foreground">{t("generate.panel.persist")}</Label>
+      </div>
+      <div className="flex items-center gap-x-2">
+        <Checkbox id={`${id}-skip-tls`} aria-label={t("generate.panel.skip_tls_aria")} checked={form.skip_tls} onCheckedChange={(checked) => setForm({ ...form, skip_tls: checked === true })} />
+        <Label htmlFor={`${id}-skip-tls`} className="text-sm text-muted-foreground">{t("generate.panel.skip_tls")}</Label>
+      </div>
+      <div className="flex items-start gap-x-2">
+        <Checkbox id={`${id}-evasion`} aria-label={t("generate.panel.edr_evasion_aria")} checked={form.evasion} onCheckedChange={(checked) => setForm({ ...form, evasion: checked === true })} />
+        <Label htmlFor={`${id}-evasion`} className="text-sm text-muted-foreground">
+          {t("generate.panel.edr_evasion")}
+          <span className="block text-(--fs-micro-sm) text-muted-foreground font-normal">{t("generate.panel.edr_evasion_hint")}</span>
+        </Label>
+      </div>
+      {variant === "exe" && (
         <div className="flex items-start gap-x-2">
-          <Checkbox id={`${id}-evasion`} aria-label="EDR Evasion" checked={form.evasion} onCheckedChange={(checked) => setForm({ ...form, evasion: checked === true })} />
-          <Label htmlFor={`${id}-evasion`} className="text-sm text-muted-foreground">
-            EDR Evasion (random sleep)
-            <span className="block text-(--font-size-micro-sm) text-muted-foreground font-normal">Set FORGEC2_EVASION=1 at runtime</span>
+          <Checkbox id={`${id}-obfuscate`} aria-label={t("generate.panel.obfuscate_aria")} checked={form.obfuscate} onCheckedChange={(checked) => setForm({ ...form, obfuscate: checked === true })} />
+          <Label htmlFor={`${id}-obfuscate`} className="text-sm text-muted-foreground">
+            {t("generate.panel.obfuscate")}
+            <span className="block text-(--fs-micro-sm) text-muted-foreground font-normal">{t("generate.panel.obfuscate_hint")}</span>
           </Label>
         </div>
-        {variant === "exe" && (
-          <div className="flex items-start gap-x-2">
-            <Checkbox id={`${id}-obfuscate`} aria-label="Obfuscate" checked={form.obfuscate} onCheckedChange={(checked) => setForm({ ...form, obfuscate: checked === true })} />
-            <Label htmlFor={`${id}-obfuscate`} className="text-sm text-muted-foreground">
-              Obfuscate (garble)
-              <span className="block text-(--font-size-micro-sm) text-muted-foreground font-normal">Strip symbols + build ID, hide literals</span>
-            </Label>
-          </div>
-        )}
-        <div>
-          <span className="block text-sm text-muted-foreground mb-1">Domain Front (CDN host)</span>
-          <Input aria-label="e.g. cdn.cloudflare.com" name={`${id}-domain-front`} value={form.domain_front} onChange={(e) => setForm({ ...form, domain_front: e.target.value })} placeholder="e.g. cdn.cloudflare.com" className="text-sm" />
-        </div>
-        <div className="mt-2 pt-2 border-t border-border">
-          <details className="group">
-            <summary className="text-xs text-muted-foreground cursor-pointer hover:text-indigo-600 transition-colors select-none">Working Hours (opt)</summary>
-            <div className="mt-2 space-y-2">
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <span className="block text-xs font-semibold text-muted-foreground mb-1">Start (HH:MM)</span>
-                  <Input aria-label="Working start time" type="time" value={form.working_start} onChange={(e) => setForm({ ...form, working_start: e.target.value })} className="text-xs" />
-                </div>
-                <div>
-                  <span className="block text-xs font-semibold text-muted-foreground mb-1">End (HH:MM)</span>
-                  <Input aria-label="Working end time" type="time" value={form.working_end} onChange={(e) => setForm({ ...form, working_end: e.target.value })} className="text-xs" />
-                </div>
-                <div>
-                  <span className="block text-xs font-semibold text-muted-foreground mb-1">Timezone</span>
-                  <Input aria-label="Timezone" placeholder="UTC" value={form.working_tz} onChange={(e) => setForm({ ...form, working_tz: e.target.value })} className="font-mono text-xs" />
-                </div>
-              </div>
-            </div>
-          </details>
-        </div>
-        <Button type="button" onClick={onGenerate} disabled={busy} className={`w-full h-10 ${cfg.btnColor} disabled:opacity-50 transition-colors text-destructive-foreground font-medium rounded-xl flex items-center justify-center gap-x-2`}>
-          {busy ? <><Spinner /> Generating...</> : <><Download className="w-4 h-4" /> {cfg.btnLabel}</>}
-        </Button>
+      )}
+      <div>
+        <FieldLabel>{t("generate.panel.domain_front")}</FieldLabel>
+        <Input aria-label={t("generate.panel.domain_front_aria")} name={`${id}-domain-front`} value={form.domain_front} onChange={(e) => setForm({ ...form, domain_front: e.target.value })} placeholder={t("generate.panel.domain_front_aria")} />
       </div>
-      <ResultDisplay result={result} />
-    </Card>
+      <AdvancedSection title={t("generate.panel.working_hours")}>
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <FieldLabel>{t("generate.panel.start_hhmm")}</FieldLabel>
+            <Input aria-label={t("generate.panel.start_aria")} type="time" value={form.working_start} onChange={(e) => setForm({ ...form, working_start: e.target.value })} />
+          </div>
+          <div>
+            <FieldLabel>{t("generate.panel.end_hhmm")}</FieldLabel>
+            <Input aria-label={t("generate.panel.end_aria")} type="time" value={form.working_end} onChange={(e) => setForm({ ...form, working_end: e.target.value })} />
+          </div>
+          <div>
+            <FieldLabel>{t("generate.panel.timezone")}</FieldLabel>
+            <Input aria-label={t("generate.panel.timezone_aria")} placeholder="UTC" value={form.working_tz} onChange={(e) => setForm({ ...form, working_tz: e.target.value })} className="font-mono text-xs" />
+          </div>
+        </div>
+      </AdvancedSection>
+    </PayloadCard>
   );
 });
 
@@ -191,61 +169,64 @@ interface UnixPanelProps {
   onGenerate: () => void;
 }
 
-const UNIX_CONFIG: Record<UnixVariant, { bg: string; icon: string; title: string; subtitle: string; btnColor: string; btnLabel: string }> = {
-  linux: { bg: "bg-emerald-100 dark:bg-emerald-900/30", icon: "🐧", title: "Linux ELF", subtitle: "Native Go payload / amd64", btnColor: "bg-emerald-600 hover:bg-emerald-700", btnLabel: "Generate ELF" },
-  macos: { bg: "bg-primary/10", icon: "🍏", title: "macOS Binary", subtitle: "Native Go payload / amd64", btnColor: "bg-primary hover:bg-primary/90 text-primary-foreground", btnLabel: "Generate macOS" },
+const UNIX_CONFIG: Record<UnixVariant, { tint: string; icon: ReactNode; titleKey: string; subtitleKey: string; btnKey: string }> = {
+  linux: { tint: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400", icon: <HardDrive className="w-5 h-5" />, titleKey: "generate.panel.elf_title", subtitleKey: "generate.panel.unix_subtitle", btnKey: "generate.panel.generate_elf" },
+  macos: { tint: "bg-primary/10 text-primary", icon: <Apple className="w-5 h-5" />, titleKey: "generate.panel.macos_title", subtitleKey: "generate.panel.unix_subtitle", btnKey: "generate.panel.generate_macos" },
 };
 
 export const UnixPanel = React.memo(function UnixPanel({ variant, form, setForm, busy, result, onGenerate }: UnixPanelProps) {
+  const { t } = useI18n();
   const cfg = UNIX_CONFIG[variant];
   const id = `unix-${variant}`;
   return (
-    <Card className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
-      <PanelHeader bg={cfg.bg} icon={cfg.icon} title={cfg.title} subtitle={cfg.subtitle} />
-      <div className="space-y-3">
-        <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Filename</span>
-          <Input aria-label="Output filename" name={`${id}-filename`} value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
-        </div>
-        <div className="flex items-center gap-x-2">
-          <Checkbox id={`${id}-persist`} aria-label="Enable persistence" checked={form.persist} onCheckedChange={(checked) => setForm({ ...form, persist: checked === true })} />
-          <Label htmlFor={`${id}-persist`} className="text-sm text-foreground">Persist</Label>
-          <Checkbox id={`${id}-skip-tls`} aria-label="Skip TLS verification" checked={form.skip_tls} onCheckedChange={(checked) => setForm({ ...form, skip_tls: checked === true })} className="ml-3" />
-          <Label htmlFor={`${id}-skip-tls`} className="text-sm text-muted-foreground">Skip TLS</Label>
-          <Checkbox id={`${id}-obfuscate`} aria-label="Obfuscate" checked={form.obfuscate} onCheckedChange={(checked) => setForm({ ...form, obfuscate: checked === true })} className="ml-3" />
-          <Label htmlFor={`${id}-obfuscate`} className="text-sm text-muted-foreground">Obfuscate</Label>
-        </div>
-        <div>
-          <span className="block text-sm text-muted-foreground mb-1">Domain Front (CDN host)</span>
-          <Input aria-label="e.g. cdn.cloudflare.com" name={`${id}-domain-front`} value={form.domain_front} onChange={(e) => setForm({ ...form, domain_front: e.target.value })} placeholder="e.g. cdn.cloudflare.com" className="text-sm" />
-        </div>
-        <div className="mt-2 pt-2 border-t border-border">
-          <details className="group">
-            <summary className="text-xs text-muted-foreground cursor-pointer hover:text-indigo-600 transition-colors select-none">Working Hours (opt)</summary>
-            <div className="mt-2 space-y-2">
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <span className="block text-xs font-semibold text-muted-foreground mb-1">Start (HH:MM)</span>
-                  <Input aria-label="Working start time" type="time" value={form.working_start} onChange={(e) => setForm({ ...form, working_start: e.target.value })} className="text-xs" />
-                </div>
-                <div>
-                  <span className="block text-xs font-semibold text-muted-foreground mb-1">End (HH:MM)</span>
-                  <Input aria-label="Working end time" type="time" value={form.working_end} onChange={(e) => setForm({ ...form, working_end: e.target.value })} className="text-xs" />
-                </div>
-                <div>
-                  <span className="block text-xs font-semibold text-muted-foreground mb-1">Timezone</span>
-                  <Input aria-label="Timezone" placeholder="UTC" value={form.working_tz} onChange={(e) => setForm({ ...form, working_tz: e.target.value })} className="font-mono text-xs" />
-                </div>
-              </div>
-            </div>
-          </details>
-        </div>
-        <Button type="button" onClick={onGenerate} disabled={busy} className={`w-full h-10 ${cfg.btnColor} disabled:opacity-50 text-white font-medium rounded-xl flex items-center justify-center gap-x-2`}>
-          {busy ? <><Spinner /> Generating...</> : <><Download className="w-4 h-4" /> {cfg.btnLabel}</>}
-        </Button>
+    <PayloadCard
+      icon={cfg.icon}
+      tint={cfg.tint}
+      title={t(cfg.titleKey)}
+      subtitle={t(cfg.subtitleKey)}
+      badge={<BuildStatusBadge busy={busy} result={result} />}
+      footer={
+        <>
+          <Button type="button" onClick={onGenerate} disabled={busy} className={BTN_CLASS}>
+            {busy ? <><Spinner /> {t("generate.panel.generating")}</> : <><Download className="w-4 h-4" /> {t(cfg.btnKey)}</>}
+          </Button>
+          <BuildResult busy={busy} result={result} />
+        </>
+      }
+    >
+      <div>
+        <FieldLabel>{t("generate.panel.filename")}</FieldLabel>
+        <Input aria-label={t("generate.panel.output_filename")} name={`${id}-filename`} value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
       </div>
-      <ResultDisplay result={result} />
-    </Card>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        <Checkbox id={`${id}-persist`} aria-label={t("generate.panel.persist_aria")} checked={form.persist} onCheckedChange={(checked) => setForm({ ...form, persist: checked === true })} />
+        <Label htmlFor={`${id}-persist`} className="text-sm text-foreground">{t("generate.panel.persist")}</Label>
+        <Checkbox id={`${id}-skip-tls`} aria-label={t("generate.panel.skip_tls_aria")} checked={form.skip_tls} onCheckedChange={(checked) => setForm({ ...form, skip_tls: checked === true })} className="ml-3" />
+        <Label htmlFor={`${id}-skip-tls`} className="text-sm text-muted-foreground">{t("generate.panel.skip_tls_short")}</Label>
+        <Checkbox id={`${id}-obfuscate`} aria-label={t("generate.panel.obfuscate_aria")} checked={form.obfuscate} onCheckedChange={(checked) => setForm({ ...form, obfuscate: checked === true })} className="ml-3" />
+        <Label htmlFor={`${id}-obfuscate`} className="text-sm text-muted-foreground">{t("generate.panel.obfuscate_aria")}</Label>
+      </div>
+      <div>
+        <FieldLabel>{t("generate.panel.domain_front")}</FieldLabel>
+        <Input aria-label={t("generate.panel.domain_front_aria")} name={`${id}-domain-front`} value={form.domain_front} onChange={(e) => setForm({ ...form, domain_front: e.target.value })} placeholder={t("generate.panel.domain_front_aria")} />
+      </div>
+      <AdvancedSection title={t("generate.panel.working_hours")}>
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <FieldLabel>{t("generate.panel.start_hhmm")}</FieldLabel>
+            <Input aria-label={t("generate.panel.start_aria")} type="time" value={form.working_start} onChange={(e) => setForm({ ...form, working_start: e.target.value })} />
+          </div>
+          <div>
+            <FieldLabel>{t("generate.panel.end_hhmm")}</FieldLabel>
+            <Input aria-label={t("generate.panel.end_aria")} type="time" value={form.working_end} onChange={(e) => setForm({ ...form, working_end: e.target.value })} />
+          </div>
+          <div>
+            <FieldLabel>{t("generate.panel.timezone")}</FieldLabel>
+            <Input aria-label={t("generate.panel.timezone_aria")} placeholder="UTC" value={form.working_tz} onChange={(e) => setForm({ ...form, working_tz: e.target.value })} className="font-mono text-xs" />
+          </div>
+        </div>
+      </AdvancedSection>
+    </PayloadCard>
   );
 });
 
@@ -260,32 +241,40 @@ interface StagerPanelProps {
   onGenerate: () => void;
 }
 
-const STAGER_CONFIG: Record<StagerVariant, { bg: string; title: string; subtitle: string; btnColor: string }> = {
-  windows: { bg: "bg-primary/10", title: "Windows Stager", subtitle: "XOR loader + remote implant", btnColor: "bg-primary hover:bg-primary/90 text-primary-foreground" },
-  linux: { bg: "bg-teal-100 dark:bg-teal-900/30", title: "Linux Stager", subtitle: "XOR loader + remote implant", btnColor: "bg-teal-600 hover:bg-teal-700" },
+const STAGER_CONFIG: Record<StagerVariant, { tint: string; icon: ReactNode; titleKey: string; subtitleKey: string }> = {
+  windows: { tint: "bg-violet-500/10 text-violet-600 dark:text-violet-400", icon: <PackageOpen className="w-5 h-5" />, titleKey: "generate.panel.stager_win_title", subtitleKey: "generate.panel.stager_subtitle" },
+  linux: { tint: "bg-teal-500/10 text-teal-600 dark:text-teal-400", icon: <Package className="w-5 h-5" />, titleKey: "generate.panel.stager_linux_title", subtitleKey: "generate.panel.stager_subtitle" },
 };
 
 export const StagerPanel = React.memo(function StagerPanel({ variant, form, setForm, busy, result, onGenerate }: StagerPanelProps) {
+  const { t } = useI18n();
   const cfg = STAGER_CONFIG[variant];
   const id = `stager-${variant}`;
   return (
-    <Card className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
-      <PanelHeader bg={cfg.bg} icon="📦" title={cfg.title} subtitle={cfg.subtitle} />
-      <div className="space-y-4">
-        <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Output Filename</span>
-          <Input aria-label="Output filename" name={`${id}-filename`} value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
-        </div>
-        <div className="flex items-center gap-x-2">
-          <Checkbox id={`${id}-skip-tls`} aria-label="Skip TLS verification" checked={form.skip_tls} onCheckedChange={(checked) => setForm({ ...form, skip_tls: checked === true })} />
-          <Label htmlFor={`${id}-skip-tls`} className="text-sm text-foreground">Skip TLS Verify</Label>
-        </div>
-        <Button type="button" onClick={onGenerate} disabled={busy} className={`w-full h-10 ${cfg.btnColor} disabled:opacity-50 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2`}>
-          {busy ? <><Spinner /> Generating...</> : <><Download className="w-4 h-4" /> Generate Loader</>}
-        </Button>
+    <PayloadCard
+      icon={cfg.icon}
+      tint={cfg.tint}
+      title={t(cfg.titleKey)}
+      subtitle={t(cfg.subtitleKey)}
+      badge={<BuildStatusBadge busy={busy} result={result} />}
+      footer={
+        <>
+          <Button type="button" onClick={onGenerate} disabled={busy} className={BTN_CLASS}>
+            {busy ? <><Spinner /> {t("generate.panel.generating")}</> : <><Download className="w-4 h-4" /> {t("generate.panel.generate_loader")}</>}
+          </Button>
+          <BuildResult busy={busy} result={result} />
+        </>
+      }
+    >
+      <div>
+        <FieldLabel>{t("generate.panel.output_filename")}</FieldLabel>
+        <Input aria-label={t("generate.panel.output_filename")} name={`${id}-filename`} value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
       </div>
-      <ResultDisplay result={result} />
-    </Card>
+      <div className="flex items-center gap-x-2">
+        <Checkbox id={`${id}-skip-tls`} aria-label={t("generate.panel.skip_tls_aria")} checked={form.skip_tls} onCheckedChange={(checked) => setForm({ ...form, skip_tls: checked === true })} />
+        <Label htmlFor={`${id}-skip-tls`} className="text-sm text-foreground">{t("generate.panel.skip_tls")}</Label>
+      </div>
+    </PayloadCard>
   );
 });
 
@@ -300,24 +289,32 @@ export const ShellcodePanel = React.memo(function ShellcodePanel({
   result: ReactNode;
   onGenerate: () => void;
 }) {
+  const { t } = useI18n();
   return (
-    <Card className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
-      <PanelHeader bg="bg-amber-100 dark:bg-amber-900/30" icon="💻" title="Raw Shellcode" subtitle="WinExec + PowerShell" />
-      <div className="space-y-4">
-        <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Command</span>
-          <Input aria-label="Shellcode command" name="shellcode-cmd" value={form.command} onChange={(e) => setForm({ ...form, command: e.target.value })} className="font-mono text-xs" />
-        </div>
-        <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Filename</span>
-          <Input aria-label="Output filename" name="shellcode-filename" value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
-        </div>
-        <Button type="button" onClick={onGenerate} disabled={busy} className="w-full h-10 bg-warning hover:bg-warning/80 disabled:opacity-50 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
-          {busy ? <><Spinner /> Generating...</> : <><Download className="w-4 h-4" /> Generate Shellcode</>}
-        </Button>
+    <PayloadCard
+      icon={<Binary className="w-5 h-5" />}
+      tint="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
+      title={t("generate.panel.shellcode_title")}
+      subtitle={t("generate.panel.shellcode_subtitle")}
+      badge={<BuildStatusBadge busy={busy} result={result} />}
+      footer={
+        <>
+          <Button type="button" onClick={onGenerate} disabled={busy} className={BTN_CLASS}>
+            {busy ? <><Spinner /> {t("generate.panel.generating")}</> : <><Download className="w-4 h-4" /> {t("generate.panel.generate_shellcode")}</>}
+          </Button>
+          <BuildResult busy={busy} result={result} />
+        </>
+      }
+    >
+      <div>
+        <FieldLabel>{t("generate.panel.command")}</FieldLabel>
+        <Input aria-label={t("generate.panel.command")} name="shellcode-cmd" value={form.command} onChange={(e) => setForm({ ...form, command: e.target.value })} className="font-mono text-xs" />
       </div>
-      <ResultDisplay result={result} />
-    </Card>
+      <div>
+        <FieldLabel>{t("generate.panel.filename")}</FieldLabel>
+        <Input aria-label={t("generate.panel.output_filename")} name="shellcode-filename" value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
+      </div>
+    </PayloadCard>
   );
 });
 
@@ -333,48 +330,56 @@ export const DonutPanel = React.memo(function DonutPanel({
   onGenerate: () => void;
   fileRef: React.RefObject<HTMLInputElement | null>;
 }) {
+  const { t } = useI18n();
   return (
-    <Card className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
-      <PanelHeader bg="bg-amber-500/10" icon="🍩" title="Donut Loader" subtitle="Native .NET to PIC shellcode" />
-      <div className="space-y-4">
-        <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">.NET Assembly (EXE/DLL)</span>
-          <input aria-label="Upload .NET assembly file" name="donut-assembly" ref={fileRef} type="file" accept=".exe,.dll" onChange={(e) => setForm({ ...form, assembly: e.target.files?.[0] || null })} className="w-full text-sm file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900/30 dark:file:text-indigo-300 dark:hover:file:bg-indigo-800/40" />
-        </div>
-        <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Arch</span>
-          <Select value={form.arch} onValueChange={(val) => val != null && setForm({ ...form, arch: val })}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="amd64">x64 (amd64)</SelectItem>
-              <SelectItem value="x86">x86</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Class (opt)</span>
-          <Input aria-label="Leave blank for Main" name="donut-class" type="text" placeholder="Leave blank for Main" value={form.class} onChange={(e) => setForm({ ...form, class: e.target.value })} className="font-mono text-xs" />
-        </div>
-        <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Method (opt)</span>
-          <Input aria-label="Main" name="donut-method" type="text" placeholder="Main" value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} className="font-mono text-xs" />
-        </div>
-        <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Args (opt)</span>
-          <Input aria-label="Arguments" name="donut-args" type="text" placeholder="" value={form.args} onChange={(e) => setForm({ ...form, args: e.target.value })} className="font-mono text-xs" />
-        </div>
-        <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Output Filename</span>
-          <Input aria-label="Output filename" name="donut-filename" value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
-        </div>
-        <Button type="button" onClick={onGenerate} disabled={busy} className="w-full h-10 bg-warning hover:bg-warning/80 disabled:opacity-50 transition-colors text-white font-medium rounded-xl flex items-center justify-center gap-x-2">
-          {busy ? <><Spinner /> Generating...</> : <><Download className="w-4 h-4" /> Generate Donut</>}
-        </Button>
+    <PayloadCard
+      icon={<Disc className="w-5 h-5" />}
+      tint="bg-orange-500/10 text-orange-600 dark:text-orange-400"
+      title={t("generate.panel.donut_title")}
+      subtitle={t("generate.panel.donut_subtitle")}
+      badge={<BuildStatusBadge busy={busy} result={result} />}
+      footer={
+        <>
+          <Button type="button" onClick={onGenerate} disabled={busy} className={BTN_CLASS}>
+            {busy ? <><Spinner /> {t("generate.panel.generating")}</> : <><Download className="w-4 h-4" /> {t("generate.panel.generate_donut")}</>}
+          </Button>
+          <BuildResult busy={busy} result={result} />
+        </>
+      }
+    >
+      <div>
+        <FieldLabel>{t("generate.panel.dotnet_assembly")}</FieldLabel>
+        <input aria-label={t("generate.panel.upload_assembly_aria")} name="donut-assembly" ref={fileRef} type="file" accept=".exe,.dll" onChange={(e) => setForm({ ...form, assembly: e.target.files?.[0] || null })} className="w-full text-sm file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/10 dark:file:bg-indigo-900/30 dark:file:text-primary dark:hover:file:bg-indigo-800/40" />
       </div>
-      <ResultDisplay result={result} />
-    </Card>
+      <div>
+        <FieldLabel>{t("generate.panel.arch")}</FieldLabel>
+        <Select value={form.arch} onValueChange={(val) => val != null && setForm({ ...form, arch: val })}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="amd64">x64 (amd64)</SelectItem>
+            <SelectItem value="x86">x86</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <FieldLabel>{t("generate.panel.class_opt")}</FieldLabel>
+        <Input aria-label={t("generate.panel.blank_for_main")} name="donut-class" type="text" placeholder={t("generate.panel.blank_for_main")} value={form.class} onChange={(e) => setForm({ ...form, class: e.target.value })} className="font-mono text-xs" />
+      </div>
+      <div>
+        <FieldLabel>{t("generate.panel.method_opt")}</FieldLabel>
+        <Input aria-label={t("generate.panel.main_aria")} name="donut-method" type="text" placeholder={t("generate.panel.main_aria")} value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} className="font-mono text-xs" />
+      </div>
+      <div>
+        <FieldLabel>{t("generate.panel.args_opt")}</FieldLabel>
+        <Input aria-label={t("generate.panel.args_opt")} name="donut-args" type="text" placeholder="" value={form.args} onChange={(e) => setForm({ ...form, args: e.target.value })} className="font-mono text-xs" />
+      </div>
+      <div>
+        <FieldLabel>{t("generate.panel.output_filename")}</FieldLabel>
+        <Input aria-label={t("generate.panel.output_filename")} name="donut-filename" value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
+      </div>
+    </PayloadCard>
   );
 });
 
@@ -393,42 +398,47 @@ export const PS1Panel = React.memo(function PS1Panel({
   onGenerate: () => void;
   onCopy: (text: string) => void;
 }) {
+  const { t } = useI18n();
   return (
-    <Card className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
-      <PanelHeader bg="bg-primary/10" icon="📜" title="PowerShell Script" subtitle="Run in memory / fileless" />
-      <div className="space-y-3">
-        <div>
-          <Label htmlFor="ps1-filename" className="text-sm text-muted-foreground mb-1 block">Filename</Label>
-          <Input id="ps1-filename" placeholder="agent.ps1" value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} className="h-9 bg-background border-border" />
-        </div>
-        <div className="flex items-center gap-x-2">
-          <Checkbox id="ps1-persist" aria-label="Persist" checked={form.persist} onCheckedChange={(checked) => setForm({ ...form, persist: checked === true })} />
-          <Label htmlFor="ps1-persist" className="text-sm text-foreground">Persist</Label>
-        </div>
-        <div className="flex items-center gap-x-2">
-          <Checkbox id="ps1-skip-tls" aria-label="Skip TLS verification" checked={form.skip_tls} onCheckedChange={(checked) => setForm({ ...form, skip_tls: checked === true })} />
-          <Label htmlFor="ps1-skip-tls" className="text-sm text-muted-foreground">Skip TLS Verify</Label>
-        </div>
-        <Button type="button" onClick={onGenerate} disabled={busy} className="w-full h-10 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-medium rounded-xl flex items-center justify-center gap-x-2">
-          {busy ? <><Spinner /> Generating...</> : <><Wand2 className="w-4 h-4" /> Generate PS1</>}
-        </Button>
+    <PayloadCard
+      icon={<Terminal className="w-5 h-5" />}
+      tint="bg-primary/10 text-primary"
+      title={t("generate.panel.ps1_title")}
+      subtitle={t("generate.panel.ps1_subtitle")}
+      badge={<BuildStatusBadge busy={busy} result={result} />}
+      footer={
+        <>
+          <Button type="button" onClick={onGenerate} disabled={busy} className={BTN_CLASS}>
+            {busy ? <><Spinner /> {t("generate.panel.generating")}</> : <><Wand2 className="w-4 h-4" /> {t("generate.panel.generate_ps1")}</>}
+          </Button>
+          <BuildResult busy={busy} result={result} />
+        </>
+      }
+    >
+      <div>
+        <FieldLabel>{t("generate.panel.filename")}</FieldLabel>
+        <Input id="ps1-filename" placeholder="agent.ps1" value={form.filename} onChange={(e) => setForm({ ...form, filename: e.target.value })} />
+      </div>
+      <div className="flex items-center gap-x-2">
+        <Checkbox id="ps1-persist" aria-label={t("generate.panel.persist")} checked={form.persist} onCheckedChange={(checked) => setForm({ ...form, persist: checked === true })} />
+        <Label htmlFor="ps1-persist" className="text-sm text-foreground">{t("generate.panel.persist")}</Label>
+      </div>
+      <div className="flex items-center gap-x-2">
+        <Checkbox id="ps1-skip-tls" aria-label={t("generate.panel.skip_tls_aria")} checked={form.skip_tls} onCheckedChange={(checked) => setForm({ ...form, skip_tls: checked === true })} />
+        <Label htmlFor="ps1-skip-tls" className="text-sm text-muted-foreground">{t("generate.panel.skip_tls")}</Label>
       </div>
       {code ? (
-        <div className="mt-3">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-emerald-600 font-medium">
-              <CheckCircle className="w-4 h-4" /> Generated: {originalLen} B / Obfuscated: {obfuscatedLen} B
+        <div className="mt-1">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="flex items-center gap-x-1.5 text-xs font-medium text-emerald-600">
+              <CheckCircle2 className="h-4 w-4" /> {t("generate.panel.generated_sizes", { original: originalLen ?? 0, obfuscated: obfuscatedLen ?? 0 })}
             </span>
-            <Button variant="outline" size="xs" onClick={() => onCopy(code)}>
-              <Copy className="w-4 h-4" /> Copy
-            </Button>
+            <CopyButton text={code} label={t("generate.panel.copy")} size="xs" />
           </div>
-          <Textarea aria-label="Generated PS1 output" name="ps1-output" readOnly value={code} className="h-48 bg-background text-emerald-400 font-mono text-xs p-3 border-border resize-none" />
-          <div className="mt-1 text-xs text-muted-foreground"><Info className="w-4 h-4" /> Paste directly into PowerShell</div>
+          <Textarea aria-label={t("generate.panel.ps1_title")} name="ps1-output" readOnly value={code} className="h-48 resize-none bg-background p-3 font-mono text-xs text-emerald-400 border-border" />
+          <div className="mt-1 flex items-center gap-x-1.5 text-xs text-muted-foreground"><Info className="h-4 w-4" /> {t("generate.panel.paste_ps")}</div>
         </div>
-      ) : result ? (
-        <ResultDisplay result={result} />
       ) : null}
-    </Card>
+    </PayloadCard>
   );
 });

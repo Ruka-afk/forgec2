@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 
@@ -80,7 +81,7 @@ const ACTION_COLORS: Record<string, string> = {
   kill: "text-red-500 bg-red-100 dark:bg-red-900/30",
   elevate: "text-orange-500 bg-orange-100 dark:bg-orange-900/30",
   creds: "text-amber-500 bg-amber-100 dark:bg-amber-900/30",
-  bof: "text-indigo-500 bg-indigo-100 dark:bg-indigo-900/30",
+  bof: "text-primary bg-primary/10 dark:bg-primary/20",
 };
 
 const ACTION_TYPES = [
@@ -125,7 +126,7 @@ export default function AgentRecordingPage() {
       const params = new URLSearchParams();
       if (actionFilter) params.set("action", actionFilter);
       const qs = params.toString();
-      const data = await api.get(`/agents/${id}/recording${qs ? "?" + qs : ""}`);
+      const data = await api.get(paths.agents.recording(id, qs));
       setRecordings((data.recordings as RecordingEntry[]) || []);
     } catch {
       toast.error(t("agents.recording_load_failed"));
@@ -145,7 +146,7 @@ export default function AgentRecordingPage() {
 
   const startReplay = async () => {
     try {
-      const data = await api.get(`/agents/${id}/recording/replay`);
+      const data = await api.get(paths.agents.recordingReplay(id));
       const entries: RecordingEntry[] = (data.recordings as RecordingEntry[]) || [];
       if (entries.length === 0) return;
 
@@ -268,7 +269,7 @@ export default function AgentRecordingPage() {
               <Card
                 key={entry.id}
                 id={`recording-${entry.id}`}
-                className={`transition-all duration-300 overflow-visible py-0 shadow-sm ${isExpanded ? "ring-2 ring-indigo-500/40 shadow-md" : "hover:bg-muted"}`}
+                className={`transition-all duration-300 overflow-visible py-0 shadow-sm ${isExpanded ? "ring-2 ring-primary/40 shadow-md" : "hover:bg-muted"}`}
               >
                 <Collapsible open={isExpanded} onOpenChange={(open) => setExpandedId(open ? entry.id : null)}>
                 <CollapsibleTrigger render={<Button variant="ghost" className="w-full justify-start p-4 h-auto" />}>
@@ -278,9 +279,9 @@ export default function AgentRecordingPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-mono text-muted-foreground">{formatTime(entry.timestamp)}</span>
-                      <Badge variant="secondary" className="text-(--font-size-micro-sm) uppercase tracking-wider">{entry.action}</Badge>
+                      <Badge variant="secondary" className="text-(--fs-micro-sm) uppercase tracking-wider">{entry.action}</Badge>
                       {entry.operator && entry.operator !== "system" && (
-                        <span className="text-(--font-size-micro-sm) font-medium text-indigo-500 dark:text-indigo-400">{entry.operator}</span>
+                        <span className="text-(--fs-micro-sm) font-medium text-primary">{entry.operator}</span>
                       )}
                     </div>
                     <div className="text-sm font-medium text-foreground mt-1 truncate">{entry.detail || ""}</div>
@@ -301,7 +302,7 @@ export default function AgentRecordingPage() {
                     ) : (
                       <div className="mt-3 text-xs text-muted-foreground/70 italic">{t("agents.recording_no_result")}</div>
                     )}
-                    <div className="mt-2 text-(--font-size-micro-sm) text-muted-foreground/70 font-mono">
+                    <div className="mt-2 text-(--fs-micro-sm) text-muted-foreground/70 font-mono">
                       {t("agents.recording_recording_fmt", { id: entry.id })} &middot; {t("agents.recording_task_fmt", { id: entry.task_id })}
                     </div>
                   </div>

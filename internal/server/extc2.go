@@ -227,10 +227,16 @@ func (s *Server) handleExternalC2WebSocket(c *gin.Context) {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		for {
+			// Snapshot the notify channel under the lock: the map is written
+			// by other goroutines (QueueExtC2Task, channel cleanup), so reading
+			// it here without the lock races a concurrent map read/write.
+			s.extC2TaskMu.Lock()
+			notifyCh := s.extC2Notify[channelID]
+			s.extC2TaskMu.Unlock()
 			select {
 			case <-done:
 				return
-			case <-s.extC2Notify[channelID]:
+			case <-notifyCh:
 			case <-ticker.C:
 			}
 			s.extC2TaskMu.Lock()

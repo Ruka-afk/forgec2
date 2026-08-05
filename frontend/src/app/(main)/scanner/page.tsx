@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { downloadText, downloadJSON } from "@/lib/download";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { toast } from "sonner";
@@ -102,7 +103,7 @@ export default function ScannerPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const result = await api.get("/scanner");
+      const result = await api.get(paths.scanner.page);
       setData({
         agents: (result.agents || []) as ScanAgent[],
         results: (result.results || []) as ScanResult[],
@@ -138,7 +139,7 @@ export default function ScannerPage() {
       } else {
         body.top_ports = "1000";
       }
-      await api.post("/api/scan", body);
+      await api.post(paths.scanner.scan, body);
       setActiveTab("active");
       loadData();
     } catch { toast.error(t("scanner.toast.start_scan_failed")); }
@@ -349,7 +350,7 @@ export default function ScannerPage() {
                     <TableHead>{t("scanner.col_status")}</TableHead>
                     <TableHead>{t("scanner.col_service")}</TableHead>
                     <TableHead>{t("scanner.col_version")}</TableHead>
-                    <TableHead>Banner</TableHead>
+                    <TableHead>{t("scanner.col_banner")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { ConfirmModal, EmptyState, PageHeader, PageSpinner } from "@/components/UI";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -88,7 +89,7 @@ export default function PhishingPageContent() {
 
   const loadTemplates = useCallback(async () => {
     try {
-      const d = await api.get("/phishing/templates");
+      const d = await api.get(paths.phishing.templates);
       setTemplates((d.data as PhishingTemplate[]) || []);
     } catch {
       setTemplates([]);
@@ -98,7 +99,7 @@ export default function PhishingPageContent() {
 
   const loadCampaigns = useCallback(async () => {
     try {
-      const d = await api.get("/phishing/campaigns");
+      const d = await api.get(paths.phishing.campaigns);
       setCampaigns((d.data as PhishingCampaign[]) || []);
     } catch {
       setCampaigns([]);
@@ -108,7 +109,7 @@ export default function PhishingPageContent() {
 
   const loadCaptures = useCallback(async () => {
     try {
-      const d = await api.get("/phishing/captures");
+      const d = await api.get(paths.phishing.captures);
       setCaptures((d.data as CaptureEntry[]) || []);
     } catch {
       setCaptures([]);
@@ -126,9 +127,9 @@ export default function PhishingPageContent() {
   const handleSaveTpl = async () => {
     try {
       if (editTplId) {
-        await api.putJson(`/phishing/templates/${editTplId}`, tplForm);
+        await api.putJson(paths.phishing.template(editTplId), tplForm);
       } else {
-        await api.postJson("/phishing/templates", tplForm);
+        await api.postJson(paths.phishing.templates, tplForm);
       }
       setShowTplForm(false);
       setEditTplId(null);
@@ -145,7 +146,7 @@ export default function PhishingPageContent() {
 
   const handleDeleteTpl = (id: number) => {
     setCfm({ msg: t("phishing.delete_template"), cb: async () => {
-      await api.del(`/phishing/templates/${id}`);
+      await api.del(paths.phishing.template(id));
       loadTemplates();
     }});
   };
@@ -154,7 +155,7 @@ export default function PhishingPageContent() {
 
   const handleSaveCamp = async () => {
     try {
-      await api.postJson("/phishing/campaigns", campForm);
+      await api.postJson(paths.phishing.campaigns, campForm);
       setShowCampForm(false);
       setCampForm({ name: "", template_id: 0, target_list: "", smtp_host: "", smtp_port: 587, smtp_user: "", smtp_pass: "" });
       loadCampaigns();
@@ -177,14 +178,14 @@ export default function PhishingPageContent() {
 
   const handleStop = async (id: number) => {
     try {
-      await api.post(`/phishing/campaigns/${id}/stop`);
+      await api.post(paths.phishing.campaignStop(id));
       loadCampaigns();
     } catch { toast.error(t("phishing.toast.save_campaign_failed")); }
   };
 
   const handleDeleteCamp = (id: number) => {
     setCfm({ msg: t("phishing.delete_campaign"), cb: async () => {
-      await api.del(`/phishing/campaigns/${id}`);
+      await api.del(paths.phishing.campaign(id));
       loadCampaigns();
     }});
   };
@@ -218,17 +219,17 @@ export default function PhishingPageContent() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {templates.map((t) => {
-                  const tid = t.id;
+                {templates.map((tpl) => {
+                  const tid = tpl.id;
                   return (
                     <TableRow key={tid}>
-                      <TableCell className="px-4 py-3 sm:py-3.5 font-medium text-foreground">{t.name}</TableCell>
-                      <TableCell className="px-4 py-3 sm:py-3.5 text-muted-foreground max-w-[200px] truncate">{t.subject}</TableCell>
-                      <TableCell className="px-4 py-3 sm:py-3.5 text-muted-foreground">{t.from_name || t.from_email}</TableCell>
-                      <TableCell className="px-4 py-3 sm:py-3.5"><Badge variant="outline">{t.type}</Badge></TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 font-medium text-foreground">{tpl.name}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 text-muted-foreground max-w-[200px] truncate">{tpl.subject}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5 text-muted-foreground">{tpl.from_name || tpl.from_email}</TableCell>
+                      <TableCell className="px-4 py-3 sm:py-3.5"><Badge variant="outline">{tpl.type}</Badge></TableCell>
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right">
-                        <Button variant="ghost" size="icon-xs" onClick={() => handleEditTpl(t)} className="text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400 mr-3" aria-label="Edit template"><Pencil className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="icon-xs" onClick={() => handleDeleteTpl(tid)} className="text-muted-foreground hover:text-destructive" aria-label="Delete template"><Trash2 className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="icon-xs" onClick={() => handleEditTpl(tpl)} className="text-muted-foreground hover:text-primary mr-3" aria-label={t("phishing.a11y_edit_template")}><Pencil className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="icon-xs" onClick={() => handleDeleteTpl(tid)} className="text-muted-foreground hover:text-destructive" aria-label={t("phishing.a11y_delete_template")}><Trash2 className="w-4 h-4" /></Button>
                       </TableCell>
                     </TableRow>
                   );
@@ -243,8 +244,8 @@ export default function PhishingPageContent() {
           if (!open) setEditTplId(null);
         }}>
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" showCloseButton={false}>
-            <DialogHeader className="bg-gradient-to-r from-indigo-500 to-purple-500 -m-4 mb-0 px-6 py-5 rounded-t-xl">
-              <DialogTitle className="text-white">{editTplId ? t("phishing.dialog_edit_template") : t("phishing.dialog_new_template")}</DialogTitle>
+            <DialogHeader className="bg-primary/10 text-primary -m-4 mb-0 px-6 py-5 rounded-t-xl">
+              <DialogTitle className="text-primary">{editTplId ? t("phishing.dialog_edit_template") : t("phishing.dialog_new_template")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -339,9 +340,9 @@ export default function PhishingPageContent() {
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.open_count}</TableCell>
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.cred_count}</TableCell>
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right">
-                        {c.status === "draft" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleLaunch(cid)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 mr-3" aria-label="Launch" />}><Play className="w-4 h-4" /></TooltipTrigger><TooltipContent>Launch</TooltipContent></Tooltip>}
-                        {c.status === "running" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleStop(cid)} className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 mr-3" aria-label="Stop" />}><Square className="w-4 h-4" /></TooltipTrigger><TooltipContent>Stop</TooltipContent></Tooltip>}
-                        {(c.status === "draft" || c.status === "completed") && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleDeleteCamp(cid)} className="text-muted-foreground hover:text-destructive" aria-label="Delete" />}><Trash2 className="w-4 h-4" /></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip>}
+                        {c.status === "draft" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleLaunch(cid)} className="text-primary hover:text-primary dark:hover:text-primary mr-3" aria-label={t("phishing.launch")} />}><Play className="w-4 h-4" /></TooltipTrigger><TooltipContent>{t("phishing.launch")}</TooltipContent></Tooltip>}
+                        {c.status === "running" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleStop(cid)} className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 mr-3" aria-label={t("phishing.stop")} />}><Square className="w-4 h-4" /></TooltipTrigger><TooltipContent>{t("phishing.stop")}</TooltipContent></Tooltip>}
+                        {(c.status === "draft" || c.status === "completed") && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleDeleteCamp(cid)} className="text-muted-foreground hover:text-destructive" aria-label={t("phishing.delete")} />}><Trash2 className="w-4 h-4" /></TooltipTrigger><TooltipContent>{t("phishing.delete")}</TooltipContent></Tooltip>}
                       </TableCell>
                     </TableRow>
                   );
@@ -353,8 +354,8 @@ export default function PhishingPageContent() {
         )}
         <Dialog open={showCampForm} onOpenChange={setShowCampForm}>
           <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" showCloseButton={false}>
-            <DialogHeader className="bg-gradient-to-r from-indigo-500 to-purple-500 -m-4 mb-0 px-6 py-5 rounded-t-xl">
-              <DialogTitle className="text-white">{t("phishing.new_campaign")}</DialogTitle>
+            <DialogHeader className="bg-primary/10 text-primary -m-4 mb-0 px-6 py-5 rounded-t-xl">
+              <DialogTitle className="text-primary">{t("phishing.new_campaign")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>

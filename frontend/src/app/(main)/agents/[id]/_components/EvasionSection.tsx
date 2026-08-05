@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { Shield, Zap, AlertTriangle } from "lucide-react";
 import { EVASION_TECHNIQUES, EVASION_GROUPS } from "../../_components/evasion-techniques";
@@ -29,7 +30,7 @@ export default function EvasionSection({ agentId, online }: EvasionSectionProps)
     }
     setSending(true);
     try {
-      await api.post(`/agents/${agentId}/run_evasion`, { technique: selectedTechnique });
+      await api.post(paths.agents.runEvasion(agentId), { technique: selectedTechnique });
       const tech = EVASION_TECHNIQUES.find(tech => tech.value === selectedTechnique);
       toast.success(t("agents.evasion_sent").replace("{technique}", t(tech?.labelKey || "")));
       setSelectedTechnique("");

@@ -29,10 +29,10 @@ export default function AgentScreenshots({
   return (
     <>
       <Card className="mb-4 overflow-hidden border-border/70 bg-card/90 shadow-sm">
-        <div className="h-1 w-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-violet-500" />
+        <div className="h-1 w-full bg-gradient-to-r from-primary via-cyan-500 to-emerald-500" />
         <div className="px-4 py-3 border-b border-border/70 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><Camera className="w-3.5 h-3.5 text-primary" />{t("agents.screenshots_title")} <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-(--font-size-micro-sm) font-normal text-muted-foreground/70">({screenshots.length})</span></h3>
-          <Link href={`/screenshots?agent_id=${agentId}`} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">{t("agents.screenshots_view_all")} &rarr;</Link>
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><Camera className="w-3.5 h-3.5 text-primary" />{t("agents.screenshots_title")} <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-(--fs-micro-sm) font-normal text-muted-foreground/70">({screenshots.length})</span></h3>
+          <Link href={`/screenshots?agent_id=${agentId}`} className="text-xs text-primary hover:underline">{t("agents.screenshots_view_all")} &rarr;</Link>
         </div>
         <div className="p-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2">
@@ -57,7 +57,7 @@ export default function AgentScreenshots({
             <div className="relative mx-auto max-w-[92vw] max-h-[88vh]">
               <Button variant="ghost" size="icon-lg" onClick={onPrevLightbox} className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 text-white backdrop-blur-sm" disabled={lightboxIdx === 0} aria-label={t("agents.screenshots_prev")}><ChevronLeft className="w-4 h-4" /></Button>
               <img src={`/screenshots/${agentId}/${screenshots[lightboxIdx!]}`} alt={`Screenshot ${lightboxIdx! + 1} of ${screenshots.length}`} className="max-w-full max-h-[82vh] object-contain rounded-2xl border border-white/10 shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-              <div className="absolute left-1/2 bottom-3 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1 text-(--font-size-xs-sm) text-white/80 backdrop-blur-sm">
+              <div className="absolute left-1/2 bottom-3 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1 text-(--fs-xs-sm) text-white/80 backdrop-blur-sm">
                 {lightboxIdx! + 1} / {screenshots.length}
               </div>
               <Button variant="ghost" size="icon-lg" onClick={onNextLightbox} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 hover:bg-black/70 text-white backdrop-blur-sm" disabled={lightboxIdx! >= screenshots.length - 1} aria-label={t("agents.screenshots_next")}><ChevronRight className="w-4 h-4" /></Button>

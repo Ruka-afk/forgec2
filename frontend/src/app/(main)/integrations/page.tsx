@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { EmptyState, PageHeader, Spinner } from "@/components/UI";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -82,7 +83,7 @@ export default function IntegrationsPage() {
     }
     setSaving(true);
     try {
-      await api.postJson("/integrations", {
+      await api.postJson(paths.integrations.list, {
         type: formType,
         name: formName.trim(),
         url: formUrl,
@@ -108,7 +109,7 @@ export default function IntegrationsPage() {
   async function toggleIntegration(id?: number) {
     if (!id) return;
     try {
-      await api.postJson(`/integrations/${id}/toggle`, {});
+      await api.postJson(paths.integrations.toggle(id), {});
       fetchIntegrations();
     } catch {
       toast.error(t("integrations.toast.toggle_failed"));
@@ -118,7 +119,7 @@ export default function IntegrationsPage() {
   async function deleteIntegration(id?: number) {
     if (!id) return;
     try {
-      await api.del(`/integrations/${id}`);
+      await api.del(paths.integrations.one(id));
       toast.success(t("integrations.toast.deleted"));
       fetchIntegrations();
     } catch {
@@ -129,7 +130,7 @@ export default function IntegrationsPage() {
   async function testNotification() {
     setTestResult(t("integrations.sending"));
     try {
-      const data = await api.postJson<{ success?: boolean; error?: string }>("/settings/webhooks/test", {
+      const data = await api.postJson<{ success?: boolean; error?: string }>(paths.settings.webhooksTest, {
         type: formType, url: formUrl, secret: formSecret, to: formTo,
         smtp_host: formSMTPHost, smtp_port: parseInt(formSMTPPort) || 587,
         smtp_user: formSMTPUser, smtp_pass: formSMTPPass, from: formFrom,
@@ -175,10 +176,10 @@ export default function IntegrationsPage() {
             ) : (
               integrations.map((intg, i) => (
                 <Card key={intg.id ?? `ro-${i}`} className="p-3.5 flex items-center gap-3">
-                  <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-secondary text-lg text-indigo-500">{getIcon(intg.type)}</div>
+                  <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-secondary text-lg text-primary">{getIcon(intg.type)}</div>
                   <div className="flex-1 flex flex-col min-w-0">
                     <span className="text-sm font-semibold text-foreground">{intg.name}</span>
-                    <span className="text-(--font-size-xs-sm) uppercase text-muted-foreground">{intg.type}</span>
+                    <span className="text-(--fs-xs-sm) uppercase text-muted-foreground">{intg.type}</span>
                     {intg.endpoint && <span className="text-xs text-muted-foreground truncate">{intg.endpoint}</span>}
                   </div>
                   <div className="flex flex-col items-end gap-1">
@@ -187,10 +188,10 @@ export default function IntegrationsPage() {
                     </Badge>
                     {!intg.readonly && intg.id ? (
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon-sm" onClick={() => toggleIntegration(intg.id)} aria-label="Toggle">
+                        <Button variant="ghost" size="icon-sm" onClick={() => toggleIntegration(intg.id)} aria-label={t("integrations.a11y_toggle")}>
                           <Power className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => deleteIntegration(intg.id)} aria-label="Delete">
+                        <Button variant="ghost" size="icon-sm" onClick={() => deleteIntegration(intg.id)} aria-label={t("common.delete")}>
                           <Trash2 className="w-3.5 h-3.5 text-destructive" />
                         </Button>
                       </div>
@@ -213,28 +214,28 @@ export default function IntegrationsPage() {
                   <SelectContent>
                     <SelectItem value="slack">Slack</SelectItem>
                     <SelectItem value="discord">Discord</SelectItem>
-                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="email">{t("integrations.type_email")}</SelectItem>
                     <SelectItem value="telegram">Telegram</SelectItem>
-                    <SelectItem value="generic">Generic Webhook</SelectItem>
-                    <SelectItem value="webhook">Webhook</SelectItem>
+                    <SelectItem value="generic">{t("integrations.type_generic")}</SelectItem>
+                    <SelectItem value="webhook">{t("integrations.type_webhook")}</SelectItem>
                     <SelectItem value="jira">JIRA</SelectItem>
                     <SelectItem value="thehive">TheHive</SelectItem>
                   </SelectContent>
                 </Select>
-                <Input aria-label="Name" name="int-name" value={formName} onChange={e => setFormName(e.target.value)} placeholder={t("integrations.name_placeholder")} />
-                <Input aria-label="Webhook URL" name="int-url" value={formUrl} onChange={e => setFormUrl(e.target.value)} placeholder={t("integrations.webhook_url")} />
+                <Input aria-label={t("integrations.a11y_name")} name="int-name" value={formName} onChange={e => setFormName(e.target.value)} placeholder={t("integrations.name_placeholder")} />
+                <Input aria-label={t("integrations.webhook_url")} name="int-url" value={formUrl} onChange={e => setFormUrl(e.target.value)} placeholder={t("integrations.webhook_url")} />
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
-                <Input aria-label="Email To" name="int-to" value={formTo} onChange={e => setFormTo(e.target.value)} placeholder={t("integrations.email_to")} />
-                <Input aria-label="Secret" name="int-secret" value={formSecret} onChange={e => setFormSecret(e.target.value)} placeholder={t("integrations.secret_token")} />
+                <Input aria-label={t("integrations.email_to")} name="int-to" value={formTo} onChange={e => setFormTo(e.target.value)} placeholder={t("integrations.email_to")} />
+                <Input aria-label={t("integrations.a11y_secret")} name="int-secret" value={formSecret} onChange={e => setFormSecret(e.target.value)} placeholder={t("integrations.secret_token")} />
               </div>
               {formType === "email" && (
                 <div className="flex flex-wrap gap-2">
-                  <Input aria-label="SMTP Host" name="smtp-host" value={formSMTPHost} onChange={e => setFormSMTPHost(e.target.value)} placeholder="SMTP Host" />
-                  <Input aria-label="SMTP Port" name="smtp-port" value={formSMTPPort} onChange={e => setFormSMTPPort(e.target.value)} placeholder="SMTP Port" />
-                  <Input aria-label="SMTP User" name="smtp-user" value={formSMTPUser} onChange={e => setFormSMTPUser(e.target.value)} placeholder="SMTP User" />
-                  <Input aria-label="SMTP Pass" name="smtp-pass" type="password" value={formSMTPPass} onChange={e => setFormSMTPPass(e.target.value)} placeholder="SMTP Pass" />
-                  <Input aria-label="From Address" name="smtp-from" value={formFrom} onChange={e => setFormFrom(e.target.value)} placeholder="From Address" />
+                  <Input aria-label={t("integrations.smtp_host")} name="smtp-host" value={formSMTPHost} onChange={e => setFormSMTPHost(e.target.value)} placeholder="SMTP Host" />
+                  <Input aria-label={t("integrations.smtp_port")} name="smtp-port" value={formSMTPPort} onChange={e => setFormSMTPPort(e.target.value)} placeholder="SMTP Port" />
+                  <Input aria-label={t("integrations.smtp_user")} name="smtp-user" value={formSMTPUser} onChange={e => setFormSMTPUser(e.target.value)} placeholder="SMTP User" />
+                  <Input aria-label={t("integrations.smtp_pass")} name="smtp-pass" type="password" value={formSMTPPass} onChange={e => setFormSMTPPass(e.target.value)} placeholder="SMTP Pass" />
+                  <Input aria-label={t("integrations.from_address")} name="smtp-from" value={formFrom} onChange={e => setFormFrom(e.target.value)} placeholder="From Address" />
                 </div>
               )}
               <Button onClick={saveIntegration} disabled={saving}>

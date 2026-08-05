@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { exportElementPng } from "@/lib/chartExport";
@@ -55,10 +56,10 @@ function TopologySidebar({
   return (
     <>
       <Card className="overflow-hidden p-0">
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-700 px-4 py-2.5">
+        <div className="bg-primary/10 border border-primary/20 px-4 py-2.5">
           <div className="flex items-center gap-2">
             <Info className="w-4 h-4" />
-            <span className="text-xs font-semibold text-white">{t("topology.node_details")}</span>
+            <span className="text-xs font-semibold text-foreground">{t("topology.node_details")}</span>
           </div>
         </div>
         <div className="p-4">
@@ -71,7 +72,7 @@ function TopologySidebar({
                 <div><b>ID:</b> {selectedTopoNode.id}</div>
                 <div><b>{t("topology.group")}:</b> {selectedTopoNode.group}</div>
                 {selectedTopoNode.p2p_mode && (
-                  <div><b>P2P Mode:</b> {selectedTopoNode.p2p_mode}</div>
+                  <div><b>{t("topology.p2p_mode")}</b> {selectedTopoNode.p2p_mode}</div>
                 )}
                 <div><b>{t("topology.peers")}:</b> {selectedTopoNode.peer_count ?? "?"}</div>
                 {selectedTopoNode.title && (
@@ -82,10 +83,10 @@ function TopologySidebar({
                 <span className="text-xs text-muted-foreground block mb-1">{t("topology.set_parent")}</span>
                 <div className="flex gap-1">
                   <Input
-                    aria-label="parent agent ID" name="input-1"
+                    aria-label={t("topology.parent_agent_id")} name="input-1"
                     value={setParentId}
                     onChange={(e) => onSetParentId(e.target.value)}
-                    placeholder="parent agent ID"
+                    placeholder={t("topology.parent_agent_id")}
                     className="flex-1 text-xs"
                   />
                   <Button
@@ -117,10 +118,10 @@ function TopologySidebar({
       </Card>
 
       <Card className="overflow-hidden p-0">
-        <div className="bg-gradient-to-r from-muted to-secondary px-4 py-2.5">
+        <div className="bg-secondary/60 border border-border px-4 py-2.5">
           <div className="flex items-center gap-2">
             <List className="w-4 h-4" />
-            <span className="text-xs font-semibold text-white">{t("topology.legend")}</span>
+            <span className="text-xs font-semibold text-foreground">{t("topology.legend")}</span>
           </div>
         </div>
         <div className="p-4 space-y-3">
@@ -140,7 +141,7 @@ function TopologySidebar({
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="w-4 h-4 rounded bg-indigo-500 shadow-lg shadow-indigo-500/50 rotate-45"></span>
+              <span className="w-4 h-4 rounded bg-primary/100 shadow-lg shadow-primary/50 rotate-45"></span>
               <span className="text-xs text-muted-foreground">{t("topology.legend_listener")}</span>
             </div>
             <span className="text-xs font-mono text-muted-foreground">{listenerCount}</span>
@@ -172,10 +173,10 @@ function TopologySidebar({
       </Card>
 
       <Card className="overflow-hidden p-0">
-        <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-2.5">
+        <div className="bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4" />
-            <span className="text-xs font-semibold text-white">{t("topology.quick_actions")}</span>
+            <span className="text-xs font-semibold text-foreground">{t("topology.quick_actions")}</span>
           </div>
         </div>
         <div className="p-4 space-y-2">
@@ -207,8 +208,10 @@ export default function TopologyPage() {
   const [now, setNow] = useState("");
   const [mobileSidebar, setMobileSidebar] = useState(false);
 
+  const loadedOnceRef = useRef(false);
+
   const loadTopology = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
+    if (!loadedOnceRef.current) setLoading(true);
     try {
       if (useMeshSource) {
         const result = await api.get<{ success?: boolean; nodes?: TopoNode[]; edges?: TopoEdge[] }>("/mesh/topology", { signal });
@@ -229,6 +232,7 @@ export default function TopologyPage() {
       setData({ nodes: [], edges: [] });
       setMeshData({ nodes: [], edges: [] });
     }
+    loadedOnceRef.current = true;
     setLoading(false);
   }, [useMeshSource]);
 
@@ -276,7 +280,7 @@ export default function TopologyPage() {
     setRouteMsg("");
     try {
       const agentId = selectedTopoNode.id.replace("agent-", "");
-      const result = await api.postJson(`/mesh/route/${agentId}`, { parent_id: setParentId });
+      const result = await api.postJson(paths.mesh.route(agentId), { parent_id: setParentId });
       if (result.success) {
         setRouteMsg(t("topology.route_success"));
         loadTopology();
@@ -309,7 +313,7 @@ export default function TopologyPage() {
           <span className="text-xs font-medium text-muted-foreground">{offlineCount} {t("topology.offline")}</span>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg">
-          <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+          <span className="w-2 h-2 rounded-full bg-primary/100"></span>
           <span className="text-xs font-medium text-muted-foreground">{listenerCount} {t("topology.listeners")}</span>
         </div>
         {useMeshSource && (
@@ -320,7 +324,7 @@ export default function TopologyPage() {
           </div>
         )}
         <div className="xl:hidden">
-          <Button variant="ghost" size="icon" className="min-w-[44px] min-h-[44px]" onClick={() => setMobileSidebar(true)}>
+          <Button variant="ghost" size="icon" aria-label={t("topology.open_sidebar")} className="min-w-[44px] min-h-[44px]" onClick={() => setMobileSidebar(true)}>
             <Menu className="w-5 h-5" />
           </Button>
         </div>
@@ -332,7 +336,7 @@ export default function TopologyPage() {
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
         <div className="xl:col-span-3">
           <Card className="overflow-hidden p-0">
-            <div className="bg-gradient-to-r from-card via-background to-card px-4 py-2.5 flex items-center justify-between border-b border-border">
+            <div className="bg-card border-b border-border px-4 py-2.5 flex items-center justify-between border-b border-border">
               <div className="flex items-center gap-2">
                 <div className="flex gap-1">
                   <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
@@ -343,10 +347,10 @@ export default function TopologyPage() {
               </div>
               <div className="flex items-center gap-2">
                 <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Checkbox aria-label="Use mesh database source" checked={useMeshSource} onCheckedChange={() => setUseMeshSource(!useMeshSource)} />
+                  <Checkbox aria-label={t("topology.use_mesh")} checked={useMeshSource} onCheckedChange={() => setUseMeshSource(!useMeshSource)} />
                   Mesh DB
                 </Label>
-                <span className="text-(--font-size-micro-sm) text-muted-foreground font-mono">NODES: {nodes.length}</span>
+                <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">NODES: {nodes.length}</span>
               </div>
             </div>
             <div ref={graphContainerRef} className="relative p-4 bg-card [background-image:radial-gradient(ellipse_at_center,var(--card)_0%,var(--background)_100%)] min-h-[500px]">
@@ -360,10 +364,10 @@ export default function TopologyPage() {
               />
             </div>
             <div className="bg-background border-t border-border px-4 py-1.5 flex items-center justify-between">
-              <span className="text-(--font-size-micro-sm) text-muted-foreground font-mono">
+              <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">
                 {loading ? t("common.loading") : useMeshSource ? "Mesh topology from DB" : "C2 topology from agent data"}
               </span>
-              <span className="text-(--font-size-micro-sm) text-muted-foreground font-mono">{now || "--:--:--"}</span>
+              <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{now || "--:--:--"}</span>
             </div>
           </Card>
         </div>

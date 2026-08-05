@@ -37,3 +37,20 @@ export const emptyCredentialData = (): CredentialData => ({
   VaultCount: 0,
   AllTags: [],
 });
+
+/** Normalize credentials API envelope (snake_case / PascalCase). */
+export function normalizeCredentialData(result: {
+  VaultEntries?: VaultEntry[];
+  vault_entries?: VaultEntry[];
+  VaultCount?: number;
+  vault_count?: number;
+  AllTags?: string[];
+  all_tags?: string[];
+} | null | undefined): CredentialData {
+  if (!result) return emptyCredentialData();
+  return {
+    VaultEntries: result.vault_entries || result.VaultEntries || [],
+    VaultCount: result.vault_count ?? result.VaultCount ?? 0,
+    AllTags: result.all_tags || result.AllTags || [],
+  };
+}

@@ -33,9 +33,9 @@ export function AgentBulkBar({
   return (
     <>
       {actionMsg && (
-        <div role="status" aria-live="polite" className="mb-3 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl text-sm text-indigo-700 dark:text-indigo-300 flex items-center justify-between">
+        <div role="status" aria-live="polite" className="mb-3 px-4 py-2 bg-info/8 border border-info/20 rounded-xl text-sm text-info flex items-center justify-between animate-fade-in">
           <span>{actionMsg}</span>
-          <Button variant="ghost" size="icon-xs" onClick={dismissActionMsg} aria-label="Dismiss action message"><X className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon-xs" onClick={dismissActionMsg} aria-label={t("common.close")}><X className="w-4 h-4" /></Button>
         </div>
       )}
 
@@ -64,7 +64,7 @@ export function AgentBulkBar({
         <Card className="p-4 mb-4 gap-0">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-foreground"><History className="w-4 h-4" />{t("agents.recent_bulk_ops")}</h3>
-            <Button variant="ghost" size="icon-xs" onClick={() => setShowResults(false)} aria-label="Close bulk results"><X className="w-4 h-4" /></Button>
+            <Button variant="ghost" size="icon-xs" onClick={() => setShowResults(false)} aria-label={t("common.close")}><X className="w-4 h-4" /></Button>
           </div>
           {bulkResults.length === 0 ? (
             <p className="text-xs text-muted-foreground/70 text-center py-4">{t("agents.no_bulk_ops")}</p>
@@ -73,10 +73,10 @@ export function AgentBulkBar({
               {bulkResults.map((r, i) => (
                 <div key={r.id || i} className="flex items-center justify-between px-3 py-2 bg-muted rounded-xl text-xs">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-white text-(--font-size-micro-sm) font-bold shrink-0 ${
+                    <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-white text-(--fs-micro-sm) font-bold shrink-0 ${
                       r.type === "kill" ? "bg-orange-500" :
                       r.type === "uninstall" ? "bg-red-500" :
-                      "bg-indigo-500"
+                      "bg-primary/100"
                     }`}>
                       {r.type === "kill" ? <Power className="w-3 h-3" /> :
                         r.type === "uninstall" ? <Trash2 className="w-3 h-3" /> :

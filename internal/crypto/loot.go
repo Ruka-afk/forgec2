@@ -14,36 +14,40 @@ import (
 )
 
 var (
-	lootKey       []byte
-	lootKeyOnce   sync.Once
-	extc2Key      []byte
-	extc2KeyOnce  sync.Once
+	lootKeyMu sync.RWMutex
+	lootKey   []byte
+
+	extc2KeyMu sync.RWMutex
+	extc2Key   []byte
 )
 
-// InitLootEncryption initializes the loot encryption key.
+// InitLootEncryption initializes (or re-initializes) the loot encryption key.
+// It is intentionally re-entrant so that JWT rotation can safely derive a new
+// key without requiring a process restart. Callers must ensure that when the
+// JWT secret changes, existing ciphertext is re-encrypted (or a stable
+// lootKeyHex is configured) before/after this call.
 // If lootKeyHex is non-empty, uses that 32-byte hex key directly.
 // Otherwise, derives the key from the JWT secret (backward compatible).
 func InitLootEncryption(jwtSecret, lootKeyHex string) {
-	lootKeyOnce.Do(func() {
-		if lootKeyHex != "" {
-			b, err := hex.DecodeString(lootKeyHex)
-			if err == nil && len(b) == 32 {
-				lootKey = b
-				return
-			}
+	lootKeyMu.Lock()
+	defer lootKeyMu.Unlock()
+	if lootKeyHex != "" {
+		if b, err := hex.DecodeString(lootKeyHex); err == nil && len(b) == 32 {
+			lootKey = b
+			return
 		}
-		h := sha256.Sum256([]byte(jwtSecret))
-		lootKey = h[:32]
-	})
+	}
+	h := sha256.Sum256([]byte(jwtSecret))
+	lootKey = h[:32]
 }
 
-// InitExtC2Encryption initializes a separate encryption key for ExtC2 channels,
-// derived independently to limit key compromise blast radius.
+// InitExtC2Encryption initializes (or re-initializes) a separate encryption key
+// for ExtC2 channels, derived independently to limit key compromise blast radius.
 func InitExtC2Encryption(jwtSecret string) {
-	extc2KeyOnce.Do(func() {
-		h := sha256.Sum256([]byte("extc2:" + jwtSecret))
-		extc2Key = h[:32]
-	})
+	extc2KeyMu.Lock()
+	defer extc2KeyMu.Unlock()
+	h := sha256.Sum256([]byte("extc2:" + jwtSecret))
+	extc2Key = h[:32]
 }
 
 // EncryptLoot encrypts a plaintext string using AES-256-GCM.
@@ -51,10 +55,13 @@ func EncryptLoot(plaintext string) (string, error) {
 	if plaintext == "" {
 		return "", nil
 	}
-	if lootKey == nil {
+	lootKeyMu.RLock()
+	key := lootKey
+	lootKeyMu.RUnlock()
+	if key == nil {
 		return "", errors.New("loot encryption not initialized")
 	}
-	block, err := aes.NewCipher(lootKey)
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
 	}
@@ -77,7 +84,10 @@ func DecryptLoot(s string) (string, error) {
 	if s == "" {
 		return "", nil
 	}
-	if lootKey == nil {
+	lootKeyMu.RLock()
+	key := lootKey
+	lootKeyMu.RUnlock()
+	if key == nil {
 		return "", errors.New("loot encryption not initialized")
 	}
 	// Detect encrypted vs legacy plaintext
@@ -89,7 +99,7 @@ func DecryptLoot(s string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("decryption failed: invalid ciphertext encoding: %w", err)
 	}
-	block, err := aes.NewCipher(lootKey)
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
 	}
@@ -113,10 +123,13 @@ func EncryptExtC2(plaintext string) (string, error) {
 	if plaintext == "" {
 		return "", nil
 	}
-	if extc2Key == nil {
+	extc2KeyMu.RLock()
+	key := extc2Key
+	extc2KeyMu.RUnlock()
+	if key == nil {
 		return "", errors.New("extc2 encryption not initialized")
 	}
-	block, err := aes.NewCipher(extc2Key)
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
 	}
@@ -136,7 +149,10 @@ func DecryptExtC2(s string) (string, error) {
 	if s == "" {
 		return "", nil
 	}
-	if extc2Key == nil {
+	extc2KeyMu.RLock()
+	key := extc2Key
+	extc2KeyMu.RUnlock()
+	if key == nil {
 		return "", errors.New("extc2 encryption not initialized")
 	}
 	const marker = "FC2EXT:"
@@ -147,7 +163,7 @@ func DecryptExtC2(s string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("extc2 decryption failed: invalid ciphertext encoding: %w", err)
 	}
-	block, err := aes.NewCipher(extc2Key)
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
 	}

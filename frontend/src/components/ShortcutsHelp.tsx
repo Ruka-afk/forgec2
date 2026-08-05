@@ -55,7 +55,7 @@ function ShortcutsHelpPanel({ open, onOpenChange }: { open: boolean; onOpenChang
             </div>
           ))}
           <p className="text-xs text-muted-foreground pt-2 border-t border-border">
-            <Link href="/settings#section-shortcuts" className="text-indigo-600 dark:text-indigo-400 hover:underline">
+            <Link href="/settings#section-shortcuts" className="text-primary hover:underline">
               Customize shortcuts
             </Link>{" "}
             in Settings
@@ -85,6 +85,7 @@ export default function ShortcutsHelp() {
 }
 
 export function ShortcutsHelpButton() {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
   return (
@@ -92,9 +93,9 @@ export function ShortcutsHelpButton() {
       <Tooltip>
         <TooltipTrigger render={<Button onClick={() => setOpen(true)} variant="ghost" size="sm" className="hidden md:flex text-xs" />}>
           <Keyboard aria-hidden="true" className="w-4 h-4" />
-          <span>Shortcuts</span>
+          <span>{t("common.shortcuts")}</span>
         </TooltipTrigger>
-        <TooltipContent>Keyboard shortcuts (Ctrl+/)</TooltipContent>
+        <TooltipContent>{t("common.shortcuts_hint")}</TooltipContent>
       </Tooltip>
       <ShortcutsHelpPanel open={open} onOpenChange={setOpen} />
     </>

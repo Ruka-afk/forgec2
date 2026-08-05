@@ -45,39 +45,61 @@ export default function TopologyGraph({
   const networkRef = useRef<HTMLDivElement>(null);
   const netInstanceRef = useRef<InstanceType<NonNullable<typeof window.vis>["Network"]> | null>(null);
 
-  const nodes = useMemo(() => useMeshSource
+  const nodes = useMemo(() => (useMeshSource
     ? (meshData?.nodes || [])
-    : (data?.nodes || []),
+    : (data?.nodes || [])),
   [useMeshSource, meshData?.nodes, data?.nodes]);
-  const edges = useMemo(() => useMeshSource
+  const edges = useMemo(() => (useMeshSource
     ? (meshData?.edges || [])
-    : (data?.edges || []),
+    : (data?.edges || [])),
   [useMeshSource, meshData?.edges, data?.edges]);
 
-  useEffect(() => {
-    if (!networkRef.current || loading) return;
-    if (nodes.length === 0) return;
+  // Refs mirror the latest props so the vis instance never needs re-creation
+  // for data/callback/physics changes (re-creation resets zoom/pan/selection).
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
+  const edgesRef = useRef(edges);
+  edgesRef.current = edges;
+  const onNodeClickRef = useRef(onNodeClick);
+  onNodeClickRef.current = onNodeClick;
+  const physicsRef = useRef(physicsEnabled);
+  physicsRef.current = physicsEnabled;
 
-    const buildVisData = () => {
-      const textColor =
-        getComputedStyle(document.documentElement)
-          .getPropertyValue("--foreground")
-          .trim() || "#e2e8f0";
-      const visNodes = (nodes as TopoNode[]).map((n, i) => ({
-        id: n.id || String(i),
-        label: n.label || n.id || "?",
-        group: n.group || "default",
-        title: n.title,
-      }));
-      const visEdges = edges.map((e, i) => ({ id: i, from: e.from, to: e.to }));
-      return { visNodes, visEdges, textColor };
-    };
+  const buildVisData = () => {
+    const textColor =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--foreground")
+        .trim() || "#e2e8f0";
+    const currentNodes = nodesRef.current as TopoNode[];
+    const visNodes = currentNodes.map((n, i) => ({
+      id: n.id || String(i),
+      label: n.label || n.id || "?",
+      group: n.group || "default",
+      title: n.title,
+    }));
+    const visEdges = edgesRef.current.map((e, i) => ({ id: i, from: e.from, to: e.to }));
+    return { visNodes, visEdges, textColor };
+  };
+
+  const syncData = () => {
+    const net = netInstanceRef.current;
+    if (!net) return;
+    const { visNodes, visEdges } = buildVisData();
+    net.setData({ nodes: visNodes, edges: visEdges });
+    net.setOptions({ physics: { enabled: physicsRef.current } });
+  };
+
+  const showGraph = !loading && nodes.length > 0;
+
+  // Create (or destroy) the vis instance only when the graph container's
+  // visibility flips or the component unmounts. Data refreshes update in place.
+  useEffect(() => {
+    if (!showGraph || !networkRef.current) return;
 
     const init = () => {
       if (!window.vis?.Network || !networkRef.current) return;
       if (netInstanceRef.current) {
-        const { visNodes, visEdges } = buildVisData();
-        netInstanceRef.current.setData({ nodes: visNodes, edges: visEdges });
+        syncData();
         return;
       }
       const { visNodes, visEdges, textColor } = buildVisData();
@@ -85,7 +107,7 @@ export default function TopologyGraph({
         networkRef.current,
         { nodes: visNodes, edges: visEdges },
         {
-          physics: { enabled: physicsEnabled, stabilization: { iterations: 80 } },
+          physics: { enabled: physicsRef.current, stabilization: { iterations: 80 } },
           interaction: { hover: true },
           nodes: { font: { color: textColor, size: 12 }, borderWidth: 2 },
           edges: {
@@ -97,42 +119,50 @@ export default function TopologyGraph({
       netInstanceRef.current = net;
       net.on("click", (params: { nodes: string[] }) => {
         const nid = params.nodes[0];
-        const found = (nodes as TopoNode[]).find(
+        const found = (nodesRef.current as TopoNode[]).find(
           (n, i) => (n.id || String(i)) === nid
         );
-        onNodeClick(found || null);
+        onNodeClickRef.current(found || null);
       });
     };
 
     if (window.vis?.Network) {
       init();
+    } else {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = "/js/vis-network.min.css";
+      document.head.appendChild(link);
+
+      const script = document.createElement("script");
+      script.src = "/js/vis-network.min.js";
+      let destroyed = false;
+      script.onload = () => {
+        if (!destroyed) init();
+      };
+      document.head.appendChild(script);
+
       return () => {
+        destroyed = true;
         netInstanceRef.current?.destroy();
         netInstanceRef.current = null;
+        script.remove();
+        link.remove();
       };
     }
 
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "/js/vis-network.min.css";
-    document.head.appendChild(link);
-
-    const script = document.createElement("script");
-    script.src = "/js/vis-network.min.js";
-    let destroyed = false;
-    script.onload = () => {
-      if (!destroyed) init();
-    };
-    document.head.appendChild(script);
-
     return () => {
-      destroyed = true;
       netInstanceRef.current?.destroy();
       netInstanceRef.current = null;
-      script.remove();
-      link.remove();
     };
-  }, [data, meshData, loading, physicsEnabled, useMeshSource, nodes, edges, onNodeClick]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showGraph]);
+
+  // Live-update the existing instance with fresh data / physics state.
+  useEffect(() => {
+    if (showGraph) syncData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, edges, physicsEnabled]);
 
   if (loading) {
     return (

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { ConfirmModal, PageHeader, Pagination } from "@/components/UI";
@@ -47,7 +48,7 @@ export default function NotificationsPage() {
     if (typeFilter) params.set("type", typeFilter);
     if (severityFilter) params.set("severity", severityFilter);
     if (readFilter) params.set("read", readFilter);
-    api.get(`/notifications?${params}`)
+    api.get(paths.notifications.list(params.toString()))
       .then((data: { notifications?: NotificationItem[]; total?: number | string }) => {
         setNotifications(data.notifications || []);
         setTotal(Number(data.total) || 0);
@@ -64,30 +65,30 @@ export default function NotificationsPage() {
   useEffect(() => { loadNotifications(); }, [loadNotifications]);
 
   const handleMarkRead = useCallback(async (id: number) => {
-    await api.put(`/notifications/${id}/read`);
+    await api.put(paths.notifications.markRead(id));
     loadNotifications();
   }, [loadNotifications]);
 
   const handleMarkAllRead = async () => {
-    await api.put("/notifications/read-all");
+    await api.put(paths.notifications.readAll);
     loadNotifications();
   };
 
   const handleDelete = useCallback(async (id: number) => {
-    await api.del(`/notifications/${id}`);
+    await api.del(paths.notifications.one(id));
     setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
     loadNotifications();
   }, [loadNotifications]);
 
   const handleClearAll = async () => {
-    await api.del("/notifications");
+    await api.del(paths.notifications.root);
     setSelectedIds(new Set());
     loadNotifications();
   };
 
   const handleBulkMarkRead = async () => {
     for (const id of selectedIds) {
-      await api.put(`/notifications/${id}/read`);
+      await api.put(paths.notifications.markRead(id));
     }
     setSelectedIds(new Set());
     loadNotifications();

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { ConfirmModal, EmptyState, PageHeader } from "@/components/UI";
 import { Button } from "@/components/ui/button";
 import { NormalizedAgent as Agent } from "@/types/agent";
@@ -56,8 +57,8 @@ export default function SchedulerPage() {
     setLoading(true);
     try {
       const [t, a] = await Promise.all([
-        api.get<{ tasks: ScheduledTask[] }>("/scheduler/tasks"),
-        api.get<{ agents?: Agent[]; data?: Agent[] }>("/agents"),
+        api.get<{ tasks: ScheduledTask[] }>(paths.scheduler.tasks),
+        api.get<{ agents?: Agent[]; data?: Agent[] }>(paths.agents.list()),
       ]);
       setTasks(t.tasks || []);
       setAgents((a.agents || a.data || []) as Agent[]);
@@ -81,22 +82,22 @@ export default function SchedulerPage() {
     const body = { name, agent_id: agentId, task_type: taskType, command, params, schedule };
     try {
       if (editingId) {
-        await api.putJson(`/scheduler/tasks/${editingId}`, body);
+        await api.putJson(paths.scheduler.task(editingId), body);
       } else {
-        await api.postJson("/scheduler/tasks", body);
+        await api.postJson(paths.scheduler.tasks, body);
       }
       resetForm(); setShowForm(false); setMessage(t("scheduler.saved")); fetchData();
     } catch { setMessage(t("scheduler.save_failed")); }
   }
 
   async function handleToggle(id: string) {
-      try { await api.postJson(`/scheduler/tasks/${id}/toggle`, {}); fetchData(); }
+      try { await api.postJson(paths.scheduler.toggle(id), {}); fetchData(); }
     catch { setMessage(t("scheduler.toggle_failed")); }
   }
 
   function handleDelete(id: string) {
     setCfm({msg: t("scheduler.delete_confirm"), cb: async () => {
-      try { await api.del(`/scheduler/tasks/${id}`); fetchData(); }
+      try { await api.del(paths.scheduler.task(id)); fetchData(); }
       catch { setMessage(t("scheduler.delete_failed")); }
     }});
   }
@@ -111,7 +112,7 @@ export default function SchedulerPage() {
       {message && (
         <Alert className="mb-4 flex items-center justify-between">
           <span>{message}</span>
-          <Button variant="ghost" size="icon-sm" onClick={() => setMessage("")} className="text-muted-foreground hover:text-foreground" aria-label="Dismiss message">
+          <Button variant="ghost" size="icon-sm" onClick={() => setMessage("")} className="text-muted-foreground hover:text-foreground" aria-label={t("scheduler.dismiss")}>
             <X className="w-4 h-4" />
           </Button>
         </Alert>
@@ -132,12 +133,12 @@ export default function SchedulerPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div>
                 <Label className="text-xs mb-1">{t("scheduler.name")}</Label>
-                <Input value={name} onChange={e => setName(e.target.value)} aria-label="Schedule name" />
+                <Input value={name} onChange={e => setName(e.target.value)} aria-label={t("scheduler.a11y_name")} />
               </div>
               <div>
                 <Label className="text-xs mb-1">{t("scheduler.agent")}</Label>
                 <Select value={agentId} onValueChange={(v) => setAgentId(v ?? "")}>
-                  <SelectTrigger aria-label="Select agent">
+                  <SelectTrigger aria-label={t("scheduler.a11y_agent")}>
                     <SelectValue placeholder={t("scheduler.select_agent")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -150,7 +151,7 @@ export default function SchedulerPage() {
               <div>
                 <Label className="text-xs mb-1">{t("scheduler.task_type")}</Label>
                 <Select value={taskType} onValueChange={(v) => setTaskType(v ?? "shell")}>
-                  <SelectTrigger aria-label="Select task type">
+                  <SelectTrigger aria-label={t("scheduler.a11y_type")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -160,19 +161,19 @@ export default function SchedulerPage() {
               </div>
               <div>
                 <Label className="text-xs mb-1">{t("scheduler.schedule")}</Label>
-                <Input value={schedule} onChange={e => setSchedule(e.target.value)} placeholder={t("scheduler.schedule_ph")} aria-label="Schedule expression" />
-                <p className="text-(--font-size-xs-sm) text-muted-foreground mt-1 space-y-0.5">
-                  <code className="px-1 bg-muted rounded text-(--font-size-micro-sm)">every N minutes</code> · <code className="px-1 bg-muted rounded text-(--font-size-micro-sm)">daily HH:MM</code> · <code className="px-1 bg-muted rounded text-(--font-size-micro-sm)">hourly</code>
+                <Input value={schedule} onChange={e => setSchedule(e.target.value)} placeholder={t("scheduler.schedule_ph")} aria-label={t("scheduler.a11y_expr")} />
+                <p className="text-(--fs-xs-sm) text-muted-foreground mt-1 space-y-0.5">
+                  <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">every N minutes</code> · <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">daily HH:MM</code> · <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">hourly</code>
                 </p>
               </div>
             </div>
             <div className="mb-4">
               <Label className="text-xs mb-1">{t("scheduler.command")}</Label>
-              <Input value={command} onChange={e => setCommand(e.target.value)} placeholder="whoami" aria-label="Command" />
+              <Input value={command} onChange={e => setCommand(e.target.value)} placeholder={t("scheduler.cmd_ph")} aria-label="Command" />
             </div>
             <div className="mb-4">
               <Label className="text-xs mb-1">{t("scheduler.params")}</Label>
-              <Textarea value={params} onChange={e => setParams(e.target.value)} rows={2} aria-label="Params JSON" />
+              <Textarea value={params} onChange={e => setParams(e.target.value)} rows={2} aria-label={t("scheduler.a11y_params")} />
             </div>
             <div className="flex gap-2">
               <Button onClick={handleSave}>{editingId ? t("autotag.update") : t("autotag.create")}</Button>
@@ -202,9 +203,9 @@ export default function SchedulerPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm">{task.name}</span>
                     <Badge variant="secondary">{task.task_type}</Badge>
-                    <span className="text-(--font-size-xs-sm) text-muted-foreground">{t("scheduler.run_count")} {task.run_count}x</span>
+                    <span className="text-(--fs-xs-sm) text-muted-foreground">{t("scheduler.run_count")} {task.run_count}x</span>
                   </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-muted-foreground mt-0.5">
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-(--fs-compact) text-muted-foreground mt-0.5">
                     <span><Bug className="w-4 h-4" />{agents.find(a => a.id === task.agent_id)?.hostname || task.agent_id.slice(0, 8)}</span>
                     <span><Calendar className="w-4 h-4" />{task.schedule}</span>
                     {task.next_run && <span><Clock className="w-4 h-4" />{t("scheduler.next")}: {formatTime(task.next_run)}</span>}
@@ -212,10 +213,10 @@ export default function SchedulerPage() {
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <Button variant="outline" size="sm" onClick={() => editTask(task)} className="w-8 h-8 p-0" aria-label="Edit schedule">
+                  <Button variant="outline" size="sm" onClick={() => editTask(task)} className="w-8 h-8 p-0" aria-label={t("scheduler.a11y_edit")}>
                     <Pencil className="w-4 h-4" />
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleDelete(task.id)} className="w-8 h-8 p-0 border-destructive/20 text-destructive hover:bg-destructive/10" aria-label="Delete schedule">
+                  <Button variant="outline" size="sm" onClick={() => handleDelete(task.id)} className="w-8 h-8 p-0 border-destructive/20 text-destructive hover:bg-destructive/10" aria-label={t("scheduler.a11y_delete")}>
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>

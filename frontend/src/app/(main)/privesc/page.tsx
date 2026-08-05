@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { downloadText, downloadJSON } from "@/lib/download";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { useI18n } from "@/lib/i18n";
@@ -96,9 +97,14 @@ export default function PrivescPage() {
     { value: "password_finder", icon: "??", label: "Password Finder", desc: t("privesc.ct_password_desc") },
   ];
 
+  const loadBusyRef = useRef(false);
+  const delayedReloadRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const loadData = useCallback(async () => {
+    if (loadBusyRef.current) return;
+    loadBusyRef.current = true;
     try {
-      const data = await api.get(`/privesc`);
+      const data = await api.get(paths.privesc.page);
       setAgents((data.agents || []) as PrivescAgent[]);
       setHistory((data.history || []) as PrivescHistory[]);
       setFindings((data.findings || []) as PrivescFinding[]);
@@ -108,6 +114,14 @@ export default function PrivescPage() {
       setFindings([]);
     }
     setLoading(false);
+    loadBusyRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (delayedReloadRef.current) clearTimeout(delayedReloadRef.current);
+      loadBusyRef.current = false;
+    };
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -120,15 +134,16 @@ export default function PrivescPage() {
     }
     setRunning(true);
     try {
-      await api.postJson(`/api/privesc/run`, { agent_id: selectedAgent, check_type: checkType });
-      setTimeout(loadData, 2000);
+      await api.postJson(paths.privesc.run, { agent_id: selectedAgent, check_type: checkType });
+      if (delayedReloadRef.current) clearTimeout(delayedReloadRef.current);
+      delayedReloadRef.current = setTimeout(loadData, 2000);
     } catch { toast.error(t("privesc.toast.start_check_failed")); }
     setRunning(false);
   };
 
   const handleViewHistory = async (historyId: string) => {
     try {
-      const data = await api.get(`/api/privesc/history/${historyId}`);
+      const data = await api.get(paths.privesc.history(historyId));
       setFindings((data.findings || data.tasks || []) as PrivescFinding[]);
     } catch { toast.error(t("privesc.toast.load_history_failed")); }
   };
@@ -136,7 +151,7 @@ export default function PrivescPage() {
   const handleExecuteExploit = (finding: PrivescFinding) => {
     setCfm({msg: `${t("privesc.confirm_exploit")}\n\n${finding.title || t("privesc.unknown")}`, cb: async () => {
       try {
-        await api.postJson(`/api/privesc/execute`, { agent_id: selectedAgent, check_type: checkType, exploit_command: finding.exploit_command });
+        await api.postJson(paths.privesc.execute, { agent_id: selectedAgent, check_type: checkType, exploit_command: finding.exploit_command });
       } catch { toast.error(t("privesc.toast.execute_exploit_failed")); }
     }});
   };
@@ -181,7 +196,7 @@ export default function PrivescPage() {
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
         <Card className="p-4">
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("privesc.stat_total_checks")}</div>
-          <div className="text-2xl font-bold mt-1 text-indigo-600 dark:text-indigo-400">{totalChecks}</div>
+          <div className="text-2xl font-bold mt-1 text-primary">{totalChecks}</div>
         </Card>
         <Card className="p-4">
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("privesc.stat_critical")}</div>
@@ -203,7 +218,7 @@ export default function PrivescPage() {
 
       <Card className="px-6 py-6 mb-6">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center">
             <ShieldAlert className="w-4 h-4" />
           </div>
           <div>
@@ -238,7 +253,7 @@ export default function PrivescPage() {
             <span className="block text-sm font-semibold mb-3">{t("privesc.check_type_label")}</span>
             <RadioGroup value={checkType} onValueChange={setCheckType} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {CHECK_TYPES.map((ct) => (
-                <div key={ct.value} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${checkType === ct.value ? "border-2 border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20" : "border border-border hover:bg-muted/50"}`}>
+                <div key={ct.value} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${checkType === ct.value ? "border-2 border-primary bg-primary/10" : "border border-border hover:bg-muted/50"}`}>
                   <RadioGroupItem value={ct.value} id={`ct-${ct.value}`} />
                   <Label htmlFor={`ct-${ct.value}`} className="min-w-0 cursor-pointer">
                     <div className="text-sm font-medium">{ct.icon} {ct.label}</div>
@@ -287,16 +302,16 @@ export default function PrivescPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium">{f.title || "-"}</span>
-                          <Badge variant="secondary" className={`px-2 py-0.5 text-(--font-size-micro-sm) rounded-full border font-medium ${severityBadge(f.severity || "low")}`}>
+                          <Badge variant="secondary" className={`px-2 py-0.5 text-(--fs-micro-sm) rounded-full border font-medium ${severityBadge(f.severity || "low")}`}>
                             {(f.severity || "unknown").toUpperCase()}
                           </Badge>
-                          {f.cve_id && <Badge variant="secondary" className="font-mono text-(--font-size-micro-sm)">{f.cve_id}</Badge>}
+                          {f.cve_id && <Badge variant="secondary" className="font-mono text-(--fs-micro-sm)">{f.cve_id}</Badge>}
                         </div>
                         <CollapsibleContent>
                           <div className="mt-3 space-y-2">
                             {f.description && <p className="text-sm text-muted-foreground">{f.description}</p>}
                             {f.recommendation && (
-                              <p className="text-sm text-indigo-600 dark:text-indigo-400">
+                              <p className="text-sm text-primary">
                                 <Lightbulb className="w-4 h-4" />{t("privesc.recommendation_label")} {f.recommendation}
                               </p>
                             )}
@@ -312,7 +327,7 @@ export default function PrivescPage() {
                         </CollapsibleContent>
                       </div>
                     </div>
-                    <CollapsibleTrigger render={<Button variant="ghost" size="icon-xs" aria-label="Expand" />}>
+                    <CollapsibleTrigger render={<Button variant="ghost" size="icon-xs" aria-label={t("common.expand")} />}>
                       <ChevronDown className="w-4 h-4" />
                     </CollapsibleTrigger>
                   </div>
@@ -337,7 +352,7 @@ export default function PrivescPage() {
             <TableHeader className="bg-muted">
               <TableRow>
                 <TableHead className="text-xs">{t("privesc.col_time")}</TableHead>
-                <TableHead className="text-xs">Agent</TableHead>
+                <TableHead className="text-xs">{t("privesc.col_agent")}</TableHead>
                 <TableHead className="text-xs">{t("privesc.check_type_label")}</TableHead>
                 <TableHead className="text-xs">{t("privesc.col_status")}</TableHead>
                 <TableHead className="text-xs">{t("privesc.col_result")}</TableHead>
@@ -361,11 +376,11 @@ export default function PrivescPage() {
                         <Badge variant="secondary">{item.status || "-"}</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">{item.findings_count ?? 0}</TableCell>
+                    <TableCell className="text-xs text-primary font-medium">{item.findings_count ?? 0}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                          <Tooltip>
-                           <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleViewHistory(hid)} aria-label="View history" />}>
+                           <TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleViewHistory(hid)} aria-label={t("privesc.view_history")} />}>
                               <Eye className="w-4 h-4" />
                             </TooltipTrigger>
                            <TooltipContent>{t("privesc.view_result")}</TooltipContent>

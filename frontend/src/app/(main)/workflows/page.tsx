@@ -1,12 +1,16 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
+import { normalizeListEnvelope } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
-import { EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { PageHeader } from "@/components/UI";
+import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Play, Plus, Workflow, History } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -47,6 +51,7 @@ export default function WorkflowsPage() {
   const { t } = useI18n();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [editWf, setEditWf] = useState<Workflow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -54,14 +59,21 @@ export default function WorkflowsPage() {
 
   const fetchWorkflows = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const data = await api.get("/workflows");
-      setWorkflows((data.workflows || []) as Workflow[]);
-    } catch { setWorkflows([]); toast.error(t("workflows.toast.load_failed")); }
-    setLoading(false);
+      const data = await api.get(paths.workflows.list);
+      setWorkflows(normalizeListEnvelope(data, ["workflows", "data"]) as Workflow[]);
+    } catch (e) {
+      setWorkflows([]);
+      const msg = e instanceof Error ? e.message : t("workflows.toast.load_failed");
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   }, [t]);
 
-  useEffect(() => { fetchWorkflows(); }, [fetchWorkflows]);
+  useEffect(() => { void fetchWorkflows(); }, [fetchWorkflows]);
 
   function openCreate() {
     setEditWf(null);
@@ -76,9 +88,9 @@ export default function WorkflowsPage() {
   async function handleSave(payload: { name: string; description: string; scope_type: string; scope_ids: string[]; steps: WorkflowStep[] }) {
     try {
       const data = editWf
-        ? await api.putJson(`/workflows/${editWf.id}`, payload)
-        : await api.postJson("/workflows", payload);
-      if (data.success) { setShowEditor(false); fetchWorkflows(); toast.success(editWf ? t("workflows.toast.updated") : t("workflows.toast.created")); }
+        ? await api.putJson(paths.workflows.one(editWf.id), payload)
+        : await api.postJson(paths.workflows.list, payload);
+      if (data.success) { setShowEditor(false); void fetchWorkflows(); toast.success(editWf ? t("workflows.toast.updated") : t("workflows.toast.created")); }
       else { toast.error((data.error as string) || t("workflows.toast.save_failed")); }
     } catch { toast.error(t("workflows.toast.save_failed")); }
   }
@@ -88,21 +100,21 @@ export default function WorkflowsPage() {
     const id = deleteId;
     setDeleteId(null);
     try {
-      const data = await api.del(`/workflows/${id}`);
-      if (data.success) { fetchWorkflows(); toast.success(t("workflows.toast.deleted")); }
+      const data = await api.del(paths.workflows.one(id));
+      if (data.success) { void fetchWorkflows(); toast.success(t("workflows.toast.deleted")); }
     } catch { toast.error(t("workflows.toast.delete_failed")); }
   }
 
   async function handleToggle(w: Workflow) {
     try {
-      await api.post(`/workflows/${w.id}/toggle`);
-      fetchWorkflows();
+      await api.post(`${paths.workflows.one(w.id)}/toggle`);
+      void fetchWorkflows();
     } catch { toast.error(t("workflows.toast.toggle_failed")); }
   }
 
   async function handleExecute(w: Workflow) {
     try {
-      const data = await api.postJson(`/workflows/${w.id}/execute`, {});
+      const data = await api.postJson(`${paths.workflows.one(w.id)}/execute`, {});
       if (data.success) { toast.success(t("workflows.toast.executed", { task_count: String(data.task_count), agents_count: String(data.agents_count) })); } else { toast.error((data.error as string)); }
     } catch { toast.error(t("workflows.toast.execute_failed")); }
   }
@@ -112,13 +124,23 @@ export default function WorkflowsPage() {
       <PageHeader title={t("workflows.title")} subtitle={t("workflows.subtitle")}>
         <Button onClick={openCreate}><Plus className="w-4 h-4" /> {t("workflows.new")}</Button>
       </PageHeader>
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Spinner />
-        </div>
-      ) : workflows.length === 0 ? (
-        <EmptyState icon={Workflow} title={t("workflows.empty")} message={t("workflows.empty_desc")} action={<Button size="sm" onClick={openCreate}>{t("workflows.new")}</Button>} />
-      ) : (
+      <DataState
+        loading={loading}
+        error={error}
+        onRetry={() => void fetchWorkflows()}
+        empty={!loading && !error && workflows.length === 0}
+        emptyIcon={Workflow}
+        emptyTitle={t("workflows.empty")}
+        emptyMessage={t("workflows.empty_desc")}
+        emptyAction={<Button size="sm" onClick={openCreate}>{t("workflows.new")}</Button>}
+        loadingSkeleton={
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-24 w-full rounded-xl" />
+            ))}
+          </div>
+        }
+      >
         <div className="flex flex-col gap-3">
           {workflows.map(w => (
             <Card key={w.id} className="p-4">
@@ -130,7 +152,7 @@ export default function WorkflowsPage() {
                 </div>
                 <div className="flex gap-1.5">
                   <Tooltip>
-                    <TooltipTrigger render={<Button variant="outline" size="xs" onClick={() => setHistoryWfId(w.id)} aria-label="Execution History" />}>
+                    <TooltipTrigger render={<Button variant="outline" size="xs" onClick={() => setHistoryWfId(w.id)} aria-label={t("workflows.exec_history")} />}>
                       <History className="w-4 h-4" />
                     </TooltipTrigger>
                     <TooltipContent>Execution History</TooltipContent>
@@ -150,8 +172,8 @@ export default function WorkflowsPage() {
               <div className="flex flex-col gap-1 mt-2">
                 {w.steps.map((s) => (
                   <div key={s.step_order} className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-muted text-xs">
-                    <span className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center text-(--font-size-micro-sm) font-semibold">{s.step_order}</span>
-                    <span className="font-semibold text-indigo-600 dark:text-indigo-400 min-w-[80px]">{s.task_type}</span>
+                    <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-(--fs-micro-sm) font-semibold">{s.step_order}</span>
+                    <span className="font-semibold text-primary min-w-[80px]">{s.task_type}</span>
                     <span className="flex-1 font-mono text-foreground truncate">{s.command?.substring(0, 60)}</span>
                     <span className="text-muted-foreground">{s.shell} &middot; {s.timeout_sec}s{s.stop_on_failure ? ` \u00b7 ${t("workflows.stop_on_fail")}` : ""}{s.condition ? ` \u00b7 if: ${s.condition}` : ""}{(s.repeat_count ?? 0) > 0 ? ` \u00b7 repeat ${s.repeat_count}x` : ""}</span>
                   </div>
@@ -160,7 +182,7 @@ export default function WorkflowsPage() {
             </Card>
           ))}
         </div>
-      )}
+      </DataState>
 
       <WorkflowEditorDialog open={showEditor} onOpenChange={setShowEditor} editWf={editWf} onSave={handleSave} />
 

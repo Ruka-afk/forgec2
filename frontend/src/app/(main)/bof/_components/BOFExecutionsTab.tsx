@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/UI";
 import { Card } from "@/components/ui/card";
 import { Terminal } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 interface BOFExecutionsTabProps {
   executions: Execution[];
@@ -13,6 +14,7 @@ interface BOFExecutionsTabProps {
 }
 
 export default function BOFExecutionsTab({ executions, loading }: BOFExecutionsTabProps) {
+  const { t } = useI18n();
   if (loading) {
     return (
       <Card className="overflow-hidden">
@@ -35,14 +37,14 @@ export default function BOFExecutionsTab({ executions, loading }: BOFExecutionsT
                     <Terminal className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-foreground">{ex.bof_name || "Unknown"}</div>
+                    <div className="text-sm font-medium text-foreground">{ex.bof_name || t("bof.unknown")}</div>
                     <div className="text-xs text-muted-foreground">
-                      {ex.agent_hostname || "Unknown"} {ex.args ? `· args: ${ex.args}` : ""}
+                      {ex.agent_hostname || t("bof.unknown")} {ex.args ? `· args: ${ex.args}` : ""}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className={`text-(--font-size-micro-sm) px-2 py-0.5 rounded-full ${getStatusColor(ex.status || "")}`}>
+                  <Badge variant="secondary" className={`text-(--fs-micro-sm) px-2 py-0.5 rounded-full ${getStatusColor(ex.status || "")}`}>
                     {ex.status || "pending"}
                   </Badge>
                   <span className="text-xs text-muted-foreground">{ex.created_at || ""}</span>
@@ -59,7 +61,7 @@ export default function BOFExecutionsTab({ executions, loading }: BOFExecutionsT
       ) : (
         <div className="text-center py-12 text-muted-foreground">
           <Terminal className="w-4 h-4" />
-          <p>No executions yet</p>
+          <p>{t("bof.no_executions")}</p>
         </div>
       )}
     </Card>

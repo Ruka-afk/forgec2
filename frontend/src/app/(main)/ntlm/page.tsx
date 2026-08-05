@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { EmptyState, PageHeader, Spinner } from "@/components/UI";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -36,7 +37,7 @@ export default function NtlmPage() {
   const loadAgents = useCallback(async () => {
     setAgentsError(null);
     try {
-      const data = await api.get(`/agents`);
+      const data = await api.get(paths.agents.list());
       setAgents((data.agents || data || []) as Agent[]);
     } catch {
       setAgentsError(t("ntlm.toast.load_agents_failed"));
@@ -69,7 +70,7 @@ export default function NtlmPage() {
     setLoading(true);
     try {
       const body = new URLSearchParams({ target, listen_addr: listenAddr });
-      const data = await api.post(`/agents/${selectedAgent}/coerce/${coerceType}`, Object.fromEntries(body));
+      const data = await api.post(paths.agents.coerce(selectedAgent, coerceType), Object.fromEntries(body));
       if (data.success) toast.success(t("ntlm.toast.coerce_dispatched", { task_id: String(data.task_id) }));
       else toast.error((data.error as string) || t("ntlm.toast.coerce_failed"));
     } catch (e) { toast.error(String(e)); }
@@ -84,7 +85,7 @@ export default function NtlmPage() {
     setLoading(true);
     try {
       const body = new URLSearchParams({ target: relayTarget, listener: relayListener, flags: relayFlags });
-      const data = await api.post(`/agents/${selectedAgent}/relay/start`, Object.fromEntries(body));
+      const data = await api.post(paths.agents.relayStart(selectedAgent), Object.fromEntries(body));
       if (data.success) toast.success(t("ntlm.toast.relay_started", { task_id: String(data.task_id) }));
       else toast.error((data.error as string) || t("ntlm.toast.start_failed"));
     } catch (e) { toast.error(String(e)); }
@@ -98,7 +99,7 @@ export default function NtlmPage() {
     }
     setLoading(true);
     try {
-      const data = await api.post(`/agents/${selectedAgent}/relay/stop`, {});
+      const data = await api.post(paths.agents.relayStop(selectedAgent), {});
       if (data.success) toast.success(t("ntlm.toast.relay_stopped"));
       else toast.error((data.error as string) || t("ntlm.toast.stop_failed"));
     } catch (e) { toast.error(String(e)); }
@@ -123,7 +124,7 @@ export default function NtlmPage() {
       {agentsError && (
         <div className="mb-4 px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/30 text-sm text-destructive flex items-center justify-between">
           <span>{agentsError}</span>
-          <Button variant="ghost" size="sm" onClick={() => setAgentsError(null)} aria-label="Dismiss">&times;</Button>
+          <Button variant="ghost" size="sm" onClick={() => setAgentsError(null)} aria-label={t("common.dismiss")}>&times;</Button>
         </div>
       )}
 
@@ -203,7 +204,7 @@ export default function NtlmPage() {
           <Button
             onClick={handleCoerce}
             disabled={loading || !selectedAgent || !target}
-            className="bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50"
+            className="disabled:opacity-50"
           >
             {loading ? <><Spinner size="sm" className="mr-2" />{t("ntlm.dispatching")}</> : <><Play className="w-4 h-4" />{t("ntlm.execute_coercion")}</>}
           </Button>
@@ -215,7 +216,7 @@ export default function NtlmPage() {
         <div className="space-y-6">
 <Card className="p-4 sm:p-5">
             <div className="flex items-center gap-x-3 mb-5">
-              <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center">
                 <ArrowLeftRight className="w-4 h-4" />
               </div>
               <div>
@@ -246,7 +247,7 @@ export default function NtlmPage() {
                 <Input
                   value={relayFlags}
                   onChange={(e) => setRelayFlags(e.target.value)}
-                  placeholder="e.g. --remove-mic --auth"
+                  placeholder={t("ntlm.args_ph")}
                 />
               </div>
             </div>

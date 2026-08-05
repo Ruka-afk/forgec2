@@ -28,29 +28,39 @@ func (s *Server) handleBulkDeleteAgents(c *gin.Context) {
 		return
 	}
 
+	// Whole batch is deleted in a single transaction: any failure rolls back
+	// every agent so the operation never leaves a partially-deleted state.
 	deleted := 0
-	failed := 0
 	var deleteAudit []auditEntry
+	tx := s.db.Begin()
 	for _, id := range req.AgentIDs {
-		if s.deleteAgentRecord(id) {
-			deleted++
-			deleteAudit = append(deleteAudit, auditEntry{action: "delete_agent", resource: "agent", agentID: id, details: "bulk delete", success: true})
-		} else {
-			failed++
+		if err := s.deleteAgentRecordTx(tx, id); err != nil {
+			tx.Rollback()
+			slog.Error("Bulk delete: failed to delete agent, rolling back batch", "agent_id", id, "err", err)
+			respondError(c, http.StatusInternalServerError, "failed to delete agents")
+			return
 		}
+		deleted++
+		deleteAudit = append(deleteAudit, auditEntry{action: "delete_agent", resource: "agent", agentID: id, details: "bulk delete", success: true})
+	}
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		slog.Error("Bulk delete: commit failed, rolling back entire batch", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to delete agents")
+		return
 	}
 	s.LogAuditRecords(c, deleteAudit)
 
 	user, _ := c.Get("user")
 	operator := fmt.Sprintf("%v", user)
 	s.broadcastBulkAgentDeleteAlert(operator, deleted)
-	s.LogAuditRecord(c, "batch_delete_agents", "agent", "", fmt.Sprintf("deleted %d agents (%d failed)", deleted, failed), true, nil)
-	slog.Warn("Bulk agent delete", "deleted", deleted, "failed", failed, "user", operator)
+	s.LogAuditRecord(c, "batch_delete_agents", "agent", "", fmt.Sprintf("deleted %d agents", deleted), true, nil)
+	slog.Warn("Bulk agent delete", "deleted", deleted, "user", operator)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"deleted": deleted,
-		"failed":  failed,
+		"failed":  0,
 	})
 }
 
@@ -97,8 +107,7 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 
 	var existingAgents []db.Implant
 	if err := s.db.Select("id").Where("id IN ?", uniqueIDs).Find(&existingAgents).Error; err != nil {
-		slog.Error("Failed to query existing agents for batch", "err", err)
-		respondError(c, http.StatusInternalServerError, "failed to query agents")
+		handleQueryError(c, err, "Failed to query existing agents for batch")
 		return
 	}
 	existingSet := make(map[string]bool, len(existingAgents))

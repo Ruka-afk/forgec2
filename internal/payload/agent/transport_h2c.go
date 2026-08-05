@@ -47,6 +47,9 @@ func sendH2CBeacon(body []byte) []byte {
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("User-Agent", UserAgent)
+		if beaconKey != "" {
+			req.Header.Set("X-Beacon-Key", beaconKey)
+		}
 
 		// Upgrade to HTTP/2 via h2c (Upgrade: h2c)
 		req.Header.Set("Upgrade", "h2c")

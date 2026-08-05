@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import type { AgentDetail } from "@/types/agent";
 import { useI18n } from "@/lib/i18n";
 
@@ -83,8 +84,8 @@ export default function AgentConfigPage() {
     if (!id) return;
     try {
       const [data, agentData] = await Promise.all([
-        api.get<ConfigResponse>(`/agents/${id}/config`),
-        api.get<{ agent?: Partial<AgentDetail> }>(`/agents/${id}`),
+        api.get<ConfigResponse>(paths.agents.config(id)),
+        api.get<{ agent?: Partial<AgentDetail> }>(paths.agents.one(id)),
       ]);
       setEffective(data.effective);
       setHasPending(data.has_pending);
@@ -139,7 +140,7 @@ export default function AgentConfigPage() {
       if (editURI.trim()) body.beacon_uri = editURI.trim();
       if (editMethod) body.method = editMethod;
 
-      const res = await api.postJson<{success: boolean; error?: string}>(`/agents/${id}/config`, body);
+      const res = await api.postJson<{success: boolean; error?: string}>(paths.agents.config(id), body);
       if (res.success) {
         toast.success(t("agents.config_push_success"));
         loadConfig();
@@ -166,7 +167,7 @@ export default function AgentConfigPage() {
         </div>
       )}
 
-      <Card className="p-4 sm:p-5 bg-gradient-to-br from-indigo-50/40 to-transparent dark:from-indigo-900/10">
+      <Card className="p-4 sm:p-5 bg-primary/[0.04]">
         <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
           <SlidersHorizontal className="w-4 h-4" /> {t("agents.config_hot_config")}
         </h3>
@@ -175,10 +176,10 @@ export default function AgentConfigPage() {
           <div>
             <Label className="text-xs mb-1.5">{t("agents.config_sleep_seconds")}</Label>
             <div className="flex gap-2">
-              <Input aria-label="Sleep interval in seconds" name="input-0" type="number" min="1" value={editSleep} onChange={(e) => setEditSleep(e.target.value)}
+              <Input aria-label={t("agents.config.sleep")} name="input-0" type="number" min="1" value={editSleep} onChange={(e) => setEditSleep(e.target.value)}
                 className="flex-1" />
               <Tooltip>
-                <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("sleep")} aria-label="Reset sleep to default" />}>
+                <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("sleep")} aria-label={t("agents.config.reset_sleep")} />}>
                   <RotateCcw className="w-4 h-4" />
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.config_reset_default")}</TooltipContent>
@@ -188,10 +189,10 @@ export default function AgentConfigPage() {
           <div>
             <Label className="text-xs mb-1.5">{t("agents.config_jitter_pct")}</Label>
             <div className="flex gap-2">
-              <Input aria-label="Jitter percentage" name="input-1" type="number" min="0" max="100" value={editJitter} onChange={(e) => setEditJitter(e.target.value)}
+              <Input aria-label={t("agents.config.jitter")} name="input-1" type="number" min="0" max="100" value={editJitter} onChange={(e) => setEditJitter(e.target.value)}
                 className="flex-1" />
               <Tooltip>
-                <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("jitter")} aria-label="Reset jitter to default" />}>
+                <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("jitter")} aria-label={t("agents.config.reset_jitter")} />}>
                   <RotateCcw className="w-4 h-4" />
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.config_reset_default")}</TooltipContent>
@@ -204,7 +205,7 @@ export default function AgentConfigPage() {
           <Label className="text-xs mb-1.5">{t("agents.config_user_agent")}</Label>
           <div className="flex gap-2">
             <div className="flex-1 flex gap-2">
-              <Input aria-label="User-Agent string" name="input-2" type="text" value={editUA} onChange={(e) => setEditUA(e.target.value)}
+              <Input aria-label={t("agents.config.ua")} name="input-2" type="text" value={editUA} onChange={(e) => setEditUA(e.target.value)}
                 className="flex-1 font-mono" />
               <Select value="" onValueChange={(v) => { if (v) setEditUA(v); }}>
                 <SelectTrigger className="w-full">
@@ -218,7 +219,7 @@ export default function AgentConfigPage() {
               </Select>
             </div>
               <Tooltip>
-                <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("ua")} aria-label="Reset user-agent to default" />}>
+                <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("ua")} aria-label={t("agents.config.reset_ua")} />}>
                   <RotateCcw className="w-4 h-4" />
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.config_reset_default")}</TooltipContent>
@@ -230,10 +231,10 @@ export default function AgentConfigPage() {
           <div>
             <Label className="text-xs mb-1.5">{t("agents.config_beacon_uri")}</Label>
             <div className="flex gap-2">
-              <Input aria-label="Beacon URI path" name="input-4" type="text" value={editURI} onChange={(e) => setEditURI(e.target.value)}
+              <Input aria-label={t("agents.config.uri")} name="input-4" type="text" value={editURI} onChange={(e) => setEditURI(e.target.value)}
                 className="flex-1 font-mono" />
               <Tooltip>
-                <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("uri")} aria-label="Reset beacon URI to default" />}>
+                <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("uri")} aria-label={t("agents.config.reset_uri")} />}>
                   <RotateCcw className="w-4 h-4" />
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.config_reset_default")}</TooltipContent>
@@ -253,7 +254,7 @@ export default function AgentConfigPage() {
                 </SelectContent>
               </Select>
               <Tooltip>
-                <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("method")} aria-label="Reset HTTP method to default" />}>
+                <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("method")} aria-label={t("agents.config.reset_method")} />}>
                   <RotateCcw className="w-4 h-4" />
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.config_reset_default")}</TooltipContent>
@@ -270,7 +271,7 @@ export default function AgentConfigPage() {
                 <Plus className="w-4 h-4" /> {t("agents.config_add")}
               </Button>
               <Tooltip>
-                <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("headers")} aria-label="Reset headers to default" />}>
+                <TooltipTrigger render={<Button variant="outline" size="sm" onClick={() => resetField("headers")} aria-label={t("agents.config.reset_headers")} />}>
                   <RotateCcw className="w-4 h-4" />
                 </TooltipTrigger>
                 <TooltipContent>{t("agents.config_reset_default")}</TooltipContent>
@@ -283,11 +284,11 @@ export default function AgentConfigPage() {
             ) : (
               editHeaders.map((h, i) => (
                 <div key={h.key} className="flex gap-2 items-center">
-                  <Input aria-label="Header name" name="header-name-6" type="text" placeholder={t("agents.config_header_name")} value={h.key} onChange={(e) => updateHeader(i, "key", e.target.value)}
+                  <Input aria-label={t("agents.config.header_name")} name="header-name-6" type="text" placeholder={t("agents.config_header_name")} value={h.key} onChange={(e) => updateHeader(i, "key", e.target.value)}
                     className="flex-1 font-mono" />
-                  <Input aria-label="Value" name="value-7" type="text" placeholder={t("agents.config_header_value")} value={h.value} onChange={(e) => updateHeader(i, "value", e.target.value)}
+                  <Input aria-label={t("agents.config.header_value")} name="value-7" type="text" placeholder={t("agents.config_header_value")} value={h.value} onChange={(e) => updateHeader(i, "value", e.target.value)}
                     className="flex-[2] font-mono" />
-                  <Button variant="ghost" size="sm" onClick={() => removeHeader(i)} aria-label="Remove header">
+                  <Button variant="ghost" size="sm" onClick={() => removeHeader(i)} aria-label={t("agents.config.remove_header")}>
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
@@ -343,12 +344,12 @@ export default function AgentConfigPage() {
               <div className="space-y-0.5">
                 {Object.entries(effective.headers).map(([k, v]) => (
                   <div key={k} className="text-xs font-mono text-foreground">
-                    <span className="text-indigo-500">{k}</span>: {v}
+                    <span className="text-primary">{k}</span>: {v}
                   </div>
                 ))}
               </div>
             ) : (
-              <span className="text-xs text-muted-foreground/70">None</span>
+              <span className="text-xs text-muted-foreground/70">{t("agents.config.none")}</span>
             )}
           </div>
         </div>

@@ -3,12 +3,40 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/util"
 	"github.com/gin-gonic/gin"
 )
+
+const (
+	maxTagNameLen   = 64
+	tagColorPattern = `^#[0-9a-fA-F]{6}$`
+)
+
+var tagColorRe = regexp.MustCompile(tagColorPattern)
+
+// validTagName rejects empty, overlong, comma-containing (tags are stored
+// comma-separated in some flows) or control-character tag names.
+func validTagName(name string) bool {
+	if name == "" || utf8.RuneCountInString(name) > maxTagNameLen {
+		return false
+	}
+	for _, r := range name {
+		if r < 0x20 || r == 0x7f || r == ',' {
+			return false
+		}
+	}
+	return true
+}
+
+func validTagColor(color string) bool {
+	return tagColorRe.MatchString(color)
+}
 
 func (s *Server) handleAPITagList(c *gin.Context) {
 	var tags []db.AgentTag
@@ -30,8 +58,17 @@ func (s *Server) handleAPITagCreate(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "name required")
 		return
 	}
+	req.Name = strings.TrimSpace(req.Name)
+	if !validTagName(req.Name) {
+		respondError(c, http.StatusBadRequest, "invalid tag name (max 64 chars, no commas or control characters)")
+		return
+	}
 	if req.Color == "" {
 		req.Color = "#3498db"
+	}
+	if !validTagColor(req.Color) {
+		respondError(c, http.StatusBadRequest, "invalid color (expected #RRGGBB)")
+		return
 	}
 	tag := db.AgentTag{
 		ID:        util.NewString(),
@@ -66,9 +103,18 @@ func (s *Server) handleAPITagUpdate(c *gin.Context) {
 		return
 	}
 	if req.Name != "" {
+		req.Name = strings.TrimSpace(req.Name)
+		if !validTagName(req.Name) {
+			respondError(c, http.StatusBadRequest, "invalid tag name (max 64 chars, no commas or control characters)")
+			return
+		}
 		tag.Name = req.Name
 	}
 	if req.Color != "" {
+		if !validTagColor(req.Color) {
+			respondError(c, http.StatusBadRequest, "invalid color (expected #RRGGBB)")
+			return
+		}
 		tag.Color = req.Color
 	}
 	tag.UpdatedAt = time.Now()

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
@@ -35,16 +35,21 @@ function SearchContent() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const requestIdRef = useRef(0);
+
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); return; }
+    const reqId = ++requestIdRef.current;
     setLoading(true);
     try {
       const data = await api.get<{ success?: boolean; results?: SearchResult[] }>(`/search?q=${encodeURIComponent(q)}`);
+      if (reqId !== requestIdRef.current) return;
       setResults(data.results || []);
     } catch {
+      if (reqId !== requestIdRef.current) return;
       setResults([]);
     } finally {
-      setLoading(false);
+      if (reqId === requestIdRef.current) setLoading(false);
     }
   }, []);
 
@@ -91,7 +96,7 @@ function SearchContent() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="text-sm font-medium text-foreground">{r.title}</span>
-                  <Badge variant="secondary" className="text-(--font-size-micro-sm) px-1.5 py-0.5 rounded capitalize">{r.type}</Badge>
+                  <Badge variant="secondary" className="text-(--fs-micro-sm) px-1.5 py-0.5 rounded capitalize">{r.type}</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground truncate">{r.subtitle}</p>
               </div>

@@ -1,13 +1,17 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
+import { normalizeListEnvelope } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
-import { PageHeader, EmptyState, Spinner } from "@/components/UI";
+import { PageHeader } from "@/components/UI";
+import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Layers, Plus } from "lucide-react";
@@ -28,6 +32,7 @@ export default function GroupsPage() {
   const { t } = useI18n();
   const [groups, setGroups] = useState<AgentGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editGroup, setEditGroup] = useState<AgentGroup | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -38,11 +43,18 @@ export default function GroupsPage() {
 
   const fetchGroups = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const data: { groups?: AgentGroup[] } = await api.get("/groups");
-      setGroups(data.groups || []);
-    } catch { setGroups([]); toast.error(t("groups.toast.load_failed")); }
-    setLoading(false);
+      const data = await api.get(paths.groups.list);
+      setGroups(normalizeListEnvelope(data, ["groups", "data"]) as AgentGroup[]);
+    } catch (e) {
+      setGroups([]);
+      const msg = e instanceof Error ? e.message : t("groups.toast.load_failed");
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   }, [t]);
 
   useEffect(() => { fetchGroups(); }, [fetchGroups]);
@@ -64,8 +76,8 @@ export default function GroupsPage() {
     try {
       const body = { name: formName.trim(), description: formDesc, color: formColor, parent_id: formParent };
       const data: { success?: boolean; error?: string } = editGroup
-        ? await api.putJson(`/groups/${editGroup.id}`, body)
-        : await api.postJson("/groups", body);
+        ? await api.putJson(paths.groups.one(editGroup.id), body)
+        : await api.postJson(paths.groups.list, body);
       if (data.success) { setShowModal(false); fetchGroups(); toast.success(editGroup ? t("groups.toast.updated") : t("groups.toast.created")); }
       else { toast.error(data.error || t("groups.toast.save_failed")); }
     } catch { toast.error(t("groups.toast.save_failed")); }
@@ -76,7 +88,7 @@ export default function GroupsPage() {
     const id = deleteId;
     setDeleteId(null);
     try {
-      const data: { success?: boolean; error?: string } = await api.del(`/groups/${id}`);
+      const data: { success?: boolean; error?: string } = await api.del(paths.groups.one(id));
       if (data.success) { fetchGroups(); toast.success(t("groups.toast.deleted")); }
       else { toast.error(data.error || t("groups.toast.delete_failed")); }
     } catch { toast.error(t("groups.toast.delete_failed")); }
@@ -96,7 +108,7 @@ export default function GroupsPage() {
           <div className="flex flex-col gap-0.5">
             <span className="text-sm font-semibold text-foreground">{g.name}</span>
             {g.description && <span className="text-xs text-muted-foreground">{g.description}</span>}
-            <span className="text-(--font-size-xs-sm) text-muted-foreground">{g.agent_count} {t("groups.agent_count")}, {g.child_count} sub-groups</span>
+            <span className="text-(--fs-xs-sm) text-muted-foreground">{g.agent_count} {t("groups.agent_count")}, {g.child_count} sub-groups</span>
           </div>
           <div className="flex gap-1.5">
                 <Button variant="outline" size="sm" onClick={() => openEdit(g)}>{t("groups.edit")}</Button>
@@ -114,20 +126,27 @@ export default function GroupsPage() {
       <PageHeader title={t("groups.title")} subtitle={t("groups.subtitle")}>
         <Button onClick={openCreate}><Plus className="w-4 h-4" /> {t("groups.new")}</Button>
       </PageHeader>
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Spinner />
-        </div>
-      ) : groups.length === 0 ? (
-        <Card className="p-12 text-center">
-          <EmptyState icon={Layers} title={t("groups.empty")} message={t("groups.empty_desc")} />
-          <Button onClick={openCreate}>{t("groups.create")}</Button>
-        </Card>
-      ) : (
+      <DataState
+        loading={loading}
+        error={error}
+        onRetry={() => void fetchGroups()}
+        empty={!loading && !error && groups.length === 0}
+        emptyIcon={Layers}
+        emptyTitle={t("groups.empty")}
+        emptyMessage={t("groups.empty_desc")}
+        emptyAction={<Button onClick={openCreate}>{t("groups.create")}</Button>}
+        loadingSkeleton={
+          <Card className="p-4 space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </Card>
+        }
+      >
         <Card className="p-4 sm:p-5">
           {rootGroups.map(g => renderGroup(g))}
         </Card>
-      )}
+      </DataState>
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -136,20 +155,20 @@ export default function GroupsPage() {
           <div className="space-y-4">
             <div>
               <Label htmlFor="group-name">{t("groups.field_name")} *</Label>
-              <Input id="group-name" aria-label="Group name" value={formName} onChange={e => setFormName(e.target.value)} placeholder={t("groups.name_placeholder")} />
+              <Input id="group-name" aria-label={t("groups.a11y_name")} value={formName} onChange={e => setFormName(e.target.value)} placeholder={t("groups.name_placeholder")} />
             </div>
             <div>
               <Label htmlFor="group-desc">{t("groups.field_desc")}</Label>
-              <Input id="group-desc" aria-label="Optional description" value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder={t("groups.desc_placeholder")} />
+              <Input id="group-desc" aria-label={t("groups.a11y_desc")} value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder={t("groups.desc_placeholder")} />
             </div>
             <div>
               <Label htmlFor="group-color">{t("groups.field_color")}</Label>
-              <Input id="group-color" aria-label="color" type="color" value={formColor} onChange={e => setFormColor(e.target.value)} />
+              <Input id="group-color" aria-label={t("groups.a11y_color")} type="color" value={formColor} onChange={e => setFormColor(e.target.value)} />
             </div>
             <div>
               <Label>{t("groups.field_parent")}</Label>
               <Select value={formParent || "__none__"} onValueChange={(v) => setFormParent(v === "__none__" || v === null ? "" : v)}>
-                <SelectTrigger className="w-full" aria-label="Parent group">
+                <SelectTrigger className="w-full" aria-label={t("groups.a11y_parent")}>
                   <SelectValue placeholder={t("groups.none_root")} />
                 </SelectTrigger>
                 <SelectContent>

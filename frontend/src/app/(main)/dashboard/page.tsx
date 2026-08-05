@@ -11,8 +11,8 @@ import { formatTime } from "@/lib/utils";
 import { ChartCard } from "@/components/ChartCard";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { DataError } from "@/components/ui/data-state";
 import { useI18n } from "@/lib/i18n";
 import { AlertTriangle, Calendar, Cpu, Globe, Inbox, Key, PieChart, Route, Shield } from "lucide-react";
@@ -51,7 +51,7 @@ function AuditStrip() {
         {logs.map((log, i) => (
           <div key={i} className="flex items-center justify-between px-5 py-2.5 text-xs">
             <div className="flex items-center gap-2 min-w-0">
-              <Badge variant="secondary" className="text-(--font-size-micro-sm) font-mono shrink-0">{log.action || "-"}</Badge>
+              <Badge variant="secondary" className="text-(--fs-micro-sm) font-mono shrink-0">{log.action || "-"}</Badge>
               <span className="text-foreground truncate">{log.details || log.username || ""}</span>
             </div>
             <span className="text-muted-foreground/70 shrink-0 ml-2">
@@ -103,7 +103,10 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     Promise.all([
-      api.get<DashboardPageStats>("/api/v1/dashboard", { signal: controller.signal }).catch(() => { setError(t("dashboard.load_failed")); return {}; }),
+      api.get<DashboardPageStats>("/api/v1/dashboard", { signal: controller.signal }).catch(() => {
+        if (!controller.signal.aborted) setError(t("dashboard.load_failed"));
+        return {};
+      }),
     ]).then(([d]) => setStats(d)).finally(() => setLoading(false));
     return () => controller.abort();
   }, [timeRange, t]);
@@ -119,9 +122,20 @@ export default function DashboardPage() {
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("dashboard.title")} subtitle={`${t("dashboard.subtitle")} · ${s.total_tasks || 0} ${t("dashboard.total_tasks_suffix")}`}>
-          <div className="flex gap-1">
+          <div className="inline-flex items-center gap-0.5 rounded-lg bg-secondary/70 p-0.5 ring-1 ring-border/50">
             {["24h", "7d", "30d"].map((r) => (
-              <Button key={r} onClick={() => changeRange(r)} variant={timeRange === r ? "default" : "ghost"} size="xs">{r}</Button>
+              <button
+                key={r}
+                onClick={() => changeRange(r)}
+                className={cn(
+                  "px-2.5 py-1 rounded-md text-xs font-mono transition-colors",
+                  timeRange === r
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {r}
+              </button>
             ))}
           </div>
             <Badge variant="success" className="gap-1.5 px-3 py-1.5 text-xs">
@@ -199,7 +213,10 @@ export default function DashboardPage() {
           ) : s.recent_tasks.slice(0, 10).map((task, i) => (
             <div key={i} className="flex items-center justify-between px-5 py-3 hover:bg-secondary transition-colors">
               <div className="flex items-center gap-3">
-                <span className={`w-2 h-2 rounded-full ${task.status === "completed" ? "bg-emerald-500" : task.status === "failed" ? "bg-red-500" : task.status === "pending" ? "bg-amber-500" : "bg-blue-500"}`}></span>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${task.status === "completed" ? "bg-emerald-500" : task.status === "failed" ? "bg-red-500" : task.status === "pending" ? "bg-amber-500" : "bg-blue-500"}`}></span>
+                <span className="text-(--fs-micro-sm) text-muted-foreground w-16 shrink-0">
+                  {task.status === "completed" ? t("tasks.completed") : task.status === "failed" ? t("tasks.failed") : task.status === "pending" ? t("tasks.pending") : task.status === "cancelled" ? t("tasks.cancelled") : t("tasks.running")}
+                </span>
                 <span className="text-xs font-mono text-foreground">{task.type}</span>
                 <span className="text-xs text-muted-foreground/70 truncate max-w-xs">{task.command}</span>
               </div>

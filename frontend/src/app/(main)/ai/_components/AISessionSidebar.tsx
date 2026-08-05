@@ -34,27 +34,32 @@ export default function AISessionSidebar({ sessions, activeSessionId, onSelect, 
           sessions.map((s) => (
             <div
               key={s.id}
-              onClick={() => onSelect(s.id)}
-              className={`group flex items-center gap-2 rounded-lg px-2 py-2 cursor-pointer text-sm ${
+              className={`group flex items-center gap-1 rounded-lg px-1.5 py-1 cursor-pointer text-sm ${
                 activeSessionId === s.id
-                  ? "bg-primary/10 text-indigo-700 dark:text-indigo-300"
+                  ? "bg-primary/10 text-primary dark:text-primary"
                   : "hover:bg-muted transition-colors text-muted-foreground"
               }`}
             >
-              <MessageSquare className="w-4 h-4" />
-              <span className="flex-1 truncate">{s.title}</span>
+              <button
+                type="button"
+                onClick={() => onSelect(s.id)}
+                className="flex items-center gap-2 flex-1 min-w-0 py-1 text-left rounded-md focus-visible:outline-none"
+              >
+                <MessageSquare className="w-4 h-4 shrink-0" aria-hidden="true" />
+                <span className="flex-1 truncate">{s.title}</span>
+              </button>
               <Button
                 variant="ghost" size="icon-xs"
-                onClick={(e) => { e.stopPropagation(); onRename(s.id, s.title); }}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-indigo-500 dark:hover:text-indigo-300 transition-opacity shrink-0"
+                onClick={() => onRename(s.id, s.title)}
+                className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 text-muted-foreground hover:text-primary transition-opacity shrink-0"
                 aria-label={t("ai.rename")}
               >
                 <Pencil className="w-4 h-4" />
               </Button>
               <Button
                 variant="ghost" size="icon-xs"
-                onClick={(e) => { e.stopPropagation(); onDelete(s.id); }}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity shrink-0"
+                onClick={() => onDelete(s.id)}
+                className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 text-muted-foreground hover:text-destructive transition-opacity shrink-0"
                 aria-label={t("ai.delete_session")}
               >
                 <Trash2 className="w-4 h-4" />

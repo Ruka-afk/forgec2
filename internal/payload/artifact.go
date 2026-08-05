@@ -200,37 +200,47 @@ func ApplyTimestamp(data []byte, ts uint32) {
 	}
 }
 
+// ApplyPESectionNames rewrites the section header names of a PE image.
+// The section table starts after the optional header, whose size must be read
+// from IMAGE_FILE_HEADER (a hardcoded offset silently fails on PE32+ images).
 func ApplyPESectionNames(data []byte, sections PESectionConfig) {
 	if len(data) < 0x100 || data[0] != 'M' || data[1] != 'Z' {
 		return
 	}
 	peOffset := int(data[0x3C]) | int(data[0x3D])<<8
-	if peOffset+4 >= len(data) {
+	if peOffset+24 >= len(data) {
 		return
 	}
-	sectionOffset := peOffset + 0xF8
-	if sectionOffset+40*4 > len(data) {
+	if data[peOffset] != 'P' || data[peOffset+1] != 'E' {
+		return
+	}
+	numSections := int(data[peOffset+6]) | int(data[peOffset+7])<<8
+	if numSections <= 0 || numSections > 96 {
+		return
+	}
+	sizeOptHeader := int(data[peOffset+20]) | int(data[peOffset+21])<<8
+	if sizeOptHeader == 0 {
+		return
+	}
+	sectionOffset := peOffset + 4 + 20 + sizeOptHeader
+	if sectionOffset+40*numSections > len(data) {
 		return
 	}
 	names := []string{sections.Text, sections.Data, sections.Rdata, sections.Reloc}
-	for i, name := range names {
+	max := numSections
+	if len(names) < max {
+		max = len(names)
+	}
+	for i := 0; i < max; i++ {
+		name := names[i]
 		if name == "" {
 			continue
 		}
 		off := sectionOffset + i*40
-		if off+8 > len(data) {
-			continue
-		}
 		b := make([]byte, 8)
 		copy(b, name)
-		for j := len(name); j < 8; j++ {
-			b[j] = 0
-		}
 		copy(data[off:off+8], b)
 	}
 }
 
-func AddBenignImports(data []byte, dlls []string) {
-	_ = data
-	_ = dlls
-}
+// (AddBenignImports lives in artifact_imports.go)

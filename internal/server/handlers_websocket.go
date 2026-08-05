@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -132,13 +133,10 @@ func (h *WebSocketHub) Broadcast(data []byte) {
 	}
 }
 
-// handleWebSocketBeacon handles WebSocket beacon connections
+// handleWebSocketBeacon handles WebSocket beacon connections.
+// v2: frame-level envelopes are authenticated by decodeBeaconEnvelope, so the
+// upgrade itself requires no separate key check.
 func (s *Server) handleWebSocketBeacon(c *gin.Context) {
-	if !s.checkBeaconKey(c) {
-		c.AbortWithStatus(http.StatusUnauthorized)
-		return
-	}
-
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		slog.Error("WebSocket upgrade failed", "error", err)
@@ -350,8 +348,8 @@ func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
 			break
 		}
 
-		envelope, req, useECDH, ok := s.decodeBeaconEnvelope(message, "")
-		if !ok {
+		env, req, kind := s.decodeBeaconEnvelope(message)
+		if kind == frameRejected {
 			slog.Warn("WebSocket beacon envelope rejected", "agent_id", beacon.AgentID)
 			continue
 		}
@@ -363,13 +361,28 @@ func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
 			s.wsHub.Register(beacon.AgentID, beacon)
 		}
 
-		// Process beacon
-		resp := s.processBeacon(req, "")
-
-		respJSON, ok := s.buildBeaconResponse(req, resp, useECDH, envelope.ECDHPub != "" && !useECDH)
-		if !ok {
-			slog.Error("WebSocket response build error", "agent_id", beacon.AgentID)
-			continue
+		var respJSON []byte
+		if kind == frameEncrypted {
+			// Process beacon (auth frames are handled without the pipeline:
+			// the agent discards the auth response and re-beacons encrypted,
+			// so claiming/fetching tasks here would lose them).
+			resp := s.processBeacon(req, "")
+			if s.sessionManager.NeedsRekey(req.UUID, BeaconSessionRekeyMessages) {
+				resp.Rekey = true
+			}
+			var ok bool
+			respJSON, ok = s.buildBeaconResponse(req.UUID, env.Seq, resp)
+			if !ok {
+				slog.Error("WebSocket response build error", "agent_id", beacon.AgentID)
+				continue
+			}
+		} else {
+			var ok bool
+			respJSON, ok = s.processAuthFrame(env, kind)
+			if !ok {
+				slog.Warn("WebSocket auth frame rejected", "agent_id", beacon.AgentID)
+				continue
+			}
 		}
 
 		func() {
@@ -380,5 +393,132 @@ func (s *Server) wsReadPump(beacon *WebSocketBeacon) {
 				slog.Warn("WebSocket send channel full", "agent_id", beacon.AgentID)
 			}
 		}()
+	}
+}
+
+// WSOperatorSession tracks an operator's WebSocket session.
+type WSOperatorSession struct {
+	Conn      *websocket.Conn
+	UserID    uint
+	Username  string
+	Page      string
+	AgentView string
+	LastSeen  time.Time
+}
+
+// operatorSessions tracks connected operator WebSocket sessions.
+type operatorSessionTracker struct {
+	mu       sync.Mutex
+	sessions map[uint]*WSOperatorSession
+}
+
+func (t *operatorSessionTracker) add(s *WSOperatorSession) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if existing, ok := t.sessions[s.UserID]; ok && existing != s {
+		existing.Conn.Close()
+	}
+	t.sessions[s.UserID] = s
+}
+
+func (t *operatorSessionTracker) remove(userID uint, s *WSOperatorSession) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if cur, ok := t.sessions[userID]; ok && cur == s {
+		delete(t.sessions, userID)
+	}
+}
+
+// BroadcastToOperators sends a message to all connected operator sessions.
+// Takes a snapshot of sessions under the lock, then writes without holding it.
+func (t *operatorSessionTracker) BroadcastToOperators(msg []byte) {
+	t.mu.Lock()
+	sessions := make([]*WSOperatorSession, 0, len(t.sessions))
+	for _, session := range t.sessions {
+		sessions = append(sessions, session)
+	}
+	t.mu.Unlock()
+
+	for _, session := range sessions {
+		session.Conn.SetWriteDeadline(time.Now().Add(OperatorWriteDeadline))
+		if err := session.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			slog.Warn("Failed to send to operator, dropping connection", "user", session.Username, "error", err)
+			session.Conn.Close()
+			t.remove(session.UserID, session)
+		}
+	}
+}
+
+// handleOperatorWS handles operator WebSocket connections for real-time updates.
+// Requires a valid forgec2_session cookie (unlike agent beacons which use the
+// transport envelope for auth).
+func (s *Server) handleOperatorWS(c *gin.Context) {
+	tokenStr, err := c.Cookie("forgec2_session")
+	if err != nil || tokenStr == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "no session token"})
+		return
+	}
+	claims, err := middleware.ParseToken(tokenStr)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "invalid token"})
+		return
+	}
+	if s.isSessionRevoked(tokenStr) {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "session_revoked"})
+		return
+	}
+
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		slog.Error("Operator WS upgrade failed", "error", err)
+		return
+	}
+
+	session := &WSOperatorSession{
+		Conn:     conn,
+		UserID:   claims.UserID,
+		Username: claims.Username,
+		LastSeen: time.Now(),
+	}
+
+	s.wsHubOnce.Do(func() {
+		if s.wsHub == nil {
+			s.wsHub = NewWebSocketHub()
+		}
+	})
+	s.operatorSessions.add(session)
+
+	defer func() {
+		s.operatorSessions.remove(session.UserID, session)
+		conn.Close()
+	}()
+
+	readDeadline := 90 * time.Second
+	conn.SetReadLimit(WSMaxMessageSize)
+	conn.SetReadDeadline(time.Now().Add(readDeadline))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(readDeadline))
+		return nil
+	})
+
+	for {
+		var msg map[string]interface{}
+		if err := conn.ReadJSON(&msg); err != nil {
+			break
+		}
+
+		msgType, _ := msg["type"].(string)
+		switch msgType {
+		case "page_update":
+			if page, ok := msg["page"].(string); ok {
+				session.Page = page
+			}
+		case "agent_view":
+			if agentID, ok := msg["agent_id"].(string); ok {
+				session.AgentView = agentID
+			}
+		case "ping":
+			conn.WriteJSON(map[string]string{"type": "pong"})
+		}
 	}
 }

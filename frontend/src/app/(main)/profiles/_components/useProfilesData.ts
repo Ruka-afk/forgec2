@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -29,7 +30,7 @@ export function useProfilesData() {
   const loadActiveConfig = useCallback(async () => {
     setLoadingActiveConfig(true);
     try {
-      const data = await api.get<ActiveMalleableConfig>("/integrations/malleable");
+      const data = await api.get<ActiveMalleableConfig>(paths.integrations.malleable);
       setActiveConfig({
         malleable_enabled: (data.malleable_enabled ?? false) as boolean,
         malleable_profile: (data.malleable_profile ?? "") as string,
@@ -51,7 +52,7 @@ export function useProfilesData() {
 
   const loadMalleableSettings = useCallback(async () => {
     try {
-      const d = await api.get("/settings");
+      const d = await api.get(paths.settings.root);
       setMalleableForm({
         enabled: (d.malleable_enabled ?? false) as boolean,
         status_code: (d.malleable_status ?? 200) as number,
@@ -69,8 +70,8 @@ export function useProfilesData() {
     setLoadingProfiles(true);
     setProfilesError(null);
     try {
-      const d = await api.get("/api/generate/profiles");
-      const list = (d.profiles || []) as AgentProfile[];
+      const d = await api.get(paths.generate.profiles);
+      const list = (d.profiles || d.Profiles || []) as AgentProfile[];
       setProfiles(list);
       if (list.length > 0 && selectedIdxRef.current < 0) {
         setSelectedIdx(0);

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 
 export function useAgentNotes(agentId: string, reloadDetail: () => Promise<void> | void, errorMessage: string) {
@@ -9,6 +10,12 @@ export function useAgentNotes(agentId: string, reloadDetail: () => Promise<void>
   const [tags, setTags] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const startEditing = useCallback((currentTags: string, currentNotes: string) => {
     setTags(currentTags);
@@ -22,13 +29,14 @@ export function useAgentNotes(agentId: string, reloadDetail: () => Promise<void>
     if (!agentId) return;
     setSaving(true);
     try {
-      await api.post(`/agents/${agentId}/note`, { notes, tags });
+      await api.post(paths.agents.note(agentId), { notes, tags });
+      if (!mountedRef.current) return;
       setEditing(false);
       await Promise.resolve(reloadDetail());
     } catch {
-      toast.error(errorMessage);
+      if (mountedRef.current) toast.error(errorMessage);
     } finally {
-      setSaving(false);
+      if (mountedRef.current) setSaving(false);
     }
   }, [agentId, notes, tags, reloadDetail, errorMessage]);
 

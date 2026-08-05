@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { EmptyState, Spinner } from "@/components/UI";
@@ -47,7 +48,7 @@ export default function NotificationsSection() {
   const [loading, setLoading] = useState(true);
   const [testingIdx, setTestingIdx] = useState<number | null>(null);
   useEffect(() => {
-    api.get("/settings/webhooks")
+    api.get(paths.settings.webhooks)
       .then((d: Record<string, unknown>) => {
         const dd = d.data as Record<string, unknown> | undefined;
         if (dd?.notifications) {
@@ -61,7 +62,7 @@ export default function NotificationsSection() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.postJson("/settings/webhooks", { notifications: targets });
+      await api.postJson(paths.settings.webhooks, { notifications: targets });
       toast.success(t("settings.toast.notifications_saved"));
     } catch {
       toast.error(t("settings.toast.notifications_save_failed"));
@@ -75,7 +76,7 @@ export default function NotificationsSection() {
     if (!target) return;
     setTestingIdx(idx);
     try {
-      const d = await api.postJson("/settings/webhooks/test", {
+      const d = await api.postJson(paths.settings.webhooksTest, {
         type: target.type,
         url: target.url,
         secret: target.secret,
@@ -116,8 +117,8 @@ export default function NotificationsSection() {
       <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border flex items-center gap-3">
         <div className="w-8 h-8 bg-sky-100 dark:bg-sky-900/30 rounded-xl flex items-center justify-center text-sky-600"><Bell className="w-4 h-4" /></div>
         <div>
-          <h2 className="text-sm font-semibold">Notification Targets</h2>
-          <p className="text-(--font-size-xs-sm) text-muted-foreground">Configure default webhook targets for Slack, Discord, Email</p>
+          <h2 className="text-sm font-semibold">{t("settings.notifications.title")}</h2>
+          <p className="text-(--fs-xs-sm) text-muted-foreground">{t("settings.notifications.subtitle")}</p>
         </div>
       </div>
 
@@ -128,13 +129,13 @@ export default function NotificationsSection() {
           </div>
         )}
 
-        {targets.map((t, i) => (
-          <div key={`${t.type}-${i}`} className="p-4 bg-muted rounded-xl space-y-3 border border-border">
+        {targets.map((target, i) => (
+          <div key={`${target.type}-${i}`} className="p-4 bg-muted rounded-xl space-y-3 border border-border">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Select value={t.type} onValueChange={(v) => update(i, "type", v)}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select type" />
+                <Select value={target.type} onValueChange={(v) => update(i, "type", v)}>
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder={t("settings.notifications.select_type")} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="generic">Generic</SelectItem>
@@ -143,74 +144,74 @@ export default function NotificationsSection() {
                     <SelectItem value="email">Email</SelectItem>
                   </SelectContent>
                 </Select>
-                <span className="text-(--font-size-micro-sm) text-muted-foreground font-mono">{t.type}</span>
+                <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{target.type}</span>
               </div>
-              <Button onClick={() => removeTarget(i)} className="text-xs px-2 py-1 bg-destructive/10 text-destructive rounded-xl hover:bg-destructive/20" aria-label="Remove"><Trash2 className="w-4 h-4" /></Button>
+              <Button onClick={() => removeTarget(i)} className="text-xs px-2 py-1 bg-destructive/10 text-destructive rounded-xl hover:bg-destructive/20" aria-label={t("settings.notifications.remove")}><Trash2 className="w-4 h-4" /></Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <Label htmlFor={`notif-name-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Name</Label>
-                <Input id={`notif-name-${i}`} className="h-9 text-xs" placeholder="e.g. Slack Ops" value={t.name} onChange={(e) => update(i, "name", e.target.value)} />
+                <Label htmlFor={`notif-name-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.name")}</Label>
+                <Input id={`notif-name-${i}`} className="text-xs" placeholder={t("settings.notifications.name_placeholder")} value={target.name} onChange={(e) => update(i, "name", e.target.value)} />
               </div>
               <div>
-                <span className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Enabled</span>
-                <Select value={t.enabled ? "true" : "false"} onValueChange={(v) => update(i, "enabled", v === "true")}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select status" />
+                <span className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.enabled")}</span>
+                <Select value={target.enabled ? "true" : "false"} onValueChange={(v) => update(i, "enabled", v === "true")}>
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder={t("settings.notifications.select_status")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="true">Enabled</SelectItem>
-                    <SelectItem value="false">Disabled</SelectItem>
+                    <SelectItem value="true">{t("settings.notifications.enabled_option")}</SelectItem>
+                    <SelectItem value="false">{t("settings.notifications.disabled_option")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            {t.type !== "email" && (
+            {target.type !== "email" && (
               <div>
-                <Label htmlFor={`notif-url-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Webhook URL</Label>
-                <Input id={`notif-url-${i}`} className="h-9 text-xs" placeholder="https://hooks.example.com/..." value={t.url} onChange={(e) => update(i, "url", e.target.value)} />
+                <Label htmlFor={`notif-url-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.webhook_url")}</Label>
+                <Input id={`notif-url-${i}`} className="text-xs" placeholder={t("settings.notifications.webhook_url_placeholder")} value={target.url} onChange={(e) => update(i, "url", e.target.value)} />
               </div>
             )}
 
-            {t.type === "generic" && (
+            {target.type === "generic" && (
               <div>
-                <Label htmlFor={`notif-secret-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">HMAC Secret (optional)</Label>
-                <Input id={`notif-secret-${i}`} className="h-9 text-xs" placeholder="Signing key" value={t.secret} onChange={(e) => update(i, "secret", e.target.value)} />
+                <Label htmlFor={`notif-secret-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.hmac_secret")}</Label>
+                <Input id={`notif-secret-${i}`} className="text-xs" placeholder={t("settings.notifications.hmac_placeholder")} value={target.secret} onChange={(e) => update(i, "secret", e.target.value)} />
               </div>
             )}
 
-            {t.type === "email" && (
+            {target.type === "email" && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor={`notif-smtp-host-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">SMTP Server</Label>
-                    <Input id={`notif-smtp-host-${i}`} className="h-9 text-xs" placeholder="smtp.gmail.com" value={t.smtp_host} onChange={(e) => update(i, "smtp_host", e.target.value)} />
+                    <Label htmlFor={`notif-smtp-host-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.smtp_server")}</Label>
+                    <Input id={`notif-smtp-host-${i}`} className="text-xs" placeholder="smtp.gmail.com" value={target.smtp_host} onChange={(e) => update(i, "smtp_host", e.target.value)} />
                   </div>
                   <div>
-                    <Label htmlFor={`notif-smtp-port-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Port</Label>
-                    <Input id={`notif-smtp-port-${i}`} type="number" className="h-9 text-xs" placeholder="587" value={t.smtp_port} onChange={(e) => update(i, "smtp_port", parseInt(e.target.value) || 587)} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <Label htmlFor={`notif-smtp-user-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Username</Label>
-                    <Input id={`notif-smtp-user-${i}`} className="h-9 text-xs" placeholder="user@gmail.com" value={t.smtp_user} onChange={(e) => update(i, "smtp_user", e.target.value)} />
-                  </div>
-                  <div>
-                    <Label htmlFor={`notif-smtp-pass-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">Password</Label>
-                    <Input id={`notif-smtp-pass-${i}`} type="password" className="h-9 text-xs" placeholder="App password" value={t.smtp_pass} onChange={(e) => update(i, "smtp_pass", e.target.value)} />
+                    <Label htmlFor={`notif-smtp-port-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.port")}</Label>
+                    <Input id={`notif-smtp-port-${i}`} type="number" className="text-xs" placeholder="587" value={target.smtp_port} onChange={(e) => update(i, "smtp_port", parseInt(e.target.value) || 587)} />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor={`notif-from-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">From Address</Label>
-                    <Input id={`notif-from-${i}`} className="h-9 text-xs" placeholder="alerts@example.com" value={t.from} onChange={(e) => update(i, "from", e.target.value)} />
+                    <Label htmlFor={`notif-smtp-user-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.username")}</Label>
+                    <Input id={`notif-smtp-user-${i}`} className="text-xs" placeholder="user@gmail.com" value={target.smtp_user} onChange={(e) => update(i, "smtp_user", e.target.value)} />
                   </div>
                   <div>
-                    <Label htmlFor={`notif-to-${i}`} className="text-(--font-size-micro-sm) font-medium text-muted-foreground">To Address(es)</Label>
-                    <Input id={`notif-to-${i}`} className="h-9 text-xs" placeholder="admin@example.com" value={t.to} onChange={(e) => update(i, "to", e.target.value)} />
+                    <Label htmlFor={`notif-smtp-pass-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.password")}</Label>
+                    <Input id={`notif-smtp-pass-${i}`} type="password" className="text-xs" placeholder={t("settings.notifications.password_placeholder")} value={target.smtp_pass} onChange={(e) => update(i, "smtp_pass", e.target.value)} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor={`notif-from-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.from")}</Label>
+                    <Input id={`notif-from-${i}`} className="text-xs" placeholder="alerts@example.com" value={target.from} onChange={(e) => update(i, "from", e.target.value)} />
+                  </div>
+                  <div>
+                    <Label htmlFor={`notif-to-${i}`} className="text-(--fs-micro-sm) font-medium text-muted-foreground">{t("settings.notifications.to")}</Label>
+                    <Input id={`notif-to-${i}`} className="text-xs" placeholder="admin@example.com" value={target.to} onChange={(e) => update(i, "to", e.target.value)} />
                   </div>
                 </div>
               </>
@@ -223,20 +224,20 @@ export default function NotificationsSection() {
                 className="text-xs px-3 py-1.5 rounded-xl bg-sky-100 hover:bg-sky-200 text-sky-700 dark:bg-sky-900/30 dark:hover:bg-sky-800/40 dark:text-sky-300 flex items-center gap-1.5"
               >
                 {testingIdx === i ? <Spinner size="xs" /> : <FlaskConical className="w-4 h-4" />}
-                {testingIdx === i ? "Sending..." : "Test"}
+                {testingIdx === i ? t("settings.notifications.sending") : t("settings.notifications.test")}
               </Button>
             </div>
           </div>
         ))}
 
         <div className="flex items-center justify-between pt-2">
-          <Button onClick={addTarget} className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5">
-            <Plus className="w-4 h-4" /> Add Target
+          <Button onClick={addTarget} className="px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5">
+            <Plus className="w-4 h-4" /> {t("settings.notifications.add_target")}
           </Button>
           {targets.length > 0 && (
             <Button onClick={handleSave} disabled={saving} className="px-4 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5">
               {saving ? <Spinner size="xs" /> : <Save className="w-4 h-4" />}
-              {saving ? "Saving..." : "Save All"}
+              {saving ? t("settings.notifications.saving") : t("settings.notifications.save_all")}
             </Button>
           )}
         </div>

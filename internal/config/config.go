@@ -21,73 +21,73 @@ type Config struct {
 	mu         sync.Mutex `yaml:"-"`
 	ConfigPath string     `yaml:"-"` // absolute path to the config file, set on Load
 	Server     struct {
-		Port                 int      `yaml:"port"`
-		Host                 string   `yaml:"host"`
-		TLSEnabled           bool     `yaml:"tls_enabled"`
-		CertFile             string   `yaml:"cert_file"`
-		KeyFile              string   `yaml:"key_file"`
-		ClientCAFile         string   `yaml:"client_ca_file"`    // mTLS: CA cert file for client verification
-		RequireClientCert    bool     `yaml:"require_client_cert"` // mTLS: require client certificate for beacon auth
-		JWTSecret            string   `yaml:"jwt_secret"`
-		TCPEnabled           bool     `yaml:"tcp_enabled"`
-		TCPAddr              string   `yaml:"tcp_addr"`
-		SMBEnabled           bool     `yaml:"smb_enabled"`
-		SMBPipe              string   `yaml:"smb_pipe"`
-		DataDir              string   `yaml:"data_dir"`
-		DNSEnabled           bool     `yaml:"dns_enabled"`
-		DNSDomain            string   `yaml:"dns_domain"`
-		DNSAddr              string   `yaml:"dns_addr"`
-		GRPCEnabled          bool     `yaml:"grpc_enabled"`
-		GRPCAddr             string   `yaml:"grpc_addr"`
-		ICMPEnabled          bool     `yaml:"icmp_enabled"`
-		ICMPAddr             string   `yaml:"icmp_addr"`
-		DNSDoHEnabled        bool     `yaml:"dns_doh_enabled"`
-		DNSDoHURL            string   `yaml:"dns_doh_url"`
-		DNSDoTEnabled        bool     `yaml:"dns_dot_enabled"`
-		DNSDoTAddr           string   `yaml:"dns_dot_addr"`
-		DNSIPv6Enabled       bool     `yaml:"dns_ipv6_enabled"`
-		OfflineThreshold     int      `yaml:"offline_threshold"`      // seconds
-		SessionMaxAgeHours   int      `yaml:"session_max_age_hours"`  // JWT expiry
-		CleanupRetentionDays int      `yaml:"cleanup_retention_days"` // auto-purge cutoff
-		UpdateCheckRepo      string   `yaml:"update_check_repo"`      // GitHub repo for update checks (e.g. "owner/repo")
-		VantagePoints        []string `yaml:"vantage_points"`         // external proxy URLs for circuit breaker probing
-		SSHEnabled           bool     `yaml:"ssh_enabled"`            // enable SSH transport listener
-		SSHPort              int      `yaml:"ssh_port"`               // SSH listener port (default 2222)
-		SSHAddr              string   `yaml:"ssh_addr"`               // SSH listener addr (default :ssh_port)
-		SSHHostKey           string   `yaml:"ssh_host_key"`           // path to SSH host key (auto-generated if missing)
-		SSHUser              string   `yaml:"ssh_user"`               // SSH user for agent auth
-		SSHPassword          string   `yaml:"ssh_password"`           // SSH password (empty = any password or key-only)
-		SSHKeyAuth           bool     `yaml:"ssh_key_auth"`           // allow public key authentication
-		GeoIPEnabled         bool     `yaml:"geoip_enabled"`          // enable GeoIP lookup via ip-api.com (opt-in)
-		FrontDomains         []string `yaml:"front_domains"`          // CDN front domains for domain fronting auto-failover
-		FrontCheckInterval   int      `yaml:"front_check_interval"`   // seconds between domain front health checks (default 60)
-		AllowedOrigins       []string `yaml:"allowed_origins"`        // allowed WebSocket/CORS origins (default: localhost,127.0.0.1,::1)
-		TrustedProxies       []string `yaml:"trusted_proxies"`        // trusted reverse proxy IPs/CIDRs for X-Forwarded-For (empty = trust none, use direct client IP)
-		CookieDomain         string   `yaml:"cookie_domain"`          // domain for session/CSRF cookies (for cross-origin deployments)
-		BeaconKey            string   `yaml:"beacon_key"`             // optional pre-shared key for agent beacon auth (X-Beacon-Key header)
-		RequireTLSForAuth    bool     `yaml:"require_tls_for_auth"`   // require TLS before issuing session cookies (strongly recommended in production)
-		EnablePprof          bool     `yaml:"enable_pprof"`           // expose /debug/pprof (default false; requires auth when enabled)
-		EnableMetrics        bool     `yaml:"enable_metrics"`         // expose /metrics (default false; requires auth when enabled)
+		Port                 int           `yaml:"port"`
+		Host                 string        `yaml:"host"`
+		TLSEnabled           bool          `yaml:"tls_enabled"`
+		CertFile             string        `yaml:"cert_file"`
+		KeyFile              string        `yaml:"key_file"`
+		ClientCAFile         string        `yaml:"client_ca_file"`      // mTLS: CA cert file for client verification
+		RequireClientCert    bool          `yaml:"require_client_cert"` // mTLS: require client certificate for beacon auth
+		JWTSecret            string        `yaml:"jwt_secret"`
+		TCPEnabled           bool          `yaml:"tcp_enabled"`
+		TCPAddr              string        `yaml:"tcp_addr"`
+		SMBEnabled           bool          `yaml:"smb_enabled"`
+		SMBPipe              string        `yaml:"smb_pipe"`
+		DataDir              string        `yaml:"data_dir"`
+		DNSEnabled           bool          `yaml:"dns_enabled"`
+		DNSDomain            string        `yaml:"dns_domain"`
+		DNSAddr              string        `yaml:"dns_addr"`
+		GRPCEnabled          bool          `yaml:"grpc_enabled"`
+		GRPCAddr             string        `yaml:"grpc_addr"`
+		ICMPEnabled          bool          `yaml:"icmp_enabled"`
+		ICMPAddr             string        `yaml:"icmp_addr"`
+		DNSDoHEnabled        bool          `yaml:"dns_doh_enabled"`
+		DNSDoHURL            string        `yaml:"dns_doh_url"`
+		DNSDoTEnabled        bool          `yaml:"dns_dot_enabled"`
+		DNSDoTAddr           string        `yaml:"dns_dot_addr"`
+		DNSIPv6Enabled       bool          `yaml:"dns_ipv6_enabled"`
+		OfflineThreshold     int           `yaml:"offline_threshold"`      // seconds
+		SessionMaxAgeHours   int           `yaml:"session_max_age_hours"`  // JWT expiry
+		CleanupRetentionDays int           `yaml:"cleanup_retention_days"` // auto-purge cutoff
+		UpdateCheckRepo      string        `yaml:"update_check_repo"`      // GitHub repo for update checks (e.g. "owner/repo")
+		VantagePoints        []string      `yaml:"vantage_points"`         // external proxy URLs for circuit breaker probing
+		SSHEnabled           bool          `yaml:"ssh_enabled"`            // enable SSH transport listener
+		SSHPort              int           `yaml:"ssh_port"`               // SSH listener port (default 2222)
+		SSHAddr              string        `yaml:"ssh_addr"`               // SSH listener addr (default :ssh_port)
+		SSHHostKey           string        `yaml:"ssh_host_key"`           // path to SSH host key (auto-generated if missing)
+		SSHUser              string        `yaml:"ssh_user"`               // SSH user for agent auth
+		SSHPassword          string        `yaml:"ssh_password"`           // SSH password (empty = any password or key-only)
+		SSHKeyAuth           bool          `yaml:"ssh_key_auth"`           // allow public key authentication
+		GeoIPEnabled         bool          `yaml:"geoip_enabled"`          // enable GeoIP lookup via ip-api.com (opt-in)
+		FrontDomains         []string      `yaml:"front_domains"`          // CDN front domains for domain fronting auto-failover
+		FrontCheckInterval   int           `yaml:"front_check_interval"`   // seconds between domain front health checks (default 60)
+		AllowedOrigins       []string      `yaml:"allowed_origins"`        // allowed WebSocket/CORS origins (default: localhost,127.0.0.1,::1)
+		TrustedProxies       []string      `yaml:"trusted_proxies"`        // trusted reverse proxy IPs/CIDRs for X-Forwarded-For (empty = trust none, use direct client IP)
+		CookieDomain         string        `yaml:"cookie_domain"`          // domain for session/CSRF cookies (for cross-origin deployments)
+		BeaconKey            string        `yaml:"beacon_key"`             // optional pre-shared key for agent beacon auth (X-Beacon-Key header)
+		RequireTLSForAuth    bool          `yaml:"require_tls_for_auth"`   // require TLS before issuing session cookies (strongly recommended in production)
+		EnablePprof          bool          `yaml:"enable_pprof"`           // expose /debug/pprof (default false; requires auth when enabled)
+		EnableMetrics        bool          `yaml:"enable_metrics"`         // expose /metrics (default false; requires auth when enabled)
 		SocksListenHost      string        `yaml:"socks_listen_host"`      // bind host for SOCKS/rportfwd (default 127.0.0.1)
-		DBMaxOpenConns       int           `yaml:"db_max_open_conns"`       // max open connections for PostgreSQL pool (default 25)
-		DBMaxIdleConns       int           `yaml:"db_max_idle_conns"`       // max idle connections for PostgreSQL pool (default 5)
-		DBConnMaxLifetime    time.Duration `yaml:"db_conn_max_lifetime"`    // max connection lifetime for PostgreSQL pool (default 30m)
+		DBMaxOpenConns       int           `yaml:"db_max_open_conns"`      // max open connections for PostgreSQL pool (default 25)
+		DBMaxIdleConns       int           `yaml:"db_max_idle_conns"`      // max idle connections for PostgreSQL pool (default 5)
+		DBConnMaxLifetime    time.Duration `yaml:"db_conn_max_lifetime"`   // max connection lifetime for PostgreSQL pool (default 30m)
 	} `yaml:"server"`
 
 	Database struct {
-		Path  string `yaml:"path"`
+		Path   string `yaml:"path"`
 		Driver string `yaml:"driver"` // "sqlite" (default) or "postgres"
 		DSN    string `yaml:"dsn"`    // PostgreSQL connection string (e.g. "host=localhost user=forgec2 password=... dbname=forgec2 port=5432 sslmode=disable")
 	} `yaml:"database"`
 
 	Implant struct {
-		DefaultInterval     int    `yaml:"default_interval"`  // seconds
-		MinInterval         int    `yaml:"min_interval"`      // OPSEC: minimum allowed beacon interval in seconds (0 = no minimum, default 5)
-		DefaultJitter       int    `yaml:"default_jitter"`    // percent
-		MinJitter           int    `yaml:"min_jitter"`        // OPSEC: minimum allowed jitter percent (0 = no minimum, default 10)
+		DefaultInterval     int    `yaml:"default_interval"` // seconds
+		MinInterval         int    `yaml:"min_interval"`     // OPSEC: minimum allowed beacon interval in seconds (0 = no minimum, default 5)
+		DefaultJitter       int    `yaml:"default_jitter"`   // percent
+		MinJitter           int    `yaml:"min_jitter"`       // OPSEC: minimum allowed jitter percent (0 = no minimum, default 10)
 		DefaultUA           string `yaml:"default_user_agent"`
 		DefaultSkipTLS      bool   `yaml:"default_skip_tls"`
-		DefaultPinnedCert   string `yaml:"default_pinned_cert"` // SHA-256 hex of server DER cert for pinning
+		DefaultPinnedCert   string `yaml:"default_pinned_cert"`   // SHA-256 hex of server DER cert for pinning
 		DefaultWorkingStart string `yaml:"default_working_start"` // HH:MM local time (empty = disabled)
 		DefaultWorkingEnd   string `yaml:"default_working_end"`   // HH:MM local time (empty = disabled)
 		DefaultWorkingTZ    string `yaml:"default_working_tz"`    // IANA timezone (e.g. "America/New_York"), empty = UTC
@@ -102,22 +102,20 @@ type Config struct {
 	} `yaml:"auth"`
 
 	PasswordPolicy struct {
-		MinLength     int  `yaml:"min_length"`      // minimum password length (default 8)
-		RequireUpper  bool `yaml:"require_upper"`   // require uppercase letter (default true)
-		RequireLower  bool `yaml:"require_lower"`   // require lowercase letter (default true)
-		RequireDigit  bool `yaml:"require_digit"`   // require digit (default true)
-		RequireSymbol bool `yaml:"require_symbol"`  // require special character (default false)
-		MaxAge        int  `yaml:"max_age_days"`    // force password rotation every N days (0 = disabled)
-		BcryptCost    int  `yaml:"bcrypt_cost"`     // bcrypt hash cost (0 = default 10, min 4, max 31)
+		MinLength     int  `yaml:"min_length"`     // minimum password length (default 8)
+		RequireUpper  bool `yaml:"require_upper"`  // require uppercase letter (default true)
+		RequireLower  bool `yaml:"require_lower"`  // require lowercase letter (default true)
+		RequireDigit  bool `yaml:"require_digit"`  // require digit (default true)
+		RequireSymbol bool `yaml:"require_symbol"` // require special character (default false)
+		MaxAge        int  `yaml:"max_age_days"`   // force password rotation every N days (0 = disabled)
+		BcryptCost    int  `yaml:"bcrypt_cost"`    // bcrypt hash cost (0 = default 10, min 4, max 31)
 	} `yaml:"password_policy"`
 
 	Crypto struct {
-		Key                     string `yaml:"key"`                       // 32-byte hex key for XOR encryption, or "ecdh:" for ECDH+AES-256-GCM (empty=disabled)
-		LootKey                 string `yaml:"loot_key"`                  // 32-byte hex key for AES-256-GCM loot encryption (empty = derived from JWT secret)
-		BackupKey               string `yaml:"backup_key"`                // 32-byte hex key for encrypted .fbk backups (empty = derived from crypto key / JWT secret)
-		SessionMaxMessages      int    `yaml:"session_max_messages"`      // ECDH key rotation after N messages (0 = default 100)
-		SessionMaxAgeMinutes    int    `yaml:"session_max_age_minutes"`   // ECDH key rotation after N minutes (0 = default 10)
-		ForceECDH               bool   `yaml:"force_ecdh"`                // reject plaintext beacons when ECDH is enabled
+		Key                     string `yaml:"key"`                        // 32-byte hex key for XOR encryption, or "ecdh:" for ECDH+AES-256-GCM (empty=disabled)
+		LootKey                 string `yaml:"loot_key"`                   // 32-byte hex key for AES-256-GCM loot encryption (empty = derived from JWT secret)
+		BackupKey               string `yaml:"backup_key"`                 // 32-byte hex key for encrypted .fbk backups (empty = derived from crypto key / JWT secret)
+		ForceECDH               bool   `yaml:"force_ecdh"`                 // reject plaintext beacons when ECDH is enabled
 		MaxDecryptedPayloadSize int    `yaml:"max_decrypted_payload_size"` // max bytes for decrypted beacon body (0 = default 10MB)
 	} `yaml:"crypto"`
 
@@ -272,8 +270,8 @@ func DefaultConfig() *Config {
 	cfg.AI.Enabled = false
 	cfg.AI.Provider = "deepseek"
 	cfg.AI.Model = "deepseek-chat"
-	cfg.AI.MaxConversationTurns = 0 // 0 = unlimited
-	cfg.AI.MaxToolRounds = 0        // 0 = unlimited
+	cfg.AI.MaxConversationTurns = 0  // 0 = unlimited
+	cfg.AI.MaxToolRounds = 0         // 0 = unlimited
 	cfg.AI.MaxDuplicateToolCalls = 0 // 0 = unlimited
 	cfg.AI.SystemPrompt = "You are the ForgeC2 red team operations assistant, running on the C2 server. You can list online agents, view target details, execute commands, view credentials, manage listeners, and more."
 	cfg.TLSFingerprint.JARMEnabled = true
@@ -283,6 +281,12 @@ func DefaultConfig() *Config {
 	cfg.TLSFingerprint.JA3Rotate = "24h"
 
 	cfg.Logging.Level = "info"
+
+	// Secure default: ECDH+AES-256-GCM beacon encryption enabled and plaintext
+	// beacons rejected. Operators who need legacy XOR or unencrypted beacons can
+	// explicitly override crypto.key / crypto.force_ecdh in config.yaml.
+	cfg.Crypto.Key = "ecdh:"
+	cfg.Crypto.ForceECDH = true
 
 	cfg.RateLimit.Login.MaxAttempts = 5
 	cfg.RateLimit.Login.Window = 60
@@ -389,6 +393,19 @@ func Load(path string) (*Config, error) {
 			return nil, err
 		}
 		slog.Warn("JWT secret auto-generated. To use a custom secret, set FORGEC2_JWT_SECRET env var or edit server.jwt_secret in config.yaml")
+	}
+
+	// Auto-generate beacon pre-shared key if empty (agents must be built with it)
+	if cfg.Server.BeaconKey == "" || isWeakSecret(cfg.Server.BeaconKey) {
+		key := make([]byte, 32)
+		if _, err := rand.Read(key); err != nil {
+			return nil, err
+		}
+		cfg.Server.BeaconKey = hex.EncodeToString(key)
+		if err := cfg.Save(path); err != nil {
+			return nil, err
+		}
+		slog.Warn("Beacon key auto-generated. To use a custom key, set server.beacon_key in config.yaml")
 	}
 
 	// Auto-generate ExtC2 API token if using default/insecure value
@@ -712,20 +729,6 @@ func (c *Config) Validate() error {
 		}
 		if _, err := hex.DecodeString(c.Crypto.BackupKey); err != nil {
 			errs = append(errs, errors.New("crypto.backup_key must be a valid hex string"))
-		}
-	}
-	if strings.HasPrefix(c.Crypto.Key, "ecdh:") {
-		if c.Crypto.SessionMaxMessages < 0 {
-			errs = append(errs, errors.New("crypto.session_max_messages must be >= 0 (0 = default 100)"))
-		}
-		if c.Crypto.SessionMaxMessages > 10000 {
-			errs = append(errs, errors.New("crypto.session_max_messages must be <= 10000"))
-		}
-		if c.Crypto.SessionMaxAgeMinutes < 0 {
-			errs = append(errs, errors.New("crypto.session_max_age_minutes must be >= 0 (0 = default 10)"))
-		}
-		if c.Crypto.SessionMaxAgeMinutes > 1440 {
-			errs = append(errs, errors.New("crypto.session_max_age_minutes must be <= 1440 (24 hours)"))
 		}
 	}
 

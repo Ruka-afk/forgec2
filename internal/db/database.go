@@ -113,7 +113,15 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 		if err := os.MkdirAll(filepath.Dir(fallbackPath), 0700); err != nil {
 			return nil, err
 		}
-		db, err = gorm.Open(glebarez.Open(fallbackPath), gormConfig)
+		// Enable foreign_keys at the DSN level so every pooled connection
+		// inherits the pragma (a per-connection PRAGMA only affects the
+		// single connection it runs on). Applies to both file and in-memory
+		// DSNs; DSNs that already carry query parameters are left untouched.
+		sqliteDSN := fallbackPath
+		if !strings.Contains(sqliteDSN, "?") {
+			sqliteDSN += "?_pragma=foreign_keys(1)"
+		}
+		db, err = gorm.Open(glebarez.Open(sqliteDSN), gormConfig)
 		if err != nil {
 			return nil, err
 		}

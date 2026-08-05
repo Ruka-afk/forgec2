@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 
 import { Spinner, PageSpinner } from "@/components/UI";
@@ -59,7 +60,7 @@ export default function AgentTrafficPage() {
   const loadReport = useCallback(async () => {
     if (!id) return;
     try {
-      const data = await api.get(`/agents/${id}/traffic-profile`);
+      const data = await api.get(paths.agents.trafficProfile(id));
       setReport((data.data as BaselineReport) || null);
       if (data.data) {
         setAutoAdapt((data.data as BaselineReport).auto_adapt);
@@ -77,7 +78,7 @@ export default function AgentTrafficPage() {
     if (!id) return;
     setAdapting(true);
     try {
-      const data = await api.postJson(`/agents/${id}/traffic-profile/adapt`, {});
+      const data = await api.postJson(paths.agents.trafficAdapt(id), {});
       if (data.success) {
         toast.success(t("agents.traffic_adapt_queued").replace("{message}", String(data.message || "")));
       } else {
@@ -94,7 +95,7 @@ export default function AgentTrafficPage() {
     if (!id) return;
     const next = !autoAdapt;
     try {
-      const data = await api.postJson(`/agents/${id}/traffic-profile/auto-adapt`, { enabled: next });
+      const data = await api.postJson(paths.agents.trafficAutoAdapt(id), { enabled: next });
       if (data.success) {
         setAutoAdapt(next);
         toast(next ? t("agents.traffic_auto_adapt_enabled") : t("agents.traffic_auto_adapt_disabled"));

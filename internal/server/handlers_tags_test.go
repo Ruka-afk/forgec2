@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -112,5 +113,62 @@ func TestHandleAPITagDelete_ClearsAssignments(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("expected assignments cleared, got %d remaining", count)
+	}
+}
+
+func tagCreateContext(body string) (*httptest.ResponseRecorder, *gin.Context) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/api/tags", bytes.NewReader([]byte(body)))
+	c.Set("user_role", "operator")
+	return w, c
+}
+
+func TestHandleAPITagCreate_RejectsInvalidInput(t *testing.T) {
+	s := newTagsTestServer(t)
+
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"comma in name", `{"name":"a,b","color":"#3498db"}`},
+		{"control char in name", `{"name":"a\x01b","color":"#3498db"}`},
+		{"name too long", `{"name":"` + strings.Repeat("x", maxTagNameLen+1) + `","color":"#3498db"}`},
+		{"bad color", `{"name":"ok","color":"red"}`},
+		{"short color", `{"name":"ok","color":"#349"}`},
+		{"spaces only name", `{"name":"   ","color":"#3498db"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, c := tagCreateContext(tc.body)
+			s.handleAPITagCreate(c)
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d; body=%s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandleAPITagCreate_AcceptsValidInput(t *testing.T) {
+	s := newTagsTestServer(t)
+
+	w, c := tagCreateContext(`{"name":"  valid-tag  ","color":"#a1B2c3"}`)
+	s.handleAPITagCreate(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Tag struct {
+			ID    string `json:"id"`
+			Name  string `json:"name"`
+			Color string `json:"color"`
+		} `json:"tag"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+	}
+	if resp.Tag.Name != "valid-tag" || resp.Tag.Color != "#a1B2c3" {
+		t.Fatalf("unexpected tag: %+v", resp.Tag)
 	}
 }

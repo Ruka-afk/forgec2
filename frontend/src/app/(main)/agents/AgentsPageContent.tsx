@@ -5,6 +5,7 @@ import { useWS } from "@/lib/wsContext";
 import { downloadText } from "@/lib/download";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,11 @@ import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, Download, Grip, Histor
 export default function AgentsPageContent() {
   const { t } = useI18n();
   const { subscribe } = useWS();
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const {
     beacons, setBeacons, loading, total, error, setError,
@@ -93,8 +99,8 @@ export default function AgentsPageContent() {
     [sortedBeacons, agentVirtualized, agentVirtStart, agentVirtEnd],
   );
 
-  const loadBeacons = useCallback(() => {
-    loadBeaconsRaw(searchQuery, statusFilter, osFilter, page, 20, tagFilter);
+  const loadBeacons = useCallback((opts?: { background?: boolean }) => {
+    loadBeaconsRaw(searchQuery, statusFilter, osFilter, page, 20, tagFilter, opts);
   }, [loadBeaconsRaw, searchQuery, statusFilter, osFilter, page, tagFilter]);
 
   const loadBeaconsRef = useRef(loadBeacons);
@@ -103,7 +109,7 @@ export default function AgentsPageContent() {
   useEffect(() => { loadBeacons(); }, [loadBeacons]);
   useEffect(() => { loadLocks(); }, [loadLocks]);
 
-  useVisibleInterval(() => loadBeacons(), autoRefresh ? 30000 : 0);
+  useVisibleInterval(() => loadBeacons({ background: true }), autoRefresh ? 30000 : 0);
 
   useEffect(() => {
     if (!actionMsg) return;
@@ -113,18 +119,19 @@ export default function AgentsPageContent() {
 
   useEffect(() => {
     if (!showResults) return;
-      api.get("/agents/bulk/results?page=1&pageSize=10")
+      api.get(paths.agents.bulkResults())
       .then((d) => {
+        if (!mountedRef.current) return;
         const results = (d.results || d.data || []) as BulkResult[];
         setBulkResults(results);
       })
-      .catch(() => { setActionMsg(t("agents.bulk_results_failed")); });
+      .catch(() => { if (mountedRef.current) setActionMsg(t("agents.bulk_results_failed")); });
   }, [showResults, t]);
 
   useEffect(() => {
     const unsub = subscribe((msg) => {
       if (msg.type === "agent_online" || msg.type === "agent_offline") {
-        loadBeaconsRef.current();
+        loadBeaconsRef.current({ background: true });
       } else if (msg.type === "agent_data_update" && msg.agent_id) {
         const aid = String(msg.agent_id);
         setBeacons((prev) => prev.map((b) =>
@@ -141,11 +148,12 @@ export default function AgentsPageContent() {
       }
     });
     return () => unsub();
-  }, [subscribe]); // eslint-disable-line react-hooks/exhaustive-deps
+    // loadBeaconsRef always points at latest loadBeacons — intentional stable subscribe
+  }, [subscribe]);
 
   const sortIcon = (field: typeof sortKey) => {
     if (sortKey !== field) return <ArrowUpDown className="w-3 h-3 text-muted-foreground" />;
-    return sortDir === "asc" ? <ArrowUp className="w-3 h-3 text-indigo-500" /> : <ArrowDown className="w-3 h-3 text-indigo-500" />;
+    return sortDir === "asc" ? <ArrowUp className="w-3 h-3 text-primary" /> : <ArrowDown className="w-3 h-3 text-primary" />;
   };
 
   const handleSortKeyDown = useCallback(
@@ -172,7 +180,7 @@ export default function AgentsPageContent() {
 
   const runBatch = async (payload: Record<string, unknown>) => {
     try {
-      const data = await api.postJson<{ success?: boolean; tasks_created?: number; error?: string }>("/agents/batch", payload);
+      const data = await api.postJson<{ success?: boolean; tasks_created?: number; error?: string }>(paths.agents.batch, payload);
       if (data.success) {
         setActionMsg(t("agents.batch_result").replace("{count}", String(data.tasks_created ?? selected.size)));
         setSelected(new Set());
@@ -187,7 +195,7 @@ export default function AgentsPageContent() {
 
   const bulkTask = async (agentIds: string[], type: string, command: string) => {
     try {
-      const data = await api.postJson<{ success?: boolean; task_count?: number; failed?: string[]; error?: string }>("/agents/bulk/task", { agent_ids: agentIds, type, command });
+      const data = await api.postJson<{ success?: boolean; task_count?: number; failed?: string[]; error?: string }>(paths.agents.bulkTask, { agent_ids: agentIds, type, command });
       if (data.success) {
         let bulkMsg = t("agents.bulk_type_result").replace("{type}", type).replace("{count}", String(data.task_count ?? agentIds.length));
         if (data.failed?.length) bulkMsg += ` (${data.failed.length} ${t("agents.failed_suffix")})`;
@@ -230,7 +238,7 @@ export default function AgentsPageContent() {
     const ids = Array.from(selected);
     if (!ids.length) return;
     try {
-      const data = await api.postJson<{ success?: boolean; deleted?: number; error?: string }>("/agents/batch/delete", { agent_ids: ids });
+      const data = await api.postJson<{ success?: boolean; deleted?: number; error?: string }>(paths.agents.batchDelete, { agent_ids: ids });
       if (data.success) {
         setActionMsg(t("agents.delete_result").replace("{count}", String(data.deleted ?? 0)));
         setSelected(new Set());
@@ -246,7 +254,7 @@ export default function AgentsPageContent() {
 
   const killAgent = async (id: string) => {
     try {
-      await api.postJson(`/agents/${id}/kill`, {});
+      await api.postJson(paths.agents.kill(id), {});
       setActionMsg(t("agents.kill_sent"));
       loadBeacons();
     } catch {
@@ -257,7 +265,7 @@ export default function AgentsPageContent() {
 
   const deleteAgent = async (id: string) => {
     try {
-      await api.del(`/agents/${id}`);
+      await api.del(paths.agents.one(id));
       setActionMsg(t("agents.deleted"));
       loadBeacons();
     } catch {
@@ -289,7 +297,7 @@ export default function AgentsPageContent() {
 
   const sendScreenshot = useCallback(async (id: string) => {
     try {
-      await api.post(`/agents/${id}/screenshot`);
+      await api.post(paths.agents.screenshotTask(id));
       setActionMsg(t("agents.screenshot_sent"));
     } catch {
       setActionMsg(t("agents.screenshot_failed"));
@@ -299,7 +307,7 @@ export default function AgentsPageContent() {
   const submitQuickSleep = async () => {
     if (!quickSleepAgent) return;
     try {
-      await api.postJson(`/agents/${quickSleepAgent.id}/set_sleep`, { interval: Number(sleepInterval), jitter: Number(sleepJitter) });
+      await api.postJson(paths.agents.setSleep(quickSleepAgent.id), { interval: Number(sleepInterval), jitter: Number(sleepJitter) });
       setActionMsg(t("agents.sleep_updated").replace("{name}", quickSleepAgent.hostname));
       closeQuickSleep();
       loadBeacons();
@@ -309,7 +317,7 @@ export default function AgentsPageContent() {
   const submitNotes = async () => {
     if (!editingNotesId) return;
     try {
-      await api.postJson(`/agents/${editingNotesId}/note`, { notes: editNotesText });
+      await api.postJson(paths.agents.note(editingNotesId), { notes: editNotesText });
       setActionMsg(t("agents.notes_updated"));
       closeNotesEdit();
       loadBeacons();

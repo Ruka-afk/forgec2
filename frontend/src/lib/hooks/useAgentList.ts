@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { api } from "@/lib/api";
 import { normalizeAgentList } from "@/lib/agents";
+import { paths } from "@/lib/api-paths";
 import { Agent } from "@/types/agent";
 
 export function useAgentList() {
@@ -19,12 +20,13 @@ export function useAgentList() {
     try {
       setLoading(true);
       setError(null);
-      const data = await api.get("/agents", { signal: controller.signal });
+      const data = await api.get(paths.agents.list(), { signal: controller.signal });
       if (controller.signal.aborted) return;
       setAgents(normalizeAgentList(data));
     } catch (e) {
       if (!controller.signal.aborted) {
         setError(e instanceof Error ? e.message : "Failed to load agents");
+        setAgents([]);
       }
     } finally {
       if (!controller.signal.aborted) setLoading(false);

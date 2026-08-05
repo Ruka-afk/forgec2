@@ -7,11 +7,18 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+// auditChainMu serializes hash-chain appends. flushAuditEntries reads the last
+// entry and back-fills prev_hash; two concurrent flushes (beacon checkins run
+// in parallel) could otherwise read the same last hash and commit entries with
+// identical prev_hash values, silently breaking the tamper-evident chain.
+var auditChainMu sync.Mutex
 
 // sensitivePatterns matches common sensitive field names in JSON or URL-encoded data.
 // It replaces the value portion with "*****" to prevent secret leakage in audit logs.
@@ -50,8 +57,8 @@ func (s *Server) LogAuditRecord(c *gin.Context, action, resource, agentID, detai
 // auditEntry is a lightweight intermediate for batch collection.
 type auditEntry struct {
 	action, resource, agentID, details string
-	success                             bool
-	err                                 error
+	success                            bool
+	err                                error
 }
 
 // LogAuditRecords batch-inserts multiple audit log entries in a single DB round-trip.
@@ -109,6 +116,11 @@ func (s *Server) flushAuditEntries(entries []db.AuditLog) {
 	if len(entries) == 0 {
 		return
 	}
+	// Serialize appends so the read-last-entry + insert is atomic with respect
+	// to other appends (see auditChainMu docs).
+	auditChainMu.Lock()
+	defer auditChainMu.Unlock()
+
 	// Compute append-only hash chain for tamper detection within a transaction
 	// to ensure atomicity of the hash chain.
 	err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -236,12 +248,12 @@ func getActionType(path string) string {
 
 // OperatorAction represents a structured audit trail entry for operator-initiated actions.
 type OperatorAction struct {
-	Action     string            `json:"action"`
-	Resource   string            `json:"resource"`
-	TargetID   string            `json:"target_id,omitempty"`
-	Details    string            `json:"details,omitempty"`
-	Metadata   map[string]string `json:"metadata,omitempty"`
-	RiskLevel  string            `json:"risk_level"`
+	Action    string            `json:"action"`
+	Resource  string            `json:"resource"`
+	TargetID  string            `json:"target_id,omitempty"`
+	Details   string            `json:"details,omitempty"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
+	RiskLevel string            `json:"risk_level"`
 }
 
 // LogOperatorAction records a structured audit trail entry for high-value operator actions.
@@ -272,9 +284,9 @@ func (s *Server) LogOperatorAction(c *gin.Context, action OperatorAction) {
 		Details:  details,
 	}
 
-	if err := s.db.Create(&logEntry).Error; err != nil {
-		slog.Error("Failed to create operator audit log", "err", err)
-	}
+	// Route through the chained flush path so operator actions are part of the
+	// same tamper-evident hash chain as beacon-triggered entries.
+	s.flushAuditEntries([]db.AuditLog{logEntry})
 
 	slog.Warn("Operator action",
 		"user", user,
@@ -284,19 +296,6 @@ func (s *Server) LogOperatorAction(c *gin.Context, action OperatorAction) {
 		"risk", action.RiskLevel,
 		"ip", ip,
 	)
-
-	if s.siem != nil {
-		s.siem.Send(SIEMEvent{
-			Timestamp: logEntry.CreatedAt,
-			Action:    "operator:" + action.Action,
-			Resource:  action.Resource,
-			AgentID:   action.TargetID,
-			User:      user,
-			IP:        ip,
-			Success:   true,
-			Details:   details,
-		})
-	}
 }
 
 // LogEmergencyAction logs a killswitch/emergency stop action.

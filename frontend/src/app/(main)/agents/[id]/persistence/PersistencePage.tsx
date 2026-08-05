@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 
 import { Spinner, PageSpinner } from "@/components/UI";
@@ -40,7 +41,7 @@ export default function AgentPersistencePage() {
   const loadAgent = useCallback(async () => {
     if (!id) return;
     try {
-      const data = await api.get(`/agents/${id}`);
+      const data = await api.get(paths.agents.one(id));
       setAgent(data.agent || data);
     } catch {
       toast.error(t("agents.persistence_load_failed"));
@@ -52,7 +53,7 @@ export default function AgentPersistencePage() {
   const listPersistence = useCallback(async () => {
     if (!id) return;
     try {
-      const data = await api.post(`/agents/${id}/persistence`, { action: "list" });
+      const data = await api.post(paths.agents.persistence(id), { action: "list" });
       if (data.success) {
         toast.success(t("agents.persistence_list_success"));
       } else {
@@ -71,7 +72,7 @@ export default function AgentPersistencePage() {
     if (!window.confirm(t("agents.persistence_install") + "?")) return;
     setActionLoading(method);
     try {
-      const data = await api.post(`/agents/${id}/persistence`, { action: "add", method });
+      const data = await api.post(paths.agents.persistence(id), { action: "add", method });
       if (data.success) {
         setInstalledMethods((prev) => (prev.includes(method) ? prev : [...prev, method]));
         toast.success(t("agents.persistence_install_success") + ` (task #${data.task_id})`);
@@ -90,7 +91,7 @@ export default function AgentPersistencePage() {
     if (!window.confirm(t("agents.persistence_remove") + "?")) return;
     setActionLoading(`remove_${method}`);
     try {
-      const data = await api.post(`/agents/${id}/persistence`, { action: "remove", method });
+      const data = await api.post(paths.agents.persistence(id), { action: "remove", method });
       if (data.success) {
         setInstalledMethods((prev) => prev.filter((m) => m !== method));
         toast.success(t("agents.persistence_remove_success") + ` (task #${data.task_id})`);
@@ -173,7 +174,7 @@ export default function AgentPersistencePage() {
                 {actionLoading === method.key ? (
                   <Spinner size="sm" className="shrink-0" />
                 ) : (
-                  <span className="text-indigo-500 shrink-0">{method.icon}</span>
+                  <span className="text-primary shrink-0">{method.icon}</span>
                 )}
                 <span className="text-left leading-tight">{t(method.labelKey)}</span>
               </Button>
@@ -187,7 +188,7 @@ export default function AgentPersistencePage() {
               <ListChecks className="w-4 h-4" aria-hidden="true" />
               <h3 className="text-sm font-semibold text-foreground">{t("agents.persistence_installed")}</h3>
             </div>
-            <Badge variant="secondary" className="text-(--font-size-micro-sm)">{installedMethods.length}</Badge>
+            <Badge variant="secondary" className="text-(--fs-micro-sm)">{installedMethods.length}</Badge>
           </div>
           {installedMethods.length === 0 ? (
             <div className="text-center py-8">
@@ -205,7 +206,7 @@ export default function AgentPersistencePage() {
                     className="flex items-center justify-between px-4 py-3 bg-card border border-border rounded-xl"
                   >
                     <div className="flex items-center gap-3">
-                      {info?.icon || <Cog className="w-4 h-4 text-indigo-500" />}
+                      {info?.icon || <Cog className="w-4 h-4 text-primary" />}
                       <span className="text-sm font-medium text-foreground">{info?.labelKey ? t(info.labelKey) : method}</span>
                     </div>
                     <Button

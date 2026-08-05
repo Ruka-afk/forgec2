@@ -367,12 +367,19 @@ func (s *Server) handleGetCurrentUser(c *gin.Context) {
 		return
 	}
 
+	data := gin.H{
+		"id":       user.ID,
+		"username": user.Username,
+		"role":     user.Role,
+	}
+	// Expose session expiry (ms epoch) for client-side timeout warnings.
+	if exp, ok := c.Get("session_exp"); ok {
+		if t, ok := exp.(time.Time); ok {
+			data["session_exp"] = t.UnixMilli()
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data": gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"role":     user.Role,
-		},
+		"data":    data,
 	})
 }

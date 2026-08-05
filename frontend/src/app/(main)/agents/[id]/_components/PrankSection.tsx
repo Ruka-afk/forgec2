@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { Globe, Image, MessageSquare, Music, Power, RotateCcw, StickyNote, Volume2, MousePointer2, Disc } from "lucide-react";
 
@@ -53,7 +54,7 @@ export default function PrankSection({ agentId, online }: PrankSectionProps) {
       const payload = selectedAction.buildPayload
         ? selectedAction.buildPayload(inputValue)
         : { command: inputValue };
-      await api.postJson(`/agents/${agentId}${selectedAction.route}`, payload);
+      await api.postJson(paths.agents.cmd(agentId, selectedAction.route), payload);
       toast.success(t("agents.prank_sent").replace("{action}", t(selectedAction.labelKey)));
       setSelectedAction(null);
       setInputValue("");
@@ -66,7 +67,7 @@ export default function PrankSection({ agentId, online }: PrankSectionProps) {
   const handleQuickExecute = async (action: PrankAction) => {
     setSending(true);
     try {
-      await api.postJson(`/agents/${agentId}${action.route}`, { command: "" });
+      await api.postJson(paths.agents.cmd(agentId, action.route), { command: "" });
       toast.success(t("agents.prank_sent").replace("{action}", t(action.labelKey)));
     } catch {
       toast.error(t("agents.prank_failed"));
@@ -79,7 +80,7 @@ export default function PrankSection({ agentId, online }: PrankSectionProps) {
       <div className="px-4 py-3 border-b border-border">
         {/* eslint-disable-next-line jsx-a11y/alt-text -- lucide-react Image icon, not an HTML img */}
         <h3 className="text-sm font-semibold text-foreground"><Image className="w-3.5 h-3.5" aria-hidden="true" />{t("agents.prank_title")}</h3>
-        <p className="text-(--font-size-xs-sm) text-amber-700 dark:text-amber-300 mt-1">{t("agents.prank_honesty")}</p>
+        <p className="text-(--fs-xs-sm) text-amber-700 dark:text-amber-300 mt-1">{t("agents.prank_honesty")}</p>
       </div>
       <div className="p-3">
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">

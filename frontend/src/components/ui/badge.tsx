@@ -24,7 +24,7 @@ const badgeVariants = cva(
         warning:
           "bg-warning/15 text-warning-foreground border-transparent dark:bg-warning/20 dark:text-warning-foreground",
         success:
-          "bg-primary/15 text-primary border-transparent dark:bg-primary/20 dark:text-primary",
+          "bg-success/15 text-success-foreground border-transparent [a]:hover:bg-success/25 dark:bg-success/20 dark:text-success dark:[a]:hover:bg-success/30",
       },
     },
     defaultVariants: {

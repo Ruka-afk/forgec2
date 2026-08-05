@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import type { AgentForm, MalleableForm, PasswordForm, ServerForm, SettingsData } from "./types";
@@ -49,7 +50,7 @@ export function useSettingsData() {
   const loadSettings = useCallback(async () => {
     setError(null);
     try {
-      const d = await api.get<SettingsData>("/settings");
+      const d = await api.get<SettingsData>(paths.settings.root);
       setData(d);
       setAgentForm({
         interval: d.default_interval ?? 5,

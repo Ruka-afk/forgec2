@@ -136,21 +136,21 @@ export default function TimelinePage() {
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("timeline.page_title")} subtitle={t("timeline.page_subtitle")}>
         <div className="lg:hidden">
-          <Button variant="outline" size="icon" className="min-w-[44px] min-h-[44px] gap-2" onClick={() => setMobileFilterOpen(true)}>
+          <Button variant="outline" size="icon" aria-label={t("timeline.open_filters")} className="min-w-[44px] min-h-[44px] gap-2" onClick={() => setMobileFilterOpen(true)}>
             <Menu className="w-4 h-4" />
           </Button>
         </div>
         <Button variant="outline" onClick={() => setShowSidebar(!showSidebar)} className="gap-2 max-lg:hidden">
           <PanelLeftClose className="w-4 h-4" />
-          <span>{showSidebar ? "Hide" : "Show"} Filters</span>
+          <span>{showSidebar ? t("timeline.hide_filters") : t("timeline.show_filters")}</span>
         </Button>
         <Button variant="outline" onClick={handleExport} className="gap-2">
           <Download className="w-4 h-4" />
-          <span>Export</span>
+          <span>{t("timeline.export")}</span>
         </Button>
         <Button onClick={loadTimeline} className="gap-2">
           <RefreshCw className="w-4 h-4" />
-          <span>Refresh</span>
+          <span>{t("timeline.refresh")}</span>
         </Button>
       </PageHeader>
 

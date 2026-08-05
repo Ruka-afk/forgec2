@@ -48,7 +48,7 @@ function CredentialRowInner({
   return (
     <TableRow className="hover:bg-muted/50 transition-colors">
       <TableCell className="py-3 px-2">
-        <Checkbox checked={isSelected} onCheckedChange={() => onToggleSelect(entry.id)} />
+        <Checkbox checked={isSelected} onCheckedChange={() => onToggleSelect(entry.id)} aria-label={t("cred.select_entry")} />
       </TableCell>
       <TableCell className="py-3 px-4">
         <Badge variant={TYPE_BADGE_VARIANT[entry.type] || "outline"}>

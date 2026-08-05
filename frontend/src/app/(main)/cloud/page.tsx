@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { EmptyState, PageHeader, Spinner } from "@/components/UI";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { Card } from "@/components/ui/card";
@@ -74,7 +75,7 @@ export default function CloudPage() {
     setStealing(true);
     setPollNote("");
     try {
-      await api.postJson("/cloud/steal", { agent_id: selectedAgent, provider });
+      await api.postJson(paths.cloud.steal, { agent_id: selectedAgent, provider });
       toast.success(t("cloud.steal_dispatched"));
       setSelectedAgentResults(selectedAgent);
       const baselineRaw = await loadResults(selectedAgent, true);
@@ -161,14 +162,14 @@ export default function CloudPage() {
               {stealing ? <Spinner size="xs" /> : <CloudUpload className="w-4 h-4" />}
               <span>{stealing ? t("cloud.dispatching") : t("cloud.steal_btn")}</span>
             </Button>
-            {pollNote && <span className="text-(--font-size-xs-sm) text-muted-foreground">{pollNote}</span>}
+            {pollNote && <span className="text-(--fs-xs-sm) text-muted-foreground">{pollNote}</span>}
           </div>
         </div>
       </Card>
 
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center">
             <List className="w-4 h-4" />
           </div>
           <div>
@@ -204,7 +205,7 @@ export default function CloudPage() {
               {results.map((cred) => (
                 <TableRow key={cred.id}>
                   <TableCell>
-                    <Badge variant="secondary" className={`text-(--font-size-micro-sm) px-2 py-0.5 rounded-full font-medium ${
+                    <Badge variant="secondary" className={`text-(--fs-micro-sm) px-2 py-0.5 rounded-full font-medium ${
                       cred.provider === "aws" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
                       cred.provider === "gcp" ? "bg-primary/10 text-primary" :
                       cred.provider === "azure" ? "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400" :

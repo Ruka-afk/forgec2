@@ -81,6 +81,9 @@ func sendMTLSBeacon(body []byte) []byte {
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("User-Agent", UserAgent)
+		if beaconKey != "" {
+			req.Header.Set("X-Beacon-Key", beaconKey)
+		}
 
 		resp, err := mtlsClient.Do(req)
 		if err != nil {

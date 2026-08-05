@@ -53,8 +53,10 @@ func (s *Server) handleTopologyData(c *gin.Context) {
 	}
 
 	var agents []db.Implant
-	if err := s.db.Select("id, hostname, os, ip, user, status, last_seen, listener_id, parent_id").Order("last_seen desc").Limit(TopologyAgentLimit).Find(&agents).Error; err != nil {
+	if err := s.db.Select("id, hostname, os, ip, username, status, last_seen, listener_id, parent_id").Order("last_seen desc").Limit(TopologyAgentLimit).Find(&agents).Error; err != nil {
 		slog.Error("Failed to query agents for topology", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to query agents for topology")
+		return
 	}
 
 	onlineCutoff := time.Now().Add(-s.offlineThreshold())

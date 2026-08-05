@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle, Globe, RefreshCw, Shield, Upload } from "lucide-react";
 
@@ -41,7 +42,7 @@ export default function CertificatesSection({
   const loadCertInfo = useCallback(async () => {
     setLoadingCert(true);
     try {
-      const info = await api.get("/settings/certs") as CertInfo;
+      const info = await api.get(paths.settings.certs) as CertInfo;
       setCertInfo(info);
     } catch {
       toast.error(t("settings.toast.cert_load_failed"));
@@ -54,7 +55,7 @@ export default function CertificatesSection({
     setShowRegenDialog(false);
     setUploading(true);
     try {
-      const result = await api.post("/settings/certs/regenerate") as CertInfo;
+      const result = await api.post(paths.settings.certsRegenerate) as CertInfo;
       setCertInfo(result);
       toast.success(t("settings.toast.cert_regenerated"));
       onRefresh();
@@ -71,7 +72,7 @@ export default function CertificatesSection({
       const formData = new FormData();
       formData.append("cert", certFile);
       formData.append("key", keyFile);
-      await api.postFormData("/settings/certs/upload", formData);
+      await api.postFormData(paths.settings.certsUpload, formData);
       toast.success(t("settings.toast.cert_uploaded"));
       loadCertInfo();
       onRefresh();
@@ -125,10 +126,10 @@ export default function CertificatesSection({
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-4">
+      <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Shield className="w-4 h-4" /></div>
-          <div><h2 className="text-lg font-semibold text-white">{t("settings.certificates.title")}</h2><p className="text-xs text-emerald-200">{t("settings.certificates.subtitle")}</p></div>
+          <div><h2 className="text-lg font-semibold text-foreground">{t("settings.certificates.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.certificates.subtitle")}</p></div>
         </div>
       </div>
       <div className="p-4 sm:p-5">

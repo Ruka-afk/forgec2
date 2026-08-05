@@ -25,8 +25,10 @@ jobs:
           test "$stale" -eq 0
       - name: Build server for smoke
         run: go build -o forgec2-server ./cmd/server
-      - name: API smoke (unauthenticated)
+      - name: API smoke (unauth + default admin)
         run: |
+          # Fresh DB so config.example.yaml auth.default_password=Admin123! seeds admin
+          rm -rf data/db
           mkdir -p data/db
           ./forgec2-server -config config.example.yaml > /tmp/forgec2-smoke.log 2>&1 &
           echo $! > /tmp/forgec2-smoke.pid
@@ -34,10 +36,8 @@ jobs:
             if curl -sf http://127.0.0.1:8000/health | grep -q ok; then break; fi
             sleep 1
           done
-          curl -sf http://127.0.0.1:8000/health | grep -q ok
-          code=$(curl -s -o /tmp/modules.body -w "%{http_code}" http://127.0.0.1:8000/api/modules)
-          test "$code" = "401"
-          grep -q unauthorized /tmp/modules.body || grep -q success /tmp/modules.body
+          chmod +x scripts/ci-api-smoke.sh
+          scripts/ci-api-smoke.sh
           kill $(cat /tmp/forgec2-smoke.pid) || true
 
   lint:
@@ -73,5 +73,12 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npx tsc --noEmit
+      - run: npm run check:i18n
+      - run: npm run check:css
+      - run: npm run check:paths
       - run: npm test
       - run: npm run build
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Playwright smoke (static UI)
+        run: npm run test:e2e

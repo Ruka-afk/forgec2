@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { api } from "./api";
+import { paths } from "./api-paths";
 import type { Listener } from "@/types/listener";
 import type { DashboardStats } from "@/types/agent";
 
@@ -85,7 +86,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   fetchStats: async () => {
     try {
-      const stats = await api.get<DashboardStats>("/api/v1/dashboard");
+      const stats = await api.get<DashboardStats>(paths.dashboard.v1);
       set({ stats, statsError: undefined });
     } catch (e) {
       if (process.env.NODE_ENV === "development") console.error("[store] fetchStats failed", e);

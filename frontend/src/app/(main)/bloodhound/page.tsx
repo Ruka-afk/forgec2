@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { API_BASE } from "@/lib/constants";
 import { api, getCsrfToken } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { downloadFromResponse } from "@/lib/download";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
@@ -60,7 +61,7 @@ export default function BloodHoundPage() {
     try {
       let failed = 0;
       const [resultsRes, statusRes] = await Promise.all([
-        api.get("/bloodhound/list").catch(() => { failed++; return null; }),
+        api.get(paths.bloodhound.list).catch(() => { failed++; return null; }),
         api.get<{ uploaded: boolean; filename: string }>("/bloodhound/status").catch(() => { failed++; return null; }),
       ]);
       if (resultsRes) setResults((resultsRes.data || []) as BHResult[]);
@@ -85,7 +86,7 @@ export default function BloodHoundPage() {
     try {
       const form = new FormData();
       form.append("file", file);
-      await api.postFormData("/bloodhound/upload", form);
+      await api.postFormData(paths.bloodhound.upload, form);
       toast.success(t("bloodhound.toast.sharp_hound_uploaded"));
       loadData();
     } catch { toast.error(t("bloodhound.toast.upload_sharp_hound_failed")); }
@@ -96,7 +97,7 @@ export default function BloodHoundPage() {
     if (!selectedAgent) return;
     setCollecting(true);
     try {
-      await api.post("/bloodhound/collect", { agent_id: selectedAgent, method });
+      await api.post(paths.bloodhound.collect, { agent_id: selectedAgent, method });
       toast.success(t("bloodhound.toast.collection_started"));
       loadData();
     } catch { toast.error(t("bloodhound.toast.start_collection_failed")); }
@@ -114,7 +115,7 @@ export default function BloodHoundPage() {
   const handleDelete = (id: number) => {
     setCfm({msg: t("bloodhound.delete_report"), cb: async () => {
       try {
-        await api.del(`/bloodhound/${id}`);
+        await api.del(paths.bloodhound.one(id));
         loadData();
       } catch { toast.error(t("bloodhound.toast.delete_report_failed")); }
     }});
@@ -138,7 +139,7 @@ export default function BloodHoundPage() {
             {binaryStatus.uploaded ? <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /> : <CircleAlert className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
           </div>
           <div>
-            <div className="text-sm font-semibold text-foreground">SharpHound Status</div>
+            <div className="text-sm font-semibold text-foreground">{t("bloodhound.sharp_hound_status")}</div>
             <div className="text-xs text-muted-foreground">
               {binaryStatus.uploaded
                 ? `Uploaded ${binaryStatus.filename}`
@@ -148,7 +149,7 @@ export default function BloodHoundPage() {
         </div>
         <div className="flex items-center gap-3">
           <Label className="relative cursor-pointer">
-            <input aria-label="Upload SharpHound executable" name="input-0" type="file" accept=".exe" onChange={handleUpload} className="" />
+            <input aria-label={t("bloodhound.upload_exe")} name="input-0" type="file" accept=".exe" onChange={handleUpload} className="" />
             <span className="inline-flex shrink-0 items-center justify-center rounded-xl bg-primary px-2.5 py-1.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/80 disabled:pointer-events-none disabled:opacity-50 gap-1.5 cursor-pointer">
               {uploading ? <Spinner size="xs" /> : <Upload className="w-4 h-4" />}
               <span>{uploading ? "Uploading..." : "Upload SharpHound.exe"}</span>
@@ -168,19 +169,19 @@ export default function BloodHoundPage() {
             <PawPrint className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-foreground">New Collection Task</div>
-            <div className="text-xs text-muted-foreground">Select an agent and collection method to run BloodHound data collection</div>
+            <div className="text-sm font-semibold text-foreground">{t("bloodhound.new_collection_task")}</div>
+            <div className="text-xs text-muted-foreground">{t("bloodhound.new_collection_desc")}</div>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
-            <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Target Agent</span>
+            <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bloodhound.target_agent")}</span>
             <Select value={selectedAgent || "placeholder"} onValueChange={(v) => setSelectedAgent(v === "placeholder" || v === null ? "" : v)}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="-- Select Agent --" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="placeholder">-- Select Agent --</SelectItem>
+                <SelectItem value="placeholder">{t("bloodhound.select_agent")}</SelectItem>
                 {agents.map(a => {
                   const id = a.id || "";
                   const hostname = a.hostname || "";
@@ -191,7 +192,7 @@ export default function BloodHoundPage() {
             </Select>
           </div>
           <div>
-            <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Collection Method</span>
+            <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bloodhound.collection_method")}</span>
             <Select value={method} onValueChange={(v) => { if (v) setMethod(v); }}>
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -220,7 +221,7 @@ export default function BloodHoundPage() {
             <div className="w-8 h-8 bg-secondary rounded-xl flex items-center justify-center">
               <Table2 className="w-4 h-4" />
             </div>
-            <h2 className="text-sm font-semibold text-foreground">Collection Results</h2>
+            <h2 className="text-sm font-semibold text-foreground">{t("bloodhound.collection_results")}</h2>
             <span className="text-xs text-muted-foreground">({results.length})</span>
           </div>
           <Button variant="ghost" size="sm" onClick={() => loadData()}>
@@ -234,15 +235,15 @@ export default function BloodHoundPage() {
               <TableHeader>
                 <TableRow className="border-b border-border bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground font-semibold">
                   <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">ID</TableHead>
-                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">Agent</TableHead>
-                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">Method</TableHead>
-                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">Users</TableHead>
-                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">Computers</TableHead>
-                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">Groups</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">{t("bloodhound.col_agent")}</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">{t("bloodhound.col_method")}</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">{t("bloodhound.col_users")}</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">{t("bloodhound.col_computers")}</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">{t("bloodhound.col_groups")}</TableHead>
                   <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">DA</TableHead>
-                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">SPN</TableHead>
-                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">Time</TableHead>
-                  <TableHead className="text-right py-3 px-4 sm:py-3.5 sm:px-5">Actions</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">{t("bloodhound.col_spn")}</TableHead>
+                  <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">{t("bloodhound.col_time")}</TableHead>
+                  <TableHead className="text-right py-3 px-4 sm:py-3.5 sm:px-5">{t("common.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-border">
@@ -261,7 +262,7 @@ export default function BloodHoundPage() {
                       <TableCell className="py-3 px-4 font-mono text-xs text-muted-foreground">{id}</TableCell>
                       <TableCell className="py-3 px-4 text-muted-foreground font-medium">{agent}</TableCell>
                       <TableCell className="py-3 px-4">
-                        <Badge variant="outline" className="text-(--font-size-micro-sm)">{methodVal}</Badge>
+                        <Badge variant="outline" className="text-(--fs-micro-sm)">{methodVal}</Badge>
                       </TableCell>
                        <TableCell className="py-3 px-4 font-mono text-primary">{users}</TableCell>
                        <TableCell className="py-3 px-4 font-mono text-primary">{computers}</TableCell>
@@ -273,12 +274,12 @@ export default function BloodHoundPage() {
                         <div className="flex items-center gap-2">
                           <Button variant="ghost" size="icon-xs" onClick={() => handleDownload(id)}
                             className="bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 rounded-xl transition-colors"
-                            aria-label="Download report">
+                            aria-label={t("bloodhound.download_report")}>
                             <Download className="w-4 h-4" />
                           </Button>
                           <Button variant="ghost" size="icon-xs" onClick={() => handleDelete(id)}
                             className="bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-xl transition-colors"
-                            aria-label="Delete report">
+                            aria-label={t("bloodhound.a11y_delete_report")}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>

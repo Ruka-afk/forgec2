@@ -18,6 +18,13 @@ const (
 	SecretSize       = 16
 	BackupCodeCount  = 8
 	BackupCodeLength = 6
+
+	// TOTP time window semantics: codes rotate every PeriodSeconds and are
+	// accepted within SkewWindows on either side, so a code stays valid for
+	// at most MaxTTLSeconds around its issuance time.
+	PeriodSeconds = 30
+	SkewWindows   = 1
+	MaxTTLSeconds = PeriodSeconds * (1 + 2*SkewWindows)
 )
 
 func GenerateSecret() (string, error) {
@@ -46,13 +53,15 @@ func VerifyCode(secret, code string) bool {
 	}
 
 	opts := totp.ValidateOpts{
-		Period: 30,
-		Skew:   1,
+		Period: PeriodSeconds,
+		Skew:   SkewWindows,
 		Digits: 6,
 	}
 
-	_, err = totp.ValidateCustom(code, secret, time.Now(), opts)
-	return err == nil
+	// ValidateCustom returns (false, nil) for a well-formed-but-mismatched
+	// code, so both the match flag and the error must be checked.
+	rv, err := totp.ValidateCustom(code, secret, time.Now(), opts)
+	return err == nil && rv
 }
 
 func GenerateBackupCodes() []string {

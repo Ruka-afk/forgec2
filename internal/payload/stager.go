@@ -47,47 +47,75 @@ type StagerResult struct {
 }
 
 var (
-	stagerKey       []byte
-	stagerKeyOnce   sync.Once
-	stagerKeyPath   = filepath.Join("data", "stager.key")
+	stagerKey         []byte
+	stagerKeyExplicit bool
+	stagerKeyOnce     sync.Once
+	stagerKeyPath     = filepath.Join("data", "stager.key")
 )
 
-func init() {
-	InitStagerKey()
+// SetStagerKeyFile overrides the on-disk location of the persisted stager key.
+// It must be called before the first key initialization (e.g. at server
+// startup with the configured data directory) to make key persistence
+// independent of the process working directory.
+func SetStagerKeyFile(path string) {
+	if path != "" {
+		stagerKeyPath = path
+	}
 }
 
-func InitStagerKey() {
+// InitStagerKey loads the persisted stager key or generates a new one.
+// A corrupted existing key (wrong length) is reported as an error instead of
+// being silently overwritten, which would invalidate every previously issued
+// stage token.
+func InitStagerKey() error {
+	var errOut error
 	stagerKeyOnce.Do(func() {
-		if data, err := os.ReadFile(stagerKeyPath); err == nil && len(data) == 32 {
+		if stagerKeyExplicit {
+			return
+		}
+		if data, err := os.ReadFile(stagerKeyPath); err == nil {
+			if len(data) != 32 {
+				errOut = fmt.Errorf("stager key file %s has invalid length %d (want 32); refusing to overwrite it", stagerKeyPath, len(data))
+				return
+			}
 			stagerKey = data
-			slog.Info("Stager key loaded from disk")
+			slog.Info("Stager key loaded from disk", "path", stagerKeyPath)
 			return
 		}
 		key := make([]byte, 32)
 		if _, err := rand.Read(key); err != nil {
-			slog.Error("crypto/rand.Read failed for stager key, using zeros (insecure)", "error", err)
-			stagerKey = make([]byte, 32)
+			errOut = fmt.Errorf("crypto/rand.Read failed for stager key: %w", err)
 			return
 		}
 		stagerKey = key
-		if err := os.MkdirAll(filepath.Dir(stagerKeyPath), 0750); err == nil {
-			if err := os.WriteFile(stagerKeyPath, stagerKey, 0640); err != nil {
-				slog.Error("Failed to persist stager key", "error", err)
-			} else {
-				slog.Info("Stager key initialized and persisted")
-			}
+		if err := os.MkdirAll(filepath.Dir(stagerKeyPath), 0750); err != nil {
+			slog.Error("Failed to create stager key directory", "path", filepath.Dir(stagerKeyPath), "error", err)
+			return
 		}
+		if err := os.WriteFile(stagerKeyPath, stagerKey, 0640); err != nil {
+			slog.Error("Failed to persist stager key; tokens will not survive a restart", "path", stagerKeyPath, "error", err)
+			return
+		}
+		slog.Info("Stager key initialized and persisted", "path", stagerKeyPath)
 	})
+	return errOut
 }
 
 func GetStagerKey() []byte {
-	InitStagerKey()
+	if err := InitStagerKey(); err != nil {
+		slog.Error("Stager key unavailable", "error", err)
+		return nil
+	}
 	return stagerKey
 }
 
+// SetStagerKey overrides the in-memory stager key (used by tests and advanced
+// deployments). An explicitly set key is authoritative and is never replaced
+// by a disk load.
 func SetStagerKey(key []byte) {
 	if len(key) == 32 {
 		stagerKey = key
+		stagerKeyExplicit = true
 	}
 }
 

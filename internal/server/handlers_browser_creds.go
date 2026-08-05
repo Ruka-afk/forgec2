@@ -114,7 +114,7 @@ func (s *Server) handleProcessBrowserResult(c *gin.Context) {
 			Source:  "browser",
 			Type:    "cleartext",
 			TaskID:  req.TaskID,
-			Notes:   credStr,
+			Notes:   encryptCredNotes(credStr),
 		}
 
 		if err := s.db.Create(&cred).Error; err == nil {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { PageHeader, PageSpinner, Spinner } from "@/components/UI";
 import { useI18n } from "@/lib/i18n";
@@ -98,10 +99,10 @@ export default function LateralPageContent() {
     try {
       let failed = 0;
       const [data, agentData, credData, histData] = await Promise.all([
-        api.get(`/api/lateral/history/all`).catch(() => { failed++; return { lateral: [] }; }),
-        api.get(`/agents`).catch(() => { failed++; return { agents: [] }; }),
-        api.get(`/credentials`).catch(() => { failed++; return { vault_entries: [] }; }),
-        api.get(`/tasks?type=lateral&pageSize=50`).catch(() => { failed++; return { tasks: [] }; }),
+        api.get(paths.lateral.historyAll).catch(() => { failed++; return { lateral: [] }; }),
+        api.get(paths.agents.list()).catch(() => { failed++; return { agents: [] }; }),
+        api.get(paths.credentials.list()).catch(() => { failed++; return { vault_entries: [] }; }),
+        api.get(paths.tasks.list("type=lateral&pageSize=50")).catch(() => { failed++; return { tasks: [] }; }),
       ]);
       setStats(data as LateralStats);
       setAgents((agentData.agents || []) as Agent[]);
@@ -149,7 +150,7 @@ export default function LateralPageContent() {
         if (form.hash) payload.hash = form.hash;
       }
 
-      await api.postJson(`/api/lateral/execute`, payload);
+      await api.postJson(paths.lateral.execute, payload);
       loadData();
     } catch { toast.error(t("lateral.toast.execute_failed")); }
     setSubmitting(false);
@@ -346,7 +347,7 @@ export default function LateralPageContent() {
 
       <Card className=" mb-6 px-4">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/20 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-primary/10 dark:bg-primary/15 rounded-xl flex items-center justify-center">
             <GitBranch className="w-4 h-4" />
           </div>
           <div>
@@ -361,7 +362,7 @@ export default function LateralPageContent() {
               <Button key={m.key} onClick={() => setActiveMethod(m.key)} variant="outline"
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${
                   activeMethod === m.key
-                    ? "bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-400 dark:border-indigo-700"
+                    ? "bg-primary/10 text-primary border-primary/30 dark:bg-primary/20  dark:border-primary/40"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted dark:hover:text-muted-foreground border-transparent"
                 }`}>
                 {m.icon}
@@ -487,7 +488,7 @@ export default function LateralPageContent() {
                   <TableCell className="font-mono text-muted-foreground">{h.source || "-"}</TableCell>
                   <TableCell className="font-mono text-muted-foreground">{h.target || "-"}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="text-(--font-size-micro-sm)">{h.method || "-"}</Badge>
+                    <Badge variant="outline" className="text-(--fs-micro-sm)">{h.method || "-"}</Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs">{h.pivot || t("lateral.direct")}</TableCell>
                   <TableCell>

@@ -55,23 +55,19 @@ func (s *Server) triggerEmailNotifications(evt Event) {
 
 	if err := sendEmailWithRetry(cfg, msg); err != nil {
 		slog.Error("Email notification failed after retries", "event", evt.Type, "agent", evt.AgentID, "error", err)
-		if err := s.db.Create(&db.AuditLog{
+		s.flushAuditEntries([]db.AuditLog{{
 			User:    "system",
 			Action:  "email_notification",
 			Success: false,
 			Details: fmt.Sprintf("Email notification failed for event %s on agent %s: %v", evt.Type, evt.AgentID, err),
-		}).Error; err != nil {
-			slog.Error("Failed to log email notification audit", "err", err)
-		}
+		}})
 	} else {
-		if err := s.db.Create(&db.AuditLog{
+		s.flushAuditEntries([]db.AuditLog{{
 			User:    "system",
 			Action:  "email_notification",
 			Success: true,
 			Details: fmt.Sprintf("Email notification sent for event %s on agent %s", evt.Type, evt.AgentID),
-		}).Error; err != nil {
-			slog.Error("Failed to log email notification audit", "err", err)
-		}
+		}})
 	}
 }
 

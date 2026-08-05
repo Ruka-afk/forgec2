@@ -75,4 +75,9 @@ SUMMARY.md
 ANCHORED_SUMMARY.md
 .omo/
 
+# Plugin runtime caches (Windows event-log mock dbs, etc.)
+plugins/**/%SystemDrive%/
+plugins/**/Caches/
+plugins/**/*.db
+
 __pycache__/

@@ -1,4 +1,4 @@
-﻿import { SettingsData } from "./types";
+import { SettingsData } from "./types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Cpu, RotateCw } from "lucide-react";
@@ -14,7 +14,7 @@ export default function AboutSection({
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-gradient-to-r from-muted/50 to-muted px-6 py-4">
+      <div className="bg-secondary/60 border-b border-border px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Cpu className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-foreground">{t("settings.about.system_information")}</h2><p className="text-xs text-muted-foreground">{t("settings.about.runtime_details")}</p></div>
@@ -44,7 +44,7 @@ export default function AboutSection({
           </div>
         </div>
         <div className="mt-6 flex flex-wrap gap-3">
-          <Button onClick={onCheckUpdate} className="h-10 px-4 bg-indigo-100 dark:bg-indigo-900/30 hover:bg-indigo-200 dark:hover:bg-indigo-800 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-medium transition-colors">
+          <Button onClick={onCheckUpdate} className="h-10 px-4 bg-primary/10 dark:bg-primary/20 hover:bg-indigo-200 dark:hover:bg-indigo-800 text-primary dark:text-primary rounded-xl text-xs font-medium transition-colors">
             <RotateCw className="w-4 h-4" />{t("settings.about.check_updates")}
           </Button>
         </div>

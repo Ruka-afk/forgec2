@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 
 export interface TOTPState {
@@ -29,7 +30,7 @@ export function useTOTP(t: (key: string) => string, saving: boolean, setSaving: 
 
   useEffect(() => {
     if (activeSection === "security") {
-      api.get("/settings/totp/status")
+      api.get(paths.settings.totpStatus)
         .then((d: Record<string, unknown>) => setTotpStatus((d.totp_enabled ?? false) as boolean))
         .catch(() => setTotpStatus(false));
     }
@@ -37,7 +38,7 @@ export function useTOTP(t: (key: string) => string, saving: boolean, setSaving: 
 
   const handleGenerateTOTP = useCallback(async () => {
     try {
-      const d = await api.post("/settings/totp/generate");
+      const d = await api.post(paths.settings.totpGenerate);
       setTotpSecret((d.secret || "") as string);
       setTotpQR((d.qr_url || "") as string);
       setTotpBackupCodes(((d.backup_codes || []) as string[]).join("\n"));
@@ -50,7 +51,7 @@ export function useTOTP(t: (key: string) => string, saving: boolean, setSaving: 
     if (!totpCode) { toast.error(t("settings.toast.totp_enter_code")); return; }
     setSaving(true);
     try {
-      await api.post("/settings/totp/enable", { password: totpEnablePassword, code: totpCode, secret: totpSecret });
+      await api.post(paths.settings.totpEnable, { password: totpEnablePassword, code: totpCode, secret: totpSecret });
       toast.success(t("settings.toast.totp_enabled"));
       setTotpStatus(true); setShowTotpSetup(false); setTotpCode(""); setTotpEnablePassword("");
     } catch { toast.error(t("settings.toast.totp_enable_failed")); }
@@ -62,7 +63,7 @@ export function useTOTP(t: (key: string) => string, saving: boolean, setSaving: 
     if (!totpDisableCode) { toast.error(t("settings.toast.totp_enter_code")); return; }
     setSaving(true);
     try {
-      await api.post("/settings/totp/disable", { password: totpDisablePassword, code: totpDisableCode });
+      await api.post(paths.settings.totpDisable, { password: totpDisablePassword, code: totpDisableCode });
       toast.success(t("settings.toast.totp_disabled"));
       setTotpStatus(false); setTotpDisablePassword(""); setTotpDisableCode("");
     } catch { toast.error(t("settings.toast.totp_disable_failed")); }

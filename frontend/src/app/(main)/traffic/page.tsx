@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { formatTime } from "@/lib/utils";
 import { PageHeader } from "@/components/UI";
@@ -58,7 +59,7 @@ export default function TrafficPage() {
 
   const loadTraffic = useCallback(async () => {
     try {
-      const data = await api.get("/traffic");
+      const data = await api.get(paths.traffic.page);
       const arr = Array.isArray(data)
         ? data
         : (data?.data ?? data?.traffic ?? []);
@@ -109,11 +110,11 @@ export default function TrafficPage() {
 
   const getMethodStyle = (method: string) => {
     const m = method.toUpperCase();
-    if (m === "POST") return "bg-emerald-500 text-white";
-    if (m === "GET") return "bg-blue-500 text-white";
-    if (m === "BEACON") return "bg-purple-500 text-white";
-    if (m === "PUT") return "bg-amber-500 text-white";
-    if (m === "DELETE") return "bg-red-500 text-white";
+    if (m === "POST") return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+    if (m === "GET") return "bg-blue-500/10 text-blue-700 dark:text-blue-400";
+    if (m === "BEACON") return "bg-purple-500/10 text-purple-700 dark:text-purple-400";
+    if (m === "PUT") return "bg-amber-500/10 text-amber-700 dark:text-amber-400";
+    if (m === "DELETE") return "bg-red-500/10 text-red-700 dark:text-red-400";
     return "bg-muted text-muted-foreground";
   };
 
@@ -153,10 +154,10 @@ export default function TrafficPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
           <div className="text-center">
             <div className="text-xs text-muted-foreground mb-1">{t("traffic.total_requests")}</div>
-            <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{totalRequests}</div>
+            <div className="text-2xl font-bold text-primary">{totalRequests}</div>
           </div>
           <div className="text-center">
-            <div className="text-xs text-muted-foreground mb-1">Beacons</div>
+            <div className="text-xs text-muted-foreground mb-1">{t("traffic.beacons")}</div>
             <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{beacons}</div>
           </div>
           <div className="text-center">
@@ -186,13 +187,13 @@ export default function TrafficPage() {
             <TableHeader>
               <TableRow className="bg-muted border-b border-border sticky top-0">
                 <TableHead className="text-xs font-medium min-w-[80px]">{t("traffic.time")}</TableHead>
-                <TableHead className="text-xs font-medium min-w-[80px]">Method</TableHead>
-                <TableHead className="text-xs font-medium min-w-[200px]">Path</TableHead>
-                <TableHead className="text-xs font-medium min-w-[120px]">Source IP</TableHead>
-                <TableHead className="text-xs font-medium min-w-[100px]">Agent</TableHead>
+                <TableHead className="text-xs font-medium min-w-[80px]">{t("traffic.col_method")}</TableHead>
+                <TableHead className="text-xs font-medium min-w-[200px]">{t("traffic.col_path")}</TableHead>
+                <TableHead className="text-xs font-medium min-w-[120px]">{t("traffic.col_source_ip")}</TableHead>
+                <TableHead className="text-xs font-medium min-w-[100px]">{t("traffic.col_agent")}</TableHead>
                 <TableHead className="text-xs font-medium min-w-[60px] text-center">{t("traffic.status")}</TableHead>
-                <TableHead className="text-xs font-medium min-w-[60px] text-right">Size</TableHead>
-                <TableHead className="text-xs font-medium min-w-[70px] text-right">Latency</TableHead>
+                <TableHead className="text-xs font-medium min-w-[60px] text-right">{t("traffic.col_size")}</TableHead>
+                <TableHead className="text-xs font-medium min-w-[70px] text-right">{t("traffic.col_latency")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="font-mono">

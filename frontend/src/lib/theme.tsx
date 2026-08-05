@@ -30,7 +30,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const saved = localStorage.getItem("forgec2_theme") as Theme | null;
-    const initial = saved && ["light", "dark", "system"].includes(saved) ? saved : "system";
+    const initial = saved && ["light", "dark", "system"].includes(saved) ? saved : "dark";
     Promise.resolve().then(() => {
       setThemeState(initial);
       setResolved(applyTheme(initial));

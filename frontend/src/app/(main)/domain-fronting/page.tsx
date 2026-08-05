@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { ConfirmModal, DataSpinner, EmptyState, PageHeader } from "@/components/UI";
 import { toast } from "sonner";
@@ -37,7 +38,7 @@ export default function DomainFrontingPage() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const data = await api.postJson("/infra/front/list", {});
+      const data = await api.postJson(paths.domainFront.list, {});
       setDomains((data.domains as FrontDomain[]) || []);
       setAutoFailover((data.auto_failover ?? true) as boolean);
     } catch {
@@ -53,7 +54,7 @@ export default function DomainFrontingPage() {
   const handleCheck = async () => {
     setChecking(true);
     try {
-      const data = await api.postJson("/infra/front/check", {});
+      const data = await api.postJson(paths.domainFront.check, {});
       setDomains((data.domains as FrontDomain[]) || []);
       toast.success(t("domain_fronting.toast.health_check_ok"));
     } catch {
@@ -66,7 +67,7 @@ export default function DomainFrontingPage() {
   const saveConfig = async (cfgDomains: string[], cfgAuto: boolean) => {
     setSaving(true);
     try {
-      const data = await api.postJson("/infra/front/config", { domains: cfgDomains, auto_failover: cfgAuto });
+      const data = await api.postJson(paths.domainFront.config, { domains: cfgDomains, auto_failover: cfgAuto });
       setDomains((data.domains as FrontDomain[]) || []);
       setAutoFailover(cfgAuto);
       toast.success(t("domain_fronting.toast.config_saved"));
@@ -115,7 +116,7 @@ export default function DomainFrontingPage() {
       {/* Auto-failover toggle */}
       <Card className="p-4 sm:p-5 mb-6 flex items-center justify-between">
         <div>
-          <div className="font-medium text-foreground">Auto-Failover</div>
+          <div className="font-medium text-foreground">{t("domain_fronting.auto_failover")}</div>
           <div className="text-sm text-muted-foreground mt-0.5">
             Automatically switch to a healthy domain when the active one becomes unreachable
           </div>
@@ -125,14 +126,14 @@ export default function DomainFrontingPage() {
 
       {/* Active domain indicator */}
       <Card className="p-4 sm:p-5 mb-6">
-        <div className="text-sm text-muted-foreground mb-1">Current Active Domain</div>
+        <div className="text-sm text-muted-foreground mb-1">{t("domain_fronting.current_active_domain")}</div>
         <div className="flex items-center gap-3">
           {domains.filter((d) => d.active).length > 0 ? (
             <span className="text-lg font-semibold text-foreground">
               {domains.find((d) => d.active)?.domain}
             </span>
           ) : (
-            <span className="text-sm text-muted-foreground">No domain configured</span>
+            <span className="text-sm text-muted-foreground">{t("domain_fronting.no_domain")}</span>
           )}
           {domains.filter((d) => d.active && d.healthy).length > 0 && (
             <Badge variant="success">
@@ -145,7 +146,7 @@ export default function DomainFrontingPage() {
       {/* Domain list */}
       <Card className="overflow-hidden mb-6">
         <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <h2 className="font-semibold text-foreground">Front Domains</h2>
+          <h2 className="font-semibold text-foreground">{t("domain_fronting.front_domains")}</h2>
           <span className="text-xs text-muted-foreground">{domains.length} domains</span>
         </div>
 
@@ -159,8 +160,8 @@ export default function DomainFrontingPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Domain</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>{t("domain_fronting.col_domain")}</TableHead>
+                <TableHead>{t("domain_fronting.col_status")}</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
@@ -183,7 +184,7 @@ export default function DomainFrontingPage() {
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-foreground truncate">{d.domain}</span>
                           {d.active && (
-                            <Badge variant="outline" className="text-(--font-size-micro-sm) px-1.5 py-px font-medium">
+                            <Badge variant="outline" className="text-(--fs-micro-sm) px-1.5 py-px font-medium">
                               Active
                             </Badge>
                           )}
@@ -220,7 +221,7 @@ export default function DomainFrontingPage() {
                         />}>
                         <Trash2 className="w-4 h-4" />
                       </TooltipTrigger>
-                      <TooltipContent>Remove domain</TooltipContent>
+                      <TooltipContent>{t("domain_fronting.remove_tooltip")}</TooltipContent>
                     </Tooltip>
                   </TableCell>
                 </TableRow>
@@ -233,13 +234,13 @@ export default function DomainFrontingPage() {
         <div className="px-4 py-3 border-t border-border bg-muted/50">
           <div className="flex items-center gap-2">
             <Input
-              aria-label="cdn.cloudflare.com"
+              aria-label={t("domain_fronting.domain_ph")}
               name="input-0"
               type="text"
               value={newDomain}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewDomain(e.target.value)}
               onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === "Enter" && addDomain()}
-              placeholder="cdn.cloudflare.com"
+              placeholder={t("domain_fronting.domain_ph")}
               className="flex-1"
             />
             <Button
@@ -247,11 +248,11 @@ export default function DomainFrontingPage() {
               disabled={!newDomain.trim() || saving}
             >
               <Plus className="w-4 h-4" />
-              Add
+              {t("domain_fronting.add")}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground mt-1.5">
-            Enter a CDN front domain (e.g. <code className="text-indigo-500">cdn.cloudflare.com</code>). The first domain will be the active one.
+            {t("domain_fronting.enter_hint_pre")} <code className="text-primary">cdn.cloudflare.com</code>{t("domain_fronting.enter_hint_post")}
           </p>
         </div>
       </Card>
@@ -261,10 +262,8 @@ export default function DomainFrontingPage() {
         <div className="flex items-start gap-3">
           <Info className="w-4 h-4" />
           <div className="text-sm text-amber-800 dark:text-amber-200">
-            <strong>How it works:</strong> The monitor performs periodic HEAD requests to each front domain using the path{" "}
-            <code className="text-amber-600 dark:text-amber-400">/api/v1/beacon</code>. If the active domain fails (non-2xx/4xx response),
-            auto-failover rotates to the next healthy domain in the list. Agents should be generated with the active domain set as
-            their C2 URL.
+            <strong>{t("domain_fronting.how_it_works")}</strong> {t("domain_fronting.monitor_head")}{" "}
+            <code className="text-amber-600 dark:text-amber-400">/api/v1/beacon</code>{t("domain_fronting.monitor_tail")}
           </div>
         </div>
       </div>

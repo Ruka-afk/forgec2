@@ -2,6 +2,7 @@ package payload
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -16,9 +17,16 @@ type Obfuscator struct {
 	rand *mrand.Rand
 }
 
-// NewObfuscator creates a new obfuscator with random seed
+// NewObfuscator creates a new obfuscator seeded from crypto/rand so generated
+// identifiers are not predictable from the wall clock.
 func NewObfuscator() *Obfuscator {
-	seed := time.Now().UnixNano()
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		// crypto/rand failure is practically unreachable; fall back to a
+		// time-based seed rather than returning a nil RNG.
+		return &Obfuscator{seed: time.Now().UnixNano()}
+	}
+	seed := int64(binary.LittleEndian.Uint64(b[:]))
 	return &Obfuscator{
 		seed: seed,
 		rand: mrand.New(mrand.NewSource(seed)),

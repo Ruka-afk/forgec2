@@ -222,7 +222,7 @@ export default function PackerPageContent() {
             : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
         }`}>
           <span>{message}</span>
-          <Button variant="ghost" size="icon-sm" onClick={() => setMessage("")} className="opacity-60 hover:opacity-100" aria-label="Dismiss"><X className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon-sm" onClick={() => setMessage("")} className="opacity-60 hover:opacity-100" aria-label={t("common.dismiss")}><X className="w-4 h-4" /></Button>
         </div>
       )}
 
@@ -270,7 +270,7 @@ export default function PackerPageContent() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Timestamp</Label>
+              <Label className="text-xs">{t("packer.timestamp")}</Label>
               <Select value={timestamp} onValueChange={(v) => setTimestamp(v ?? "random")}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -335,7 +335,7 @@ export default function PackerPageContent() {
               </div>
               <div>
                 <Label className="text-xs">{t("packer.shellcode_file")}</Label>
-                <input type="file" accept=".bin" onChange={handleShellcodeFile} aria-label="Upload BOF artifact"
+                <input type="file" accept=".bin" onChange={handleShellcodeFile} aria-label={t("packer.upload_bof")}
                   className="w-full text-sm file:mr-3 file:py-1.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/80 file:cursor-pointer file:transition-colors" />
                 {shellcodeB64 && <span className="text-xs text-emerald-600 mt-1 flex items-center gap-1"><CheckCircle className="w-4 h-4" />{t("packer.shellcode_loaded")}</span>}
               </div>
@@ -362,14 +362,14 @@ export default function PackerPageContent() {
         <Card className="p-4 sm:p-5 space-y-5">
           <div>
             <Label className="text-xs mb-1.5">{t("packer.payload_exe")}</Label>
-            <input type="file" accept=".exe,.dll" onChange={handleFileSelect} aria-label="Upload DLL or EXE"
+            <input type="file" accept=".exe,.dll" onChange={handleFileSelect} aria-label={t("packer.upload_dll")}
               className="w-full text-sm file:mr-3 file:py-1.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/80 file:cursor-pointer file:transition-colors" />
             {exeB64 && <span className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1"><CheckCircle className="w-4 h-4" />{t("packer.exe_loaded", { size: String(Math.round(exeB64.length * 0.75 / 1024)) })}</span>}
           </div>
 
           <div className="border-t border-border pt-4">
             <h3 className="text-sm font-semibold text-foreground mb-3">{t("packer.icon")} <span className="text-muted-foreground font-normal">{t("packer.optional")}</span></h3>
-            <input type="file" accept=".ico" onChange={handleIconSelect} aria-label="Upload icon"
+            <input type="file" accept=".ico" onChange={handleIconSelect} aria-label={t("packer.upload_icon")}
               className="w-full text-sm file:mr-3 file:py-1.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/80 file:cursor-pointer file:transition-colors" />
             {iconB64 && <span className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1"><CheckCircle className="w-4 h-4" />{t("packer.icon_loaded")}</span>}
           </div>

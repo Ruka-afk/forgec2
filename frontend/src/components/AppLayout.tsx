@@ -59,10 +59,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       >
         <TopBar onMenuToggle={handleMenuToggle} />
         <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto min-h-0 pt-14 scroll-smooth focus:outline-none">
+          {/* Sticky breadcrumb dock — merges into the topbar chrome plane */}
+          <div className="sticky top-14 z-20 bg-background/85 backdrop-blur-xl border-b border-border/40">
+            <div className="mx-auto w-full max-w-screen-2xl px-5 sm:px-8 lg:px-10 py-2">
+              <Breadcrumb />
+            </div>
+          </div>
             <div className="mx-auto h-full w-full max-w-screen-2xl px-5 sm:px-8 lg:px-10 py-5 sm:py-7 lg:py-8">
             <UpdateBanner />
             <AgentStatusBanner />
-            <Breadcrumb />
             {children}
           </div>
         </main>

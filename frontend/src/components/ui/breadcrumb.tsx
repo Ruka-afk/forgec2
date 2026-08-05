@@ -115,21 +115,21 @@ function Breadcrumb() {
   if (items.length <= 1) return null;
 
   return (
-    <nav aria-label="Breadcrumb" className="mb-4 sm:mb-5">
-      <ol className="flex items-center gap-1 text-xs text-muted-foreground/70">
+    <nav aria-label={t("common.breadcrumb")}>
+      <ol className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
         {items.map((item, i) => {
           const isLast = i === items.length - 1;
           return (
-            <li key={item.label} className="flex items-center gap-1">
-              {i > 0 && <ChevronSep className="w-3 h-3 shrink-0 text-muted-foreground/40" />}
+            <li key={item.label} className="flex items-center gap-1.5">
+              {i > 0 && <ChevronSep className="w-3.5 h-3.5 shrink-0 text-muted-foreground/30" />}
               {isLast ? (
-                <span className="font-medium text-foreground/80 truncate max-w-[160px]">{item.label}</span>
+                <span className="mono-cell font-medium text-foreground truncate max-w-[240px]">{item.label}</span>
               ) : item.href ? (
-                <Link href={item.href} className="hover:text-foreground transition-colors truncate max-w-[120px]">
-                  {i === 0 ? <Home className="w-3.5 h-3.5" /> : item.label}
+                <Link href={item.href} className="mono-eyebrow hover:text-foreground transition-colors truncate max-w-[140px]">
+                  {i === 0 ? <Home className="w-3.5 h-3.5" aria-hidden="true" /> : item.label}
                 </Link>
               ) : (
-                <span>{item.label}</span>
+                <span className="truncate max-w-[140px]">{item.label}</span>
               )}
             </li>
           );

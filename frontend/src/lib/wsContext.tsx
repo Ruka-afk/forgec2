@@ -119,6 +119,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    let disposed = false;
     const startHeartbeat = () => {
       lastPongRef.current = Date.now();
       heartbeatRef.current = setInterval(() => {
@@ -137,6 +138,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     };
 
     const connect = () => {
+      if (disposed) return;
       if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
       const ws = new WebSocket(getWSURL());
@@ -163,6 +165,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       ws.onclose = () => {
         stopHeartbeat();
         setConnected(false);
+        if (disposed) return;
         if (!getCookie("forgec2_session")) {
           setReconnectFailed(true);
           if (typeof window !== "undefined" && window.location.pathname !== "/login") {
@@ -198,6 +201,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     connect();
 
     return () => {
+      disposed = true;
       stopHeartbeat();
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
       activeWS = null;

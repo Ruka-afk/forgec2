@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { downloadText } from "@/lib/download";
 import { ConfirmModal, EmptyState, PageHeader, Spinner } from "@/components/UI";
@@ -117,7 +118,7 @@ export default function StagerPage() {
   function handleDelete(id: number) {
     setCfm({msg: t("stager.delete_token"), cb: async () => {
       try {
-        await api.del(`/stager/${id}`);
+        await api.del(paths.stager.one(id));
         setMessage(t("stager.toast.deleted"));
         fetchTokens();
       } catch { setMessage(t("stager.toast.delete_failed")); }
@@ -137,9 +138,9 @@ export default function StagerPage() {
       <PageHeader title={t("stager.title")} subtitle={t("stager.subtitle")} />
 
       {message && (
-        <div className="px-4 py-2 bg-primary/10 dark:bg-indigo-900/30 border border-primary/20 dark:border-indigo-800 rounded-xl text-sm text-primary dark:text-indigo-300">
+        <div className="px-4 py-2 bg-primary/10 border border-primary/20 rounded-xl text-sm text-primary animate-fade-in">
           {message}
-          <Button variant="ghost" size="icon-sm" onClick={() => setMessage("")} className="ml-2 text-indigo-400 hover:text-indigo-600" aria-label="Dismiss">&times;</Button>
+          <Button variant="ghost" size="icon-sm" onClick={() => setMessage("")} className="ml-2 text-muted-foreground hover:text-foreground" aria-label={t("common.dismiss")}>&times;</Button>
         </div>
       )}
 
@@ -147,11 +148,11 @@ export default function StagerPage() {
         <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-2">
           <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{t("stager.token_created")}</div>
           <div className="text-xs space-y-1">
-            <div><span className="font-medium">{t("stager.stager_url")}</span> <code className="text-indigo-600 dark:text-indigo-400 bg-secondary/80 px-1 rounded">{createdToken.stager_url}</code></div>
+            <div><span className="font-medium">{t("stager.stager_url")}</span> <code className="text-primary bg-secondary/80 px-1 rounded">{createdToken.stager_url}</code></div>
             <div><span className="font-medium">{t("stager.token_label")}</span>
-              <code className="block mt-1 p-2 bg-secondary/80 dark:bg-muted/50 rounded text-(--font-size-micro-sm) break-all font-mono">{createdToken.token}</code>
+              <code className="block mt-1 p-2 bg-secondary/80 dark:bg-muted/50 rounded text-(--fs-micro-sm) break-all font-mono">{createdToken.token}</code>
             </div>
-            <div><span className="font-medium">{t("stager.stage2_size")}</span> {createdToken.stage2_size} bytes</div>
+            <div><span className="font-medium">{t("stager.stage2_size")}</span> {createdToken.stage2_size > 0 ? `${createdToken.stage2_size} bytes` : t("stager.stage2_lazy")}</div>
             <div><span className="font-medium">{t("stager.expires")}</span> {formatTime(createdToken.expires_at)}</div>
           </div>
           <div className="flex gap-2 mt-2">
@@ -173,7 +174,7 @@ export default function StagerPage() {
             <Label className="text-xs">{t("stager.field_listener")}</Label>
             <Select value={listenerId} onValueChange={(v) => setListenerId(v ?? "")}>
               <SelectTrigger className="w-full mt-1">
-                <SelectValue placeholder="Select listener..." />
+                <SelectValue placeholder={t("stager.select_listener_ph")} />
               </SelectTrigger>
               <SelectContent>
                 {listeners.map(l => (
@@ -233,22 +234,22 @@ export default function StagerPage() {
 
           <div>
             <Label className="text-xs">{t("stager.field_ua")}</Label>
-            <Input type="text" value={userAgent} onChange={e => setUserAgent(e.target.value)} placeholder="leave empty for default" className="w-full mt-1" />
+            <Input type="text" value={userAgent} onChange={e => setUserAgent(e.target.value)} placeholder={t("stager.empty_default")} className="w-full mt-1" />
           </div>
 
           <div>
             <Label className="text-xs">{t("stager.field_profile")}</Label>
-            <Input type="text" value={profile} onChange={e => setProfile(e.target.value)} placeholder="optional" className="w-full mt-1" />
+            <Input type="text" value={profile} onChange={e => setProfile(e.target.value)} placeholder={t("stager.optional")} className="w-full mt-1" />
           </div>
 
           <div>
             <Label className="text-xs">{t("stager.field_dns_domain")}</Label>
-            <Input type="text" value={dnsDomain} onChange={e => setDnsDomain(e.target.value)} placeholder="optional" className="w-full mt-1" />
+            <Input type="text" value={dnsDomain} onChange={e => setDnsDomain(e.target.value)} placeholder={t("stager.optional")} className="w-full mt-1" />
           </div>
 
           <div>
             <Label className="text-xs">{t("stager.field_dns_server")}</Label>
-            <Input type="text" value={dnsServer} onChange={e => setDnsServer(e.target.value)} placeholder="optional" className="w-full mt-1" />
+            <Input type="text" value={dnsServer} onChange={e => setDnsServer(e.target.value)} placeholder={t("stager.optional")} className="w-full mt-1" />
           </div>
 
           <Label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -268,7 +269,7 @@ export default function StagerPage() {
           </div>
 
           {loading ? (
-            <div className="text-sm text-muted-foreground"><Spinner size="xs" /> Loading...</div>
+            <div className="text-sm text-muted-foreground"><Spinner size="xs" /> {t("common.loading")}</div>
           ) : tokens.length === 0 ? (
             <EmptyState title={t("stager.empty_tokens")} />
           ) : (

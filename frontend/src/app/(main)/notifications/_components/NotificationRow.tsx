@@ -53,7 +53,7 @@ function NotificationRowInner({
 }: NotificationRowProps) {
   const n = item;
   return (
-    <div className={`flex items-start gap-3 px-4 sm:px-6 py-4 transition-colors ${n.read ? "" : "bg-indigo-50/50 dark:bg-indigo-900/10"}`}>
+    <div className={`flex items-start gap-3 px-4 sm:px-6 py-4 transition-colors ${n.read ? "" : "bg-primary/5"}`}>
       <Checkbox
         checked={isSelected}
         onCheckedChange={() => onToggleSelect(n.id)}
@@ -66,27 +66,27 @@ function NotificationRowInner({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
           <span className="font-medium text-sm">{n.title || n.type}</span>
-          {!n.read && <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0"></span>}
+          {!n.read && <span className="w-2 h-2 rounded-full bg-primary shrink-0"></span>}
         </div>
         <p className="text-sm text-muted-foreground truncate">{n.message}</p>
         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
           <span>{n.created_at ? formatTime(n.created_at) : "-"}</span>
           {n.agent_id && <span>{t("notifications.agent_prefix")} {n.agent_id.substring(0, 8)}</span>}
           <Badge variant={SEVERITY_VARIANT[n.severity] || "default"}>{n.severity}</Badge>
-          <span className="font-mono text-(--font-size-micro-sm)">{n.type}</span>
+          <span className="font-mono text-(--fs-micro-sm)">{n.type}</span>
         </div>
       </div>
       <div className="flex items-center gap-1 shrink-0">
         {!n.read && (
           <Tooltip>
-            <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onMarkRead(n.id)} className="w-8 h-8 p-0" aria-label="Mark as read" />}>
+            <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onMarkRead(n.id)} className="w-8 h-8 p-0" aria-label={t("notifications.mark_read")} />}>
               <Check className="w-4 h-4" />
             </TooltipTrigger>
             <TooltipContent>Mark read</TooltipContent>
           </Tooltip>
         )}
         <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onDelete(n.id)} className="w-8 h-8 p-0 text-muted-foreground hover:text-destructive" aria-label="Delete notification" />}>
+          <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onDelete(n.id)} className="w-8 h-8 p-0 text-muted-foreground hover:text-destructive" aria-label={t("notifications.delete")} />}>
             <Trash2 className="w-4 h-4" />
           </TooltipTrigger>
           <TooltipContent>Delete</TooltipContent>

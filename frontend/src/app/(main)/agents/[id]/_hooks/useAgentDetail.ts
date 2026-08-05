@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 
 export function useAgentDetail<T>(agentId: string) {
   const [data, setData] = useState<T | null>(null);
@@ -13,7 +14,7 @@ export function useAgentDetail<T>(agentId: string) {
     setLoading(true);
     setLoadError(false);
     try {
-      const response = await api.get<T>(`/agents/${agentId}?include_screenshots=false`, { signal });
+      const response = await api.get<T>(`${paths.agents.one(agentId)}?include_screenshots=false`, { signal });
       setData(response);
     } catch (error) {
       if ((error as Error).name !== "AbortError") {

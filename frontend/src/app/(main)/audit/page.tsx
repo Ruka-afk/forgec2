@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { downloadText } from "@/lib/download";
 import { PageHeader, Pagination } from "@/components/UI";
@@ -49,7 +50,7 @@ export default function AuditPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    api.get("/users", { signal: controller.signal })
+    api.get(paths.users.list, { signal: controller.signal })
       .then((data) => {
         const list = (data.users || data.data || []) as { username: string }[];
         setUsers(list);
@@ -70,7 +71,7 @@ export default function AuditPage() {
       if (search) params.set("search", search);
       if (userFilter) params.set("user", userFilter);
       if (actionFilter) params.set("action", actionFilter);
-      const data = await api.get(`/audit/logs?${params}`, { signal });
+      const data = await api.get(paths.audit.logs(params.toString()), { signal });
       setLogs((data.logs as AuditLog[]) || []);
       setTotal((data.total as number) || 0);
     } catch {
@@ -159,7 +160,7 @@ export default function AuditPage() {
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("audit.total_records")}</div>
               <div className="mt-2 text-2xl font-bold">{total}</div>
             </div>
-            <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center">
               <FileText className="w-4 h-4" />
             </div>
           </div>
@@ -214,7 +215,7 @@ export default function AuditPage() {
                 <TableHead className="text-left">{t("audit.action")}</TableHead>
                 <TableHead className="text-left">{t("audit.severity")}</TableHead>
                 <TableHead className="text-left">{t("audit.resource")}</TableHead>
-                <TableHead className="text-left">Target</TableHead>
+                <TableHead className="text-left">{t("audit.col_target")}</TableHead>
                 <TableHead className="text-left">{t("audit.status")}</TableHead>
                 <TableHead className="text-left">{t("audit.details")}</TableHead>
               </TableRow>

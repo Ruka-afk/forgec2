@@ -261,7 +261,6 @@ func init() {
 		{Type: protocol.TaskTypeEdrStatus, Name: "EDR Status", Description: "Check EDR status", Category: "discovery"},
 		{Type: protocol.TaskTypeGhostModeStatus, Name: "Ghost Mode Status", Description: "Check ghost mode status", Category: "c2"},
 		{Type: protocol.TaskTypeGhostModeExit, Name: "Ghost Mode Exit", Description: "Exit ghost mode", Category: "c2"},
-		{Type: protocol.TaskTypeKeyRotate, Name: "Force Key Rotation", Description: "Force ECDH session key re-negotiation", Category: "c2"},
 
 		// Prank / Fun Tasks
 		{Type: protocol.TaskTypeWallpaperChange, Name: "Change Wallpaper", Description: "Change the desktop wallpaper", Category: "impact",

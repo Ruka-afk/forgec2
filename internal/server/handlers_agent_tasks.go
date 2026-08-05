@@ -45,8 +45,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 	var tasks []db.Task
 	if err := query.Preload("Agent").
 		Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&tasks).Error; err != nil {
-		slog.Error("Failed to query tasks", "err", err)
-		respondError(c, http.StatusInternalServerError, "failed to query tasks")
+		handleQueryError(c, err, "Failed to query tasks")
 		return
 	}
 
@@ -106,8 +105,7 @@ func (s *Server) handleExportTasks(c *gin.Context) {
 	if err := s.db.Preload("Agent").
 		Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
 		Order("created_at desc").Limit(ExportTaskLimit).Find(&tasks).Error; err != nil {
-		slog.Error("Failed to export tasks", "err", err)
-		respondError(c, http.StatusInternalServerError, "failed to export tasks")
+		handleQueryError(c, err, "Failed to export tasks")
 		return
 	}
 
@@ -124,9 +122,9 @@ func (s *Server) handleExportTasks(c *gin.Context) {
 			t.CreatedAt.Format("2006-01-02 15:04:05"),
 			agentName,
 			t.Type,
-			t.Command,
-			truncateString(t.Result, CSVResultTruncLen),
-			truncateString(t.Error, CSVErrorTruncLen),
+			csvSafe(t.Command),
+			csvSafe(truncateString(t.Result, CSVResultTruncLen)),
+			csvSafe(truncateString(t.Error, CSVErrorTruncLen)),
 			t.Status,
 		})
 	}
@@ -156,8 +154,7 @@ func (s *Server) apiBulkTaskStatus(c *gin.Context) {
 	}
 	var tasks []db.Task
 	if err := s.db.Where("id IN ?", req.TaskIDs).Select("id, status, result, error, updated_at").Find(&tasks).Error; err != nil {
-		slog.Error("Failed to bulk query task status", "err", err)
-		respondError(c, http.StatusInternalServerError, "failed to query task status")
+		handleQueryError(c, err, "Failed to bulk query task status")
 		return
 	}
 	result := make(map[uint]db.Task, len(tasks))

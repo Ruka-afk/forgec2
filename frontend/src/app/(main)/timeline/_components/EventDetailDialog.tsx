@@ -40,7 +40,7 @@ export default function EventDetailDialog({ event, onClose }: EventDetailDialogP
     <Dialog open={!!event} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Event Details</DialogTitle>
+          <DialogTitle>{t("timeline.event_details")}</DialogTitle>
         </DialogHeader>
         {event && (<div className="space-y-4">
           <div>
@@ -74,7 +74,7 @@ export default function EventDetailDialog({ event, onClose }: EventDetailDialogP
           )}
           {getEventAgent(event) && (
             <div>
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Agent ID</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("timeline.col_agent_id")}</span>
               <p className="text-sm font-mono mt-0.5">{getEventAgent(event)}</p>
             </div>
           )}
@@ -83,7 +83,7 @@ export default function EventDetailDialog({ event, onClose }: EventDetailDialogP
               <Link href={getEventUrl(event)}>
                 <Button className="gap-2">
                   <ExternalLink className="w-4 h-4" />
-                  <span>View Related Object</span>
+                  <span>{t("timeline.view_related")}</span>
                 </Button>
               </Link>
             </div>

@@ -79,8 +79,8 @@ export const StatusIndicator = memo(function StatusIndicator({
   if (variant === "dotOnly") {
     return (
       <span
-        role="status"
-        aria-label={`Status: ${displayLabel}`}
+        role="img"
+        aria-label={displayLabel}
         className={cn(
           "inline-block rounded-full",
           dotSize,
@@ -95,8 +95,6 @@ export const StatusIndicator = memo(function StatusIndicator({
   if (variant === "dot") {
     return (
       <span
-        role="status"
-        aria-label={`Status: ${displayLabel}`}
         className={cn("inline-flex items-center gap-1.5", className)}
       >
         <span
@@ -115,8 +113,6 @@ export const StatusIndicator = memo(function StatusIndicator({
 
   return (
     <span
-      role="status"
-      aria-label={`Status: ${displayLabel}`}
       className={cn(
         "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide",
         cfg.bg,

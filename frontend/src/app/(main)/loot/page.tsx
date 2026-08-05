@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { downloadText, downloadJSON } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
@@ -21,43 +22,19 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Download, FileUp, Images, Keyboard, Terminal, Trash2, X } from "lucide-react";
 import { Accordion, AccordionItem, AccordionHeader, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
-import type { Screenshot } from "@/types/screenshot";
-import type { KeylogTask, DownloadTask, LootData } from "@/types/loot";
 import { LootScreenshotCard } from "./_components/LootScreenshotCard";
-
-type LootTab = "screenshots" | "keylogs" | "downloads";
+import { useLootData } from "./_components/useLootData";
+import type { LootTab } from "./_components/types";
 
 export default function LootPage() {
   const { t } = useI18n();
-  const [data, setData] = useState<LootData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error, loadLoot } = useLootData();
   const [modalImg, setModalImg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LootTab>("screenshots");
   const [agentFilter, setAgentFilter] = useState("");
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [keylogSearch, setKeylogSearch] = useState("");
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
-
-  const loadLoot = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await api.get("/loot");
-      setData({
-        screenshots: (result.screenshots || []) as Screenshot[],
-        keylog_tasks: (result.keylog_tasks || result.keylogs || []) as KeylogTask[],
-        download_tasks: (result.download_tasks || result.downloads || []) as DownloadTask[],
-      });
-    } catch {
-      setData({ screenshots: [], keylog_tasks: [], download_tasks: [] });
-      setError(t("loot.toast.load_failed"));
-      toast.error(t("loot.toast.load_failed"));
-    }
-    setLoading(false);
-  }, [t]);
-
-  useEffect(() => { loadLoot(); }, [loadLoot]);
 
   const filteredScreenshots = useMemo(() => data?.screenshots?.filter(s => !agentFilter || s.agent_id === agentFilter) || [], [data, agentFilter]);
   const filteredKeylogs = data?.keylog_tasks?.filter(k => {
@@ -99,13 +76,18 @@ export default function LootPage() {
 
   const deleteSelected = useCallback(() => {
     if (selectedItems.size === 0) return;
-    setCfm({msg: `Delete ${selectedItems.size} selected items?`, cb: async () => {
-      try {
-        await api.postJson("/loot/bulk-delete", { ids: [...selectedItems] });
-        setSelectedItems(new Set());
-        loadLoot();
-      } catch { toast.error(t("loot.toast.delete_failed")); }
-    }});
+    setCfm({
+      msg: t("loot.confirm_delete_selected", { count: selectedItems.size }),
+      cb: async () => {
+        try {
+          await api.postJson(paths.loot.bulkDelete, { ids: [...selectedItems] });
+          setSelectedItems(new Set());
+          loadLoot();
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : t("loot.toast.delete_failed"));
+        }
+      },
+    });
   }, [selectedItems, loadLoot, t]);
 
   const exportAll = (format: "json" | "csv" = "json") => {
@@ -148,7 +130,7 @@ export default function LootPage() {
       <PageHeader title={t("loot.page_title")} subtitle={t("loot.subtitle")}>
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={agentFilter || "all"} onValueChange={(v) => { setAgentFilter(v === "all" ? "" : v ?? ""); setSelectedItems(new Set()); }}>
-            <SelectTrigger className="w-full sm:w-48" aria-label="Filter by agent"><SelectValue placeholder={t("loot.all_agents")} /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-48" aria-label={t("loot.filter_agent_aria")}><SelectValue placeholder={t("loot.all_agents")} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("loot.all_agents")}</SelectItem>
               {allAgents.map(a => <SelectItem key={a} value={a}>{a.substring(0, 12)}</SelectItem>)}
@@ -168,7 +150,18 @@ export default function LootPage() {
         </div>
       </PageHeader>
 
-      <DataState loading={loading} error={error} onRetry={loadLoot}>
+      <DataState
+        loading={loading}
+        error={error}
+        onRetry={loadLoot}
+        loadingSkeleton={
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="rounded-xl h-24" />
+            ))}
+          </div>
+        }
+      >
       <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as LootTab); setSelectedItems(new Set()); }}>
         <TabsList className="mb-4">
           {tabs.map(tab => (
@@ -231,7 +224,7 @@ export default function LootPage() {
               <span>{t("loot.keylogs_title")}</span>
             </div>
             <div className="flex items-center gap-2">
-              <Input placeholder={t("loot.search_keylogs")} value={keylogSearch} onChange={e => setKeylogSearch(e.target.value)} className="h-8 w-48 text-xs" />
+              <Input placeholder={t("loot.search_keylogs")} value={keylogSearch} onChange={e => setKeylogSearch(e.target.value)} className="hidden sm:block h-8 w-44 text-xs" />
               <span className="text-xs text-muted-foreground">{filteredKeylogs.length}</span>
             </div>
           </div>
@@ -254,19 +247,18 @@ export default function LootPage() {
                     <AccordionItem key={k.id} value={k.id} className="border border-border rounded-xl overflow-hidden mb-3">
                       <AccordionHeader className="bg-muted/50">
                         <AccordionTrigger className="px-4 py-2 hover:bg-muted/80 flex-1">
-                          <div className="flex items-center justify-between w-full">
-                            <div className="flex items-center gap-x-3">
-                              <Terminal aria-hidden="true" className="w-4 h-4" />
-                              <span className="font-medium text-sm">{agentName}</span>
-                            </div>
-                            <div className="flex items-center gap-x-3" onClick={e => e.stopPropagation()}>
-                              <span className="text-xs text-muted-foreground">{formatTime(k.created_at)}</span>
-                              <Button variant="ghost" size="sm" onClick={() => downloadText(full, `keylog-${agentName}-${k.id}.txt`)} className="text-xs h-auto p-1 text-primary hover:text-emerald-700" aria-label={`Download keylog ${agentName}`}><Download aria-hidden="true" className="w-4 h-4" /></Button>
-                            </div>
+                          <div className="flex items-center gap-x-3 w-full">
+                            <Terminal aria-hidden="true" className="w-4 h-4 shrink-0" />
+                            <span className="font-medium text-sm truncate">{agentName}</span>
+                            <span className="ml-auto text-xs text-muted-foreground">{formatTime(k.created_at)}</span>
                           </div>
                         </AccordionTrigger>
                       </AccordionHeader>
                       <AccordionPanel>
+                        <div className="flex items-center justify-between px-4 py-1.5 border-b border-border bg-muted/30">
+                          <span className="text-xs text-muted-foreground">{t("loot.keylog")}</span>
+                          <Button variant="ghost" size="sm" onClick={() => downloadText(full, `keylog-${agentName}-${k.id}.txt`)} className="text-xs h-auto p-1 text-primary" aria-label={t("common.download")}><Download aria-hidden="true" className="w-4 h-4" /></Button>
+                        </div>
                         <div className="bg-background text-emerald-700 dark:text-emerald-300 font-mono text-xs p-4 max-h-[500px] overflow-y-auto whitespace-pre-wrap break-all">
                           {full}
                         </div>
@@ -338,9 +330,9 @@ export default function LootPage() {
           <DialogContent className="max-w-4xl bg-transparent border-0 p-0" showCloseButton={false}>
             <div className="absolute top-4 right-4 flex gap-2 z-10">
               <a href={modalImg} download>
-                <Button variant="secondary" className="gap-1"><Download aria-hidden="true" className="w-4 h-4" />Download</Button>
+                <Button variant="secondary" className="gap-1"><Download aria-hidden="true" className="w-4 h-4" />{t("common.download")}</Button>
               </a>
-              <Button variant="secondary" onClick={() => setModalImg(null)} className="w-10 h-10 p-0" aria-label="Close screenshot">
+              <Button variant="secondary" onClick={() => setModalImg(null)} className="w-10 h-10 p-0" aria-label={t("loot.close_screenshot")}>
                 <X aria-hidden="true" className="w-4 h-4" />
               </Button>
             </div>

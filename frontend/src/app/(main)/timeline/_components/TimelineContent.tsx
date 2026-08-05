@@ -5,9 +5,9 @@ import { EmptyState } from "@/components/UI";
 import { Card } from "@/components/ui/card";
 import { Pagination } from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Circle, Clock, Search } from "lucide-react";
+import { SearchInput } from "@/components/framework/SearchInput";
+import { Circle, Clock } from "lucide-react";
 import { EVENT_COLORS } from "../page";
 import type { TimelineEvent } from "../page";
 
@@ -51,13 +51,16 @@ export default function TimelineContent({
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        <div className="flex-1 min-w-[200px] relative">
-          <Search className="w-4 h-4" />
-          <Input placeholder="Search event content..." value={textSearch} onChange={e => onTextSearchChange(e.target.value)} className="pl-9" aria-label="Search event content" />
-        </div>
+        <SearchInput
+          value={textSearch}
+          onChange={onTextSearchChange}
+          placeholder={t("timeline.search_placeholder")}
+          className="flex-1 min-w-[200px]"
+          label={t("timeline.search_placeholder")}
+        />
         <span className="text-xs text-muted-foreground">
           <Circle className="w-4 h-4" />
-          Live Event Stream
+          {t("timeline.live_stream")}
         </span>
       </div>
 
@@ -65,19 +68,19 @@ export default function TimelineContent({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="text-center">
             <div className="text-2xl font-bold">{totalEvents}</div>
-            <div className="text-(--font-size-micro-sm) text-muted-foreground uppercase tracking-wider mt-0.5">Total Events</div>
+            <div className="text-(--fs-micro-sm) text-muted-foreground uppercase tracking-wider mt-0.5">{t("timeline.total_events")}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-emerald-600">{filteredEvents.filter(e => getEventType(e) === "agent_online").length}</div>
-            <div className="text-(--font-size-micro-sm) text-muted-foreground uppercase tracking-wider mt-0.5">Agent Events</div>
+            <div className="text-(--fs-micro-sm) text-muted-foreground uppercase tracking-wider mt-0.5">{t("timeline.agent_events")}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-amber-600">{filteredEvents.filter(e => getEventType(e) === "credential").length}</div>
-            <div className="text-(--font-size-micro-sm) text-muted-foreground uppercase tracking-wider mt-0.5">Credential Events</div>
+            <div className="text-(--fs-micro-sm) text-muted-foreground uppercase tracking-wider mt-0.5">{t("timeline.credential_events")}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-red-600">{filteredEvents.filter(e => getEventType(e) === "alert").length}</div>
-            <div className="text-(--font-size-micro-sm) text-muted-foreground uppercase tracking-wider mt-0.5">Alerts</div>
+            <div className="text-(--fs-micro-sm) text-muted-foreground uppercase tracking-wider mt-0.5">{t("timeline.alerts")}</div>
           </div>
         </div>
       </Card>
@@ -124,7 +127,7 @@ export default function TimelineContent({
                       </div>
                       <p className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">{getEventTitle(e)}</p>
                       {getEventDesc(e) && <p className="text-xs text-muted-foreground mt-0.5">{getEventDesc(e)}</p>}
-                      {url && <span className="text-(--font-size-micro-sm) text-indigo-500 dark:text-indigo-400 inline-block mt-1">View Details</span>}
+                      {url && <span className="text-(--fs-micro-sm) text-primary inline-block mt-1">{t("timeline.view_details")}</span>}
                     </div>
                   </div>
                 );

@@ -124,24 +124,7 @@ func (s *Server) startTCPProtoListener() {
 		return
 	}
 	listener := NewTCPProtoListener(addr)
-	listener.SetHandler(func(agentID string, reqJSON []byte) []byte {
-		var req beaconRequest
-		if len(reqJSON) > 0 {
-			if err := json.Unmarshal(reqJSON, &req); err != nil {
-				slog.Error("TCP Proto beacon handler unmarshal error", "err", err)
-			}
-		}
-		if req.UUID == "" {
-			req.UUID = agentID
-		}
-		resp := s.processBeacon(req, "")
-		respJSON, err := json.Marshal(resp)
-		if err != nil {
-			slog.Error("TCP Proto marshal response failed", "error", err)
-			return nil
-		}
-		return respJSON
-	})
+	listener.SetHandler(s.makeBeaconHandler())
 	if err := listener.Start(); err != nil {
 		slog.Error("Failed to start TCP Proto listener", "addr", addr, "err", err)
 	}

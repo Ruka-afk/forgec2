@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import type { RepoItem } from "./types";
@@ -7,8 +7,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/framework/SearchInput";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Box, Check, CheckCircle, Download, DownloadCloud, Layers, Link, Star, TriangleAlert } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 interface BOFRepoTabProps {
   repoItems: RepoItem[];
@@ -18,7 +20,7 @@ interface BOFRepoTabProps {
   onRate: (itemId: string, rating: number) => void;
 }
 
-function renderStars(rating: number | undefined, interactive: boolean, onRate?: (rating: number) => void) {
+function renderStars(rating: number | undefined, interactive: boolean, onRate?: (rating: number) => void, rateLabel = "Rate") {
   const r = rating ?? 0;
   return (
     <div className="flex items-center gap-0.5">
@@ -29,7 +31,7 @@ function renderStars(rating: number | undefined, interactive: boolean, onRate?: 
           key={star}
           onClick={() => interactive && onRate?.(star)}
           className={`${interactive ? "cursor-pointer hover:scale-110 transition-transform" : "cursor-default"} text-xs ${star <= r ? "text-warning" : "text-muted-foreground"}`}
-          aria-label="Rate"
+          aria-label={`${rateLabel} ${star}`}
         >
           <Star className="w-4 h-4" />
         </Button>
@@ -39,6 +41,7 @@ function renderStars(rating: number | undefined, interactive: boolean, onRate?: 
 }
 
 export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, onRate }: BOFRepoTabProps) {
+  const { t } = useI18n();
   const [importUrl, setImportUrl] = useState("");
   const [importName, setImportName] = useState("");
   const [importStatus, setImportStatus] = useState<{ loading: boolean; message: string; success: boolean } | null>(null);
@@ -50,7 +53,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
   const handleImportUrl = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!importUrl.trim()) return;
-    setImportStatus({ loading: true, message: "Importing BOF from URL...", success: false });
+    setImportStatus({ loading: true, message: t("bof.importing"), success: false });
     const result = await onImportUrl(importUrl, importName || undefined);
     setImportStatus({ loading: false, message: result.message, success: result.success });
     if (result.success) {
@@ -60,7 +63,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
   };
 
   const handleImportFromRepo = async (item: RepoItem) => {
-    setImportStatus({ loading: true, message: `Importing ${item.name}...`, success: false });
+    setImportStatus({ loading: true, message: t("bof.importing_name", { name: item.name || t("bof.unnamed") }), success: false });
     const result = await onImport(item);
     setImportStatus({ loading: false, message: result.message, success: result.success });
   };
@@ -89,7 +92,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
           </div>
           <div>
             <div className="text-xl font-bold text-foreground">{repoItems.length}</div>
-            <div className="text-xs text-muted-foreground">Community BOFs</div>
+            <div className="text-xs text-muted-foreground">{t("bof.community_bofs")}</div>
           </div>
         </Card>
         <Card className="p-4 sm:p-5 flex items-center gap-3">
@@ -98,7 +101,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
           </div>
           <div>
             <div className="text-xl font-bold text-foreground">{repoItems.filter((i) => i.imported).length}</div>
-            <div className="text-xs text-muted-foreground">Imported</div>
+            <div className="text-xs text-muted-foreground">{t("bof.stat_imported")}</div>
           </div>
         </Card>
         <Card className="p-4 sm:p-5 flex items-center gap-3">
@@ -107,21 +110,22 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
           </div>
           <div>
             <div className="text-xl font-bold text-foreground">{repoItems.filter((i) => (i.rating ?? 0) >= 4).length}</div>
-            <div className="text-xs text-muted-foreground">Highly Rated</div>
+            <div className="text-xs text-muted-foreground">{t("bof.highly_rated")}</div>
           </div>
         </Card>
       </div>
 
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/20 rounded-lg flex items-center justify-center text-primary">
+          <div className="w-8 h-8 bg-primary/10 dark:bg-primary/15 rounded-lg flex items-center justify-center text-primary">
             <Link className="w-4 h-4" />
           </div>
-          <span className="text-sm font-semibold text-foreground">Import from URL</span>
+          <span className="text-sm font-semibold text-foreground">{t("bof.import_from_url")}</span>
         </div>
         <form onSubmit={handleImportUrl} className="flex gap-3">
           <Input
-            placeholder="https://..."
+            aria-label={t("bof.url")}
+            placeholder={t("bof.repo_url_ph")}
             required
             pattern="https?://.*"
             value={importUrl}
@@ -129,13 +133,14 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
             className="flex-1 h-10 text-foreground"
           />
           <Input
-            placeholder="BOF Name (optional)"
+            aria-label={t("bof.bof_name")}
+            placeholder={t("bof.bof_name_optional")}
             value={importName}
             onChange={(e) => setImportName(e.target.value)}
             className="w-52 h-10 text-foreground"
           />
           <Button type="submit" className="px-5 h-10 rounded-xl text-sm font-medium transition-colors">
-            <Download className="w-4 h-4" />Import
+            <Download className="w-4 h-4" />{t("bof.import")}
           </Button>
         </form>
         {importStatus && (
@@ -156,23 +161,23 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Search</span>
-            <Input
-              placeholder="Search BOFs..."
-              value={repoSearch}
-              onChange={(e) => setRepoSearch(e.target.value)}
-              className="w-full h-9 text-foreground"
-            />
+          <SearchInput
+            placeholder={t("bof.search")}
+            label={t("bof.search")}
+            value={repoSearch}
+            onChange={setRepoSearch}
+            className="w-full"
+          />
         </div>
         <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Category</span>
+          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.category")}</span>
           <Select value={filterCategory} onValueChange={(v) => setFilterCategory(v ?? "")}>
-            <SelectTrigger className="w-full h-9 dark:text-foreground">
+            <SelectTrigger className="w-full dark:text-foreground">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {Array.from(new Set(repoItems.map((i) => i.category || "Uncategorized"))).map((c) => (
+              <SelectItem value="all">{t("bof.all_categories")}</SelectItem>
+              {Array.from(new Set(repoItems.map((i) => i.category || t("bof.uncategorized")))).map((c) => (
                 <SelectItem key={c} value={c}>
                   {c}
                 </SelectItem>
@@ -181,13 +186,13 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
           </Select>
         </div>
         <div>
-          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Architecture</span>
+          <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.architecture")}</span>
           <Select value={filterArch} onValueChange={(v) => setFilterArch(v ?? "")}>
-            <SelectTrigger className="w-full h-9 dark:text-foreground">
+            <SelectTrigger className="w-full dark:text-foreground">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Architectures</SelectItem>
+              <SelectItem value="all">{t("bof.all_architectures")}</SelectItem>
               {Array.from(new Set(repoItems.map((i) => i.architecture || "x64"))).map((a) => (
                 <SelectItem key={a} value={a}>
                   {a}
@@ -199,16 +204,16 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
       </div>
 
       <div className="flex items-center justify-between mb-4">
-        <span className="text-sm text-muted-foreground">{filteredItems.length} BOFs found</span>
+        <span className="text-sm text-muted-foreground">{t("bof.found", { count: filteredItems.length })}</span>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Sort by:</span>
+          <span className="text-xs text-muted-foreground">{t("bof.sort_by")}</span>
           <Select value={sortBy} onValueChange={(v) => setSortBy(v as "stars" | "name")}>
             <SelectTrigger className="h-8 bg-card text-xs text-foreground focus-visible:ring-3">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="stars">Popularity</SelectItem>
-              <SelectItem value="name">Name</SelectItem>
+              <SelectItem value="stars">{t("bof.sort_popularity")}</SelectItem>
+              <SelectItem value="name">{t("bof.sort_name")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -235,21 +240,21 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
                       <Box className="w-4 h-4" />
                     </div>
                     <div>
-                      <div className="text-sm font-semibold text-foreground font-mono">{item.name || "Unnamed"}</div>
+                      <div className="text-sm font-semibold text-foreground font-mono">{item.name || t("bof.unnamed")}</div>
                       <div className="text-xs text-muted-foreground">
-                        by {item.author || "Unknown"}
+                        {t("bof.by_author", { author: item.author || t("bof.unknown") })}
                         {item.category ? ` · ${item.category}` : ""}
                       </div>
                     </div>
                   </div>
                   <Badge variant={imported ? "success" : "outline"}>
-                    {imported ? "Imported" : "Available"}
+                    {imported ? t("bof.imported") : t("bof.available")}
                   </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{item.description || "No description"}</p>
+                <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{item.description || t("bof.no_description")}</p>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    {renderStars(item.rating, true, (rating) => onRate(itemId, rating))}
+                    {renderStars(item.rating, true, (rating) => onRate(itemId, rating), t("bof.rate"))}
                     <span className="flex items-center gap-1">
                       <Star className="w-4 h-4" />
                       {item.reviews ?? 0}
@@ -262,7 +267,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
                   </div>
                   <Button onClick={() => handleImportFromRepo(item)} disabled={!!imported} size="sm">
                     {imported ? <Check className="w-4 h-4 mr-1" /> : <DownloadCloud className="w-4 h-4 mr-1" />}
-                    {imported ? "Imported" : "Import"}
+                    {imported ? t("bof.imported") : t("bof.import")}
                   </Button>
                 </div>
               </Card>

@@ -7,6 +7,7 @@ import { useI18n } from "@/lib/i18n";
 import { useTheme, type Theme } from "@/lib/theme";
 import { useAppStore } from "@/lib/store";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { ShortcutsHelpButton } from "@/components/ShortcutsHelp";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -80,14 +81,14 @@ function SearchBox() {
         <Input id="global-search" type="text" value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("topbar.search_placeholder")}
-          className="h-9 pl-8 pr-16 text-[13px] placeholder:text-muted-foreground/70 bg-secondary/50 border-transparent focus:bg-card focus:border-border rounded-xl" />
+          className="h-9 pl-8 pr-16 text-(--fs-compact) placeholder:text-muted-foreground/70 bg-secondary/50 border-transparent focus:bg-card focus:border-border rounded-xl" />
         {query && (
           <Button type="button" onClick={() => setQuery("")}
             variant="ghost" size="icon-xs" className="absolute right-8 top-1/2 -translate-y-1/2" aria-label={t("common.clear_search")}>
             <X className="w-3 h-3" />
           </Button>
         )}
-        <kbd className="absolute right-2 top-1/2 -translate-y-1/2 text-(--font-size-micro-sm) text-muted-foreground/70 bg-secondary px-1.5 py-0.5 rounded border border-border">
+        <kbd className="absolute right-2 top-1/2 -translate-y-1/2 text-(--fs-micro-sm) text-muted-foreground/70 bg-secondary px-1.5 py-0.5 rounded border border-border">
           {typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "\u2318K" : "Ctrl+K"}
         </kbd>
       </form>
@@ -172,12 +173,18 @@ function LanguageSelector() {
   );
 }
 
+function formatNotifTime(raw: string): string {
+  const d = new Date(raw);
+  if (raw && !isNaN(d.getTime())) return d.toLocaleString();
+  return raw || new Date().toLocaleTimeString();
+}
+
 function NotificationDropdown() {
   const { t } = useI18n();
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
-    api.get("/notifications?page=1&pageSize=20")
+    api.get(paths.notifications.list("page=1&pageSize=20"))
       .then((data) => {
         const list = (data.notifications || data.data || []) as Array<Record<string, unknown>>;
         const mapped: Notification[] = list.slice(0, 20).map((n) => ({
@@ -186,7 +193,7 @@ function NotificationDropdown() {
             ? String(n.severity || n.type || "info")
             : "info") as Notification["type"],
           message: String(n.message || n.title || ""),
-          time: String(n.created_at || new Date().toLocaleTimeString()),
+          time: formatNotifTime(String(n.created_at || "")),
           read: Boolean(n.read),
         }));
         setNotifications(mapped);
@@ -203,16 +210,19 @@ function NotificationDropdown() {
   }, []);
 
   const handleWSMessage = useCallback((msg: { type: string; [key: string]: unknown }) => {
-    if (msg.type === "agent_online") pushNotification("success", `Agent online: ${String(msg.hostname || msg.agent_id || "").slice(0, 32)}`);
-    else if (msg.type === "agent_offline") pushNotification("warning", `Agent offline: ${String(msg.hostname || msg.agent_id || "").slice(0, 32)}`);
+    const name = String(msg.hostname || msg.agent_id || "").slice(0, 32);
+    if (msg.type === "agent_online") pushNotification("success", t("topbar.notif.agent_online", { name }));
+    else if (msg.type === "agent_offline") pushNotification("warning", t("topbar.notif.agent_offline", { name }));
     else if (msg.type === "task_update") {
       const status = String(msg.status || "");
-      if (status === "completed") pushNotification("success", `Task done [${String(msg.task_type || "")}]: ${String(msg.command || "").slice(0, 40)}`);
-      else if (status === "failed") pushNotification("error", `Task failed [${String(msg.task_type || "")}]: ${String(msg.command || "").slice(0, 40)}`);
-    } else if (msg.type === "credential_found") pushNotification("success", String(msg.description || "New credential found"));
-    else if (msg.type === "system_alert") pushNotification("warning", String(msg.message || msg.title || "System alert"));
-    else if (msg.type === "update_available") pushNotification("info", `Update available: ${String(msg.latest || "")}`);
-  }, [pushNotification]);
+      const type = String(msg.task_type || "");
+      const cmd = String(msg.command || "").slice(0, 40);
+      if (status === "completed") pushNotification("success", t("topbar.notif.task_done", { type, cmd }));
+      else if (status === "failed") pushNotification("error", t("topbar.notif.task_failed", { type, cmd }));
+    } else if (msg.type === "credential_found") pushNotification("success", t("topbar.notif.credential_found"));
+    else if (msg.type === "system_alert") pushNotification("warning", String(msg.message || msg.title || t("topbar.notif.system_alert")));
+    else if (msg.type === "update_available") pushNotification("info", t("topbar.notif.update_available", { version: String(msg.latest || "") }));
+  }, [pushNotification, t]);
 
   useWebSocket(handleWSMessage);
 
@@ -233,7 +243,7 @@ function NotificationDropdown() {
           <TooltipTrigger render={<Button variant="ghost" size="icon" className="relative" aria-label={t("topbar.notifications")} />}>
             <Bell className="w-5 h-5 text-muted-foreground" />
             {unreadCount > 0 && (
-              <Badge variant="destructive" className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-0.5 text-(--font-size-micro) font-bold rounded-full flex items-center justify-center animate-scale-in">
+              <Badge variant="destructive" className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-0.5 text-(--fs-micro) font-bold rounded-full flex items-center justify-center animate-scale-in">
                 {unreadCount > 99 ? "99+" : String(unreadCount)}
               </Badge>
             )}
@@ -241,19 +251,13 @@ function NotificationDropdown() {
           <TooltipContent>{t("topbar.notifications")}</TooltipContent>
         </Tooltip>
       }>
-        <Bell className="w-5 h-5 text-muted-foreground" />
-        {unreadCount > 0 && (
-          <Badge variant="destructive" className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-0.5 text-(--font-size-micro) font-bold rounded-full flex items-center justify-center animate-scale-in">
-            {unreadCount > 99 ? "99+" : String(unreadCount)}
-          </Badge>
-        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <div className="px-3 py-2 border-b border-border text-sm font-medium">
           <div className="flex items-center justify-between">
             <span>{t("topbar.notifications")}</span>
             {unreadCount > 0 && (
-              <Button variant="ghost" size="xs" onClick={markAllRead} className="text-(--font-size-micro-sm) text-primary hover:text-primary/80">
+              <Button variant="ghost" size="xs" onClick={markAllRead} className="text-(--fs-micro-sm) text-primary hover:text-primary/80">
                 {t("topbar.mark_all_read")}
               </Button>
             )}
@@ -272,7 +276,7 @@ function NotificationDropdown() {
                   <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${typeColors[n.type] || typeColors.info}`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-foreground truncate">{n.message}</p>
-                    <p className="text-(--font-size-micro-sm) text-muted-foreground/70 mt-0.5">{n.time}</p>
+                    <p className="text-(--fs-micro-sm) text-muted-foreground/70 mt-0.5">{n.time}</p>
                   </div>
                 </div>
               </div>
@@ -307,7 +311,7 @@ function UserDropdown() {
         </div>
         <div className="hidden md:block text-left">
           <div className="text-xs font-medium text-foreground">{name}</div>
-          <div className="text-(--font-size-micro-sm) text-muted-foreground/70">{role}</div>
+          <div className="text-(--fs-micro-sm) text-muted-foreground/70">{role}</div>
         </div>
         <span className="md:hidden text-xs font-medium text-foreground max-w-[60px] truncate">{name.slice(0, 6)}</span>
         <ChevronDown className="w-3 h-3 text-muted-foreground/70 hidden md:block" />
@@ -315,7 +319,7 @@ function UserDropdown() {
       <DropdownMenuContent align="end">
         <div className="px-3 py-2 border-b border-border text-sm font-medium">
           <div>{name}</div>
-          <div className="text-(--font-size-micro-sm) text-muted-foreground/70">Role: {role}</div>
+          <div className="text-(--fs-micro-sm) text-muted-foreground/70">{t("topbar.role", { role })}</div>
         </div>
         <DropdownMenuItem onClick={() => router.push("/settings")}>
           <Settings className="w-4 h-4" />{t("topbar.settings")}
@@ -325,7 +329,7 @@ function UserDropdown() {
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive"
-          onClick={() => { api.post("/logout").catch(() =>         toast.error(t("topbar.toast.logout_failed"))).finally(() => router.push("/login")); }}>
+          onClick={() => { api.post(paths.auth.logout).catch(() =>         toast.error(t("topbar.toast.logout_failed"))).finally(() => router.push("/login")); }}>
           <LogOut className="w-4 h-4" />
           {t("topbar.logout")}
         </DropdownMenuItem>
@@ -355,11 +359,11 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
 
       <div className="flex items-center gap-1">
         {/* WS Status */}
-        <div className="flex items-center gap-1.5 px-2 py-1 mr-2 shrink-0">
+        <div className="flex items-center gap-2 px-2.5 py-1 mr-2 shrink-0 rounded-full bg-secondary/60 dark:bg-secondary/40 border border-border/50">
           <Tooltip>
             <TooltipTrigger>
               <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : reconnectFailed ? "bg-red-500" : "bg-amber-500 animate-pulse"}`} />
-              <span className="text-(--font-size-micro-sm) text-muted-foreground/70 hidden lg:inline">{connected ? t("common.live") : reconnectFailed ? t("common.offline") : t("topbar.reconnecting")}</span>
+              <span className="text-(--fs-micro-sm) text-muted-foreground/70 hidden lg:inline">{connected ? t("common.live") : reconnectFailed ? t("common.offline") : t("topbar.reconnecting")}</span>
             </TooltipTrigger>
             <TooltipContent>{connected ? t("topbar.ws_connected") : reconnectFailed ? t("topbar.ws_lost") : t("topbar.reconnecting")}</TooltipContent>
           </Tooltip>
@@ -378,9 +382,9 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
         style={{ left: storeSidebarWidth }}
       >
         <AlertTriangle className="w-4 h-4 shrink-0" />
-        <span>Connection lost. Real-time updates paused.</span>
+        <span>{t("topbar.ws_disconnected_banner")}</span>
         <Button variant="outline" size="sm" className="ml-auto h-7 text-xs border-destructive/30 text-destructive hover:bg-destructive/10" onClick={reconnect}>
-          Reconnect
+          {t("topbar.reconnect")}
         </Button>
       </div>
     )}

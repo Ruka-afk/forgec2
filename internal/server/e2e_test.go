@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/testutil"
 	"github.com/forgec2/forgec2/pkg/encoding"
@@ -82,28 +81,18 @@ func TestE2E_Smoke_ListEndpoints(t *testing.T) {
 	})
 }
 
-// TestE2E_Beacon_Task_ResultFlow tests the full lifecycle:
+// TestE2E_Beacon_Task_ResultFlow tests the full v2 lifecycle:
 // 1. Agent registers via beacon
 // 2. Server assigns a task
 // 3. Agent receives task on next beacon
 // 4. Agent submits result
 // 5. Server stores result and marks task completed
 func TestE2E_Beacon_Task_ResultFlow(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	database := newContractDB(t)
-	s := &Server{
-		db:               database,
-		cfg:              &config.Config{},
-		beaconDedupCache: make(map[string]time.Time),
-		eventManager:     NewEventManager(database),
-		socksEngine:      newSocksRelayEngine(),
-	}
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	r.POST("/beacon", s.handleBeacon)
-	s.router = r
+	s, database := v2TestServer(t)
+	r := s.router
 
 	agentUUID := "11111111-2222-4333-8444-555555555555"
+	agent := newTCPTestAgent(t, agentUUID).withRegKey(v2TestMasterKey)
 
 	// Helper: clear dedup cache so each beacon is processed
 	clearDedup := func() {
@@ -112,12 +101,12 @@ func TestE2E_Beacon_Task_ResultFlow(t *testing.T) {
 		s.beaconDedupMu.Unlock()
 	}
 
-	// Helper: send a beacon and return the raw response body
-	sendBeacon := func(t *testing.T, body string) *httptest.ResponseRecorder {
+	// Helper: send a beacon frame and return the raw response body
+	sendFrame := func(t *testing.T, frame string) *httptest.ResponseRecorder {
 		t.Helper()
 		clearDedup()
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest(http.MethodPost, "/beacon", strings.NewReader(body))
+		req, _ := http.NewRequest(http.MethodPost, "/beacon", strings.NewReader(frame))
 		req.Header.Set("Content-Type", "application/json")
 		r.ServeHTTP(w, req)
 		if w.Code != http.StatusOK {
@@ -126,31 +115,55 @@ func TestE2E_Beacon_Task_ResultFlow(t *testing.T) {
 		return w
 	}
 
-	// Helper: decode a beacon response (strips format byte prefix)
-	decodeResp := func(t *testing.T, body []byte) beaconResponse {
+	// Helper: decode an encrypted beacon response (AAD = uuid||last frame seq)
+	decodeEncResp := func(t *testing.T, w *httptest.ResponseRecorder) beaconResponse {
 		t.Helper()
+		var encResp struct {
+			CipherB64 string `json:"c"`
+		}
+		if err := encoding.Unmarshal(w.Body.Bytes(), &encResp); err != nil {
+			t.Fatalf("failed to parse encrypted response: %v (body=%s)", err, w.Body.String())
+		}
+		plain, err := agent.decryptWithAAD(encResp.CipherB64, agent.aad(agent.seq))
+		if err != nil {
+			t.Fatalf("failed to decrypt response: %v", err)
+		}
 		var resp beaconResponse
-		if err := encoding.Unmarshal(body, &resp); err != nil {
+		if err := encoding.Unmarshal(plain, &resp); err != nil {
 			t.Fatalf("failed to unmarshal beacon response: %v", err)
 		}
 		return resp
 	}
 
-	// Step 1: First beacon — agent registers (no results, no acks)
+	// Step 1: Registration (v2 auth frame, binds identity, establishes session)
 	t.Run("step1_agent_registers", func(t *testing.T) {
-		beaconJSON := `{"uuid":"` + agentUUID + `","info":{"hostname":"TESTPC","username":"testuser","ip":"10.0.0.1"},"pv":1}`
-		sendBeacon(t, beaconJSON)
+		w := v2Post(t, s, agent.registerFrame())
+		if w.Code != http.StatusOK {
+			t.Fatalf("registration: expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+		var regResp struct {
+			Seq     uint64 `json:"seq"`
+			RegOK   bool   `json:"reg_ok"`
+			ECDHPub string `json:"ecdh_pub"`
+			Mac     string `json:"mac"`
+		}
+		if err := encoding.Unmarshal(w.Body.Bytes(), &regResp); err != nil {
+			t.Fatalf("register response parse: %v", err)
+		}
+		if !agent.verifyResponseMAC(regResp.Seq, regResp.ECDHPub, regResp.Mac) {
+			t.Fatalf("register response MAC mismatch")
+		}
+		if err := agent.establishFromServerKey(regResp.ECDHPub); err != nil {
+			t.Fatalf("establish session: %v", err)
+		}
 
 		// Verify agent was created
-		var agent db.Implant
-		if err := database.Where("id = ?", agentUUID).First(&agent).Error; err != nil {
+		var agentRow db.Implant
+		if err := database.Where("id = ?", agentUUID).First(&agentRow).Error; err != nil {
 			t.Fatalf("agent not found in DB: %v", err)
 		}
-		if agent.Hostname != "TESTPC" {
-			t.Errorf("hostname = %q, want TESTPC", agent.Hostname)
-		}
-		if agent.Username != "testuser" {
-			t.Errorf("username = %q, want testuser", agent.Username)
+		if !agentRow.Registered {
+			t.Errorf("agent must be registered=true, got false")
 		}
 	})
 
@@ -175,9 +188,13 @@ func TestE2E_Beacon_Task_ResultFlow(t *testing.T) {
 	// Step 3: Agent beacons again — should receive the pending task
 	var resp3 beaconResponse
 	t.Run("step3_agent_receives_task", func(t *testing.T) {
-		beaconJSON := `{"uuid":"` + agentUUID + `","pv":1}`
-		w := sendBeacon(t, beaconJSON)
-		resp3 = decodeResp(t, w.Body.Bytes())
+		inner, _ := json.Marshal(map[string]interface{}{
+			"uuid": agentUUID,
+			"pv":   2,
+			"info": map[string]string{"hostname": "TESTPC", "username": "testuser", "ip": "10.0.0.1"},
+		})
+		w := sendFrame(t, agent.encryptedFrame(inner))
+		resp3 = decodeEncResp(t, w)
 
 		if len(resp3.Tasks) == 0 {
 			t.Fatal("expected at least 1 task, got 0")
@@ -203,8 +220,13 @@ func TestE2E_Beacon_Task_ResultFlow(t *testing.T) {
 			Type:   "shell",
 			Output: "testdomain\\testuser",
 		}})
-		beaconJSON := `{"uuid":"` + agentUUID + `","pv":1,"results":` + string(resultsJSON) + `,"acks":[` + itoa(int(taskID)) + `]}`
-		sendBeacon(t, beaconJSON)
+		inner, _ := json.Marshal(map[string]interface{}{
+			"uuid":    agentUUID,
+			"pv":      2,
+			"results": json.RawMessage(resultsJSON),
+			"acks":    []uint{taskID},
+		})
+		sendFrame(t, agent.encryptedFrame(inner))
 	})
 
 	// Step 5: Verify result was stored
@@ -223,26 +245,25 @@ func TestE2E_Beacon_Task_ResultFlow(t *testing.T) {
 
 	// Step 6: Second beacon returns empty tasks (already completed)
 	t.Run("step6_no_more_tasks", func(t *testing.T) {
-		beaconJSON := `{"uuid":"` + agentUUID + `","pv":1}`
-		w := sendBeacon(t, beaconJSON)
-		resp := decodeResp(t, w.Body.Bytes())
+		inner, _ := json.Marshal(map[string]interface{}{"uuid": agentUUID, "pv": 2})
+		w := sendFrame(t, agent.encryptedFrame(inner))
+		resp := decodeEncResp(t, w)
 		if len(resp.Tasks) != 0 {
 			t.Errorf("expected 0 tasks, got %d", len(resp.Tasks))
 		}
 	})
 
-	// Step 7: Protocol version rejection
+	// Step 7: Protocol version rejection — v1 plaintext frames are rejected outright.
 	t.Run("step7_protocol_version_rejection", func(t *testing.T) {
-		beaconJSON := `{"uuid":"55555555-6666-4333-8444-777777777777","pv":0,"info":{"hostname":"old"}}`
+		beaconJSON := `{"uuid":"55555555-6666-4333-8444-777777777777","pv":1,"info":{"hostname":"old"}}`
 		clearDedup()
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest(http.MethodPost, "/beacon", strings.NewReader(beaconJSON))
 		req.Header.Set("Content-Type", "application/json")
 		r.ServeHTTP(w, req)
 
-		// pv=0 is not rejected (old agents that don't send pv)
-		if w.Code != http.StatusOK {
-			t.Errorf("pv=0 should be accepted for backward compat, got %d", w.Code)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("v1 plaintext frame must be rejected (breaking change), got %d; body=%s", w.Code, w.Body.String())
 		}
 	})
 }

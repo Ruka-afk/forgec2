@@ -117,7 +117,7 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label className="mb-1">{t("workflows.field_name")} *</Label>
-              <Input aria-label="Workflow name" name="wf-name" value={formName} onChange={e => setFormName(e.target.value)} placeholder={t("workflows.field_name")} />
+              <Input aria-label={t("workflows.a11y_name")} name="wf-name" value={formName} onChange={e => setFormName(e.target.value)} placeholder={t("workflows.field_name")} />
             </div>
             <div>
               <Label className="mb-1">{t("workflows.field_scope")}</Label>
@@ -134,7 +134,7 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
           </div>
           <div>
             <Label className="mb-1">{t("workflows.field_desc")}</Label>
-            <Input aria-label="Optional description" name="wf-desc" value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder={t("workflows.field_desc")} />
+            <Input aria-label={t("workflows.a11y_desc")} name="wf-desc" value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder={t("workflows.field_desc")} />
           </div>
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -146,8 +146,8 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
                 <div key={step.id ?? step._key ?? idx} className="p-2 rounded-lg bg-muted space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-xs text-muted-foreground min-w-[20px]">#{step.step_order}</span>
-                    <Button variant="ghost" size="icon-xs" onClick={() => moveStep(idx, "up")} disabled={idx === 0} aria-label="Move up"><ChevronUp className="w-3 h-3" /></Button>
-                    <Button variant="ghost" size="icon-xs" onClick={() => moveStep(idx, "down")} disabled={idx === formSteps.length - 1} aria-label="Move down"><ChevronDown className="w-3 h-3" /></Button>
+                    <Button variant="ghost" size="icon-xs" onClick={() => moveStep(idx, "up")} disabled={idx === 0} aria-label={t("workflows.move_up")}><ChevronUp className="w-3 h-3" /></Button>
+                    <Button variant="ghost" size="icon-xs" onClick={() => moveStep(idx, "down")} disabled={idx === formSteps.length - 1} aria-label={t("workflows.move_down")}><ChevronDown className="w-3 h-3" /></Button>
                     <Select value={step.task_type} onValueChange={v => { if (v !== null) updateStep(idx, "task_type", v); }}>
                       <SelectTrigger className="w-32"><SelectValue placeholder={t("common.type")} /></SelectTrigger>
                       <SelectContent>
@@ -161,25 +161,25 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
                         <SelectItem value="upload">upload</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Input aria-label="Command" name={`cmd-${idx}`} value={step.command} onChange={e => updateStep(idx, "command", e.target.value)} placeholder={t("common.command")} className="flex-1 h-8 px-2 text-xs font-mono" />
+                    <Input aria-label={t("workflows.a11y_command")} name={`cmd-${idx}`} value={step.command} onChange={e => updateStep(idx, "command", e.target.value)} placeholder={t("common.command")} className="flex-1 h-8 px-2 text-xs font-mono" />
                     <Select value={step.shell} onValueChange={v => { if (v !== null) updateStep(idx, "shell", v); }}>
-                      <SelectTrigger className="w-28"><SelectValue placeholder="Shell" /></SelectTrigger>
+                      <SelectTrigger className="w-28"><SelectValue placeholder={t("workflows.shell_ph")} /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="cmd">cmd</SelectItem>
                         <SelectItem value="powershell">powershell</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Input aria-label="Step timeout in seconds" name={`timeout-${idx}`} type="number" value={step.timeout_sec} onChange={e => updateStep(idx, "timeout_sec", parseInt(e.target.value) || 60)} className="w-16 h-8 px-2 text-xs" />
-                    <Label className="text-xs text-muted-foreground whitespace-nowrap">Repeats</Label>
-                    <Input type="number" min={0} value={step.repeat_count || 0} onChange={e => updateStep(idx, "repeat_count", Number(e.target.value))} className="h-8 text-xs w-16" />
-                    <Label className="text-xs text-muted-foreground whitespace-nowrap">Delay(s)</Label>
-                    <Input type="number" min={0} value={step.repeat_delay || 0} onChange={e => updateStep(idx, "repeat_delay", Number(e.target.value))} className="h-8 text-xs w-16" />
+                    <Input aria-label={t("workflows.a11y_timeout")} name={`timeout-${idx}`} type="number" value={step.timeout_sec} onChange={e => updateStep(idx, "timeout_sec", parseInt(e.target.value) || 60)} className="w-16 h-8 px-2 text-xs" />
+                    <Label className="text-xs text-muted-foreground whitespace-nowrap">{t("workflows.repeats")}</Label>
+                    <Input type="number" min={0} value={step.repeat_count || 0} onChange={e => updateStep(idx, "repeat_count", parseInt(e.target.value) || 0)} className="h-8 text-xs w-16" />
+                    <Label className="text-xs text-muted-foreground whitespace-nowrap">{t("workflows.delay")}</Label>
+                    <Input type="number" min={0} value={step.repeat_delay || 0} onChange={e => updateStep(idx, "repeat_delay", parseInt(e.target.value) || 0)} className="h-8 text-xs w-16" />
                     <Label className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap"><Checkbox checked={step.stop_on_failure} onCheckedChange={v => updateStep(idx, "stop_on_failure", v)} /> {t("workflows.stop")}</Label>
-                    <Button variant="destructive" size="icon-xs" onClick={() => removeStep(idx)} aria-label="Remove step">&times;</Button>
+                    <Button variant="destructive" size="icon-xs" onClick={() => removeStep(idx)} aria-label={t("workflows.remove_step")}>&times;</Button>
                   </div>
                   <div className="flex items-center gap-2 ml-7">
                     <Select value={step.condition || "none"} onValueChange={v => { if (v !== null) updateStep(idx, "condition", v === "none" ? "" : v); }}>
-                      <SelectTrigger className="w-40"><SelectValue placeholder="Condition" /></SelectTrigger>
+                      <SelectTrigger className="w-40"><SelectValue placeholder={t("workflows.condition_ph")} /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">No condition</SelectItem>
                         <SelectItem value="not_empty">Result not empty</SelectItem>
@@ -189,7 +189,7 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
                         <SelectItem value="equals('0')">equals(&apos;0&apos;)</SelectItem>
                       </SelectContent>
                     </Select>
-                    <span className="text-xs text-muted-foreground">On success:</span>
+                    <span className="text-xs text-muted-foreground">{t("workflows.on_success")}</span>
                     <Select value={step.on_success || "continue"} onValueChange={v => { if (v !== null) updateStep(idx, "on_success", v); }}>
                       <SelectTrigger className="h-8 text-xs w-32"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -202,7 +202,7 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
                         ))}
                       </SelectContent>
                     </Select>
-                    <span className="text-xs text-muted-foreground">On failure:</span>
+                    <span className="text-xs text-muted-foreground">{t("workflows.on_failure")}</span>
                     <Select value={step.on_failure || "continue"} onValueChange={v => { if (v !== null) updateStep(idx, "on_failure", v); }}>
                       <SelectTrigger className="h-8 text-xs w-32"><SelectValue /></SelectTrigger>
                       <SelectContent>

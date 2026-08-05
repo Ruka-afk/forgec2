@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -83,7 +84,7 @@ export default function InfrastructurePage() {
         <TabsContent value="config" className="mt-0">
           <Card className="overflow-hidden">
             <CardHeader className="px-6 py-4 border-b">
-              <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400"><Plug className="w-4 h-4" /></div>
+              <div className="w-8 h-8 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center text-primary"><Plug className="w-4 h-4" /></div>
               <div><CardTitle>{t("infra.select")} Listener</CardTitle><CardDescription>{t("infra.select_listener_hint")}</CardDescription></div>
             </CardHeader>
             <CardContent className="p-4 sm:p-5">
@@ -119,7 +120,7 @@ export default function InfrastructurePage() {
                 </div>
                 <div>
                   <Label className="text-xs">{t("infra.listen_port")}</Label>
-                  <Input aria-label="Listen port" name="input-2" type="number" value={port} onChange={e => setPort(Number(e.target.value))} />
+                  <Input aria-label={t("infra.listen_port")} name="input-2" type="number" value={port} onChange={e => setPort(Number(e.target.value))} />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -138,7 +139,7 @@ export default function InfrastructurePage() {
                   <span className="text-xs text-muted-foreground">{t("infra.ws_support")}</span>
                 </Label>
                 <Label className="flex items-center gap-2 cursor-pointer">
-                  <Input value={extC2Path} onChange={(e) => setExtC2Path(e.target.value)} placeholder={t("infra.ext_c2_placeholder")} className="h-9 text-xs" />
+                  <Input value={extC2Path} onChange={(e) => setExtC2Path(e.target.value)} placeholder={t("infra.ext_c2_placeholder")} className="text-xs" />
                   <span className="text-xs text-muted-foreground">{t("infra.ext_c2_path")}</span>
                 </Label>
               </div>
@@ -188,7 +189,7 @@ export default function InfrastructurePage() {
             <div className="lg:col-span-2">
               <Card className="overflow-hidden">
                 <CardHeader className="px-6 py-4 border-b">
-                  <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400"><Share2 className="w-4 h-4" /></div>
+                  <div className="w-8 h-8 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center text-primary"><Share2 className="w-4 h-4" /></div>
                   <div><CardTitle>{t("infra.redirectors")}</CardTitle><CardDescription>{t("infra.redirectors_desc")}</CardDescription></div>
                   <Button onClick={() => { setEditingRd(null); setRdName(""); setRdHost(""); setRdType("nginx"); setRdSSHUser("root"); setRdSSHPort(22); setRdSSHKey(""); setRdSSHPassword(""); setRdConfig(""); }} className="ml-auto">
                     <Plus className="w-4 h-4" /> {t("infra.add_redirector")}
@@ -227,7 +228,7 @@ export default function InfrastructurePage() {
                                   <Button onClick={() => {
                                     setCfm({msg: t("infra.delete_redirector_confirm"), cb: async () => {
                                       setDeleting(rd.id);
-                                      try { await api.del(`/redirectors/${rd.id}`); loadRedirectors(); } catch { toast.error(t("infrastructure.toast.delete_redirector_failed")); }
+                                      try { await api.del(paths.redirectors.one(rd.id)); loadRedirectors(); } catch { toast.error(t("infrastructure.toast.delete_redirector_failed")); }
                                       setDeleting(null);
                                     }});
                                   }} variant="destructive" size="sm">
@@ -257,7 +258,7 @@ export default function InfrastructurePage() {
                 <CardContent className="p-4 sm:p-5 space-y-4">
                   <div>
                     <Label className="text-xs">{t("common.name")}</Label>
-                    <Input aria-label="My Redirector" name="input-7" type="text" value={rdName} onChange={e => setRdName(e.target.value)} placeholder="My Redirector" />
+                    <Input aria-label={t("infra.name_label")} name="input-7" type="text" value={rdName} onChange={e => setRdName(e.target.value)} placeholder="My Redirector" />
                   </div>
                   <div>
                     <Label className="text-xs">{t("infra.host")}</Label>
@@ -284,7 +285,7 @@ export default function InfrastructurePage() {
                     </div>
                     <div>
                       <Label className="text-xs">{t("infra.ssh_port")}</Label>
-                      <Input aria-label="SSH port" name="input-11" type="number" value={rdSSHPort} onChange={e => setRdSSHPort(Number(e.target.value))} />
+                      <Input aria-label={t("infra.ssh_port")} name="input-11" type="number" value={rdSSHPort} onChange={e => setRdSSHPort(Number(e.target.value))} />
                     </div>
                   </div>
                   <div>
@@ -303,9 +304,9 @@ export default function InfrastructurePage() {
                           ? { name: rdName, host: rdHost, type: rdType, ssh_user: rdSSHUser, ssh_port: rdSSHPort, ssh_key: rdSSHKey, ssh_password: rdSSHPassword, config: rdConfig }
                           : { name: rdName, host: rdHost, type: rdType, ssh_user: rdSSHUser, ssh_port: rdSSHPort, ssh_key: rdSSHKey, ssh_password: rdSSHPassword };
                         if (editingRd) {
-                          await api.putJson(`/redirectors/${editingRd}`, payload);
+                          await api.putJson(paths.redirectors.one(editingRd), payload);
                         } else {
-                          await api.postJson("/redirectors", payload);
+                          await api.postJson(paths.redirectors.list, payload);
                         }
                         loadRedirectors();
                         setEditingRd(null);
@@ -317,11 +318,11 @@ export default function InfrastructurePage() {
                     <Button onClick={async () => {
                       setTestingSSH(true);
                       try {
-                        const data = await api.postJson("/redirectors/test-ssh", { host: rdHost, port: rdSSHPort, user: rdSSHUser, password: rdSSHPassword, ssh_key: rdSSHKey });
+                        const data = await api.postJson(paths.redirectors.testSsh, { host: rdHost, port: rdSSHPort, user: rdSSHUser, password: rdSSHPassword, ssh_key: rdSSHKey });
                         if (data.success) { toast.success(t("infrastructure.toast.ssh_ok", { stdout: String(data.stdout) })); } else { toast.error(t("infrastructure.toast.ssh_failed", { message: String(data.message) })); }
                       } catch { toast.error(t("infrastructure.toast.ssh_test_failed")); }
                       setTestingSSH(false);
-                    }} disabled={testingSSH} variant="outline" aria-label="Test SSH connection">
+                    }} disabled={testingSSH} variant="outline" aria-label={t("infra.test_ssh")}>
                       {testingSSH ? <Spinner size="sm" /> : <Plug className="w-4 h-4" />}
                     </Button>
                   </div>
@@ -347,16 +348,16 @@ export default function InfrastructurePage() {
                 </div>
                 <div>
                   <Label className="text-xs">{t("infra.listen_port")}</Label>
-                  <Input aria-label="Redirector listen port" name="input-16" type="number" value={rdGeneratePort} onChange={e => setRdGeneratePort(Number(e.target.value))} />
+                  <Input aria-label={t("infra.redirector_listen_port")} name="input-16" type="number" value={rdGeneratePort} onChange={e => setRdGeneratePort(Number(e.target.value))} />
                 </div>
                 <div className="flex items-center gap-4 pt-6">
                   <Label className="flex items-center gap-2 cursor-pointer">
                     <Checkbox checked={rdGenerateTLS} onCheckedChange={(v) => setRdGenerateTLS(!!v)} />
-                    <span className="text-xs text-muted-foreground">TLS</span>
+                    <span className="text-xs text-muted-foreground">{t("infrastructure.tls")}</span>
                   </Label>
                   <Label className="flex items-center gap-2 cursor-pointer">
                     <Checkbox checked={rdGenerateWS} onCheckedChange={(v) => setRdGenerateWS(!!v)} />
-                    <span className="text-xs text-muted-foreground">WebSocket</span>
+                    <span className="text-xs text-muted-foreground">{t("infrastructure.websocket")}</span>
                   </Label>
                 </div>
               </div>
@@ -384,9 +385,9 @@ export default function InfrastructurePage() {
                         config: data.config,
                       };
                       if (editingRd) {
-                        await api.putJson(`/redirectors/${editingRd}`, payload);
+                        await api.putJson(paths.redirectors.one(editingRd), payload);
                       } else {
-                        await api.postJson("/redirectors", payload);
+                        await api.postJson(paths.redirectors.list, payload);
                       }
                     }
                   } catch { toast.error(t("infrastructure.toast.generate_config_failed")); }
@@ -457,7 +458,7 @@ export default function InfrastructurePage() {
               </div>
               <div>
                 <Label className="text-xs"><Plug className="w-4 h-4" />{t("infra.http01_port")}</Label>
-                <Input aria-label="HTTP-01 challenge port" name="input-21" type="number" value={acmePort} onChange={e => setAcmePort(Number(e.target.value))} />
+                <Input aria-label={t("infra.http01_port")} name="input-21" type="number" value={acmePort} onChange={e => setAcmePort(Number(e.target.value))} />
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -466,7 +467,7 @@ export default function InfrastructurePage() {
                 <span className="text-xs text-muted-foreground">{t("infra.use_staging")}</span>
               </Label>
               <Button onClick={provisionCert} disabled={acmeProvisioning}
-                className="bg-cyan-600 hover:bg-cyan-700 text-white">
+                className="">
                 {acmeProvisioning ? <Spinner size="xs" /> : <Award className="w-4 h-4" />} {acmeProvisioning ? t("infra.provisioning") : t("infra.auto_provision")}
               </Button>
             </div>

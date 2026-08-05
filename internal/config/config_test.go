@@ -176,6 +176,48 @@ func TestAutoGenerateJWTSecret(t *testing.T) {
 	}
 }
 
+func TestAutoGenerateBeaconKey(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.yaml")
+
+	cfg := DefaultConfig()
+	cfg.Server.BeaconKey = ""
+	out, _ := yaml.Marshal(cfg)
+	os.WriteFile(path, out, 0644)
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded.Server.BeaconKey == "" {
+		t.Fatal("expected auto-generated beacon key, got empty")
+	}
+	if len(loaded.Server.BeaconKey) != 64 { // 32 bytes hex
+		t.Fatalf("expected 64-char hex beacon key, got %d chars", len(loaded.Server.BeaconKey))
+	}
+	if len(loaded.Server.JWTSecret) != 64 {
+		t.Fatalf("JWT secret should also be generated alongside, got %d chars", len(loaded.Server.JWTSecret))
+	}
+}
+
+func TestPreservesExplicitBeaconKey(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.yaml")
+
+	cfg := DefaultConfig()
+	cfg.Server.BeaconKey = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	out, _ := yaml.Marshal(cfg)
+	os.WriteFile(path, out, 0644)
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded.Server.BeaconKey != "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("explicit beacon key should be preserved, got %q", loaded.Server.BeaconKey)
+	}
+}
+
 func TestValidate(t *testing.T) {
 	tests := []struct {
 		name    string

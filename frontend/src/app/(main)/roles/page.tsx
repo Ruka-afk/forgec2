@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { ConfirmModal, EmptyState, PageHeader, PageSpinner } from "@/components/UI";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -76,14 +77,14 @@ export default function RolesPage() {
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
-    await api.postJson("/api/roles", { name: newName, description: newDesc, permissions: newPerms });
+    await api.postJson(paths.roles.list, { name: newName, description: newDesc, permissions: newPerms });
     setNewName(""); setNewDesc(""); setNewPerms([]); setShowCreate(false);
     loadRoles();
     toast.success(t("roles.created"));
   };
 
   const handleUpdate = async (role: Role) => {
-    await api.postJson(`/api/roles/${role.id}`, {
+    await api.postJson(paths.roles.one(role.id), {
       name: role.name,
       description: role.description,
       permissions: role.permissions,
@@ -96,7 +97,7 @@ export default function RolesPage() {
   const handleDelete = (id: number) => {
     setCfm({msg: t("roles.delete_confirm"), cb: async () => {
       try {
-        await api.del(`/api/roles/${id}`);
+        await api.del(paths.roles.one(id));
         toast.success(t("roles.deleted"));
         loadRoles();
       } catch {
@@ -128,7 +129,7 @@ export default function RolesPage() {
             <div className="space-y-3">
               <Input aria-label="Role name (e.g. operator-readonly)" placeholder={t("roles.name_ph")} value={newName}
                 onChange={(e) => setNewName(e.target.value)} />
-              <Textarea aria-label="Description" rows={2} placeholder={t("roles.desc_ph")} value={newDesc}
+              <Textarea aria-label={t("roles.a11y_desc_short")} rows={2} placeholder={t("roles.desc_ph")} value={newDesc}
                 onChange={(e) => setNewDesc(e.target.value)} />
               <PermSelector selected={newPerms} onToggle={(p) => setNewPerms(togglePerm(newPerms, p))} />
             </div>
@@ -147,9 +148,9 @@ export default function RolesPage() {
             <Card key={role.id} className="p-4 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30 transition-all cursor-pointer">
               {editRole?.id === role.id ? (
                 <div className="space-y-3">
-                  <Input aria-label="Role name" value={editRole.name}
+                  <Input aria-label={t("roles.a11y_name")} value={editRole.name}
                     onChange={(e) => setEditRole({ ...editRole, name: e.target.value })} />
-                  <Textarea aria-label="Role description" rows={2} value={editRole.description}
+                  <Textarea aria-label={t("roles.a11y_desc")} rows={2} value={editRole.description}
                     onChange={(e) => setEditRole({ ...editRole, description: e.target.value })} />
                   <PermSelector selected={editRole.permissions}
                     onToggle={(p) => setEditRole({ ...editRole, permissions: togglePerm(editRole.permissions, p) })} />
@@ -193,9 +194,10 @@ export default function RolesPage() {
 }
 
 function PermSelector({ selected, onToggle }: { selected: string[]; onToggle: (perm: string) => void }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-2">
-      <p className="text-sm font-medium">Permissions</p>
+      <p className="text-sm font-medium">{t("roles.permissions")}</p>
       {Object.entries(PERM_GROUPS).map(([group, perms]) => (
         <div key={group}>
            <p className="text-xs text-muted-foreground mb-1">{group}</p>

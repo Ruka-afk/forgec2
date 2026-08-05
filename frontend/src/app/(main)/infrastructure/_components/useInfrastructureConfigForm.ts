@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { downloadText } from "@/lib/download";
@@ -113,7 +114,7 @@ backend c2_backend
   const provisionCert = useCallback(async () => {
     setAcmeProvisioning(true);
     try {
-      await api.postJson("/infrastructure/acme/provision", { domain: acmeDomain, email: acmeEmail, port: acmePort, staging: acmeStaging });
+      await api.postJson(paths.infrastructure.acmeProvision, { domain: acmeDomain, email: acmeEmail, port: acmePort, staging: acmeStaging });
       setCertPath(`/etc/letsencrypt/live/${acmeDomain}/fullchain.pem`);
       setKeyPath(`/etc/letsencrypt/live/${acmeDomain}/privkey.pem`);
     } catch { toast.error(t("infrastructure.toast.provision_cert_failed")); }
@@ -122,7 +123,7 @@ backend c2_backend
 
   const exportProfile = useCallback(async () => {
     try {
-      const data = await api.get(`/infrastructure/profile/export?format=${exportFormat}`);
+      const data = await api.get(paths.infrastructure.profileExport(exportFormat));
       const content = exportFormat === "json" ? JSON.stringify(data, null, 2) : JSON.stringify(data);
       const ext = exportFormat === "json" ? "json" : exportFormat === "nginx" ? "conf" : "env";
       downloadText(content, `c2-profile-${exportFormat}.${ext}`, "application/json");

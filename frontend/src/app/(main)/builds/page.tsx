@@ -5,11 +5,15 @@ import Link from "next/link";
 import { API_BASE } from "@/lib/constants";
 import { downloadFromResponse } from "@/lib/download";
 import { api, getCsrfToken } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
+import { normalizeAgentList } from "@/lib/agents";
+import { firstNumber, normalizeListEnvelope } from "@/lib/envelope";
 import { toast } from "sonner";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { Spinner, PageHeader } from "@/components/UI";
+import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -83,6 +87,7 @@ export default function BuildsPage() {
   const [failedCount, setFailedCount] = useState(0);
   const [avgDuration, setAvgDuration] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filterPlatform, setFilterPlatform] = useState("all");
   const [filterStatus, setFilterStatus] = useState("");
   const [expandedBuild, setExpandedBuild] = useState<string | null>(null);
@@ -90,41 +95,54 @@ export default function BuildsPage() {
   const { t } = useI18n();
 
   const loadBuilds = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (filterPlatform !== "all") params.set("platform", filterPlatform);
       if (filterStatus) params.set("status", filterStatus);
       const [data, agents] = await Promise.all([
-        api.get(`/builds?${params}`),
-        api.get("/api/agents").catch(() => null),
+        api.get(paths.builds.list(params.toString())),
+        api.get(paths.agents.list()).catch(() => null),
       ]);
-      const logs: BuildLog[] = (data.logs || []) as BuildLog[];
+      const logs = normalizeListEnvelope(data, ["logs", "Logs", "builds", "data"]) as BuildLog[];
       setBuilds(logs);
-      setTotal((data.total ?? logs.length) as number);
-      const success = (data.success_count ?? logs.filter((l: BuildLog) => (l.status) === "success").length) as number;
-      const failed = (data.failed_count ?? logs.filter((l: BuildLog) => (l.status) === "failed").length) as number;
+      setTotal(firstNumber(data, ["total", "Total"], logs.length));
+      const success = firstNumber(
+        data,
+        ["success_count", "SuccessCount"],
+        logs.filter((l: BuildLog) => (l.status || l.Status) === "success").length,
+      );
+      const failed = firstNumber(
+        data,
+        ["failed_count", "FailedCount"],
+        logs.filter((l: BuildLog) => (l.status || l.Status) === "failed").length,
+      );
       setSuccessCount(success);
       setFailedCount(failed);
-      const durations = logs.filter((l: BuildLog) => l.duration).map((l: BuildLog) => {
-        const d = (l.duration || "0").replace("s", "");
+      const durations = logs.filter((l: BuildLog) => l.duration || l.Duration).map((l: BuildLog) => {
+        const d = (l.duration || l.Duration || "0").replace("s", "");
         return parseFloat(d) || 0;
       });
       setAvgDuration(durations.length > 0 ? Math.round(durations.reduce((a: number, b: number) => a + b, 0) / durations.length) : 0);
       if (agents) {
-        const list = (Array.isArray(agents) ? agents : agents.agents || []) as { version?: string; Version?: string }[];
+        const list = normalizeAgentList(agents) as { version?: string; Version?: string }[];
         const counts: Record<string, number> = {};
         list.forEach(a => { const v = a.version || a.Version || "unknown"; counts[v] = (counts[v] || 0) + 1; });
         setVersionDist(Object.entries(counts).map(([version, count]) => ({ version, count })).sort((a, b) => b.count - a.count));
       }
-    } catch {
+    } catch (e) {
       setBuilds([]);
       setTotal(0);
       setSuccessCount(0);
       setFailedCount(0);
       setAvgDuration(0);
-      toast.error(t("builds.toast.load_failed"));
+      const msg = e instanceof Error ? e.message : t("builds.toast.load_failed");
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [filterPlatform, filterStatus, t]);
 
   useEffect(() => { loadBuilds(); }, [loadBuilds]);
@@ -134,7 +152,7 @@ export default function BuildsPage() {
     const buildId = build.id;
     if (!buildId) return;
     try {
-      const resp = await fetch(`${API_BASE}/builds/${buildId}/download`, { headers: { "X-CSRF-Token": getCsrfToken() } });
+      const resp = await fetch(`${API_BASE}${paths.builds.download(String(buildId))}`, { headers: { "X-CSRF-Token": getCsrfToken() } });
       if (!resp.ok) {
         toast.error(t("builds.toast.download_failed"));
         return;
@@ -184,7 +202,7 @@ export default function BuildsPage() {
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("builds.total_builds")}</div>
               <div className="text-2xl font-bold tabular-nums text-primary mt-2">{total}</div>
             </div>
-            <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center">
               <Hammer className="w-4 h-4" />
             </div>
           </div>
@@ -269,7 +287,7 @@ export default function BuildsPage() {
           <span className="text-sm font-semibold text-muted-foreground ml-2">{t("builds.status")}</span>
           <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v ?? "")}>
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="All" />
+              <SelectValue placeholder={t("builds.filter_all")} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="">{t("builds.filter_all")}</SelectItem>
@@ -287,29 +305,37 @@ export default function BuildsPage() {
         </div>
       </Card>
 
-      <div className="space-y-3">
-        {loading ? (
-          [1, 2, 3].map((i) => (
-            <Card key={i} className="p-4 sm:p-5">
-              <div className="flex items-center gap-4">
-                <Skeleton className="w-10 h-10 rounded-xl" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-3 w-40" />
-                  <Skeleton className="h-2 w-60" />
+      <DataState
+        loading={loading}
+        error={error}
+        onRetry={() => void loadBuilds()}
+        empty={!loading && !error && builds.length === 0}
+        emptyIcon={Hammer}
+        emptyTitle={t("builds.empty")}
+        emptyMessage={t("builds.generate_new_implant")}
+        emptyAction={
+          <Button render={<Link href="/generate" />}>
+            <Plus className="w-4 h-4" /> {t("builds.go_generate")}
+          </Button>
+        }
+        loadingSkeleton={
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="p-4 sm:p-5">
+                <div className="flex items-center gap-4">
+                  <Skeleton className="w-10 h-10 rounded-xl" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3 w-40" />
+                    <Skeleton className="h-2 w-60" />
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ))
-        ) : builds.length === 0 ? (
-          <Card className="p-12 text-center">
-            <Hammer className="w-4 h-4" />
-            <p className="text-sm font-medium text-muted-foreground">{t("builds.empty")}</p>
-            <p className="text-xs mt-2 text-muted-foreground">
-              <Link href="/generate" className="text-primary hover:underline">{t("builds.go_generate")}</Link> {t("builds.generate_new_implant")}
-            </p>
-          </Card>
-        ) : (
-          builds.map((build, idx) => {
+              </Card>
+            ))}
+          </div>
+        }
+      >
+      <div className="space-y-3">
+          {builds.map((build, idx) => {
             const id = build.id || String(idx);
             const status = build.status || "unknown";
             const platform = build.platform || "";
@@ -332,12 +358,12 @@ export default function BuildsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-semibold text-foreground">#{String(id).substring(0, 8)}</span>
-                        <Badge variant={platformColor(platform) as "success" | "outline"} className="px-2 py-0.5 text-(--font-size-micro-sm) rounded-lg">
+                        <Badge variant={platformColor(platform) as "success" | "outline"} className="px-2 py-0.5 text-(--fs-micro-sm) rounded-lg">
                           {platformIcon(platform)} {platform || "unknown"}
                         </Badge>
-                        <Badge variant="outline" className="px-2 py-0.5 text-(--font-size-micro-sm) rounded-lg">{build.format || "-"}</Badge>
+                        <Badge variant="outline" className="px-2 py-0.5 text-(--fs-micro-sm) rounded-lg">{build.format || "-"}</Badge>
                         <Badge variant={status === "success" ? "success" : status === "failed" ? "destructive" : "outline"}
-                          className="px-2 py-0.5 text-(--font-size-micro-sm) rounded-full">
+                          className="px-2 py-0.5 text-(--fs-micro-sm) rounded-full">
                           <span className={`w-1.5 h-1.5 rounded-full inline-block mr-1 ${info.bg} ${isBuilding ? "animate-pulse" : ""}`}></span>
                           {info.label}
                         </Badge>
@@ -352,19 +378,19 @@ export default function BuildsPage() {
                     <div className="flex items-center gap-2 shrink-0">
                       <Tooltip>
                         <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => setExpandedBuild(isExpanded ? null : id)}
-                            aria-label="Toggle logs" />}>
+                            aria-label={t("builds.toggle_logs")} />}>
                           <Terminal className="w-4 h-4" />
                         </TooltipTrigger>
-                        <TooltipContent>Logs</TooltipContent>
+                        <TooltipContent>{t("builds.logs")}</TooltipContent>
                       </Tooltip>
                       {(status === "success" || build.artifact_path) && (
                         <Tooltip>
                           <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => handleDownload(build)}
-                              className="text-primary hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
-                              aria-label="Download artifact" />}>
+                              className="text-primary hover:bg-primary/10 dark:hover:bg-primary/20"
+                              aria-label={t("builds.download_artifact")} />}>
                             <Download className="w-4 h-4" />
                           </TooltipTrigger>
-                          <TooltipContent>Download Artifact</TooltipContent>
+                          <TooltipContent>{t("builds.download_artifact")}</TooltipContent>
                         </Tooltip>
                       )}
                     </div>
@@ -387,7 +413,7 @@ export default function BuildsPage() {
                         <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                           <Terminal className="w-4 h-4" /> {t("builds.log_title")}
                         </span>
-                        <span className="text-(--font-size-micro-sm) text-muted-foreground font-mono">{stdout.split("\n").length} {t("builds.lines")}</span>
+                        <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{stdout.split("\n").length} {t("builds.lines")}</span>
                       </div>
                       <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed">
                         {stdout || <span className="text-muted-foreground italic">{t("builds.no_output")}</span>}
@@ -402,9 +428,9 @@ export default function BuildsPage() {
                 )}
               </Card>
             );
-          })
-        )}
+          })}
       </div>
+      </DataState>
     </div>
   );
 }

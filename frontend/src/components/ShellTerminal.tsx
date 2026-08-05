@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { runTask } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { fetchAgentBeaconTiming, loadCommandHistory, saveCommandHistory } from "@/lib/shell";
 import { getCompletions } from "@/lib/completions";
 import { highlightOutput } from "@/lib/highlight";
@@ -44,6 +45,10 @@ export default function ShellTerminal({
     if (typeof window === "undefined") return 14;
     return Number(localStorage.getItem(KEY)) || 14;
   });
+  const fontSizeRef = useRef(fontSize);
+  fontSizeRef.current = fontSize;
+  const osTypeRef = useRef(osType);
+  osTypeRef.current = osType;
   const [beaconHint, setBeaconHint] = useState("");
 
   const [promptChar] = useState(() => PROMPT_CHARS[Math.floor(Math.random() * PROMPT_CHARS.length)]);
@@ -75,7 +80,7 @@ export default function ShellTerminal({
       try {
         const st = await runTask(
           agentId,
-          `/agents/${agentId}/shell`,
+          paths.agents.cmd(agentId, "shell"),
           {
             method: "postJson",
             body: { command: cmd, shell: shellType },
@@ -140,7 +145,7 @@ export default function ShellTerminal({
 
       term = new Terminal({
         cursorBlink: true,
-        fontSize,
+        fontSize: fontSizeRef.current,
         fontFamily: "'JetBrains Mono', 'Cascadia Code', Consolas, monospace",
         theme: {
           background: "#020617",
@@ -240,7 +245,7 @@ export default function ShellTerminal({
           if (!line) return;
           const promptLen = plainPromptRef.current.length;
           const currentInput = line.translateToString().substring(promptLen).trim();
-          const matches = getCompletions(currentInput, osType || "windows");
+          const matches = getCompletions(currentInput, osTypeRef.current || "windows");
 
           if (matches.length === 1) {
             const completed = matches[0];
@@ -282,7 +287,7 @@ export default function ShellTerminal({
       termRef.current = null;
       fitRef.current = null;
     };
-  }, [agentId, executeCommand, writeln, fontSize, writePrompt, osType]);
+  }, [agentId, executeCommand, writeln, writePrompt]);
 
   useEffect(() => {
     if (termRef.current) termRef.current.options.fontSize = fontSize;
@@ -312,7 +317,7 @@ export default function ShellTerminal({
         <div className="shrink-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <span className="w-2 h-2 bg-emerald-500 rounded-full shrink-0"></span>
-            <span className="font-semibold text-sm text-foreground truncate">Shell</span>
+            <span className="font-semibold text-sm text-foreground truncate">{t("shell.title")}</span>
             <span className="text-xs text-muted-foreground font-mono uppercase">{shellType}</span>
             <Tooltip>
               <TooltipTrigger>
@@ -332,7 +337,7 @@ export default function ShellTerminal({
                   setFontSize(val);
                   localStorage.setItem(KEY, String(val));
                 }}>
-                <SelectTrigger className="w-auto">
+                <SelectTrigger className="w-auto" aria-label={t("shell.font_size")}>
                   <SelectValue placeholder="14" />
                 </SelectTrigger>
                 <SelectContent>
@@ -392,7 +397,7 @@ export default function ShellTerminal({
       />
       {isDragging && (
         <div className="absolute inset-0 bg-primary/10 border-2 border-dashed border-primary rounded-lg flex items-center justify-center z-10 pointer-events-none">
-          <span className="text-primary font-medium">Drop file to upload</span>
+          <span className="text-primary font-medium">{t("shell.drop_file")}</span>
         </div>
       )}
       {loading && (
@@ -400,7 +405,7 @@ export default function ShellTerminal({
            <Spinner size="xs" /> Executing...
         </div>
       )}
-      <div className="shrink-0 bg-background border-t border-border px-4 py-1.5 text-(--font-size-micro-sm) text-muted-foreground/70 flex items-center justify-between">
+      <div className="shrink-0 bg-background border-t border-border px-4 py-1.5 text-(--fs-micro-sm) text-muted-foreground/70 flex items-center justify-between">
         <span>
            <Keyboard className="w-3 h-3 mr-1 inline" />
           {osType === "linux" ? "Ctrl+D" : "Ctrl+Z"} · Ctrl+C: interrupt

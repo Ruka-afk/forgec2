@@ -27,6 +27,7 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		ListenerID    uint   `form:"listener_id"`
 		Proxy         string `form:"proxy"`
 		CryptoKey     string `form:"crypto_key"`
+		BeaconKey     string `form:"beacon_key"`
 	}
 	if err := c.ShouldBind(&form); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request parameters")
@@ -52,6 +53,11 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		interval = form.BeaconTime
 	}
 
+	beaconKey := form.BeaconKey
+	if beaconKey == "" {
+		beaconKey = s.serverBeaconKey()
+	}
+
 	cfg := payload.ImplantConfig{
 		C2URL:          form.C2URL,
 		Protocol:       form.Protocol,
@@ -66,6 +72,8 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		Profile:       form.Profile,
 		ListenerID:    form.ListenerID,
 		Proxy:         form.Proxy,
+		CryptoKey:     form.CryptoKey,
+		BeaconKey:     beaconKey,
 	}
 
 	ps1Code, err := payload.GeneratePowerShellSource(cfg, s.implantDataDir())
@@ -103,6 +111,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		PayloadType      string `form:"payload_type"` // "exe", "ps1", "linux"
 		Proxy            string `form:"proxy"`
 		CryptoKey        string `form:"crypto_key"`
+		BeaconKey        string `form:"beacon_key"`
 		P2PMode          string `form:"p2p_mode"`
 		P2PParent        string `form:"p2p_parent"`
 		P2PListenAddr    string `form:"p2p_listen_addr"`
@@ -167,6 +176,11 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		form.BeaconTransport = "tcp"
 	}
 
+	beaconKey := form.BeaconKey
+	if beaconKey == "" {
+		beaconKey = s.serverBeaconKey()
+	}
+
 	cfg := payload.ImplantConfig{
 		C2URL:            form.C2URL,
 		Protocol:         form.Protocol,
@@ -187,6 +201,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		DNSServer:     form.DNSServer,
 		Proxy:         form.Proxy,
 		CryptoKey:     form.CryptoKey,
+		BeaconKey:     beaconKey,
 	}
 
 	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")

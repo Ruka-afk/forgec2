@@ -3,7 +3,7 @@ package server
 import "time"
 
 const (
-	ServerVersion = "2.4.0"
+	ServerVersion = "2.5.0"
 
 	BeaconRateLimit  = 100
 	BeaconRateWindow = 1 * time.Minute
@@ -25,19 +25,20 @@ const (
 	MaxPendingTasksPerAgent = 50               // max pending tasks per agent before rejecting new ones
 	MaxCommandLength        = 10000            // max characters in a command string
 	MaxNotesLength          = 5000             // max characters in agent notes/tags
+	MaxChatMessageBytes     = 8 * 1024         // max bytes in a chat message
 	MaxShellcodeSize        = 10 * 1024 * 1024 // 10 MB max decoded shellcode payload
 	MaxTechniqueLength      = 64               // max characters in an injection/spawn technique name
 	MaxTargetLength         = 128              // max characters in a spawn target executable
 
 	// ─── Map Size Limits ───
-	MaxWSConnections       = 256              // max concurrent WebSocket dashboard clients
-	MaxExtC2QueuePerChan   = 200              // max queued tasks per ext C2 channel before dropping
-	MaxBuildJobs           = 50               // max concurrent build jobs
-	MaxScreenMonitors      = 100              // max screen monitor registrations
-	MaxRPortFwdListeners   = 100              // max reverse port forward listeners
-	MaxExtraListeners      = 64               // max dynamically created listeners
-	MaxDomainFrontStatus   = 128              // max domain fronting entries
-	StaleMapCleanupAge     = 30 * time.Minute // clean map entries older than this
+	MaxWSConnections     = 256              // max concurrent WebSocket dashboard clients
+	MaxExtC2QueuePerChan = 200              // max queued tasks per ext C2 channel before dropping
+	MaxBuildJobs         = 50               // max concurrent build jobs
+	MaxScreenMonitors    = 100              // max screen monitor registrations
+	MaxRPortFwdListeners = 100              // max reverse port forward listeners
+	MaxExtraListeners    = 64               // max dynamically created listeners
+	MaxDomainFrontStatus = 128              // max domain fronting entries
+	StaleMapCleanupAge   = 30 * time.Minute // clean map entries older than this
 
 	// SOCKS Relay
 	SocksMaxFrameSize   = 64 * 1024       // 64 KB per relay frame
@@ -149,10 +150,10 @@ const (
 	AuditLogDetailsMaxLen  = 600
 
 	// ─── Auth / Session ───
-	DefaultSessionHours  = 24
-	SecondsPerHour       = 3600
-	RememberMeMaxAgeSec  = 7 * 86400
-	LangCookieMaxAgeSec  = 365 * 24 * 3600
+	DefaultSessionHours = 24
+	SecondsPerHour      = 3600
+	RememberMeMaxAgeSec = 7 * 86400
+	LangCookieMaxAgeSec = 365 * 24 * 3600
 
 	// ─── Validation Bounds ───
 	MinOfflineThresholdSec  = 5
@@ -196,14 +197,19 @@ const (
 	BeaconDedupStaleAge   = 30 * time.Second // entries older than this are purged
 	BeaconDedupCleanup    = 60 * time.Second // cleanup ticker interval
 
+	// ─── Beacon Protocol v2 ───
+	// BeaconSessionRekeyMessages is the session message count after which the
+	// agent is asked to rotate keying material with a fresh handshake.
+	BeaconSessionRekeyMessages = 10000
+
 	// ─── Batch / Request Limits ───
-	MaxBatchAgentLimit      = 500
-	MaxTaskIDsPerRequest    = 200
-	MaxBulkCancelLimit      = 100
-	PasswordHistoryMax      = 10
-	DefaultBOFLimit         = 20
-	TopoRecencyMinutes      = 30
-	TopoAgentLimit          = 30
+	MaxBatchAgentLimit   = 500
+	MaxTaskIDsPerRequest = 200
+	MaxBulkCancelLimit   = 100
+	PasswordHistoryMax   = 10
+	DefaultBOFLimit      = 20
+	TopoRecencyMinutes   = 30
+	TopoAgentLimit       = 30
 
 	// ─── Plugin / Callback Timeouts ───
 	PluginHookTimeout = 30 * time.Second
@@ -221,8 +227,8 @@ const (
 	TaskWorkerPoolSize      = 32
 
 	// ─── Agent Offline / Stale ───
-	DefaultOfflineThresholdSec = 60
-	StaleThresholdMultiplier   = 3
+	DefaultOfflineThresholdSec  = 60
+	StaleThresholdMultiplier    = 3
 	DefaultCleanupRetentionDays = 30
 
 	// ─── Backup ───

@@ -32,7 +32,7 @@ export function EasterEggPopup({ open, onClose, hostname }: EasterEggPopupProps)
           <h3 className="text-sm font-bold text-foreground mb-2">{t("agents.easter_egg_title")}</h3>
           <p className="text-xs text-muted-foreground leading-relaxed">{message}</p>
           {hostname && (
-            <p className="text-(--font-size-micro-sm) text-muted-foreground/50 mt-3">
+            <p className="text-(--fs-micro-sm) text-muted-foreground/50 mt-3">
               {t("agents.easter_egg_target")}: {hostname}
             </p>
           )}

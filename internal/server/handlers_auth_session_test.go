@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/server/middleware"
@@ -133,9 +134,10 @@ func TestHandleGetCurrentUser_Active(t *testing.T) {
 	var resp struct {
 		Success bool `json:"success"`
 		Data    struct {
-			ID       uint   `json:"id"`
-			Username string `json:"username"`
-			Role     string `json:"role"`
+			ID         uint   `json:"id"`
+			Username   string `json:"username"`
+			Role       string `json:"role"`
+			SessionExp int64  `json:"session_exp"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
@@ -149,6 +151,53 @@ func TestHandleGetCurrentUser_Active(t *testing.T) {
 	}
 	if resp.Data.Username != "current-user" {
 		t.Errorf("expected username=current-user, got %s", resp.Data.Username)
+	}
+	if resp.Data.SessionExp != 0 {
+		t.Errorf("expected session_exp to be absent (0) when not set in context, got %d", resp.Data.SessionExp)
+	}
+}
+
+func TestHandleGetCurrentUser_ReturnsSessionExp(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := newContractDB(t)
+	s := &Server{db: database}
+
+	user := db.User{
+		Username: "exp-user",
+		Role:     "user",
+		IsActive: true,
+	}
+	if err := database.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	exp := time.Now().Add(24 * time.Hour)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/api/current-user", nil)
+	c.Set("user_id", user.ID)
+	c.Set("session_exp", exp)
+
+	s.handleGetCurrentUser(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			SessionExp int64 `json:"session_exp"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+	}
+	if resp.Data.SessionExp == 0 {
+		t.Fatalf("expected session_exp to be present, got %d", resp.Data.SessionExp)
+	}
+	wantMs := exp.UnixMilli()
+	if resp.Data.SessionExp != wantMs {
+		t.Errorf("expected session_exp=%d, got %d", wantMs, resp.Data.SessionExp)
 	}
 }
 

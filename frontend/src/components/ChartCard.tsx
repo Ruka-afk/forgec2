@@ -33,7 +33,7 @@ export function ChartCard({ title, icon: Icon, iconColor, children, onRefresh, l
   return (
     <Card role="region" aria-label={title} className={`p-5 sm:p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30 ${className || ""}`}>
       <div className="flex items-center justify-between mb-4 pb-4 border-b border-border/50">
-        <div className="font-semibold text-foreground flex items-center gap-x-2.5 text-(--font-size-body-sm)">
+        <div className="font-semibold text-foreground flex items-center gap-x-2.5 text-(--fs-body-sm)">
           <IconBadge
             icon={Icon}
             color={iconColor.includes("emerald") ? "emerald" : iconColor.includes("amber") ? "amber" : iconColor.includes("red") ? "red" : "primary"}

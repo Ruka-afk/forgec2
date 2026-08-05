@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useWS } from "@/lib/wsContext";
 import { formatTime } from "@/lib/utils";
 import { PageHeader, Spinner } from "@/components/UI";
@@ -40,7 +41,7 @@ export default function ChatPage() {
   const loadHistory = useCallback(async (silent = false, signal?: AbortSignal) => {
     if (!silent) setLoading(true);
     try {
-      const data = await api.get(`/chat/history?channel=${currentChannel}`, { signal });
+      const data = await api.get(paths.chat.history(currentChannel), { signal });
       const msgs = (data.messages as ChatMsg[]) || [];
       setMessages(msgs.slice(-500));
     } catch (e) { if ((e as Error).name !== 'AbortError') { setMessages([]); toast.error(t("chat.load_history_failed")); } }
@@ -49,7 +50,7 @@ export default function ChatPage() {
 
   const loadChannels = useCallback(async (signal?: AbortSignal) => {
     try {
-      const data = await api.get("/chat/channels", { signal });
+      const data = await api.get(paths.chat.channels, { signal });
       if ((data.channels as ChannelInfo[])?.length > 0) setChannels(data.channels as ChannelInfo[]);
     } catch (e) { if ((e as Error).name !== 'AbortError') toast.error(t("chat.load_channels_failed")); }
   }, [t]);
@@ -79,7 +80,7 @@ export default function ChatPage() {
     setInput("");
     setSending(true);
     try {
-      const data = await api.postJson("/chat/send", { message: msg, channel: currentChannel });
+      const data = await api.postJson(paths.chat.send, { message: msg, channel: currentChannel });
       if (!data.success) { toast.error((data.error as string) || t("chat.send_failed")); setInput(msg); return; }
       loadHistory(true);
       loadChannels();
@@ -107,7 +108,7 @@ export default function ChatPage() {
               onClick={() => setCurrentChannel(c.channel)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrentChannel(c.channel); } }}>
               <span># {c.channel}</span>
-              <span className="text-(--font-size-xs-sm) text-muted-foreground">{c.message_count}</span>
+              <span className="text-(--fs-xs-sm) text-muted-foreground">{c.message_count}</span>
             </div>
           ))}
         </div>
@@ -125,8 +126,8 @@ export default function ChatPage() {
             ) : (
               messages.map(m => (
                 <div key={m.id} className="px-2.5 py-1.5 rounded-lg bg-card">
-                  <span className="font-semibold text-xs text-indigo-600 dark:text-indigo-400 mr-2">{m.username}</span>
-                  <span className="text-(--font-size-xs-sm) text-muted-foreground">{formatTime(m.created_at)}</span>
+                  <span className="font-semibold text-xs text-primary mr-2">{m.username}</span>
+                  <span className="text-(--fs-xs-sm) text-muted-foreground">{formatTime(m.created_at)}</span>
                   <div className="mt-1 text-sm text-foreground whitespace-pre-wrap break-words">{m.message}</div>
                 </div>
               ))

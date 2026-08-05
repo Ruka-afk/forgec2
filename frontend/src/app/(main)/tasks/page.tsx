@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useCallback, useEffect, memo, useMemo } from "react";
+import { Suspense, useState, useCallback, useEffect, memo, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { downloadText } from "@/lib/download";
@@ -12,6 +12,7 @@ import OperatorBadge from "@/components/OperatorBadge";
 import { useAppStore } from "@/lib/store";
 import type { Agent } from "@/types/agent";
 import { normalizeAgentList } from "@/lib/agents";
+import { paths } from "@/lib/api-paths";
 import { formatTime } from "@/lib/utils";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
 import { Card } from "@/components/ui/card";
@@ -63,8 +64,8 @@ function TasksPage() {
   const sortIcon = (col: SortKey) => {
     if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 inline-block ml-1 text-muted-foreground/50" />;
     return sortDir === "asc"
-      ? <ArrowUp className="w-3 h-3 inline-block ml-1 text-indigo-500" />
-      : <ArrowDown className="w-3 h-3 inline-block ml-1 text-indigo-500" />;
+      ? <ArrowUp className="w-3 h-3 inline-block ml-1 text-primary" />
+      : <ArrowDown className="w-3 h-3 inline-block ml-1 text-primary" />;
   };
 
   const handleSortKeyDown = useCallback(
@@ -83,31 +84,43 @@ function TasksPage() {
 
   const loadAgents = useCallback(async () => {
     try {
-      const data = await api.get("/api/agents?page=1&pageSize=200");
+      const data = await api.get(paths.agents.list("page=1&pageSize=200"));
       setAgents(normalizeAgentList(data));
-    } catch { toast.error(t("tasks.toast_load_agents_failed")); }
+    } catch (e) {
+      setAgents([]);
+      toast.error(e instanceof Error ? e.message : t("tasks.toast_load_agents_failed"));
+    }
   }, [t]);
 
+  const loadTasksAbortRef = useRef<AbortController | null>(null);
+
   const loadTasks = useCallback(() => {
+    loadTasksAbortRef.current?.abort();
+    const ac = new AbortController();
+    loadTasksAbortRef.current = ac;
     setLoading(true);
     setError(null);
     const params = new URLSearchParams({ page: String(page), pageSize: "50" });
     if (statusFilter) params.set("status", statusFilter);
     if (agentFilter) params.set("agent", agentFilter);
     if (typeFilter) params.set("type", typeFilter);
-    api.get(`/tasks?${params}`)
+    api.get(paths.tasks.list(params.toString()), { signal: ac.signal })
       .then((data: Record<string, unknown>) => {
+        if (ac.signal.aborted) return;
         setTasks((Array.isArray(data.tasks) ? data.tasks : []) as Task[]);
         setTotal(Number(data.Total) || Number(data.total) || 0);
       })
       .catch((e) => {
+        if (ac.signal.aborted) return;
         setTasks([]);
         setTotal(0);
         const msg = e instanceof Error ? e.message : t("tasks.toast_load_failed");
         setError(msg);
         toast.error(msg);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!ac.signal.aborted) setLoading(false);
+      });
   }, [page, statusFilter, agentFilter, typeFilter, t]);
 
   useEffect(() => { loadAgents(); }, [loadAgents]);
@@ -139,42 +152,42 @@ function TasksPage() {
 
   const handleCancel = async (task: Task) => {
     try {
-      await api.post(`/agents/${task.agent_id}/tasks/${task.id}/cancel`);
+      await api.post(paths.agents.cancelTask(task.agent_id, task.id));
       loadTasks();
     } catch { toast.error(t("tasks.toast_cancel_failed")); }
   };
 
   const handleRerun = async (task: Task) => {
     try {
-      await api.post(`/agents/${task.agent_id}/task/${task.id}/rerun`);
+      await api.post(paths.agents.rerunTask(task.agent_id, task.id));
       loadTasks();
     } catch { toast.error(t("tasks.toast_rerun_failed")); }
   };
 
   const handleApprove = async (task: Task) => {
     try {
-      await api.post(`/tasks/${task.id}/approve`);
+      await api.post(paths.tasksCollab.approve(task.id));
       loadTasks();
     } catch { toast.error(t("tasks.toast_approve_failed")); }
   };
 
   const handleReject = async (task: Task) => {
     try {
-      await api.post(`/tasks/${task.id}/reject`);
+      await api.post(paths.tasksCollab.reject(task.id));
       loadTasks();
     } catch { toast.error(t("tasks.toast_reject_failed")); }
   };
 
   const handleClaim = async (taskId: number) => {
     try {
-      await api.post(`/collab/tasks/${taskId}/claim`);
+      await api.post(paths.tasksCollab.claim(taskId));
       loadTasks();
     } catch { toast.error(t("tasks.toast_claim_failed")); }
   };
 
   const handleRelease = async (taskId: number) => {
     try {
-      await api.post(`/collab/tasks/${taskId}/release`);
+      await api.post(paths.tasksCollab.release(taskId));
       loadTasks();
     } catch { toast.error(t("tasks.toast_release_failed")); }
   };
@@ -236,7 +249,7 @@ function TasksPage() {
       <Card className="p-4 sm:p-5 mb-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <Select value={statusFilter || "all"} onValueChange={(val) => { setStatusFilter(val === "all" ? "" : val ?? ""); setPage(1); }}>
-            <SelectTrigger aria-label="Status filter">
+            <SelectTrigger aria-label={t("tasks.status_filter")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -249,7 +262,7 @@ function TasksPage() {
             </SelectContent>
           </Select>
           <Select value={agentFilter || "all"} onValueChange={(val) => { setAgentFilter(val === "all" ? "" : val ?? ""); setPage(1); }}>
-            <SelectTrigger aria-label="Agent filter" className="min-w-[150px]">
+            <SelectTrigger aria-label={t("tasks.agent_filter")} className="min-w-[150px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -260,7 +273,7 @@ function TasksPage() {
             </SelectContent>
           </Select>
           <Select value={typeFilter || "all"} onValueChange={(val) => { setTypeFilter(val === "all" ? "" : val ?? ""); setPage(1); }}>
-            <SelectTrigger aria-label="Type filter">
+            <SelectTrigger aria-label={t("tasks.type_filter")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -376,20 +389,32 @@ const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCa
   const { t } = useI18n();
   return (
     <>
-      <TableRow className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={onDetail}
-        tabIndex={0} role="button"
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onDetail(); } }}>
+      <TableRow className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={onDetail}>
         <TableCell className="max-sm:hidden py-3 px-4 font-mono text-xs text-muted-foreground whitespace-nowrap">{task.created_at ? formatTime(task.created_at) : "-"}</TableCell>
         <TableCell className="max-sm:hidden py-3 px-4"><div className="font-medium text-foreground text-sm">{getAgentName(task.agent_id) || task.agent_id?.substring(0, 8)}</div></TableCell>
         <TableCell className="max-sm:hidden py-3 px-4">{getTypeBadge(task.type)}</TableCell>
-        <TableCell className="py-3 px-4 font-mono text-xs text-muted-foreground max-w-xs truncate">{task.command || "-"}</TableCell>
-        <TableCell className="max-sm:hidden py-3 px-4 max-w-sm" onClick={(e) => { e.stopPropagation(); onToggle(); }}>
+        <TableCell className="py-3 px-4 font-mono text-xs text-muted-foreground max-w-xs truncate">
+          <Button
+            variant="link"
+            size="sm"
+            onClick={(e) => { e.stopPropagation(); onDetail(); }}
+            className="font-mono text-xs text-muted-foreground hover:text-foreground p-0 h-auto justify-start max-w-full truncate"
+          >
+            {task.command || "-"}
+          </Button>
+        </TableCell>
+        <TableCell className="max-sm:hidden py-3 px-4 max-w-sm">
           {task.result ? (
-            <div>
-              <span className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer">
-                {expanded ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />} {t("tasks.expand")}
-              </span>
-            </div>
+            <Button
+              variant="link"
+              size="sm"
+              onClick={(e) => { e.stopPropagation(); onToggle(); }}
+              aria-expanded={expanded}
+              aria-label={expanded ? t("tasks.collapse") : t("tasks.expand")}
+              className="text-xs text-primary hover:underline flex items-center gap-1 p-0 h-auto justify-start"
+            >
+              {expanded ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />} {t("tasks.expand")}
+            </Button>
           ) : "-"}
         </TableCell>
         <TableCell className="max-sm:hidden py-3 px-4" data-label="Claimed By">
@@ -406,7 +431,7 @@ const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCa
             {(!task.claimed_by || task.claimed_by === currentUsername) && (task.status === "pending" || task.status === "running") && (
               <>
                 {task.claimed_by !== currentUsername ? (
-                  <Button variant="ghost" size="icon-xs" onClick={onClaim} className="text-muted-foreground hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title={t("tasks.claim")} aria-label={t("tasks.claim")}>
+                  <Button variant="ghost" size="icon-xs" onClick={onClaim} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-indigo-900/20" title={t("tasks.claim")} aria-label={t("tasks.claim")}>
                     <Hand className="w-4 h-4" />
                   </Button>
                 ) : (
@@ -422,7 +447,7 @@ const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCa
               </Button>
             )}
             {(task.status === "completed" || task.status === "failed" || task.status === "cancelled") && (
-              <Button variant="ghost" size="icon-xs" onClick={onRerun} className="text-muted-foreground hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title={t("tasks.rerun")} aria-label={t("tasks.rerun")}>
+              <Button variant="ghost" size="icon-xs" onClick={onRerun} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-indigo-900/20" title={t("tasks.rerun")} aria-label={t("tasks.rerun")}>
                 <RotateCw className="w-4 h-4" />
               </Button>
             )}

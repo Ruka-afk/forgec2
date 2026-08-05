@@ -162,7 +162,9 @@ func (s *Server) apiDeleteAgent(c *gin.Context) {
 	}
 
 	id := c.Param("id")
-	if err := s.db.Delete(&db.Implant{}, "id = ?", id).Error; err != nil {
+	// Cascade-delete all dependent rows (tasks, credentials, tokens, …) —
+	// a bare implant delete would leave orphans behind.
+	if !s.deleteAgentRecord(id) {
 		respondError(c, http.StatusInternalServerError, "delete failed")
 		return
 	}
@@ -343,7 +345,8 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 		return nil
 	})
 	if err := g.Wait(); err != nil {
-		slog.Error("API: failed to count dashboard stats", "error", err)
+		handleQueryError(c, err, "API: failed to count dashboard stats")
+		return
 	}
 
 	onlineUsers := int64(len(onlineUsersList))
@@ -351,7 +354,8 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 	var recentTasks []db.Task
 	if err := s.db.Where("type NOT IN ?", []string{"screen_stream_start", "screen_stream_stop", "ls"}).
 		Order("created_at desc").Limit(DashboardRecentTasks).Find(&recentTasks).Error; err != nil {
-		slog.Error("API: failed to query recent tasks", "err", err)
+		handleQueryError(c, err, "API: failed to query recent tasks")
+		return
 	}
 	if len(recentTasks) > 0 {
 		agentIDs := make([]string, 0, len(recentTasks))
@@ -363,7 +367,8 @@ func (s *Server) apiDashboardStats(c *gin.Context) {
 		if len(agentIDs) > 0 {
 			var agents []db.Implant
 			if err := s.db.Where("id IN ?", agentIDs).Find(&agents).Error; err != nil {
-				slog.Error("API: failed to query agents for recent tasks", "err", err)
+				handleQueryError(c, err, "API: failed to query agents for recent tasks")
+				return
 			}
 			agentMap := make(map[string]db.Implant, len(agents))
 			for _, a := range agents {

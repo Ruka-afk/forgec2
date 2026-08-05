@@ -182,13 +182,13 @@ func (m *MonitorCollector) checkAgentAlerts() {
 						Timestamp: time.Now(),
 						AgentID:   a.ID,
 						Payload: map[string]interface{}{
-						"hostname":            a.Hostname,
-						"ip":                  a.IP,
-						"offline_for_seconds": now.Sub(a.LastSeen).Seconds(),
-					},
-				})
-			}(agent)
-		}
+							"hostname":            a.Hostname,
+							"ip":                  a.IP,
+							"offline_for_seconds": now.Sub(a.LastSeen).Seconds(),
+						},
+					})
+				}(agent)
+			}
 		case offlineFor > m.server.offlineThreshold() && agent.Status == "online":
 			staleIDs = append(staleIDs, agent.ID)
 			m.server.recordAgentStatusEvent(agent.ID, "stale")
@@ -728,21 +728,25 @@ func (s *Server) handleAgentRemoteInput(c *gin.Context) {
 }
 
 func (s *Server) handleScreenFrame(c *gin.Context) {
-	var req struct {
-		UUID string `json:"uuid"`
-		Data string `json:"data"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid json")
-		return
-	}
-	if req.UUID == "" || req.Data == "" {
-		c.JSON(http.StatusOK, gin.H{"ok": true})
+	raw, err := c.GetRawData()
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
-	if s.IsScreenMonitoring(req.UUID) {
-		s.BroadcastScreenshot(req.UUID, req.Data)
+	env, req, kind := s.decodeBeaconEnvelope(raw)
+	if kind != frameEncrypted {
+		slog.Warn("Screen frame rejected: not a v2 encrypted frame", "agent_id", env.UUID)
+		respondError(c, http.StatusUnauthorized, "authentication failed")
+		return
+	}
+
+	for _, r := range req.Results {
+		if r.Type == "screen_frame" && r.Output != "" {
+			if s.IsScreenMonitoring(req.UUID) {
+				s.BroadcastScreenshot(req.UUID, r.Output)
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true})

@@ -52,8 +52,8 @@ func (s *Server) handleAPIPhishingCaptures(c *gin.Context) {
 		var payload map[string]string
 		if e.Payload != "" {
 			if err := json.Unmarshal([]byte(e.Payload), &payload); err != nil {
-			slog.Warn("Failed to parse phishing payload", "event_id", e.ID, "error", err)
-		}
+				slog.Warn("Failed to parse phishing payload", "event_id", e.ID, "error", err)
+			}
 			user = payload["username"]
 			pass = payload["password"]
 		}
@@ -374,9 +374,9 @@ func (s *Server) handleAPILaunchPhishingCampaign(c *gin.Context) {
 	s.LogAuditRecord(c, "launch_phishing_campaign", "phishing_campaign", id,
 		fmt.Sprintf("queued %d recipients via %s", len(targets), camp.SMTPHost), true, nil)
 	respond(c, gin.H{
-		"success":   true,
-		"queued":    len(targets),
-		"message":   fmt.Sprintf("Campaign launched. Queued %d emails for SMTP delivery.", len(targets)),
+		"success": true,
+		"queued":  len(targets),
+		"message": fmt.Sprintf("Campaign launched. Queued %d emails for SMTP delivery.", len(targets)),
 	})
 }
 
@@ -475,6 +475,14 @@ func (s *Server) handlePhishingLanding(c *gin.Context) {
 		c.String(http.StatusNotFound, "not found")
 		return
 	}
+
+	// Rate limit per token+IP to blunt brute-force submissions and page
+	// hammering on this unauthenticated endpoint.
+	if !s.phishingLandingAllowed(token, c.ClientIP()) {
+		c.String(http.StatusTooManyRequests, "too many requests")
+		return
+	}
+
 	var evt db.PhishingEvent
 	if err := s.db.Where("token = ?", token).Order("id asc").First(&evt).Error; err != nil {
 		c.String(http.StatusNotFound, "not found")
@@ -483,20 +491,30 @@ func (s *Server) handlePhishingLanding(c *gin.Context) {
 
 	// open tracking on first GET
 	if c.Request.Method == http.MethodGet {
-		open := db.PhishingEvent{
-			CampaignID: evt.CampaignID,
-			Token:      token,
-			Email:      evt.Email,
-			EventType:  "open",
-			IP:         c.ClientIP(),
-			UserAgent:  c.GetHeader("User-Agent"),
-			CreatedAt:  time.Now(),
+		// Deduplicate: only count a unique open per token+IP within the window.
+		var existing int64
+		if err := s.db.Model(&db.PhishingEvent{}).
+			Where("token = ? AND event_type = ? AND ip = ? AND created_at > ?",
+				token, "open", c.ClientIP(), time.Now().Add(-phishingOpenDedupWindow)).
+			Count(&existing).Error; err != nil {
+			slog.Error("Failed to dedupe phishing open event", "campaign", evt.CampaignID, "err", err)
 		}
-		if err := s.db.Create(&open).Error; err != nil {
-			slog.Error("Failed to log phishing open event", "campaign", evt.CampaignID, "err", err)
-		}
-		if err := s.db.Exec("UPDATE phishing_campaigns SET open_count = open_count + 1, updated_at = ? WHERE id = ?", time.Now(), evt.CampaignID).Error; err != nil {
-			slog.Error("Failed to increment open_count", "campaign_id", evt.CampaignID, "err", err)
+		if existing == 0 {
+			open := db.PhishingEvent{
+				CampaignID: evt.CampaignID,
+				Token:      token,
+				Email:      evt.Email,
+				EventType:  "open",
+				IP:         c.ClientIP(),
+				UserAgent:  c.GetHeader("User-Agent"),
+				CreatedAt:  time.Now(),
+			}
+			if err := s.db.Create(&open).Error; err != nil {
+				slog.Error("Failed to log phishing open event", "campaign", evt.CampaignID, "err", err)
+			}
+			if err := s.db.Exec("UPDATE phishing_campaigns SET open_count = open_count + 1, updated_at = ? WHERE id = ?", time.Now(), evt.CampaignID).Error; err != nil {
+				slog.Error("Failed to increment open_count", "campaign_id", evt.CampaignID, "err", err)
+			}
 		}
 
 		c.Header("Content-Type", "text/html; charset=utf-8")
@@ -552,4 +570,56 @@ button{margin-top:1.25rem;width:100%%;padding:.7rem;border:0;border-radius:8px;b
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.String(http.StatusOK, `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Thank you</title></head>
 <body style="font-family:system-ui;text-align:center;padding:4rem"><h2>Thank you</h2><p>Your request is being processed.</p></body></html>`)
+}
+
+// phishingLandingLimits bounds per-token+IP requests to the public landing page.
+const (
+	phishingLandingLimit      = 60
+	phishingLandingWindow     = 10 * time.Minute
+	phishingOpenDedupWindow   = 24 * time.Hour
+	phishingLimiterMaxEntries = 100000
+)
+
+// phishingLandingAllowed enforces a sliding per token+IP request budget on the
+// unauthenticated landing page. Returns false once the budget is exhausted.
+func (s *Server) phishingLandingAllowed(token, ip string) bool {
+	if ip == "" {
+		ip = "unknown"
+	}
+	key := token + "|" + ip
+	now := time.Now()
+
+	s.landingLimiterMu.Lock()
+	defer s.landingLimiterMu.Unlock()
+
+	if s.landingLimiterHits == nil {
+		s.landingLimiterHits = make(map[string]int)
+		s.landingLimiterSince = make(map[string]time.Time)
+	}
+
+	if hits, ok := s.landingLimiterHits[key]; ok {
+		since := s.landingLimiterSince[key]
+		if now.Sub(since) < phishingLandingWindow {
+			if hits >= phishingLandingLimit {
+				return false
+			}
+			s.landingLimiterHits[key] = hits + 1
+			return true
+		}
+		// Window expired: reset budget.
+	}
+
+	if len(s.landingLimiterHits) >= phishingLimiterMaxEntries {
+		// Opportunistic eviction of stale entries to bound memory.
+		for k, since := range s.landingLimiterSince {
+			if now.Sub(since) >= phishingLandingWindow {
+				delete(s.landingLimiterHits, k)
+				delete(s.landingLimiterSince, k)
+			}
+		}
+	}
+
+	s.landingLimiterHits[key] = 1
+	s.landingLimiterSince[key] = now
+	return true
 }

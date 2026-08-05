@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { EmptyState, PageHeader, PageSpinner } from "@/components/UI";
 import { toast } from "sonner";
@@ -67,7 +68,7 @@ export default function CommandTemplatesPage() {
 
   const handleSave = async () => {
     try {
-      await api.postJson("/api/templates", form);
+      await api.postJson(paths.templates.list, form);
       setShowAdd(false);
       setForm({ name: "", category: "recon", command: "", description: "" });
       loadTemplates();
@@ -77,7 +78,7 @@ export default function CommandTemplatesPage() {
   const handleDelete = (id: string) => {
     setCfm({msg: t("templates.confirm_delete"), cb: async () => {
       try {
-        await api.del(`/api/templates/${id}`);
+        await api.del(paths.templates.one(id));
         loadTemplates();
       } catch { toast.error(t("templates.toast.delete_failed")); }
     }});
@@ -134,7 +135,7 @@ export default function CommandTemplatesPage() {
                     <Card key={id} className="p-4 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow group">
                       <div className="flex items-start justify-between mb-3">
                         <h3 className="font-semibold text-foreground">{name}</h3>
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Delete">
+                        <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity" aria-label={t("common.delete")}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -169,7 +170,7 @@ export default function CommandTemplatesPage() {
               <Label className="mb-2">{t("templates.field_category")}</Label>
               <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v ?? "" })}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Category" />
+                  <SelectValue placeholder={t("command_templates.category_ph")} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="recon">{t("templates.opt_recon")}</SelectItem>
@@ -183,7 +184,7 @@ export default function CommandTemplatesPage() {
             </div>
             <div>
               <Label className="mb-2">{t("templates.field_command")}</Label>
-              <Textarea rows={4} placeholder="net localgroup administrators" value={form.command} onChange={(e) => setForm({ ...form, command: e.target.value })} />
+              <Textarea rows={4} placeholder={t("command_templates.cmd_ph")} value={form.command} onChange={(e) => setForm({ ...form, command: e.target.value })} />
             </div>
             <div>
               <Label className="mb-2">{t("templates.field_description")}</Label>
@@ -204,7 +205,7 @@ export default function CommandTemplatesPage() {
       <Dialog open={!!cfm} onOpenChange={(open) => { if (!open) setCfm(null); }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Confirm</DialogTitle>
+            <DialogTitle>{t("common.confirm")}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">{cfm?.msg || ""}</p>
           <DialogFooter>

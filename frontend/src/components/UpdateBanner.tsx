@@ -51,12 +51,12 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
   };
 
   return (
-    <div className="bg-gradient-to-r from-sky-500 to-primary text-white text-xs flex items-center justify-between px-4 sm:px-6 py-2 shrink-0 rounded-xl mx-4 sm:mx-6 lg:mx-8 mt-2 overflow-hidden">
+    <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-2.5 rounded-lg border border-info/25 bg-info/8 dark:bg-info/[0.10] mx-2 sm:mx-3 mb-2 animate-fade-in" aria-live="polite">
       <div className="flex items-center gap-2 min-w-0">
-        <ArrowUpCircle className="w-4 h-4 shrink-0" />
-        <span className="truncate">
-          Update available: <strong>{info.latest}</strong>
-          {currentVersion && <span className="text-white/80"> (current: {currentVersion})</span>}
+        <ArrowUpCircle className="w-4 h-4 text-info shrink-0" />
+        <span className="mono-cell text-(--fs-compact) text-foreground/90 truncate">
+          Update available: <strong className="font-mono">{info.latest}</strong>
+          {currentVersion && <span className="text-muted-foreground/70"> (current: {currentVersion})</span>}
         </span>
       </div>
       <div className="flex items-center gap-3 shrink-0 ml-3">
@@ -64,11 +64,11 @@ export default function UpdateBanner({ currentVersion }: { currentVersion?: stri
           href={info.downloadUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-white/90 hover:text-white underline hidden sm:inline transition-colors"
+          className="text-sm text-info-foreground font-medium underline-offset-2 hover:underline transition-colors hidden sm:inline"
         >
           Download
         </a>
-        <Button variant="ghost" size="icon-sm" onClick={dismiss} className="text-white/70 hover:text-white" aria-label={t("common.dismiss")}>
+        <Button variant="ghost" size="icon-sm" onClick={dismiss} className="text-muted-foreground hover:text-foreground" aria-label={t("common.dismiss")}>
           <X className="w-4 h-4" />
         </Button>
       </div>

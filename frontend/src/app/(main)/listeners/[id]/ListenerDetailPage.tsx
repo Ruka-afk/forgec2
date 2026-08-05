@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { PageSpinner, PageHeader } from "@/components/UI";
 import { Card } from "@/components/ui/card";
@@ -57,7 +58,7 @@ export default function ListenerDetailPage() {
   const loadDetail = useCallback(async () => {
     if (!id) return;
     try {
-      const data = await api.get(`/listeners/${id}`);
+      const data = await api.get(paths.listeners.one(id));
       setListener(data.listener || data);
       const a: ListenerAgent[] = (data.agents || []) as ListenerAgent[];
       setAgents(a);
@@ -81,7 +82,7 @@ export default function ListenerDetailPage() {
     return (
       <div className="text-center py-20 text-muted-foreground">
         <Plug className="w-4 h-4" />
-        <p>Listener not found</p>
+        <p>{t("listeners.not_found")}</p>
       </div>
     );
   }
@@ -147,14 +148,14 @@ export default function ListenerDetailPage() {
       <div className="mt-8">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-foreground">{t("listener.agents_using")} ({stats.total})</h2>
-          <Link href="/agents" className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 transition-colors">{t("listener.view_all_agents")}</Link>
+          <Link href="/agents" className="text-sm text-primary hover:text-primary transition-colors">{t("listener.view_all_agents")}</Link>
         </div>
 
         <Card className="overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="py-3 px-6">Agent</TableHead>
+                <TableHead className="py-3 px-6">{t("listeners.col_agent")}</TableHead>
                 <TableHead className="py-3 px-4">IP</TableHead>
                 <TableHead className="py-3 px-4">{t("listener.os")}</TableHead>
                 <TableHead className="py-3 px-4">{t("listener.last_seen")}</TableHead>
@@ -181,7 +182,7 @@ export default function ListenerDetailPage() {
                         )}
                       </TableCell>
                       <TableCell className="py-3 px-6 text-right">
-                        <Link href={`/agents/${aid}`} className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 hover:underline text-sm transition-colors">{t("listener.detail")}</Link>
+                        <Link href={`/agents/${aid}`} className="text-primary hover:text-primary hover:underline text-sm transition-colors">{t("listener.detail")}</Link>
                       </TableCell>
                     </TableRow>
                   );

@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/constants";
 import { api, getCsrfToken } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
+import { extractProfilePresets, normalizeListeners } from "@/lib/generate-load";
 import { downloadFromResponse } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -45,7 +47,7 @@ export function usePayloadGenerator() {
   const [shared, setShared] = useState<SharedState>({
     listener_id: "", c2_url: "", protocol: "http", beacon_transport: "http",
     interval: "5", jitter: "0",
-    ua: DEFAULT_UA, proxy: "", failover: "", crypto_key: "", profile: "",
+    ua: DEFAULT_UA, proxy: "", failover: "", crypto_key: "", beacon_key: "", profile: "",
     dns_doh_url: "", dns_dot_addr: "", ssh_user: "forgec2", ssh_password: "", ssh_key: "", ssh_host_key: "",
   });
 
@@ -55,27 +57,47 @@ export function usePayloadGenerator() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const donutFileRef = useRef<HTMLInputElement>(null);
+  const asyncAbortRef = useRef<AbortController | null>(null);
 
-  // Load listeners
+  // Stop any in-flight async build poll when leaving the page.
+  useEffect(() => {
+    return () => {
+      asyncAbortRef.current?.abort();
+      asyncAbortRef.current = null;
+    };
+  }, []);
+
+  // Load listeners + profiles
   const loadData = useCallback(async () => {
     try {
-      const data = await api.get("/api/listeners");
-      setListeners(Array.isArray(data) ? data : []);
-    } catch {
+      const data = await api.get(paths.listeners.list);
+      setListeners(normalizeListeners(data));
+    } catch (e) {
       setListeners([]);
-      toast.error(t("generate.toast.load_listeners_failed"));
+      toast.error(e instanceof Error ? e.message : t("generate.toast.load_listeners_failed"));
     } finally { setLoading(false); }
     try {
-      const profileData = await api.get<{success: boolean; data?: {profiles?: ProfilePreset[]}}>(`/api/generate/profiles`);
-      if (profileData.success && profileData.data?.profiles?.length) {
-        setProfilePresets(profileData.data.profiles);
-      }
-    } catch {
-      toast.error(t("generate.toast.load_profiles_failed"));
+      const profileData = await api.get(paths.generate.profiles);
+      setProfilePresets((prev) => extractProfilePresets(profileData, prev));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("generate.toast.load_profiles_failed"));
     }
   }, [t]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Consume ?listener_id= (deep link from the listener detail page) once
+  // listeners are loaded, then preselect that listener.
+  const queryListenerApplied = useRef(false);
+  useEffect(() => {
+    if (loading || queryListenerApplied.current) return;
+    queryListenerApplied.current = true;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const lid = params.get("listener_id");
+      if (lid) setShared((s) => ({ ...s, listener_id: lid }));
+    } catch { /* ignore */ }
+  }, [loading]);
 
   const getListenerInfo = useCallback((listenerId: string) => {
     const l = listeners.find((x) => String(x.id) === String(listenerId));
@@ -100,7 +122,7 @@ export function usePayloadGenerator() {
       jitter = String(preset.jitter && preset.jitter >= 0 ? preset.jitter : 20);
       ua = preset.user_agent || ua;
     }
-    return { profile: prevProfileRef.current, interval, jitter, user_agent: ua, proxy: shared.proxy, crypto_key: shared.crypto_key };
+    return { profile: prevProfileRef.current, interval, jitter, user_agent: ua, proxy: shared.proxy, crypto_key: shared.crypto_key, beacon_key: shared.beacon_key };
   }, [shared, profilePresets]);
 
   const buildFormData = useCallback((formData: FormData, extra?: Record<string, string>) => {
@@ -111,6 +133,7 @@ export function usePayloadGenerator() {
     formData.set("user_agent", s.user_agent);
     formData.set("proxy", s.proxy);
     formData.set("crypto_key", s.crypto_key);
+    formData.set("beacon_key", s.beacon_key);
     formData.set("listener_id", shared.listener_id);
     if (extra) for (const [k, v] of Object.entries(extra)) formData.set(k, v);
   }, [getSharedSettings, shared.listener_id]);
@@ -199,12 +222,24 @@ export function usePayloadGenerator() {
 
       const pollInterval = 2000;
       const maxAttempts = 300; // 10 minutes max
+      asyncAbortRef.current?.abort();
+      const ac = new AbortController();
+      asyncAbortRef.current = ac;
       for (let i = 0; i < maxAttempts; i++) {
+        if (ac.signal.aborted) return { error: "Build cancelled" };
         await new Promise((r) => setTimeout(r, pollInterval));
-        const pollRes = await fetch(`${API_BASE}/generate/builds/${buildId}`, { credentials: "include", headers: { "Accept": "application/json" } });
+        if (ac.signal.aborted) return { error: "Build cancelled" };
+        let pollRes: Response;
+        try {
+          pollRes = await fetch(`${API_BASE}/generate/builds/${buildId}`, { credentials: "include", headers: { "Accept": "application/json" }, signal: ac.signal });
+        } catch (err) {
+          if (ac.signal.aborted) return { error: "Build cancelled" };
+          throw err;
+        }
         if (!pollRes.ok) continue;
         const pollData = await pollRes.json();
         if (pollData.status === "completed") {
+          if (ac.signal.aborted) return { error: "Build cancelled" };
           // 3) Download the result
           const dlRes = await fetch(`${API_BASE}/generate/builds/${buildId}/download`, { credentials: "include" });
           if (!dlRes.ok) return { error: `Download failed (${dlRes.status})` };
@@ -284,8 +319,8 @@ export function usePayloadGenerator() {
   const handleGenerateBinary = useCallback(async (key: "exe" | "dll") => {
     const form = forms[key];
     const ext = key === "exe" ? "exe" : "dll";
-    await generateStandard(key, `/${key}`, `forge_agent.${ext}`, binaryExtra(form), `${key.toUpperCase()} generated and downloaded successfully!`, true);
-  }, [forms, generateStandard, binaryExtra]);
+    await generateStandard(key, `/${key}`, `forge_agent.${ext}`, binaryExtra(form), t("generate.toast.key_generated", { key: key.toUpperCase() }), true);
+  }, [forms, generateStandard, binaryExtra, t]);
 
   const handleGeneratePS1 = useCallback(async () => {
     setStates((s) => ({ ...s, ps1: { busy: true, result: "" } }));
@@ -294,29 +329,29 @@ export function usePayloadGenerator() {
     if (result?.error) {
       setStates((s) => ({ ...s, ps1: { busy: false, result: result.error! } }));
     } else if (result?.success) {
-      toast.success(`Generated! Original: ${result.original_length} B / Obfuscated: ${result.obfuscated_len} B`);
+      toast.success(t("generate.toast.profile_generated", { original_length: result.original_length, obfuscated_len: result.obfuscated_len }));
       setStates((s) => ({ ...s, ps1: { busy: false, result: "" } }));
       setExtras((e) => ({ ...e, ps1: { code: result.code, original_length: result.original_length, obfuscated_len: result.obfuscated_len } }));
     } else {
       setStates((s) => ({ ...s, ps1: { busy: false, result: "" } }));
     }
-  }, [forms.ps1, handleGenerate, ]);
+  }, [forms.ps1, handleGenerate, t]);
 
   const handleGenerateUnix = useCallback(async (key: "linux" | "macos") => {
-    await generateStandard(key, `/${key}`, "forge_implant", unixExtra(forms[key]), `${key === "linux" ? "Linux ELF" : "macOS Binary"} generated and downloaded successfully!`, true);
-  }, [forms, generateStandard, unixExtra]);
+    await generateStandard(key, `/${key}`, "forge_implant", unixExtra(forms[key]), t("generate.toast.key_generated", { key: key === "linux" ? "Linux ELF" : "macOS" }), true);
+  }, [forms, generateStandard, unixExtra, t]);
 
   const handleGenerateStager = useCallback(async (key: "stager" | "stager_linux") => {
     const form = forms[key];
     const endpoint = key === "stager" ? "/stager" : "/stager_linux";
     const filename = key === "stager" ? "stager.exe" : "stager";
     const label = key === "stager" ? "Windows" : "Linux";
-    await generateStandard(key, endpoint, filename, { filename: form.filename, skip_tls_verify: form.skip_tls ? "true" : "" }, `${label} Loader + staging payload generated successfully!`);
-  }, [forms, generateStandard]);
+    await generateStandard(key, endpoint, filename, { filename: form.filename, skip_tls_verify: form.skip_tls ? "true" : "" }, t("generate.toast.loader_generated", { label }));
+  }, [forms, generateStandard, t]);
 
   const handleGenerateShellcode = useCallback(async () => {
-    await generateStandard("shellcode", "/shellcode", "shellcode.bin", { command: forms.shellcode.command, filename: forms.shellcode.filename }, "Shellcode generated and downloaded successfully!");
-  }, [forms.shellcode, generateStandard]);
+    await generateStandard("shellcode", "/shellcode", "shellcode.bin", { command: forms.shellcode.command, filename: forms.shellcode.filename }, t("generate.toast.shellcode_generated"));
+  }, [forms.shellcode, generateStandard, t]);
 
   const handleGenerateDonut = useCallback(async () => {
     setStates((s) => ({ ...s, donut: { busy: true, result: "" } }));
@@ -382,12 +417,13 @@ export function usePayloadGenerator() {
     formData.set("profile", s.profile); formData.set("interval", s.interval);
     formData.set("user_agent", s.user_agent); formData.set("proxy", s.proxy);
     formData.set("crypto_key", s.crypto_key);
+    formData.set("beacon_key", s.beacon_key);
     try {
       const data = await api.postFormData<{ success?: boolean; error?: string; types?: Array<{ name: string; desc: string; command: string }>; download_url?: string }>("/generate/one-liner", formData);
       if (!data.success) {
         setStates((s) => ({ ...s, oneliner: { busy: false, result: data.error || "" } }));
       } else {
-        toast.success(`Generated ${data.types?.length ?? 0} One-Liner commands`);
+        toast.success(t("generate.toast.oneliner_generated", { count: data.types?.length ?? 0 }));
         setStates((s) => ({ ...s, oneliner: { busy: false, result: "success" } }));
         setExtras((e) => ({ ...e, oneliner: { data: { download_url: data.download_url || "", types: data.types || [] } } }));
       }
@@ -438,7 +474,7 @@ export function usePayloadGenerator() {
   const deleteProfile = useCallback(async (name: string) => {
     if (!name || name === "default") return false;
     try {
-      const data = await api.del(`/api/generate/profile/${name}`);
+      const data = await api.del(paths.generate.profileDelete(name));
       if (data.success) {
         setProfilePresets((prev) => prev.filter((p) => p.name !== name));
         changeProfile("default");

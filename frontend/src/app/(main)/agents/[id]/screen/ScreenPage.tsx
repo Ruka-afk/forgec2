@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { useWS } from "@/lib/wsContext";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { EmptyState, Spinner } from "@/components/UI";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,12 +40,18 @@ interface ScreenshotItem {
   const [wsLive, setWsLive] = useState(false);
   const { subscribe } = useWS();
 
-  const captureScreenshot = useCallback(async () => {
+  const captureBusyRef = useRef(false);
+
+  const captureScreenshot = useCallback(async (showStatus = true) => {
     if (!id) return;
-    setStatus("capturing");
-    setMonitoringStatus("capturing");
+    if (captureBusyRef.current) return;
+    captureBusyRef.current = true;
+    if (showStatus) {
+      setStatus("capturing");
+      setMonitoringStatus("capturing");
+    }
     try {
-      const data = await api.get<{image?: string; data?: string; screenshot?: string; width?: number; height?: number; window_name?: string}>(`/agents/${id}/screenshot`);
+      const data = await api.get<{image?: string; data?: string; screenshot?: string; width?: number; height?: number; window_name?: string}>(paths.agents.screenshot(id, ""));
       const imgData = data.image || data.data || data.screenshot || "";
       const width = data.width || 0;
       const height = data.height || 0;
@@ -71,19 +78,20 @@ interface ScreenshotItem {
     } catch {
       setStatus("error");
       setMonitoringStatus("offline");
+    } finally {
+      captureBusyRef.current = false;
     }
   }, [id]);  const startMonitoring = async () => {
     if (!id) return;
     setMonitoring(true);
     setMonitoringStatus("capturing");
     try {      const body = new URLSearchParams();      body.append("interval", (interval * 1000).toString());
-      await api.post(`/agents/${id}/screen/start`, { interval: (interval * 1000).toString() });      toast.success(t("agents.screen_started"));
-      } catch {
+      await api.post(paths.agents.screenStart(id), { interval: (interval * 1000).toString() });
+      toast.success(t("agents.screen_started"));
+    } catch {
       toast.error(t("agents.screen_start_failed"));
     }
-    await captureScreenshot();    if (autoRefresh) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = setInterval(captureScreenshot, interval * 1000);    }
+    await captureScreenshot();
   };
 
   const stopMonitoring = async () => {
@@ -92,8 +100,9 @@ interface ScreenshotItem {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
-    }    try {
-      await api.post(`/agents/${id}/screen/stop`, {});
+    }
+    try {
+      await api.post(paths.agents.screenStop(id), {});
       toast.success(t("agents.screen_stopped"));
     } catch { toast.error(t("agents.screen_stop_failed")); }
   };
@@ -103,7 +112,7 @@ interface ScreenshotItem {
     setStatus("capturing");
     setMonitoringStatus("capturing");
     try {
-      await api.post<{ success?: boolean }>(`/agents/${id}/screenshot`, {});
+      await api.post<{ success?: boolean }>(paths.agents.screenshotTask(id), {});
       toast.success(t("agents.screen_capture"));
       await new Promise((r) => setTimeout(r, 900));
       await captureScreenshot();
@@ -119,7 +128,7 @@ interface ScreenshotItem {
     setStatus("capturing");
     setMonitoringStatus("capturing");
     try {
-      await api.post<{ success?: boolean }>(`/agents/${id}/screenshot_window`, {});
+      await api.post<{ success?: boolean }>(paths.agents.screenshotWindow(id), {});
       toast.success(t("agents.screen_window_capture"));
       await new Promise((r) => setTimeout(r, 900));
       await captureScreenshot();
@@ -147,7 +156,7 @@ interface ScreenshotItem {
   useEffect(() => {
     if (monitoring && autoRefresh) {
       if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = setInterval(captureScreenshot, interval * 1000);
+      timerRef.current = setInterval(() => captureScreenshot(false), interval * 1000);
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -213,7 +222,7 @@ interface ScreenshotItem {
             )}          </div>
           <div className="flex items-center gap-2 flex-wrap">
             {!monitoring ? (              <Button onClick={startMonitoring}
-                className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm px-4 h-9 rounded-xl transition-colors flex items-center gap-1.5 font-medium shadow-sm">
+                className="disabled:opacity-50 text-sm px-4 h-9 rounded-xl transition-colors flex items-center gap-1.5 font-medium shadow-sm">
                 <Play className="w-4 h-4" />
                 {t("agents.screen_start")}
               </Button>
@@ -262,7 +271,7 @@ interface ScreenshotItem {
                   {wsLive && (
                     <Tooltip>
                       <TooltipTrigger>
-                        <span className="text-(--font-size-micro-sm) text-emerald-400 flex items-center gap-1">
+                        <span className="text-(--fs-micro-sm) text-emerald-400 flex items-center gap-1">
                           <Zap className="w-4 h-4" /> WS
                         </span>
                       </TooltipTrigger>
@@ -283,7 +292,7 @@ interface ScreenshotItem {
                   <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
                     <div className="flex flex-col items-center gap-3">
                       <Spinner size="xl" color="white" />
-                      <span className="text-white text-sm font-medium">Capturing...</span>
+                      <span className="text-white text-sm font-medium">{t("screen.capturing")}</span>
                     </div>
                   </div>                )}
               </div>
@@ -292,7 +301,7 @@ interface ScreenshotItem {
             <Card className="p-4 shrink-0">
               <div className="text-xs text-muted-foreground mb-3 font-semibold uppercase tracking-wider flex items-center justify-between">
                 <span>{t("agents.screen_controls")}</span>
-                 <span className={`flex items-center gap-1.5 text-(--font-size-micro-sm) font-normal ${monitoring ? "text-emerald-500" : "text-muted-foreground/70"}`}>                  <span className={`w-1.5 h-1.5 rounded-full ${monitoring ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`}></span>                  {monitoring ? "LIVE" : "OFF"}
+                 <span className={`flex items-center gap-1.5 text-(--fs-micro-sm) font-normal ${monitoring ? "text-emerald-500" : "text-muted-foreground/70"}`}>                  <span className={`w-1.5 h-1.5 rounded-full ${monitoring ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`}></span>                  {monitoring ? "LIVE" : "OFF"}
                 </span>
               </div>
               <div className="space-y-3">
@@ -321,7 +330,7 @@ interface ScreenshotItem {
                 </div>
                 <div className="border-t border-border pt-3">
                   <span className="block text-xs text-muted-foreground mb-2 flex items-center gap-1">
-                    <ImageIcon className="w-4 h-4" aria-hidden="true" /> Quick Capture                  </span>
+                    <ImageIcon className="w-4 h-4" aria-hidden="true" /> {t("screen.quick_capture")}                  </span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">                    <Button onClick={handleManualCapture} disabled={status === "capturing"}
                       className="px-2 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs transition-colors flex items-center justify-center gap-1 disabled:opacity-50">
                       <Camera className="w-4 h-4" /> {t("agents.screen_capture")}                    </Button>
@@ -334,7 +343,7 @@ interface ScreenshotItem {
                 {resolution && (
                   <div className="border-t border-border pt-3">
                     <span className="block text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
-                      <Maximize2 className="w-4 h-4" /> Resolution                    </span>
+                      <Maximize2 className="w-4 h-4" /> {t("screen.resolution")}                    </span>
                      <div className="bg-muted rounded-lg px-3 py-2 text-sm font-mono text-foreground">
                       {resolution.width} &times; {resolution.height}
                     </div>
@@ -348,20 +357,20 @@ interface ScreenshotItem {
                 <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1">
                   <Images className="w-4 h-4" aria-hidden="true" /> {t("agents.screen_gallery")}
                 </div>
-                <Badge variant="secondary" className="text-(--font-size-micro-sm)">{screenshotGallery.length}</Badge>
+                <Badge variant="secondary" className="text-(--fs-micro-sm)">{screenshotGallery.length}</Badge>
               </div>
               {screenshotGallery.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 overflow-y-auto flex-1 max-h-64 lg:max-h-full">
                   {screenshotGallery.map((item) => (
                     <div key={item.id} className="relative group cursor-pointer rounded-xl overflow-hidden border-2 border-transparent hover:border-primary transition-colors bg-muted"
                       onClick={() => openModal(item.data || "")}>
-                      <img src={item.data} alt="Thumbnail" className="w-full h-auto aspect-video object-cover" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 text-(--font-size-micro) text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                      <img src={item.data} alt="Thumbnail" className="w-full h-auto aspect-video object-cover" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 text-(--fs-micro) text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                         {item.timestamp}
                       </div>
-                      <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                         <Button
                           onClick={(e) => { e.stopPropagation(); handleDownloadScreenshot(item.data, `screen_${id}_${item.timestamp?.replace(/[:\s/]/g, "_")}.png`); }}
-                          className="bg-black/60 hover:bg-black/80 text-white p-1 rounded text-(--font-size-micro) transition-colors h-auto"
+                          className="bg-black/60 hover:bg-black/80 text-white p-1 rounded text-(--fs-micro) transition-colors h-auto"
                         >
                           <Download className="w-4 h-4" />
                         </Button>

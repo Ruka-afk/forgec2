@@ -15,11 +15,11 @@ export default function ThemeSection({ theme, onApplyTheme }: { theme: string; o
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-4">
+      <div className="bg-primary/10 border-b border-primary/20 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Palette className="w-4 h-4" /></div>
           <div>
-            <h2 className="text-lg font-semibold text-white">{t("settings.theme_title")}</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t("settings.theme_title")}</h2>
             <p className="text-xs text-violet-200">{t("settings.theme_subtitle")}</p>
           </div>
         </div>
@@ -33,7 +33,7 @@ export default function ThemeSection({ theme, onApplyTheme }: { theme: string; o
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {modes.map(({ id, icon: Icon, descKey }) => (
               <Button key={id} onClick={() => onApplyTheme(id)} variant="ghost"
-                className={`p-4 border rounded-xl transition-colors capitalize ${theme === id ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30" : "bg-muted border-border hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"}`}>
+                className={`p-4 border rounded-xl transition-colors capitalize ${theme === id ? "border-primary bg-primary/10 dark:bg-primary/20" : "bg-muted border-border hover:border-primary hover:bg-primary/10 dark:hover:bg-primary/20"}`}>
                 <div className={`text-2xl mb-2 ${id === "light" ? "text-amber-500" : id === "dark" ? "text-indigo-400" : "text-muted-foreground"}`}>
                   <Icon className="w-6 h-6" />
                 </div>

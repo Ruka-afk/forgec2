@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { EmptyState, PageHeader, PageSpinner, Spinner } from "@/components/UI";
 import { Card } from "@/components/ui/card";
@@ -62,21 +63,21 @@ export default function ScriptingPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const agentData = await api.get("/agents");
+      const agentData = await api.get(paths.agents.list());
       setAgents((agentData.agents || []) as Agent[]);
     } catch {
       setAgents([]);
       toast.error(t("scripting.toast.load_failed"));
     }
     try {
-      const scriptData = await api.get("/api/scripts");
+      const scriptData = await api.get(paths.scripts.list);
       setSavedScripts((scriptData.scripts || scriptData.data || []) as SavedScript[]);
     } catch {
       setSavedScripts([]);
       toast.error(t("scripting.toast.load_failed"));
     }
     try {
-      const historyData = await api.get("/api/scripts/history");
+      const historyData = await api.get(paths.scripts.history);
       setRunHistory((historyData.history || []) as RunHistory[]);
     } catch {
       setRunHistory([]);
@@ -89,14 +90,14 @@ export default function ScriptingPage() {
   const handleSaveScript = async () => {
     if (!scriptName.trim() || !scriptCode.trim()) return;
     try {
-      await api.postJson("/api/scripts", { name: scriptName, code: scriptCode });
+      await api.postJson(paths.scripts.list, { name: scriptName, code: scriptCode });
       loadData();
     } catch { toast.error(t("scripting.toast.save_failed")); }
   };
 
   const handleDeleteScript = async (scriptId: string) => {
     try {
-      await api.del(`/api/scripts/${scriptId}`);
+      await api.del(paths.scripts.one(scriptId));
       loadData();
     } catch { toast.error(t("scripting.toast.delete_failed")); }
   };
@@ -111,7 +112,7 @@ export default function ScriptingPage() {
     setRunning(true);
     setScriptOutput("Executing script...");
     try {
-      const data = await api.postJson("/api/scripts/execute", { agent_id: selectedAgent, code: scriptCode, name: scriptName });
+      const data = await api.postJson(paths.scripts.execute, { agent_id: selectedAgent, code: scriptCode, name: scriptName });
       setScriptOutput((data.output || data.result || data.error || "Script executed with no output") as string);
       loadData();
     } catch {
@@ -220,7 +221,7 @@ export default function ScriptingPage() {
                   ) : (
                     savedScripts.map((s) => (
                       <div key={s.id} className="flex items-center justify-between px-4 py-2.5 border-b border-border hover:bg-muted transition-colors">
-                        <Button variant="ghost" size="sm" onClick={() => handleLoadScript(s)} className="text-sm text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400 truncate text-left flex-1 justify-start">
+                        <Button variant="ghost" size="sm" onClick={() => handleLoadScript(s)} className="text-sm text-muted-foreground hover:text-primary truncate text-left flex-1 justify-start">
                           {s.name || t("scripting.untitled")}
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => s.id && handleDeleteScript(s.id)} className="text-muted-foreground hover:text-destructive ml-2">
@@ -256,7 +257,7 @@ export default function ScriptingPage() {
                       <Save className="w-4 h-4" />{t("scripting.save")}
                     </Button>
                     <Button size="sm" onClick={handleRunScript} disabled={running || !selectedAgent || !scriptCode.trim()}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                      >
                       {running ? <Spinner size="xs" className="mr-1" /> : <Play className="w-4 h-4" />}
                       {running ? t("scripting.running") : t("scripting.run")}
                     </Button>
@@ -310,7 +311,7 @@ export default function ScriptingPage() {
                         <span className="text-xs text-muted-foreground">{run.agent_hostname || "Unknown"}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant={(run.status || "") === "success" ? "success" : "destructive"} className="text-(--font-size-micro-sm) px-2 py-0.5 rounded-full">{run.status || "completed"}</Badge>
+                        <Badge variant={(run.status || "") === "success" ? "success" : "destructive"} className="text-(--fs-micro-sm) px-2 py-0.5 rounded-full">{run.status || "completed"}</Badge>
                         <span className="text-xs text-muted-foreground">{run.created_at || ""}</span>
                       </div>
                     </div>

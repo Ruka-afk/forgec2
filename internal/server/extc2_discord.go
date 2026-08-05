@@ -15,14 +15,14 @@ import (
 )
 
 type DiscordExternalC2 struct {
-	server    *Server
-	botToken  string
-	channelID string
-	mu        sync.Mutex
-	running   bool
-	stopCh    chan struct{}
-	sequence  atomic.Int64
-	sessionID string
+	server     *Server
+	botToken   string
+	channelID  string
+	mu         sync.Mutex
+	running    bool
+	stopCh     chan struct{}
+	sequence   atomic.Int64
+	sessionID  string
 	httpClient *http.Client
 }
 
@@ -183,10 +183,15 @@ func (d *DiscordExternalC2) connectAndRun(channelID string) {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		for {
+			// Snapshot under the lock: the notify map is mutated concurrently
+			// by QueueExtC2Task and channel cleanup goroutines.
+			d.server.extC2TaskMu.Lock()
+			notifyCh := d.server.extC2Notify[channelID]
+			d.server.extC2TaskMu.Unlock()
 			select {
 			case <-d.stopCh:
 				return
-			case <-d.server.extC2Notify[channelID]:
+			case <-notifyCh:
 			case <-ticker.C:
 			}
 			d.server.extC2TaskMu.Lock()

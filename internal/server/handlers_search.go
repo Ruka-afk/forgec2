@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strings"
 
@@ -49,7 +48,8 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 		Where("(hostname LIKE ? ESCAPE '\\' OR username LIKE ? ESCAPE '\\' OR ip LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\')",
 			like, like, like, like, like).
 		Limit(perType).Find(&agents).Error; err != nil {
-		slog.Error("Search: failed to query agents", "err", err)
+		handleQueryError(c, err, "Search: failed to query agents")
+		return
 	}
 	for _, a := range agents {
 		results = append(results, SearchResult{
@@ -66,7 +66,8 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 	if err := s.db.Select("id", "name", "host", "port", "scheme").
 		Where("(name LIKE ? ESCAPE '\\' OR host LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\')", like, like, like).
 		Limit(perType).Find(&listeners).Error; err != nil {
-		slog.Error("Search: failed to query listeners", "err", err)
+		handleQueryError(c, err, "Search: failed to query listeners")
+		return
 	}
 	for _, l := range listeners {
 		results = append(results, SearchResult{
@@ -83,7 +84,8 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 	if err := s.db.Select("id", "domain", "username", "source", "type").
 		Where("(domain LIKE ? ESCAPE '\\' OR username LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\')", like, like, like).
 		Limit(perType).Find(&creds).Error; err != nil {
-		slog.Error("Search: failed to query credentials", "err", err)
+		handleQueryError(c, err, "Search: failed to query credentials")
+		return
 	}
 	for _, cr := range creds {
 		results = append(results, SearchResult{
@@ -100,7 +102,8 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 	if err := s.db.Select("id", "name", "description").
 		Where("(name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')", like, like).
 		Limit(perType).Find(&bofs).Error; err != nil {
-		slog.Error("Search: failed to query BOFs", "err", err)
+		handleQueryError(c, err, "Search: failed to query BOFs")
+		return
 	}
 	for _, b := range bofs {
 		results = append(results, SearchResult{
@@ -117,7 +120,8 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 	if err := s.db.Select("id", "username", "role").
 		Where("username LIKE ? ESCAPE '\\'", like).
 		Limit(perType).Find(&users).Error; err != nil {
-		slog.Error("Search: failed to query users", "err", err)
+		handleQueryError(c, err, "Search: failed to query users")
+		return
 	}
 	for _, u := range users {
 		results = append(results, SearchResult{
@@ -135,7 +139,8 @@ func (s *Server) handleAPISearch(c *gin.Context) {
 		Where("(command LIKE ? ESCAPE '\\' OR type LIKE ? ESCAPE '\\' OR agent_id LIKE ? ESCAPE '\\')", like, like, like).
 		Order("created_at DESC").
 		Limit(perType).Find(&tasks).Error; err != nil {
-		slog.Error("Search: failed to query tasks", "err", err)
+		handleQueryError(c, err, "Search: failed to query tasks")
+		return
 	}
 	for _, t := range tasks {
 		cmd := t.Command

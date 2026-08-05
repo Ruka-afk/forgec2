@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 
 export function useAgentDangerActions(
@@ -24,7 +25,7 @@ export function useAgentDangerActions(
     if (!agentId) return;
     setBusy("kill");
     try {
-      await api.postJson(`/agents/${agentId}/kill`, {});
+      await api.postJson(paths.agents.kill(agentId), {});
       toast.success(messages.killSuccess);
     } catch {
       toast.error(messages.killFailed);
@@ -37,7 +38,7 @@ export function useAgentDangerActions(
     if (!agentId) return;
     setBusy("uninstall");
     try {
-      await api.postJson(`/agents/${agentId}/uninstall`, {});
+      await api.postJson(paths.agents.uninstall(agentId), {});
       toast.success(messages.uninstallSuccess);
     } catch {
       toast.error(messages.uninstallFailed);
@@ -50,7 +51,7 @@ export function useAgentDangerActions(
     if (!agentId) return;
     setBusy("kill_date");
     try {
-      await api.postJson(`/agents/${agentId}/kill_date`, { kill_date: killDate });
+      await api.postJson(paths.agents.killDate(agentId), { kill_date: killDate });
       toast.success(messages.killDateSuccess);
       await Promise.resolve(reloadDetail());
     } catch {
@@ -64,7 +65,7 @@ export function useAgentDangerActions(
     if (!agentId) return;
     setBusy("clear_kill_date");
     try {
-      await api.del(`/agents/${agentId}/kill_date`);
+      await api.del(paths.agents.killDate(agentId));
       toast.success(messages.clearKillDateSuccess);
       await Promise.resolve(reloadDetail());
     } catch {

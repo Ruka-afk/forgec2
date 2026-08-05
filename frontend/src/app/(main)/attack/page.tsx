@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { MITRE_PHASE_COLORS } from "@/lib/colors";
 import { PageHeader, PageSpinner } from "@/components/UI";
 import { useAgentList } from "@/lib/hooks/useAgentList";
@@ -188,7 +189,7 @@ export default function AttackPage() {
           </div>
           <div className="flex flex-col items-center">
             <div className="relative w-24 h-24">
-              <svg className="w-24 h-24 -rotate-90" viewBox="0 0 36 36" role="img" aria-label="Attack progress ring">
+              <svg className="w-24 h-24 -rotate-90" viewBox="0 0 36 36" role="img" aria-label={t("attack.progress_ring")}>
                 <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3"
                   className="text-border" />
                 <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3"
@@ -212,8 +213,8 @@ export default function AttackPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {sortedTactics.map((tactic) => {
           const isExpanded = expandedTactic === tactic.tactic;
-          const headerColor = TACTIC_HEADER_COLORS[tactic.tactic] || "bg-indigo-500";
-          const borderColor = TACTIC_BORDER_COLORS[tactic.tactic] || "border-indigo-500/30";
+          const headerColor = TACTIC_HEADER_COLORS[tactic.tactic] || "bg-primary";
+          const borderColor = TACTIC_BORDER_COLORS[tactic.tactic] || "border-primary/30";
           const tacticPct = tactic.total > 0 ? Math.round((tactic.covered / tactic.total) * 100) : 0;
 
           return (
@@ -268,7 +269,7 @@ export default function AttackPage() {
                           ) : (
                             <CircleX className="w-4 h-4 text-muted-foreground shrink-0" />
                           )}
-                          <code className="text-xs font-mono text-indigo-600 dark:text-indigo-400 shrink-0 w-20">
+                          <code className="text-xs font-mono text-primary shrink-0 w-20">
                             {tech.id}
                           </code>
                           <span className={`text-sm truncate ${
@@ -284,13 +285,13 @@ export default function AttackPage() {
                             <Badge
                               key={tt}
                               variant={usedTaskTypes.has(tt) ? "success" : "outline"}
-                              className="text-(--font-size-micro-sm) font-mono"
+                              className="text-(--fs-micro-sm) font-mono"
                             >
                               {tt}
                             </Badge>
                           ))}
                           {tech.task_types.length > 3 && (
-                            <span className="text-(--font-size-micro-sm) text-muted-foreground">+{tech.task_types.length - 3}</span>
+                            <span className="text-(--fs-micro-sm) text-muted-foreground">+{tech.task_types.length - 3}</span>
                           )}
                         </div>
                       </div>
@@ -316,7 +317,7 @@ function PhaseCoverageCard() {
     const controller = new AbortController();
     (async () => {
       try {
-        const json = await api.get("/mitre/phases", { signal: controller.signal });
+        const json = await api.get(paths.mitre.phases, { signal: controller.signal });
         if (json.success) setPhases(((json.data || []) as PhaseCoverage[]));
       } catch { toast.error(t("attack.load_phases_failed")); }
       setLoading(false);
@@ -354,10 +355,10 @@ function PhaseCoverageCard() {
                 {isCovered ? (
                   <Check className="w-4 h-4" />
                 ) : (
-                  <span className="text-white text-(--font-size-micro-sm) font-bold">-</span>
+                  <span className="text-white text-(--fs-micro-sm) font-bold">-</span>
                 )}
               </div>
-              <div className="text-(--font-size-micro-sm) font-medium text-foreground leading-tight mb-1">
+              <div className="text-(--fs-micro-sm) font-medium text-foreground leading-tight mb-1">
                 {phase.split(" ").slice(0, 2).join(" ")}
               </div>
               <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
@@ -365,7 +366,7 @@ function PhaseCoverageCard() {
                   style={{ width: `${pct}%` }} />
               </div>
               {found && (
-                <div className="text-(--font-size-micro) text-muted mt-1">
+                <div className="text-(--fs-micro) text-muted mt-1">
                   {found.total_tasks} {t("attack.tasks")}
                 </div>
               )}

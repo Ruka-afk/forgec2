@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { CopyButton, StatusBadge, Spinner } from "@/components/UI";
 import type { AgentDetail, AgentStatus } from "@/types/agent";
-import { Activity, Apple, Camera, Clipboard, Crown, Database, FolderOpen, History, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, RefreshCw, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
+import { Activity, Apple, Camera, Clipboard, Crown, Database, FolderOpen, History, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -35,13 +35,12 @@ export interface AgentHeaderProps {
   credCount: number | null;
   onKill: () => void;
   onUninstall: () => void;
-  onKeyRotate?: () => void;
   onClose?: () => void;
 }
 
 export default function AgentHeader({
   agent, agentId, status,
-  actionLoading, onQuickAction, credCount, onKill, onUninstall, onKeyRotate,
+  actionLoading, onQuickAction, credCount, onKill, onUninstall,
 }: AgentHeaderProps) {
   const { t } = useI18n();
   const hostname = agent.hostname || "\u2014";
@@ -114,12 +113,12 @@ export default function AgentHeader({
                     <StatusBadge status={status} pulse={status === "online"} />
                   </span>
                   {integrity && (
-                    <Badge variant={integrity.toLowerCase() === "system" || integrity.toLowerCase() === "high" ? "destructive" : integrity.toLowerCase() === "medium" ? "secondary" : "outline"} className="text-(--font-size-micro-sm) uppercase">
+                    <Badge variant={integrity.toLowerCase() === "system" || integrity.toLowerCase() === "high" ? "destructive" : integrity.toLowerCase() === "medium" ? "secondary" : "outline"} className="text-(--fs-micro-sm) uppercase">
                       {integrity}
                     </Badge>
                   )}
                   {elevated && (
-                    <Badge variant="warning" className="text-(--font-size-micro-sm)">
+                    <Badge variant="warning" className="text-(--fs-micro-sm)">
                       <Crown className="w-4 h-4" />
                       {t("agents.header_elevated")}
                     </Badge>
@@ -127,28 +126,28 @@ export default function AgentHeader({
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                    <span className="text-(--font-size-micro-sm) uppercase tracking-wide text-muted-foreground/70">IP</span>
+                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">IP</span>
                     <span className="font-mono text-foreground">{ip}</span>
                     <CopyButton text={ip} label="IP" />
                   </span>
                   {publicIP && (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                      <span className="text-(--font-size-micro-sm) uppercase tracking-wide text-muted-foreground/70">WAN</span>
+                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">{t("agents.header_wan")}</span>
                       <span className="font-mono text-foreground">{publicIP}</span>
                       <CopyButton text={publicIP} label="Public IP" />
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                    <span className="text-(--font-size-micro-sm) uppercase tracking-wide text-muted-foreground/70">User</span>
+                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">{t("agents.header_user")}</span>
                     <span className="text-foreground">{username}</span>
                   </span>
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                    <span className="text-(--font-size-micro-sm) uppercase tracking-wide text-muted-foreground/70">OS</span>
+                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">OS</span>
                     <span className="text-foreground">{os} {arch}</span>
                   </span>
                   {domain && (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                      <span className="text-(--font-size-micro-sm) uppercase tracking-wide text-muted-foreground/70">Domain</span>
+                      <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">{t("agents.header_domain")}</span>
                       <span className="text-foreground">{domain}</span>
                     </span>
                   )}
@@ -162,9 +161,9 @@ export default function AgentHeader({
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:w-[34rem]">
-              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/shell`} />}><Terminal className="w-4 h-4" /> {t("agents.shell_title")} <kbd className="text-(--font-size-micro-sm) opacity-50 ml-1">S</kbd></Button>
-              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/files`} />}><FolderOpen className="w-4 h-4" /> {t("agents.files_title")} <kbd className="text-(--font-size-micro-sm) opacity-50 ml-1">F</kbd></Button>
-              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/screen`} />}><Monitor className="w-4 h-4" /> {t("agents.screen_title")} <kbd className="text-(--font-size-micro-sm) opacity-50 ml-1">D</kbd></Button>
+              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/shell`} />}><Terminal className="w-4 h-4" /> {t("agents.shell_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">S</kbd></Button>
+              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/files`} />}><FolderOpen className="w-4 h-4" /> {t("agents.files_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">F</kbd></Button>
+              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/screen`} />}><Monitor className="w-4 h-4" /> {t("agents.screen_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">D</kbd></Button>
               <DropdownMenu>
                 <DropdownMenuTrigger render={<Button variant="secondary" size="sm" className="gap-1.5"><MoreHorizontal className="w-4 h-4" /> {t("agents.header_more")}</Button>} />
                 <DropdownMenuContent className="w-48">
@@ -174,7 +173,6 @@ export default function AgentHeader({
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/recording`} />}><History className="w-4 h-4" /> {t("agents.recording_title")}</DropdownMenuItem>
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/config`} />}><SlidersHorizontal className="w-4 h-4" /> {t("agents.config_hot_config")}</DropdownMenuItem>
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/traffic`} />}><Activity className="w-4 h-4" /> {t("agents.traffic_title")}</DropdownMenuItem>
-                  {onKeyRotate && <DropdownMenuItem onClick={onKeyRotate}><RefreshCw className="w-4 h-4" /> {t("agents.force_key_rotation")}</DropdownMenuItem>}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem variant="destructive" onClick={onKill}><Skull className="w-4 h-4" /> {t("agents.kill_agent")}</DropdownMenuItem>
                   <DropdownMenuItem variant="destructive" onClick={onUninstall}><Trash2 className="w-4 h-4" /> {t("agents.uninstall")}</DropdownMenuItem>
@@ -188,13 +186,20 @@ export default function AgentHeader({
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
         {quickActions.map((item) => (
           <Tooltip key={item.action}>
-            <TooltipTrigger render={<Card onClick={() => onQuickAction(item.action, item.label)} className={`group relative overflow-hidden rounded-xl border border-border/70 bg-card/90 p-3.5 flex flex-col items-center gap-2.5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-primary/20 cursor-pointer ${status !== "online" || actionLoading !== null ? "opacity-40 pointer-events-none" : ""}`} />}>
+            <TooltipTrigger render={
+              <Button
+                variant="ghost"
+                disabled={status !== "online" || actionLoading !== null}
+                onClick={() => onQuickAction(item.action, item.label)}
+                className={`group relative overflow-hidden rounded-xl border border-border/70 bg-card/90 p-3.5 flex flex-col items-center gap-2.5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-primary/20 ${status !== "online" || actionLoading !== null ? "opacity-40" : ""}`}
+              />
+            }>
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary transition-transform group-hover:scale-105">
                 {actionLoading === item.action ? <Spinner size="sm" /> : item.icon}
               </span>
-              <span className="text-(--font-size-micro-sm) font-medium text-foreground leading-tight text-center">{item.label}</span>
+              <span className="text-(--fs-micro-sm) font-medium text-foreground leading-tight text-center">{item.label}</span>
               {"badge" in item && item.badge != null && (item.badge as number) > 0 && (
-                <Badge className="absolute top-1 right-1 min-w-[16px] h-4 px-1 text-(--font-size-micro-sm)">{(item.badge as number) > 99 ? "99+" : (item.badge as number)}</Badge>
+                <Badge className="absolute top-1 right-1 min-w-[16px] h-4 px-1 text-(--fs-micro-sm)">{(item.badge as number) > 99 ? "99+" : (item.badge as number)}</Badge>
               )}
             </TooltipTrigger>
             <TooltipContent>{item.label}</TooltipContent>

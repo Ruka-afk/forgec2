@@ -4,24 +4,35 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdh"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
+	"runtime"
+	"sync"
 )
 
 const (
 	nonceSize  = 8
 	keySize    = 32
 	magicBytes = "FC20"
+
+	// v2 key derivation salts — MUST mirror internal/crypto/keys.go.
+	regKeySaltV2  = "forgec2-reg-v2"
+	sessKeySaltV2 = "forgec2-session-v2"
 )
 
 var (
 	errShortData    = errors.New("cipher data too short")
 	errBadMagic     = errors.New("invalid magic bytes")
 	errNoSessionKey = errors.New("ECDH session not established")
+	errShortKey     = errors.New("stream cipher key must be 32 bytes")
 )
 
 // streamCipher is the legacy XOR stream cipher (backward compatible)
@@ -31,14 +42,13 @@ type streamCipher struct {
 	key [keySize]byte
 }
 
-func newStreamCipher(key []byte) *streamCipher {
-	c := &streamCipher{}
-	if len(key) >= keySize {
-		copy(c.key[:], key[:keySize])
-	} else {
-		rand.Read(c.key[:])
+func newStreamCipher(key []byte) (*streamCipher, error) {
+	if len(key) != keySize {
+		return nil, errShortKey
 	}
-	return c
+	c := &streamCipher{}
+	copy(c.key[:], key)
+	return c, nil
 }
 
 func (sc *streamCipher) encrypt(plaintext []byte) ([]byte, error) {
@@ -92,15 +102,128 @@ func (sc *streamCipher) generateKeystream(nonce []byte, length int) []byte {
 	return keystream[:length]
 }
 
+// --- v2 key derivation (standard-library HKDF-SHA256, mirrors internal/crypto) ---
+
+// hkdfSHA256 implements HKDF-SHA256 using only the standard library so the
+// agent (which must not depend on x/crypto in a standalone binary context)
+// derives keys identically to the server.
+func hkdfSHA256(secret, salt, info []byte) []byte {
+	if len(secret) == 0 {
+		return nil
+	}
+	extract := hmac.New(sha256.New, salt)
+	extract.Write(secret)
+	prk := extract.Sum(nil)
+
+	out := make([]byte, 32)
+	var prev []byte
+	for counter := byte(1); len(prev) < len(out); counter++ {
+		expand := hmac.New(sha256.New, prk)
+		expand.Write(prev)
+		expand.Write(info)
+		expand.Write([]byte{counter})
+		block := expand.Sum(nil)
+		out = append(out[:0:0], out[:len(prev)]...)
+		out = append(out, block[:len(out)-len(prev)]...)
+		prev = block
+	}
+	return out
+}
+
+// deriveAgentRegKey derives the per-agent registration key from the compiled-in
+// beacon key (hex string, same value as the server's cfg.Server.BeaconKey).
+// Mirrors crypto.DeriveRegistrationKey. Returns nil for an empty/invalid key.
+func deriveAgentRegKey(beaconKeyHex, agentID string) []byte {
+	master, err := hex.DecodeString(beaconKeyHex)
+	if err != nil || len(master) == 0 {
+		return nil
+	}
+	return hkdfSHA256(master, []byte(regKeySaltV2), []byte(agentID))
+}
+
+// deriveAgentSessionKey derives the AES-256-GCM session key from an X25519
+// shared secret. Mirrors crypto.DeriveSessionKey.
+func deriveAgentSessionKey(sharedSecret []byte, agentID string) []byte {
+	return hkdfSHA256(sharedSecret, []byte(sessKeySaltV2), []byte(agentID))
+}
+
+// computeRegHMAC authenticates the v2 registration frame:
+// HMAC-SHA256(regKey, agentID || identity_pub_b64 || ts (8-byte big-endian)).
+// Mirrors crypto.ComputeRegHMAC.
+func computeRegHMAC(regKey []byte, agentID, identityPubB64 string, ts int64) []byte {
+	mac := hmac.New(sha256.New, regKey)
+	mac.Write([]byte(agentID))
+	mac.Write([]byte(identityPubB64))
+	var buf [8]byte
+	for i := 0; i < 8; i++ {
+		buf[7-i] = byte(ts >> (8 * i))
+	}
+	mac.Write(buf[:])
+	return mac.Sum(nil)
+}
+
+// computeFrameMAC authenticates v2 handshake request frames and the server's
+// auth responses: HMAC-SHA256(regKey, parts...). Mirrors server computeAuthMAC.
+func computeFrameMAC(regKey []byte, parts ...string) []byte {
+	mac := hmac.New(sha256.New, regKey)
+	for _, p := range parts {
+		mac.Write([]byte(p))
+	}
+	return mac.Sum(nil)
+}
+
+// --- v2 identity key (persistent X25519 pair, bound at registration) ---
+
+var identityPriv *ecdh.PrivateKey // persistent identity key (nil until loaded)
+
+// loadOrCreateIdentityKey loads the persistent identity key, generating and
+// persisting a fresh one on first run. Returns (key, firstRun).
+func loadOrCreateIdentityKey() (*ecdh.PrivateKey, bool) {
+	path := getIdentityKeyFilePath()
+	if data, err := os.ReadFile(path); err == nil && len(data) == 32 {
+		if k, err := ecdh.X25519().NewPrivateKey(data); err == nil {
+			identityPriv = k
+			return k, false
+		}
+	}
+	curve := ecdh.X25519()
+	k, err := curve.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, false
+	}
+	if err := os.WriteFile(path, k.Bytes(), 0600); err != nil {
+		return nil, false
+	}
+	if runtime.GOOS == "windows" {
+		setHidden(path)
+	}
+	identityPriv = k
+	return k, true
+}
+
+// identityPubB64 returns the identity public key (base64) or "" if not loaded.
+func identityPubB64() string {
+	if identityPriv == nil {
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(identityPriv.PublicKey().Bytes())
+}
+
+// getIdentityKeyFilePath returns the persistence path for the identity key.
+func getIdentityKeyFilePath() string {
+	dir := filepath.Dir(getUUIDFilePath())
+	return filepath.Join(dir, "identity.key")
+}
+
 // --- ECDH + AES-256-GCM Session (forward-secret encryption) ---
 
-// ecdhSession manages a single ECDH session with the server
+// ecdhSession manages a single ECDH session with the server. It is shared by
+// the beacon loop, quick-result senders and task executor goroutines, so every
+// access to privateKey/sessionKey is guarded by mu.
 type ecdhSession struct {
-	privateKey        *ecdh.PrivateKey
-	sessionKey        []byte // AES-256-GCM key derived from ECDH shared secret
-	msgCount          int
-	rotationPending   bool   // agent key was rotated; include new pub key in next beacon
-	rotationPubKeyB64 string // new public key to send
+	mu         sync.RWMutex
+	privateKey *ecdh.PrivateKey
+	sessionKey []byte // AES-256-GCM key derived from ECDH shared secret
 }
 
 // newECDSession generates a new ECDH key pair for session initiation
@@ -117,29 +240,44 @@ func newECDSession() (*ecdhSession, error) {
 
 // publicKeyB64 returns the base64-encoded public key for the handshake
 func (es *ecdhSession) publicKeyB64() string {
+	es.mu.RLock()
+	defer es.mu.RUnlock()
 	return base64.StdEncoding.EncodeToString(es.privateKey.PublicKey().Bytes())
 }
 
-// establishFromServerKey completes the ECDH handshake using the server's public key
+// establishFromServerKey completes the ECDH handshake using the server's public
+// key. The session key is HKDF-derived from the shared secret, bound to the
+// agent identity (v2 — replaces the bare SHA-256 of v1).
 func (es *ecdhSession) establishFromServerKey(serverPubB64 string) error {
 	curve := ecdh.X25519()
 	serverPub, err := curve.NewPublicKey(decodeB64(serverPubB64))
 	if err != nil {
 		return err
 	}
+	es.mu.Lock()
+	defer es.mu.Unlock()
 	sharedSecret, err := es.privateKey.ECDH(serverPub)
 	if err != nil {
 		return err
 	}
-	hash := sha256.Sum256(sharedSecret)
-	es.sessionKey = hash[:]
-	es.msgCount = 0
+	es.sessionKey = deriveAgentSessionKey(sharedSecret, agentUUID)
 	return nil
 }
 
-// encryptAESGCM encrypts plaintext with AES-256-GCM using the session key
+// invalidate drops the session key so the next beacon performs a fresh
+// authenticated handshake (rekey / server restart recovery).
+func (es *ecdhSession) invalidate() {
+	es.mu.Lock()
+	es.sessionKey = nil
+	es.mu.Unlock()
+}
+
+// encryptAESGCM encrypts plaintext with AES-256-GCM using the session key.
+// AAD binds the frame to its agent/sequence (v2 replay protection).
 // Returns: base64(nonce + ciphertext)
-func (es *ecdhSession) encryptAESGCM(plaintext []byte) (string, error) {
+func (es *ecdhSession) encryptAESGCMWithAAD(plaintext []byte, aad []byte) (string, error) {
+	es.mu.RLock()
+	defer es.mu.RUnlock()
 	if es.sessionKey == nil {
 		return "", errNoSessionKey
 	}
@@ -159,14 +297,16 @@ func (es *ecdhSession) encryptAESGCM(plaintext []byte) (string, error) {
 		return "", err
 	}
 
-	ciphertext := aesGCM.Seal(nonce, nonce, plaintext, nil)
-	es.msgCount++
+	ciphertext := aesGCM.Seal(nonce, nonce, plaintext, aad)
 
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-// decryptAESGCM decrypts base64(nonce + ciphertext) with AES-256-GCM
-func (es *ecdhSession) decryptAESGCM(encoded string) ([]byte, error) {
+// decryptAESGCMWithAAD decrypts base64(nonce + ciphertext) with AES-256-GCM,
+// authenticating the same AAD used at encryption time.
+func (es *ecdhSession) decryptAESGCMWithAAD(encoded string, aad []byte) ([]byte, error) {
+	es.mu.RLock()
+	defer es.mu.RUnlock()
 	if es.sessionKey == nil {
 		return nil, errNoSessionKey
 	}
@@ -192,36 +332,18 @@ func (es *ecdhSession) decryptAESGCM(encoded string) ([]byte, error) {
 	}
 
 	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
-	plaintext, err := aesGCM.Open(nil, nonce, ciphertext, nil)
+	plaintext, err := aesGCM.Open(nil, nonce, ciphertext, aad)
 	if err != nil {
 		return nil, err
 	}
 
-	es.msgCount++
 	return plaintext, nil
-}
-
-// needsKeyRotation checks if the session key should be rotated
-func (es *ecdhSession) needsKeyRotation() bool {
-	return es.sessionKey != nil && es.msgCount >= 100
-}
-
-// rotateKeyPair generates a new ECDH key pair for forward secrecy during rotation
-func (es *ecdhSession) rotateKeyPair() error {
-	curve := ecdh.X25519()
-	privateKey, err := curve.GenerateKey(rand.Reader)
-	if err != nil {
-		return err
-	}
-	es.privateKey = privateKey
-	es.rotationPubKeyB64 = es.publicKeyB64()
-	es.rotationPending = true
-	es.msgCount = 0
-	return nil
 }
 
 // needsHandshake returns true if the session hasn't been established yet
 func (es *ecdhSession) needsHandshake() bool {
+	es.mu.RLock()
+	defer es.mu.RUnlock()
 	return es.sessionKey == nil
 }
 
