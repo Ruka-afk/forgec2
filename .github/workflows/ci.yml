@@ -27,13 +27,19 @@ jobs:
         run: go build -o forgec2-server ./cmd/server
       - name: API smoke (unauth + default admin)
         run: |
-          # Fresh DB so config.example.yaml auth.default_password=Admin123! seeds admin
+          # Fresh DB. config.example.yaml leaves auth.default_password empty
+          # (secure default -> random password printed on first boot), so CI
+          # injects a strong password for the login test and tells the smoke
+          # script what it is.
+          SMOKE_ADMIN_PASSWORD="S1mokeC2-$(openssl rand -hex 8)-9z!Z"
+          sed "s/^  default_password:.*/  default_password: $SMOKE_ADMIN_PASSWORD/" config.example.yaml > config.ci.yaml
           rm -rf data/db
           mkdir -p data/db
-          ./forgec2-server -config config.example.yaml > /tmp/forgec2-smoke.log 2>&1 &
+          export SMOKE_ADMIN_PASSWORD
+          ./forgec2-server -config config.ci.yaml > /tmp/forgec2-smoke.log 2>&1 &
           echo $! > /tmp/forgec2-smoke.pid
           for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8000/health | grep -q ok; then break; fi
+            if curl -skf https://127.0.0.1:8000/health | grep -q ok; then break; fi
             sleep 1
           done
           chmod +x scripts/ci-api-smoke.sh

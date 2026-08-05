@@ -19,6 +19,9 @@ func newLoginTestServer(t *testing.T) *Server {
 	gin.SetMode(gin.TestMode)
 	cfg := config.DefaultConfig()
 	cfg.Server.JWTSecret = "test-jwt-secret-for-login"
+	// Tests exercise login over plain HTTP; TLS-gating is covered by the
+	// dedicated RequireTLSForAuth tests (see handlers_auth_session_test.go).
+	cfg.Server.RequireTLSForAuth = false
 	if err := middleware.InitJWTSecret(cfg, ""); err != nil {
 		t.Fatalf("InitJWTSecret() error = %v", err)
 	}

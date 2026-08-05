@@ -114,6 +114,7 @@ type Config struct {
 	Crypto struct {
 		Key                     string `yaml:"key"`                        // 32-byte hex key for XOR encryption, or "ecdh:" for ECDH+AES-256-GCM (empty=disabled)
 		LootKey                 string `yaml:"loot_key"`                   // 32-byte hex key for AES-256-GCM loot encryption (empty = derived from JWT secret)
+		ExtC2Key                string `yaml:"extc2_key"`                  // 32-byte hex key for AES-256-GCM ExtC2 channel encryption (empty = derived from JWT secret)
 		BackupKey               string `yaml:"backup_key"`                 // 32-byte hex key for encrypted .fbk backups (empty = derived from crypto key / JWT secret)
 		ForceECDH               bool   `yaml:"force_ecdh"`                 // reject plaintext beacons when ECDH is enabled
 		MaxDecryptedPayloadSize int    `yaml:"max_decrypted_payload_size"` // max bytes for decrypted beacon body (0 = default 10MB)
@@ -202,7 +203,8 @@ func DefaultConfig() *Config {
 	cfg := &Config{}
 	cfg.Server.Port = 8000
 	cfg.Server.Host = "127.0.0.1" // change to "0.0.0.0" for production access
-	cfg.Server.TLSEnabled = false
+	cfg.Server.TLSEnabled = true  // self-signed cert auto-generated on first run
+	cfg.Server.RequireTLSForAuth = true
 	cfg.Server.TCPEnabled = false
 	cfg.Server.TCPAddr = ""
 	cfg.Server.SMBEnabled = false
@@ -351,6 +353,43 @@ func isWeakSecret(s string) bool {
 	return false
 }
 
+// isWeakDefaultPassword rejects trivially guessable first-boot admin
+// passwords (e.g. the historical "Admin123!" example value). Operators must
+// either choose a strong password or leave default_password empty so the
+// server auto-generates a random one.
+func isWeakDefaultPassword(s string) bool {
+	if len(s) < 12 {
+		return true
+	}
+	lower := strings.ToLower(s)
+	weak := []string{
+		"admin", "password", "changeme", "change_me", "123456", "12345678",
+		"qwerty", "letmein", "welcome", "forgec2", "default", "test",
+	}
+	for _, w := range weak {
+		if strings.Contains(lower, w) {
+			return true
+		}
+	}
+	hasUpper := false
+	hasLower := false
+	hasDigit := false
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+			hasLower = true
+		case r >= 'A' && r <= 'Z':
+			hasUpper = true
+		case r >= '0' && r <= '9':
+			hasDigit = true
+		}
+	}
+	if !(hasUpper && hasLower && hasDigit) {
+		return true
+	}
+	return false
+}
+
 // Load loads config from file, creates default if not exists
 func Load(path string) (*Config, error) {
 	cfg := DefaultConfig()
@@ -361,6 +400,24 @@ func Load(path string) (*Config, error) {
 			// create default config file
 			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 				return nil, err
+			}
+			// Fresh deployment: mint independent random storage keys now so
+			// loot/ExtC2 ciphertext are cryptographically independent of the
+			// JWT secret (a JWT compromise must not decrypt credentials).
+			for _, gen := range []struct {
+				field *string
+				slogW string
+			}{
+				{&cfg.Server.JWTSecret, "JWT secret"},
+				{&cfg.Crypto.LootKey, "loot key"},
+				{&cfg.Crypto.ExtC2Key, "ExtC2 key"},
+				{&cfg.Server.BeaconKey, "beacon key"},
+			} {
+				key := make([]byte, 32)
+				if _, rerr := rand.Read(key); rerr != nil {
+					return nil, rerr
+				}
+				*gen.field = hex.EncodeToString(key)
 			}
 			out, _ := yaml.Marshal(cfg)
 			if err := os.WriteFile(path, out, 0600); err != nil {
@@ -424,6 +481,11 @@ func Load(path string) (*Config, error) {
 	// Env override for loot key (takes precedence over config file)
 	if envLootKey := os.Getenv("FORGEC2_LOOT_KEY"); envLootKey != "" {
 		cfg.Crypto.LootKey = envLootKey
+	}
+
+	// Env override for ExtC2 key (takes precedence over config file)
+	if envExtC2Key := os.Getenv("FORGEC2_EXTC2_KEY"); envExtC2Key != "" {
+		cfg.Crypto.ExtC2Key = envExtC2Key
 	}
 
 	// Env override for backup key (takes precedence over config file)
@@ -606,23 +668,15 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// TLS validation
+	// TLS validation. cert_file/key_file paths are required when TLS is on,
+	// but the files themselves may be absent: the server auto-generates a
+	// self-signed certificate at startup (Run -> GenerateSelfSignedCert).
 	if c.Server.TLSEnabled {
 		if c.Server.CertFile == "" {
 			errs = append(errs, errors.New("server.cert_file is required when server.tls_enabled is true"))
 		}
 		if c.Server.KeyFile == "" {
 			errs = append(errs, errors.New("server.key_file is required when server.tls_enabled is true"))
-		}
-		if c.Server.CertFile != "" {
-			if _, err := os.Stat(c.Server.CertFile); err != nil {
-				errs = append(errs, fmt.Errorf("server.cert_file: %w", err))
-			}
-		}
-		if c.Server.KeyFile != "" {
-			if _, err := os.Stat(c.Server.KeyFile); err != nil {
-				errs = append(errs, fmt.Errorf("server.key_file: %w", err))
-			}
 		}
 	}
 	if c.Server.RequireTLSForAuth && !c.Server.TLSEnabled {
@@ -665,6 +719,9 @@ func (c *Config) Validate() error {
 	}
 	if c.PasswordPolicy.BcryptCost > 0 && (c.PasswordPolicy.BcryptCost < 4 || c.PasswordPolicy.BcryptCost > 31) {
 		errs = append(errs, errors.New("password_policy.bcrypt_cost must be between 4 and 31 when non-zero"))
+	}
+	if c.Auth.DefaultPasswd != "" && isWeakDefaultPassword(c.Auth.DefaultPasswd) {
+		errs = append(errs, errors.New("auth.default_password is too weak — set a strong password or leave it empty to auto-generate a random one on first boot"))
 	}
 	if c.Socks.Enabled {
 		for _, dest := range c.Socks.AllowedDests {
@@ -721,6 +778,14 @@ func (c *Config) Validate() error {
 		}
 		if _, err := hex.DecodeString(c.Crypto.LootKey); err != nil {
 			errs = append(errs, errors.New("crypto.loot_key must be a valid hex string"))
+		}
+	}
+	if c.Crypto.ExtC2Key != "" {
+		if len(c.Crypto.ExtC2Key) != 64 {
+			errs = append(errs, errors.New("crypto.extc2_key must be a 64-character hex string (32 bytes) when set"))
+		}
+		if _, err := hex.DecodeString(c.Crypto.ExtC2Key); err != nil {
+			errs = append(errs, errors.New("crypto.extc2_key must be a valid hex string"))
 		}
 	}
 	if c.Crypto.BackupKey != "" {

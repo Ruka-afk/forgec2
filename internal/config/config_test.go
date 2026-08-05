@@ -17,8 +17,11 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Server.Host != "127.0.0.1" {
 		t.Errorf("expected host 127.0.0.1, got %s", cfg.Server.Host)
 	}
-	if cfg.Server.TLSEnabled != false {
-		t.Errorf("expected tls_enabled false, got %v", cfg.Server.TLSEnabled)
+	if !cfg.Server.TLSEnabled {
+		t.Errorf("expected tls_enabled true (secure default), got %v", cfg.Server.TLSEnabled)
+	}
+	if !cfg.Server.RequireTLSForAuth {
+		t.Errorf("expected require_tls_for_auth true (secure default), got %v", cfg.Server.RequireTLSForAuth)
 	}
 	if cfg.Implant.DefaultInterval != 5 {
 		t.Errorf("expected interval 5, got %d", cfg.Implant.DefaultInterval)
@@ -150,6 +153,39 @@ func TestIsWeakSecret(t *testing.T) {
 		if got := isWeakSecret(tt.secret); got != tt.weak {
 			t.Errorf("isWeakSecret(%q) = %v, want %v", tt.secret, got, tt.weak)
 		}
+	}
+}
+
+func TestIsWeakDefaultPassword(t *testing.T) {
+	tests := []struct {
+		pass string
+		weak bool
+	}{
+		{"", true},
+		{"Admin123!", true},
+		{"admin", true},
+		{"password123", true},
+		{"Changeme1!", true},
+		{"abcdefghijkl", true},
+		{"NOSMALLCASE123456", true},
+		{"Xy9!kZ2@mQ7vLp4w", false},
+	}
+	for _, tt := range tests {
+		if got := isWeakDefaultPassword(tt.pass); got != tt.weak {
+			t.Errorf("isWeakDefaultPassword(%q) = %v, want %v", tt.pass, got, tt.weak)
+		}
+	}
+}
+
+func TestValidateRejectsWeakDefaultPassword(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Auth.DefaultPasswd = "Admin123!"
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() should reject weak auth.default_password")
+	}
+	cfg.Auth.DefaultPasswd = ""
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() with empty default_password should pass, got: %v", err)
 	}
 }
 

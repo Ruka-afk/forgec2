@@ -5,9 +5,10 @@
 server:
   port: 8000
   host: 0.0.0.0
-  tls_enabled: false
+  tls_enabled: true            # SECURE DEFAULT: HTTPS on by default; a self-signed cert is auto-generated at data/server.crt|key on first run
   cert_file: data/server.crt
   key_file: data/server.key
+  require_tls_for_auth: true   # refuse to issue session cookies over plain HTTP
   jwt_secret: ""
   data_dir: data
   offline_threshold: 60
@@ -40,8 +41,10 @@ implant:
 
 auth:
   password_hash: ""
-  # Used only when the DB has zero users (first boot). CI smoke uses admin / Admin123!
-  default_password: "Admin123!"
+  # First-boot admin password, used only when the DB has zero users.
+  # SECURE DEFAULT: leave empty — a random strong password is generated and
+  # printed to the console on first start (never commit a default password).
+  default_password: ""
 
 password_policy:
   min_length: 8
@@ -54,7 +57,8 @@ password_policy:
 crypto:
   key: "ecdh:"                 # "ecdh:" enables ECDH+AES-256-GCM (default/recommended); or a 32-byte hex key for legacy XOR (not recommended)
   force_ecdh: true             # reject plaintext beacons when ECDH is enabled
-  loot_key: ""                 # 32-byte hex key for AES-256-GCM loot encryption (empty = derived from JWT secret)
+  loot_key: ""                 # 32-byte hex key for AES-256-GCM loot encryption (empty = derived from JWT secret; fresh installs auto-generate)
+  extc2_key: ""                # 32-byte hex key for AES-256-GCM ExtC2 channel encryption (empty = derived from JWT secret; fresh installs auto-generate)
   backup_key: ""               # 32-byte hex key for encrypted .fbk backups (empty = derived from crypto key / JWT secret)
 
 malleable:
