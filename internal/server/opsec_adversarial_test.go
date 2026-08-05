@@ -499,11 +499,11 @@ func TestTransportObfuscation_FakeQueryRate(t *testing.T) {
 	}
 }
 
-func TestJARMValidator_Stats(t *testing.T) {
+func TestTLSCertMonitor_Stats(t *testing.T) {
 	t.Helper()
-	jv := NewJARMValidator(true)
+	jv := NewTLSCertMonitor(true)
 	if jv == nil {
-		t.Fatal("NewJARMValidator returned nil for enabled=true")
+		t.Fatal("NewTLSCertMonitor returned nil for enabled=true")
 	}
 
 	stats := jv.GetStats()
@@ -514,9 +514,9 @@ func TestJARMValidator_Stats(t *testing.T) {
 		t.Errorf("initial total_probes = %d, want 0", stats["total_probes"])
 	}
 
-	jv.RecordJARMHash("hash-aaa")
-	jv.RecordJARMHash("hash-bbb")
-	jv.RecordJARMHash("hash-aaa")
+	jv.RecordCertHash("hash-aaa")
+	jv.RecordCertHash("hash-bbb")
+	jv.RecordCertHash("hash-aaa")
 
 	stats = jv.GetStats()
 	if stats["unique_hashes"] != 2 {
@@ -526,21 +526,14 @@ func TestJARMValidator_Stats(t *testing.T) {
 		t.Errorf("total_probes = %d, want 3", stats["total_probes"])
 	}
 
-	if jv.IsBurned("hash-aaa") {
-		t.Error("hash-aaa should not be burned")
+	if NewTLSCertMonitor(false) != nil {
+		t.Error("NewTLSCertMonitor(false) should return nil")
 	}
 
-	if NewJARMValidator(false) != nil {
-		t.Error("NewJARMValidator(false) should return nil")
-	}
-
-	var nilValidator *JARMValidator
-	nilValidator.RecordJARMHash("noop")
-	if nilValidator.GetStats() != nil {
-		t.Error("nil JARMValidator.GetStats() should return nil")
-	}
-	if nilValidator.IsBurned("noop") {
-		t.Error("nil JARMValidator.IsBurned should return false")
+	var nilMonitor *TLSCertMonitor
+	nilMonitor.RecordCertHash("noop")
+	if nilMonitor.GetStats() != nil {
+		t.Error("nil TLSCertMonitor.GetStats() should return nil")
 	}
 }
 
@@ -659,7 +652,7 @@ func TestOpsecAdaptive_BlockCritical(t *testing.T) {
 
 func TestExtC2Encryption_RoundTrip(t *testing.T) {
 	t.Helper()
-	crypto.InitExtC2Encryption("test-jwt-secret-for-extc2")
+	crypto.InitExtC2Encryption("test-jwt-secret-for-extc2", "")
 
 	original := "discord-webhook-token-super-secret-12345"
 	encrypted, err := crypto.EncryptExtC2(original)

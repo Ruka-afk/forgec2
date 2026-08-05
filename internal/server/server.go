@@ -85,6 +85,9 @@ type Server struct {
 	// ECDH session manager (nil = disabled / old XOR mode)
 	sessionManager *crypto.SessionManager
 
+	// v3 per-implant registration secret store (seals/unseals reg secrets)
+	regSecrets *crypto.RegSecretStore
+
 	monitorCollector *MonitorCollector
 
 	// Plugin marketplace
@@ -218,7 +221,7 @@ type Server struct {
 	pwdChangeTimesMu sync.Mutex
 
 	// JARM/JA3 continuous validation
-	jarmValidator *JARMValidator
+	tlsCertMonitor *TLSCertMonitor
 
 	// OPSEC adaptive threat manager
 	opsecAdaptive *opsec.AdaptiveManager
@@ -249,7 +252,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		os.Exit(1)
 	}
 	crypto.InitLootEncryption(cfg.Server.JWTSecret, cfg.Crypto.LootKey)
-	crypto.InitExtC2Encryption(cfg.Server.JWTSecret)
+	crypto.InitExtC2Encryption(cfg.Server.JWTSecret, cfg.Crypto.ExtC2Key)
 
 	inFlight := middleware.NewInFlightTracker()
 
@@ -385,6 +388,15 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		}
 	}
 
+	// v3 per-implant registration secret store (server-side sealing key
+	// derived from the master beacon key; never embedded in payloads).
+	if beaconKeyHex := cfg.Server.BeaconKey; beaconKeyHex != "" {
+		if master, err := hex.DecodeString(beaconKeyHex); err == nil && len(master) > 0 {
+			s.regSecrets = crypto.NewRegSecretStore(master)
+			slog.Info("v3 per-implant registration secrets enabled")
+		}
+	}
+
 	// Periodic cleanup of stale ECDH sessions to prevent unbounded map growth
 	if s.sessionManager != nil {
 		s.wg.Add(1)
@@ -426,8 +438,8 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	// Password change rate limiter
 	s.pwdChangeTimes = make(map[uint]time.Time)
 
-	// JARM/JA3 continuous validation
-	s.jarmValidator = NewJARMValidator(s.cfg.TLSFingerprint.JARMEnabled)
+	// TLS certificate stability monitor
+	s.tlsCertMonitor = NewTLSCertMonitor(s.cfg.TLSFingerprint.JARMEnabled)
 
 	// OPSEC adaptive threat manager
 	s.opsecAdaptive = opsec.NewAdaptiveManager()
@@ -512,7 +524,7 @@ func (s *Server) InitOptimizations(configPath string) {
 			switch field {
 			case "crypto.key", "server.jwt_secret":
 				crypto.InitLootEncryption(s.cfg.Server.JWTSecret, s.cfg.Crypto.LootKey)
-				crypto.InitExtC2Encryption(s.cfg.Server.JWTSecret)
+				crypto.InitExtC2Encryption(s.cfg.Server.JWTSecret, s.cfg.Crypto.ExtC2Key)
 				slog.Info("Crypto primitives re-derived from updated config", "field", field, "loot_key_explicit", s.cfg.Crypto.LootKey != "")
 			}
 		}
