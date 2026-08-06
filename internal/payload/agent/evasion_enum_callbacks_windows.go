@@ -182,7 +182,7 @@ func checkProcessDebugPort() string {
 	var retLen uint32
 
 	ret, _, _ := procNtQueryInfoProcess.Call(
-		^uintptr(0xffffffffffffffff),
+		^uintptr(0),
 		uintptr(ProcessDebugPort),
 		uintptr(unsafe.Pointer(&debugPort)),
 		uintptr(unsafe.Sizeof(debugPort)),
@@ -209,7 +209,7 @@ func checkImageLoadCallbacks() string {
 	var buf [512]byte
 	var retLen uint32
 	ret, _, _ := procNtQueryInfoProcess.Call(
-		^uintptr(0xffffffffffffffff),
+		^uintptr(0),
 		uintptr(ProcessImageFileName),
 		uintptr(unsafe.Pointer(&buf[0])),
 		uintptr(len(buf)),

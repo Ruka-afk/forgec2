@@ -64,7 +64,7 @@ func blockDllsPEBInternal() string {
 
 	var pbi processBasicInformation
 	ret, _, _ := procNtQueryInformationProcess.Call(
-		uintptr(0xffffffffffffffff),
+		^uintptr(0),
 		0,
 		uintptr(unsafe.Pointer(&pbi)),
 		uintptr(unsafe.Sizeof(pbi)),

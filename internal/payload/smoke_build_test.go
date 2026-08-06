@@ -9,43 +9,47 @@ import (
 
 // Smoke test: generate a real Windows agent with the config-blob ldflags to
 // ensure the full build pipeline (go mod tidy + go build + blob injection)
-// produces a working binary.
+// produces a working binary on every supported Windows arch.
 func TestSmokeGenerateWindowsEXE(t *testing.T) {
 	if os.Getenv("FORGEC2_SMOKE_BUILD") != "1" {
 		t.Skip("set FORGEC2_SMOKE_BUILD=1 to run the real agent build")
 	}
-	outDir := t.TempDir()
-	cfg := ImplantConfig{
-		C2URL:           "http://127.0.0.1:8080",
-		Protocol:        "http",
-		Interval:        9,
-		Jitter:          30,
-		UserAgent:       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-		Persist:         false,
-		BeaconKey:       "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
-		ListenerID:      1,
-		Filename:        "smoketest",
-		BeaconTransport: "http",
-		Architecture:    "amd64",
+	for _, arch := range []string{"amd64", "386"} {
+		t.Run("windows-"+arch, func(t *testing.T) {
+			outDir := t.TempDir()
+			cfg := ImplantConfig{
+				C2URL:           "http://127.0.0.1:8080",
+				Protocol:        "http",
+				Interval:        9,
+				Jitter:          30,
+				UserAgent:       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+				Persist:         false,
+				BeaconKey:       "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
+				ListenerID:      1,
+				Filename:        "smoketest",
+				BeaconTransport: "http",
+				Architecture:    arch,
+			}
+			path, err := GenerateWindowsEXE(cfg, outDir)
+			if err != nil {
+				t.Fatalf("GenerateWindowsEXE(%s) failed: %v", arch, err)
+			}
+			if _, err := os.Stat(path); err != nil {
+				t.Fatalf("output missing: %v", err)
+			}
+			// The config-blob approach must not leave plaintext secrets in the binary.
+			exe, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read output: %v", err)
+			}
+			for _, secret := range []string{cfg.BeaconKey, cfg.C2URL} {
+				if bytes.Contains(exe, []byte(secret)) {
+					t.Errorf("binary leaks plaintext config value %q", secret)
+				}
+			}
+			t.Logf("built %s size=%d", filepath.Base(path), fileSize(path))
+		})
 	}
-	path, err := GenerateWindowsEXE(cfg, outDir)
-	if err != nil {
-		t.Fatalf("GenerateWindowsEXE failed: %v", err)
-	}
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("output missing: %v", err)
-	}
-	// The config-blob approach must not leave plaintext secrets in the binary.
-	exe, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read output: %v", err)
-	}
-	for _, secret := range []string{cfg.BeaconKey, cfg.C2URL} {
-		if bytes.Contains(exe, []byte(secret)) {
-			t.Errorf("binary leaks plaintext config value %q", secret)
-		}
-	}
-	t.Logf("built %s size=%d", filepath.Base(path), fileSize(path))
 }
 
 func fileSize(p string) int64 {

