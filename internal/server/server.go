@@ -1026,6 +1026,12 @@ func (s *Server) cleanupOldData() {
 		slog.Error("Cleanup tasks failed", "err", err)
 	}
 
+	// delete old system metrics (monitoring persists one row every 30s; without
+	// retention the table grows ~2.9k rows/day and bloats the SQLite database)
+	if err := s.db.Where("created_at < ?", cutoff).Delete(&db.SystemMetric{}).Error; err != nil {
+		slog.Error("Cleanup system metrics failed", "err", err)
+	}
+
 	// Periodic SQLite maintenance: VACUUM and ANALYZE to prevent bloat and
 	// keep query planner statistics fresh. Only runs if the DB is SQLite.
 	if sqlDB, err := s.db.DB(); err == nil {
