@@ -37,10 +37,35 @@ interface ScreenshotItem {
   const [modalImage, setModalImage] = useState<string>("");  const [resolution, setResolution] = useState<{ width: number; height: number } | null>(null);  const [status, setStatus] = useState<"waiting" | "capturing" | "error">("waiting");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const galleryIdRef = useRef(0);
+  const lastFrameRef = useRef<string | null>(null);
+  const frameRafRef = useRef<number | null>(null);
+  const pendingFrameRef = useRef<{ data: string; width?: number; height?: number; windowName: string } | null>(null);
   const [wsLive, setWsLive] = useState(false);
   const { subscribe } = useWS();
 
   const captureBusyRef = useRef(false);
+
+  const commitFrame = useCallback((fullData: string, extras: { width?: number; height?: number; windowName: string }) => {
+    pendingFrameRef.current = { data: fullData, ...extras };
+    if (frameRafRef.current !== null) return;
+    frameRafRef.current = requestAnimationFrame(() => {
+      frameRafRef.current = null;
+      const p = pendingFrameRef.current;
+      pendingFrameRef.current = null;
+      if (!p) return;
+      setLastUpdate(new Date().toLocaleTimeString());
+      setStatus("waiting");
+      setMonitoringStatus("connected");
+      if (p.data === lastFrameRef.current) return;
+      lastFrameRef.current = p.data;
+      setScreenshot(p.data);
+      if (p.width && p.height) setResolution({ width: p.width, height: p.height });
+      setScreenshotGallery((prev) => [
+        { id: String(++galleryIdRef.current), data: p.data, timestamp: new Date().toLocaleTimeString(), width: p.width, height: p.height, window_name: p.windowName },
+        ...prev,
+      ].slice(0, 50));
+    });
+  }, []);
 
   const captureScreenshot = useCallback(async (showStatus = true) => {
     if (!id) return;
@@ -57,20 +82,7 @@ interface ScreenshotItem {
       const height = data.height || 0;
       if (imgData) {
         const fullData = imgData.startsWith("data:") ? imgData : `data:image/png;base64,${imgData}`;
-        setScreenshot(fullData);
-        setLastUpdate(new Date().toLocaleTimeString());
-        setStatus("waiting");
-        setMonitoringStatus("connected");
-        if (width && height) setResolution({ width, height });
-        const galleryItem: ScreenshotItem = {
-          id: String(++galleryIdRef.current),
-          data: fullData,
-          timestamp: new Date().toLocaleTimeString(),
-          width,
-          height,
-          window_name: data.window_name || "Desktop",
-        };
-        setScreenshotGallery(prev => [galleryItem, ...prev].slice(0, 50));
+        commitFrame(fullData, { width, height, windowName: data.window_name || "Desktop" });
       } else {
         setStatus("error");
         setMonitoringStatus("offline");
@@ -81,7 +93,7 @@ interface ScreenshotItem {
     } finally {
       captureBusyRef.current = false;
     }
-  }, [id]);  const startMonitoring = async () => {
+  }, [id, commitFrame]);  const startMonitoring = async () => {
     if (!id) return;
     setMonitoring(true);
     setMonitoringStatus("capturing");
@@ -166,26 +178,14 @@ interface ScreenshotItem {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (frameRafRef.current !== null) cancelAnimationFrame(frameRafRef.current);
     };
   }, []);
 
   const applyFrame = useCallback((imgData: string, width = 0, height = 0, windowName = "Desktop") => {
     const fullData = imgData.startsWith("data:") ? imgData : `data:image/png;base64,${imgData}`;
-    setScreenshot(fullData);
-    setLastUpdate(new Date().toLocaleTimeString());
-    setStatus("waiting");
-    setMonitoringStatus("connected");
-    if (width && height) setResolution({ width, height });
-    const galleryItem: ScreenshotItem = {
-      id: String(++galleryIdRef.current),
-      data: fullData,
-      timestamp: new Date().toLocaleTimeString(),
-      width,
-      height,
-      window_name: windowName,
-    };
-    setScreenshotGallery((prev) => [galleryItem, ...prev].slice(0, 50));
-  }, []);
+    commitFrame(fullData, { width, height, windowName });
+  }, [commitFrame]);
 
   useEffect(() => {
     if (!id) return;

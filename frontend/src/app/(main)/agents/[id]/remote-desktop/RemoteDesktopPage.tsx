@@ -62,9 +62,30 @@ export default function RemoteDesktopPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const moveThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastFrameRef = useRef<string | null>(null);
+  const frameRafRef = useRef<number | null>(null);
+  const pendingFrameRef = useRef<{ data: string; width?: number; height?: number } | null>(null);
   const { subscribe } = useWS();
 
   const pollInterval = INTERVAL_BY_RES[resolution] ?? 1000;
+
+  const commitFrame = useCallback((fullData: string, width = 0, height = 0) => {
+    pendingFrameRef.current = { data: fullData, width, height };
+    if (frameRafRef.current !== null) return;
+    frameRafRef.current = requestAnimationFrame(() => {
+      frameRafRef.current = null;
+      const p = pendingFrameRef.current;
+      pendingFrameRef.current = null;
+      if (!p) return;
+      setLastUpdate(new Date().toLocaleTimeString());
+      setStatus("connected");
+      if (p.data === lastFrameRef.current) return;
+      lastFrameRef.current = p.data;
+      setScreenData(p.data);
+      if (p.width) setNativeWidth(p.width);
+      if (p.height) setNativeHeight(p.height);
+    });
+  }, []);
 
   const captureFrame = useCallback(async () => {
     if (!id) return;
@@ -73,17 +94,13 @@ export default function RemoteDesktopPage() {
       const imgData = (data.image || data.data || data.screenshot || "") as string;
       if (imgData) {
         const fullData = imgData.startsWith("data:") ? imgData : `data:image/png;base64,${imgData}`;
-        setScreenData(fullData);
-        setLastUpdate(new Date().toLocaleTimeString());
-        setStatus("connected");
-        if (data.width) setNativeWidth(data.width as number);
-        if (data.height) setNativeHeight(data.height as number);
+        commitFrame(fullData, data.width as number, data.height as number);
       }
     } catch {
       setStatus("error");
       toast.error(t("agents.rdp_capture_failed"));
     }
-  }, [id, t]);
+  }, [id, t, commitFrame]);
 
   const startMonitoring = async () => {
     if (!id) return;
@@ -133,18 +150,15 @@ export default function RemoteDesktopPage() {
         const fullData = String(msg.data).startsWith("data:")
           ? String(msg.data)
           : `data:image/jpeg;base64,${String(msg.data)}`;
-        setScreenData(fullData);
-        setLastUpdate(new Date().toLocaleTimeString());
-        setStatus("connected");
-        if (msg.width) setNativeWidth(Number(msg.width));
-        if (msg.height) setNativeHeight(Number(msg.height));
+        commitFrame(fullData, msg.width ? Number(msg.width) : 0, msg.height ? Number(msg.height) : 0);
       }
     });
-  }, [subscribe, id]);
+  }, [subscribe, id, commitFrame]);
 
   useEffect(() => {
     return () => {
       if (moveThrottleRef.current) clearTimeout(moveThrottleRef.current);
+      if (frameRafRef.current !== null) cancelAnimationFrame(frameRafRef.current);
       if (!id) return;
       api.post(paths.agents.screenStop(id)).catch((e) => { console.error("RemoteDesktop stop failed:", e); });
     };
