@@ -81,6 +81,18 @@ function mockAuthedApis(page: Page) {
       await route.abort();
       return;
     }
+    if (type === "image") {
+      // 1x1 transparent PNG so <img> elements load instead of erroring out.
+      await route.fulfill({
+        status: 200,
+        contentType: "image/png",
+        body: Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+          "base64",
+        ),
+      });
+      return;
+    }
     if (type !== "xhr" && type !== "fetch") {
       await route.continue();
       return;
@@ -113,6 +125,18 @@ function mockAuthedApis(page: Page) {
       }
     } else if (path === "/collab/agents") {
       body = { agents: [] };
+    } else if (path === "/loot") {
+      body = {
+        screenshots: Array.from({ length: 60 }, (_, i) => ({
+          id: `shot-${i}`,
+          agent_id: "beacon-0001",
+          filename: `screenshot-${i}.png`,
+          path: `screenshots/beacon-0001/screenshot-${i}.png`,
+          created_at: "2026-08-06T00:00:00Z",
+        })),
+        keylog_tasks: [],
+        download_tasks: [],
+      };
     } else if (path === "/health") {
       body = { status: "ok", version: "test" };
     }
@@ -170,5 +194,20 @@ test.describe("tasks list interplay", () => {
       await expect(page.getByText("capture")).toBeHidden({ timeout: 10_000 });
       await expect(page.getByText("whoami")).toBeVisible();
     }
+  });
+});
+
+test.describe("loot screenshots pagination", () => {
+  test("renders first page of 48 and flips to the remaining 12", async ({ page }) => {
+    await mockAuthedApis(page);
+    await withSession(page);
+
+    await page.goto("/loot.html");
+    const imgs = page.getByRole("img", { name: /screenshot-\d+\.png/ });
+    await expect(imgs).toHaveCount(48, { timeout: 10_000 });
+    await expect(page.getByText(/\/ 60/)).toBeVisible();
+
+    await page.getByRole("button", { name: /下一页|next/i }).click();
+    await expect(imgs).toHaveCount(12, { timeout: 10_000 });
   });
 });

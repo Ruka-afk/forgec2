@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { downloadText, downloadJSON } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { formatTime } from "@/lib/utils";
-import { ConfirmModal, EmptyState, PageHeader, StatusBadge } from "@/components/UI";
+import { ConfirmModal, EmptyState, PageHeader, Pagination, StatusBadge } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,9 +35,16 @@ export default function LootPage() {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [keylogSearch, setKeylogSearch] = useState("");
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+  const [screenshotPage, setScreenshotPage] = useState(1);
+  const [keylogPage, setKeylogPage] = useState(1);
+  const [downloadPage, setDownloadPage] = useState(1);
+
+  const SCREENSHOT_PAGE_SIZE = 48;
+  const KEYLOG_PAGE_SIZE = 20;
+  const DOWNLOAD_PAGE_SIZE = 50;
 
   const filteredScreenshots = useMemo(() => data?.screenshots?.filter(s => !agentFilter || s.agent_id === agentFilter) || [], [data, agentFilter]);
-  const filteredKeylogs = data?.keylog_tasks?.filter(k => {
+  const filteredKeylogs = useMemo(() => (data?.keylog_tasks || []).filter(k => {
     if (agentFilter && k.agent_id !== agentFilter) return false;
     if (keylogSearch) {
       const q = keylogSearch.toLowerCase();
@@ -46,8 +53,29 @@ export default function LootPage() {
       if (!content.includes(q) && !agent.includes(q)) return false;
     }
     return true;
-  }) || [];
+  }), [data, agentFilter, keylogSearch]);
   const filteredDownloads = useMemo(() => data?.download_tasks?.filter(d => !agentFilter || d.agent_id === agentFilter) || [], [data, agentFilter]);
+
+  const visibleScreenshots = useMemo(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredScreenshots.length / SCREENSHOT_PAGE_SIZE));
+    const page = Math.min(screenshotPage, totalPages);
+    const start = (page - 1) * SCREENSHOT_PAGE_SIZE;
+    return filteredScreenshots.slice(start, start + SCREENSHOT_PAGE_SIZE);
+  }, [filteredScreenshots, screenshotPage]);
+
+  const visibleKeylogs = useMemo(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredKeylogs.length / KEYLOG_PAGE_SIZE));
+    const page = Math.min(keylogPage, totalPages);
+    const start = (page - 1) * KEYLOG_PAGE_SIZE;
+    return filteredKeylogs.slice(start, start + KEYLOG_PAGE_SIZE);
+  }, [filteredKeylogs, keylogPage]);
+
+  const visibleDownloads = useMemo(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredDownloads.length / DOWNLOAD_PAGE_SIZE));
+    const page = Math.min(downloadPage, totalPages);
+    const start = (page - 1) * DOWNLOAD_PAGE_SIZE;
+    return filteredDownloads.slice(start, start + DOWNLOAD_PAGE_SIZE);
+  }, [filteredDownloads, downloadPage]);
 
   const allAgents = [...new Set([
     ...(data?.screenshots?.map(s => s.agent_id) || []),
@@ -129,7 +157,7 @@ export default function LootPage() {
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("loot.page_title")} subtitle={t("loot.subtitle")}>
         <div className="flex items-center gap-2 flex-wrap">
-          <Select value={agentFilter || "all"} onValueChange={(v) => { setAgentFilter(v === "all" ? "" : v ?? ""); setSelectedItems(new Set()); }}>
+          <Select value={agentFilter || "all"} onValueChange={(v) => { setAgentFilter(v === "all" ? "" : v ?? ""); setSelectedItems(new Set()); setScreenshotPage(1); setKeylogPage(1); setDownloadPage(1); }}>
             <SelectTrigger className="w-full sm:w-48" aria-label={t("loot.filter_agent_aria")}><SelectValue placeholder={t("loot.all_agents")} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("loot.all_agents")}</SelectItem>
@@ -162,7 +190,7 @@ export default function LootPage() {
           </div>
         }
       >
-      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as LootTab); setSelectedItems(new Set()); }}>
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as LootTab); setSelectedItems(new Set()); setScreenshotPage(1); setKeylogPage(1); setDownloadPage(1); }}>
         <TabsList className="mb-4">
           {tabs.map(tab => (
             <TabsTrigger key={tab.key} value={tab.key} className="gap-2">
@@ -198,7 +226,7 @@ export default function LootPage() {
             </div>
           ) : filteredScreenshots.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-              {filteredScreenshots.map(s => (
+              {visibleScreenshots.map(s => (
                 <LootScreenshotCard
                   key={s.id}
                   screenshot={s}
@@ -213,6 +241,14 @@ export default function LootPage() {
               <EmptyState icon={Images} title={t("loot.empty_screenshots")} />
             </div>
           )}
+          {filteredScreenshots.length > SCREENSHOT_PAGE_SIZE && (
+            <Pagination
+              page={Math.min(screenshotPage, Math.ceil(filteredScreenshots.length / SCREENSHOT_PAGE_SIZE))}
+              pageSize={SCREENSHOT_PAGE_SIZE}
+              total={filteredScreenshots.length}
+              onPageChange={setScreenshotPage}
+            />
+          )}
         </Card>
       </TabsContent>
 
@@ -224,7 +260,7 @@ export default function LootPage() {
               <span>{t("loot.keylogs_title")}</span>
             </div>
             <div className="flex items-center gap-2">
-              <Input placeholder={t("loot.search_keylogs")} value={keylogSearch} onChange={e => setKeylogSearch(e.target.value)} className="hidden sm:block h-8 w-44 text-xs" />
+              <Input placeholder={t("loot.search_keylogs")} value={keylogSearch} onChange={e => { setKeylogSearch(e.target.value); setKeylogPage(1); }} className="hidden sm:block h-8 w-44 text-xs" />
               <span className="text-xs text-muted-foreground">{filteredKeylogs.length}</span>
             </div>
           </div>
@@ -240,7 +276,7 @@ export default function LootPage() {
           ) : filteredKeylogs.length > 0 ? (
             <div className="space-y-3">
               <Accordion>
-                {filteredKeylogs.map(k => {
+                {visibleKeylogs.map(k => {
                   const agentName = k.agent?.hostname || k.hostname || k.agent_id;
                   const full = k.result || k.error;
                   return (
@@ -273,6 +309,14 @@ export default function LootPage() {
               <EmptyState icon={Keyboard} title={t("loot.empty_keylogs")} />
             </div>
           )}
+          {filteredKeylogs.length > KEYLOG_PAGE_SIZE && (
+            <Pagination
+              page={Math.min(keylogPage, Math.ceil(filteredKeylogs.length / KEYLOG_PAGE_SIZE))}
+              pageSize={KEYLOG_PAGE_SIZE}
+              total={filteredKeylogs.length}
+              onPageChange={setKeylogPage}
+            />
+          )}
         </Card>
       </TabsContent>
 
@@ -304,7 +348,7 @@ export default function LootPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDownloads.map(d => (
+                {visibleDownloads.map(d => (
                   <TableRow key={d.id}>
                     <TableCell className="font-mono text-xs text-muted-foreground">{formatTime(d.created_at)}</TableCell>
                     <TableCell><span className="font-medium text-xs">{d.agent?.hostname || d.hostname || d.agent_id.substring(0, 8)}</span></TableCell>
@@ -319,6 +363,14 @@ export default function LootPage() {
             </div>
           ) : (
             <EmptyState icon={Download} title={t("loot.empty_downloads")} />
+          )}
+          {filteredDownloads.length > DOWNLOAD_PAGE_SIZE && (
+            <Pagination
+              page={Math.min(downloadPage, Math.ceil(filteredDownloads.length / DOWNLOAD_PAGE_SIZE))}
+              pageSize={DOWNLOAD_PAGE_SIZE}
+              total={filteredDownloads.length}
+              onPageChange={setDownloadPage}
+            />
           )}
         </Card>
       </TabsContent>
