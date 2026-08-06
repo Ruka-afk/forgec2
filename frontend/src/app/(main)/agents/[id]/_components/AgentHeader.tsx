@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
-import { useState } from "react";
 
 function getOSIcon(os: string): React.ReactNode {
   const cls = "w-7 h-7 text-primary";
@@ -52,12 +51,6 @@ export default function AgentHeader({
   const domain = agent.domain || "";
   const country = agent.country || "";
   const city = agent.city || "";
-
-  const [lastSeenMinutes] = useState(() =>
-    agent.last_seen
-      ? (Date.now() - new Date(agent.last_seen).getTime()) / 60000
-      : undefined
-  );
 
   const quickActions = [
     { action: "screenshot", label: t("agents.header_screenshot"), icon: <Camera className="w-5 h-5" /> },
