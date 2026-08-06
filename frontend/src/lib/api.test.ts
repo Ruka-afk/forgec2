@@ -188,3 +188,45 @@ describe("api.get network layer", () => {
     expect(headers["X-CSRF-Token"]).toBe("tok-csrf");
   });
 });
+
+describe("api.download filename parsing", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("prefers UTF-8 filename* over plain filename", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(new Blob(["x"]), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "Content-Disposition": "attachment; filename=\"fallback.bin\"; filename*=UTF-8''screenshot%20%E6%88%AA%E5%9B%BE.png",
+        },
+      }),
+    ));
+    const { filename } = await api.downloadGet("/dl");
+    expect(filename).toBe("screenshot 截图.png");
+  });
+
+  it("falls back to plain quoted filename when no filename*", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(new Blob(["x"]), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "Content-Disposition": "attachment; filename=\"build.exe\"",
+        },
+      }),
+    ));
+    const { filename } = await api.downloadGet("/dl");
+    expect(filename).toBe("build.exe");
+  });
+
+  it("defaults to download.bin when no Content-Disposition", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(new Blob(["x"]), { status: 200 }),
+    ));
+    const { filename } = await api.downloadGet("/dl");
+    expect(filename).toBe("download.bin");
+  });
+});

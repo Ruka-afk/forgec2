@@ -152,7 +152,7 @@ export default function BuildsPage() {
     const buildId = build.id;
     if (!buildId) return;
     try {
-      const resp = await fetch(`${API_BASE}${paths.builds.download(String(buildId))}`, { headers: { "X-CSRF-Token": getCsrfToken() } });
+      const resp = await fetch(`${API_BASE}${paths.builds.download(String(buildId))}`, { credentials: "include", headers: { "X-CSRF-Token": getCsrfToken() } });
       if (!resp.ok) {
         toast.error(t("builds.toast.download_failed"));
         return;

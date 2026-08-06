@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,11 +17,16 @@ export function CopyButton({ text, label, title, className, size = "icon-xs", ch
 }) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      if (mountedRef.current) setCopied(true);
+      setTimeout(() => { if (mountedRef.current) setCopied(false); }, 1500);
     } catch {
       onError?.();
     }

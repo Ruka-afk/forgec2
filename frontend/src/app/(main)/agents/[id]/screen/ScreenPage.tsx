@@ -282,7 +282,7 @@ interface ScreenshotItem {
               </div>              <div className="relative bg-background flex-1 flex items-center justify-center cursor-pointer overflow-hidden"
                 onClick={() => screenshot && openModal(screenshot)}>
                 {screenshot ? (
-                  <img src={screenshot} alt="Screenshot" className="max-w-full max-h-full object-contain" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <img src={screenshot} alt="Screenshot" width={resolution?.width || undefined} height={resolution?.height || undefined} style={{ aspectRatio: resolution ? `${resolution.width} / ${resolution.height}` : undefined }} className="max-w-full max-h-full object-contain" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : (
                   <div className="text-center text-muted-foreground/70 py-20">
                     <EmptyState icon={Monitor} title={t("agents.screen_no_screenshots")} message={`${t("agents.screen_start")} / ${t("agents.screen_capture")}`} />

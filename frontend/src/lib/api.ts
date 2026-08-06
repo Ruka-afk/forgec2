@@ -178,6 +178,19 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
   return doFetch(0);
 }
 
+function parseFilenameFromDisposition(cd: string | null): string {
+  if (!cd) return "download.bin";
+  const star = cd.match(/filename\*\s*=\s*(?:UTF-8'')?([^;]+)/i);
+  if (star) {
+    try {
+      const decoded = decodeURIComponent(star[1].trim().replace(/"/g, ""));
+      if (decoded) return decoded;
+    } catch { /* fall back to plain filename */ }
+  }
+  const plain = cd.match(/filename\s*=\s*"?([^";]+)"?/i);
+  return plain ? plain[1].trim() : "download.bin";
+}
+
 export const api = {
   get<T = Record<string, unknown>>(path: string, opts?: { retries?: number; signal?: AbortSignal }): Promise<T> {
     return request<T>(path, { method: "GET", retries: opts?.retries ?? 0, signal: opts?.signal });
@@ -226,13 +239,7 @@ export const api = {
       body,
       raw: true,
     });
-    const cd = res.headers.get("Content-Disposition");
-    let filename = "download.bin";
-    if (cd) {
-      const m = cd.match(/filename=(.+)/);
-      if (m) filename = m[1].replace(/"/g, "");
-    }
-    return { blob: await res.blob(), filename };
+    return { blob: await res.blob(), filename: parseFilenameFromDisposition(res.headers.get("Content-Disposition")) };
   },
 
   async downloadGet(path: string): Promise<{ blob: Blob; filename: string }> {
@@ -240,13 +247,7 @@ export const api = {
       method: "GET",
       raw: true,
     });
-    const cd = res.headers.get("Content-Disposition");
-    let filename = "download.bin";
-    if (cd) {
-      const m = cd.match(/filename=(.+)/);
-      if (m) filename = m[1].replace(/"/g, "");
-    }
-    return { blob: await res.blob(), filename };
+    return { blob: await res.blob(), filename: parseFilenameFromDisposition(res.headers.get("Content-Disposition")) };
   },
 };
 
