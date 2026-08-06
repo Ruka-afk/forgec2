@@ -155,6 +155,7 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/privesc_check", s.handlePrivescCheck)
 		agentCmd.POST("/inject", s.handleInject)
 		agentCmd.POST("/spawn", s.handleSpawn)
+		agentCmd.POST("/migrate", s.handleMigrate)
 		agentCmd.POST("/self_update", s.handleSelfUpdate)
 		agentCmd.POST("/lateral", s.handleLateral)
 		agentCmd.POST("/socks", s.handleSocks)

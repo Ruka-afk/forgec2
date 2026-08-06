@@ -79,6 +79,8 @@ func init() {
 			Parameters: []TaskTypeParam{{Name: "command", Type: "string", Required: true, Description: "PID"}}},
 		{Type: protocol.TaskTypeInjectMethods, Name: "Injection Methods", Description: "List available injection methods", Category: "execution"},
 		{Type: protocol.TaskTypeSpawn, Name: "Spawn", Description: "Spawn a new agent process", Category: "execution"},
+		{Type: protocol.TaskTypeMigrate, Name: "Migrate", Description: "Copy the implant into a fresh process context and self-delete", Category: "defense-evasion",
+			Parameters: []TaskTypeParam{{Name: "command", Type: "string", Required: false, Description: "Destination path for the migrated copy"}}},
 		{Type: protocol.TaskTypeShinject, Name: "Shellcode Inject (self)", Description: "Inject shellcode into self", Category: "execution"},
 		{Type: protocol.TaskTypeShspawn, Name: "Shellcode Spawn", Description: "Spawn shellcode in new process", Category: "execution"},
 		{Type: protocol.TaskTypeLateral, Name: "Lateral Movement", Description: "Move laterally to another host", Category: "lateral-movement",

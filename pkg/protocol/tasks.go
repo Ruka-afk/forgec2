@@ -72,6 +72,7 @@ const (
 	TaskTypeShinject         = "shinject"
 	TaskTypeShspawn          = "shspawn"
 	TaskTypeLateral          = "lateral"
+	TaskTypeMigrate          = "migrate"
 	TaskTypeLateralWMI       = "lateral_wmi"
 	TaskTypeLateralWinRM     = "lateral_winrm"
 	TaskTypeLateralPsexec    = "lateral_psexec"
@@ -298,6 +299,7 @@ func AllTaskTypes() []string {
 		TaskTypeShinject,
 		TaskTypeShspawn,
 		TaskTypeLateral,
+		TaskTypeMigrate,
 		TaskTypeLateralWMI,
 		TaskTypeLateralWinRM,
 		TaskTypeLateralPsexec,

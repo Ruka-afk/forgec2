@@ -193,7 +193,7 @@ func isShellTask(taskType string) bool {
 }
 
 func isInjectTask(taskType string) bool {
-	return taskType == "inject" || taskType == "shinject" || taskType == "spawn" || taskType == "shspawn" || taskType == "peloader" || taskType == "bof"
+	return taskType == "inject" || taskType == "shinject" || taskType == "spawn" || taskType == "shspawn" || taskType == "migrate" || taskType == "peloader" || taskType == "bof"
 }
 
 // ── Egress Detection State ───────────────────────────────────────────────

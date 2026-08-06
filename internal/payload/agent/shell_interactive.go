@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"runtime"
 	"sync"
 	"sync/atomic"
 )
@@ -69,78 +68,6 @@ func pushShellOutput(shellID string, data []byte) {
 		Path:     shellID,
 	})
 	pendingMu.Unlock()
-}
-
-func startInteractiveShell(shellType string) (*InteractiveShell, error) {
-	var shellPath string
-	var shellArgs []string
-
-	switch runtime.GOOS {
-	case "windows":
-		switch shellType {
-		case "powershell", "pwsh":
-			shellPath = "powershell.exe"
-			shellArgs = []string{"-NoLogo", "-NoProfile", "-NonInteractive"}
-		default:
-			shellPath = "cmd.exe"
-			shellArgs = []string{"/Q"}
-		}
-	default:
-		switch shellType {
-		case "zsh":
-			shellPath = "/bin/zsh"
-		default:
-			shellPath = "/bin/bash"
-		}
-		shellArgs = []string{"--norc", "--noediting"}
-	}
-
-	cmd := exec.Command(shellPath, shellArgs...)
-
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, fmt.Errorf("stdin pipe: %w", err)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		stdin.Close()
-		return nil, fmt.Errorf("stdout pipe: %w", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		stdin.Close()
-		stdout.Close()
-		return nil, fmt.Errorf("stderr pipe: %w", err)
-	}
-
-	if runtime.GOOS == "windows" {
-		applyHideWindow(cmd)
-	}
-
-	if err := cmd.Start(); err != nil {
-		stdin.Close()
-		stdout.Close()
-		stdin.Close()
-		return nil, fmt.Errorf("start shell: %w", err)
-	}
-
-	ish := &InteractiveShell{
-		shellID:   nextShellID(),
-		PID:       cmd.Process.Pid,
-		active:    true,
-		shellType: shellType,
-		cmd:       cmd,
-		stdin:     stdin,
-		stdout:    stdout,
-		stderr:    stderr,
-		closeCh:   make(chan struct{}),
-	}
-
-	setShell(ish.shellID, ish)
-
-	go ish.readOutput()
-
-	return ish, nil
 }
 
 func (s *InteractiveShell) writeInput(data string) error {
@@ -261,7 +188,7 @@ func handleInteractiveShellStop(task Task, res *TaskResult) {
 	}
 
 	ish.stop()
-	res.Output = "shell stopped: " + shellID
+	res.Output = "stopped"
 }
 
 func parseShellWriteCommand(cmd string) (shellID, data string) {
