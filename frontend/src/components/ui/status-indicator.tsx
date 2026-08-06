@@ -95,9 +95,12 @@ export const StatusIndicator = memo(function StatusIndicator({
   if (variant === "dot") {
     return (
       <span
+        role="status"
+        aria-live={pulse ? "polite" : undefined}
         className={cn("inline-flex items-center gap-1.5", className)}
       >
         <span
+          aria-hidden="true"
           className={cn(
             "inline-block rounded-full ring-2",
             dotSize,
@@ -113,6 +116,8 @@ export const StatusIndicator = memo(function StatusIndicator({
 
   return (
     <span
+      role="status"
+      aria-live={pulse ? "polite" : undefined}
       className={cn(
         "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide",
         cfg.bg,
@@ -121,6 +126,7 @@ export const StatusIndicator = memo(function StatusIndicator({
       )}
     >
       <span
+        aria-hidden="true"
         className={cn(
           "rounded-full",
           dotSize,

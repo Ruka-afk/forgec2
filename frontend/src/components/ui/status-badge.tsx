@@ -15,13 +15,25 @@ const STATUS_CONFIG: Record<string, { dot: string; bg: string; text: string }> =
   pending_approval: { dot: "bg-amber-500", bg: "bg-amber-500/10 dark:bg-amber-500/10", text: "text-amber-700 dark:text-amber-400" },
 };
 
-export const StatusBadge = memo(function StatusBadge({ status, pulse }: { status: string; pulse?: boolean }) {
+export const StatusBadge = memo(function StatusBadge({
+  status,
+  pulse,
+  ariaLabel,
+}: {
+  status: string;
+  pulse?: boolean;
+  /** Accessible name; defaults to the raw status text. */
+  ariaLabel?: string;
+}) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.offline;
   return (
     <span
+      role="status"
+      aria-live={pulse ? "polite" : undefined}
+      aria-label={ariaLabel ?? status}
       className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-(--fs-xs-sm) font-semibold tracking-wide ${cfg.bg} ${cfg.text}`}
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${pulse ? "animate-pulse-glow" : ""}`} />
+      <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${pulse ? "animate-pulse-glow" : ""}`} />
       {status}
     </span>
   );

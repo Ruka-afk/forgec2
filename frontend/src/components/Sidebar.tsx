@@ -316,8 +316,8 @@ const SidebarFooter = memo(function SidebarFooter({ collapsed, connected, reconn
           ))}
         </div>
       )}
-      <div className="flex items-center gap-x-2 rounded-md bg-secondary/50 dark:bg-secondary/30 border border-border/40 px-2 py-1.5">
-        <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : reconnectFailed ? "bg-red-500" : "bg-amber-500 animate-pulse"}`} />
+      <div role="status" aria-live="polite" className="flex items-center gap-x-2 rounded-md bg-secondary/50 dark:bg-secondary/30 border border-border/40 px-2 py-1.5">
+        <span aria-hidden="true" className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : reconnectFailed ? "bg-red-500" : "bg-amber-500 animate-pulse"}`} />
         <span className="mono-cell text-(--fs-micro-sm) text-muted-foreground/80">
           {connected ? t("common.live") : t("common.disconnected")}
         </span>
