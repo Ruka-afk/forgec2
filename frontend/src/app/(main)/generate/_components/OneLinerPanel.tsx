@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 
 import { Listener, OneLinerForm, OneLinerType, OneLinerData } from "./types";
 import { Spinner } from "@/components/UI";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,7 +14,7 @@ import { FieldLabel, PayloadCard } from "./PayloadCard";
 import { BuildResult, BuildStatusBadge } from "./BuildResult";
 
 export default function OneLinerPanel({
-  form, setForm, busy, result, onelinerData, listeners, getListenerInfo, onGenerate, onCopy,
+  form, setForm, busy, result, onelinerData, listeners, getListenerInfo, onGenerate,
 }: {
   form: OneLinerForm;
   setForm: React.Dispatch<React.SetStateAction<OneLinerForm>>;
@@ -25,7 +24,6 @@ export default function OneLinerPanel({
   listeners: Listener[];
   getListenerInfo: (id: string) => { scheme: string; host: string; port: string | number; type: string; name: string } | null;
   onGenerate: () => void;
-  onCopy: (text: string) => void;
 }) {
   const { t } = useI18n();
   return (

@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Bell, FlaskConical, Globe, Link, Plus, Trash2, Zap } from "lucide-react";
-import { defaultWebhookParams, type AlertRule, type Rule, type Webhook } from "./_components/types";
+import { defaultWebhookParams, type AlertRule } from "./_components/types";
 import { useAutomationData } from "./_components/useAutomationData";
 import { RuleDialog } from "./_components/RuleDialog";
 import { WebhookDialog } from "./_components/WebhookDialog";
@@ -20,10 +20,10 @@ import { AlertRuleDialog } from "./_components/AlertRuleDialog";
 export default function AutomationPage() {
   const { t } = useI18n();
   const {
-    rules, setRules,
-    webhooks, setWebhooks,
-    alertRules, setAlertRules,
-    alerts, setAlerts,
+    rules,
+    webhooks,
+    alertRules,
+    alerts,
     loading, error, loadData,
   } = useAutomationData();
   const [showAlertRuleModal, setShowAlertRuleModal] = useState(false);

@@ -99,7 +99,6 @@ function DialogFooter({
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean
 }) {
-  const { t } = useI18n();
   return (
     <div
       data-slot="dialog-footer"

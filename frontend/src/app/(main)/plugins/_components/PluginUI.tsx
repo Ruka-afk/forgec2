@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { Spinner } from "@/components/UI";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";

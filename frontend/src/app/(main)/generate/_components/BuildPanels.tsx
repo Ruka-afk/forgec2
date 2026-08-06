@@ -386,7 +386,7 @@ export const DonutPanel = React.memo(function DonutPanel({
 // ─── PS1Panel ──────────────────────────────────────────────────
 
 export const PS1Panel = React.memo(function PS1Panel({
-  form, setForm, busy, result, code, originalLen, obfuscatedLen, onGenerate, onCopy,
+  form, setForm, busy, result, code, originalLen, obfuscatedLen, onGenerate,
 }: {
   form: PS1Form;
   setForm: React.Dispatch<React.SetStateAction<PS1Form>>;
@@ -396,7 +396,6 @@ export const PS1Panel = React.memo(function PS1Panel({
   originalLen?: number;
   obfuscatedLen?: number;
   onGenerate: () => void;
-  onCopy: (text: string) => void;
 }) {
   const { t } = useI18n();
   return (

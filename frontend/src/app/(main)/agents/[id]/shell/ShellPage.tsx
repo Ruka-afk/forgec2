@@ -35,7 +35,7 @@ export default function AgentShellPage() {
         const os = String(ag.os || "").toLowerCase();
         setOsType(os.includes("linux") || os.includes("darwin") ? "linux" : "windows");
       })
-      .catch((e) => { if (!controller.signal.aborted) toast.error(t("agents.load_failed")); });
+      .catch(() => { if (!controller.signal.aborted) toast.error(t("agents.load_failed")); });
     fetchAgentList().then(({ agents: list, error }) => {
       if (controller.signal.aborted) return;
       setAgents(list);

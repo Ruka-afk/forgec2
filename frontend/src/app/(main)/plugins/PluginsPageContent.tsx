@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { api, getCsrfToken, buildUrl } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadFromResponse } from "@/lib/download";
@@ -21,7 +21,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Switch } from "@/components/ui/switch";
 import { CheckCircle, CloudUpload, FileDown, LayoutGrid, List, Play, Plus, Puzzle } from "lucide-react";
 import { SearchInput } from "@/components/framework/SearchInput";
 import { PLUGIN_CATEGORIES } from "./_components/categories";
@@ -31,7 +30,7 @@ import { usePluginsData } from "./_components/usePluginsData";
 
 export default function PluginsPage() {
   const { t } = useI18n();
-  const { plugins, setPlugins, loading, error, loadPlugins } = usePluginsData();
+  const { plugins, loading, error, loadPlugins } = usePluginsData();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [detailPlugin, setDetailPlugin] = useState<Plugin | null>(null);

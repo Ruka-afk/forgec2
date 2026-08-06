@@ -149,7 +149,7 @@ export default function AgentsPageContent() {
     });
     return () => unsub();
     // loadBeaconsRef always points at latest loadBeacons — intentional stable subscribe
-  }, [subscribe]);
+  }, [subscribe, setAgentLocks, setBeacons]);
 
   const sortIcon = (field: typeof sortKey) => {
     if (sortKey !== field) return <ArrowUpDown className="w-3 h-3 text-muted-foreground" />;

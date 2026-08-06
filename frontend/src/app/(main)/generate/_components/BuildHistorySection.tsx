@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { AppWindow, Apple, Binary, CheckCircle2, ChevronDown, Disc, HardDrive, History, Package, PackageOpen, Puzzle, Terminal, XCircle } from "lucide-react";
+import { AppWindow, Apple, Binary, CheckCircle2, ChevronDown, Disc, HardDrive, History, PackageOpen, Puzzle, Terminal, XCircle } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { BuildHistoryEntry } from "@/types/generate";

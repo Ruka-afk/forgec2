@@ -507,14 +507,6 @@ export function usePayloadGenerator() {
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : String(err)); }
   }, [listenerForm, loadData, t]);
 
-  const copyToClipboard = useCallback(async (text: string) => {
-    try { await navigator.clipboard.writeText(text); toast.success(t("generate.toast.copied")); }
-    catch {
-      const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); toast.success(t("generate.toast.copied"));
-    }
-  }, [t]);
-
   // Sync c2_url and transport with listener
   useEffect(() => {
     if (shared.listener_id) {
@@ -587,7 +579,7 @@ export function usePayloadGenerator() {
     fileInputRef, donutFileRef,
     changeProfile, handleProfileImport, deleteProfile,
     handleCreateListener, submitListener,
-    copyToClipboard, getListenerInfo,
+    getListenerInfo,
     handlerMap, applyPreset,
   };
 }

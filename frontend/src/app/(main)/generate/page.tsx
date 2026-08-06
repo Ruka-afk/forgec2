@@ -85,7 +85,7 @@ export default function GeneratePage() {
     <>
       <div className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "0ms" }}><BinaryPanel variant="exe" form={g.forms.exe} setForm={makeDispatch("exe")} busy={g.states.exe.busy} result={g.states.exe.result} onGenerate={g.handlerMap.exe} /></div>
       <div className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "40ms" }}><BinaryPanel variant="dll" form={g.forms.dll} setForm={makeDispatch("dll")} busy={g.states.dll.busy} result={g.states.dll.result} onGenerate={g.handlerMap.dll} /></div>
-      <div className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "80ms" }}><PS1Panel form={g.forms.ps1} setForm={makeDispatch("ps1")} busy={g.states.ps1.busy} result={g.states.ps1.result} code={g.extras.ps1?.code} originalLen={g.extras.ps1?.original_length} obfuscatedLen={g.extras.ps1?.obfuscated_len} onGenerate={g.handlerMap.ps1} onCopy={g.copyToClipboard} /></div>
+      <div className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "80ms" }}><PS1Panel form={g.forms.ps1} setForm={makeDispatch("ps1")} busy={g.states.ps1.busy} result={g.states.ps1.result} code={g.extras.ps1?.code} originalLen={g.extras.ps1?.original_length} obfuscatedLen={g.extras.ps1?.obfuscated_len} onGenerate={g.handlerMap.ps1} /></div>
       <div className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "120ms" }}><UnixPanel variant="linux" form={g.forms.linux} setForm={makeDispatch("linux")} busy={g.states.linux.busy} result={g.states.linux.result} onGenerate={g.handlerMap.linux} /></div>
       <div className="opacity-0 animate-fade-slide-up" style={{ animationDelay: "160ms" }}><UnixPanel variant="macos" form={g.forms.macos} setForm={makeDispatch("macos")} busy={g.states.macos.busy} result={g.states.macos.result} onGenerate={g.handlerMap.macos} /></div>
     </>
@@ -179,7 +179,7 @@ export default function GeneratePage() {
             busy={g.states.oneliner.busy} result={g.states.oneliner.result}
             onelinerData={g.extras.oneliner?.data}
             listeners={g.listeners} getListenerInfo={g.getListenerInfo}
-            onGenerate={g.handlerMap.oneliner} onCopy={g.copyToClipboard}
+            onGenerate={g.handlerMap.oneliner}
           />
 
           <QuickPresets onApply={g.applyPreset} />
