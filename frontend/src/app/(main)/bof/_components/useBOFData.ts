@@ -23,7 +23,7 @@ export function useBOFData() {
       setFiles(data.bofs || data.files || []);
       const execData = await api.get<{ results?: Execution[]; Results?: Execution[] }>(paths.bof.results);
       setExecutions(execData.results || []);
-      const agentData = await api.get<{ Agents?: Array<Record<string, unknown>>; agents?: Array<Record<string, unknown>> }>("/agents");
+      const agentData = await api.get<{ Agents?: Array<Record<string, unknown>>; agents?: Array<Record<string, unknown>> }>(paths.agents.list());
       setAgents(
         (agentData.agents || []).map((a: Record<string, unknown>) => ({
           id: String(a.id || ""),

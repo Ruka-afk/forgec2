@@ -57,7 +57,7 @@ export default function ModulesSection() {
 
   const loadAgents = useCallback(async () => {
     try {
-      const data = await api.get<{ agents?: AgentOption[] } | AgentOption[]>("/agents");
+      const data = await api.get<{ agents?: AgentOption[] } | AgentOption[]>(paths.agents.list());
       const list = Array.isArray(data)
         ? data
         : ((data as { agents?: AgentOption[] })?.agents || []);

@@ -219,6 +219,7 @@ export const paths = {
     update: (id: string | number) => `/api/plugins/${id}/update`,
     checkUpdates: "/api/plugins/check-updates",
     reviews: (id: string | number) => `/api/plugins/${id}/reviews`,
+    dependencies: (id: string | number) => `/api/plugins/${id}/dependencies`,
     rating: (id: string | number) => `/api/plugins/${id}/rating`,
   },
   ai: {
@@ -339,6 +340,7 @@ export const paths = {
   },
   timeline: {
     export: "/api/timeline/export",
+    data: (query = "") => (query ? `/api/timeline/data?${query}` : "/api/timeline/data"),
   },
   topology: {
     data: "/api/topology/data",

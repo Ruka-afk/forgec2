@@ -76,7 +76,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   fetchListeners: async () => {
     try {
-      const data = await api.get<{ data?: Listener[]; listeners?: Listener[]; Listeners?: Listener[] }>("/listeners");
+      const data = await api.get<{ data?: Listener[]; listeners?: Listener[]; Listeners?: Listener[] }>(paths.listeners.list);
       const listeners = data.data || data.listeners || [];
       set({ listeners });
     } catch {

@@ -34,7 +34,7 @@ function AuditStrip() {
   const [logs, setLogs] = useState<{ action?: string; username?: string; created_at?: string; details?: string }[]>([]);
   useEffect(() => {
     const controller = new AbortController();
-    api.get<{ logs?: { action?: string; username?: string; created_at?: string; details?: string }[] }>("/audit/logs?page=1&pageSize=6", { signal: controller.signal })
+    api.get<{ logs?: { action?: string; username?: string; created_at?: string; details?: string }[] }>(paths.audit.logs("page=1&pageSize=6"), { signal: controller.signal })
       .then((d) => setLogs(d.logs || []))
       .catch(() => setLogs([]));
     return () => controller.abort();

@@ -14,6 +14,17 @@ const CALL_RE =
   /\b(?:api\.(?:get|post|postJson|put|putJson|del|download|downloadGet)|fetch)\(\s*[`'"](\/[^`'"]+)[`'"]/g;
 
 /**
+ * Normalize source text so path-policy checks survive real-world call shapes:
+ * - Chained `.then` style: `.get(`/\api/...``) after `api` on an earlier line.
+ * - Generic calls: `api.get<{...}>(`...`)` — TS type args sit between name and `(`.
+ */
+function normalizeForScan(text) {
+  return text
+    .replace(/\b(api|fetch)\s*\n\s*\./g, "$1.")
+    .replace(/\b(get|post|postJson|put|putJson|del|download|downloadGet)\s*<[^()]*>\s*(?=\()/g, "$1");
+}
+
+/**
  * Bare list paths that MUST use /api/... (backend JSON list routes).
  * Do not include dual-use page routes like /notifications, /groups, /loot.
  */
@@ -110,7 +121,7 @@ for (const file of files) {
   if (file.replace(/\\/g, "/").endsWith("/lib/api-paths.ts")) continue;
   if (file.replace(/\\/g, "/").endsWith("/lib/api.test.ts")) continue;
 
-  const text = fs.readFileSync(file, "utf8");
+  const text = normalizeForScan(fs.readFileSync(file, "utf8"));
   let m;
   CALL_RE.lastIndex = 0;
   while ((m = CALL_RE.exec(text)) !== null) {

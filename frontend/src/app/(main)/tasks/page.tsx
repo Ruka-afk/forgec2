@@ -15,6 +15,7 @@ import { normalizeAgentList } from "@/lib/agents";
 import { paths } from "@/lib/api-paths";
 import { formatTime } from "@/lib/utils";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
+import { useCachedData } from "@/lib/hooks/useCachedData";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,7 +44,14 @@ function TasksPage() {
   const { t } = useI18n();
   const searchParams = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const { data: agents } = useCachedData<Agent[]>("agents:names", {
+    fetcher: async () => {
+      const data = await api.get(paths.agents.list("page=1&pageSize=200"));
+      return normalizeAgentList(data);
+    },
+    ttlMs: 120_000,
+    onError: () => toast.error(t("tasks.toast_load_agents_failed")),
+  });
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,18 +87,8 @@ function TasksPage() {
   );
 
   const getAgentName = useCallback((agentId: string) => {
-    return agents.find((a) => a.id === agentId)?.hostname;
+    return (agents || []).find((a) => a.id === agentId)?.hostname;
   }, [agents]);
-
-  const loadAgents = useCallback(async () => {
-    try {
-      const data = await api.get(paths.agents.list("page=1&pageSize=200"));
-      setAgents(normalizeAgentList(data));
-    } catch (e) {
-      setAgents([]);
-      toast.error(e instanceof Error ? e.message : t("tasks.toast_load_agents_failed"));
-    }
-  }, [t]);
 
   const loadTasksAbortRef = useRef<AbortController | null>(null);
 
@@ -123,7 +121,6 @@ function TasksPage() {
       });
   }, [page, statusFilter, agentFilter, typeFilter, t]);
 
-  useEffect(() => { loadAgents(); }, [loadAgents]);
   useEffect(() => { loadTasks(); }, [loadTasks]);
 
   const handleExportCSV = () => {
@@ -267,7 +264,7 @@ function TasksPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("tasks.all_agents")}</SelectItem>
-              {agents.filter((a) => a.id).map((a) => (
+              {(agents || []).filter((a) => a.id).map((a) => (
                 <SelectItem key={a.id} value={a.id!}>{a.hostname || a.id!.substring(0, 8)}</SelectItem>
               ))}
             </SelectContent>

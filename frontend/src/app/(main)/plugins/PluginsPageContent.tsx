@@ -181,7 +181,7 @@ export default function PluginsPage() {
     setReviewsPlugin(plugin);
     setShowReviews(true);
     try {
-      const apiData = await api.get<{ reviews?: Review[]; Reviews?: Review[] } | Review[]>(`/api/plugins/${pid}/reviews`);
+      const apiData = await api.get<{ reviews?: Review[]; Reviews?: Review[] } | Review[]>(paths.plugins.reviews(pid));
       const d = apiData as { reviews?: Review[]; Reviews?: Review[] };
       setReviews(d.reviews || (Array.isArray(apiData) ? apiData : []));
     } catch {
@@ -210,7 +210,7 @@ export default function PluginsPage() {
   const handleLoadDependencies = async (plugin: Plugin) => {
     const pid = plugin.id || "";
     try {
-      const apiData = await api.get<{ dependencies?: string[]; Dependencies?: string[] } | string[]>(`/api/plugins/${pid}/dependencies`);
+      const apiData = await api.get<{ dependencies?: string[]; Dependencies?: string[] } | string[]>(paths.plugins.dependencies(pid));
       const d = apiData as { dependencies?: string[]; Dependencies?: string[] };
       const deps = d.dependencies || (Array.isArray(apiData) ? apiData : []);
       setDetailPlugin({ ...plugin, Dependencies: Array.isArray(deps) ? deps : [] });

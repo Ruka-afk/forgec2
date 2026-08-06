@@ -66,7 +66,7 @@ export default function TimelinePage() {
       if (agentFilter) params.set("agent", agentFilter);
       if (dateFrom) params.set("from", dateFrom);
       if (dateTo) params.set("to", dateTo);
-      const data = await api.get<{ events: TimelineEvent[]; total: number; total_pages?: number }>(`/api/timeline/data?${params}`);
+      const data = await api.get<{ events: TimelineEvent[]; total: number; total_pages?: number }>(paths.timeline.data(params.toString()));
       setEvents(data.events || []);
       setTotalEvents(data.total || 0);
       setTotalPages(data.total_pages || Math.ceil((data.total || 0) / 50));

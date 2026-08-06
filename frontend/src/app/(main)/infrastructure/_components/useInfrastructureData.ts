@@ -1,5 +1,6 @@
 ﻿import { useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 
 export interface InfraListener {
@@ -34,7 +35,7 @@ export function useInfrastructureData() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.get<{ Listeners?: InfraListener[]; listeners?: InfraListener[] }>("/listeners");
+      const data = await api.get<{ Listeners?: InfraListener[]; listeners?: InfraListener[] }>(paths.listeners.list);
       setListeners((data.listeners || []) as InfraListener[]);
     } catch {
       setListeners([]);

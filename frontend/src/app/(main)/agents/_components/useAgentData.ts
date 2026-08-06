@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
+import { useCachedData } from "@/lib/hooks/useCachedData";
 import type { Beacon } from "./types";
 
 export type AgentTag = { id: string; name: string; color: string };
@@ -24,7 +25,6 @@ export function useAgentData(t: (key: string) => string) {
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [allTags, setAllTags] = useState<AgentTag[]>([]);
   const [tagsByAgent, setTagsByAgent] = useState<Record<string, AgentTag[]>>({});
   const [taskCountMap, setTaskCountMap] = useState<Record<string, number>>({});
   const [agentLocks, setAgentLocks] = useState<Record<string, string>>({});
@@ -42,7 +42,7 @@ export function useAgentData(t: (key: string) => string) {
       if (os) p.set("os", os);
       if (tag_id) p.set("tag_id", tag_id);
       api
-        .get(`/api/agents?${p.toString()}`, { signal: ac.signal })
+        .get(paths.agents.list(p.toString()), { signal: ac.signal })
         .then((data) => {
           if (ac.signal.aborted) return;
           const list = (data.agents || []) as Beacon[];
@@ -89,18 +89,16 @@ export function useAgentData(t: (key: string) => string) {
       });
   }, [t]);
 
-  useEffect(() => {
-    const ac = new AbortController();
-    api.get(paths.tags.list, { signal: ac.signal })
-      .then((d) => { if (!ac.signal.aborted) setAllTags((d.tags || []) as AgentTag[]); })
-      .catch(() => {
-        if (!ac.signal.aborted) {
-          setAllTags([]);
-          toast.error(t("agents.tags_load_failed"));
-        }
-      });
-    return () => ac.abort();
-  }, [t]);
+  const { data: cachedAllTags } = useCachedData<AgentTag[]>("tags:list", {
+    fetcher: async () => {
+      const d = await api.get(paths.tags.list);
+      return (d.tags || []) as AgentTag[];
+    },
+    ttlMs: 60_000,
+    onError: () => toast.error(t("agents.tags_load_failed")),
+  });
+
+  const allTags = cachedAllTags ?? [];
 
   const idsKey = useMemo(() => beacons.map((b) => b.id || "").filter(Boolean).sort().join(","), [beacons]);
 
