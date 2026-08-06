@@ -27,11 +27,12 @@ const FALLBACK_TYPES: TaskTypeInfo[] = [
 let cachedTypes: TaskTypeInfo[] | null = null;
 
 import { buildUrl } from "./api";
+import { paths } from "./api-paths";
 
 export async function fetchTaskTypes(): Promise<TaskTypeInfo[]> {
   if (cachedTypes) return cachedTypes;
   try {
-    const res = await fetch(buildUrl("/api/v1/task-types"));
+    const res = await fetch(buildUrl(paths.v1.taskTypes));
     const json = await res.json();
     cachedTypes = (json.data || []) as TaskTypeInfo[];
   } catch {

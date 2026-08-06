@@ -115,6 +115,15 @@ for (const file of files) {
   CALL_RE.lastIndex = 0;
   while ((m = CALL_RE.exec(text)) !== null) {
     const pth = m[1];
+    // Literal /api/ paths inside routes must come from paths.* constants.
+    if (pth.startsWith("/api/")) {
+      violations.push({
+        file,
+        path: pth,
+        reason: "literal /api/ path — import { paths } from \"@/lib/api-paths\" and use a paths.* helper",
+      });
+      continue;
+    }
     // strip template tail noise like ${id} already in path
     if (pth.includes("${")) {
       // allow templated agent paths and /api paths

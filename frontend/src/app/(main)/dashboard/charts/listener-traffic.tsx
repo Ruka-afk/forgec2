@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { ChartCard } from "@/components/ChartCard";
 import { Spinner } from "@/components/UI";
 import { ArrowLeftRight } from "lucide-react";
@@ -33,7 +34,7 @@ function ListenerTrafficInner({ range }: { range: string }) {
     const controller = new AbortController();
     setLoading(true);
     setLoadError(false);
-    api.get<TrafficPoint[] | { data: TrafficPoint[] } | { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] }>(`/api/dashboard/listener-traffic?range=${range}`, { signal: controller.signal })
+    api.get<TrafficPoint[] | { data: TrafficPoint[] } | { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] }>(paths.dashboard.listenerTraffic(range), { signal: controller.signal })
       .then((d) => {
         if (controller.signal.aborted) return;
         const o = (d as { data?: { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] } })?.data ?? d;

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { buildUrl } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 
 const CHECK_INTERVAL_MS = 60_000;
@@ -15,7 +16,7 @@ interface MeResponse {
 
 async function fetchSessionExpiry(): Promise<number | null> {
   try {
-    const res = await fetch(buildUrl("/api/me"), { credentials: "include" });
+    const res = await fetch(buildUrl(paths.auth.me), { credentials: "include" });
     if (!res.ok) return null;
     const body = (await res.json()) as MeResponse;
     const exp = body?.data?.session_exp;
@@ -76,7 +77,7 @@ export default function SessionTimeoutWarning() {
 
   const handleExtend = useCallback(async () => {
     try {
-      await fetch(buildUrl("/api/me"), { credentials: "include" });
+      await fetch(buildUrl(paths.auth.me), { credentials: "include" });
       toastShownRef.current = false;
       check();
     } catch {

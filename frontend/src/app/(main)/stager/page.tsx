@@ -70,7 +70,7 @@ export default function StagerPage() {
 
   const fetchListeners = useCallback(async () => {
     try {
-      const res = await api.get<unknown>("/api/listeners");
+      const res = await api.get<unknown>(paths.listeners.list);
       const list = Array.isArray(res) ? (res as Listener[]) : ((res as Record<string, unknown>)?.data as Listener[] || (res as Record<string, unknown>)?.listeners as Listener[] || []);
       setListeners(list);
     } catch { toast.error(t("stager.toast.create_failed")); }

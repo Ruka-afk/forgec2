@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ export default function AgentStatusBanner() {
 
   const load = useCallback(async () => {
     try {
-      const data = await api.get<NavStats>("/api/v1/dashboard");
+      const data = await api.get<NavStats>(paths.dashboard.v1);
       setCounts(data);
       setLoadError(false);
     } catch {

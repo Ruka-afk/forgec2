@@ -79,7 +79,7 @@ export default function TagsPage() {
     if (!formName.trim()) return;
     try {
       if (modal?.mode === "create") {
-        const data = await api.postJson<{ success?: boolean; tag?: Tag; error?: string }>("/api/tags", { name: formName.trim(), color: formColor });
+        const data = await api.postJson<{ success?: boolean; tag?: Tag; error?: string }>(paths.tags.list, { name: formName.trim(), color: formColor });
         if (data.success) {
           setActionMsg(t("tags.toast.created"));
           setModal(null);
@@ -88,7 +88,7 @@ export default function TagsPage() {
           setActionMsg(data.error || t("tags.toast.create_failed"));
         }
       } else if (modal?.mode === "edit" && modal.tag) {
-        const data = await api.put<{ success?: boolean; error?: string }>("/api/tags/" + modal.tag.id, { name: formName.trim(), color: formColor });
+        const data = await api.put<{ success?: boolean; error?: string }>(paths.tags.one(modal.tag.id), { name: formName.trim(), color: formColor });
         if (data.success) {
           setActionMsg(t("tags.toast.updated"));
           setModal(null);
@@ -105,7 +105,7 @@ export default function TagsPage() {
   const handleDelete = async () => {
     if (!deleteConfirm) return;
     try {
-      const data = await api.del<{ success?: boolean; error?: string }>("/api/tags/" + deleteConfirm.id);
+      const data = await api.del<{ success?: boolean; error?: string }>(paths.tags.one(deleteConfirm.id));
       if (data.success) {
         setActionMsg(t("tags.toast.deleted"));
         setDeleteConfirm(null);

@@ -198,16 +198,21 @@ export const paths = {
     ruleToggle: (id: string | number) => `/api/automation/rules/${id}/toggle`,
     webhooks: "/api/webhooks",
     webhook: (id: string | number) => `/api/webhooks/${id}`,
+    webhookTest: "/api/webhooks/test",
     alertRules: "/api/monitor/alert-rules",
     alertRule: (id: string | number) => `/api/monitor/alert-rules/${id}`,
     alertAck: (id: string | number) => `/api/monitor/alerts/${id}/acknowledge`,
     alertResolve: (id: string | number) => `/api/monitor/alerts/${id}/resolve`,
+  },
+  monitor: {
+    alerts: (query = "") => (query ? `/api/monitor/alerts?${query}` : "/api/monitor/alerts"),
   },
   plugins: {
     list: "/api/plugins",
     create: "/api/plugins",
     importJson: "/api/plugins/import?format=json",
     one: (id: string | number) => `/api/plugins/${id}`,
+    export: (id: string | number) => `/api/plugins/${id}/export`,
     install: (id: string | number) => `/api/plugins/${id}/install`,
     toggle: (id: string | number) => `/api/plugins/${id}/toggle`,
     execute: (id: string | number) => `/api/plugins/${id}/execute`,
@@ -224,6 +229,8 @@ export const paths = {
     sessionMessages: (id: string | number) => `/ai/sessions/${id}/messages`,
   },
   bof: {
+    list: "/api/bof/list",
+    results: "/api/bof/results",
     upload: "/api/bof/upload?format=json",
     one: (id: string | number) => `/api/bof/${id}`,
     run: (id: string | number) => `/api/bof/${id}/run`,
@@ -238,6 +245,7 @@ export const paths = {
     one: (id: string | number) => `/bloodhound/${id}`,
   },
   chrome: {
+    agents: "/api/chrome/agents",
     agentTasks: (agentId: string) => `/chrome/agents/${agentId}/tasks`,
   },
   chat: {
@@ -254,6 +262,7 @@ export const paths = {
     rules: "/api/autotag/rules",
     rule: (id: string | number) => `/api/autotag/rules/${id}`,
     toggle: (id: string | number) => `/api/autotag/rules/${id}/toggle`,
+    apply: "/api/autotag/apply",
   },
   domainFront: {
     list: "/infra/front/list",
@@ -292,6 +301,14 @@ export const paths = {
   dashboard: {
     /** REST under /api/v1 group */
     v1: "/api/v1/dashboard",
+    agentGeo: "/api/dashboard/agent-geo",
+    attackPath: "/api/dashboard/attack-path",
+    credentialTypes: "/api/dashboard/credential-types",
+    activityHeatmap: "/api/dashboard/activity-heatmap",
+    osDistribution: "/api/dashboard/os-distribution",
+    taskStatus: "/api/dashboard/task-status",
+    taskGantt: (range: string) => `/api/dashboard/task-gantt?range=${range}`,
+    listenerTraffic: (range: string) => `/api/dashboard/listener-traffic?range=${range}`,
   },
   /**
    * DUAL-USE: GET /loot — SPA vs JSON Accept. Not /api/loot.
@@ -313,6 +330,18 @@ export const paths = {
   },
   v1: {
     tasks: "/api/v1/tasks",
+    taskTypes: "/api/v1/task-types",
+  },
+  dns: {
+    status: "/api/dns/status",
+    start: "/api/dns/start",
+    stop: "/api/dns/stop",
+  },
+  timeline: {
+    export: "/api/timeline/export",
+  },
+  topology: {
+    data: "/api/topology/data",
   },
   workflows: {
     list: "/workflows",
@@ -330,6 +359,7 @@ export const paths = {
   },
   tags: {
     list: "/api/tags",
+    one: (id: string | number) => `/api/tags/${id}`,
   },
   tasks: {
     list: (query = "") => (query ? `/tasks?${query}` : "/tasks"),
@@ -422,6 +452,7 @@ export const paths = {
     login: "/login",
     logout: "/logout",
     health: "/health",
+    me: "/api/me",
   },
 } as const;
 

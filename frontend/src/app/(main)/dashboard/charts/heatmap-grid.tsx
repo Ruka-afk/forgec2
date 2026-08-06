@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { withChartData } from "@/components/withChartData";
+import { paths } from "@/lib/api-paths";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
 
@@ -39,6 +40,6 @@ function HeatmapBody({ data }: { data: HeatmapPoint[] }) {
 
 export default withChartData<HeatmapPoint[]>(
   ({ data }) => <HeatmapBody data={data} />,
-  "/api/dashboard/activity-heatmap",
+  paths.dashboard.activityHeatmap,
   (raw) => (raw as { data: HeatmapPoint[] }).data || [],
 );

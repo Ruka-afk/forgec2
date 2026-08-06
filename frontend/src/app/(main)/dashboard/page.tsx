@@ -3,6 +3,7 @@
 import React, { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { DASHBOARD_RANGE_KEY } from "@/lib/shortcuts";
 import { EmptyState, PageHeader } from "@/components/UI";
@@ -104,7 +105,7 @@ export default function DashboardPage() {
     setError(null);
     // Stats are global counters and do not depend on the time range; only the
     // range-aware charts (listener-traffic, task-gantt) re-fetch on range change.
-    api.get<DashboardPageStats>("/api/v1/dashboard", { signal: controller.signal })
+    api.get<DashboardPageStats>(paths.dashboard.v1, { signal: controller.signal })
       .then((d) => setStats(d))
       .catch(() => {
         if (!controller.signal.aborted) setError(t("dashboard.load_failed"));
@@ -116,7 +117,7 @@ export default function DashboardPage() {
   }, [t]);
 
   useVisibleInterval(() => {
-    api.get<DashboardPageStats>("/api/v1/dashboard")
+    api.get<DashboardPageStats>(paths.dashboard.v1)
       .then((d) => setStats(d))
       .catch((e) => { console.error("Dashboard poll failed:", e); });
   }, 30000);
@@ -151,7 +152,7 @@ export default function DashboardPage() {
       {error && (
         <DataError
           message={error}
-          onRetry={() => { setError(null); setLoading(true); api.get<DashboardPageStats>("/api/v1/dashboard").then((d) => setStats(d)).catch(() => setError(t("dashboard.refresh_failed"))).finally(() => setLoading(false)); }}
+          onRetry={() => { setError(null); setLoading(true); api.get<DashboardPageStats>(paths.dashboard.v1).then((d) => setStats(d)).catch(() => setError(t("dashboard.refresh_failed"))).finally(() => setLoading(false)); }}
           onDismiss={() => setError(null)}
           className="mb-4"
         />

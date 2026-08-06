@@ -98,7 +98,7 @@ export default function AutomationPage() {
     const wh = ruleForm.webhook;
     setSendingTest(true);
     try {
-      const d = await api.postJson<{ success?: boolean; error?: string }>("/api/webhooks/test", {
+      const d = await api.postJson<{ success?: boolean; error?: string }>(paths.automation.webhookTest, {
         type: wh.type,
         url: wh.url,
         secret: wh.secret,
@@ -326,7 +326,7 @@ export default function AutomationPage() {
                       <Button
                         onClick={async () => {
                           try {
-                            const d = await api.postJson<{ success?: boolean; error?: string }>("/api/webhooks/test", { url, method: w.method || "POST" });
+                            const d = await api.postJson<{ success?: boolean; error?: string }>(paths.automation.webhookTest, { url, method: w.method || "POST" });
                              if (d.success) { toast.success(t("automation.toast.webhook_test_sent")); } else { toast.error((d.error as string) || t("automation.toast.webhook_test_failed")); }
                           } catch { toast.error(t("automation.toast.webhook_test_failed")); }
                         }}

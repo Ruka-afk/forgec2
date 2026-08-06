@@ -73,8 +73,8 @@ export default function AutoTagPage() {
     setLoading(true);
     try {
       const [r, t] = await Promise.all([
-        api.get<{ rules: AutoTagRule[] }>("/api/autotag/rules"),
-        api.get<{ tags: AgentTag[] }>("/api/tags"),
+        api.get<{ rules: AutoTagRule[] }>(paths.autotag.rules),
+        api.get<{ tags: AgentTag[] }>(paths.tags.list),
       ]);
       setRules(r.rules || []);
       setTags(t.tags || []);
@@ -118,7 +118,7 @@ export default function AutoTagPage() {
 
   async function handleApplyAll() {
     try {
-      const res = await api.postJson<{ data?: { applied: number } }>("/api/autotag/apply", {});
+      const res = await api.postJson<{ data?: { applied: number } }>(paths.autotag.apply, {});
       setMessage(t("autotag.applied", { count: res.data?.applied ?? 0 }));
     } catch { setMessage(t("autotag.apply_failed")); }
   }

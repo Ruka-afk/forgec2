@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { downloadBlob } from "@/lib/download";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { toast } from "sonner";
@@ -98,7 +99,7 @@ export default function TimelinePage() {
       if (activeTypes.length > 0) dlParams.type = activeTypes.join(",");
       if (userFilter) dlParams.user = userFilter;
       if (agentFilter) dlParams.agent = agentFilter;
-      const { blob } = await api.download("/api/timeline/export", dlParams);
+      const { blob } = await api.download(paths.timeline.export, dlParams);
       downloadBlob(blob, "timeline-export.csv");
     } catch { toast.error(t("timeline.toast.export_failed")); }
   };

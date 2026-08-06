@@ -45,7 +45,7 @@ export default function ModulesSection() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.get<{ modules?: ModuleInfo[]; hint?: string }>("/api/modules");
+      const data = await api.get<{ modules?: ModuleInfo[]; hint?: string }>(paths.modules.list);
       setModules(data.modules || []);
       setHint(data.hint || "");
     } catch {

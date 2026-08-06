@@ -54,7 +54,7 @@ export default function CommandTemplatesPage() {
 
   const loadTemplates = useCallback(async () => {
     try {
-      const data = await api.get<{ templates?: Template[]; Templates?: Template[] } | Template[]>("/api/templates");
+      const data = await api.get<{ templates?: Template[]; Templates?: Template[] } | Template[]>(paths.templates.list);
       setTemplates(Array.isArray(data) ? data : data.templates || []);
     } catch {
       setTemplates([]);

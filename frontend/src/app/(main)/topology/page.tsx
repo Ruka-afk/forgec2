@@ -221,7 +221,7 @@ export default function TopologyPage() {
           setMeshData({ nodes: [] as TopoNode[], edges: [] as TopoEdge[] });
         }
       } else {
-        const result = await api.get<{ Nodes?: TopoNode[]; nodes?: TopoNode[]; Edges?: Array<{ from: string; to: string }>; edges?: Array<{ from: string; to: string }>; data?: { Nodes?: TopoNode[]; nodes?: TopoNode[]; Edges?: Array<{ from: string; to: string }>; edges?: Array<{ from: string; to: string }> } }>("/api/topology/data", { signal });
+        const result = await api.get<{ Nodes?: TopoNode[]; nodes?: TopoNode[]; Edges?: Array<{ from: string; to: string }>; edges?: Array<{ from: string; to: string }>; data?: { Nodes?: TopoNode[]; nodes?: TopoNode[]; Edges?: Array<{ from: string; to: string }>; edges?: Array<{ from: string; to: string }> } }>(paths.topology.data, { signal });
         if (result.data) {
           setData({ nodes: (result.data.nodes || []) as TopoNode[], edges: (result.data.edges || []) as Array<{ from: string; to: string }> });
         } else {

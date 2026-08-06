@@ -138,7 +138,7 @@ export default function PluginsPage() {
 
   const handleExport = async (pluginId: string) => {
     try {
-      const res = await fetch(buildUrl(`/api/plugins/${pluginId}/export`), { credentials: "include", headers: { "Accept": "application/octet-stream", "X-CSRF-Token": getCsrfToken() } });
+      const res = await fetch(buildUrl(paths.plugins.export(pluginId)), { credentials: "include", headers: { "Accept": "application/octet-stream", "X-CSRF-Token": getCsrfToken() } });
       if (!res.ok) throw new Error("Export failed");
       await downloadFromResponse(res, `plugin_${pluginId}.json`);
       toast.success(t("plugins.toast.exported"));

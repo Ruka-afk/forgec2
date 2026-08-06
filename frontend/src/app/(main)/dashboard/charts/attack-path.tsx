@@ -1,6 +1,7 @@
 "use client";
 
 import { withChartData } from "@/components/withChartData";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 
 interface AttackPathPoint { name?: string; host?: string; target?: string; type?: string }
@@ -22,7 +23,7 @@ function AttackBody({ data }: { data: AttackPathPoint[] }) {
 
 export default withChartData<AttackPathPoint[]>(
   ({ data }) => <AttackBody data={data} />,
-  "/api/dashboard/attack-path",
+  paths.dashboard.attackPath,
   (raw) => {
     const o = (raw as { data?: { nodes?: { id?: string; label?: string; type?: string }[] } }).data;
     const nodes = (o?.nodes || []) as { id?: string; label?: string; type?: string }[];

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { PageHeader, Spinner } from "@/components/UI";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,7 +32,7 @@ export default function DNSPage() {
 
   const fetchStatus = useCallback(async (seedFields = false, silent = false) => {
     try {
-      const data = await api.get<DNSStatus>("/api/dns/status");
+      const data = await api.get<DNSStatus>(paths.dns.status);
       setStatus(data);
       if (seedFields) {
         if (data.domain) setDomain(data.domain);
@@ -56,7 +57,7 @@ export default function DNSPage() {
   const handleStart = async () => {
     setActionLoading(true);
     try {
-      await api.postJson<{ status: string }>("/api/dns/start", {
+      await api.postJson<{ status: string }>(paths.dns.start, {
         domain,
         addr,
         server,
@@ -73,7 +74,7 @@ export default function DNSPage() {
   const handleStop = async () => {
     setActionLoading(true);
     try {
-      await api.postJson<{ status: string }>("/api/dns/stop", {});
+      await api.postJson<{ status: string }>(paths.dns.stop, {});
       toast.success(t("dns.toast.stopped"));
       fetchStatus();
     } catch (e) {

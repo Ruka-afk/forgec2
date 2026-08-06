@@ -1,6 +1,7 @@
 "use client";
 
 import { withChartData } from "@/components/withChartData";
+import { paths } from "@/lib/api-paths";
 import { Bell } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
@@ -20,7 +21,7 @@ function AlertBody({ data }: { data: { message?: string; severity?: string; titl
 
 export default withChartData<{ message?: string; severity?: string; title?: string }[]>(
   ({ data }) => <AlertBody data={data} />,
-  "/api/monitor/alerts?status=active&limit=8",
+  paths.monitor.alerts("status=active&limit=8"),
   (raw) => {
     const d = raw as { alerts?: unknown[]; data?: unknown[] };
     return (d.alerts || d.data || []) as { message?: string; severity?: string; title?: string }[];

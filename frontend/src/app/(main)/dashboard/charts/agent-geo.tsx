@@ -1,6 +1,7 @@
 "use client";
 
 import { withChartData } from "@/components/withChartData";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 
 interface GeoPoint { flag?: string; country?: string; count: number }
@@ -22,6 +23,6 @@ function GeoBody({ data }: { data: GeoPoint[] }) {
 
 export default withChartData<GeoPoint[]>(
   ({ data }) => <GeoBody data={data} />,
-  "/api/dashboard/agent-geo",
+  paths.dashboard.agentGeo,
   (raw) => (raw as { data: GeoPoint[] }).data || [],
 );

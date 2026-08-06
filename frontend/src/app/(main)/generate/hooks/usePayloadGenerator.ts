@@ -460,7 +460,7 @@ export function usePayloadGenerator() {
     const fd = new FormData();
     fd.append("profile", file);
     try {
-      const data = await api.postFormData<{ success?: boolean; error?: string; profile?: ProfilePreset }>("/api/generate/profile/import", fd);
+      const data = await api.postFormData<{ success?: boolean; error?: string; profile?: ProfilePreset }>(paths.generate.profileImport, fd);
       if (!data.success) { toast.error(data.error || t("generate.toast.import_failed")); return; }
       const p = data.profile;
       if (!p) return;
@@ -496,7 +496,7 @@ export function usePayloadGenerator() {
     if (!host) { toast.error(t("generate.toast.host_required")); return; }
     if (!port) { toast.error(t("generate.toast.port_required")); return; }
     try {
-      const data = await api.postJson<{ success: boolean; error?: string; listener?: { ID?: number; id?: number } }>("/api/listeners", { name, type: ltype, host, port: parseInt(port) || 8080, protocol: proto, enabled: true });
+      const data = await api.postJson<{ success: boolean; error?: string; listener?: { ID?: number; id?: number } }>(paths.listeners.list, { name, type: ltype, host, port: parseInt(port) || 8080, protocol: proto, enabled: true });
       if (data.success) {
         setShowListenerModal(false);
         toast.success(t("generate.toast.listener_created"));

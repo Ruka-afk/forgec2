@@ -1,6 +1,7 @@
 "use client";
 
 import { withChartData } from "@/components/withChartData";
+import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 
 function CredBody({ data }: { data: Record<string, number> }) {
@@ -26,7 +27,7 @@ function CredBody({ data }: { data: Record<string, number> }) {
 
 export default withChartData<Record<string, number>>(
   ({ data }) => <CredBody data={data} />,
-  "/api/dashboard/credential-types",
+  paths.dashboard.credentialTypes,
   (raw) => {
     const arr = Array.isArray(raw)
       ? (raw as { Name?: string; Count?: number }[])

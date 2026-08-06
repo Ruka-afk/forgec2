@@ -1,6 +1,7 @@
 "use client";
 
 import { withChartData } from "@/components/withChartData";
+import { paths } from "@/lib/api-paths";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
 
@@ -38,7 +39,7 @@ function TaskBody({ data }: { data: TaskCounts }) {
 
 export default withChartData<TaskCounts>(
   ({ data }) => <TaskBody data={data} />,
-  "/api/dashboard/task-status",
+  paths.dashboard.taskStatus,
   (raw) => {
     const d = (raw as { data: Record<string, number> }).data || raw || {};
     return {

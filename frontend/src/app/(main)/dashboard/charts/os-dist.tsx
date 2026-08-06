@@ -1,6 +1,7 @@
 "use client";
 
 import { withChartData } from "@/components/withChartData";
+import { paths } from "@/lib/api-paths";
 import { OS_CHART_COLORS } from "@/lib/colors";
 import { useI18n } from "@/lib/i18n";
 
@@ -34,7 +35,7 @@ function OSBody({ data }: { data: OSPoint[] }) {
 
 export default withChartData<OSPoint[]>(
   ({ data }) => <OSBody data={data} />,
-  "/api/dashboard/os-distribution",
+  paths.dashboard.osDistribution,
   (raw) => {
     const r = (raw as { data: Record<string, number> }).data || raw || {};
   const colors = OS_CHART_COLORS;

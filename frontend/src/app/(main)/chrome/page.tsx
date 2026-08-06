@@ -60,7 +60,7 @@ export default function ChromeC2Page() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.get<{ agents: ChromeAgent[] }>("/api/chrome/agents");
+      const data = await api.get<{ agents: ChromeAgent[] }>(paths.chrome.agents);
       setAgents(data.agents || []);
     } catch {
       setAgents([]);

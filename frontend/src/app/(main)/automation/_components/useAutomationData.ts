@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import type { AlertRule, MonitorAlert, Rule, Webhook } from "./types";
@@ -20,19 +21,19 @@ export function useAutomationData() {
     try {
       let failed = 0;
       const [ruleData, whResp, alertRuleResp, alertsResp] = await Promise.all([
-        api.get<{ rules?: Rule[]; data?: Rule[] }>("/api/automation/rules", { signal }).catch(() => {
+        api.get<{ rules?: Rule[]; data?: Rule[] }>(paths.automation.rules, { signal }).catch(() => {
           failed++;
           return null;
         }),
-        api.get<{ webhooks?: Webhook[]; data?: Webhook[] }>("/api/webhooks", { signal }).catch(() => {
+        api.get<{ webhooks?: Webhook[]; data?: Webhook[] }>(paths.automation.webhooks, { signal }).catch(() => {
           failed++;
           return null;
         }),
-        api.get<{ rules?: AlertRule[] }>("/api/monitor/alert-rules", { signal }).catch(() => {
+        api.get<{ rules?: AlertRule[] }>(paths.automation.alertRules, { signal }).catch(() => {
           failed++;
           return null;
         }),
-        api.get<{ alerts?: MonitorAlert[] }>("/api/monitor/alerts", { signal }).catch(() => {
+        api.get<{ alerts?: MonitorAlert[] }>(paths.monitor.alerts(), { signal }).catch(() => {
           failed++;
           return null;
         }),
