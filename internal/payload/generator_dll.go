@@ -108,13 +108,8 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", fmt.Errorf("go executable not found in PATH")
 	}
 
-	tidyCmd := exec.Command(goCmd, "mod", "tidy")
-	tidyCmd.Dir = tmpDir
-	var tidyOut, tidyErr bytes.Buffer
-	tidyCmd.Stdout = &tidyOut
-	tidyCmd.Stderr = &tidyErr
-	if err := tidyCmd.Run(); err != nil {
-		return "", fmt.Errorf("go mod tidy failed: %w\n%s\n%s", err, tidyOut.String(), tidyErr.String())
+	if err := runGoModTidy(goCmd, tmpDir); err != nil {
+		return "", err
 	}
 
 	goarch := "amd64"

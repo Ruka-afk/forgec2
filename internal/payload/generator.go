@@ -135,6 +135,30 @@ func getGoCmd() string {
 	return cachedGoCmd
 }
 
+// getGarbleCmd locates the garble binary. Same robustness as getGoCmd:
+// garble is typically installed via `go install`, landing in GOPATH/bin,
+// which is often missing from PATH when the server runs as a service.
+func getGarbleCmd() string {
+	if p, err := exec.LookPath("garble"); err == nil {
+		return p
+	}
+	var candidates []string
+	if gopath := os.Getenv("GOPATH"); gopath != "" {
+		candidates = append(candidates, filepath.Join(gopath, "bin", "garble.exe"), filepath.Join(gopath, "bin", "garble"))
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates,
+			filepath.Join(home, "go", "bin", "garble.exe"),
+			filepath.Join(home, "go", "bin", "garble"))
+	}
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && !info.IsDir() {
+			return c
+		}
+	}
+	return ""
+}
+
 const defaultWindowsUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 func defaultMalleableProfile() MalleableProfile {
@@ -480,13 +504,8 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	if goCmd == "" {
 		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
 	}
-	tidyCmd := exec.Command(goCmd, "mod", "tidy")
-	tidyCmd.Dir = tmpDir
-	var tidyOut, tidyErr bytes.Buffer
-	tidyCmd.Stdout = &tidyOut
-	tidyCmd.Stderr = &tidyErr
-	if err := tidyCmd.Run(); err != nil {
-		return "", fmt.Errorf("go mod tidy failed: %w\n%s\n%s", err, tidyOut.String(), tidyErr.String())
+	if err := runGoModTidy(goCmd, tmpDir); err != nil {
+		return "", err
 	}
 
 	// Build command - use explicit GOOS/GOARCH
@@ -600,14 +619,29 @@ func injectRandomizedStrxor(buildDir string) error {
 	return os.WriteFile(filepath.Join(buildDir, "strxor.go"), table, 0644)
 }
 
+// runGoModTidy resolves go.sum entries for the temp build module. Every
+// generate path must run this before `go build`; without it cross-builds
+// fail with "missing go.sum entry" for OS-specific transitive imports.
+func runGoModTidy(goCmd, workDir string) error {
+	tidyCmd := exec.Command(goCmd, "mod", "tidy")
+	tidyCmd.Dir = workDir
+	var tidyOut, tidyErr bytes.Buffer
+	tidyCmd.Stdout = &tidyOut
+	tidyCmd.Stderr = &tidyErr
+	if err := tidyCmd.Run(); err != nil {
+		return fmt.Errorf("go mod tidy failed: %w\n%s\n%s", err, tidyOut.String(), tidyErr.String())
+	}
+	return nil
+}
+
 // buildAgentBinary runs `go build` or `garble build` with consistent hardening flags.
 // When obfuscate is requested, garble is REQUIRED: falling back to a plain
 // build would silently produce an un-obfuscated implant (a false security
 // promise), so a missing/broken garble fails the build instead.
 func buildAgentBinary(goCmd, workDir, ldflags, outPath string, obfuscate bool, goos, goarch string) error {
 	if obfuscate {
-		garblePath, err := exec.LookPath("garble")
-		if err != nil {
+		garblePath := getGarbleCmd()
+		if garblePath == "" {
 			return fmt.Errorf("obfuscation requested but garble is not installed: install it with `go install mvdan.cc/garble@latest`")
 		}
 		args := append([]string{"-literals", "-tiny", "-seed=random", "build"},
@@ -744,6 +778,9 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 	if goCmd == "" {
 		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
 	}
+	if err := runGoModTidy(goCmd, tmpDir); err != nil {
+		return "", err
+	}
 	goarch := "amd64"
 	switch cfg.Architecture {
 	case "arm64":
@@ -811,6 +848,9 @@ func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 	goCmd := getGoCmd()
 	if goCmd == "" {
 		return "", fmt.Errorf("go executable not found in PATH. Install Go from https://go.dev/dl/ or set the GO_BINARY environment variable")
+	}
+	if err := runGoModTidy(goCmd, tmpDir); err != nil {
+		return "", err
 	}
 	goarch := "amd64"
 	if cfg.Architecture == "arm64" {
