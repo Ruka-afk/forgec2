@@ -10,10 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
-import { useConfetti } from "@/components/ConfettiBurst";
-import { getAgentEmoji, getAgentEmojiLabel } from "@/lib/easter-egg-quotes";
-import { useState, useCallback } from "react";
-import { EasterEggPopup } from "./EasterEggPopup";
+import { useState } from "react";
 
 function getOSIcon(os: string): React.ReactNode {
   const cls = "w-7 h-7 text-primary";
@@ -56,26 +53,11 @@ export default function AgentHeader({
   const country = agent.country || "";
   const city = agent.city || "";
 
-  const [showEasterEgg, setShowEasterEgg] = useState(false);
-  const confetti = useConfetti();
-
   const [lastSeenMinutes] = useState(() =>
     agent.last_seen
       ? (Date.now() - new Date(agent.last_seen).getTime()) / 60000
       : undefined
   );
-
-  const agentEmoji = getAgentEmoji(status, lastSeenMinutes);
-  const agentEmojiLabel = getAgentEmojiLabel(status, lastSeenMinutes);
-
-  const triggerConfetti = useCallback((el: HTMLElement) => {
-    const rect = el.getBoundingClientRect();
-    confetti(rect.left + rect.width / 2, rect.top + rect.height / 2, 35);
-  }, [confetti]);
-
-  const handleStatusClick = useCallback((e: React.MouseEvent) => {
-    triggerConfetti(e.currentTarget as HTMLElement);
-  }, [triggerConfetti]);
 
   const quickActions = [
     { action: "screenshot", label: t("agents.header_screenshot"), icon: <Camera className="w-5 h-5" /> },
@@ -97,22 +79,14 @@ export default function AgentHeader({
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex min-w-0 flex-1 items-start gap-4">
               <div
-                className="w-14 h-14 rounded-2xl bg-primary/10 ring-1 ring-primary/10 flex items-center justify-center shrink-0 cursor-pointer hover:scale-105 transition-transform select-none shadow-sm"
-                role="button"
-                tabIndex={0}
-                onClick={() => setShowEasterEgg(true)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowEasterEgg(true); } }}
-                title={t("agents.header_double_click")}
+                className="w-14 h-14 rounded-2xl bg-primary/10 ring-1 ring-primary/10 flex items-center justify-center shrink-0 select-none shadow-sm"
               >
                 {getOSIcon(os)}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-xl font-bold text-foreground truncate">{hostname}</h1>
-                  <span className="text-lg select-none cursor-default" title={agentEmojiLabel}>{agentEmoji}</span>
-                  <span role="button" tabIndex={0} className="cursor-pointer" onClick={handleStatusClick} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); triggerConfetti(e.currentTarget as HTMLElement); } }} title={t("agents.header_click_confetti")}>
-                    <StatusBadge status={status} pulse={status === "online"} />
-                  </span>
+                  <StatusBadge status={status} pulse={status === "online"} />
                   {integrity && (
                     <Badge variant={integrity.toLowerCase() === "system" || integrity.toLowerCase() === "high" ? "destructive" : integrity.toLowerCase() === "medium" ? "secondary" : "outline"} className="text-(--fs-micro-sm) uppercase">
                       {integrity}
@@ -210,7 +184,6 @@ export default function AgentHeader({
           </Tooltip>
         ))}
       </div>
-      <EasterEggPopup open={showEasterEgg} onClose={() => setShowEasterEgg(false)} hostname={hostname} />
     </>
   );
 }

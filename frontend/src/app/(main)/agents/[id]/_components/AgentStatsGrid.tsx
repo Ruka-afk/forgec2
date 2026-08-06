@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useRef, memo } from "react";
+import { useRef, memo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { CopyButton, Spinner } from "@/components/UI";
 import { timeAgo } from "@/lib/utils";
 import type { AgentDetail, AgentDetailData, AgentStatus } from "@/types/agent";
@@ -12,7 +11,6 @@ import AgentHealthRing, { getHealthColor } from "./AgentHealthRing";
 import { Calendar, Check, ChevronDown, Clipboard, Cpu, FileCode, FileText, GitBranch, Network, Radio, X } from "lucide-react";
 import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useI18n } from "@/lib/i18n";
-import { getRandomQuote } from "@/lib/easter-egg-quotes";
 
 function InfoRow({ label, value, mono, title, copyValue, copyLabel, isSelect }: { label: string; value: string; mono?: boolean; title?: string; copyValue?: string; copyLabel?: string; isSelect?: boolean }) {
   const spanRef = useRef<HTMLSpanElement>(null);
@@ -47,33 +45,6 @@ function InfoRow({ label, value, mono, title, copyValue, copyLabel, isSelect }: 
         {copyValue && <CopyButton text={copyValue} label={copyLabel} />}
       </div>
     </div>
-  );
-}
-
-let lastQuoteTime = 0;
-function QuoteTooltip({ children }: { children: React.ReactNode }) {
-  const [quote, setQuote] = useState<string | null>(null);
-
-  const handleEnter = () => {
-    const now = Date.now();
-    if (now - lastQuoteTime < 30000 || Math.random() > 0.1) return;
-    lastQuoteTime = now;
-    setQuote(getRandomQuote());
-  };
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={<span onMouseEnter={handleEnter} onMouseLeave={() => setQuote(null)} />}
-      >
-        {children}
-      </TooltipTrigger>
-      {quote && (
-        <TooltipContent side="top" sideOffset={8} className="max-w-[220px] text-xs">
-          💬 {quote}
-        </TooltipContent>
-      )}
-    </Tooltip>
   );
 }
 
@@ -132,14 +103,14 @@ export default memo(function AgentStatsGrid({
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-      <Card className="p-4 gap-0 overflow-hidden border-border/70 bg-card/90 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30"><QuoteTooltip><div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><Cpu className="w-3.5 h-3.5" />{t("agents.stats_system")}</div></QuoteTooltip><div className="space-y-2.5">
+      <Card className="p-4 gap-0 overflow-hidden border-border/70 bg-card/90 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30"><div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><Cpu className="w-3.5 h-3.5" />{t("agents.stats_system")}</div><div className="space-y-2.5">
         <InfoRow label={t("agents.stats_agent_id")} value={agentID || "\u2014"} mono copyValue={agentID || undefined} copyLabel={t("agents.stats_agent_id")} isSelect />
         <InfoRow label={t("agents.stats_pid")} value={pid ? String(pid) : "\u2014"} />
         <InfoRow label={t("agents.stats_process")} value={processName || "\u2014"} />
         <InfoRow label={t("agents.stats_version")} value={version} />
         <InfoRow label={t("agents.stats_username")} value={username} />
       </div></Card>
-      <Card className="p-4 gap-0 overflow-hidden border-border/70 bg-card/90 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30"><QuoteTooltip><div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><Network className="w-3.5 h-3.5" />{t("agents.stats_network")}</div></QuoteTooltip><div className="space-y-2.5">
+      <Card className="p-4 gap-0 overflow-hidden border-border/70 bg-card/90 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30"><div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><Network className="w-3.5 h-3.5" />{t("agents.stats_network")}</div><div className="space-y-2.5">
         <InfoRow label={t("agents.stats_local_ip")} value={ip} copyValue={ip !== "\u2014" ? ip : undefined} copyLabel={t("agents.stats_local_ip")} />
         <InfoRow label={t("agents.stats_public_ip")} value={publicIP || "\u2014"} copyValue={publicIP || undefined} copyLabel={t("agents.stats_public_ip")} />
         <InfoRow label={t("agents.stats_domain")} value={domain || "\u2014"} />
@@ -157,7 +128,7 @@ export default memo(function AgentStatsGrid({
           </div>
         )}
       </div></Card>
-      <Card className="p-4 gap-0 overflow-hidden border-border/70 bg-card/90 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30"><QuoteTooltip><div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><Radio className="w-3.5 h-3.5" />{t("agents.stats_beacon")}</div></QuoteTooltip><div className="space-y-2.5">
+      <Card className="p-4 gap-0 overflow-hidden border-border/70 bg-card/90 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30"><div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><Radio className="w-3.5 h-3.5" />{t("agents.stats_beacon")}</div><div className="space-y-2.5">
         <InfoRow label={t("agents.stats_sleep")} value={interval ? `${interval}s` : "\u2014"} />
         <InfoRow label={t("agents.stats_jitter")} value={jitter ? `${jitter}%` : "\u2014"} />
         <InfoRow label={t("agents.stats_uptime")} value={uptime} />
@@ -190,7 +161,7 @@ export default memo(function AgentStatsGrid({
           </div>
         </div>
       </div></Card>
-      <Card className="p-4 gap-0 overflow-hidden border-border/70 bg-card/90 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30"><QuoteTooltip><div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><GitBranch className="w-3.5 h-3.5" />{t("agents.stats_activity")}</div></QuoteTooltip><div className="space-y-2.5">
+      <Card className="p-4 gap-0 overflow-hidden border-border/70 bg-card/90 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30"><div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><GitBranch className="w-3.5 h-3.5" />{t("agents.stats_activity")}</div><div className="space-y-2.5">
         {activeWindow ? (<div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground/70 shrink-0">{t("agents.stats_window")}</span><span className="text-xs text-foreground font-medium truncate max-w-[120px]" title={activeWindow}>{activeWindow}</span></div>) : <InfoRow label={t("agents.stats_window")} value="\u2014" />}
         {parentID && <InfoRow label={t("agents.stats_parent")} value={parentID.substring(0, 8) + "..."} />}
         {peerCount > 0 && <InfoRow label={t("agents.stats_peers")} value={String(peerCount)} />}

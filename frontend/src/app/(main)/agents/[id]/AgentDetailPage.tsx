@@ -44,9 +44,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
-import { useConfetti } from "@/components/ConfettiBurst";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Bug, Check, ChevronDown, Circle, Eye, History, Pencil, Send, Tag, Terminal, X } from "lucide-react";
 
@@ -212,41 +210,6 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     setJitterValue(jitter);
   }, [data?.agent]);
 
-  const [partyMode, setPartyMode] = useState(false);
-  const partyConfetti = useConfetti();
-
-  useEffect(() => {
-    const KONAMI = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
-    let buf: string[] = [];
-    let timer: ReturnType<typeof setTimeout>;
-    const partyTimers: ReturnType<typeof setTimeout>[] = [];
-
-    function handler(e: KeyboardEvent) {
-      buf.push(e.key);
-      if (buf.length > KONAMI.length) buf.shift();
-      clearTimeout(timer);
-      timer = setTimeout(() => { buf = []; }, 1500);
-      if (buf.join(",") === KONAMI.join(",")) {
-        buf = [];
-        setPartyMode(true);
-        toast.success(t("agents.party_mode_activated"));
-        const cx = window.innerWidth / 2;
-        const cy = window.innerHeight / 2;
-        for (let i = 0; i < 5; i++) {
-          partyTimers.push(setTimeout(() => partyConfetti(cx + Math.random() * 200 - 100, cy + Math.random() * 200 - 100, 25), i * 200));
-        }
-        partyTimers.push(setTimeout(() => setPartyMode(false), 10000));
-      }
-    }
-
-    window.addEventListener("keydown", handler);
-    return () => {
-      window.removeEventListener("keydown", handler);
-      clearTimeout(timer);
-      partyTimers.forEach(clearTimeout);
-    };
-  }, [partyConfetti, t]);
-
   const agent = data?.agent || ({} as AgentDetailModel);
   const tasks: TaskEntry[] = useMemo(() => data?.tasks || [], [data?.tasks]);
   const status = (agent.status || "offline") as AgentStatus;
@@ -363,7 +326,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   }
 
   return (
-    <div className={cn("max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up", partyMode && "party-rainbow")}>
+    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <AgentHeader
         agent={agent as Partial<AgentDetailExt>}
         agentId={id}

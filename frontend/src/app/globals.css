@@ -297,9 +297,6 @@ body {
   .animate-ping {
     animation: none !important;
   }
-  .party-rainbow {
-    animation: none !important;
-  }
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation: none !important;
@@ -417,17 +414,4 @@ body {
 @keyframes fadeSlideOut {
   from { opacity: 1; transform: translateY(0); }
   to { opacity: 0; transform: translateY(-8px); }
-}
-
-/* ══════════════════════════════════════════
-   EASTER EGGS
-   ══════════════════════════════════════════ */
-
-@keyframes rainbowShift {
-  0% { filter: hue-rotate(0deg); }
-  100% { filter: hue-rotate(360deg); }
-}
-
-.party-rainbow {
-  animation: rainbowShift 3s linear infinite;
 }
