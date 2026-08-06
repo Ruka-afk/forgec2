@@ -9,5 +9,5 @@ func ptraceGetIP(regs *syscall.PtraceRegs) uint64 {
 }
 
 func ptraceSetIP(regs *syscall.PtraceRegs, ip uint64) {
-	regs.Eip = uint32(ip)
+	regs.Eip = int32(ip)
 }

