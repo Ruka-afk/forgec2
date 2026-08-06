@@ -46,6 +46,20 @@ jobs:
           scripts/ci-api-smoke.sh
           kill $(cat /tmp/forgec2-smoke.pid) || true
 
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - run: go mod download
+      - name: Real agent builds (windows amd64/386 + linux ELF + token stagers)
+        # Everything in the supporting `for` loops is fast (~10s each). The
+        # garble obfuscated path stays manual (needs $GOPATH/bin + takes ~3min).
+        run: |
+          FORGEC2_SMOKE_BUILD=1 go test ./internal/payload/... -count=1 -timeout 15m -run 'TestSmokeGenerateWindowsEXE|TestSmokeLinuxELFSmoke|TestSmokeTokenStagerBuild' -v
+
   lint:
     runs-on: ubuntu-latest
     steps:
