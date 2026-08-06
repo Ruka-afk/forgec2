@@ -19,6 +19,10 @@ export interface WSMessage {
 type WSListener = (msg: WSMessage) => void;
 
 // Module-level listeners so non-React code (e.g. the task poller in api.ts)
+// can observe WS messages without a React context. This is a second, distinct
+// channel from the provider-level `listenersRef` set below — subscribers are
+// never duplicated across channels, and each channel stays idempotent because
+// both are backed by Sets (re-registering the same listener is a no-op).
 const globalListeners = new Set<WSListener>();
 
 // activeWS is the current operator WebSocket, used to send control frames
@@ -141,6 +145,18 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       if (disposed) return;
       if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
+      // Fan a message out to both subscription channels. Listeners are
+      // fire-and-forget: a throwing listener is skipped so one bad subscriber
+      // cannot break the bus.
+      const dispatch = (msg: WSMessage) => {
+        for (const fn of listenersRef.current) {
+          try { fn(msg); } catch { /* listener error: skip */ }
+        }
+        for (const fn of globalListeners) {
+          try { fn(msg); } catch { /* listener error: skip */ }
+        }
+      };
+
       const ws = new WebSocket(getWSURL());
       wsRef.current = ws;
       activeWS = ws;
@@ -186,12 +202,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         try {
           const msg = JSON.parse(event.data) as WSMessage;
           if (msg.type === "pong") { lastPongRef.current = Date.now(); return; }
-          for (const fn of listenersRef.current) {
-            try { fn(msg); } catch { /* listener error: skip */ }
-          }
-          for (const fn of globalListeners) {
-            try { fn(msg); } catch { /* listener error: skip */ }
-          }
+          dispatch(msg);
         } catch {
           // Silently ignore malformed WS frames
         }
