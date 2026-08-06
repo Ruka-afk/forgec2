@@ -17,6 +17,8 @@ export function useAgentDangerActions(
     killDateFailed: string;
     clearKillDateSuccess: string;
     clearKillDateFailed: string;
+    migrateSuccess: string;
+    migrateFailed: string;
   },
 ) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -75,10 +77,24 @@ export function useAgentDangerActions(
     }
   }, [agentId, reloadDetail, messages.clearKillDateSuccess, messages.clearKillDateFailed]);
 
+  const migrateAgent = useCallback(async (path: string) => {
+    if (!agentId) return;
+    setBusy("migrate");
+    try {
+      await api.post(paths.agents.migrate(agentId), path.trim() ? { path: path.trim() } : {});
+      toast.success(messages.migrateSuccess);
+    } catch {
+      toast.error(messages.migrateFailed);
+    } finally {
+      setBusy(null);
+    }
+  }, [agentId, messages.migrateSuccess, messages.migrateFailed]);
+
   return {
     busy,
     killAgent,
     uninstallAgent,
+    migrateAgent,
     setKillDate,
     clearKillDate,
   };

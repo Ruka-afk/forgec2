@@ -67,6 +67,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const [confirmKillDate, setConfirmKillDate] = useState(false);
   const [killDateValue, setKillDateValue] = useState("");
   const [confirmClearKillDate, setConfirmClearKillDate] = useState(false);
+  const [confirmMigrate, setConfirmMigrate] = useState(false);
+  const [migratePath, setMigratePath] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [expandedTask, setExpandedTask] = useState<number | null>(null);
   const [lbOpen, setLbOpen] = useState(false);
@@ -112,7 +114,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     cancelEditing: cancelEditNotes,
     save: handleSaveNote,
   } = useAgentNotes(id, loadDetail, t("agents.detail_notes_save_failed"));
-  const { busy: dangerBusy, killAgent: runKillAgent, uninstallAgent: runUninstallAgent, setKillDate: runSetKillDate, clearKillDate: runClearKillDate } = useAgentDangerActions(id, loadDetail, {
+  const { busy: dangerBusy, killAgent: runKillAgent, uninstallAgent: runUninstallAgent, migrateAgent: runMigrateAgent, setKillDate: runSetKillDate, clearKillDate: runClearKillDate } = useAgentDangerActions(id, loadDetail, {
     killSuccess: t("agents.detail_kill_sent"),
     killFailed: t("agents.detail_kill_failed"),
     uninstallSuccess: t("agents.detail_uninstall_sent"),
@@ -121,6 +123,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     killDateFailed: t("agents.detail_kill_date_set_failed"),
     clearKillDateSuccess: t("agents.detail_kill_date_cleared"),
     clearKillDateFailed: t("agents.detail_kill_date_clear_failed"),
+    migrateSuccess: t("agents.detail_migrate_sent"),
+    migrateFailed: t("agents.detail_migrate_failed"),
   });
 
   const { subscribe } = useWS();
@@ -370,6 +374,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         credCount={credCount}
         onKill={() => setConfirmKill(true)}
         onUninstall={() => setConfirmUninstall(true)}
+        onMigrate={() => { setMigratePath(""); setConfirmMigrate(true); }}
         onClose={onClose}
       />
 
@@ -574,6 +579,29 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         </Dialog>
       )}
       <ConfirmModal open={confirmClearKillDate} title={t("agents.detail_clear_kill_date")} message={t("agents.detail_clear_kill_date_msg")} confirmText={t("agents.detail_clear")} danger onConfirm={async () => { await runClearKillDate(); setConfirmClearKillDate(false); }} onCancel={() => setConfirmClearKillDate(false)} />
+      {confirmMigrate && (
+        <Dialog open={confirmMigrate} onOpenChange={(v) => !v && setConfirmMigrate(false)}>
+          <DialogContent className="w-96 gap-0">
+            <DialogHeader>
+              <DialogTitle>{t("agents.migrate_agent")}</DialogTitle>
+            </DialogHeader>
+            <p className="text-xs text-muted-foreground mb-3">{t("agents.migrate_msg")}</p>
+            <span className="block text-xs font-medium text-muted-foreground mb-1.5">{t("agents.migrate_path_label")}</span>
+            <Input
+              type="text"
+              value={migratePath}
+              onChange={(e) => setMigratePath(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { runMigrateAgent(migratePath); setConfirmMigrate(false); } }}
+              placeholder={t("agents.migrate_path_placeholder")}
+              className="mb-3 text-sm font-mono"
+            />
+            <DialogFooter>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmMigrate(false)} disabled={!!dangerBusy}>{t("agents.detail_cancel")}</Button>
+              <Button variant="destructive" size="sm" onClick={async () => { await runMigrateAgent(migratePath); setConfirmMigrate(false); }} disabled={!!dangerBusy}>{t("agents.migrate")}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 })

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { CopyButton, StatusBadge, Spinner } from "@/components/UI";
 import type { AgentDetail, AgentStatus } from "@/types/agent";
-import { Activity, Apple, Camera, Clipboard, Crown, Database, FolderOpen, History, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
+import { Activity, Apple, Camera, Clipboard, Crown, Database, FolderOpen, History, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, RefreshCw, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -35,12 +35,13 @@ export interface AgentHeaderProps {
   credCount: number | null;
   onKill: () => void;
   onUninstall: () => void;
+  onMigrate?: () => void;
   onClose?: () => void;
 }
 
 export default function AgentHeader({
   agent, agentId, status,
-  actionLoading, onQuickAction, credCount, onKill, onUninstall,
+  actionLoading, onQuickAction, credCount, onKill, onUninstall, onMigrate,
 }: AgentHeaderProps) {
   const { t } = useI18n();
   const hostname = agent.hostname || "\u2014";
@@ -173,6 +174,9 @@ export default function AgentHeader({
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/recording`} />}><History className="w-4 h-4" /> {t("agents.recording_title")}</DropdownMenuItem>
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/config`} />}><SlidersHorizontal className="w-4 h-4" /> {t("agents.config_hot_config")}</DropdownMenuItem>
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/traffic`} />}><Activity className="w-4 h-4" /> {t("agents.traffic_title")}</DropdownMenuItem>
+                  {onMigrate && (
+                    <DropdownMenuItem onClick={onMigrate}><RefreshCw className="w-4 h-4" /> {t("agents.header_migrate")}</DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem variant="destructive" onClick={onKill}><Skull className="w-4 h-4" /> {t("agents.kill_agent")}</DropdownMenuItem>
                   <DropdownMenuItem variant="destructive" onClick={onUninstall}><Trash2 className="w-4 h-4" /> {t("agents.uninstall")}</DropdownMenuItem>

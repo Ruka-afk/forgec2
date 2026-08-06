@@ -24,6 +24,7 @@ export const paths = {
     cancelTask: (id: string, taskId: string | number) => `/agents/${id}/tasks/${taskId}/cancel`,
     rerunTask: (id: string, taskId: string | number) => `/agents/${id}/task/${taskId}/rerun`,
     kill: (id: string) => `/agents/${id}/kill`,
+    migrate: (id: string) => `/agents/${id}/migrate`,
     uninstall: (id: string) => `/agents/${id}/uninstall`,
     note: (id: string) => `/agents/${id}/note`,
     setSleep: (id: string) => `/agents/${id}/set_sleep`,
