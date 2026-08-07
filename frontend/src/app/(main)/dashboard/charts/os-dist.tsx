@@ -14,7 +14,7 @@ function OSBody({ data }: { data: OSPoint[] }) {
   const items = data.map((d) => ({ ...d, color: colors[d.name] || d.color || "#6b7280" }));
   return (
     <div className="flex items-center gap-4">
-      <div className="relative w-20 h-20 shrink-0">
+      <div className="relative w-20 h-20 shrink-0" aria-hidden="true">
         {total > 0 ? (
           <div className="w-full h-full rounded-full" style={{ background: `conic-gradient(${items.map((d, i) => { const prev = items.slice(0, i).reduce((s, x) => s + x.value, 0); return `${d.color} ${(prev / total) * 360}deg ${((prev + d.value) / total) * 360}deg`; }).join(", ")})` }}></div>
         ) :           <div className="w-full h-full rounded-full bg-secondary"></div>}

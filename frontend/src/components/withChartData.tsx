@@ -81,7 +81,7 @@ export function withChartData<T>(
             <Spinner size="sm" />Loading...
           </div>
         ) : error ? (
-          <div className="h-24 flex items-center justify-center text-destructive text-xs">
+          <div className="h-24 flex items-center justify-center text-destructive text-xs" role="alert">
             <AlertTriangle className="w-4 h-4 mr-2 inline" />Failed to load
             <Button variant="link" size="sm" onClick={load} className="ml-2">{t("common.retry")}</Button>
           </div>

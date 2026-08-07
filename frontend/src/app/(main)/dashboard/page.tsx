@@ -218,7 +218,7 @@ export default function DashboardPage() {
           ) : s.recent_tasks.slice(0, 10).map((task, i) => (
             <div key={i} className="flex items-center justify-between px-5 py-3 hover:bg-secondary transition-colors">
               <div className="flex items-center gap-3">
-                <span className={`w-2 h-2 rounded-full shrink-0 ${task.status === "completed" ? "bg-emerald-500" : task.status === "failed" ? "bg-red-500" : task.status === "pending" ? "bg-amber-500" : "bg-blue-500"}`}></span>
+                <span aria-hidden="true" className={`w-2 h-2 rounded-full shrink-0 ${task.status === "completed" ? "bg-emerald-500" : task.status === "failed" ? "bg-red-500" : task.status === "pending" ? "bg-amber-500" : "bg-blue-500"}`}></span>
                 <span className="text-(--fs-micro-sm) text-muted-foreground w-16 shrink-0">
                   {task.status === "completed" ? t("tasks.completed") : task.status === "failed" ? t("tasks.failed") : task.status === "pending" ? t("tasks.pending") : task.status === "cancelled" ? t("tasks.cancelled") : t("tasks.running")}
                 </span>

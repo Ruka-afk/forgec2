@@ -42,6 +42,7 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
             key={id}
             role="button"
             tabIndex={0}
+            aria-label={`${hostname} ${os} ${status} ${ip}`}
             onClick={() => onSelect(id)}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(id); } }}
             className={`p-4 cursor-pointer hover:ring-2 hover:ring-primary/50 hover:shadow-md transition-all duration-200 border-l-4 ${borderColor} group ring-0 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70`}
@@ -55,7 +56,7 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <span className={`w-2 h-2 rounded-full ${status === "online" ? "bg-emerald-500 animate-pulse" : status === "stale" ? "bg-amber-500" : "bg-red-500"}`} />
+                <span aria-hidden="true" className={`w-2 h-2 rounded-full ${status === "online" ? "bg-emerald-500 animate-pulse" : status === "stale" ? "bg-amber-500" : "bg-red-500"}`} />
                 <span className="text-(--fs-micro-sm) text-muted-foreground/70 capitalize">{status}</span>
               </div>
             </div>
