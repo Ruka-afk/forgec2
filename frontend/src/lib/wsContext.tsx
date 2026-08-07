@@ -25,32 +25,6 @@ type WSListener = (msg: WSMessage) => void;
 // both are backed by Sets (re-registering the same listener is a no-op).
 const globalListeners = new Set<WSListener>();
 
-// activeWS is the current operator WebSocket, used to send control frames
-// (subscribe/unsubscribe) from anywhere without a hook.
-let activeWS: WebSocket | null = null;
-
-// Track subscribed agents so we can re-subscribe after reconnection
-const subscribedAgents = new Set<string>();
-
-// sendWSMessage sends a control frame to the server if the socket is open.
-export function sendWSMessage(obj: unknown): void {
-  if (activeWS && activeWS.readyState === WebSocket.OPEN) {
-    activeWS.send(JSON.stringify(obj));
-  }
-}
-
-// subscribeAgent tells the server to scope agent-scoped broadcasts to this connection.
-export function subscribeAgent(agentID: string): void {
-  subscribedAgents.add(agentID);
-  sendWSMessage({ type: "subscribe", agent_id: agentID });
-}
-
-// unsubscribeAgent removes a previous subscription for agentID.
-export function unsubscribeAgent(agentID: string): void {
-  subscribedAgents.delete(agentID);
-  sendWSMessage({ type: "unsubscribe", agent_id: agentID });
-}
-
 // onWSMessage registers a global WS message listener and returns an unsubscribe fn.
 export function onWSMessage(listener: WSListener): () => void {
   globalListeners.add(listener);
@@ -159,18 +133,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
       const ws = new WebSocket(getWSURL());
       wsRef.current = ws;
-      activeWS = ws;
 
       ws.onopen = () => {
         reconnectAttemptRef.current = 0;
         setReconnectFailed(false);
-        const token = getCookie("forgec2_session");
-        if (token) {
-          ws.send(JSON.stringify({ type: "auth", token }));
-        }
-        for (const agentID of subscribedAgents) {
-          ws.send(JSON.stringify({ type: "subscribe", agent_id: agentID }));
-        }
         while (sendBufferRef.current.length > 0) {
           const buffered = sendBufferRef.current.shift()!;
           ws.send(buffered);
@@ -215,7 +181,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       disposed = true;
       stopHeartbeat();
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
-      activeWS = null;
       wsRef.current?.close();
     };
   }, []);

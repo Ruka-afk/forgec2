@@ -5,10 +5,6 @@ import type { Agent, AgentStatus, NormalizedAgent } from "@/types/agent";
 
 export type { NormalizedAgent as AgentSummary };
 
-/** Canonical list path — prefer /api/agents over dual-use /agents (SPA vs JSON). */
-export { paths as apiPaths } from "./api-paths";
-export const AGENTS_LIST_PATH = paths.agents.list();
-
 /** Normalize agent list envelopes from /agents, /api/agents, or bare arrays. */
 export function normalizeAgentList(data: unknown): Agent[] {
   return firstArray(data, ["agents", "Agents", "data", "Beacons", "beacons"]) as Agent[];

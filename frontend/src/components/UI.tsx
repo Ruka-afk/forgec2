@@ -18,16 +18,3 @@ export { DataState, DataSpinner, DataError } from "@/components/ui/data-state";
 export { ChartCard } from "@/components/ChartCard";
 export { Separator } from "@/components/ui/separator";
 export { TableSkeleton, CardGridSkeleton, ChartSkeleton, ListSkeleton, StatSkeleton, AgentGridSkeleton } from "@/components/ui/skeletons";
-
-/* ── TableCard (2 consumers — keep here) ── */
-
-export function TableCard({ header, children }: { header?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-      {header && <div className="px-5 py-3.5 border-b border-border text-sm font-medium text-foreground">{header}</div>}
-      <div className="overflow-x-auto">
-        {children}
-      </div>
-    </div>
-  );
-}

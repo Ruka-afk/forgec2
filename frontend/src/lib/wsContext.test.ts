@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { getWSURL, sendWSMessage, subscribeAgent, unsubscribeAgent } from "./wsContext";
+import { describe, it, expect, afterEach } from "vitest";
+import { getWSURL } from "./wsContext";
 
 describe("getWSURL", () => {
   afterEach(() => {
@@ -27,20 +27,5 @@ describe("getWSURL", () => {
     delete process.env.NEXT_PUBLIC_WS_URL;
     delete process.env.NEXT_PUBLIC_GO_BACKEND_PORT;
     expect(getWSURL()).toBe("wss://c2.example:443/ws");
-  });
-});
-
-describe("WS control helpers without an open socket", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("sendWSMessage is a safe no-op when no socket is open", () => {
-    expect(() => sendWSMessage({ type: "anything" })).not.toThrow();
-  });
-
-  it("subscribeAgent/unsubscribeAgent do not throw without a socket", () => {
-    expect(() => subscribeAgent("agent-1")).not.toThrow();
-    expect(() => unsubscribeAgent("agent-1")).not.toThrow();
   });
 });

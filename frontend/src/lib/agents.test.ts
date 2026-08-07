@@ -1,12 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { AGENTS_LIST_PATH, normalizeAgentList, fetchAgentList } from "./agents";
+import { normalizeAgentList, fetchAgentList } from "./agents";
 import { api } from "./api";
-
-describe("AGENTS_LIST_PATH", () => {
-  it("points at the API-prefixed path", () => {
-    expect(AGENTS_LIST_PATH).toBe("/api/agents");
-  });
-});
 
 describe("normalizeAgentList", () => {
   it("returns bare arrays as-is", () => {
