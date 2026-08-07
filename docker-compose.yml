@@ -20,14 +20,16 @@ services:
       - FORGEC2_PORT=${FORGEC2_PORT:-8000}
       - FORGEC2_DB_PATH=${FORGEC2_DB_PATH:-/data/db/forgec2.db}
       - FORGEC2_DB_DRIVER=${FORGEC2_DB_DRIVER:-postgres}
-      - FORGEC2_DB_DSN=${FORGEC2_DB_DSN:-host=postgres user=forgec2 password=forgec2_pass dbname=forgec2 port=5432 sslmode=disable}
-      - DB_PASSWORD=${DB_PASSWORD:-forgec2_pass}
+      - FORGEC2_DB_DSN=${FORGEC2_DB_DSN:-host=postgres user=forgec2 password=$DB_PASSWORD dbname=forgec2 port=5432 sslmode=disable}
+      - DB_PASSWORD=${DB_PASSWORD:?set DB_PASSWORD in the .env file (no default allowed)}
       - TZ=${TZ:-UTC}
     depends_on:
       postgres:
         condition: service_healthy
     cap_drop:
       - ALL
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["/usr/local/bin/healthcheck"]
       interval: 30s
@@ -41,7 +43,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: forgec2
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-forgec2_pass}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in the .env file (required, no weak default)}
       POSTGRES_DB: forgec2
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -53,6 +55,8 @@ services:
       - SETGID
       - FOWNER
       - CHOWN
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "forgec2"]
       interval: 10s
