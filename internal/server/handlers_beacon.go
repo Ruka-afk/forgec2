@@ -220,17 +220,6 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 	}
 
 	if envelope.CipherB64 != "" {
-		// Encrypted frame. Advance the replay window before decrypting so
-		// replayed ciphertext is rejected even if it somehow decrypts.
-		accepted, gap := s.acceptSeq(envelope.UUID, envelope.Seq)
-		if !accepted {
-			slog.Warn("Beacon rejected: replay or out-of-order seq", "agent_id", envelope.UUID, "seq", envelope.Seq)
-			return beaconEnvelope{}, beaconRequest{}, frameRejected
-		}
-		if gap {
-			slog.Warn("Beacon: large seq jump", "agent_id", envelope.UUID, "seq", envelope.Seq)
-		}
-
 		if s.sessionManager == nil {
 			slog.Warn("Beacon rejected: session manager unavailable", "agent_id", envelope.UUID)
 			return beaconEnvelope{}, beaconRequest{}, frameRejected
@@ -240,6 +229,20 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 			slog.Warn("ECDH decryption failed", "agent_id", envelope.UUID, "err", err)
 			return beaconEnvelope{}, beaconRequest{}, frameRejected
 		}
+
+		// Advance the replay window only after the frame passed AEAD
+		// authentication. Advancing it earlier let any anonymous actor who
+		// knows a UUID burn the window with garbage frames and permanently
+		// lock out the real agent.
+		accepted, gap := s.acceptSeq(envelope.UUID, envelope.Seq)
+		if !accepted {
+			slog.Warn("Beacon rejected: replay or out-of-order seq", "agent_id", envelope.UUID, "seq", envelope.Seq)
+			return beaconEnvelope{}, beaconRequest{}, frameRejected
+		}
+		if gap {
+			slog.Warn("Beacon: large seq jump", "agent_id", envelope.UUID, "seq", envelope.Seq)
+		}
+
 		s.configMu.RLock()
 		maxPayload := s.cfg.Crypto.MaxDecryptedPayloadSize
 		s.configMu.RUnlock()
@@ -311,7 +314,6 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 	}
 
 	if kind == frameRegister {
-		s.ensureBeaconImplantRow(env.UUID)
 		expected := crypto.ComputeRegHMAC(regKey, env.UUID, env.IdentityPub, env.Ts)
 		got, err := base64.StdEncoding.DecodeString(env.RegHMAC)
 		if err != nil || !hmac.Equal(expected, got) {
@@ -323,6 +325,9 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 			slog.Warn("Beacon registration rejected: invalid identity key", "agent_id", env.UUID)
 			return nil, false
 		}
+		// Only create the implant row once the frame is authenticated; an
+		// unauthenticated UUID must never be able to write rows to the DB.
+		s.ensureBeaconImplantRow(env.UUID)
 		updates := map[string]interface{}{
 			"identity_pub": env.IdentityPub,
 			"registered":   true,

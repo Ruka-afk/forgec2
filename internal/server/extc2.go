@@ -75,27 +75,50 @@ func (s *Server) handleExtC2Receive(c *gin.Context) {
 		return
 	}
 
-	// Parse as BeaconRequest
-	var br beaconRequest
-	if err := json.Unmarshal(raw, &br); err != nil {
-		c.JSON(http.StatusBadRequest, extC2ReceiveResponse{Error: sanitizeError(err, "JSON decode")})
+	// The raw payload is a full v2 beacon envelope, exactly like the HTTP
+	// beacon body. Run it through the complete envelope gate (ECDH AEAD with
+	// AAD-bound UUID+seq, replay window, timestamp tolerance) instead of
+	// trusting an opaque JSON blob — otherwise a holder of the shared
+	// X-ExtC2-Token could impersonate arbitrary agents and inject results or
+	// drain queued tasks. BeaconID is intentionally NOT applied: the agent
+	// identity comes from the authenticated envelope and cannot be spoofed.
+	env, br, kind := s.decodeBeaconEnvelope(raw)
+	if kind == frameRejected {
+		c.JSON(http.StatusUnauthorized, extC2ReceiveResponse{Error: "invalid beacon envelope"})
 		return
 	}
-	if req.BeaconID != "" {
-		br.UUID = req.BeaconID
+
+	var respBytes []byte
+	if kind == frameEncrypted {
+		resp := s.processBeacon(br, "")
+		if s.sessionManager != nil && s.sessionManager.NeedsRekey(br.UUID, BeaconSessionRekeyMessages) {
+			resp.Rekey = true
+		}
+		var ok bool
+		respBytes, ok = s.buildBeaconResponse(br.UUID, env.Seq, resp)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, extC2ReceiveResponse{Error: "response build failed"})
+			return
+		}
+	} else {
+		var ok bool
+		respBytes, ok = s.processAuthFrame(env, kind)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, extC2ReceiveResponse{Error: "authentication failed"})
+			return
+		}
 	}
 
-	resp := s.processBeacon(br, "")
-	respJSON, err := json.Marshal(resp)
+	respJSON, err := json.Marshal(struct {
+		Success bool   `json:"success"`
+		Data    string `json:"data"`
+	}{Success: true, Data: base64.StdEncoding.EncodeToString(respBytes)})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, extC2ReceiveResponse{Error: sanitizeError(err, "Response encoding")})
 		return
 	}
 
-	c.JSON(http.StatusOK, extC2ReceiveResponse{
-		Success: true,
-		Data:    base64.StdEncoding.EncodeToString(respJSON),
-	})
+	c.Data(http.StatusOK, "application/json", respJSON)
 }
 
 func (s *Server) handleExtC2Send(c *gin.Context) {

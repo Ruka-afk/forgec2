@@ -14,7 +14,6 @@ server:
   offline_threshold: 60
   session_max_age_hours: 24
   cleanup_retention_days: 30
-  require_tls_for_auth: false
   enable_pprof: false
   enable_metrics: false
   socks_listen_host: "127.0.0.1"
