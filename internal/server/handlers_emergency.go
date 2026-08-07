@@ -197,15 +197,48 @@ func (s *Server) handleKillSwitch(c *gin.Context) {
 		})
 	case "disarm":
 		s.setKillSwitch(false, "", user.Username)
+
+		// Reclaim uninstall tasks that were dispatched at arm time but never
+		// executed. An "armed then disarmed" kill switch is a false alarm in
+		// many ops; those pending/failed uninstall jobs must not fire hours
+		// later when the affected implants wake up. (An implant that already
+		// obtained the task before disarm cannot be recalled — that is
+		// inherent to a one-shot kill switch, not a recoverable state.)
+		reclaimed := 0
+		var queued []db.Task
+		if err := s.db.Where("type = ? AND status IN ?", "uninstall", []string{"pending", "running"}).Find(&queued).Error; err != nil {
+			slog.Warn("Kill switch disarm: failed to query queued uninstall tasks", "err", err)
+		} else if len(queued) > 0 {
+			ids := make([]uint, 0, len(queued))
+			for _, t := range queued {
+				ids = append(ids, t.ID)
+			}
+			if err := s.db.Model(&db.Task{}).Where("id IN ?", ids).Update("status", "cancelled").Error; err != nil {
+				slog.Warn("Kill switch disarm: failed to cancel queued uninstall tasks", "err", err)
+			} else {
+				reclaimed = len(queued)
+				// These tasks will never be observed as completed, so roll
+				// back the per-agent pending counters that arm/ent incremented.
+				s.agentPendingTasksMu.Lock()
+				for _, t := range queued {
+					if s.agentPendingTasks[t.AgentID] > 0 {
+						s.agentPendingTasks[t.AgentID]--
+					}
+				}
+				s.agentPendingTasksMu.Unlock()
+			}
+		}
+
 		s.LogAuditRecord(c, "kill_switch_disarm", "security", user.Username,
-			"Fleet kill-switch disarmed", true, nil)
+			"Fleet kill-switch disarmed ("+strconv.Itoa(reclaimed)+" uninstall tasks reclaimed)", true, nil)
 		s.broadcastSystemAlert("KILL SWITCH DISARMED",
 			"Fleet kill-switch disarmed by "+user.Username+".", "kill_switch")
-		slog.Warn("KILL SWITCH DISARMED", "user", user.Username)
+		slog.Warn("KILL SWITCH DISARMED", "user", user.Username, "uninstall_tasks_reclaimed", reclaimed)
 		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "Kill switch disarmed.",
-			"armed":   false,
+			"success":  true,
+			"message":  "Kill switch has been disarmed.",
+			"armed":    false,
+			"reclaimed": reclaimed,
 		})
 	default:
 		respondError(c, http.StatusBadRequest, "action must be 'arm' or 'disarm'")

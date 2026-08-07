@@ -115,10 +115,20 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		existingSet[a.ID] = true
 	}
 
-	// Build all tasks first, then batch-insert in a single DB call
+	// Build all tasks first, then batch-insert in a single DB call.
+	// Apply the same gates as createTask (command length + per-agent pending
+	// depth). The single-task path rejects new tasks once an agent has
+	// MaxPendingTasksPerAgent outstanding; the bulk path must not silently
+	// bypass that ceiling by inserting straight into the DB.
+	if len(req.Command) > MaxCommandLength {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("command too long (max %d characters)", MaxCommandLength))
+		return
+	}
+
 	tasks := make([]db.Task, 0, len(uniqueIDs))
 	validAgentIDs := make([]string, 0, len(uniqueIDs))
 
+	s.agentPendingTasksMu.Lock()
 	for _, agentID := range uniqueIDs {
 		if !existingSet[agentID] {
 			continue
@@ -129,6 +139,13 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 			slog.Error("Batch command: unknown task type", "type", req.TaskType)
 			continue
 		}
+
+		if s.agentPendingTasks[agentID] >= MaxPendingTasksPerAgent {
+			slog.Warn("Batch command: agent pending queue full, skipping",
+				"agent_id", agentID, "pending", s.agentPendingTasks[agentID], "limit", MaxPendingTasksPerAgent)
+			continue
+		}
+		s.agentPendingTasks[agentID]++
 
 		tasks = append(tasks, db.Task{
 			AgentID: agentID,
@@ -141,21 +158,22 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		})
 		validAgentIDs = append(validAgentIDs, agentID)
 	}
+	s.agentPendingTasksMu.Unlock()
 
 	// Batch-insert all tasks in one DB round-trip
 	if err := s.db.CreateInBatches(tasks, 100).Error; err != nil {
+		s.agentPendingTasksMu.Lock()
+		for i := range tasks {
+			s.agentPendingTasks[tasks[i].AgentID]--
+		}
+		s.agentPendingTasksMu.Unlock()
 		slog.Error("Batch command: failed to batch-create tasks", "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to create tasks")
 		return
 	}
 
-	// Post-insert: increment pending counters, fire hooks, broadcast
-	s.agentPendingTasksMu.Lock()
-	for i := range tasks {
-		s.agentPendingTasks[tasks[i].AgentID]++
-	}
-	s.agentPendingTasksMu.Unlock()
-
+	// Post-insert: fire hooks, broadcast. Pending counters were already
+	// incremented under the gate check above.
 	for i := range tasks {
 		if s.pluginManager != nil {
 			taskCopy := tasks[i]
