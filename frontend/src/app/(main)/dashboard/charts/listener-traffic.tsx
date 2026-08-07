@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { fetchCached } from "@/lib/hooks/useCachedData";
 import { ChartCard } from "@/components/ChartCard";
 import { Spinner } from "@/components/UI";
 import { ArrowLeftRight } from "lucide-react";
@@ -34,15 +35,19 @@ function ListenerTrafficInner({ range }: { range: string }) {
     const controller = new AbortController();
     setLoading(true);
     setLoadError(false);
-    api.get<TrafficPoint[] | { data: TrafficPoint[] } | { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] }>(paths.dashboard.listenerTraffic(range), { signal: controller.signal })
-      .then((d) => {
+    const endpoint = paths.dashboard.listenerTraffic(range);
+    fetchCached<TrafficPoint[]>(`traffic:${endpoint}`, async () => {
+      const d = await api.get<TrafficPoint[] | { data: TrafficPoint[] } | { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] }>(endpoint, { signal: controller.signal });
+      const o = (d as { data?: { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] } })?.data ?? d;
+      const obj = (o as { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] }) || {};
+      const labels = obj.labels || [];
+      const bins = obj.bytes_in || [];
+      const bouts = obj.bytes_out || [];
+      return labels.map((t, i) => ({ time: t, value: (Number(bins[i]) || 0) + (Number(bouts[i]) || 0) }));
+    }, 30_000)
+      .then((parsed) => {
         if (controller.signal.aborted) return;
-        const o = (d as { data?: { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] } })?.data ?? d;
-        const obj = (o as { labels?: string[]; bytes_in?: number[]; bytes_out?: number[] }) || {};
-        const labels = obj.labels || [];
-        const bins = obj.bytes_in || [];
-        const bouts = obj.bytes_out || [];
-        setData(labels.map((t, i) => ({ time: t, value: (Number(bins[i]) || 0) + (Number(bouts[i]) || 0) })));
+        setData(parsed);
       })
       .catch(() => {
         if (controller.signal.aborted) return;

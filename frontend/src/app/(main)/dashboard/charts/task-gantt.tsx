@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { fetchCached } from "@/lib/hooks/useCachedData";
 import { ChartCard } from "@/components/ChartCard";
 import { BarChart3 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -36,10 +37,14 @@ export default function TaskGanttSection({ range }: { range: string }) {
   useEffect(() => {
     const controller = new AbortController();
     setLoadError(false);
-    api.get<GanttItem[] | { data: GanttItem[] }>(paths.dashboard.taskGantt(range), { signal: controller.signal })
-      .then((d) => {
+    const endpoint = paths.dashboard.taskGantt(range);
+    fetchCached<GanttItem[]>(`gantt:${endpoint}`, async () => {
+      const d = await api.get<GanttItem[] | { data: GanttItem[] }>(endpoint, { signal: controller.signal });
+      return (d as { data: GanttItem[] }).data || (d as GanttItem[]) || [];
+    }, 30_000)
+      .then((parsed) => {
         if (controller.signal.aborted) return;
-        setItems((d as { data: GanttItem[] }).data || (d as GanttItem[]) || []);
+        setItems(parsed);
       })
       .catch(() => {
         if (controller.signal.aborted) return;

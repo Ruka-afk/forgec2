@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { api } from "@/lib/api";
+import { fetchCached } from "@/lib/hooks/useCachedData";
 import { Spinner } from "@/components/UI";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
@@ -12,6 +13,27 @@ interface ChartDataProps<T> {
   loading: boolean;
   error: boolean;
   onRefresh: () => void;
+}
+
+/** Freshness window for dashboard chart data. Charts trade up to ~30s of
+ * staleness for shared, deduped requests across remounts. */
+export const CHART_CACHE_TTL_MS = 30_000;
+
+/** Fetch a chart endpoint through the shared TTL cache. Concurrent/lazy
+ * charts for the same endpoint collapse into a single in-flight request. */
+export async function fetchChartData<T>(
+  endpoint: string,
+  fetchFn: (endpoint: string) => Promise<unknown>,
+  transform?: (raw: unknown) => T,
+): Promise<T> {
+  return fetchCached<T>(
+    `chart:${endpoint}`,
+    async () => {
+      const raw = await fetchFn(endpoint);
+      return transform ? transform(raw) : (raw as T);
+    },
+    CHART_CACHE_TTL_MS,
+  );
 }
 
 export function withChartData<T>(
@@ -26,6 +48,8 @@ export function withChartData<T>(
     const [error, setError] = useState(false);
     const [visible, setVisible] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
+    const transformRef = useRef(transform);
+    transformRef.current = transform;
 
     // IntersectionObserver: only fetch when visible
     useEffect(() => {
@@ -42,8 +66,8 @@ export function withChartData<T>(
     const load = useCallback(() => {
       setLoading(true);
       setError(false);
-      api.get<unknown>(endpoint)
-        .then((raw) => setData(transform ? transform(raw) : (raw as T)))
+      fetchChartData<T>(endpoint, (e) => api.get<unknown>(e), transformRef.current)
+        .then((value) => setData(value))
         .catch(() => setError(true))
         .finally(() => setLoading(false));
     }, []);
