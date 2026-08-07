@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -122,4 +123,58 @@ func main() {}`)
 	if len(res.Stdout) != 0 {
 		t.Fatalf("expected empty stdout, got %q", string(res.Stdout))
 	}
+}
+
+func TestExecutorEnvWhitelist(t *testing.T) {
+	dir := t.TempDir()
+	writeTestScript(t, dir, "env.go", `package main
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+)
+func main() {
+	leaks := map[string]string{}
+	for _, k := range []string{"SECRET_TOKEN", "JWT_SECRET", "DB_PASSWORD", "HOME", "TMP", "PLUGIN_NAME", "PATH", "MISSING_VAR"} {
+		leaks[k] = os.Getenv(k)
+	}
+	out, _ := json.Marshal(leaks)
+	fmt.Println(string(out))
+}`)
+
+	// Set a secret that must not be visible to plugin scripts.
+	t.Setenv("SECRET_TOKEN", "super-secret-do-not-leak")
+	t.Setenv("DB_PASSWORD", "p4ssw0rd")
+	t.Setenv("JWT_SECRET", "jwt-secret-value")
+
+	if os.Getenv("HOME") == "" {
+		t.Setenv("HOME", "C:\\operators\\home")
+	}
+
+	exec := &executor{}
+	manifest := &Manifest{Name: "envtest", Interpreter: "go", Entry: "env.go", Timeout: 20}
+	res, err := exec.run(context.Background(), dir, manifest, map[string]interface{}{}, 20)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	var got map[string]string
+	if err := unmarshal(res.Stdout, &got); err != nil {
+		t.Fatalf("parse env result: %v (out=%s)", err, string(res.Stdout))
+	}
+	if got["SECRET_TOKEN"] != "" || got["DB_PASSWORD"] != "" || got["JWT_SECRET"] != "" {
+		t.Fatalf("plugin env leaks server secrets: %+v", got)
+	}
+	if got["MISSING_VAR"] != "" {
+		t.Fatalf("plugin env leaks unknown variables: %+v", got)
+	}
+	if got["HOME"] == "" || got["TMP"] == "" {
+		t.Fatalf("HOME/TMP must be pinned: %+v", got)
+	}
+	if got["PLUGIN_NAME"] != "envtest" {
+		t.Fatalf("plugin-specific vars missing: %+v", got)
+	}
+}
+
+func unmarshal(b []byte, v any) error {
+	return json.Unmarshal(b, v)
 }

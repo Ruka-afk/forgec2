@@ -292,7 +292,7 @@ func buildTokenStager(cfg ImplantConfig, outputDir string, fetch StagerFetch, go
 	if !strings.HasPrefix(outPath, absOutputDir+string(filepath.Separator)) {
 		return "", fmt.Errorf("invalid stager filename: escapes output directory")
 	}
-	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(outPath), 0750); err != nil {
 		return "", err
 	}
 

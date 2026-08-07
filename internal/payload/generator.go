@@ -337,7 +337,7 @@ func SaveImportedProfile(dataDir string, raw []byte) (MalleableProfile, error) {
 		dataDir = "data"
 	}
 	dir := filepath.Join(dataDir, "profiles")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return p, err
 	}
 	p.Name = strings.TrimPrefix(p.Name, "default_")
@@ -407,7 +407,7 @@ type ImplantConfig struct {
 	DNSServer     string // DNS C2 server IP
 	Proxy         string // HTTP proxy URL (e.g. "http://proxy:8080")
 	CryptoKey     string // 32-byte hex key for StreamCipher (empty = disabled)
-	BeaconKey     string // PSK sent as envelope "key" + X-Beacon-Key header (empty = no PSK auth)
+	BeaconKey     string // PSK used to derive registration auth (empty = no PSK auth)
 	RegSecretID   string // v3 per-implant registration secret id (compiled into the binary)
 	RegSecret     string // v3 per-implant registration secret, base64 (replaces BeaconKey in v3 builds)
 	ExpiryDate    string // Compile-time expiry date "YYYY-MM-DD" (empty = disabled)
@@ -508,7 +508,7 @@ func GenerateWindowsEXE(cfg ImplantConfig, outputDir string) (string, error) {
 	}
 	// ensure the dir for outPath exists (use abs dir)
 	outDir := filepath.Dir(outPath)
-	if err := os.MkdirAll(outDir, 0755); err != nil {
+	if err := os.MkdirAll(outDir, 0750); err != nil {
 		return "", err
 	}
 
@@ -576,7 +576,7 @@ func GeneratePowerShell(cfg ImplantConfig, outputDir string) (string, error) {
 		outName = "forgec2_agent.ps1"
 	}
 	outPath := filepath.Join(outputDir, outName)
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0750); err != nil {
 		return "", err
 	}
 	if err := os.WriteFile(outPath, []byte(ps1Code), 0644); err != nil {
@@ -783,7 +783,7 @@ func GenerateLinuxELF(cfg ImplantConfig, outputDir string) (string, error) {
 		}
 	}
 	outDir := filepath.Dir(outPath)
-	if err := os.MkdirAll(outDir, 0755); err != nil {
+	if err := os.MkdirAll(outDir, 0750); err != nil {
 		return "", err
 	}
 
@@ -854,7 +854,7 @@ func GenerateMacOS(cfg ImplantConfig, outputDir string) (string, error) {
 		}
 	}
 	outDir := filepath.Dir(outPath)
-	if err := os.MkdirAll(outDir, 0755); err != nil {
+	if err := os.MkdirAll(outDir, 0750); err != nil {
 		return "", err
 	}
 

@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -132,5 +133,56 @@ func TestStageServeNonHexToken(t *testing.T) {
 	w := stageGet(t, s, "/stage/abcdefgh-not-hex")
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestStageServeConsumesToken(t *testing.T) {
+	dataDir := t.TempDir()
+	s, token, sig, _, _ := stageFixture(t, dataDir, time.Now().Add(time.Hour))
+
+	w := stageGet(t, s, "/stage/"+token+"?s="+sig)
+	if w.Code != http.StatusOK {
+		t.Fatalf("first fetch status = %d, want 200; body=%q", w.Code, w.Body.String())
+	}
+	// If a lazy rebuild path is hit the decrypted plaintext would be rebuilt;
+	// the encrypted blob must not remain on disk after consumption.
+	if _, err := os.Stat(payload.Stage2BlobPath(dataDir, token)); !os.IsNotExist(err) {
+		t.Fatalf("stage blob should be removed after consumption, err=%v", err)
+	}
+
+	w = stageGet(t, s, "/stage/"+token+"?s="+sig)
+	if w.Code != http.StatusGone {
+		t.Fatalf("second fetch status = %d, want 410 (single-use)", w.Code)
+	}
+}
+
+func TestStageServeConcurrentConsumesOnce(t *testing.T) {
+	s, token, sig, _, _ := stageFixture(t, t.TempDir(), time.Now().Add(time.Hour))
+
+	results := make(chan int, 2)
+	done := make(chan struct{})
+	for i := 0; i < 2; i++ {
+		go func() {
+			defer func() { done <- struct{}{} }()
+			w := stageGet(t, s, "/stage/"+token+"?s="+sig)
+			results <- w.Code
+		}()
+	}
+	for i := 0; i < 2; i++ {
+		<-done
+	}
+	close(results)
+
+	ok, gone := 0, 0
+	for code := range results {
+		switch code {
+		case http.StatusOK:
+			ok++
+		case http.StatusGone:
+			gone++
+		}
+	}
+	if ok != 1 || gone != 1 {
+		t.Fatalf("expected exactly one 200 + one 410, got ok=%d gone=%d", ok, gone)
 	}
 }

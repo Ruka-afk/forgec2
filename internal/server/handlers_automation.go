@@ -2,10 +2,13 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
@@ -14,6 +17,68 @@ import (
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
+
+// validateExternalURL guards server-initiated fetches against SSRF. It accepts
+// http(s) URLs whose resolved destination is a public IP: loopback, RFC1918/
+// ULA-private, link-local, multicast, unspecified and IPv4-mapped-v6 addresses
+// are all rejected. Resolving the hostname covers encoded/decimal-octet
+// literals and DNS rebinding on the lookup the server itself performs.
+func validateExternalURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return errors.New("invalid URL")
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return errors.New("URL must be http or https")
+	}
+	host := u.Hostname()
+	if host == "" {
+		return errors.New("URL has no host")
+	}
+	var addrs []netip.Addr
+	if ip, perr := netip.ParseAddr(host); perr == nil {
+		addrs = append(addrs, ip.Unmap())
+	} else {
+		resolved, lerr := net.LookupIP(host)
+		if lerr != nil {
+			return fmt.Errorf("host resolution failed: %w", lerr)
+		}
+		for _, ip := range resolved {
+			if a, ok := netip.AddrFromSlice(ip); ok {
+				addrs = append(addrs, a.Unmap())
+			}
+		}
+		if len(addrs) == 0 {
+			return errors.New("host resolved to no addresses")
+		}
+	}
+	for _, a := range addrs {
+		if a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast() ||
+			a.IsLinkLocalMulticast() || a.IsUnspecified() || a.IsMulticast() {
+			return fmt.Errorf("blocked non-public address %s", a)
+		}
+	}
+	return nil
+}
+
+// ssrfSafeClient returns an HTTP client that validates every redirect hop
+// before following it, so a public fetch cannot pivot into internal targets.
+func ssrfSafeClient(base *http.Client) *http.Client {
+	if base == nil {
+		base = http.DefaultClient
+	}
+	c := &http.Client{
+		Timeout:   base.Timeout,
+		Transport: base.Transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return errors.New("too many redirects")
+			}
+			return validateExternalURL(req.URL.String())
+		},
+	}
+	return c
+}
 
 func (s *Server) handleAutomationPage(c *gin.Context) {
 	rules := s.loadAutomationRules()
@@ -555,20 +620,14 @@ func (s *Server) handleBOFRepoImport(c *gin.Context) {
 		return
 	}
 
-	// Validate URL scheme to prevent SSRF
-	parsedURL, err := url.Parse(req.URL)
-	if err != nil || (parsedURL.Scheme != "https" && parsedURL.Scheme != "http") {
-		respondError(c, http.StatusBadRequest, "url must be http or https")
-		return
-	}
-	// Block private/internal IP ranges to prevent SSRF
-	host := parsedURL.Hostname()
-	if host == "localhost" || host == "127.0.0.1" || host == "::1" || strings.HasPrefix(host, "10.") || strings.HasPrefix(host, "172.") || strings.HasPrefix(host, "192.168.") || strings.HasPrefix(host, "169.254.") {
-		respondError(c, http.StatusBadRequest, "url must not target private/internal addresses")
+	// Validate URL to prevent SSRF: scheme + full IP-space check of the
+	// resolved host (loopback/RFC1918/ULA/link-local/multicast all blocked).
+	if err := validateExternalURL(req.URL); err != nil {
+		respondError(c, http.StatusBadRequest, "url rejected: "+err.Error())
 		return
 	}
 
-	resp, err := s.httpClient.Get(req.URL)
+	resp, err := ssrfSafeClient(s.httpClient).Get(req.URL)
 	if err != nil {
 		respondError(c, http.StatusBadRequest, sanitizeError(err, "BOF operation"))
 		return

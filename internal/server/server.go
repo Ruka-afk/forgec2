@@ -1655,6 +1655,12 @@ func (s *Server) startExtraHTTPListener(key, scheme string) error {
 		defer s.wg.Done()
 		var err error
 		if scheme == "https" {
+			// Extra HTTPS listeners share the main server's TLS posture:
+			// JARM/JA3 fingerprint wrapping, mTLS requirements and TLS 1.2
+			// floor are applied identically to every termination point.
+			if cfgErr := s.configureTLS(srv); cfgErr != nil {
+				slog.Error("Extra HTTPS listener TLS config failed", "key", key, "addr", addr, "err", cfgErr)
+			}
 			slog.Info("Extra HTTPS listener started", "addr", addr, "key", key)
 			err = srv.ListenAndServeTLS(s.cfg.Server.CertFile, s.cfg.Server.KeyFile)
 		} else {

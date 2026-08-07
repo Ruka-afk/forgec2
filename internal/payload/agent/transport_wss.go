@@ -48,9 +48,6 @@ func sendWSSBeacon(body []byte) []byte {
 		if DomainFront != "" {
 			header.Set("Host", DomainFront)
 		}
-		if beaconKey != "" {
-			header.Set("X-Beacon-Key", beaconKey)
-		}
 
 		conn, _, err := dialer.Dial(wsURL, header)
 		if err != nil {

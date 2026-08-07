@@ -99,7 +99,7 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 		}
 	}
 	outDir := filepath.Dir(outPath)
-	if err := os.MkdirAll(outDir, 0755); err != nil {
+	if err := os.MkdirAll(outDir, 0750); err != nil {
 		return "", err
 	}
 

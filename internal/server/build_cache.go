@@ -37,7 +37,7 @@ type BuildCache struct {
 }
 
 func NewBuildCache(cacheDir string, maxSizeMB int, ttl time.Duration) (*BuildCache, error) {
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(cacheDir, 0750); err != nil {
 		return nil, fmt.Errorf("create cache dir: %w", err)
 	}
 

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -43,6 +44,14 @@ func (s *Server) handleServeStage(c *gin.Context) {
 		return
 	}
 
+	// Stager tokens are single-use: a token that was already served must not
+	// be reusable, so a leaked/compromised URL cannot be replayed to fetch
+	// additional stage-2 copies.
+	if tok.Used {
+		c.String(http.StatusGone, "stage token already consumed")
+		return
+	}
+
 	dataDir := s.cfg.Server.DataDir
 	if dataDir == "" {
 		dataDir = "data"
@@ -66,6 +75,24 @@ func (s *Server) handleServeStage(c *gin.Context) {
 			return
 		}
 	}
+
+	// Atomically claim the token so concurrent fetches cannot double-serve.
+	// Only one request wins the row update; the loser is treated as consumed.
+	claim := s.db.Model(&db.StagerToken{}).
+		Where("id = ? AND used = ?", tok.ID, false).
+		Update("used", true)
+	if claim.Error != nil {
+		slog.Error("failed to consume stage token", "err", claim.Error)
+		c.String(http.StatusInternalServerError, "stage not available")
+		return
+	}
+	if claim.RowsAffected == 0 {
+		c.String(http.StatusGone, "stage token already consumed")
+		return
+	}
+
+	// The encrypted blob is no longer needed once the token is consumed.
+	_ = os.Remove(payload.Stage2BlobPath(dataDir, token))
 
 	c.Header("Cache-Control", "no-store")
 	c.Data(http.StatusOK, "application/octet-stream", blob)

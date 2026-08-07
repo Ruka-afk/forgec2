@@ -245,7 +245,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 
 	// Copy the payload to the hosted payloads directory for download
 	payloadsDir := filepath.Join(s.cfg.Server.DataDir, "payloads")
-	if err := os.MkdirAll(payloadsDir, 0755); err != nil {
+	if err := os.MkdirAll(payloadsDir, 0750); err != nil {
 		s.logBuild(format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Payload generation"))
 		return
@@ -253,7 +253,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 
 	payloadID := uuid.New().String()
 	payloadSubDir := filepath.Join(payloadsDir, payloadID)
-	if err := os.MkdirAll(payloadSubDir, 0755); err != nil {
+	if err := os.MkdirAll(payloadSubDir, 0750); err != nil {
 		s.logBuild(format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Payload generation"))
 		return

@@ -12,7 +12,7 @@ import (
 // SetupLogRotation configures lumberjack-based log rotation and returns
 // a writer that sends output to both stdout and the rotating log file.
 func SetupLogRotation(logDir string) io.Writer {
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(logDir, 0750); err != nil {
 		slog.Error("Failed to create log directory", "dir", logDir, "err", err)
 		return os.Stdout
 	}

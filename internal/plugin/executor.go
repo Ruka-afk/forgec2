@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -37,12 +38,28 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Dir = pluginDir
 
-	cmd.Env = append(os.Environ(),
-		"HOME="+os.TempDir(),
-		"TMPDIR="+os.TempDir(),
-		"PLUGIN_NAME="+m.Name,
-		"PLUGIN_VERSION="+m.Version,
-	)
+	// Plugin scripts run with a minimal environment instead of inheriting the
+	// full server environment: secrets, tokens and machine context in env vars
+	// must not be readable by (potentially untrusted) plugins. HOME/TMP* are
+	// pinned to the OS temp directory so plugins cannot touch operator files.
+	// Go toolchain variables (GOCACHE/GOPATH/GOROOT) are injected explicitly so
+	// "go run" plugins still compile without leaking anything sensitive.
+	env := []string{
+		"PATH=" + os.Getenv("PATH"),
+		"LANG=C.UTF-8",
+		"HOME=" + os.TempDir(),
+		"TMPDIR=" + os.TempDir(),
+		"TMP=" + os.TempDir(),
+		"TEMP=" + os.TempDir(),
+		"GOCACHE=" + filepath.Join(os.TempDir(), "forgec2-plugin-gocache"),
+		"GOPATH=" + filepath.Join(os.TempDir(), "forgec2-plugin-gopath"),
+		"PLUGIN_NAME=" + m.Name,
+		"PLUGIN_VERSION=" + m.Version,
+	}
+	if goroot := os.Getenv("GOROOT"); goroot != "" {
+		env = append(env, "GOROOT="+goroot)
+	}
+	cmd.Env = env
 
 	stdinData, err := json.Marshal(input)
 	if err != nil {
