@@ -35,6 +35,30 @@ func decodeBlobForTest(obfuscated string) ([]byte, bool) {
 	return out, true
 }
 
+func TestBuildConfigBlobCarriesMalleableWrapping(t *testing.T) {
+	cfg := ImplantConfig{
+		C2URL:            "http://10.0.0.9:9999",
+		Protocol:         "http",
+		MalleablePrepend: "<html><body>",
+		MalleableAppend:  "</body></html>",
+	}
+	blob := buildConfigBlob(cfg, defaultMalleableProfile())
+	raw, ok := decodeBlobForTest(blob)
+	if !ok {
+		t.Fatal("blob did not decode")
+	}
+	var got agentConfigJSON
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("blob json: %v", err)
+	}
+	if got.MalleablePrepend != "<html><body>" {
+		t.Errorf("MalleablePrepend not carried: %q", got.MalleablePrepend)
+	}
+	if got.MalleableAppend != "</body></html>" {
+		t.Errorf("MalleableAppend not carried: %q", got.MalleableAppend)
+	}
+}
+
 func TestBuildConfigBlobRoundTrip(t *testing.T) {
 	profile := defaultMalleableProfile()
 	cfg := ImplantConfig{

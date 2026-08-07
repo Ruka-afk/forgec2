@@ -534,7 +534,10 @@ func (s *Server) handleBeacon(c *gin.Context) {
 		}
 	}
 
-	c.Data(http.StatusOK, "application/json", respBytes)
+	// Render through the malleable profile when enabled: prepend/append bytes,
+	// custom status + headers + Content-Type. The raw JSON reply is unchanged
+	// for every other transport (TCP/WS/DNS binary frames are not wrapped).
+	s.applyMalleableProfile(c, respBytes)
 }
 
 func decodeBeaconIdentity(info map[string]string) (hostname, username, ip string) {

@@ -41,6 +41,8 @@ var (
 	RegSecretStr         string   = ""                            // v3: per-implant registration secret, base64 ("" = v2 master-key derivation)
 	DomainFront          string   = ""                            // Domain fronting: override HTTP Host header ("" = disabled)
 	ContentLengthJitter  int      = 0                             // Max random padding bytes for HTTP body (0=disabled)
+	MalleablePrepend     string   = ""                            // bytes prepended to every HTTP beacon response body (server malleable profile)
+	MalleableAppend      string   = ""                            // bytes appended to every HTTP beacon response body (server malleable profile)
 	ExpiryDateStr        string   = ""                            // Compile-time expiry date: "YYYY-MM-DD" — implant auto-exits after this date
 	EvasionStr           string   = "false"                       // Compile-time EDR evasion (chunked sleep); also FORGEC2_EVASION=1 at runtime
 	PPIDSpoofStr         string   = "false"                       // Compile-time PPID spoofing (spawned processes inherit explorer.exe as parent)
@@ -178,6 +180,8 @@ type agentConfigBlob struct {
 	SSHHostKey       string `json:"ssh_host_key"`
 	PinnedCertSHA256 string `json:"pinned_cert"`
 	SelfCheckSHA256  string `json:"self_check"`
+	MalleablePrepend string `json:"malleable_prepend"`
+	MalleableAppend  string `json:"malleable_append"`
 }
 
 // loadConfigBlob decodes the injected runtime config block and reapplies it over
@@ -307,5 +311,11 @@ func (b *agentConfigBlob) apply() {
 	}
 	if b.SelfCheckSHA256 != "" {
 		SelfCheckSHA256Str = b.SelfCheckSHA256
+	}
+	if b.MalleablePrepend != "" {
+		MalleablePrepend = b.MalleablePrepend
+	}
+	if b.MalleableAppend != "" {
+		MalleableAppend = b.MalleableAppend
 	}
 }

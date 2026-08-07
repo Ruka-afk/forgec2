@@ -8,8 +8,11 @@ import (
 )
 
 func (s *Server) applyMalleableProfile(c *gin.Context, body []byte) {
+	s.configMu.RLock()
 	mp := s.cfg.Malleable
+	s.configMu.RUnlock()
 	if !mp.Enabled {
+		c.Data(http.StatusOK, "application/json", body)
 		return
 	}
 

