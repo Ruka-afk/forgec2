@@ -527,27 +527,19 @@ export default function CredentialsPage() {
           <DialogHeader>
             <DialogTitle>{t("cred.edit_title")}</DialogTitle>
           </DialogHeader>
+          <p className="text-xs text-muted-foreground">{t("cred.edit_readonly_hint")}</p>
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_type")}</Label>
-                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v ?? "cleartext" })}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CRED_TYPES.filter(ct => ct !== "all").map(ct => (
-                      <SelectItem key={ct} value={ct}>{ct}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input value={form.type} disabled />
               </div>
               <div>
-                <Label htmlFor="edit-cred-username" className="text-xs text-muted-foreground block mb-1">{t("cred.field_username")} *</Label>
+                <Label htmlFor="edit-cred-username" className="text-xs text-muted-foreground block mb-1">{t("cred.field_username")}</Label>
                 <Input
                   id="edit-cred-username"
                   value={form.username}
-                  onChange={e => setForm({ ...form, username: e.target.value })}
+                  disabled
                 />
               </div>
               <div>
@@ -555,7 +547,8 @@ export default function CredentialsPage() {
                 <Input
                   id="edit-cred-password"
                   value={form.password}
-                  onChange={e => setForm({ ...form, password: e.target.value })}
+                  type="password"
+                  disabled
                 />
               </div>
               <div>
@@ -563,7 +556,7 @@ export default function CredentialsPage() {
                 <Input
                   id="edit-cred-domain"
                   value={form.domain}
-                  onChange={e => setForm({ ...form, domain: e.target.value })}
+                  disabled
                 />
               </div>
               <div>
@@ -571,7 +564,7 @@ export default function CredentialsPage() {
                 <Input
                   id="edit-cred-source"
                   value={form.source}
-                  onChange={e => setForm({ ...form, source: e.target.value })}
+                  disabled
                 />
               </div>
               <div>
@@ -579,8 +572,8 @@ export default function CredentialsPage() {
                 <Input
                   id="edit-cred-hash"
                   value={form.hash}
-                  onChange={e => setForm({ ...form, hash: e.target.value })}
                   className="font-mono text-xs"
+                  disabled
                 />
               </div>
             </div>

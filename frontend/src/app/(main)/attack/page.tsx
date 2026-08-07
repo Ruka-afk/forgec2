@@ -91,7 +91,7 @@ const TACTIC_HEADER_COLORS: Record<string, string> = {
 
 export default function AttackPage() {
   const { t } = useI18n();
-  const { agents, refresh: refreshAgents } = useAgentList();
+  const { agents } = useAgentList();
   const [data, setData] = useState<AttackCoverageResponse | null>(null);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [loading, setLoading] = useState(true);
@@ -109,10 +109,6 @@ export default function AttackPage() {
       setLoading(false);
     }
   }, [t]);
-
-  useEffect(() => {
-    refreshAgents();
-  }, [refreshAgents]);
 
   useEffect(() => {
     const controller = new AbortController();

@@ -44,7 +44,7 @@ interface BHResult {
 
 export default function BloodHoundPage() {
   const { t } = useI18n();
-  const { agents, refresh: refreshAgents } = useAgentList();
+  const { agents } = useAgentList();
   const [results, setResults] = useState<BHResult[]>([]);
   const [binaryStatus, setBinaryStatus] = useState<{ uploaded: boolean; filename: string }>({ uploaded: false, filename: "" });
   const [loading, setLoading] = useState(true);
@@ -77,7 +77,7 @@ export default function BloodHoundPage() {
     setLoading(false);
   }, [t]);
 
-  useEffect(() => { loadData(); refreshAgents(); }, [loadData, refreshAgents]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

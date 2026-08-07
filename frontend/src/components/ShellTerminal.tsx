@@ -18,6 +18,7 @@ import { useTheme } from "@/lib/theme";
 
 const PROMPT_CHARS = ["$", "#", ">", "%"];
 const KEY = "forgec2_shell_fontsize";
+const MAX_DRAG_UPLOAD_BYTES = 4 * 1024;
 
 function buildTerminalTheme() {
   const cs = typeof window === "undefined" ? null : getComputedStyle(document.documentElement);
@@ -441,7 +442,15 @@ export default function ShellTerminal({
           const files = Array.from(e.dataTransfer.files);
           if (files.length === 0) return;
           for (const file of files) {
+            if (file.size > MAX_DRAG_UPLOAD_BYTES) {
+              writeln(
+                `${t("shell.drop_upload_too_large")} (${Math.ceil(file.size / 1024)} KB > ${Math.floor(MAX_DRAG_UPLOAD_BYTES / 1024)} KB) — ${t("shell.drop_upload_use_files")}`,
+                "31",
+              );
+              continue;
+            }
             const reader = new FileReader();
+            reader.onerror = () => writeln(`${t("shell.drop_upload_read_failed")}: ${file.name}`, "31");
             reader.onload = () => {
               const b64 = (reader.result as string).split(",")[1];
               const cmd = `upload ${file.name} ${b64}`;

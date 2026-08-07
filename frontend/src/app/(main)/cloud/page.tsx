@@ -38,7 +38,7 @@ interface CloudResultsResponse {
 
 export default function CloudPage() {
   const { t } = useI18n();
-  const { agents, loading: agentsLoading, refresh: refreshAgents } = useAgentList();
+  const { agents, loading: agentsLoading } = useAgentList();
   const [selectedAgent, setSelectedAgent] = useState("");
   const [provider, setProvider] = useState("aws");
   const [stealing, setStealing] = useState(false);
@@ -46,8 +46,6 @@ export default function CloudPage() {
   const [selectedAgentResults, setSelectedAgentResults] = useState("");
   const [pollNote, setPollNote] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => { refreshAgents(); }, [refreshAgents]);
 
   const loadResults = useCallback(async (agentId: string, quiet = false): Promise<number> => {
     if (!agentId) return 0;

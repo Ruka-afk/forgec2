@@ -36,6 +36,8 @@ export default function AgentPersistencePage() {
   const [loading, setLoading] = useState(true);
   const [installedMethods, setInstalledMethods] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [listOutput, setListOutput] = useState<string | null>(null);
+  const [listLoading, setListLoading] = useState(false);
 
 
   const loadAgent = useCallback(async () => {
@@ -52,15 +54,31 @@ export default function AgentPersistencePage() {
 
   const listPersistence = useCallback(async () => {
     if (!id) return;
+    setListLoading(true);
     try {
       const data = await api.post(paths.agents.persistence(id), { action: "list" });
       if (data.success) {
         toast.success(t("agents.persistence_list_success"));
+        for (let attempt = 0; attempt < 10; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          const tasks = await api.get<{ tasks?: Array<{ type: string; result: string }> }>(
+            paths.agents.tasks(id),
+          );
+          const latest = (tasks.tasks || []).find(
+            (task) => task.type === "persistence_list" && task.result && task.result.trim(),
+          );
+          if (latest) {
+            setListOutput(latest.result);
+            break;
+          }
+        }
       } else {
         toast.error((data.error as string) || t("agents.persistence_load_failed"));
       }
     } catch (e) {
       toast.error(String(e));
+    } finally {
+      setListLoading(false);
     }
   }, [id, t]);
 
@@ -227,6 +245,23 @@ export default function AgentPersistencePage() {
                 );
               })}
             </div>
+          )}
+        {listOutput ? (
+            <details className="mt-3">
+              <summary className="text-xs font-medium text-muted-foreground cursor-pointer">
+                {t("agents.persistence_last_detection")}
+              </summary>
+              <pre className="mt-2 max-h-60 overflow-auto font-mono text-xs whitespace-pre-wrap bg-muted/40 rounded-lg p-3">
+                {listOutput}
+              </pre>
+            </details>
+          ) : (
+            listLoading && (
+              <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                <Spinner size="sm" />
+                {t("agents.persistence_detecting")}
+              </div>
+            )
           )}
         </Card>
       </div>

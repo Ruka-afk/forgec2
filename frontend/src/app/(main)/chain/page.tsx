@@ -36,7 +36,7 @@ interface ChainNode {
 export default function ChainPage() {
   const { t } = useI18n();
 
-  const { agents, refresh: refreshAgents } = useAgentList();
+  const { agents } = useAgentList();
   const [graph, setGraph] = useState<ChainNode[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>("");
   const [chain, setChain] = useState<string[]>([]);
@@ -68,8 +68,8 @@ export default function ChainPage() {
   }, [t]);
 
   useEffect(() => {
-    Promise.all([refreshAgents(), fetchGraph()]).finally(() => setLoading(false));
-  }, [refreshAgents, fetchGraph]);
+    fetchGraph().finally(() => setLoading(false));
+  }, [fetchGraph]);
 
   useEffect(() => {
     if (selectedAgent) {

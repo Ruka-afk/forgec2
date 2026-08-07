@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { PageHeader, Spinner } from "@/components/UI";
@@ -17,15 +17,13 @@ import type { Agent } from "@/types/agent";
 
 export default function ContainerPage() {
   const { t } = useI18n();
-  const { agents, refresh: refreshAgents } = useAgentList();
+  const { agents } = useAgentList();
   const [selectedAgent, setSelectedAgent] = useState("");
   const [escapeMethod, setEscapeMethod] = useState("generic");
   const [activeTab, setActiveTab] = useState("detect");
   const [loading, setLoading] = useState(false);
   const [dispatchMsg, setDispatchMsg] = useState<string | null>(null);
   const taskPoll = useTaskResult(selectedAgent);
-
-  useEffect(() => { refreshAgents(); }, [refreshAgents]);
 
   const getAgentId = (a: Agent) => a.id || "";
   const getHostname = (a: Agent) => a.hostname || "";

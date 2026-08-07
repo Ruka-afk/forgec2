@@ -29,6 +29,7 @@ interface ScreenshotItem {
   const urlParams = useParams<{ id: string }>();
   const id = Array.isArray(urlParams?.id) ? urlParams.id[0] : urlParams?.id || "";
   const [monitoring, setMonitoring] = useState(false);  const [monitoringStatus, setMonitoringStatus] = useState<"connected" | "offline" | "capturing" | "waiting">("waiting");
+  const monitoringRef = useRef(false);
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [screenshotGallery, setScreenshotGallery] = useState<ScreenshotItem[]>([]);
   const [lastUpdate, setLastUpdate] = useState<string>("-");  const [interval, setInterval_] = useState(3);
@@ -96,6 +97,7 @@ interface ScreenshotItem {
   }, [id, commitFrame]);  const startMonitoring = async () => {
     if (!id) return;
     setMonitoring(true);
+    monitoringRef.current = true;
     setMonitoringStatus("capturing");
     try {      const body = new URLSearchParams();      body.append("interval", (interval * 1000).toString());
       await api.post(paths.agents.screenStart(id), { interval: (interval * 1000).toString() });
@@ -108,6 +110,7 @@ interface ScreenshotItem {
 
   const stopMonitoring = async () => {
     setMonitoring(false);
+    monitoringRef.current = false;
     setMonitoringStatus("waiting");
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -190,6 +193,7 @@ interface ScreenshotItem {
   useEffect(() => {
     if (!id) return;
     return subscribe((msg) => {
+      if (!monitoringRef.current) return;
       if (msg.type === "screenshot" && String(msg.agent_id) === id && msg.data) {
         setWsLive(true);
         applyFrame(String(msg.data));

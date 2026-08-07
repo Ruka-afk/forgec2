@@ -46,6 +46,7 @@ export default function RemoteDesktopPage() {
   );
 
   const [monitoring, setMonitoring] = useState(false);
+  const monitoringRef = useRef(false);
   const [status, setStatus] = useState<"waiting" | "capturing" | "connected" | "error">("waiting");
   const [screenData, setScreenData] = useState<string | null>(null);
   const [resolution, setResolution] = useState<string>("medium");
@@ -105,6 +106,7 @@ export default function RemoteDesktopPage() {
   const startMonitoring = async () => {
     if (!id) return;
     setMonitoring(true);
+    monitoringRef.current = true;
     setStatus("capturing");
     try {
       await api.post(paths.agents.screenStart(id), { interval: String(pollInterval) });
@@ -121,6 +123,7 @@ export default function RemoteDesktopPage() {
   const stopMonitoring = async () => {
     if (!id) return;
     setMonitoring(false);
+    monitoringRef.current = false;
     setStatus("waiting");
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -145,6 +148,7 @@ export default function RemoteDesktopPage() {
   useEffect(() => {
     if (!id) return;
     return subscribe((msg) => {
+      if (!monitoringRef.current) return;
       if (msg.type === "screenshot" && String(msg.agent_id) === id && msg.data) {
         setWsLive(true);
         const fullData = String(msg.data).startsWith("data:")

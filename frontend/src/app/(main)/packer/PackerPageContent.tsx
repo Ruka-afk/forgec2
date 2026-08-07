@@ -239,7 +239,7 @@ export default function PackerPageContent() {
                 <SelectContent>
                   <SelectItem value="">{t("packer.custom")}</SelectItem>
                   {templates.map(t => (
-                    <SelectItem key={t.name} value={t.name}>{t.name} 鈥?{t.description}</SelectItem>
+                    <SelectItem key={t.name} value={t.name}>{t.name} — {t.description}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -472,7 +472,7 @@ export default function PackerPageContent() {
               </div>
               <div>
                 <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">{t("packer.ready")}</p>
-                <p className="text-xs text-muted-foreground">{(resultSize / 1024).toFixed(1)} KB 鈥?{resultFilename}</p>
+                <p className="text-xs text-muted-foreground">{(resultSize / 1024).toFixed(1)} KB — {resultFilename}</p>
               </div>
             </div>
             <Button onClick={handleDownload}>
