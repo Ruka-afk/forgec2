@@ -184,9 +184,11 @@ func TestSecurityHeaders(t *testing.T) {
 	SecurityHeaders(false)(c)
 
 	checks := map[string]string{
-		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":       "SAMEORIGIN",
-		"Referrer-Policy":       "same-origin",
+		"X-Content-Type-Options":         "nosniff",
+		"X-Frame-Options":                "SAMEORIGIN",
+		"Referrer-Policy":                "same-origin",
+		"Cross-Origin-Opener-Policy":     "same-origin",
+		"Cross-Origin-Resource-Policy":   "same-origin",
 	}
 	for header, want := range checks {
 		got := w.Header().Get(header)

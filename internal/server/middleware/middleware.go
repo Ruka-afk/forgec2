@@ -169,6 +169,8 @@ func SecurityHeaders(tlsEnabled bool) gin.HandlerFunc {
 		c.Header("X-Frame-Options", "SAMEORIGIN")
 		c.Header("Referrer-Policy", "same-origin")
 		c.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		c.Header("Cross-Origin-Opener-Policy", "same-origin")
+		c.Header("Cross-Origin-Resource-Policy", "same-origin")
 		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: wss:; frame-ancestors 'none'")
 		if tlsEnabled {
 			c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")

@@ -423,11 +423,16 @@ func GenerateToken(user db.User, rememberMe bool, sessionMaxAgeHours int) (strin
 	if rememberMe {
 		expiry = JWTLongExpiry
 	}
+	jti := make([]byte, 16)
+	if _, err := rand.Read(jti); err != nil {
+		return "", fmt.Errorf("generate jti: %w", err)
+	}
 	claims := &Claims{
 		UserID:   user.ID,
 		Username: user.Username,
 		Role:     user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        hex.EncodeToString(jti),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},

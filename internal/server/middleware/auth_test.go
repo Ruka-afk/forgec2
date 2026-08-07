@@ -85,6 +85,13 @@ func TestGenerateToken(t *testing.T) {
 		if token == "" {
 			t.Fatal("GenerateToken() returned empty token")
 		}
+		claims, err := ParseToken(token)
+		if err != nil {
+			t.Fatalf("ParseToken() error = %v", err)
+		}
+		if claims.ID == "" {
+			t.Fatal("expected a non-empty jti claim on the session token")
+		}
 	})
 
 	t.Run("user session", func(t *testing.T) {
