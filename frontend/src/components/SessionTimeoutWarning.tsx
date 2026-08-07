@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { buildUrl } from "@/lib/api";
+import { buildUrl, api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 
@@ -77,7 +77,7 @@ export default function SessionTimeoutWarning() {
 
   const handleExtend = useCallback(async () => {
     try {
-      await fetch(buildUrl(paths.auth.me), { credentials: "include" });
+      await api.post(paths.auth.extend);
       toastShownRef.current = false;
       check();
     } catch {

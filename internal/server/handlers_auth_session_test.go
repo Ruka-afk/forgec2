@@ -401,3 +401,164 @@ func TestHandleLogin_EmptyPassword(t *testing.T) {
 		t.Errorf("expected 401 for empty password, got %d", w.Code)
 	}
 }
+
+func TestHandleExtendSession_RotatesTokenAndCookie(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := newLoginTestServer(t)
+
+	hash, err := middleware.HashPassword("test-pass")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	user := db.User{
+		Username:     "extend-user",
+		PasswordHash: hash,
+		Role:         "admin",
+		IsActive:     true,
+	}
+	if err := s.db.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	token, err := middleware.GenerateToken(user, false, 24)
+	if err != nil {
+		t.Fatalf("generate token: %v", err)
+	}
+	maxAge := 24 * SecondsPerHour
+	if err := s.createSession(token, user.ID, "127.0.0.1", "test-agent", "", maxAge); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	oldHash := middleware.TokenHash(token)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/api/auth/extend", nil)
+	c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: token})
+	c.Set("user_id", user.ID)
+	c.Set("user", user.Username)
+	c.Set("user_role", user.Role)
+
+	s.handleExtendSession(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+
+	// Set-Cookie: forgec2_session=<new token>; Max-Age=86400...
+	setCookies := w.Result().Cookies()
+	var newCookie *http.Cookie
+	for _, ck := range setCookies {
+		if ck.Name == "forgec2_session" {
+			newCookie = ck
+			break
+		}
+	}
+	if newCookie == nil {
+		t.Fatal("expected forgec2_session cookie to be set")
+	}
+	if newCookie.Value == token {
+		t.Fatal("expected a rotated (different) session token")
+	}
+	if newCookie.MaxAge != maxAge {
+		t.Errorf("expected Max-Age=%d, got %d", maxAge, newCookie.MaxAge)
+	}
+
+	// Response exposes the new session_exp.
+	var resp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			SessionExp int64 `json:"session_exp"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+	}
+	if !resp.Success || resp.Data.SessionExp == 0 {
+		t.Fatalf("expected success + session_exp, got %+v", resp)
+	}
+
+	// The user_sessions row must track the rotated token, not the old one.
+	var sess db.UserSession
+	if err := s.db.Where("token_hash = ?", middleware.TokenHash(newCookie.Value)).First(&sess).Error; err != nil {
+		t.Fatalf("rotated session row not found: %v", err)
+	}
+	if sess.UserID != user.ID {
+		t.Errorf("expected session user_id=%d, got %d", user.ID, sess.UserID)
+	}
+	var oldRowCount int64
+	s.db.Model(&db.UserSession{}).Where("token_hash = ?", oldHash).Count(&oldRowCount)
+	if oldRowCount != 0 {
+		t.Errorf("expected old token hash to be rotated away, %d row(s) remain", oldRowCount)
+	}
+}
+
+func TestHandleExtendSession_PreservesRememberMe(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := newLoginTestServer(t)
+
+	user := db.User{
+		Username: "extend-remember",
+		Role:     "admin",
+		IsActive: true,
+	}
+	if err := s.db.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	token, err := middleware.GenerateToken(user, true, 24)
+	if err != nil {
+		t.Fatalf("generate token: %v", err)
+	}
+	if err := s.createSession(token, user.ID, "127.0.0.1", "test-agent", "", RememberMeMaxAgeSec); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/api/auth/extend", nil)
+	c.Request.AddCookie(&http.Cookie{Name: "forgec2_session", Value: token})
+	c.Set("user_id", user.ID)
+	c.Set("user", user.Username)
+	c.Set("user_role", user.Role)
+
+	s.handleExtendSession(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+	var newCookie *http.Cookie
+	for _, ck := range w.Result().Cookies() {
+		if ck.Name == "forgec2_session" {
+			newCookie = ck
+			break
+		}
+	}
+	if newCookie == nil {
+		t.Fatal("expected forgec2_session cookie to be set")
+	}
+	if newCookie.MaxAge != RememberMeMaxAgeSec {
+		t.Errorf("expected Max-Age=%d (remember-me preserved), got %d", RememberMeMaxAgeSec, newCookie.MaxAge)
+	}
+}
+
+func TestHandleExtendSession_Unauthenticated(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := newContractDB(t)
+	s := &Server{db: database}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/api/auth/extend", nil)
+
+	s.handleExtendSession(c)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 without user in context, got %d; body=%s", w.Code, w.Body.String())
+	}
+	// No cookie should be issued for an anonymous extend.
+	for _, ck := range w.Result().Cookies() {
+		if ck.Name == "forgec2_session" {
+			t.Fatalf("must not set a session cookie for unauthenticated extend")
+		}
+	}
+}

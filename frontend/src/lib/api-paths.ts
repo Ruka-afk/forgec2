@@ -455,6 +455,7 @@ export const paths = {
     logout: "/logout",
     health: "/health",
     me: "/api/me",
+    extend: "/api/auth/extend",
   },
 } as const;
 

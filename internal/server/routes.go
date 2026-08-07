@@ -419,6 +419,7 @@ func (s *Server) registerSettingsRoutes(auth *gin.RouterGroup) {
 
 	auth.GET("/settings/totp/status", s.handleTOTPStatus)
 	auth.GET("/api/me", s.handleGetCurrentUser)
+	auth.POST("/api/auth/extend", s.handleExtendSession)
 	auth.GET("/settings/totp/backup-codes/count", s.handleBackupCodeCount)
 
 	auth.GET("/translations", s.handleTranslationsPage)

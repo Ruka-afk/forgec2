@@ -383,3 +383,80 @@ func (s *Server) handleGetCurrentUser(c *gin.Context) {
 		"data":    data,
 	})
 }
+
+// handleExtendSession re-issues the session JWT and replaces the cookie,
+// sliding the expiry forward. remember-me semantics are preserved from the
+// original session row (long-lived sessions stay long-lived). Force-logout
+// and per-session revocation checks keep working because the new token
+// carries a fresh IssuedAt/jti and the updated row is tracked in user_sessions.
+func (s *Server) handleExtendSession(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		respondError(c, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+
+	var user db.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		respondError(c, http.StatusUnauthorized, "user not found")
+		return
+	}
+	if !user.IsActive {
+		respondError(c, http.StatusForbidden, "account is disabled")
+		return
+	}
+
+	tokenStr, err := c.Cookie("forgec2_session")
+	if err != nil || tokenStr == "" {
+		respondError(c, http.StatusUnauthorized, "no session token")
+		return
+	}
+
+	// Preserve remember-me from the original session window length.
+	rememberMe := false
+	var sess db.UserSession
+	if err := s.db.Where("token_hash = ?", middleware.TokenHash(tokenStr)).First(&sess).Error; err == nil {
+		rememberMe = sess.ExpiresAt.Sub(sess.CreatedAt) > 48*time.Hour
+	}
+
+	s.configMu.RLock()
+	sessionMaxAgeHours := s.cfg.Server.SessionMaxAgeHours
+	s.configMu.RUnlock()
+
+	newToken, err := middleware.GenerateToken(user, rememberMe, sessionMaxAgeHours)
+	if err != nil {
+		slog.Error("Failed to extend session token", "user_id", user.ID, "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to extend session")
+		return
+	}
+
+	sessionHours := sessionMaxAgeHours
+	if sessionHours < 1 {
+		sessionHours = DefaultSessionHours
+	}
+	maxAge := sessionHours * SecondsPerHour
+	if rememberMe {
+		maxAge = RememberMeMaxAgeSec
+	}
+	middleware.SetCookieWithSameSite(c, "forgec2_session", newToken, maxAge, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
+
+	// Rotate the tracked session row so revocation bookkeeping stays accurate.
+	now := time.Now()
+	if err := s.db.Model(&db.UserSession{}).
+		Where("user_id = ? AND token_hash = ?", user.ID, middleware.TokenHash(tokenStr)).
+		Updates(map[string]interface{}{
+			"token_hash": middleware.TokenHash(newToken),
+			"expires_at": now.Add(time.Duration(maxAge) * time.Second),
+		}).Error; err != nil {
+		slog.Error("Failed to update session row on extend", "user_id", user.ID, "err", err)
+	}
+
+	s.LogAuditRecord(c, "session_extend", "auth", user.Username, "Session extended", true, nil)
+	slog.Info("Session extended", "username", user.Username, "ip", c.ClientIP(), "max_age", maxAge)
+
+	exp := now.Add(time.Duration(maxAge) * time.Second).UnixMilli()
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    gin.H{"session_exp": exp},
+	})
+}
