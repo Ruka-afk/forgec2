@@ -622,7 +622,7 @@ func registerOrGetUUID() string {
 		buf[8] = (buf[8] & 0x3f) | 0x80 // variant 10
 		newUUID := fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 			buf[0:4], buf[4:6], buf[6:8], buf[8:10], buf[10:16])
-		os.WriteFile(uuidFile, []byte(newUUID), 0644)
+		os.WriteFile(uuidFile, []byte(newUUID), 0o600)
 		if runtime.GOOS == "windows" {
 			setHidden(uuidFile)
 		}
@@ -632,7 +632,7 @@ func registerOrGetUUID() string {
 	newUUID := fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 		rng.Uint32(), rng.Uint32()&0xffff, rng.Uint32()&0xffff|0x4000,
 		rng.Uint32()&0x3fff|0x8000, rng.Uint64())
-	os.WriteFile(uuidFile, []byte(newUUID), 0644)
+	os.WriteFile(uuidFile, []byte(newUUID), 0o600)
 	if runtime.GOOS == "windows" {
 		setHidden(uuidFile)
 	}

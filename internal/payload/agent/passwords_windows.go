@@ -4,14 +4,28 @@
 package main
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
+
+// randNonce returns a 8-byte random hex nonce for ephemeral temp files so the
+// on-disk filename cannot be predicted (fixed predictable temp paths can be
+// pre-created / swapped by an insecuro pathing process on the host).
+func randNonce() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}
 
 type browserPasswordStore struct {
 	Name       string
@@ -77,12 +91,12 @@ func exportStorePasswords(store browserPasswordStore) string {
 		return fmt.Sprintf("=== %s Passwords ===\nmaster key error: %v\n", store.Name, err)
 	}
 
-	tmpCopy := filepath.Join(os.TempDir(), fmt.Sprintf("forgec2_logins_%s.db", strings.ToLower(store.Name)))
+	tmpCopy := filepath.Join(os.TempDir(), fmt.Sprintf("forgec2_%x_logins_%s.db", randNonce(), strings.ToLower(store.Name)))
 	data, err := os.ReadFile(loginDB)
 	if err != nil {
 		return fmt.Sprintf("=== %s Passwords ===\nread error: %v\n", store.Name, err)
 	}
-	if err := os.WriteFile(tmpCopy, data, 0644); err != nil {
+	if err := os.WriteFile(tmpCopy, data, 0o600); err != nil {
 		return fmt.Sprintf("=== %s Passwords ===\ncopy error: %v\n", store.Name, err)
 	}
 	defer os.Remove(tmpCopy)

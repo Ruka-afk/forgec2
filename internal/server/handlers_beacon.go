@@ -872,6 +872,14 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			}
 		}
 
+		// Enforce the max result size BEFORE any downstream parsing or
+		// processing. A compromised agent could otherwise stream a multi-MB
+		// blob through the regex-backed credential/kerberoast parsers below
+		// before the size guard fires (previously applied only at save time).
+		if r.Type != "screenshot" && len(task.Result) > MaxResultSize {
+			task.Result = truncateString(task.Result, MaxResultSize)
+		}
+
 		// Format token_list_procs results into a readable table
 		if r.Type == "token_list_procs" && task.Result != "" {
 			task.Result = FormatTokenProcsFromJSON(task.Result)
@@ -902,7 +910,7 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 
 		// Auto-parse credential dump results into the vault
 		if r.Type == "creds" && task.Status == "completed" && task.Result != "" {
-			parseAndStoreCredentials(s.db, uuid, task.Result, task.ID)
+			s.parseAndStoreCredentials(uuid, task.Result, task.ID)
 			s.eventManager.Emit(Event{
 				Type:      EventCredentialFound,
 				AgentID:   uuid,
@@ -915,7 +923,7 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 
 		// Auto-parse mimikatz results into the credential vault
 		if r.Type == "mimikatz" && task.Status == "completed" && task.Result != "" {
-			parseAndStoreCredentials(s.db, uuid, task.Result, task.ID)
+			s.parseAndStoreCredentials(uuid, task.Result, task.ID)
 			s.eventManager.Emit(Event{
 				Type:      EventCredentialFound,
 				AgentID:   uuid,
@@ -928,7 +936,7 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 
 		// Auto-parse kerberoast TGS hashes into the credential vault
 		if r.Type == "kerberoast" && task.Status == "completed" && task.Result != "" {
-			parseAndStoreKerberoastResults(s.db, uuid, task.Result, task.ID)
+			s.parseAndStoreKerberoastResults(uuid, task.Result, task.ID)
 			s.eventManager.Emit(Event{
 				Type:      EventCredentialFound,
 				AgentID:   uuid,
@@ -939,10 +947,8 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			})
 		}
 
-		// Enforce max result size only for text results (not for images like screenshots)
-		if r.Type != "screenshot" && len(task.Result) > MaxResultSize {
-			task.Result = truncateString(task.Result, MaxResultSize)
-		}
+		// Result size cap is enforced before parsing (see above); screenshots
+		// are exempt from the cap.
 		if err := s.db.Model(task).Updates(map[string]interface{}{
 			"status":      task.Status,
 			"result":      task.Result,

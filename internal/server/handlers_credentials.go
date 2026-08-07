@@ -43,7 +43,8 @@ func initCredRegexps() {
 
 // parseAndStoreCredentials parses common credential dump formats (mimikatz-style)
 // and stores extracted entries in the credential vault.
-func parseAndStoreCredentials(database *gorm.DB, agentID string, raw string, taskID uint) {
+func (s *Server) parseAndStoreCredentials(agentID string, raw string, taskID uint) {
+	database := s.db
 	entries := parseCredentialsFromText(raw, agentID, taskID)
 	if len(entries) == 0 {
 		return
@@ -87,13 +88,30 @@ func parseAndStoreCredentials(database *gorm.DB, agentID string, raw string, tas
 			slog.Error("Failed to store credentials batch", "agent_id", agentID, "err", err)
 		} else {
 			slog.Info("Credentials stored in vault", "agent_id", agentID, "count", len(batch))
+			s.LogAuditRecord(nil, "credential_ingest", "credential", agentID,
+				"stored "+strconv.Itoa(len(batch))+" credentials (source="+parseCredentialSource(raw)+")", true, nil)
 		}
+	}
+}
+
+// parseCredentialSource classifies a raw credential dump for audit detail
+// strings. The raw bytes are never logged.
+func parseCredentialSource(raw string) string {
+	low := strings.ToLower(raw)
+	switch {
+	case strings.Contains(low, "krb5tgs") || strings.Contains(low, "$krb5tgs"):
+		return "kerberoast"
+	case strings.Contains(low, "sekurlsa") || strings.Contains(low, "logonpasswords"):
+		return "mimikatz"
+	default:
+		return "dump"
 	}
 }
 
 // parseAndStoreKerberoastResults parses kerberoast TGS hash output (SPN:HASH)
 // and stores entries in the credential vault.
-func parseAndStoreKerberoastResults(database *gorm.DB, agentID string, raw string, taskID uint) {
+func (s *Server) parseAndStoreKerberoastResults(agentID string, raw string, taskID uint) {
+	database := s.db
 	lines := strings.Split(raw, "\n")
 	// Batch-load existing hashes to avoid N+1 queries
 	type credKey struct {
@@ -148,6 +166,8 @@ func parseAndStoreKerberoastResults(database *gorm.DB, agentID string, raw strin
 			slog.Error("Failed to store kerberoast hashes", "agent_id", agentID, "err", err)
 		} else {
 			slog.Info("Kerberoast hashes stored in vault", "agent_id", agentID, "count", len(newEntries))
+			s.LogAuditRecord(nil, "credential_ingest", "credential", agentID,
+				"stored "+strconv.Itoa(len(newEntries))+" kerberoast hashes", true, nil)
 		}
 	}
 }
@@ -400,6 +420,8 @@ func (s *Server) handleExportCredentials(c *gin.Context) {
 		return
 	}
 
+	s.LogAuditRecord(c, "credential_export", "credential", "", "credentials exported as CSV", true, nil)
+
 	var creds []db.CredentialEntry
 	query := s.db.Order("created_at desc").Limit(5000)
 
@@ -469,9 +491,12 @@ func (s *Server) handleAddCredential(c *gin.Context) {
 	}
 	if err := s.db.Create(&entry).Error; err != nil {
 		slog.Error("Failed to create credential entry", "error", err)
+		s.LogAuditRecord(c, "credential_add", "credential", entry.AgentID, "add credential failed", false, err)
 		respondError(c, http.StatusInternalServerError, "failed to add credential")
 		return
 	}
+	s.LogAuditRecord(c, "credential_add", "credential", entry.AgentID,
+		"added credential (domain="+entry.Domain+", user="+entry.Username+", type="+entry.Type+")", true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "id": entry.ID})
 }
 
@@ -486,6 +511,8 @@ func (s *Server) handleGetCredential(c *gin.Context) {
 		return
 	}
 	cred.Notes = decryptCredNotes(cred.Notes)
+	s.LogAuditRecord(c, "credential_view", "credential", cred.AgentID,
+		"viewed credential id="+c.Param("cred_id")+" (domain="+cred.Domain+", user="+cred.Username+")", true, nil)
 	c.JSON(http.StatusOK, cred)
 }
 
@@ -501,9 +528,11 @@ func (s *Server) handleDeleteCredential(c *gin.Context) {
 	}
 	if err := s.db.Delete(&db.CredentialEntry{}, id).Error; err != nil {
 		slog.Error("Failed to delete credential", "id", id, "error", err)
+		s.LogAuditRecord(c, "credential_delete", "credential", "", "delete credential id="+idStr+" failed", false, err)
 		respondError(c, http.StatusInternalServerError, "failed to delete")
 		return
 	}
+	s.LogAuditRecord(c, "credential_delete", "credential", "", "deleted credential id="+idStr, true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -537,9 +566,11 @@ func (s *Server) handleUpdateCredential(c *gin.Context) {
 
 	if err := s.db.Save(&cred).Error; err != nil {
 		slog.Error("Failed to update credential", "id", cred.ID, "error", err)
+		s.LogAuditRecord(c, "credential_update", "credential", cred.AgentID, "update credential id="+idStr+" failed", false, err)
 		respondError(c, http.StatusInternalServerError, "failed to update")
 		return
 	}
+	s.LogAuditRecord(c, "credential_update", "credential", cred.AgentID, "updated credential id="+idStr, true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -571,6 +602,7 @@ func (s *Server) handleBatchAddTags(c *gin.Context) {
 		return
 	}
 
+	s.LogAuditRecord(c, "credential_tag", "credential", "", "added tags to "+strconv.Itoa(len(req.IDs))+" credentials", true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "count": len(req.IDs)})
 }
 
@@ -596,5 +628,7 @@ func (s *Server) handleToggleConfirmed(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to update")
 		return
 	}
+	s.LogAuditRecord(c, "credential_confirm", "credential", cred.AgentID,
+		"set confirmed="+strconv.FormatBool(cred.Confirmed)+" for credential id="+idStr, true, nil)
 	c.JSON(http.StatusOK, gin.H{"success": true, "confirmed": cred.Confirmed})
 }

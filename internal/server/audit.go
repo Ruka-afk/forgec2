@@ -210,13 +210,15 @@ func (s *Server) AuditMiddleware() gin.HandlerFunc {
 
 // shouldLogAction determines if an action should be logged
 func shouldLogAction(path string) bool {
-	// Log authentication, agent management, and command actions
+	// Log authentication, agent management, credential access, and command actions
 	actionsToLog := []string{
 		"/login",
 		"/logout",
 		"/agents/",
 		"/generate/",
 		"/tasks",
+		"/api/credentials/",
+		"/api/tasks/",
 	}
 	for _, action := range actionsToLog {
 		if len(path) >= len(action) && path[:len(action)] == action {

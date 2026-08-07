@@ -162,7 +162,7 @@ func kerberosPassTheTicket(ticketB64 string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("base64 decode ticket: %v", err)
 	}
-	if err := os.WriteFile(ticketFile, ticketData, 0644); err != nil {
+	if err := os.WriteFile(ticketFile, ticketData, 0o600); err != nil {
 		return "", fmt.Errorf("write ticket: %v", err)
 	}
 	defer os.Remove(ticketFile)
