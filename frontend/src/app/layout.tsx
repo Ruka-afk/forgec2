@@ -1,10 +1,25 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import localFont from "next/font/local";
 import "./globals.css";
 import ClientProvider from "@/components/ClientProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
 import { cn } from "@/lib/utils";
+
+const inter = localFont({
+  src: "./fonts/Inter-Variable.ttf",
+  variable: "--font-inter",
+  weight: "100 900",
+  display: "swap",
+});
+
+const jetBrainsMono = localFont({
+  src: "./fonts/JetBrainsMono-Variable.ttf",
+  variable: "--font-jbmono",
+  weight: "100 900",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "ForgeC2 - Professional Red Team C2 Framework",
@@ -20,12 +35,13 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh" suppressHydrationWarning className={cn("h-full", "font-sans")}>
+    <html
+      lang="zh"
+      suppressHydrationWarning
+      className={cn("h-full", "font-sans", inter.variable, jetBrainsMono.variable)}
+    >
       <head>
         <meta charSet="utf-8" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
         <Script id="theme-init" strategy="beforeInteractive">{`
           (function(){
             try {
