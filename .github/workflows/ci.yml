@@ -109,6 +109,8 @@ jobs:
       - run: npm run check:paths
       - run: npm test
       - run: npm run build
+      - name: Webdist freshness (internal/webdist/dist must match export)
+        run: node ../scripts/check-webdist.mjs
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Playwright smoke (static UI)

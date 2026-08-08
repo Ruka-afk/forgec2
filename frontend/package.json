@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "check:css": "node scripts/check-css.mjs",
+    "check:webdist": "node ../scripts/check-webdist.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:paths": "node scripts/check-api-paths.mjs",
     "check": "npm run check:css && npm run check:i18n && npm run check:paths"
