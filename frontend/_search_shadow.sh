@@ -1,1 +1,0 @@
-grep -rn "shadow-\[" C:/Users/18354/Downloads/C2/forgec2/frontend/src/ --include="*.tsx" --include="*.ts" | grep -v "node_modules"

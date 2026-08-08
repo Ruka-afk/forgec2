@@ -1,1 +1,0 @@
-grep -rn "rounded-\[(2xl|3xl|4xl|\[.*\])" C:/Users/18354/Downloads/C2/forgec2/frontend/src/ --include="*.tsx" --include="*.ts" | grep -v "node_modules"
