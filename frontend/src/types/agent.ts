@@ -91,6 +91,7 @@ export interface DashboardStats {
   total_listeners: number;
   total_tasks: number;
   total_creds: number;
+  total_tokens?: number;
   total_audits: number;
   today_tasks: number;
   pending_tasks: number;

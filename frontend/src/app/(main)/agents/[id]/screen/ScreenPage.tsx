@@ -44,6 +44,10 @@ interface ScreenshotItem {
   const [wsLive, setWsLive] = useState(false);
   const { subscribe } = useWS();
 
+  // Cap the in-memory gallery: each entry is a full-size base64 frame, so
+  // keeping dozens of them pinned in React state costs real memory.
+  const GALLERY_CAP = 24;
+
   const captureBusyRef = useRef(false);
 
   const commitFrame = useCallback((fullData: string, extras: { width?: number; height?: number; windowName: string }) => {
@@ -64,7 +68,7 @@ interface ScreenshotItem {
       setScreenshotGallery((prev) => [
         { id: String(++galleryIdRef.current), data: p.data, timestamp: new Date().toLocaleTimeString(), width: p.width, height: p.height, window_name: p.windowName },
         ...prev,
-      ].slice(0, 50));
+      ].slice(0, GALLERY_CAP));
     });
   }, []);
 

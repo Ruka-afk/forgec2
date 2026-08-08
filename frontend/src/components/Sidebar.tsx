@@ -8,6 +8,7 @@ import { useShallow } from "zustand/shallow";
 import { useI18n } from "@/lib/i18n";
 import { useAppStore } from "@/lib/store";
 import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import type { DashboardStats } from "@/types/agent";
 import { Button } from "@/components/ui/button";
@@ -350,10 +351,11 @@ export default function Sidebar() {
 
   useEffect(() => {
     if (currentUsername) return;
-    api.get<{ CurrentUsername?: string; CurrentUserRole?: string }>("/settings").then((d) => {
-      if (d.CurrentUsername) setCurrentUsername(d.CurrentUsername);
-      if (d.CurrentUserRole) setCurrentUserRole(d.CurrentUserRole);
-    }).catch((e) => { if (process.env.NODE_ENV === "development") console.error("Sidebar: failed to fetch username", e); });
+    api.get<{ data?: { username?: string; role?: string } }>(paths.auth.me).then((d) => {
+      const me = d?.data;
+      if (me?.username) setCurrentUsername(me.username);
+      if (me?.role) setCurrentUserRole(me.role);
+    }).catch((e) => { if (process.env.NODE_ENV === "development") console.error("Sidebar: failed to fetch current user", e); });
   }, [currentUsername, setCurrentUsername, setCurrentUserRole]);
 
   const collapsed = sidebarCollapsed;

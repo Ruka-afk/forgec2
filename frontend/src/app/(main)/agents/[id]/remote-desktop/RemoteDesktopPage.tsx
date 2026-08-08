@@ -66,9 +66,14 @@ export default function RemoteDesktopPage() {
   const lastFrameRef = useRef<string | null>(null);
   const frameRafRef = useRef<number | null>(null);
   const pendingFrameRef = useRef<{ data: string; width?: number; height?: number } | null>(null);
+  const captureBusyRef = useRef(false);
   const { subscribe } = useWS();
 
   const pollInterval = INTERVAL_BY_RES[resolution] ?? 1000;
+
+  // Skip polls while the tab is hidden and never start a capture while the
+  // previous one is still in flight — keeps slow links from stacking requests.
+  const shouldCapture = useCallback(() => !document.hidden && !captureBusyRef.current, []);
 
   const commitFrame = useCallback((fullData: string, width = 0, height = 0) => {
     pendingFrameRef.current = { data: fullData, width, height };
@@ -90,6 +95,8 @@ export default function RemoteDesktopPage() {
 
   const captureFrame = useCallback(async () => {
     if (!id) return;
+    if (captureBusyRef.current) return;
+    captureBusyRef.current = true;
     try {
       const data = await api.get(paths.agents.screenshot(id));
       const imgData = (data.image || data.data || data.screenshot || "") as string;
@@ -100,6 +107,8 @@ export default function RemoteDesktopPage() {
     } catch {
       setStatus("error");
       toast.error(t("agents.rdp_capture_failed"));
+    } finally {
+      captureBusyRef.current = false;
     }
   }, [id, t, commitFrame]);
 
@@ -112,7 +121,7 @@ export default function RemoteDesktopPage() {
       await api.post(paths.agents.screenStart(id), { interval: String(pollInterval) });
       await captureFrame();
       if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = setInterval(captureFrame, pollInterval);
+      timerRef.current = setInterval(() => { if (shouldCapture()) captureFrame(); }, pollInterval);
     } catch {
       setStatus("error");
       setMonitoring(false);
@@ -139,11 +148,11 @@ export default function RemoteDesktopPage() {
   useEffect(() => {
     if (!monitoring) return;
     if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(captureFrame, pollInterval);
+    timerRef.current = setInterval(() => { if (shouldCapture()) captureFrame(); }, pollInterval);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [resolution, monitoring, captureFrame, pollInterval]);
+  }, [resolution, monitoring, captureFrame, pollInterval, shouldCapture]);
 
   useEffect(() => {
     if (!id) return;

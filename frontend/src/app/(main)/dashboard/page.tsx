@@ -4,8 +4,9 @@ import React, { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { DASHBOARD_RANGE_KEY } from "@/lib/shortcuts";
+import { useAppStore } from "@/lib/store";
+import { useShallow } from "zustand/shallow";
 import { EmptyState, PageHeader } from "@/components/UI";
 import StatCard from "@/components/StatCard";
 import { formatTime } from "@/lib/utils";
@@ -82,10 +83,13 @@ interface DashboardPageStats {
 /* ── Main Dashboard Page ── */
 export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState("24h");
-  const [stats, setStats] = useState<DashboardPageStats>({});
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const { t } = useI18n();
+  const stats = useAppStore(useShallow((s) => s.stats));
+  const statsError = useAppStore((s) => s.statsError);
+  const fetchStats = useAppStore((s) => s.fetchStats);
+
+  const loading = stats === null && !statsError;
+  const error = statsError || null;
 
   const changeRange = (r: string) => {
     setTimeRange(r);
@@ -99,30 +103,16 @@ export default function DashboardPage() {
     } catch { /* ignore */ }
   }, []);
 
+  // Stats live in the app store and are refreshed there (Sidebar uses the same
+  // poll loop). The dashboard is a pure consumer — no duplicate fetcher.
   useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    // Stats are global counters and do not depend on the time range; only the
-    // range-aware charts (listener-traffic, task-gantt) re-fetch on range change.
-    api.get<DashboardPageStats>(paths.dashboard.v1, { signal: controller.signal })
-      .then((d) => setStats(d))
-      .catch(() => {
-        if (!controller.signal.aborted) setError(t("dashboard.load_failed"));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [t]);
+    fetchStats();
+  }, [fetchStats]);
 
-  useVisibleInterval(() => {
-    api.get<DashboardPageStats>(paths.dashboard.v1)
-      .then((d) => setStats(d))
-      .catch((e) => { console.error("Dashboard poll failed:", e); });
-  }, 30000);
+  // Charts are range-aware and keep their own TTL/polling; stats themselves are
+  // independent of the range, so the store's interval refresh is sufficient.
 
-  const s = stats;
+  const s: DashboardPageStats = stats ?? {};
 
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
@@ -152,8 +142,8 @@ export default function DashboardPage() {
       {error && (
         <DataError
           message={error}
-          onRetry={() => { setError(null); setLoading(true); api.get<DashboardPageStats>(paths.dashboard.v1).then((d) => setStats(d)).catch(() => setError(t("dashboard.refresh_failed"))).finally(() => setLoading(false)); }}
-          onDismiss={() => setError(null)}
+          onRetry={() => { fetchStats(); }}
+          onDismiss={() => useAppStore.setState({ statsError: undefined })}
           className="mb-4"
         />
       )}

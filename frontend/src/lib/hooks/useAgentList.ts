@@ -1,42 +1,30 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
 import { api } from "@/lib/api";
 import { normalizeAgentList } from "@/lib/agents";
 import { paths } from "@/lib/api-paths";
-import { Agent } from "@/types/agent";
+import { useCachedData } from "@/lib/hooks/useCachedData";
+import type { Agent } from "@/types/agent";
 
+/**
+ * Full agent list for dropdown-style consumers. Served from the shared
+ * module-level cache ("agents:list") so switching pages/remounting does not
+ * re-fetch a list that just loaded elsewhere. Callers may `refresh()` to
+ * force revalidation for chatty views.
+ */
 export function useAgentList() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const { data, loading, error, refresh } = useCachedData<Agent[]>("agents:list", {
+    fetcher: async () => {
+      const data = await api.get(paths.agents.list());
+      return normalizeAgentList(data);
+    },
+    ttlMs: 60_000,
+  });
 
-  const refresh = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await api.get(paths.agents.list(), { signal: controller.signal });
-      if (controller.signal.aborted) return;
-      setAgents(normalizeAgentList(data));
-    } catch (e) {
-      if (!controller.signal.aborted) {
-        setError(e instanceof Error ? e.message : "Failed to load agents");
-        setAgents([]);
-      }
-    } finally {
-      if (!controller.signal.aborted) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-    return () => { abortRef.current?.abort(); };
-  }, [refresh]);
-
-  return { agents, loading, error, refresh };
+  return {
+    agents: data ?? [],
+    loading,
+    error: error ? "Failed to load agents" : null,
+    refresh,
+  };
 }
