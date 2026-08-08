@@ -123,7 +123,6 @@ export default function GeneratePage() {
             handleCreateListener={g.handleCreateListener}
             submitListener={g.submitListener}
             setShowListenerModal={g.setShowListenerModal}
-            setListenerForm={g.setListenerForm}
             onProfileDeleted={g.deleteProfile}
             fileInputRef={g.fileInputRef}
             onProfileImport={g.handleProfileImport}

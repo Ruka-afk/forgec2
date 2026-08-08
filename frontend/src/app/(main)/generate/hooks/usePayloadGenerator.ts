@@ -12,6 +12,7 @@ import {
   Listener, ProfilePreset, SharedState, PayloadForms, PayloadStates, PayloadExtras,
   PayloadKey, BinaryForm, UnixForm, createDefaultForms, createDefaultStates,
 } from "@/types/generate";
+import type { ListenerForm } from "../_components/ListenerModal";
 
 const DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 
@@ -42,7 +43,7 @@ export function usePayloadGenerator() {
   const savedManualRef = useRef<{ interval: string; jitter: string; ua: string } | null>(null);
   const prevProfileRef = useRef<string>("default");
   const [showListenerModal, setShowListenerModal] = useState(false);
-  const [listenerForm, setListenerForm] = useState({ name: "", ltype: "http", host: "", port: "8443", proto: "http" });
+  const [listenerForm, setListenerForm] = useState<ListenerForm>({ name: "", ltype: "http", host: "", port: "8443", proto: "http" });
 
   const [shared, setShared] = useState<SharedState>({
     listener_id: "", c2_url: "", protocol: "http", beacon_transport: "http",
@@ -490,11 +491,8 @@ export function usePayloadGenerator() {
     setShowListenerModal(true);
   }, []);
 
-  const submitListener = useCallback(async () => {
-    const { name, ltype, host, port, proto } = listenerForm;
-    if (!name) { toast.error(t("generate.toast.listener_name_required")); return; }
-    if (!host) { toast.error(t("generate.toast.host_required")); return; }
-    if (!port) { toast.error(t("generate.toast.port_required")); return; }
+  const submitListener = useCallback(async (form: ListenerForm) => {
+    const { name, ltype, host, port, proto } = form;
     try {
       const data = await api.postJson<{ success: boolean; error?: string; listener?: { ID?: number; id?: number } }>(paths.listeners.list, { name, type: ltype, host, port: parseInt(port) || 8080, protocol: proto, enabled: true });
       if (data.success) {
@@ -505,7 +503,7 @@ export function usePayloadGenerator() {
         if (newId) setShared((prev) => ({ ...prev, listener_id: newId }));
       } else toast.error(t("generate.toast.creation_failed", { error: data.error || "" }));
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : String(err)); }
-  }, [listenerForm, loadData, t]);
+  }, [loadData, t]);
 
   // Sync c2_url and transport with listener
   useEffect(() => {

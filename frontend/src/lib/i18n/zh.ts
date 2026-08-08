@@ -1608,6 +1608,7 @@ export const zh: Record<string, string> = {
     "listeners.toast_enabled": "监听器已启用",
     "listeners.toast_load_failed": "加载监听器失败",
     "listeners.toast_name_host_port_required": "名称、主机和端口为必填项",
+    "listeners.port_invalid": "端口必须在 1 到 65535 之间",
     "listeners.toast_toggle_failed": "切换监听器状态失败",
     "listeners.toast_unknown_error": "未知错误",
     "listeners.toast_update_failed": "更新监听器失败",

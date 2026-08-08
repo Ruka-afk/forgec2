@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { z } from "zod";
 import { useI18n } from "@/lib/i18n";
-import { EmptyState, PageHeader, ConfirmModal, StatusBadge } from "@/components/UI";
+import { useForm } from "@/lib/hooks/useForm";
+import { FieldError, EmptyState, PageHeader, ConfirmModal, StatusBadge } from "@/components/UI";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataError } from "@/components/ui/data-state";
@@ -19,6 +21,7 @@ import { ArrowLeftRight, Copy, Info, Pencil, Plug, Plus, Power, Trash2 } from "l
 import type { Listener } from "./_components/types";
 import { emptyCreateForm, emptyEditForm } from "./_components/types";
 import { useListenersData } from "./_components/useListenersData";
+import type { CreateListenerForm, EditListenerForm } from "./_components/types";
 
 export default function ListenersPageContent() {
   const { t } = useI18n();
@@ -37,27 +40,98 @@ export default function ListenersPageContent() {
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [createForm, setCreateForm] = useState(emptyCreateForm);
 
-  const handleTypeChange = (type: string) => {
-    setCreateForm(prev => ({ ...prev, type, protocol: type === "https" ? "https" : type }));
+  const portSchema = useMemo(
+    () =>
+      z
+        .string()
+        .trim()
+        .min(1, t("generate.toast.port_required"))
+        .refine(
+          (v) => /^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 65535,
+          t("listeners.port_invalid"),
+        ),
+    [t],
+  );
+
+  const createSchema = useMemo(
+    () =>
+      z.object({
+        name: z.string().trim().min(1, t("generate.toast.listener_name_required")),
+        type: z.string().min(1),
+        host: z.string().trim().min(1, t("generate.toast.host_required")),
+        port: portSchema,
+        protocol: z.string(),
+        tags: z.string(),
+        color: z.string(),
+      }),
+    [portSchema, t],
+  );
+
+  const editSchema = useMemo(
+    () =>
+      createSchema.extend({
+        notes: z.string(),
+      }),
+    [createSchema],
+  );
+
+  const typeChange = (setFieldValue: (f: keyof CreateListenerForm, v: unknown) => void) => (type: string | null) => {
+    const val = type ?? "http";
+    setFieldValue("type", val);
+    setFieldValue("protocol", val === "https" ? "https" : val);
   };
+
   const [editingListener, setEditingListener] = useState<Listener | null>(null);
   const [showEdit, setShowEdit] = useState(false);
-  const [editForm, setEditForm] = useState(emptyEditForm);
-  const handleEditTypeChange = (type: string) => {
-    setEditForm(prev => ({ ...prev, type, protocol: type === "https" ? "https" : type }));
-  };
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const ok = await createListener(createForm);
-    if (ok) {
-      setShowCreate(false);
-      setCreateForm(emptyCreateForm());
-    }
-  };
+  const {
+    values: createForm,
+    errors: createErrors,
+    touched: createTouched,
+    isSubmitting: createSubmitting,
+    isValid: createValid,
+    setFieldValue: createSetField,
+    handleChange: createChange,
+    handleBlur: createBlur,
+    handleSubmit: handleCreateSubmit,
+    resetForm: resetCreate,
+  } = useForm<CreateListenerForm>({
+    initialValues: emptyCreateForm(),
+    schema: createSchema,
+    onSubmit: async (values) => {
+      const ok = await createListener(values);
+      if (ok) {
+        setShowCreate(false);
+        resetCreate();
+      }
+    },
+  });
+
+  const {
+    values: editForm,
+    errors: editErrors,
+    touched: editTouched,
+    isSubmitting: editSubmitting,
+    isValid: editValid,
+    setFieldValue: setEditChange,
+    handleChange: handleEditChange,
+    handleBlur: handleEditBlur,
+    handleSubmit: handleEditSubmit,
+    resetForm: resetEdit,
+  } = useForm<EditListenerForm>({
+    initialValues: emptyEditForm(),
+    schema: editSchema,
+    onSubmit: async (values) => {
+      const id = editingListener?.id || editingListener?.ID || "";
+      const ok = await updateListener(id, values);
+      if (ok) {
+        setShowEdit(false);
+        setEditingListener(null);
+      }
+    },
+  });
 
   const handleCopy = async (address: string) => {
     try {
@@ -68,7 +142,7 @@ export default function ListenersPageContent() {
 
   const handleEdit = (listener: Listener) => {
     setEditingListener(listener);
-    setEditForm({
+    resetEdit({
       name: listener.name || "",
       type: listener.type || "http",
       host: listener.host || "",
@@ -79,16 +153,6 @@ export default function ListenersPageContent() {
       color: listener.color || "",
     });
     setShowEdit(true);
-  };
-
-  const handleEditSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = editingListener?.id || editingListener?.ID || "";
-    const ok = await updateListener(id, editForm);
-    if (ok) {
-      setShowEdit(false);
-      setEditingListener(null);
-    }
   };
 
   const handleToggle = async (listener: Listener) => {
@@ -296,16 +360,19 @@ export default function ListenersPageContent() {
           <DialogHeader>
             <DialogTitle>{t("listeners.create_dialog_title")}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreate}>
+          <form onSubmit={handleCreateSubmit} noValidate>
             <div className="space-y-3">
               <div>
                 <Label className="text-xs mb-1" htmlFor="create-name">{t("listeners.field_name")}</Label>
-                <Input id="create-name" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                  placeholder={t("listeners.name_ph")} />
+                <Input id="create-name" value={createForm.name} onChange={createChange("name")} onBlur={createBlur("name")}
+                  placeholder={t("listeners.name_ph")}
+                  aria-invalid={!!(createTouched.name && createErrors.name)}
+                  aria-describedby={createErrors.name ? "create-name-error" : undefined} />
+                {createTouched.name && <FieldError id="create-name-error">{createErrors.name}</FieldError>}
               </div>
               <div>
                 <Label className="text-xs mb-1" htmlFor="create-type">{t("listeners.field_type")}</Label>
-                <Select value={createForm.type} onValueChange={(val) => handleTypeChange(typeof val === "string" ? val : "http")}>
+                <Select value={createForm.type} onValueChange={typeChange(createSetField)}>
                   <SelectTrigger id="create-type" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -321,21 +388,27 @@ export default function ListenersPageContent() {
               </div>
               <div>
                 <Label className="text-xs mb-1" htmlFor="create-host">{t("listeners.field_host")}</Label>
-                <Input id="create-host" value={createForm.host} onChange={(e) => setCreateForm({ ...createForm, host: e.target.value })} />
+                <Input id="create-host" value={createForm.host} onChange={createChange("host")} onBlur={createBlur("host")}
+                  aria-invalid={!!(createTouched.host && createErrors.host)}
+                  aria-describedby={createErrors.host ? "create-host-error" : undefined} />
+                {createTouched.host && <FieldError id="create-host-error">{createErrors.host}</FieldError>}
               </div>
               <div>
                 <Label className="text-xs mb-1" htmlFor="create-port">{t("listeners.field_port")}</Label>
-                <Input id="create-port" type="number" min="1" max="65535" value={createForm.port} onChange={(e) => setCreateForm({ ...createForm, port: e.target.value })}
-                  placeholder="8443" />
+                <Input id="create-port" type="number" min="1" max="65535" value={createForm.port} onChange={createChange("port")} onBlur={createBlur("port")}
+                  placeholder="8443"
+                  aria-invalid={!!(createTouched.port && createErrors.port)}
+                  aria-describedby={createErrors.port ? "create-port-error" : undefined} />
+                {createTouched.port && <FieldError id="create-port-error">{createErrors.port}</FieldError>}
               </div>
               <div>
                 <Label className="text-xs mb-1" htmlFor="create-tags">{t("listeners.field_tags")}</Label>
-                <Input id="create-tags" value={createForm.tags} onChange={(e) => setCreateForm({ ...createForm, tags: e.target.value })}
+                <Input id="create-tags" value={createForm.tags} onChange={createChange("tags")}
                   placeholder={t("listeners.tags_ph")} />
               </div>
               <div>
                 <Label className="text-xs mb-1" htmlFor="create-color">{t("listeners.field_color")}</Label>
-                <Select value={createForm.color} onValueChange={(val) => setCreateForm({ ...createForm, color: val ?? "" })}>
+                <Select value={createForm.color} onValueChange={(val) => createSetField("color", val ?? "")}>
                   <SelectTrigger id="create-color" className="w-full">
                     <SelectValue placeholder={t("listeners.color_none")} />
                   </SelectTrigger>
@@ -354,7 +427,7 @@ export default function ListenersPageContent() {
             </div>
             <DialogFooter>
               <Button variant="outline" type="button" onClick={() => setShowCreate(false)} className="flex-1">{t("listeners.cancel")}</Button>
-              <Button type="submit" disabled={creating || !createForm.name || !createForm.port}
+              <Button type="submit" disabled={creating || createSubmitting || !createValid}
                 className="flex-1">
                 {creating ? t("listeners.creating") : t("listeners.create_listener")}
               </Button>
@@ -368,15 +441,18 @@ export default function ListenersPageContent() {
           <DialogHeader>
             <DialogTitle>{t("listeners.edit_dialog_title")}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleEditSave}>
+          <form onSubmit={handleEditSubmit} noValidate>
             <div className="space-y-3">
               <div>
                 <Label className="text-xs mb-1" htmlFor="edit-name">{t("listeners.field_name")}</Label>
-                <Input id="edit-name" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+                <Input id="edit-name" value={editForm.name} onChange={handleEditChange("name")} onBlur={handleEditBlur("name")}
+                  aria-invalid={!!(editTouched.name && editErrors.name)}
+                  aria-describedby={editErrors.name ? "edit-name-error" : undefined} />
+                {editTouched.name && <FieldError id="edit-name-error">{editErrors.name}</FieldError>}
               </div>
               <div>
                 <Label className="text-xs mb-1" htmlFor="edit-type">{t("listeners.field_type")}</Label>
-                <Select value={editForm.type} onValueChange={(val) => handleEditTypeChange(typeof val === "string" ? val : "http")}>
+                <Select value={editForm.type} onValueChange={typeChange(setEditChange)}>
                   <SelectTrigger id="edit-type" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -392,24 +468,30 @@ export default function ListenersPageContent() {
               </div>
               <div>
                 <Label className="text-xs mb-1" htmlFor="edit-host">{t("listeners.field_host")}</Label>
-                <Input id="edit-host" value={editForm.host} onChange={(e) => setEditForm({ ...editForm, host: e.target.value })} />
+                <Input id="edit-host" value={editForm.host} onChange={handleEditChange("host")} onBlur={handleEditBlur("host")}
+                  aria-invalid={!!(editTouched.host && editErrors.host)}
+                  aria-describedby={editErrors.host ? "edit-host-error" : undefined} />
+                {editTouched.host && <FieldError id="edit-host-error">{editErrors.host}</FieldError>}
               </div>
               <div>
                 <Label className="text-xs mb-1" htmlFor="edit-port">{t("listeners.field_port")}</Label>
-                <Input id="edit-port" type="number" min="1" max="65535" value={editForm.port} onChange={(e) => setEditForm({ ...editForm, port: e.target.value })} />
+                <Input id="edit-port" type="number" min="1" max="65535" value={editForm.port} onChange={handleEditChange("port")} onBlur={handleEditBlur("port")}
+                  aria-invalid={!!(editTouched.port && editErrors.port)}
+                  aria-describedby={editErrors.port ? "edit-port-error" : undefined} />
+                {editTouched.port && <FieldError id="edit-port-error">{editErrors.port}</FieldError>}
               </div>
               <div>
                 <Label className="text-xs mb-1" htmlFor="edit-notes">{t("listeners.field_notes")}</Label>
-                <Input id="edit-notes" value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
+                <Input id="edit-notes" value={editForm.notes} onChange={handleEditChange("notes")} />
               </div>
               <div>
                 <Label className="text-xs mb-1" htmlFor="edit-tags">{t("listeners.field_tags")}</Label>
-                <Input id="edit-tags" value={editForm.tags} onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })}
+                <Input id="edit-tags" value={editForm.tags} onChange={handleEditChange("tags")}
                   placeholder={t("listeners.tags_ph")} />
               </div>
               <div>
                 <Label className="text-xs mb-1" htmlFor="edit-color">{t("listeners.field_color")}</Label>
-                <Select value={editForm.color} onValueChange={(val) => setEditForm({ ...editForm, color: val ?? "" })}>
+                <Select value={editForm.color} onValueChange={(val) => setEditChange("color", val ?? "")}>
                   <SelectTrigger id="edit-color" className="w-full">
                     <SelectValue placeholder={t("listeners.color_none")} />
                   </SelectTrigger>
@@ -428,7 +510,7 @@ export default function ListenersPageContent() {
             </div>
             <DialogFooter>
               <Button variant="outline" type="button" onClick={() => { setShowEdit(false); setEditingListener(null); }} className="flex-1">{t("listeners.cancel")}</Button>
-              <Button type="submit" className="flex-1">{t("listeners.save")}</Button>
+              <Button type="submit" disabled={editSubmitting || !editValid} className="flex-1">{t("listeners.save")}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

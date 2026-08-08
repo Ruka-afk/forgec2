@@ -13,7 +13,7 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CraftPanel } from "@/components/framework/CraftPanel";
 import { ConfigSection } from "@/components/framework/ConfigSection";
-import { Listener, ProfilePreset, SharedState } from "./types";
+import { Listener, ProfilePreset, SharedState, clampInterval, clampJitter } from "./types";
 import ListenerModal from "./ListenerModal";
 import { FileCode2, Import, KeyRound, Lock, Network, Plus, Radio, Timer, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -52,7 +52,6 @@ export default function ConnectionPanel({
   handleCreateListener,
   submitListener,
   setShowListenerModal,
-  setListenerForm,
   onProfileDeleted,
   fileInputRef,
   onProfileImport,
@@ -66,9 +65,8 @@ export default function ConnectionPanel({
   setShared: React.Dispatch<React.SetStateAction<SharedState>>;
   changeProfile: (profile: string) => void;
   handleCreateListener: () => void;
-  submitListener: () => void;
+  submitListener: (form: { name: string; ltype: string; host: string; port: string; proto: string }) => void;
   setShowListenerModal: React.Dispatch<React.SetStateAction<boolean>>;
-  setListenerForm: React.Dispatch<React.SetStateAction<{ name: string; ltype: string; host: string; port: string; proto: string }>>;
   onProfileDeleted?: (name: string) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onProfileImport?: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -268,12 +266,12 @@ export default function ConnectionPanel({
         <div className="grid grid-cols-2 gap-2">
           <div>
             <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">{t("generate.heartbeat_sec")}</span>
-            <Input aria-label={t("generate.heartbeat_sec")} type="number" min={1} max={86400} disabled={profileLocked} value={shared.interval} onChange={(e) => { const v = Math.max(1, Math.min(86400, Number(e.target.value) || 1)); setShared(s => ({ ...s, interval: String(v) })); }} />
+            <Input aria-label={t("generate.heartbeat_sec")} type="number" min={1} max={86400} disabled={profileLocked} value={shared.interval} onChange={(e) => setShared(s => ({ ...s, interval: clampInterval(e.target.value) }))} />
             <p className="mt-1 text-(--fs-micro-sm) text-muted-foreground">{t("generate.heartbeat_range")}</p>
           </div>
           <div>
             <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">{t("generate.jitter_pct")}</span>
-            <Input aria-label={t("generate.jitter_pct")} type="number" min={0} max={100} disabled={profileLocked} value={shared.jitter} onChange={(e) => { const v = Math.max(0, Math.min(100, Number(e.target.value) || 0)); setShared(s => ({ ...s, jitter: String(v) })); }} />
+            <Input aria-label={t("generate.jitter_pct")} type="number" min={0} max={100} disabled={profileLocked} value={shared.jitter} onChange={(e) => setShared(s => ({ ...s, jitter: clampJitter(e.target.value) }))} />
           </div>
         </div>
       </ConfigSection>
@@ -319,8 +317,7 @@ export default function ConnectionPanel({
 
       <ListenerModal
         show={showListenerModal}
-        form={listenerForm}
-        onChange={setListenerForm}
+        initial={listenerForm}
         onSubmit={submitListener}
         onClose={() => setShowListenerModal(false)}
       />

@@ -11,6 +11,7 @@ export { MdContent } from "@/components/ui/md-content";
 export { AvatarRoot, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 export { Breadcrumb } from "@/components/ui/breadcrumb";
 export { IconBadge } from "@/components/ui/icon-badge";
+export { FieldError } from "@/components/ui/field-error";
 export { StatCard } from "@/components/ui/animated-stat-card";
 export { PageSection } from "@/components/ui/page-section";
 export { DataState, DataSpinner, DataError } from "@/components/ui/data-state";

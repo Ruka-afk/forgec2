@@ -1608,6 +1608,7 @@ export const en: Record<string, string> = {
     "listeners.toast_enabled": "Listener enabled",
     "listeners.toast_load_failed": "Failed to load listeners",
     "listeners.toast_name_host_port_required": "Name, host and port are required",
+    "listeners.port_invalid": "Port must be between 1 and 65535",
     "listeners.toast_toggle_failed": "Failed to toggle listener",
     "listeners.toast_unknown_error": "Unknown error",
     "listeners.toast_update_failed": "Failed to update listener",

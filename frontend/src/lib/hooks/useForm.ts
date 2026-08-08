@@ -53,13 +53,14 @@ export function useForm<T extends Record<string, unknown>>({
     (field: keyof T) =>
       (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const input = e.target;
-        const newVal = input.type === "number"
-          ? input.value === ""
-            ? ""
-            : Number(input.value) || input.value
-          : input instanceof HTMLSelectElement && "value" in input
-            ? input.value
-            : (input as HTMLInputElement | HTMLTextAreaElement).value;
+        let newVal: unknown;
+        if (input instanceof HTMLInputElement && input.type === "checkbox") {
+          newVal = input.checked;
+        } else if (input instanceof HTMLInputElement && input.type === "number") {
+          newVal = input.value === "" ? "" : Number(input.value) || input.value;
+        } else {
+          newVal = input.value;
+        }
         setValues((prev) => ({ ...prev, [field]: newVal }));
       },
     [],

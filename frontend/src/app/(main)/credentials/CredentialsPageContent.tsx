@@ -2,11 +2,13 @@
 
 import { toast } from "sonner";
 import { useState, useMemo, useCallback } from "react";
+import { z } from "zod";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadText } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
-import { PageHeader } from "@/components/UI";
+import { useForm } from "@/lib/hooks/useForm";
+import { FieldError, PageHeader } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -40,7 +42,18 @@ export default function CredentialsPage() {
 
   const [showPasswords, setShowPasswords] = useState<Set<string>>(new Set());
 
-  const [form, setForm] = useState({
+  type CredFormValues = {
+    domain: string;
+    username: string;
+    password: string;
+    hash: string;
+    type: string;
+    source: string;
+    tags: string;
+    notes: string;
+  };
+
+  const emptyCredForm = (): CredFormValues => ({
     domain: "",
     username: "",
     password: "",
@@ -51,34 +64,63 @@ export default function CredentialsPage() {
     notes: "",
   });
 
+  const credSchema = useMemo(
+    () =>
+      z.object({
+        domain: z.string(),
+        username: z.string().trim().min(1, t("cred.toast.username_required")),
+        password: z.string(),
+        hash: z.string(),
+        type: z.string().min(1),
+        source: z.string(),
+        tags: z.string(),
+        notes: z.string(),
+      }),
+    [t],
+  );
+
+  const {
+    values: form,
+    errors: formErrors,
+    touched: formTouched,
+    isSubmitting: formSubmitting,
+    isValid: formValid,
+    handleChange: formChange,
+    handleBlur: formBlur,
+    setFieldValue: formSetField,
+    handleSubmit: formSubmit,
+    resetForm,
+  } = useForm<CredFormValues>({
+    initialValues: emptyCredForm(),
+    schema: credSchema,
+    onSubmit: async (vals) => {
+      try {
+        await api.post(paths.credentials.add, {
+          domain: vals.domain,
+          username: vals.username,
+          password: vals.password,
+          hash: vals.hash,
+          type: vals.type,
+          source: vals.source || "manual",
+          tags: vals.tags,
+          notes: vals.notes,
+        });
+        showToastNotify(t("cred.toast.added"), "success");
+        setShowAddModal(false);
+        resetForm();
+        loadData();
+      } catch (err) {
+        showToastNotify(String(err), "error");
+      }
+    },
+  });
+
   const [batchTags, setBatchTags] = useState("");
 
   const showToastNotify = (text: string, type: "success" | "error" | "info" = "info") => {
     if (type === "success") toast.success(text);
     else if (type === "error") toast.error(text);
     else toast.info(text);
-  };
-
-  const handleAdd = async () => {
-    if (!form.username) return showToastNotify(t("cred.toast.username_required"), "error");
-    try {
-      await api.post(paths.credentials.add, {
-        domain: form.domain,
-        username: form.username,
-        password: form.password,
-        hash: form.hash,
-        type: form.type,
-        source: form.source || "manual",
-        tags: form.tags,
-        notes: form.notes,
-      });
-      showToastNotify(t("cred.toast.added"), "success");
-      setShowAddModal(false);
-      resetForm();
-      loadData();
-    } catch (err) {
-      showToastNotify(String(err), "error");
-    }
   };
 
   const handleEdit = async () => {
@@ -155,7 +197,7 @@ export default function CredentialsPage() {
 
   const openEdit = useCallback((entry: VaultEntry) => {
     setEditTarget(entry);
-    setForm({
+    resetForm({
       domain: entry.domain || "",
       username: entry.username || "",
       password: entry.password || "",
@@ -166,20 +208,7 @@ export default function CredentialsPage() {
       notes: entry.notes || "",
     });
     setShowEditModal(true);
-  }, []);
-
-  const resetForm = () => {
-    setForm({
-      domain: "",
-      username: "",
-      password: "",
-      hash: "",
-      type: "cleartext",
-      source: "",
-      tags: "",
-      notes: "",
-    });
-  };
+  }, [resetForm]);
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
@@ -433,11 +462,12 @@ export default function CredentialsPage() {
           <DialogHeader>
             <DialogTitle>{t("cred.add_title")}</DialogTitle>
           </DialogHeader>
+          <form onSubmit={formSubmit} noValidate>
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label className="text-xs text-muted-foreground block mb-1">{t("cred.field_type")} *</Label>
-                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v ?? "cleartext" })}>
+                <Select value={form.type} onValueChange={(v) => formSetField("type", v ?? "cleartext")}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -453,15 +483,19 @@ export default function CredentialsPage() {
                 <Input
                   id="add-cred-username"
                   value={form.username}
-                  onChange={e => setForm({ ...form, username: e.target.value })}
+                  onChange={formChange("username")}
+                  onBlur={formBlur("username")}
+                  aria-invalid={!!(formTouched.username && formErrors.username)}
+                  aria-describedby={formErrors.username ? "add-cred-username-error" : undefined}
                 />
+                {formTouched.username && <FieldError id="add-cred-username-error">{formErrors.username}</FieldError>}
               </div>
               <div>
                 <Label htmlFor="add-cred-password" className="text-xs text-muted-foreground block mb-1">{t("cred.field_password")}</Label>
                 <Input
                   id="add-cred-password"
                   value={form.password}
-                  onChange={e => setForm({ ...form, password: e.target.value })}
+                  onChange={formChange("password")}
                 />
               </div>
               <div>
@@ -469,7 +503,7 @@ export default function CredentialsPage() {
                 <Input
                   id="add-cred-domain"
                   value={form.domain}
-                  onChange={e => setForm({ ...form, domain: e.target.value })}
+                  onChange={formChange("domain")}
                 />
               </div>
               <div>
@@ -477,7 +511,7 @@ export default function CredentialsPage() {
                 <Input
                   id="add-cred-source"
                   value={form.source}
-                  onChange={e => setForm({ ...form, source: e.target.value })}
+                  onChange={formChange("source")}
                   placeholder={t("cred.ph_source")}
                 />
               </div>
@@ -486,7 +520,7 @@ export default function CredentialsPage() {
                 <Input
                   id="add-cred-hash"
                   value={form.hash}
-                  onChange={e => setForm({ ...form, hash: e.target.value })}
+                  onChange={formChange("hash")}
                   className="font-mono text-xs"
                 />
               </div>
@@ -496,7 +530,7 @@ export default function CredentialsPage() {
               <Input
                 id="add-cred-tags"
                 value={form.tags}
-                onChange={e => setForm({ ...form, tags: e.target.value })}
+                onChange={formChange("tags")}
                 placeholder={t("cred.ph_tags")}
               />
             </div>
@@ -505,20 +539,21 @@ export default function CredentialsPage() {
               <Textarea
                 id="add-cred-notes"
                 value={form.notes}
-                onChange={e => setForm({ ...form, notes: e.target.value })}
+                onChange={formChange("notes")}
                 rows={2}
                 className="resize-none"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddModal(false)} className="flex-1">
+            <Button variant="outline" type="button" onClick={() => setShowAddModal(false)} className="flex-1">
               {t("common.cancel")}
             </Button>
-            <Button onClick={handleAdd} className="flex-1">
+            <Button type="submit" disabled={formSubmitting || !formValid} className="flex-1">
               {t("cred.btn.add")}
             </Button>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -582,7 +617,7 @@ export default function CredentialsPage() {
               <Input
                 id="edit-cred-tags"
                 value={form.tags}
-                onChange={e => setForm({ ...form, tags: e.target.value })}
+                onChange={formChange("tags")}
               />
             </div>
             <div>
@@ -590,7 +625,7 @@ export default function CredentialsPage() {
               <Textarea
                 id="edit-cred-notes"
                 value={form.notes}
-                onChange={e => setForm({ ...form, notes: e.target.value })}
+                onChange={formChange("notes")}
                 rows={2}
                 className="resize-none"
               />
