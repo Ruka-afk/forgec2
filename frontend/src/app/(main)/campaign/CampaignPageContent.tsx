@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import StatCard from "@/components/StatCard";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
-import { ConfirmModal, EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { ConfirmModal, EmptyState, PageHeader, Spinner, StatCard } from "@/components/UI";
 import { toast } from "sonner";
 
 import { Card } from "@/components/ui/card";

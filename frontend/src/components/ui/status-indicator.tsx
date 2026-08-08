@@ -20,6 +20,7 @@ const STATUS_STYLES: Record<string, { dot: string; bg: string; text: string; rin
   completed:    { dot: "bg-emerald-500", bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-500/30" },
   failed:       { dot: "bg-red-500", bg: "bg-red-500/10", text: "text-red-700 dark:text-red-400", ring: "ring-red-500/30" },
   cancelled:    { dot: "bg-muted-foreground", bg: "bg-muted/50", text: "text-muted-foreground", ring: "ring-muted-foreground/30" },
+  pending_approval: { dot: "bg-amber-500", bg: "bg-amber-500/10", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-500/30" },
   connected:    { dot: "bg-emerald-500", bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-500/30" },
   disconnected: { dot: "bg-red-500", bg: "bg-red-500/10", text: "text-red-700 dark:text-red-400", ring: "ring-red-500/30" },
   reconnecting: { dot: "bg-amber-500", bg: "bg-amber-500/10", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-500/30" },
@@ -36,6 +37,8 @@ interface StatusIndicatorProps {
   pulse?: boolean;
   size?: "sm" | "md" | "lg";
   label?: string;
+  /** Accessible name; defaults to the displayed label. */
+  ariaLabel?: string;
   className?: string;
 }
 
@@ -48,6 +51,7 @@ const STATUS_LABELS: Record<string, string> = {
   completed: "Completed",
   failed: "Failed",
   cancelled: "Cancelled",
+  pending_approval: "Pending Approval",
   connected: "Connected",
   disconnected: "Disconnected",
   reconnecting: "Reconnecting",
@@ -70,17 +74,19 @@ export const StatusIndicator = memo(function StatusIndicator({
   pulse = false,
   size = "md",
   label,
+  ariaLabel,
   className,
 }: StatusIndicatorProps) {
   const cfg = STATUS_STYLES[status] || STATUS_STYLES.offline;
   const displayLabel = label ?? STATUS_LABELS[status] ?? status;
+  const accessibleLabel = ariaLabel ?? displayLabel;
   const dotSize = DOT_SIZES[size];
 
   if (variant === "dotOnly") {
     return (
       <span
         role="img"
-        aria-label={displayLabel}
+        aria-label={accessibleLabel}
         className={cn(
           "inline-block rounded-full",
           dotSize,
@@ -97,6 +103,7 @@ export const StatusIndicator = memo(function StatusIndicator({
       <span
         role="status"
         aria-live={pulse ? "polite" : undefined}
+        aria-label={accessibleLabel}
         className={cn("inline-flex items-center gap-1.5", className)}
       >
         <span
@@ -118,6 +125,7 @@ export const StatusIndicator = memo(function StatusIndicator({
     <span
       role="status"
       aria-live={pulse ? "polite" : undefined}
+      aria-label={accessibleLabel}
       className={cn(
         "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide",
         cfg.bg,
