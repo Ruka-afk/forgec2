@@ -90,6 +90,115 @@ func TestHandleOperatorWS_AcceptsValidSession(t *testing.T) {
 	}
 }
 
+// TestBroadcastOperatorEvent_DeliversToLegacyHub verifies the operator event
+// fan-out reaches the legacy /ws hub (buffered channel clients), which is what
+// the browser dashboard actually connects to.
+func TestBroadcastOperatorEvent_DeliversToLegacyHub(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{
+		db:        newContractDB(t),
+		ctx:       context.Background(),
+		wsClients: make(map[*websocket.Conn]*wsClientConn),
+		wsMutex:   sync.RWMutex{},
+	}
+
+	client := &wsClientConn{
+		conn:    &websocket.Conn{},
+		session: UserSession{Username: "legacy-client"},
+		ch:      make(chan []byte, 8),
+		done:    make(chan struct{}),
+	}
+	s.wsMutex.Lock()
+	s.wsClients[client.conn] = client
+	s.wsMutex.Unlock()
+
+	s.broadcastOperatorEvent(map[string]interface{}{"type": "test_event", "value": 42})
+
+	select {
+	case msg := <-client.ch:
+		var got struct {
+			Type  string `json:"type"`
+			Value int    `json:"value"`
+		}
+		if err := json.Unmarshal(msg, &got); err != nil {
+			t.Fatalf("invalid event json %q: %v", msg, err)
+		}
+		if got.Type != "test_event" || got.Value != 42 {
+			t.Fatalf("unexpected event payload: %+v", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("operator event never reached legacy hub")
+	}
+}
+
+// TestOperatorWS_SyncSnapshotOnConnect verifies that a fresh /ws/operator
+// connection immediately receives a {"type":"sync"} snapshot carrying the
+// current build job list, so reconnects converge without polling.
+func TestOperatorWS_SyncSnapshotOnConnect(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := config.DefaultConfig()
+	cfg.Server.JWTSecret = "test-secret-for-opws-sync-32chars!"
+	if err := middleware.InitJWTSecret(cfg, ""); err != nil {
+		t.Fatalf("InitJWTSecret: %v", err)
+	}
+	database := newContractDB(t)
+	s := &Server{
+		db:               database,
+		cfg:              cfg,
+		ctx:              context.Background(),
+		buildJobs:        make(map[string]*BuildJob),
+		wsClients:        make(map[*websocket.Conn]*wsClientConn),
+		wsMutex:          sync.RWMutex{},
+		wsUpgrader:       websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
+		operatorSessions: &operatorSessionTracker{sessions: make(map[uint]*WSOperatorSession)},
+	}
+
+	user := db.User{Username: "op-ws-sync", Role: "admin", IsActive: true}
+	if err := database.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	token, err := middleware.GenerateToken(user, false, 24)
+	if err != nil {
+		t.Fatalf("generate token: %v", err)
+	}
+	if err := s.createSession(token, user.ID, "127.0.0.1", "test", "", 86400); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	router := gin.New()
+	router.GET("/ws/operator", s.handleOperatorWS)
+	ts := httptest.NewServer(router)
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws/operator"
+	header := http.Header{}
+	header.Add("Cookie", "forgec2_session="+token)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err != nil {
+		t.Fatalf("dial /ws/operator: %v", err)
+	}
+	defer conn.Close()
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_, data, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("read sync snapshot: %v", err)
+	}
+	var msg struct {
+		Type   string  `json:"type"`
+		Builds []gin.H `json:"builds"`
+	}
+	if err := json.Unmarshal(data, &msg); err != nil {
+		t.Fatalf("invalid sync json %q: %v", data, err)
+	}
+	if msg.Type != "sync" {
+		t.Fatalf("first frame type = %q, want sync", msg.Type)
+	}
+	if msg.Builds == nil {
+		t.Fatalf("sync snapshot missing builds list")
+	}
+}
+
 // TestHandleWebSocket_PingPong verifies the application-level heartbeat:
 // a {"type":"ping"} message must be answered with {"type":"pong"} routed
 // through the writer goroutine (never written directly from the reader,

@@ -449,6 +449,35 @@ func (t *operatorSessionTracker) BroadcastToOperators(msg []byte) {
 	}
 }
 
+// broadcastOperatorEvent dispatches a JSON event to every connected operator
+// dashboard. Events fan out to BOTH the legacy /ws hub and any /ws/operator
+// sessions, so every browser client receives the same stream regardless of
+// which endpoint it dialed. (The beacon wsHub is deliberately NOT used.)
+func (s *Server) broadcastOperatorEvent(payload map[string]interface{}) {
+	msg, ok := marshalJSONSafe(payload)
+	if !ok {
+		return
+	}
+	s.broadcastToClients(msg)
+	if s.operatorSessions != nil {
+		s.operatorSessions.BroadcastToOperators(msg)
+	}
+}
+
+// sendOperatorSyncSnapshot pushes the current state snapshot (active build
+// jobs) to a freshly-connected operator socket, so dashboards can render the
+// latest state without waiting for the next event and after a reconnect.
+func (s *Server) sendOperatorSyncSnapshot(conn *websocket.Conn) {
+	msg, ok := marshalJSONSafe(gin.H{"type": "sync", "builds": s.buildJobSnapshots()})
+	if !ok {
+		return
+	}
+	conn.SetWriteDeadline(time.Now().Add(OperatorWriteDeadline))
+	if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+		slog.Warn("Failed to send operator sync snapshot", "error", err)
+	}
+}
+
 // handleOperatorWS handles operator WebSocket connections for real-time updates.
 // Requires a valid forgec2_session cookie (unlike agent beacons which use the
 // transport envelope for auth).
@@ -487,6 +516,11 @@ func (s *Server) handleOperatorWS(c *gin.Context) {
 		}
 	})
 	s.operatorSessions.add(session)
+
+	// Reconnect sync: every connect (fresh or re-established) receives the
+	// current build snapshot so a client that dropped events while offline
+	// converges immediately.
+	s.sendOperatorSyncSnapshot(conn)
 
 	defer func() {
 		s.operatorSessions.remove(session.UserID, session)

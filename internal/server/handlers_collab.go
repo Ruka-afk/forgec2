@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"time"
@@ -137,18 +136,11 @@ func (s *Server) currentUsername(c *gin.Context) string {
 	return ""
 }
 
-// broadcastCollabEvent pushes a collaboration event over the websocket hub.
+// broadcastCollabEvent pushes a collaboration event over the operator websocket bus.
 func (s *Server) broadcastCollabEvent(eventType, agentID, username string) {
-	if s.wsHub == nil {
-		return
-	}
-	payload, err := json.Marshal(map[string]interface{}{
+	s.broadcastOperatorEvent(map[string]interface{}{
 		"type":     eventType,
 		"agent_id": agentID,
 		"username": username,
 	})
-	if err != nil {
-		return
-	}
-	s.wsHub.Broadcast(payload)
 }

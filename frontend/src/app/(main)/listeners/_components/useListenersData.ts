@@ -1,21 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { normalizeListEnvelope } from "@/lib/envelope";
+import { useWS } from "@/lib/wsContext";
 import { useI18n } from "@/lib/i18n";
 import type { CreateListenerForm, EditListenerForm, Listener } from "./types";
 import { emptyCreateForm, emptyEditForm } from "./types";
 
 export function useListenersData() {
   const { t } = useI18n();
+  const { subscribe } = useWS();
   const [listeners, setListeners] = useState<Listener[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [agentCountMap, setAgentCountMap] = useState<Record<string, number>>({});
   const [creating, setCreating] = useState(false);
+  const loadingRef = useRef(true);
+  loadingRef.current = loading;
 
   const loadListeners = useCallback(async () => {
     setError(null);
@@ -145,6 +149,19 @@ export function useListenersData() {
       .catch(() => setAgentCountMap({}));
     return () => controller.abort();
   }, [loadListeners]);
+
+  // Live registry updates: refresh when another operator changes a listener
+  // or when the WS reconnects (sync snapshot) — excludes the in-flight first
+  // load which the mount effect already handles.
+  useEffect(() => {
+    const unsub = subscribe((msg) => {
+      if (msg.type === "listener_update" || msg.type === "sync") {
+        if (loadingRef.current) return;
+        loadListeners();
+      }
+    });
+    return unsub;
+  }, [subscribe, loadListeners]);
 
   return {
     listeners,

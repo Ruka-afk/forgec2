@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { API_BASE } from "@/lib/constants";
 import { downloadFromResponse } from "@/lib/download";
@@ -9,7 +9,7 @@ import { paths } from "@/lib/api-paths";
 import { normalizeAgentList } from "@/lib/agents";
 import { firstNumber, normalizeListEnvelope } from "@/lib/envelope";
 import { toast } from "sonner";
-import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { useWS } from "@/lib/wsContext";
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { Spinner, PageHeader } from "@/components/UI";
@@ -146,7 +146,31 @@ export default function BuildsPage() {
   }, [filterPlatform, filterStatus, t]);
 
   useEffect(() => { loadBuilds(); }, [loadBuilds]);
-  useVisibleInterval(loadBuilds, 5000);
+
+  // Real-time build updates: refresh when any async build finishes, when the
+  // WS reconnects (sync snapshot), or when the socket first connects. A short
+  // debounce coalesces bursts (e.g. parallel builds completing together).
+  const { connected, subscribe } = useWS();
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(loadBuilds, 250);
+  }, [loadBuilds]);
+  useEffect(() => {
+    if (connected) scheduleRefresh();
+  }, [connected, scheduleRefresh]);
+  useEffect(() => {
+    const unsub = subscribe((msg) => {
+      if (msg.type === "build_update" || msg.type === "sync") {
+        if (msg.type === "build_update" && msg.status === "building") return;
+        scheduleRefresh();
+      }
+    });
+    return () => {
+      unsub();
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    };
+  }, [subscribe, scheduleRefresh]);
 
   const handleDownload = async (build: BuildLog) => {
     const buildId = build.id;

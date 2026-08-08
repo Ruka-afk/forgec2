@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { API_BASE } from "@/lib/constants";
 import { api, getCsrfToken } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { useWS } from "@/lib/wsContext";
 import { extractProfilePresets, normalizeListeners } from "@/lib/generate-load";
 import { downloadFromResponse } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
@@ -36,6 +37,9 @@ const DEFAULT_PROFILE_PRESETS: ProfilePreset[] = [
 
 export function usePayloadGenerator() {
   const { t } = useI18n();
+  const { connected, subscribe } = useWS();
+  const connectedRef = useRef(connected);
+  useEffect(() => { connectedRef.current = connected; }, [connected]);
   const [listeners, setListeners] = useState<Listener[]>([]);
   const [loading, setLoading] = useState(true);
   const [profilePresets, setProfilePresets] = useState<ProfilePreset[]>(DEFAULT_PROFILE_PRESETS);
@@ -86,6 +90,15 @@ export function usePayloadGenerator() {
   }, [t]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Keep the listener registry current with other operators and after WS
+  // reconnects (sync snapshot) — no polling needed.
+  useEffect(() => {
+    const unsub = subscribe((msg) => {
+      if (msg.type === "listener_update" || msg.type === "sync") loadData();
+    });
+    return unsub;
+  }, [subscribe, loadData]);
 
   // Consume ?listener_id= (deep link from the listener detail page) once
   // listeners are loaded, then preselect that listener.
@@ -173,6 +186,50 @@ export function usePayloadGenerator() {
     return "http";
   }, [shared.listener_id, shared.beacon_transport, getListenerInfo]);
 
+  // Resolves when the operator WS reports this build as completed/failed.
+  // While the socket is unavailable a 2s HTTP fallback poll keeps the build
+  // wait from stalling. Cancelled via the abort signal.
+  const waitForBuildResult = useCallback((buildId: string, signal: AbortSignal) => {
+    return new Promise<{ status: "completed" | "failed" | "timeout" | "aborted"; error?: string }>((resolve) => {
+      let settled = false;
+      let fallback: ReturnType<typeof setTimeout> | null = null;
+      let timeout: ReturnType<typeof setTimeout> | null = null;
+      let unsub: () => void = () => {};
+      const finish = (outcome: { status: "completed" | "failed" | "timeout" | "aborted"; error?: string }) => {
+        if (settled) return;
+        settled = true;
+        unsub();
+        if (fallback) clearTimeout(fallback);
+        if (timeout) clearTimeout(timeout);
+        signal.removeEventListener("abort", onAbort);
+        resolve(outcome);
+      };
+      const onAbort = () => finish({ status: "aborted" });
+      const poll = async () => {
+        if (settled) return;
+        if (connectedRef.current) { fallback = setTimeout(poll, 2000); return; }
+        try {
+          const pollRes = await fetch(`${API_BASE}/generate/builds/${buildId}`, { credentials: "include", headers: { "Accept": "application/json" }, signal });
+          if (!pollRes.ok) { fallback = setTimeout(poll, 2000); return; }
+          const pollData = await pollRes.json();
+          if (pollData.status === "completed") finish({ status: "completed" });
+          else if (pollData.status === "failed") finish({ status: "failed", error: pollData.error });
+          else fallback = setTimeout(poll, 2000);
+        } catch {
+          fallback = setTimeout(poll, 2000);
+        }
+      };
+      unsub = subscribe((msg) => {
+        if (msg.type !== "build_update" || msg.build_id !== buildId) return;
+        if (msg.status === "completed") finish({ status: "completed" });
+        else if (msg.status === "failed") finish({ status: "failed", error: typeof msg.error === "string" ? msg.error : undefined });
+      });
+      timeout = setTimeout(() => finish({ status: "timeout" }), 10 * 60 * 1000);
+      signal.addEventListener("abort", onAbort);
+      fallback = setTimeout(poll, 100);
+    });
+  }, [subscribe]);
+
   // Core generate request — for binary builds (exe/dll/linux/macos) this uses
   // the async build system: POST returns a build_id, then we poll until done
   // and download the result.  Non-binary endpoints (ps1, stager, etc.) still
@@ -216,49 +273,34 @@ export function usePayloadGenerator() {
         return { success: true };
       }
 
-      // 2) Async build: poll for completion
+      // 2) Async build: await completion over the operator WebSocket.
+      // The backend pushes build_update events (building/completed/failed);
+      // a slow HTTP fallback poll only runs while the socket is down so the
+      // build still completes if the WS is unavailable.
       const startData = await res.json();
       const buildId = startData.build_id;
       if (!buildId) return { error: startData.error || "No build ID returned" };
 
-      const pollInterval = 2000;
-      const maxAttempts = 300; // 10 minutes max
       asyncAbortRef.current?.abort();
       const ac = new AbortController();
       asyncAbortRef.current = ac;
-      for (let i = 0; i < maxAttempts; i++) {
-        if (ac.signal.aborted) return { error: "Build cancelled" };
-        await new Promise((r) => setTimeout(r, pollInterval));
-        if (ac.signal.aborted) return { error: "Build cancelled" };
-        let pollRes: Response;
-        try {
-          pollRes = await fetch(`${API_BASE}/generate/builds/${buildId}`, { credentials: "include", headers: { "Accept": "application/json" }, signal: ac.signal });
-        } catch (err) {
-          if (ac.signal.aborted) return { error: "Build cancelled" };
-          throw err;
-        }
-        if (!pollRes.ok) continue;
-        const pollData = await pollRes.json();
-        if (pollData.status === "completed") {
-          if (ac.signal.aborted) return { error: "Build cancelled" };
-          // 3) Download the result
-          const dlRes = await fetch(`${API_BASE}/generate/builds/${buildId}/download`, { credentials: "include" });
-          if (!dlRes.ok) return { error: `Download failed (${dlRes.status})` };
-          await downloadFromResponse(dlRes, formName);
-          return { success: true };
-        }
-        if (pollData.status === "failed") {
-          return { error: pollData.error || "Build failed" };
-        }
-        // Still building — continue polling
-      }
-      return { error: "Build timed out after 10 minutes" };
+
+      const outcome = await waitForBuildResult(buildId, ac.signal);
+      if (outcome.status === "aborted" || ac.signal.aborted) return { error: "Build cancelled" };
+      if (outcome.status === "failed") return { error: outcome.error || "Build failed" };
+      if (outcome.status === "timeout") return { error: "Build timed out after 10 minutes" };
+
+      // 3) Download the result
+      const dlRes = await fetch(`${API_BASE}/generate/builds/${buildId}/download`, { credentials: "include" });
+      if (!dlRes.ok) return { error: `Download failed (${dlRes.status})` };
+      await downloadFromResponse(dlRes, formName);
+      return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("abort")) return { error: "Request timed out" };
       return { error: msg };
     }
-  }, [shared.listener_id, shared.dns_doh_url, shared.dns_dot_addr, shared.ssh_user, shared.ssh_password, shared.ssh_key, shared.ssh_host_key, buildC2URL, getProtocol, getBeaconTransport, buildFormData, t]);
+  }, [shared.listener_id, shared.dns_doh_url, shared.dns_dot_addr, shared.ssh_user, shared.ssh_password, shared.ssh_key, shared.ssh_host_key, buildC2URL, getProtocol, getBeaconTransport, buildFormData, t, waitForBuildResult]);
 
   // Form updaters
   const updateForm = useCallback(<K extends PayloadKey>(key: K, updater: (prev: PayloadForms[K]) => PayloadForms[K]) => {

@@ -90,6 +90,14 @@ func (s *Server) parseAndStoreCredentials(agentID string, raw string, taskID uin
 			slog.Info("Credentials stored in vault", "agent_id", agentID, "count", len(batch))
 			s.LogAuditRecord(nil, "credential_ingest", "credential", agentID,
 				"stored "+strconv.Itoa(len(batch))+" credentials (source="+parseCredentialSource(raw)+")", true, nil)
+			// Push the vault change to open dashboard sessions so the
+			// Credentials page refreshes without polling.
+			s.broadcastOperatorEvent(map[string]interface{}{
+				"type":     "credential_update",
+				"action":   "found",
+				"agent_id": agentID,
+				"count":    len(batch),
+			})
 		}
 	}
 }
@@ -497,6 +505,12 @@ func (s *Server) handleAddCredential(c *gin.Context) {
 	}
 	s.LogAuditRecord(c, "credential_add", "credential", entry.AgentID,
 		"added credential (domain="+entry.Domain+", user="+entry.Username+", type="+entry.Type+")", true, nil)
+	s.broadcastOperatorEvent(map[string]interface{}{
+		"type":         "credential_update",
+		"action":       "added",
+		"id":           entry.ID,
+		"agent_id":     entry.AgentID,
+	})
 	c.JSON(http.StatusOK, gin.H{"success": true, "id": entry.ID})
 }
 
@@ -533,6 +547,11 @@ func (s *Server) handleDeleteCredential(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "credential_delete", "credential", "", "deleted credential id="+idStr, true, nil)
+	s.broadcastOperatorEvent(map[string]interface{}{
+		"type":   "credential_update",
+		"action": "deleted",
+		"id":     id,
+	})
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -571,6 +590,12 @@ func (s *Server) handleUpdateCredential(c *gin.Context) {
 		return
 	}
 	s.LogAuditRecord(c, "credential_update", "credential", cred.AgentID, "updated credential id="+idStr, true, nil)
+	s.broadcastOperatorEvent(map[string]interface{}{
+		"type":         "credential_update",
+		"action":       "updated",
+		"id":           cred.ID,
+		"agent_id":     cred.AgentID,
+	})
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -603,6 +628,11 @@ func (s *Server) handleBatchAddTags(c *gin.Context) {
 	}
 
 	s.LogAuditRecord(c, "credential_tag", "credential", "", "added tags to "+strconv.Itoa(len(req.IDs))+" credentials", true, nil)
+	s.broadcastOperatorEvent(map[string]interface{}{
+		"type":   "credential_update",
+		"action": "updated",
+		"count":  len(req.IDs),
+	})
 	c.JSON(http.StatusOK, gin.H{"success": true, "count": len(req.IDs)})
 }
 
@@ -630,5 +660,11 @@ func (s *Server) handleToggleConfirmed(c *gin.Context) {
 	}
 	s.LogAuditRecord(c, "credential_confirm", "credential", cred.AgentID,
 		"set confirmed="+strconv.FormatBool(cred.Confirmed)+" for credential id="+idStr, true, nil)
+	s.broadcastOperatorEvent(map[string]interface{}{
+		"type":         "credential_update",
+		"action":       "updated",
+		"id":           cred.ID,
+		"agent_id":     cred.AgentID,
+	})
 	c.JSON(http.StatusOK, gin.H{"success": true, "confirmed": cred.Confirmed})
 }

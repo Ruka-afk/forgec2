@@ -4,11 +4,30 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
+
+// broadcastListenerUpdate notifies operators that the listener registry
+// changed (created/updated/deleted/enabled/disabled) so open Listener tables
+// can refresh without polling.
+func (s *Server) broadcastListenerUpdate(action string, l *db.Listener) {
+	payload := map[string]interface{}{
+		"type":          "listener_update",
+		"action":        action,
+		"listener_id":   strconv.FormatUint(uint64(l.ID), 10),
+		"name":          l.Name,
+		"listener_type": l.Type,
+		"scheme":        l.Scheme,
+		"host":          l.Host,
+		"port":          l.Port,
+		"enabled":       l.Enabled,
+	}
+	s.broadcastOperatorEvent(payload)
+}
 
 func (s *Server) handleListListeners(c *gin.Context) {
 	p := parsePagination(c, 20, 100)
@@ -213,6 +232,8 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 	// Start a real listener for the requested port/type.
 	s.startListenerForRecord(&l, "created")
 
+	s.broadcastListenerUpdate("created", &l)
+
 	c.JSON(http.StatusOK, gin.H{"success": true, "listener": l})
 }
 
@@ -313,6 +334,8 @@ func (s *Server) handleUpdateListener(c *gin.Context) {
 		s.stopExtraListener(oldKey)
 	}
 
+	s.broadcastListenerUpdate("updated", &l)
+
 	c.JSON(http.StatusOK, gin.H{"success": true, "listener": l})
 }
 
@@ -349,6 +372,7 @@ func (s *Server) handleDeleteListener(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "listener not found")
 		return
 	}
+	s.broadcastListenerUpdate("deleted", &l)
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -366,6 +390,7 @@ func (s *Server) handleEnableListener(c *gin.Context) {
 		return
 	}
 	s.startListenerForRecord(&l, "enabled")
+	s.broadcastListenerUpdate("enabled", &l)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Listener enabled"})
 }
 
@@ -383,6 +408,7 @@ func (s *Server) handleDisableListener(c *gin.Context) {
 		return
 	}
 	s.stopExtraListener(listenerKey(&l))
+	s.broadcastListenerUpdate("disabled", &l)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Listener disabled"})
 }
 

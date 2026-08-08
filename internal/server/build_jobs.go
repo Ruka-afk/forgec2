@@ -154,35 +154,34 @@ func (s *Server) handleBuildDownload(c *gin.Context) {
 
 // handleBuildList returns all active build jobs for the caller.
 func (s *Server) handleBuildList(c *gin.Context) {
-	type jobResp struct {
-		ID          string    `json:"id"`
-		Status      string    `json:"status"`
-		Platform    string    `json:"platform"`
-		Format      string    `json:"format"`
-		Filename    string    `json:"filename"`
-		Error       string    `json:"error,omitempty"`
-		CreatedAt   time.Time `json:"created_at"`
-		CompletedAt time.Time `json:"completed_at,omitempty"`
-	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "builds": s.buildJobSnapshots()})
+}
 
-	// Copy every field under the lock so the build goroutine's mutations
-	// cannot race our reads.
+// buildJobSnapshots returns a lock-protected snapshot of every active build
+// job in the same JSON shape used by handleBuildList. Copying every field
+// under the lock guarantees the build goroutine's mutations cannot race reads.
+func (s *Server) buildJobSnapshots() []gin.H {
 	s.buildJobsMu.RLock()
-	resp := make([]jobResp, 0, len(s.buildJobs))
+	defer s.buildJobsMu.RUnlock()
+	resp := make([]gin.H, 0, len(s.buildJobs))
 	for _, j := range s.buildJobs {
-		resp = append(resp, jobResp{
-			ID:          j.ID,
-			Status:      j.Status,
-			Platform:    j.Platform,
-			Format:      j.Format,
-			Filename:    j.Filename,
-			Error:       j.Error,
-			CreatedAt:   j.CreatedAt,
-			CompletedAt: j.CompletedAt,
-		})
+		entry := gin.H{
+			"id":         j.ID,
+			"status":     j.Status,
+			"platform":   j.Platform,
+			"format":     j.Format,
+			"filename":   j.Filename,
+			"created_at": j.CreatedAt,
+		}
+		if j.Error != "" {
+			entry["error"] = j.Error
+		}
+		if !j.CompletedAt.IsZero() {
+			entry["completed_at"] = j.CompletedAt
+		}
+		resp = append(resp, entry)
 	}
-	s.buildJobsMu.RUnlock()
-	c.JSON(http.StatusOK, gin.H{"success": true, "builds": resp})
+	return resp
 }
 
 // isBuildRunning returns true if there are active builds.
@@ -199,6 +198,15 @@ func (s *Server) isBuildRunning() bool {
 
 // runBuildAndUpdateJob is a helper to run a build function and update the job.
 func (s *Server) runBuildAndUpdateJob(job *BuildJob, buildFn func() (string, error), platform, format, c2URL string, listenerID uint, filename string) {
+	// The job is registered as "building" already; tell dashboards it has
+	// actually started executing (queue wait is over).
+	s.broadcastOperatorEvent(map[string]interface{}{
+		"type":     "build_update",
+		"build_id": job.ID,
+		"status":   "building",
+		"platform": platform,
+		"format":   format,
+	})
 	outPath, err := buildFn()
 	s.completeBuildJob(job, outPath, err)
 	if err != nil {
@@ -208,20 +216,20 @@ func (s *Server) runBuildAndUpdateJob(job *BuildJob, buildFn func() (string, err
 		s.logBuild(platform, format, c2URL, listenerID, filename, "success", "", outPath)
 		slog.Info("Async build completed", "build_id", job.ID, "platform", platform, "format", format, "output", outPath)
 	}
-	// Broadcast build status via WebSocket
-	if s.wsHub != nil {
-		msg, ok := marshalJSONSafe(gin.H{
-			"type":     "build_complete",
-			"build_id": job.ID,
-			"status":   job.Status,
-			"platform": platform,
-			"format":   format,
-		})
-		if !ok {
-			return
-		}
-		s.wsHub.Broadcast(msg)
+	event := map[string]interface{}{
+		"type":   "build_update",
+		"build_id": job.ID,
+		"status": job.Status,
+		"platform": platform,
+		"format": format,
 	}
+	if job.Error != "" {
+		event["error"] = job.Error
+	}
+	if !job.CompletedAt.IsZero() {
+		event["completed_at"] = job.CompletedAt
+	}
+	s.broadcastOperatorEvent(event)
 }
 
 // Build queue: binary generation runs the Go/garble toolchain, which is

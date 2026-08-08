@@ -18,6 +18,8 @@ const OneLinerPanel = dynamic(() => import("./_components/OneLinerPanel"), { ssr
 const QuickPresets = dynamic(() => import("./_components/QuickPresets"), { ssr: false });
 const BuildHistorySection = dynamic(() => import("./_components/BuildHistorySection"), { ssr: false });
 
+import { useWS } from "@/lib/wsContext";
+
 const BANNER_DISMISS_KEY = "forgec2_gen_banner_dismissed";
 
 function SectionHeading({ icon, tint, title, desc, className }: { icon: ReactNode; tint: string; title: string; desc: string; className?: string }) {
@@ -48,6 +50,18 @@ export default function GeneratePage() {
 
   const states = g.states;
   const setForms = g.setForms;
+
+  // Builds finished elsewhere (other tab/operator/previously queued job)
+  // refresh the recent-builds history section via the WS bus.
+  const { subscribe } = useWS();
+  useEffect(() => {
+    const unsub = subscribe((msg) => {
+      if (msg.type === "build_update" && (msg.status === "completed" || msg.status === "failed")) {
+        setHistoryRefresh((n) => n + 1);
+      }
+    });
+    return unsub;
+  }, [subscribe]);
 
   useEffect(() => {
     const prev = prevBusyRef.current;

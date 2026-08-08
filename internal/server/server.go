@@ -774,6 +774,15 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 	}()
 
 	slog.Info("WebSocket client connected", "user", username)
+	// Reconnect sync: push the current build snapshot so a dashboard that was
+	// offline (reconnect) or connected mid-build converges instantly. Routed
+	// through the writer goroutine, never written from the reader.
+	if msg, ok := marshalJSONSafe(gin.H{"type": "sync", "builds": s.buildJobSnapshots()}); ok {
+		select {
+		case client.ch <- msg:
+		default:
+		}
+	}
 	s.broadcastUserEvent("user_online", username, session)
 
 	go func() {
