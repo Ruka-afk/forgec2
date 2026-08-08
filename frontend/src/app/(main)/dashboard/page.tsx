@@ -4,7 +4,8 @@ import React, { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { DASHBOARD_RANGE_KEY } from "@/lib/shortcuts";
+import { DASHBOARD_RANGES } from "@/lib/shortcuts";
+import { useUrlState } from "@/lib/hooks/useUrlState";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/shallow";
 import { EmptyState, PageHeader, StatCard } from "@/components/UI";
@@ -81,7 +82,7 @@ interface DashboardPageStats {
 
 /* ── Main Dashboard Page ── */
 export default function DashboardPage() {
-  const [timeRange, setTimeRange] = useState("24h");
+  const [timeRange, setTimeRange] = useUrlState("range", "24h", DASHBOARD_RANGES);
   const { t } = useI18n();
   const stats = useAppStore(useShallow((s) => s.stats));
   const statsError = useAppStore((s) => s.statsError);
@@ -90,17 +91,7 @@ export default function DashboardPage() {
   const loading = stats === null && !statsError;
   const error = statsError || null;
 
-  const changeRange = (r: string) => {
-    setTimeRange(r);
-    try { localStorage.setItem(DASHBOARD_RANGE_KEY, r); } catch { /* ignore */ }
-  };
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(DASHBOARD_RANGE_KEY);
-      if (saved && ["24h", "7d", "30d"].includes(saved)) setTimeRange(saved);
-    } catch { /* ignore */ }
-  }, []);
+  const changeRange = (r: (typeof DASHBOARD_RANGES)[number]) => setTimeRange(r);
 
   // Stats live in the app store and are refreshed there (Sidebar uses the same
   // poll loop). The dashboard is a pure consumer — no duplicate fetcher.
@@ -117,7 +108,7 @@ export default function DashboardPage() {
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
       <PageHeader title={t("dashboard.title")} subtitle={`${t("dashboard.subtitle")} · ${s.total_tasks || 0} ${t("dashboard.total_tasks_suffix")}`}>
           <div className="inline-flex items-center gap-0.5 rounded-lg bg-secondary/70 p-0.5 ring-1 ring-border/50">
-            {["24h", "7d", "30d"].map((r) => (
+            {DASHBOARD_RANGES.map((r) => (
               <button
                 key={r}
                 onClick={() => changeRange(r)}

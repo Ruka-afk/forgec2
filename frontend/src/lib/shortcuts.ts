@@ -56,4 +56,4 @@ export function matchShortcut(e: KeyboardEvent, s: ShortcutDef): boolean {
   );
 }
 
-export const DASHBOARD_RANGE_KEY = "forgec2_dashboard_range";
+export const DASHBOARD_RANGES = ["24h", "7d", "30d"] as const;

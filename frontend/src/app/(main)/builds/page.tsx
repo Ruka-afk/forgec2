@@ -10,6 +10,7 @@ import { normalizeAgentList } from "@/lib/agents";
 import { firstNumber, normalizeListEnvelope } from "@/lib/envelope";
 import { toast } from "sonner";
 import { useWS } from "@/lib/wsContext";
+import { useUrlState } from "@/lib/hooks/useUrlState";
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { Spinner, PageHeader } from "@/components/UI";
@@ -88,8 +89,8 @@ export default function BuildsPage() {
   const [avgDuration, setAvgDuration] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filterPlatform, setFilterPlatform] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [filterPlatform, setFilterPlatform] = useUrlState("platform", "all", PLATFORMS as readonly string[]);
+  const [filterStatus, setFilterStatus] = useUrlState("status", "", ["", "success", "failed", "building"] as const);
   const [expandedBuild, setExpandedBuild] = useState<string | null>(null);
   const [versionDist, setVersionDist] = useState<{ version: string; count: number }[]>([]);
   const { t } = useI18n();
