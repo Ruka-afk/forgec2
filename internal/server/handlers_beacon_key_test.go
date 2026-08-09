@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -98,7 +100,7 @@ func TestV2BeaconRegistrationAuth(t *testing.T) {
 		seq := agent.nextSeq()
 		oldTs := time.Now().Unix() - beaconTsTolerance - 60
 		idPub := agent.publicKeyB64()
-		regHMAC := base64.StdEncoding.EncodeToString(crypto.ComputeRegHMAC(agent.regKey, agentUUID, idPub, oldTs))
+		regHMAC := base64.StdEncoding.EncodeToString(crypto.ComputeRegHMAC(agent.regKey, agentUUID, idPub, oldTs, seq))
 		body := `{"uuid":"` + agentUUID + `","seq":` + strconv.FormatUint(seq, 10) + `,"ts":` + strconv.FormatInt(oldTs, 10) + `,"ecdh_pub":"` + idPub + `","id_pub":"` + idPub + `","reg_hmac":"` + regHMAC + `"}`
 		w := v2Post(t, s, body)
 		if w.Code == http.StatusOK {
@@ -151,5 +153,117 @@ func TestV2ComputeAuthMAC(t *testing.T) {
 	otherKey := crypto.DeriveRegistrationKeyFromHex(strings.Repeat("ff", 32), "uuid-1")
 	if a == computeAuthMAC(otherKey, "uuid-1", "1", "pub-1") {
 		t.Fatal("MAC must differ when the reg key changes")
+	}
+}
+
+// TestV2OversizedBodyRejectedBeforeDecrypt proves the raw body is rejected by
+// the pre-decode length check (default 10MB max payload → ~13.4MB raw limit)
+// instead of being base64-decoded and run through AES-GCM first.
+func TestV2OversizedBodyRejectedBeforeDecrypt(t *testing.T) {
+	s, _ := v2TestServer(t)
+	big := strings.Repeat("A", 15*1024*1024)
+	body := `{"uuid":"11111111-2222-4333-8444-555555555555","seq":1,"ts":` + strconv.FormatInt(time.Now().Unix(), 10) + `,"c":"` + big + `"}`
+	w := v2Post(t, s, body)
+	if w.Code == http.StatusOK {
+		t.Fatalf("expected rejection for oversized body, got 200; body=%s", w.Body.String())
+	}
+}
+
+// TestV2RegSeqTamperRejected proves the frame seq is bound into the
+// registration HMAC: a captured registration frame replayed with an inflated
+// seq (which previously burned the replay window) must now fail auth.
+func TestV2RegSeqTamperRejected(t *testing.T) {
+	s, _ := v2TestServer(t)
+	agentUUID := "aaaa1111-2222-4333-8444-333333333333"
+	agent := newTCPTestAgent(t, agentUUID).withRegKey(s.cfg.Server.BeaconKey)
+
+	seq := agent.nextSeq()
+	ts := time.Now().Unix()
+	idPub := agent.publicKeyB64()
+	// HMAC is computed over seq+1 while the envelope carries seq: the seq
+	// must be part of the MAC input, so this must be rejected.
+	badMAC := base64.StdEncoding.EncodeToString(crypto.ComputeRegHMAC(agent.regKey, agentUUID, idPub, ts, seq+1))
+	body := `{"uuid":"` + agentUUID + `","seq":` + strconv.FormatUint(seq, 10) + `,"ts":` + strconv.FormatInt(ts, 10) + `,"ecdh_pub":"` + idPub + `","id_pub":"` + idPub + `","reg_hmac":"` + badMAC + `"}`
+	w := v2Post(t, s, body)
+	if w.Code == http.StatusOK {
+		t.Fatalf("expected rejection for seq-tampered reg_hmac, got 200; body=%s", w.Body.String())
+	}
+}
+
+// TestV2HandshakeSeqTamperRejected proves the frame seq is bound into the
+// handshake MAC: replaying a captured handshake frame with an inflated seq
+// must fail auth instead of advancing the replay window.
+func TestV2HandshakeSeqTamperRejected(t *testing.T) {
+	s, _ := v2TestServer(t)
+	agentUUID := "bbbb2222-3333-4333-8444-444444444444"
+	agent := newTCPTestAgent(t, agentUUID).withRegKey(s.cfg.Server.BeaconKey)
+
+	// Register normally.
+	w := v2Post(t, s, agent.registerFrame())
+	if w.Code != http.StatusOK {
+		t.Fatalf("registration: expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+
+	// Handshake envelope carrying seq, but MAC computed over seq+1.
+	seq := agent.nextSeq()
+	ts := time.Now().Unix()
+	pub := agent.publicKeyB64()
+	mac := hmac.New(sha256.New, agent.regKey)
+	mac.Write([]byte(agentUUID))
+	mac.Write([]byte(pub))
+	mac.Write([]byte(strconv.FormatInt(ts, 10)))
+	mac.Write([]byte(strconv.FormatUint(seq+1, 10)))
+	tamperedMAC := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	body := `{"uuid":"` + agentUUID + `","seq":` + strconv.FormatUint(seq, 10) + `,"ts":` + strconv.FormatInt(ts, 10) + `,"ecdh_pub":"` + pub + `","mac":"` + tamperedMAC + `"}`
+	w = v2Post(t, s, body)
+	if w.Code == http.StatusOK {
+		t.Fatalf("expected rejection for seq-tampered handshake, got 200; body=%s", w.Body.String())
+	}
+}
+
+// TestV2SeqHardCapLockout proves a cryptographically valid frame with an
+// implausible seq jump is rejected and locks the agent out briefly instead of
+// burning the replay window.
+func TestV2SeqHardCapLockout(t *testing.T) {
+	s, _ := v2TestServer(t)
+	agentUUID := "cccc3333-4444-4333-8444-555555555555"
+	agent := newTCPTestAgent(t, agentUUID).withRegKey(s.cfg.Server.BeaconKey)
+
+	w := v2Post(t, s, agent.registerFrame())
+	if w.Code != http.StatusOK {
+		t.Fatalf("registration: expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+
+	// Valid-MAC handshake but seq jumps far beyond the hard cap (maxSeqJump*10).
+	hugeSeq := agent.nextSeq() + maxSeqJump*100
+	ts := time.Now().Unix()
+	pub := agent.publicKeyB64()
+	mac := hmac.New(sha256.New, agent.regKey)
+	mac.Write([]byte(agentUUID))
+	mac.Write([]byte(pub))
+	mac.Write([]byte(strconv.FormatInt(ts, 10)))
+	mac.Write([]byte(strconv.FormatUint(hugeSeq, 10)))
+	validMAC := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+	body := `{"uuid":"` + agentUUID + `","seq":` + strconv.FormatUint(hugeSeq, 10) + `,"ts":` + strconv.FormatInt(ts, 10) + `,"ecdh_pub":"` + pub + `","mac":"` + validMAC + `"}`
+	w = v2Post(t, s, body)
+	if w.Code == http.StatusOK {
+		t.Fatalf("expected rejection for hard-cap seq jump, got 200; body=%s", w.Body.String())
+	}
+
+	// A perfectly normal next frame must also be rejected while locked out:
+	// the huge jump must not have advanced the window either.
+	okSeq := hugeSeq - maxSeqJump/2
+	ts2 := time.Now().Unix()
+	pub2 := agent.publicKeyB64()
+	mac2 := hmac.New(sha256.New, agent.regKey)
+	mac2.Write([]byte(agentUUID))
+	mac2.Write([]byte(pub2))
+	mac2.Write([]byte(strconv.FormatInt(ts2, 10)))
+	mac2.Write([]byte(strconv.FormatUint(okSeq, 10)))
+	okMAC := base64.StdEncoding.EncodeToString(mac2.Sum(nil))
+	body2 := `{"uuid":"` + agentUUID + `","seq":` + strconv.FormatUint(okSeq, 10) + `,"ts":` + strconv.FormatInt(ts2, 10) + `,"ecdh_pub":"` + pub2 + `","mac":"` + okMAC + `"}`
+	w2 := v2Post(t, s, body2)
+	if w2.Code == http.StatusOK {
+		t.Fatalf("expected rejection while seq lockout active, got 200; body=%s", w2.Body.String())
 	}
 }

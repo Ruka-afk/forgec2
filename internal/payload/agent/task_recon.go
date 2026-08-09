@@ -33,8 +33,11 @@ func handleScreenshot(task Task, res *TaskResult) {
 		inFastMode.Store(true)
 		return
 	}
-	// Multi-chunk: append chunks to pendingResults (already locked by doBeacon)
+	// Multi-chunk: append chunks to pendingResults. The beacon loop and the
+	// task worker both touch pendingResults, so take the lock here.
+	pendingMu.Lock()
 	pendingResults = append(pendingResults, results...)
+	pendingMu.Unlock()
 	res.Output = "screenshot_chunked"
 	res.Size = int64(len(results))
 	inFastMode.Store(true)
@@ -109,7 +112,9 @@ func handleScreenshotWindow(task Task, res *TaskResult) {
 		res.Size = results[0].Size
 		return
 	}
+	pendingMu.Lock()
 	pendingResults = append(pendingResults, results...)
+	pendingMu.Unlock()
 	res.Output = "screenshot_chunked"
 	res.Size = int64(len(results))
 }

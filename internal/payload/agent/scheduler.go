@@ -123,7 +123,10 @@ func (bs *BeaconScheduler) ShouldBeaconNow() bool {
 		bs.triggered.Store(false)
 		return true
 	}
-	if len(pendingResults) > 0 {
+	pendingMu.Lock()
+	hasPending := len(pendingResults) > 0
+	pendingMu.Unlock()
+	if hasPending {
 		return true
 	}
 

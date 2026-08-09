@@ -149,7 +149,7 @@ func (a *tcpTestAgent) registerFrame() string {
 		"id_pub":   idPub,
 	}
 	if a.regKey != nil {
-		env["reg_hmac"] = base64.StdEncoding.EncodeToString(crypto.ComputeRegHMAC(a.regKey, a.uuid, idPub, ts))
+		env["reg_hmac"] = base64.StdEncoding.EncodeToString(crypto.ComputeRegHMAC(a.regKey, a.uuid, idPub, ts, seq))
 	}
 	if a.secretID != "" {
 		env["secret_id"] = a.secretID
@@ -175,6 +175,7 @@ func (a *tcpTestAgent) handshakeFrame() string {
 		mac.Write([]byte(a.uuid))
 		mac.Write([]byte(pub))
 		mac.Write([]byte(strconv.FormatInt(ts, 10)))
+		mac.Write([]byte(strconv.FormatUint(seq, 10)))
 		env["mac"] = base64.StdEncoding.EncodeToString(mac.Sum(nil))
 	}
 	b, _ := json.Marshal(env)

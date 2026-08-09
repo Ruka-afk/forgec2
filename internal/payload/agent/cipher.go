@@ -158,15 +158,19 @@ func deriveAgentSessionKey(sharedSecret []byte, agentID string) []byte {
 }
 
 // computeRegHMAC authenticates the v2 registration frame:
-// HMAC-SHA256(regKey, agentID || identity_pub_b64 || ts (8-byte big-endian)).
-// Mirrors crypto.ComputeRegHMAC.
-func computeRegHMAC(regKey []byte, agentID, identityPubB64 string, ts int64) []byte {
+// HMAC-SHA256(regKey, agentID || identity_pub_b64 || ts || seq (8-byte
+// big-endian)). Mirrors crypto.ComputeRegHMAC.
+func computeRegHMAC(regKey []byte, agentID, identityPubB64 string, ts int64, seq uint64) []byte {
 	mac := hmac.New(sha256.New, regKey)
 	mac.Write([]byte(agentID))
 	mac.Write([]byte(identityPubB64))
 	var buf [8]byte
 	for i := 0; i < 8; i++ {
 		buf[7-i] = byte(ts >> (8 * i))
+	}
+	mac.Write(buf[:])
+	for i := 0; i < 8; i++ {
+		buf[7-i] = byte(seq >> (8 * i))
 	}
 	mac.Write(buf[:])
 	return mac.Sum(nil)

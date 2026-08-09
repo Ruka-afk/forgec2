@@ -182,7 +182,7 @@ func NewEventCorrelator() *EventCorrelator {
 		},
 		{
 			Name:         "credential_dump_spike",
-			Action:       "credential_found",
+			Action:       "credential_ingest",
 			Window:       1 * time.Minute,
 			Threshold:    3,
 			AlertAction:  "siem_alert",
@@ -190,7 +190,7 @@ func NewEventCorrelator() *EventCorrelator {
 		},
 		{
 			Name:         "task_cancel_spike",
-			Action:       "task_cancelled",
+			Action:       "cancel_task",
 			Window:       2 * time.Minute,
 			Threshold:    5,
 			AlertAction:  "siem_alert",

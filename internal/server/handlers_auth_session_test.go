@@ -485,10 +485,14 @@ func TestHandleExtendSession_RotatesTokenAndCookie(t *testing.T) {
 	if sess.UserID != user.ID {
 		t.Errorf("expected session user_id=%d, got %d", user.ID, sess.UserID)
 	}
-	var oldRowCount int64
-	s.db.Model(&db.UserSession{}).Where("token_hash = ?", oldHash).Count(&oldRowCount)
-	if oldRowCount != 0 {
-		t.Errorf("expected old token hash to be rotated away, %d row(s) remain", oldRowCount)
+	// The old session row must now be revoked so a copied pre-rotation cookie
+	// is rejected immediately (isSessionRevoked matches revoked_at > epoch).
+	var revokedCount int64
+	s.db.Model(&db.UserSession{}).
+		Where("token_hash = ? AND revoked_at > ?", oldHash, time.Unix(0, 0)).
+		Count(&revokedCount)
+	if revokedCount != 1 {
+		t.Errorf("expected old token hash to be revoked, %d revoked row(s) found", revokedCount)
 	}
 }
 

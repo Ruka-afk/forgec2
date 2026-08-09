@@ -440,15 +440,29 @@ func (s *Server) handleExtendSession(c *gin.Context) {
 	}
 	middleware.SetCookieWithSameSite(c, "forgec2_session", newToken, maxAge, "/", middleware.CookieSecure, true, http.SameSiteLaxMode)
 
-	// Rotate the tracked session row so revocation bookkeeping stays accurate.
+	// Rotate the session: revoke the old token's row so a copied (pre-rotation)
+	// cookie is invalidated immediately, then track the new token in a fresh
+	// row. Overwriting token_hash on the old row previously left the old token
+	// in JWT-only limbo where the revocation check could never match, so a
+	// stolen cookie kept working for the rest of its original lifetime.
 	now := time.Now()
+	newExpiry := now.Add(time.Duration(maxAge) * time.Second)
 	if err := s.db.Model(&db.UserSession{}).
-		Where("user_id = ? AND token_hash = ?", user.ID, middleware.TokenHash(tokenStr)).
-		Updates(map[string]interface{}{
-			"token_hash": middleware.TokenHash(newToken),
-			"expires_at": now.Add(time.Duration(maxAge) * time.Second),
-		}).Error; err != nil {
-		slog.Error("Failed to update session row on extend", "user_id", user.ID, "err", err)
+		Where("user_id = ? AND token_hash = ? AND revoked_at <= ?", user.ID, middleware.TokenHash(tokenStr), time.Unix(0, 0)).
+		Update("revoked_at", now).Error; err != nil {
+		slog.Error("Failed to revoke old session on extend", "user_id", user.ID, "err", err)
+	}
+	newSess := db.UserSession{
+		UserID:            user.ID,
+		TokenHash:         middleware.TokenHash(newToken),
+		IP:                sess.IP,
+		UserAgent:         sess.UserAgent,
+		DeviceFingerprint: sess.DeviceFingerprint,
+		ExpiresAt:         newExpiry,
+		CreatedAt:         now,
+	}
+	if err := s.db.Create(&newSess).Error; err != nil {
+		slog.Error("Failed to insert rotated session row", "user_id", user.ID, "err", err)
 	}
 
 	s.LogAuditRecord(c, "session_extend", "auth", user.Username, "Session extended", true, nil)

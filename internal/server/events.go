@@ -26,6 +26,7 @@ type Event struct {
 	AgentHost string
 	AgentIP   string
 	AgentOS   string
+	TaskID    uint
 	User      string
 	Timestamp time.Time
 	Data      map[string]interface{}

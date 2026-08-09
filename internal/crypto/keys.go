@@ -74,14 +74,20 @@ func DeriveSessionKey(sharedSecret []byte, agentID string) []byte {
 }
 
 // ComputeRegHMAC authenticates a v2 registration handshake:
-// HMAC-SHA256(regKey, uuid || id_pub || ts).
-func ComputeRegHMAC(regKey []byte, agentID, identityPub string, ts int64) []byte {
+// HMAC-SHA256(regKey, uuid || id_pub || ts || seq). The seq is bound into the
+// MAC so a captured registration frame cannot be replayed with an inflated
+// sequence number to burn the server-side replay window.
+func ComputeRegHMAC(regKey []byte, agentID, identityPub string, ts int64, seq uint64) []byte {
 	mac := hmac.New(sha256.New, regKey)
 	mac.Write([]byte(agentID))
 	mac.Write([]byte(identityPub))
 	var buf [8]byte
 	for i := 0; i < 8; i++ {
 		buf[7-i] = byte(ts >> (8 * i))
+	}
+	mac.Write(buf[:])
+	for i := 0; i < 8; i++ {
+		buf[7-i] = byte(seq >> (8 * i))
 	}
 	mac.Write(buf[:])
 	return mac.Sum(nil)

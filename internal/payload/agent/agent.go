@@ -1212,7 +1212,7 @@ func buildBeaconEnvelope(body []byte) (sendBody []byte, kind agentFrameKind, seq
 		env.ECDHPub = idPub
 		env.IdentityPub = idPub
 		env.SecretID = RegSecretIDStr
-		env.RegHMAC = base64.StdEncoding.EncodeToString(computeRegHMAC(agentRegKey, agentUUID, idPub, ts))
+		env.RegHMAC = base64.StdEncoding.EncodeToString(computeRegHMAC(agentRegKey, agentUUID, idPub, ts, seq))
 	case ecdhSess.needsHandshake() || rekey:
 		// Authenticated handshake with a fresh ephemeral key.
 		kind = agentFrameHandshake
@@ -1220,7 +1220,7 @@ func buildBeaconEnvelope(body []byte) (sendBody []byte, kind agentFrameKind, seq
 		if agentRegKey == nil {
 			return nil, 0, 0, false
 		}
-		env.Mac = base64.StdEncoding.EncodeToString(computeFrameMAC(agentRegKey, agentUUID, env.ECDHPub, strconv.FormatInt(ts, 10)))
+		env.Mac = base64.StdEncoding.EncodeToString(computeFrameMAC(agentRegKey, agentUUID, env.ECDHPub, strconv.FormatInt(ts, 10), strconv.FormatUint(seq, 10)))
 	default:
 		kind = agentFrameEncrypted
 		aad := []byte(agentUUID + "\x00" + strconv.FormatUint(seq, 10))

@@ -164,6 +164,11 @@ const beaconTsTolerance = 300 // seconds
 // frame is rejected as a replay flood / desync indicator.
 const maxSeqJump = 1000
 
+// seqLockoutDuration is how long an agent stays locked out after a sequence
+// jump exceeds the hard cap in acceptSeq. The lockout is in-memory and clears
+// on restart; the operator can also recover via the admin reset path.
+const seqLockoutDuration = 5 * time.Minute
+
 // deriveRegKey returns the per-agent registration key. v3: when the implant
 // has a bound per-implant secret, that secret is used directly (the master key
 // is never embedded in v3 payloads). v2 legacy: derived from the master beacon
@@ -181,10 +186,12 @@ func (s *Server) deriveRegKey(agentID string) []byte {
 // computeAuthMAC computes the authentication MAC for handshake/registration
 // request frames and handshake response frames:
 //
-//	request:  HMAC(regKey, uuid || ecdh_pub || ts)
+//	request:  HMAC(regKey, uuid || ecdh_pub || ts || seq)
 //	response: HMAC(regKey, uuid || seq || server_pub)
 //
 // An attacker without the registration key cannot forge either direction.
+// Binding seq into the request MAC prevents replaying a captured
+// authentication frame with an inflated sequence number.
 func computeAuthMAC(regKey []byte, parts ...string) string {
 	mac := hmac.New(sha256.New, regKey)
 	for _, p := range parts {
@@ -194,10 +201,23 @@ func computeAuthMAC(regKey []byte, parts ...string) string {
 }
 
 // acceptSeq atomically advances last_seq for an implant. Returns false when
-// the frame is a replay (seq <= last_seq) or the implant does not exist yet.
-// The gap flag reports an unreasonably large jump (possible desync or replay
-// flood) so callers can log an alert.
+// the frame is a replay (seq <= last_seq), the implant does not exist yet, or
+// the agent is in a seq-flood lockout. The gap flag reports an unreasonably
+// large jump (possible desync or replay flood) so callers can log an alert.
+//
+// Jumps exceeding the hard cap are rejected WITHOUT advancing the window and
+// put the agent into a short in-memory lockout. With the sequence number now
+// bound into the frame MAC, a passive attacker cannot inflate seq; the hard
+// cap is defense-in-depth against a key-holding actor replay-flooding a
+// captured valid frame to burn the replay window.
 func (s *Server) acceptSeq(agentID string, seq uint64) (accepted bool, gap bool) {
+	s.seqLockoutMu.Lock()
+	unlock, locked := s.seqLockout[agentID]
+	s.seqLockoutMu.Unlock()
+	if locked && time.Now().Before(unlock) {
+		return false, false
+	}
+
 	var lastSeq uint64
 	if err := s.db.Model(&db.Implant{}).Where("id = ?", agentID).Pluck("last_seq", &lastSeq).Error; err != nil {
 		return false, false
@@ -205,19 +225,51 @@ func (s *Server) acceptSeq(agentID string, seq uint64) (accepted bool, gap bool)
 	if seq <= lastSeq {
 		return false, false
 	}
+	jump := seq - lastSeq
+	if jump > maxSeqJump*10 {
+		// Cryptographically valid frame but an implausible jump. Do not
+		// advance the window and lock the agent out briefly so a flood cannot
+		// keep hammering the database or the handshake path.
+		s.seqLockoutMu.Lock()
+		if s.seqLockout == nil {
+			s.seqLockout = make(map[string]time.Time)
+		}
+		s.seqLockout[agentID] = time.Now().Add(seqLockoutDuration)
+		s.seqLockoutMu.Unlock()
+		slog.Warn("Beacon seq jump exceeded hard cap, locking agent", "agent_id", agentID, "seq", seq, "last_seq", lastSeq)
+		return false, true
+	}
 	res := s.db.Model(&db.Implant{}).
 		Where("id = ? AND last_seq = ?", agentID, lastSeq).
 		Update("last_seq", seq)
 	if res.Error != nil || res.RowsAffected != 1 {
 		return false, false
 	}
-	return true, seq-lastSeq > maxSeqJump
+	return true, jump > maxSeqJump
 }
 
 // decodeBeaconEnvelope parses and authenticates a v2 transport envelope.
 // Returns the envelope, the inner (decrypted) request when applicable, and the
 // frame kind. Protocol v1/plaintext frames are rejected outright.
 func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req beaconRequest, kind beaconFrameKind) {
+	// Reject oversized bodies before JSON/base64/AES-GCM work. The plaintext
+	// payload is capped at maxPayload, so the base64 ciphertext body cannot
+	// legitimately exceed ~4/3 of that plus envelope overhead. Checking raw
+	// length up front prevents a BeaconMaxBodySize (64MB) body from being
+	// fully base64-decoded and run through AES-GCM before the post-decrypt
+	// size guard fires — an anonymous actor can no longer drive GB/min of
+	// decrypt work per IP.
+	s.configMu.RLock()
+	maxPayload := s.cfg.Crypto.MaxDecryptedPayloadSize
+	s.configMu.RUnlock()
+	if maxPayload <= 0 {
+		maxPayload = 10 * 1024 * 1024 // default 10MB
+	}
+	rawLimit := (maxPayload+2)/3*4 + 64*1024
+	if len(raw) > rawLimit {
+		slog.Warn("Beacon body exceeds raw limit", "size", len(raw), "max", rawLimit)
+		return beaconEnvelope{}, beaconRequest{}, frameRejected
+	}
 	if err := json.Unmarshal(raw, &envelope); err != nil {
 		slog.Warn("Beacon: invalid envelope JSON")
 		return beaconEnvelope{}, beaconRequest{}, frameRejected
@@ -332,7 +384,7 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 	}
 
 	if kind == frameRegister {
-		expected := crypto.ComputeRegHMAC(regKey, env.UUID, env.IdentityPub, env.Ts)
+		expected := crypto.ComputeRegHMAC(regKey, env.UUID, env.IdentityPub, env.Ts, env.Seq)
 		got, err := base64.StdEncoding.DecodeString(env.RegHMAC)
 		if err != nil || !hmac.Equal(expected, got) {
 			slog.Warn("Beacon registration rejected: bad reg_hmac", "agent_id", env.UUID)
@@ -375,8 +427,12 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 			slog.Info("Beacon registered (v2 master key)", "agent_id", env.UUID)
 		}
 	} else { // frameHandshake
-		// The handshake must bind the presented ecdh_pub to the registration key.
-		expected := computeAuthMAC(regKey, env.UUID, env.ECDHPub, strconv.FormatInt(env.Ts, 10))
+		// The handshake must bind the presented ecdh_pub, timestamp AND the
+		// frame sequence number to the registration key. Binding seq prevents
+		// an attacker who captured a plaintext authentication frame from
+		// replaying it with an inflated sequence number to burn the server-side
+		// replay window and permanently lock out the real implant.
+		expected := computeAuthMAC(regKey, env.UUID, env.ECDHPub, strconv.FormatInt(env.Ts, 10), strconv.FormatUint(env.Seq, 10))
 		got, err := base64.StdEncoding.DecodeString(env.Mac)
 		if err != nil {
 			slog.Warn("Beacon handshake rejected: bad mac encoding", "agent_id", env.UUID)
@@ -684,6 +740,19 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 		slog.Info("New agent registered", "agent_id", agent.ID, "hostname", agent.Hostname, "ip", agent.IP, "listener_id", agent.ListenerID)
 		s.broadcastAgentOnline(agent, true)
 		s.recordAgentStatusEvent(agent.ID, "online")
+		// Feed the SIEM correlator: a brand-new agent is a first-class signal.
+		if s.siem != nil {
+			s.siem.Send(SIEMEvent{
+				Timestamp: now,
+				Action:    "implant_checkin",
+				Resource:  "beacon",
+				AgentID:   agent.ID,
+				IP:        agent.IP,
+				Success:   true,
+				Details:   "New agent registered",
+				Hostname:  agent.Hostname,
+			})
+		}
 		s.eventManager.Emit(Event{
 			Type:      EventImplantCheckin,
 			AgentID:   agent.ID,
@@ -717,7 +786,21 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 			updates["domain"] = v
 		}
 		if v := req.Info["elevated"]; v != "" {
-			updates["elevated"] = v == "true"
+			nowElevated := v == "true"
+			// Feed the SIEM correlator on a privilege escalation transition.
+			if nowElevated && !agent.Elevated && s.siem != nil {
+				s.siem.Send(SIEMEvent{
+					Timestamp: now,
+					Action:    "agent_elevated",
+					Resource:  "beacon",
+					AgentID:   agent.ID,
+					IP:        agent.IP,
+					Success:   true,
+					Details:   "Agent privilege escalation detected",
+					Hostname:  agent.Hostname,
+				})
+			}
+			updates["elevated"] = nowElevated
 		}
 		if pid := parseInt("pid"); pid > 0 {
 			updates["pid"] = pid
@@ -990,6 +1073,30 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		if !isSilent {
 			s.broadcastTaskUpdate(uuid, *task)
 		}
+
+		// Emit task lifecycle events so webhooks, email, automation rules, and
+		// (for failures) the alert/notification pipeline react. Generic results
+		// previously never emitted EventTaskComplete/EventTaskFail, leaving the
+		// subscribers in server.go permanently dormant. Intermediate screenshot
+		// chunks carry no TaskID and never reach this point, so only genuine
+		// task completions fire.
+		evtType := EventTaskComplete
+		if task.Status == "failed" {
+			evtType = EventTaskFail
+		}
+		s.eventManager.Emit(Event{
+			Type:      evtType,
+			AgentID:   uuid,
+			AgentHost: agent.Hostname,
+			AgentIP:   agent.IP,
+			TaskID:    task.ID,
+			Timestamp: now,
+			Data: map[string]interface{}{
+				"type":    r.Type,
+				"status":  task.Status,
+				"command": task.Command,
+			},
+		})
 
 		// Task callbacks: POST results to external URL when task completes.
 		// Uses a semaphore to bound concurrent background goroutines.

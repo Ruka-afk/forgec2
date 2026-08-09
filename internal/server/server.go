@@ -137,6 +137,12 @@ type Server struct {
 	beaconDedupMu    sync.Mutex
 	beaconDedupCache map[string]time.Time
 
+	// Per-agent seq flood lockout (agentID → unlock time). Set by acceptSeq
+	// when a frame sequence jump exceeds the hard cap; guards the replay
+	// window against a key-holding actor replay-flooding a valid frame.
+	seqLockoutMu sync.Mutex
+	seqLockout   map[string]time.Time
+
 	// P2P relay depth guard: bounds recursive envelope relay nesting so a
 	// maliciously deep parent chain cannot stack-overflow the handler.
 	relayDepthMu sync.Mutex
@@ -306,6 +312,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		domainFrontStatus:     make(map[string]*frontDomainState),
 		agentPendingTasks:     make(map[string]int),
 		beaconDedupCache:      make(map[string]time.Time),
+		seqLockout:            make(map[string]time.Time),
 		landingLimiterHits:    make(map[string]int),
 		landingLimiterSince:   make(map[string]time.Time),
 		agentStatusCooldown:   make(map[string]time.Time),
@@ -498,7 +505,9 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		s.dispatchEvent(evt, false)
 	})
 	s.eventManager.On(EventTaskFail, func(evt Event) {
-		s.dispatchEvent(evt, false)
+		// Failures go through the alert/notification path so operators get
+		// pushed on task errors, not just webhooks/email.
+		s.dispatchEvent(evt, true)
 	})
 	s.eventManager.On(EventCredentialFound, func(evt Event) {
 		s.dispatchEvent(evt, true)
@@ -645,13 +654,16 @@ func (s *Server) SetupRoutes() {
 		s.registerAPIRoutes(restAPI)
 	}
 
-	// Root-level malleable profile routes (agent beacon_uri does NOT include /api/v1/ prefix)
-	s.router.POST("/generate_204", middleware.RequestBodyLimit(BeaconMaxBodySize), s.handleBeacon)
-	s.router.GET("/generate_204", s.handleBeacon)
+	// Root-level malleable profile routes (agent beacon_uri does NOT include /api/v1/ prefix).
+	// These sit outside the beaconAPI group, so apply the same rate limit and
+	// traffic capture explicitly. Without the limiter, these endpoints were an
+	// unbounded path into the decrypt hot path.
+	s.router.POST("/generate_204", middleware.RequestBodyLimit(BeaconMaxBodySize), s.rateLimiter.Limit(), s.trafficMiddleware(), s.handleBeacon)
+	s.router.GET("/generate_204", s.rateLimiter.Limit(), s.trafficMiddleware(), s.handleBeacon)
 
 	// Catch-all for profile-defined beacon URIs (e.g. bing /th?id=...)
-	s.router.GET("/th", s.handleBeacon)
-	s.router.POST("/th", middleware.RequestBodyLimit(BeaconMaxBodySize), s.handleBeacon)
+	s.router.GET("/th", s.rateLimiter.Limit(), s.trafficMiddleware(), s.handleBeacon)
+	s.router.POST("/th", middleware.RequestBodyLimit(BeaconMaxBodySize), s.rateLimiter.Limit(), s.trafficMiddleware(), s.handleBeacon)
 	if s.cfg.Malleable.Enabled {
 		s.router.NoRoute(func(c *gin.Context) {
 			if c.GetHeader("Accept") != "application/json" {
