@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"encoding/json"
@@ -17,7 +17,7 @@ import (
 func newCredentialsTestServer(t *testing.T) *Server {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	crypto.InitLootEncryption("test-secret-for-credentials-tests", "")
+	crypto.InitLootEncryption(testStorageKeyHex)
 	return &Server{db: newContractDB(t), cfg: config.DefaultConfig()}
 }
 

@@ -114,9 +114,11 @@ type Config struct {
 
 	Crypto struct {
 		Key                     string `yaml:"key"`                        // 32-byte hex key for XOR encryption, or "ecdh:" for ECDH+AES-256-GCM (empty=disabled)
-		LootKey                 string `yaml:"loot_key"`                   // 32-byte hex key for AES-256-GCM loot encryption (empty = derived from JWT secret)
-		ExtC2Key                string `yaml:"extc2_key"`                  // 32-byte hex key for AES-256-GCM ExtC2 channel encryption (empty = derived from JWT secret)
-		BackupKey               string `yaml:"backup_key"`                 // 32-byte hex key for encrypted .fbk backups (empty = derived from crypto key / JWT secret)
+		LootKey                 string `yaml:"loot_key"`                   // REQUIRED: 32-byte hex key for AES-256-GCM loot encryption (independent of the JWT secret)
+		ExtC2Key                string `yaml:"extc2_key"`                  // REQUIRED: 32-byte hex key for AES-256-GCM ExtC2 channel encryption (independent)
+		BackupKey               string `yaml:"backup_key"`                 // REQUIRED: 32-byte hex key for encrypted .fbk backups (independent)
+		TotpKey                 string `yaml:"totp_key"`                   // REQUIRED: 32-byte hex key for TOTP secrets / SMTP / SSH-redirector credentials (independent)
+		CsrfKey                 string `yaml:"csrf_key"`                   // REQUIRED: 32-byte hex key for CSRF token binding (independent)
 		ForceECDH               bool   `yaml:"force_ecdh"`                 // reject plaintext beacons when ECDH is enabled
 		MaxDecryptedPayloadSize int    `yaml:"max_decrypted_payload_size"` // max bytes for decrypted beacon body (0 = default 10MB)
 	} `yaml:"crypto"`
@@ -404,8 +406,9 @@ func Load(path string) (*Config, error) {
 				return nil, err
 			}
 			// Fresh deployment: mint independent random storage keys now so
-			// loot/ExtC2 ciphertext are cryptographically independent of the
-			// JWT secret (a JWT compromise must not decrypt credentials).
+			// loot/ExtC2/backup/TOTP/CSRF primitives are cryptographically
+			// isolated from the JWT secret (a JWT compromise must not decrypt
+			// credentials, backups, or bind CSRF tokens).
 			for _, gen := range []struct {
 				field *string
 				slogW string
@@ -413,6 +416,9 @@ func Load(path string) (*Config, error) {
 				{&cfg.Server.JWTSecret, "JWT secret"},
 				{&cfg.Crypto.LootKey, "loot key"},
 				{&cfg.Crypto.ExtC2Key, "ExtC2 key"},
+				{&cfg.Crypto.BackupKey, "backup key"},
+				{&cfg.Crypto.TotpKey, "TOTP key"},
+				{&cfg.Crypto.CsrfKey, "CSRF key"},
 				{&cfg.Server.BeaconKey, "beacon key"},
 			} {
 				key := make([]byte, 32)
@@ -493,6 +499,16 @@ func Load(path string) (*Config, error) {
 	// Env override for backup key (takes precedence over config file)
 	if envBackupKey := os.Getenv("FORGEC2_BACKUP_KEY"); envBackupKey != "" {
 		cfg.Crypto.BackupKey = envBackupKey
+	}
+
+	// Env override for TOTP key (takes precedence over config file)
+	if envTotpKey := os.Getenv("FORGEC2_TOTP_KEY"); envTotpKey != "" {
+		cfg.Crypto.TotpKey = envTotpKey
+	}
+
+	// Env override for CSRF key (takes precedence over config file)
+	if envCsrfKey := os.Getenv("FORGEC2_CSRF_KEY"); envCsrfKey != "" {
+		cfg.Crypto.CsrfKey = envCsrfKey
 	}
 
 	// Env override for AI API key (takes precedence over config file)
@@ -774,32 +790,40 @@ func (c *Config) Validate() error {
 	if c.Crypto.MaxDecryptedPayloadSize > 104857600 {
 		errs = append(errs, errors.New("crypto.max_decrypted_payload_size must be <= 104857600 (100MB)"))
 	}
-	if c.Crypto.LootKey != "" {
-		if len(c.Crypto.LootKey) != 64 {
-			errs = append(errs, errors.New("crypto.loot_key must be a 64-character hex string (32 bytes) when set"))
-		}
-		if _, err := hex.DecodeString(c.Crypto.LootKey); err != nil {
-			errs = append(errs, errors.New("crypto.loot_key must be a valid hex string"))
-		}
+	// Crypto validation — storage keys are REQUIRED and must be 32-byte hex.
+	// The legacy SHA-256(jwt_secret) derivation cascade was removed (breaking
+	// change): each key is independent so a JWT compromise cannot decrypt
+	// credentials, backups, or bind CSRF tokens.
+	cryptoKeys := []struct {
+		name string
+		val  string
+	}{
+		{"crypto.loot_key", c.Crypto.LootKey},    // loot credentials (FC2ENC:)
+		{"crypto.extc2_key", c.Crypto.ExtC2Key},  // ExtC2 channel (FC2EXT:)
+		{"crypto.backup_key", c.Crypto.BackupKey}, // .fbk backups
+		{"crypto.totp_key", c.Crypto.TotpKey},     // TOTP secrets / SMTP / SSH redirector credentials
+		{"crypto.csrf_key", c.Crypto.CsrfKey},     // CSRF token binding
 	}
-	if c.Crypto.ExtC2Key != "" {
-		if len(c.Crypto.ExtC2Key) != 64 {
-			errs = append(errs, errors.New("crypto.extc2_key must be a 64-character hex string (32 bytes) when set"))
+	for _, k := range cryptoKeys {
+		if k.val == "" {
+			errs = append(errs, fmt.Errorf("%s is required (auto-generated only on fresh installs; the legacy derivation from server.jwt_secret was removed - set a 64-character hex key in config.yaml or the corresponding FORGEC2_%s env var; note existing encrypted data created with the old derived key can no longer be decrypted)", k.name, envSuffixForKey(k.name)))
+			continue
 		}
-		if _, err := hex.DecodeString(c.Crypto.ExtC2Key); err != nil {
-			errs = append(errs, errors.New("crypto.extc2_key must be a valid hex string"))
+		if len(k.val) != 64 {
+			errs = append(errs, fmt.Errorf("%s must be a 64-character hex string (32 bytes)", k.name))
+			continue
 		}
-	}
-	if c.Crypto.BackupKey != "" {
-		if len(c.Crypto.BackupKey) != 64 {
-			errs = append(errs, errors.New("crypto.backup_key must be a 64-character hex string (32 bytes) when set"))
-		}
-		if _, err := hex.DecodeString(c.Crypto.BackupKey); err != nil {
-			errs = append(errs, errors.New("crypto.backup_key must be a valid hex string"))
+		if _, err := hex.DecodeString(k.val); err != nil {
+			errs = append(errs, fmt.Errorf("%s must be a valid hex string", k.name))
 		}
 	}
 
 	return errors.Join(errs...)
+}
+
+// envSuffixForKey maps a config field path to the FORGEC2_* env var suffix.
+func envSuffixForKey(field string) string {
+	return strings.ToUpper(strings.SplitN(field, ".", 2)[1])
 }
 
 // Lock acquires the config mutex for safe concurrent reads/writes.

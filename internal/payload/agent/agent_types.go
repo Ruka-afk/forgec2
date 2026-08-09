@@ -67,6 +67,12 @@ var (
 	p2pChildAcks     = make(map[string][]uint)
 	p2pChildTasks    = make(map[string][]Task)
 	p2pChildLastSeen = make(map[string]time.Time)
+	// p2pChildFrames holds opaque v2 envelopes queued by children for the
+	// next parent beacon; p2pChildReplies holds server response envelopes
+	// awaiting pickup by the child socket. Both relay on these verbatim,
+	// never parsing or decrypting them.
+	p2pChildFrames  = make(map[string][][]byte)
+	p2pChildReplies = make(map[string][][]byte)
 
 	// SMB transport state
 	isSMBChild bool // true if this agent is connected via SMB to a parent

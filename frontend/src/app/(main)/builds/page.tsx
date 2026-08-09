@@ -59,6 +59,23 @@ interface BuildLog {
 
 const PLATFORMS = ["all", "windows", "linux", "macos"];
 
+// dedupeBuilds keeps the first occurrence of each build id (order-stable) so
+// builds arriving both via the list API and via WS-driven refreshes never
+// render duplicates. Entries without an id are preserved as-is.
+function dedupeBuilds(logs: BuildLog[]): BuildLog[] {
+  const seen = new Set<string>();
+  const out: BuildLog[] = [];
+  for (const l of logs) {
+    const id = l.id ?? l.ID;
+    if (id) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+    }
+    out.push(l);
+  }
+  return out;
+}
+
 function getDuration(start?: string, end?: string): string {
   if (!start) return "-";
   try {
@@ -106,7 +123,7 @@ export default function BuildsPage() {
         api.get(paths.builds.list(params.toString())),
         api.get(paths.agents.list()).catch(() => null),
       ]);
-      const logs = normalizeListEnvelope(data, ["logs", "Logs", "builds", "data"]) as BuildLog[];
+      const logs = dedupeBuilds(normalizeListEnvelope(data, ["logs", "Logs", "builds", "data"]) as BuildLog[]);
       setBuilds(logs);
       setTotal(firstNumber(data, ["total", "Total"], logs.length));
       const success = firstNumber(

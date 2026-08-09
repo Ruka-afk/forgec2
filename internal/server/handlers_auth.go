@@ -168,13 +168,13 @@ func (s *Server) handleLogin(c *gin.Context) {
 	}
 
 	s.configMu.RLock()
-	jwtSecret := s.cfg.Server.JWTSecret
+	totpKey := s.cfg.Crypto.TotpKey
 	sessionMaxAgeHours := s.cfg.Server.SessionMaxAgeHours
 	s.configMu.RUnlock()
 
 	if user.TOTPSecret != "" {
 		if totpCode != "" {
-			decryptedSecret, err := decryptSecret(user.TOTPSecret, jwtSecret)
+			decryptedSecret, err := decryptSecret(user.TOTPSecret, totpKey)
 			if err != nil {
 				slog.Error("Failed to decrypt TOTP secret", "username", username, "err", err)
 				s.renderLoginError(c, "2FA configuration error", username, rememberMe)

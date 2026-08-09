@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"crypto/rand"
@@ -652,7 +652,7 @@ func TestOpsecAdaptive_BlockCritical(t *testing.T) {
 
 func TestExtC2Encryption_RoundTrip(t *testing.T) {
 	t.Helper()
-	crypto.InitExtC2Encryption("test-jwt-secret-for-extc2", "")
+	crypto.InitExtC2Encryption(testStorageKeyHex)
 
 	original := "discord-webhook-token-super-secret-12345"
 	encrypted, err := crypto.EncryptExtC2(original)

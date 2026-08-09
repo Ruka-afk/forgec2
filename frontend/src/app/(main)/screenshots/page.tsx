@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { formatTime } from "@/lib/utils";
+import { safeHref } from "@/lib/safeUrl";
 import { PageHeader, Pagination, ConfirmModal } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
@@ -273,7 +274,7 @@ export default function ScreenshotsPage() {
                   <TooltipContent>{t("screenshots.lightbox_slideshow")}</TooltipContent>
                 </Tooltip>
                 <Tooltip>
-                  <TooltipTrigger render={<a href={current.url} download aria-label={t("screenshots.lightbox_download")} className="inline-flex size-7 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm" />}>
+                  <TooltipTrigger render={<a href={safeHref(current.url)} download aria-label={t("screenshots.lightbox_download")} className="inline-flex size-7 items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm" />}>
                     <Download aria-hidden="true" className="w-4 h-4" />
                   </TooltipTrigger>
                   <TooltipContent>{t("screenshots.lightbox_download")}</TooltipContent>

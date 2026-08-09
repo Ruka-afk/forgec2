@@ -1,8 +1,11 @@
 package server
 
 import (
+	"encoding/hex"
 	"testing"
 )
+
+const testCredKeyHex = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 
 func TestSanitizeFilename(t *testing.T) {
 	tests := []struct {
@@ -29,11 +32,10 @@ func TestSanitizeFilename(t *testing.T) {
 	}
 }
 
-func TestCSRFTokenEncryptDecryptRoundtrip(t *testing.T) {
-	secret := "test-jwt-secret-key-12345"
+func TestEncryptDecryptSecretRoundtrip(t *testing.T) {
 	plaintext := "JBSWY3DPEHPK3PXP"
 
-	encrypted, err := encryptSecret(plaintext, secret)
+	encrypted, err := encryptSecret(plaintext, testCredKeyHex)
 	if err != nil {
 		t.Fatalf("encryptSecret() error: %v", err)
 	}
@@ -44,7 +46,7 @@ func TestCSRFTokenEncryptDecryptRoundtrip(t *testing.T) {
 		t.Error("encrypted should not be empty")
 	}
 
-	decrypted, err := decryptSecret(encrypted, secret)
+	decrypted, err := decryptSecret(encrypted, testCredKeyHex)
 	if err != nil {
 		t.Fatalf("decryptSecret() error: %v", err)
 	}
@@ -54,7 +56,7 @@ func TestCSRFTokenEncryptDecryptRoundtrip(t *testing.T) {
 }
 
 func TestEncryptSecret_EmptyString(t *testing.T) {
-	got, err := encryptSecret("", "key")
+	got, err := encryptSecret("", testCredKeyHex)
 	if err != nil {
 		t.Fatalf("encryptSecret(\"\") error: %v", err)
 	}
@@ -64,7 +66,7 @@ func TestEncryptSecret_EmptyString(t *testing.T) {
 }
 
 func TestDecryptSecret_EmptyString(t *testing.T) {
-	got, err := decryptSecret("", "key")
+	got, err := decryptSecret("", testCredKeyHex)
 	if err != nil {
 		t.Fatalf("decryptSecret(\"\") error: %v", err)
 	}
@@ -74,48 +76,46 @@ func TestDecryptSecret_EmptyString(t *testing.T) {
 }
 
 func TestDecryptSecret_WrongKey(t *testing.T) {
-	encrypted, err := encryptSecret("sensitive", "correct-key")
+	encrypted, err := encryptSecret("sensitive", testCredKeyHex)
 	if err != nil {
 		t.Fatalf("encryptSecret() error: %v", err)
 	}
 
-	_, err = decryptSecret(encrypted, "wrong-key")
+	_, err = decryptSecret(encrypted, "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100")
 	if err == nil {
 		t.Error("decryptSecret with wrong key should fail")
 	}
 }
 
 func TestDecryptSecret_InvalidBase64(t *testing.T) {
-	_, err := decryptSecret("not-valid-base64!!!", "key")
+	_, err := decryptSecret("not-valid-base64!!!", testCredKeyHex)
 	if err == nil {
 		t.Error("decryptSecret with invalid base64 should fail")
 	}
 }
 
-func TestCSRFTokenDeriveDeterministic(t *testing.T) {
-	key1 := deriveTOTPKey("my-secret")
-	key2 := deriveTOTPKey("my-secret")
-	if len(key1) != 32 {
-		t.Errorf("key length = %d, want 32", len(key1))
+func TestEncryptSecret_InvalidKey(t *testing.T) {
+	if _, err := encryptSecret("data", "too-short"); err == nil {
+		t.Error("encryptSecret with non-hex short key should fail")
 	}
-	for i := range key1 {
-		if key1[i] != key2[i] {
-			t.Fatal("deriveTOTPKey should be deterministic for same input")
-		}
+	if _, err := encryptSecret("data", ""); err == nil {
+		t.Error("encryptSecret with empty key should fail")
 	}
 }
 
-func TestCSRFTokenDeriveDifferentKeys(t *testing.T) {
-	key1 := deriveTOTPKey("secret-a")
-	key2 := deriveTOTPKey("secret-b")
-	same := true
-	for i := range key1 {
-		if key1[i] != key2[i] {
-			same = false
-			break
-		}
+func TestKeyHexTo32(t *testing.T) {
+	want, _ := hex.DecodeString(testCredKeyHex)
+	got, err := keyHexTo32(testCredKeyHex)
+	if err != nil {
+		t.Fatalf("keyHexTo32() error: %v", err)
 	}
-	if same {
-		t.Error("different secrets should produce different keys")
+	if string(got) != string(want) {
+		t.Error("keyHexTo32 should decode the hex string verbatim")
+	}
+	if _, err := keyHexTo32("zz"); err == nil {
+		t.Error("keyHexTo32 with invalid hex should fail")
+	}
+	if _, err := keyHexTo32(""); err == nil {
+		t.Error("keyHexTo32 with empty string should fail")
 	}
 }

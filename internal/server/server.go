@@ -136,6 +136,11 @@ type Server struct {
 	beaconDedupMu    sync.Mutex
 	beaconDedupCache map[string]time.Time
 
+	// P2P relay depth guard: bounds recursive envelope relay nesting so a
+	// maliciously deep parent chain cannot stack-overflow the handler.
+	relayDepthMu sync.Mutex
+	relayDepth   int
+
 	// Task result idempotency: agentID + result id → processed timestamp.
 	// Results re-sent after a dropped frame carry a new envelope seq, so
 	// dedupe on the agent-supplied result id instead.
@@ -260,8 +265,12 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		slog.Error("Failed to initialize JWT secret", "err", err)
 		os.Exit(1)
 	}
-	crypto.InitLootEncryption(cfg.Server.JWTSecret, cfg.Crypto.LootKey)
-	crypto.InitExtC2Encryption(cfg.Server.JWTSecret, cfg.Crypto.ExtC2Key)
+	if err := middleware.InitCSRFSecret(cfg); err != nil {
+		slog.Error("Failed to initialize CSRF secret", "err", err)
+		os.Exit(1)
+	}
+	crypto.InitLootEncryption(cfg.Crypto.LootKey)
+	crypto.InitExtC2Encryption(cfg.Crypto.ExtC2Key)
 
 	inFlight := middleware.NewInFlightTracker()
 
@@ -540,10 +549,14 @@ func (s *Server) InitOptimizations(configPath string) {
 
 		for _, field := range changed {
 			switch field {
-			case "crypto.key", "server.jwt_secret":
-				crypto.InitLootEncryption(s.cfg.Server.JWTSecret, s.cfg.Crypto.LootKey)
-				crypto.InitExtC2Encryption(s.cfg.Server.JWTSecret, s.cfg.Crypto.ExtC2Key)
-				slog.Info("Crypto primitives re-derived from updated config", "field", field, "loot_key_explicit", s.cfg.Crypto.LootKey != "")
+			case "crypto.key", "server.jwt_secret", "crypto.loot_key", "crypto.extc2_key":
+				crypto.InitLootEncryption(s.cfg.Crypto.LootKey)
+				crypto.InitExtC2Encryption(s.cfg.Crypto.ExtC2Key)
+				slog.Info("Crypto primitives updated from reloaded config", "field", field)
+			case "crypto.csrf_key":
+				if err := middleware.InitCSRFSecret(s.cfg); err != nil {
+					slog.Error("Config reload: invalid crypto.csrf_key, keeping previous CSRF key", "err", err)
+				}
 			}
 		}
 

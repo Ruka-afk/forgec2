@@ -12,12 +12,25 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const testStorageKeyHex = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+
+// setServerTestKeys fills all REQUIRED independent storage keys so tests can
+// build a config that passes startup validation / server construction.
+func setServerTestKeys(cfg *config.Config) {
+	cfg.Crypto.LootKey = testStorageKeyHex
+	cfg.Crypto.ExtC2Key = testStorageKeyHex
+	cfg.Crypto.BackupKey = testStorageKeyHex
+	cfg.Crypto.TotpKey = testStorageKeyHex
+	cfg.Crypto.CsrfKey = testStorageKeyHex
+}
+
 func TestNewInitializesServer(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := testutil.SetupTestDB(t)
 	cfg := config.DefaultConfig()
 	cfg.Server.JWTSecret = "test-secret-for-new-test-32char-len!"
-	crypto.InitLootEncryption(cfg.Server.JWTSecret, "")
+	setServerTestKeys(cfg)
+	crypto.InitLootEncryption(cfg.Crypto.LootKey)
 
 	srv := New(cfg, db)
 	if srv == nil {
@@ -42,7 +55,8 @@ func TestShutdownCompletes(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	cfg := config.DefaultConfig()
 	cfg.Server.JWTSecret = "test-secret-for-shutdown-test-32char!"
-	crypto.InitLootEncryption(cfg.Server.JWTSecret, "")
+	setServerTestKeys(cfg)
+	crypto.InitLootEncryption(cfg.Crypto.LootKey)
 
 	srv := New(cfg, db)
 	srv.SetupRoutes()

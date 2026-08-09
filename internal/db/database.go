@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"log/slog"
@@ -18,6 +19,43 @@ import (
 	// PostgreSQL driver (optional, for production deployments)
 	"gorm.io/driver/postgres"
 )
+
+// lockAwareLogger wraps a GORM logger so SQLite lock contention errors
+// ("database is locked") are surfaced through slog even when GORM runs in
+// Silent mode, where statement errors would otherwise be swallowed.
+type lockAwareLogger struct {
+	logger.Interface
+}
+
+// Trace intercepts statement execution errors before the wrapped logger
+// applies its (possibly Silent) log level filter.
+func (l lockAwareLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+	if err != nil && isSQLiteLockError(err) {
+		sql, rows := fc()
+		slog.Error("SQLite lock error", "error", err, "sql", sql, "rows", rows)
+	}
+	l.Interface.Trace(ctx, begin, fc, err)
+}
+
+// Error surfaces lock errors reported through the logger's Error path
+// (e.g. failed transaction begin) the same way.
+func (l lockAwareLogger) Error(ctx context.Context, msg string, data ...interface{}) {
+	for _, d := range data {
+		if e, ok := d.(error); ok && isSQLiteLockError(e) {
+			slog.Error("SQLite lock error", "error", e)
+			return
+		}
+	}
+	l.Interface.Error(ctx, msg, data...)
+}
+
+func isSQLiteLockError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "database is locked") || strings.Contains(s, "database table is locked")
+}
 
 // execMigration runs a migration SQL statement and logs unexpected errors.
 // Duplicate column/index errors are expected during migrations and are silently ignored.
@@ -86,10 +124,10 @@ func InitDB(dbPath string, logLevel slog.Level, defaultPassword ...string) (*gor
 
 func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbMaxOpenConns int, dbMaxIdleConns int, dbConnMaxLifetime time.Duration, defaultPassword ...string) (*gorm.DB, error) {
 	gormConfig := &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
+		Logger: lockAwareLogger{Interface: logger.Default.LogMode(logger.Silent)},
 	}
 	if logLevel == slog.LevelDebug {
-		gormConfig.Logger = logger.Default.LogMode(logger.Info)
+		gormConfig.Logger = lockAwareLogger{Interface: logger.Default.LogMode(logger.Info)}
 	}
 
 	var db *gorm.DB
@@ -113,13 +151,14 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 		if err := os.MkdirAll(filepath.Dir(fallbackPath), 0700); err != nil {
 			return nil, err
 		}
-		// Enable foreign_keys at the DSN level so every pooled connection
-		// inherits the pragma (a per-connection PRAGMA only affects the
-		// single connection it runs on). Applies to both file and in-memory
-		// DSNs; DSNs that already carry query parameters are left untouched.
+		// Enable foreign_keys and busy_timeout at the DSN level so every
+		// pooled connection inherits the pragmas (a per-connection PRAGMA
+		// only affects the single connection it runs on). Applies to both
+		// file and in-memory DSNs; DSNs that already carry query
+		// parameters are left untouched.
 		sqliteDSN := fallbackPath
 		if !strings.Contains(sqliteDSN, "?") {
-			sqliteDSN += "?_pragma=foreign_keys(1)"
+			sqliteDSN += "?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
 		}
 		db, err = gorm.Open(glebarez.Open(sqliteDSN), gormConfig)
 		if err != nil {

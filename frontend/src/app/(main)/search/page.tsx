@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ChevronRight, Search } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { safeHref } from "@/lib/safeUrl";
 
 interface SearchResult {
   type: string;
@@ -84,7 +85,7 @@ function SearchContent() {
         <div className="space-y-2">
           {results.map((r, i) => (
             <Link key={`${r.type}-${r.id}-${i}`}
-              href={r.url}
+              href={safeHref(r.url) ?? "#"}
               className={cn(
                 "w-full text-left p-4 flex items-center gap-4 transition-colors h-auto justify-start",
                 "rounded-xl border border-transparent hover:border-primary/30 hover:bg-muted/50 dark:hover:bg-muted/30",

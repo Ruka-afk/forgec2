@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { downloadText, downloadJSON } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { formatTime } from "@/lib/utils";
+import { safeHref, safeImageSrc } from "@/lib/safeUrl";
 import { ConfirmModal, EmptyState, PageHeader, Pagination, StatusBadge } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
@@ -381,14 +382,14 @@ export default function LootPage() {
         <Dialog open={true} onOpenChange={() => setModalImg(null)}>
           <DialogContent className="max-w-4xl bg-transparent border-0 p-0" showCloseButton={false}>
             <div className="absolute top-4 right-4 flex gap-2 z-10">
-              <a href={modalImg} download>
+              <a href={safeHref(modalImg)} download>
                 <Button variant="secondary" className="gap-1"><Download aria-hidden="true" className="w-4 h-4" />{t("common.download")}</Button>
               </a>
               <Button variant="secondary" onClick={() => setModalImg(null)} className="w-10 h-10 p-0" aria-label={t("loot.close_screenshot")}>
                 <X aria-hidden="true" className="w-4 h-4" />
               </Button>
             </div>
-            <img src={modalImg} alt="Screenshot" className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <img src={safeImageSrc(modalImg)} alt="Screenshot" className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </DialogContent>
         </Dialog>
       )}

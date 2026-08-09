@@ -47,7 +47,7 @@ func (s *Server) handleRedirectorCreate(c *gin.Context) {
 		req.SSHPort = DefaultSSHPort
 	}
 
-	encPassword, _ := encryptSecret(req.SSHPassword, s.cfg.Server.JWTSecret)
+	encPassword, _ := encryptSecret(req.SSHPassword, s.cfg.Crypto.TotpKey)
 	rd := db.Redirector{
 		Name:        req.Name,
 		Host:        req.Host,
@@ -102,7 +102,7 @@ func (s *Server) handleRedirectorUpdate(c *gin.Context) {
 		rd.SSHKey = req.SSHKey
 	}
 	if req.SSHPassword != "" {
-		encPassword, _ := encryptSecret(req.SSHPassword, s.cfg.Server.JWTSecret)
+		encPassword, _ := encryptSecret(req.SSHPassword, s.cfg.Crypto.TotpKey)
 		rd.SSHPassword = encPassword
 	}
 	if req.Status != "" {

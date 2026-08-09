@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -390,20 +389,12 @@ func decryptBackupData(encryptedData []byte, key []byte) ([]byte, error) {
 }
 
 // backupKeyHex returns the hex key used to encrypt/decrypt .fbk backup files.
-// A dedicated crypto.backup_key takes precedence; otherwise it falls back to
-// the legacy derivation (crypto.key, then the JWT secret) so backups created
-// by older versions remain restorable.
+// crypto.backup_key is REQUIRED (validated at startup): the legacy derivation
+// cascade (crypto.key, then the JWT secret) was removed so backups are
+// cryptographically independent of other secrets. Backups created by older
+// versions that re-used the derived key can no longer be restored.
 func (s *Server) backupKeyHex() string {
-	if s.cfg.Crypto.BackupKey != "" {
-		return s.cfg.Crypto.BackupKey
-	}
-	if s.cfg.Crypto.Key != "" {
-		if strings.HasPrefix(s.cfg.Crypto.Key, "ecdh:") {
-			return s.cfg.Server.JWTSecret
-		}
-		return s.cfg.Crypto.Key
-	}
-	return s.cfg.Server.JWTSecret
+	return s.cfg.Crypto.BackupKey
 }
 
 // backupKey decodes backupKeyHex into the 32 raw key bytes used for .fbk

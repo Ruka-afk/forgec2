@@ -801,6 +801,7 @@ func doBeacon() {
 		TaskCapacity:    &taskCapacity,
 		SocksData:       socksData,
 		Relayed:         relayedResults,
+		RelayedFrames:   p2pDrainChildFrames(),
 	}
 
 	body, _ := json.Marshal(req)
@@ -997,6 +998,9 @@ func doBeacon() {
 		}
 		p2pRelayMu.Unlock()
 	}
+
+	// Relay opaque v2 reply envelopes to children (child sockets pick them up)
+	p2pDeliverChildReplies(resp.RelayedReplies)
 
 	// checkFastMode resets inFastMode, so we set SOCKS hints AFTER it
 	checkFastMode(resp.Tasks)

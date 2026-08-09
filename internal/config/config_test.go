@@ -182,6 +182,7 @@ func TestIsWeakDefaultPassword(t *testing.T) {
 
 func TestValidateRejectsWeakDefaultPassword(t *testing.T) {
 	cfg := DefaultConfig()
+	setValidCryptoKeys(cfg)
 	cfg.Auth.DefaultPasswd = "Admin123!"
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate() should reject weak auth.default_password")
@@ -190,6 +191,17 @@ func TestValidateRejectsWeakDefaultPassword(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() with empty default_password should pass, got: %v", err)
 	}
+}
+
+// setValidCryptoKeys fills all REQUIRED storage keys so tests exercising
+// unrelated validation rules pass the required-key checks.
+func setValidCryptoKeys(c *Config) {
+	const key = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	c.Crypto.LootKey = key
+	c.Crypto.ExtC2Key = key
+	c.Crypto.BackupKey = key
+	c.Crypto.TotpKey = key
+	c.Crypto.CsrfKey = key
 }
 
 func TestAutoGenerateJWTSecret(t *testing.T) {
@@ -295,13 +307,26 @@ func TestValidate(t *testing.T) {
 		{"negative AI max_tool_rounds", func(c *Config) { c.AI.MaxToolRounds = -1 }, true, "max_tool_rounds"},
 		{"negative AI max_duplicate_tool_calls", func(c *Config) { c.AI.MaxDuplicateToolCalls = -1 }, true, "max_duplicate_tool_calls"},
 		{"zero AI limits (unlimited)", func(c *Config) { c.AI.MaxConversationTurns = 0; c.AI.MaxToolRounds = 0; c.AI.MaxDuplicateToolCalls = 0 }, false, ""},
-		{"backup_key too short", func(c *Config) { c.Crypto.BackupKey = "aabb" }, true, "backup_key"},
-		{"backup_key not hex", func(c *Config) { c.Crypto.BackupKey = strings.Repeat("zz", 32) }, true, "backup_key"},
-		{"backup_key valid 64 hex", func(c *Config) { c.Crypto.BackupKey = strings.Repeat("ab", 32) }, false, ""},
+		{"loot_key missing", func(c *Config) { c.Crypto.LootKey = "" }, true, "crypto.loot_key"},
+		{"loot_key too short", func(c *Config) { c.Crypto.LootKey = "aabb" }, true, "crypto.loot_key"},
+		{"loot_key not hex", func(c *Config) { c.Crypto.LootKey = strings.Repeat("zz", 32) }, true, "crypto.loot_key"},
+		{"extc2_key missing", func(c *Config) { c.Crypto.ExtC2Key = "" }, true, "crypto.extc2_key"},
+		{"extc2_key too short", func(c *Config) { c.Crypto.ExtC2Key = "aabb" }, true, "crypto.extc2_key"},
+		{"extc2_key not hex", func(c *Config) { c.Crypto.ExtC2Key = strings.Repeat("zz", 32) }, true, "crypto.extc2_key"},
+		{"backup_key missing", func(c *Config) { c.Crypto.BackupKey = "" }, true, "crypto.backup_key"},
+		{"backup_key too short", func(c *Config) { c.Crypto.BackupKey = "aabb" }, true, "crypto.backup_key"},
+		{"backup_key not hex", func(c *Config) { c.Crypto.BackupKey = strings.Repeat("zz", 32) }, true, "crypto.backup_key"},
+		{"totp_key missing", func(c *Config) { c.Crypto.TotpKey = "" }, true, "crypto.totp_key"},
+		{"totp_key too short", func(c *Config) { c.Crypto.TotpKey = "aabb" }, true, "crypto.totp_key"},
+		{"totp_key not hex", func(c *Config) { c.Crypto.TotpKey = strings.Repeat("zz", 32) }, true, "crypto.totp_key"},
+		{"csrf_key missing", func(c *Config) { c.Crypto.CsrfKey = "" }, true, "crypto.csrf_key"},
+		{"csrf_key too short", func(c *Config) { c.Crypto.CsrfKey = "aabb" }, true, "crypto.csrf_key"},
+		{"csrf_key not hex", func(c *Config) { c.Crypto.CsrfKey = strings.Repeat("zz", 32) }, true, "crypto.csrf_key"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := DefaultConfig()
+			setValidCryptoKeys(cfg)
 			tt.modify(cfg)
 			err := cfg.Validate()
 			if tt.wantErr && err == nil {

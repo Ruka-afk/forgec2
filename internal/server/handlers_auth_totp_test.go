@@ -1,4 +1,4 @@
-package server
+﻿package server
 
 import (
 	"net/http"
@@ -37,10 +37,11 @@ func newAuthTestDB(t *testing.T) *gorm.DB {
 func newAuthTestServer(t *testing.T) *Server {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	crypto.InitLootEncryption("test-secret-for-auth", "")
+	crypto.InitLootEncryption(testStorageKeyHex)
 	db := newAuthTestDB(t)
 	s := &Server{db: db, cfg: &config.Config{}}
 	s.cfg.Server.JWTSecret = "test-secret-for-auth"
+	s.cfg.Crypto.TotpKey = testStorageKeyHex
 	return s
 }
 
@@ -70,7 +71,7 @@ func TestHandleTOTPStatus_NoTOTP(t *testing.T) {
 
 func TestHandleTOTPStatus_WithTOTP(t *testing.T) {
 	s := newAuthTestServer(t)
-	encryptedSecret, err := encryptSecret("JBSWY3DPEHPK3PXP", s.cfg.Server.JWTSecret)
+	encryptedSecret, err := encryptSecret("JBSWY3DPEHPK3PXP", s.cfg.Crypto.TotpKey)
 	if err != nil {
 		t.Fatalf("encryptSecret: %v", err)
 	}
@@ -117,7 +118,7 @@ func TestHandleTOTPEnable_StoresEncrypted(t *testing.T) {
 
 	// The handler will fail at VerifyCode (invalid code), but we test the storage path separately
 	// by directly testing encrypt + storage
-	encrypted, err := encryptSecret("JBSWY3DPEHPK3PXP", s.cfg.Server.JWTSecret)
+	encrypted, err := encryptSecret("JBSWY3DPEHPK3PXP", s.cfg.Crypto.TotpKey)
 	if err != nil {
 		t.Fatalf("encryptSecret: %v", err)
 	}
@@ -135,7 +136,7 @@ func TestHandleTOTPEnable_StoresEncrypted(t *testing.T) {
 	}
 
 	// Verify we can decrypt it back
-	decrypted, err := decryptSecret(user.TOTPSecret, s.cfg.Server.JWTSecret)
+	decrypted, err := decryptSecret(user.TOTPSecret, s.cfg.Crypto.TotpKey)
 	if err != nil {
 		t.Fatalf("decryptSecret: %v", err)
 	}

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ExternalLink } from "lucide-react";
 import { EVENT_COLORS } from "../page";
 import type { TimelineEvent } from "../page";
+import { safeHref } from "@/lib/safeUrl";
 
 interface EventDetailDialogProps {
   event: TimelineEvent | null;
@@ -78,9 +79,9 @@ export default function EventDetailDialog({ event, onClose }: EventDetailDialogP
               <p className="text-sm font-mono mt-0.5">{getEventAgent(event)}</p>
             </div>
           )}
-          {getEventUrl(event) && (
+          {getEventUrl(event) && safeHref(getEventUrl(event)) && (
             <div className="pt-2">
-              <Link href={getEventUrl(event)}>
+              <Link href={safeHref(getEventUrl(event))!}>
                 <Button className="gap-2">
                   <ExternalLink className="w-4 h-4" />
                   <span>{t("timeline.view_related")}</span>

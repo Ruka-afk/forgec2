@@ -58,9 +58,11 @@ password_policy:
 crypto:
   key: "ecdh:"                 # "ecdh:" enables ECDH+AES-256-GCM (default/recommended); or a 32-byte hex key for legacy XOR (not recommended)
   force_ecdh: true             # reject plaintext beacons when ECDH is enabled
-  loot_key: ""                 # 32-byte hex key for AES-256-GCM loot encryption (empty = derived from JWT secret; fresh installs auto-generate)
-  extc2_key: ""                # 32-byte hex key for AES-256-GCM ExtC2 channel encryption (empty = derived from JWT secret; fresh installs auto-generate)
-  backup_key: ""               # 32-byte hex key for encrypted .fbk backups (empty = derived from crypto key / JWT secret)
+  loot_key: ""                 # REQUIRED: 64-char hex (32-byte) AES-256-GCM key for loot encryption (FC2ENC:); fresh installs auto-generate. NO longer derived from server.jwt_secret — set it (or FORGEC2_LOOT_KEY) or startup fails. Existing FC2ENC: data encrypted with the legacy derived key cannot be decrypted after upgrade.
+  extc2_key: ""                # REQUIRED: 64-char hex (32-byte) AES-256-GCM key for ExtC2 channels (FC2EXT:); fresh installs auto-generate. NO longer derived from server.jwt_secret (or FORGEC2_EXTC2_KEY).
+  backup_key: ""               # REQUIRED: 64-char hex (32-byte) AES-256-GCM key for encrypted .fbk backups; fresh installs auto-generate. NO longer derived from crypto.key / server.jwt_secret (or FORGEC2_BACKUP_KEY). Legacy backups created with the derived key are not restorable after upgrade.
+  totp_key: ""                 # REQUIRED: 64-char hex (32-byte) AES-256-GCM key for TOTP secrets / SMTP passwords / SSH-redirector passwords; fresh installs auto-generate (or FORGEC2_TOTP_KEY). Previously derived from server.jwt_secret — 2FA secrets may need re-enabling after upgrade.
+  csrf_key: ""                 # REQUIRED: 64-char hex (32-byte) HMAC key binding CSRF tokens to sessions; fresh installs auto-generate (or FORGEC2_CSRF_KEY). Previously re-used the JWT secret — now independent.
 
 malleable:
   enabled: false

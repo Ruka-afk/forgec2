@@ -185,7 +185,7 @@ func (s *Server) handleAPICreatePhishingCampaign(c *gin.Context) {
 	if req.SMTPPort == 0 {
 		req.SMTPPort = 587
 	}
-	encryptedPass, err := encryptSecret(req.SMTPPass, s.cfg.Server.JWTSecret)
+	encryptedPass, err := encryptSecret(req.SMTPPass, s.cfg.Crypto.TotpKey)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to encrypt SMTP password")
 		return
@@ -341,7 +341,7 @@ func (s *Server) handleAPILaunchPhishingCampaign(c *gin.Context) {
 		return
 	}
 
-	smtpPass, err := decryptSecret(camp.SMTPPass, s.cfg.Server.JWTSecret)
+	smtpPass, err := decryptSecret(camp.SMTPPass, s.cfg.Crypto.TotpKey)
 	if err != nil {
 		// fallback: treat as plaintext for legacy rows
 		smtpPass = camp.SMTPPass

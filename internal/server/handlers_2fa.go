@@ -47,7 +47,7 @@ func (s *Server) handleTOTPGenerate(c *gin.Context) {
 	qrURL := totp.GenerateQRCodeURL(user.Username, secret)
 	rawCodes := totp.GenerateBackupCodes()
 
-	encryptedSecret, err := encryptSecret(secret, s.cfg.Server.JWTSecret)
+	encryptedSecret, err := encryptSecret(secret, s.cfg.Crypto.TotpKey)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to process secret")
 		return
@@ -109,7 +109,7 @@ func (s *Server) handleTOTPEnable(c *gin.Context) {
 		return
 	}
 
-	encryptedSecret, err := encryptSecret(secret, s.cfg.Server.JWTSecret)
+	encryptedSecret, err := encryptSecret(secret, s.cfg.Crypto.TotpKey)
 	if err != nil {
 		slog.Error("Failed to encrypt TOTP secret", "user_id", user.ID, "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to enable 2FA")
@@ -173,7 +173,7 @@ func (s *Server) handleTOTPDisable(c *gin.Context) {
 	}
 
 	if user.TOTPSecret != "" {
-		decryptedSecret, err := decryptSecret(user.TOTPSecret, s.cfg.Server.JWTSecret)
+		decryptedSecret, err := decryptSecret(user.TOTPSecret, s.cfg.Crypto.TotpKey)
 		if err != nil {
 			slog.Error("Failed to decrypt TOTP secret for disable", "user_id", user.ID, "err", err)
 			respondError(c, http.StatusInternalServerError, "failed to verify 2FA code")

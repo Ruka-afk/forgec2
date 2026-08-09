@@ -208,6 +208,21 @@ func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []s
 	if old.Server.JWTSecret != new.Server.JWTSecret {
 		hotReloadable = append(hotReloadable, "server.jwt_secret")
 	}
+	if old.Crypto.LootKey != new.Crypto.LootKey {
+		hotReloadable = append(hotReloadable, "crypto.loot_key")
+	}
+	if old.Crypto.ExtC2Key != new.Crypto.ExtC2Key {
+		hotReloadable = append(hotReloadable, "crypto.extc2_key")
+	}
+	if old.Crypto.CsrfKey != new.Crypto.CsrfKey {
+		hotReloadable = append(hotReloadable, "crypto.csrf_key")
+	}
+	if old.Crypto.TotpKey != new.Crypto.TotpKey {
+		hotReloadable = append(hotReloadable, "crypto.totp_key")
+	}
+	if old.Crypto.BackupKey != new.Crypto.BackupKey {
+		hotReloadable = append(hotReloadable, "crypto.backup_key")
+	}
 	if old.Database.Driver != new.Database.Driver {
 		staticOnly = append(staticOnly, "database.driver")
 	}

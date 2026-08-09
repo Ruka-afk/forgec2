@@ -198,6 +198,26 @@ func (s *Server) isBuildRunning() bool {
 
 // runBuildAndUpdateJob is a helper to run a build function and update the job.
 func (s *Server) runBuildAndUpdateJob(job *BuildJob, buildFn func() (string, error), platform, format, c2URL string, listenerID uint, filename string) {
+	// A panic in the toolchain must never kill the worker goroutine (that
+	// would silently stop the whole queue). Recover, mark the job failed,
+	// and let the worker continue with the next queued build.
+	defer func() {
+		if r := recover(); r != nil {
+			err := fmt.Errorf("panic in build: %v", r)
+			slog.Error("Async build panicked", "build_id", job.ID, "platform", platform, "format", format, "panic", r)
+			s.completeBuildJob(job, "", err)
+			s.logBuild(platform, format, c2URL, listenerID, filename, "failed", err.Error(), "")
+			s.broadcastOperatorEvent(map[string]interface{}{
+				"type":         "build_update",
+				"build_id":     job.ID,
+				"status":       "failed",
+				"platform":     platform,
+				"format":       format,
+				"error":        err.Error(),
+				"completed_at": job.CompletedAt,
+			})
+		}
+	}()
 	// The job is registered as "building" already; tell dashboards it has
 	// actually started executing (queue wait is over).
 	s.broadcastOperatorEvent(map[string]interface{}{

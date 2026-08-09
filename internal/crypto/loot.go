@@ -4,7 +4,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -22,40 +21,33 @@ var (
 )
 
 // InitLootEncryption initializes (or re-initializes) the loot encryption key.
-// It is intentionally re-entrant so that JWT rotation can safely derive a new
-// key without requiring a process restart. Callers must ensure that when the
-// JWT secret changes, existing ciphertext is re-encrypted (or a stable
-// lootKeyHex is configured) before/after this call.
-// If lootKeyHex is non-empty, uses that 32-byte hex key directly.
-// Otherwise, derives the key from the JWT secret (backward compatible).
-func InitLootEncryption(jwtSecret, lootKeyHex string) {
+// It is intentionally re-entrant so config reloads / key rotation can install
+// a new key without requiring a process restart.
+// The key MUST be a 32-byte hex string: the legacy SHA-256(jwt_secret)
+// derivation was removed so loot ciphertext is cryptographically independent
+// of the JWT secret. An invalid/empty key clears the key (encryption then
+// fails loudly until a valid key is configured).
+func InitLootEncryption(lootKeyHex string) {
 	lootKeyMu.Lock()
 	defer lootKeyMu.Unlock()
-	if lootKeyHex != "" {
-		if b, err := hex.DecodeString(lootKeyHex); err == nil && len(b) == 32 {
-			lootKey = b
-			return
-		}
+	if b, err := hex.DecodeString(lootKeyHex); err == nil && len(b) == 32 {
+		lootKey = b
+		return
 	}
-	h := sha256.Sum256([]byte(jwtSecret))
-	lootKey = h[:32]
+	lootKey = nil
 }
 
 // InitExtC2Encryption initializes (or re-initializes) a separate encryption key
 // for ExtC2 channels, derived independently to limit key compromise blast radius.
-// If extc2KeyHex is non-empty, uses that 32-byte hex key directly (recommended).
-// Otherwise derives the key from the JWT secret (backward compatible).
-func InitExtC2Encryption(jwtSecret, extc2KeyHex string) {
+// The key MUST be a 32-byte hex string (no legacy JWT derivation).
+func InitExtC2Encryption(extc2KeyHex string) {
 	extc2KeyMu.Lock()
 	defer extc2KeyMu.Unlock()
-	if extc2KeyHex != "" {
-		if b, err := hex.DecodeString(extc2KeyHex); err == nil && len(b) == 32 {
-			extc2Key = b
-			return
-		}
+	if b, err := hex.DecodeString(extc2KeyHex); err == nil && len(b) == 32 {
+		extc2Key = b
+		return
 	}
-	h := sha256.Sum256([]byte("extc2:" + jwtSecret))
-	extc2Key = h[:32]
+	extc2Key = nil
 }
 
 // EncryptLoot encrypts a plaintext string using AES-256-GCM.

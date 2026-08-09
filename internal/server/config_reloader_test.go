@@ -30,6 +30,7 @@ func TestConfigReloader_RejectsStaticChanges(t *testing.T) {
 	origCfg.Server.Port = 8000
 	origCfg.Server.Host = "127.0.0.1"
 	origCfg.Server.JWTSecret = "test-secret-for-reloader-32chars!!"
+	setServerTestKeys(origCfg)
 	if err := origCfg.Save(cfgPath); err != nil {
 		t.Fatalf("save original config: %v", err)
 	}
@@ -74,6 +75,7 @@ func TestConfigReloader_AcceptsHotReloadableChanges(t *testing.T) {
 	origCfg.Server.Port = 8000
 	origCfg.Server.JWTSecret = "test-secret-for-reloader-32chars!!"
 	origCfg.Logging.Level = "info"
+	setServerTestKeys(origCfg)
 	if err := origCfg.Save(cfgPath); err != nil {
 		t.Fatalf("save original config: %v", err)
 	}

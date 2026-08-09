@@ -1,8 +1,10 @@
 package db
 
 import (
+	"fmt"
 	"log/slog"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,9 +14,11 @@ import (
 	"gorm.io/gorm"
 )
 
+const testHexKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+
 func setupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	crypto.InitLootEncryption("test-secret-for-db-tests", "")
+	crypto.InitLootEncryption(testHexKey)
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("failed to open test database: %v", err)
@@ -58,7 +62,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 }
 
 func TestUpgradePreservesLegacyAgentsData(t *testing.T) {
-	crypto.InitLootEncryption("test-secret-for-db-tests", "")
+	crypto.InitLootEncryption(testHexKey)
 	dbPath := filepath.Join(t.TempDir(), "legacy.db")
 
 	raw, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
@@ -1328,6 +1332,75 @@ func TestMigrateOldRoles(t *testing.T) {
 	db.Where("username = ?", "admin1").First(&admin)
 	if admin.Role != RoleAdmin {
 		t.Errorf("admin role should be unchanged, got %q", admin.Role)
+	}
+}
+
+func TestIsSQLiteLockError(t *testing.T) {
+	tests := []struct {
+		err  string
+		want bool
+	}{
+		{"database is locked", true},
+		{"database table is locked", true},
+		{"SQL logic error: no such table: foo", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		var err error
+		if tt.err != "" {
+			err = fmt.Errorf("%s", tt.err)
+		}
+		if got := isSQLiteLockError(err); got != tt.want {
+			t.Errorf("isSQLiteLockError(%q) = %v, want %v", tt.err, got, tt.want)
+		}
+	}
+}
+
+func TestInitDBWithDriverSQLiteDSNPragmas(t *testing.T) {
+	// The DSN must carry foreign_keys and busy_timeout pragmas so every
+	// pooled connection inherits them (per-connection PRAGMA execs only
+	// affect the single connection they run on).
+	dbPath := filepath.Join(t.TempDir(), "pragma.db")
+	database, err := InitDBWithDriver("", "", dbPath, slog.LevelWarn, 10, 5, time.Minute)
+	if err != nil {
+		t.Fatalf("InitDBWithDriver: %v", err)
+	}
+
+	// foreign_keys fk enforcement must be active on the pooled connections.
+	// Create a parent, then force a child insert with a bad id.
+	_ = database.Exec(`CREATE TABLE fk_parent (id INTEGER PRIMARY KEY)`)
+	_ = database.Exec(`CREATE TABLE fk_child (id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES fk_parent(id))`)
+	_ = database.Exec(`INSERT INTO fk_parent (id) VALUES (1)`)
+
+	var childErr error
+	if res := database.Exec(`INSERT INTO fk_child (id, parent_id) VALUES (1, 999)`); res.Error != nil {
+		childErr = res.Error
+	}
+	if childErr == nil {
+		t.Error("expected foreign key violation when DSN pragma foreign_keys=1 is active")
+	}
+
+	// busy_timeout must be active: concurrent writers on distinct pooled
+	// connections must not race into "database is locked".
+	var wg sync.WaitGroup
+	errCh := make(chan error, 40)
+	for i := 0; i < 40; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			if res := database.Exec(`INSERT INTO fk_parent (id) VALUES (?)`, 5000+n); res.Error != nil {
+				errCh <- res.Error
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Errorf("concurrent write failed: %v", err)
+	}
+
+	if sqlDB, err := database.DB(); err == nil {
+		_ = sqlDB.Close()
 	}
 }
 

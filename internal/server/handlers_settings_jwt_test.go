@@ -40,15 +40,17 @@ func jwtPostContext() (*httptest.ResponseRecorder, *gin.Context) {
 	return w, c
 }
 
-func TestHandleRegenerateJWT_RejectsWithoutExplicitLootKey(t *testing.T) {
+func TestHandleRegenerateJWT_IndependentKeysSurviveRotation(t *testing.T) {
 	database := testutil.SetupTestDB(t)
 	cfg := config.DefaultConfig()
-	cfg.Crypto.LootKey = ""
+	setServerTestKeys(cfg)
 	cfg.Server.JWTSecret = "old-jwt-secret-that-is-32-bytes-ok!!"
 	s := newJWTTestServer(t, database, cfg)
+	s.configPath = t.TempDir() + "/config.yaml"
 
-	// Persist a credential encrypted under the old (derived) loot key.
-	crypto.InitLootEncryption(cfg.Server.JWTSecret, cfg.Crypto.LootKey)
+	crypto.InitLootEncryption(cfg.Crypto.LootKey)
+
+	// Persist a credential encrypted under the (independent) loot key.
 	enc, err := crypto.EncryptLoot("credential-value")
 	if err != nil {
 		t.Fatalf("EncryptLoot: %v", err)
@@ -62,39 +64,40 @@ func TestHandleRegenerateJWT_RejectsWithoutExplicitLootKey(t *testing.T) {
 		t.Fatalf("seed credential: %v", err)
 	}
 
+	oldSecret := cfg.Server.JWTSecret
 	w, c := jwtPostContext()
 	s.handleRegenerateJWT(c)
 
-	if w.Code != http.StatusConflict {
-		t.Fatalf("expected 409 Conflict without explicit loot_key, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 (rotation must not require loot coupling), got %d body=%s", w.Code, w.Body.String())
+	}
+	if s.cfg.Server.JWTSecret == oldSecret {
+		t.Fatal("JWT secret did not rotate")
 	}
 
-	// JWT secret must be unchanged, and the credential must still decrypt.
-	if s.cfg.Server.JWTSecret != "old-jwt-secret-that-is-32-bytes-ok!!" {
-		t.Fatalf("JWT secret was mutated despite rejection: %q", s.cfg.Server.JWTSecret)
-	}
+	// The credential encrypted with the stable loot key must still decrypt
+	// even though the JWT secret changed.
 	var cred db.CredentialEntry
 	if err := database.First(&cred).Error; err != nil {
 		t.Fatalf("load credential: %v", err)
 	}
 	plain, err := crypto.DecryptLoot(cred.Password)
 	if err != nil || plain != "credential-value" {
-		t.Fatalf("credential unreadable after rejected rotation: plain=%q err=%v", plain, err)
+		t.Fatalf("credential unreadable after rotation: plain=%q err=%v", plain, err)
 	}
 }
 
-func TestHandleRegenerateJWT_RotatesAndReencryptsAllTOTP(t *testing.T) {
+func TestHandleRegenerateJWT_LeavesTOTPSecretsUntouched(t *testing.T) {
 	database := testutil.SetupTestDB(t)
 	cfg := config.DefaultConfig()
-	cfg.Crypto.LootKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	setServerTestKeys(cfg)
 	cfg.Server.JWTSecret = "old-jwt-secret-that-is-32-bytes-ok!!"
 	s := newJWTTestServer(t, database, cfg)
 	s.configPath = t.TempDir() + "/config.yaml"
 
-	// Explicit loot key stays stable across JWT rotation.
-	crypto.InitLootEncryption(cfg.Server.JWTSecret, cfg.Crypto.LootKey)
+	crypto.InitLootEncryption(cfg.Crypto.LootKey)
 
-	// Seed 510 users with TOTP secrets (exceeds the old hard Limit(500)).
+	// Seed 510 users with TOTP secrets encrypted under the dedicated totp_key.
 	const total = 510
 	for i := 0; i < total; i++ {
 		u := db.User{
@@ -102,8 +105,7 @@ func TestHandleRegenerateJWT_RotatesAndReencryptsAllTOTP(t *testing.T) {
 			PasswordHash: "hash",
 			Role:         "operator",
 		}
-		// User TOTPSecret stored encrypted with old JWT secret.
-		enc, err := encryptSecret("secret-value-"+strconv.Itoa(i), cfg.Server.JWTSecret)
+		enc, err := encryptSecret("secret-value-"+strconv.Itoa(i), cfg.Crypto.TotpKey)
 		if err != nil {
 			t.Fatalf("encryptSecret: %v", err)
 		}
@@ -120,49 +122,36 @@ func TestHandleRegenerateJWT_RotatesAndReencryptsAllTOTP(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
-	newSecret := s.cfg.Server.JWTSecret
-	if newSecret == oldSecret {
+	if s.cfg.Server.JWTSecret == oldSecret {
 		t.Fatal("JWT secret did not rotate")
 	}
 
-	// All 510 TOTP secrets must be decryptable with the NEW secret.
-	var count int64
-	if err := database.Model(&db.User{}).Count(&count).Error; err != nil {
-		t.Fatalf("count users: %v", err)
-	}
-	if count != total {
-		t.Fatalf("expected %d users, got %d", total, count)
-	}
+	// TOTP secrets use the independent totp_key: they must be decryptable
+	// with that key both before and after the JWT rotation.
 	var users []db.User
 	if err := database.Find(&users).Error; err != nil {
 		t.Fatalf("find users: %v", err)
 	}
 	for _, u := range users {
-		plain, err := decryptSecret(u.TOTPSecret, newSecret)
+		plain, err := decryptSecret(u.TOTPSecret, cfg.Crypto.TotpKey)
 		if err != nil {
-			t.Fatalf("user %s TOTP not decryptable with new secret: %v", u.Username, err)
+			t.Fatalf("user %s TOTP not decryptable with totp_key: %v", u.Username, err)
 		}
 		if !strings.HasPrefix(plain, "secret-value-") {
 			t.Fatalf("user %s: unexpected plaintext %q", u.Username, plain)
 		}
-	}
-
-	// Old-secret decryption must now fail (proves re-encryption happened).
-	first := users[0]
-	if _, err := decryptSecret(first.TOTPSecret, oldSecret); err == nil {
-		t.Fatal("old-secret decryption should fail after re-encryption")
 	}
 }
 
 func TestHandleRegenerateJWT_PersistsAndReinitializes(t *testing.T) {
 	database := testutil.SetupTestDB(t)
 	cfg := config.DefaultConfig()
-	cfg.Crypto.LootKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	setServerTestKeys(cfg)
 	cfg.Server.JWTSecret = "old-jwt-secret-that-is-32-bytes-ok!!"
 	s := newJWTTestServer(t, database, cfg)
 	s.configPath = t.TempDir() + "/config.yaml"
 
-	crypto.InitLootEncryption(cfg.Server.JWTSecret, cfg.Crypto.LootKey)
+	crypto.InitLootEncryption(cfg.Crypto.LootKey)
 
 	// Encrypt something before rotation; loot key must remain usable after.
 	before, err := crypto.EncryptLoot("stable-loot")
@@ -185,7 +174,7 @@ func TestHandleRegenerateJWT_PersistsAndReinitializes(t *testing.T) {
 		t.Fatalf("config on disk does not match runtime secret")
 	}
 
-	// Loot ciphertext encrypted before rotation must decrypt (explicit key stable).
+	// Loot ciphertext encrypted before rotation must decrypt (independent key stable).
 	plain, err := crypto.DecryptLoot(before)
 	if err != nil || plain != "stable-loot" {
 		t.Fatalf("loot lost after rotation: plain=%q err=%v", plain, err)

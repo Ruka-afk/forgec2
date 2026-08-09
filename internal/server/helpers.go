@@ -4,8 +4,8 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -308,19 +308,31 @@ func sanitizeFilename(name string) string {
 	return name
 }
 
-// deriveTOTPKey derives a 32-byte AES key from the JWT secret using SHA-256.
-func deriveTOTPKey(jwtSecret string) []byte {
-	h := sha256.Sum256([]byte("forgec2-totp-encrypt:" + jwtSecret))
-	return h[:]
+// keyHexTo32 decodes a 64-character hex key string into 32 raw key bytes.
+// There is intentionally NO fallback derivation: credentials must be bound to
+// an explicit independent key (crypto.totp_key), never to the JWT secret.
+func keyHexTo32(keyHex string) ([]byte, error) {
+	if len(keyHex) != 64 {
+		return nil, fmt.Errorf("key must be a 64-character hex string (32 bytes), got %d chars", len(keyHex))
+	}
+	b, err := hex.DecodeString(keyHex)
+	if err != nil || len(b) != 32 {
+		return nil, fmt.Errorf("key must be a valid 64-character hex string (32 bytes)")
+	}
+	return b, nil
 }
 
-// encryptSecret encrypts a plaintext string using AES-256-GCM.
+// encryptSecret encrypts a plaintext string using AES-256-GCM with the
+// dedicated credential key (crypto.totp_key).
 // Output format: base64(nonce(12) + ciphertext).
-func encryptSecret(plaintext, jwtSecret string) (string, error) {
+func encryptSecret(plaintext, keyHex string) (string, error) {
 	if plaintext == "" {
 		return "", nil
 	}
-	key := deriveTOTPKey(jwtSecret)
+	key, err := keyHexTo32(keyHex)
+	if err != nil {
+		return "", err
+	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
@@ -337,8 +349,9 @@ func encryptSecret(plaintext, jwtSecret string) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-// decryptSecret decrypts a base64-encoded AES-256-GCM ciphertext.
-func decryptSecret(encoded, jwtSecret string) (string, error) {
+// decryptSecret decrypts a base64-encoded AES-256-GCM ciphertext with the
+// dedicated credential key (crypto.totp_key).
+func decryptSecret(encoded, keyHex string) (string, error) {
 	if encoded == "" {
 		return "", nil
 	}
@@ -346,7 +359,10 @@ func decryptSecret(encoded, jwtSecret string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	key := deriveTOTPKey(jwtSecret)
+	key, err := keyHexTo32(keyHex)
+	if err != nil {
+		return "", err
+	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err

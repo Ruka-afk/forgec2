@@ -117,7 +117,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
     const connect = () => {
       if (disposed) return;
-      if (wsRef.current?.readyState === WebSocket.OPEN) return;
+      if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) return;
 
       // Fan a message out to both subscription channels. Listeners are
       // fire-and-forget: a throwing listener is skipped so one bad subscriber

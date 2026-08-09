@@ -108,6 +108,7 @@ func TestPhishingLandingEscapesAttackerValues(t *testing.T) {
 func TestValidateAndSaveConfig_RejectsInvalid(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := config.DefaultConfig()
+	setServerTestKeys(cfg)
 	cfg.Implant.DefaultJitter = -5 // invalid per Validate()
 	s := &Server{cfg: cfg}
 

