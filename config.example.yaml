@@ -28,6 +28,17 @@ server:
   grpc_enabled: false
   icmp_enabled: false
   ssh_enabled: false
+  ssh_port: 2222
+  ssh_addr: ""                # bind addr for the SSH beacon listener (default ":ssh_port")
+  ssh_user: forgec2           # SSH username accepted by the beacon listener (empty = any)
+  ssh_password: ""            # SSH password (empty = accept any password or public key / key-only)
+  ssh_key_auth: true          # allow public key authentication
+  ssh_host_key: data/ssh_host_key   # SSH host key path (auto-generated if missing)
+
+listeners:
+  h2c:
+    enabled: false
+    addr: ":8081"               # cleartext HTTP/2 (h2c) beacon listener bind addr
 
 database:
   path: data/db/forgec2.db

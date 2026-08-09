@@ -119,7 +119,7 @@ func (s *Server) startListenerForRecord(l *db.Listener, context string) {
 	if scheme == "" {
 		scheme = l.Type
 	}
-	if scheme != "http" && scheme != "https" && scheme != "tcp" && scheme != "tls" && scheme != "dns" && scheme != "icmp" {
+	if scheme != "http" && scheme != "https" && scheme != "tcp" && scheme != "tls" && scheme != "dns" && scheme != "icmp" && scheme != "ssh" && scheme != "h2c" {
 		return
 	}
 
@@ -168,6 +168,10 @@ func normalizeListenerProtocol(l *db.Listener) {
 			l.Type = "dns"
 		case "icmp":
 			l.Type = "icmp"
+		case "ssh":
+			l.Type = "ssh"
+		case "h2c":
+			l.Type = "h2c"
 		default:
 			l.Type = "tcp"
 		}
@@ -180,6 +184,10 @@ func normalizeListenerProtocol(l *db.Listener) {
 			l.Type = "dns"
 		case "icmp":
 			l.Type = "icmp"
+		case "ssh":
+			l.Type = "ssh"
+		case "h2c":
+			l.Type = "h2c"
 		default:
 			l.Type = "tcp"
 		}
@@ -194,6 +202,12 @@ func normalizeListenerProtocol(l *db.Listener) {
 		case "icmp":
 			l.Scheme = "icmp"
 			l.Protocol = "icmp"
+		case "ssh":
+			l.Scheme = "ssh"
+			l.Protocol = "ssh"
+		case "h2c":
+			l.Scheme = "h2c"
+			l.Protocol = "h2c"
 		default:
 			l.Scheme = "tcp"
 			l.Protocol = "tcp"

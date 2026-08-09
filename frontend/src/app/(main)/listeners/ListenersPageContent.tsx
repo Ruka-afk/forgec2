@@ -236,6 +236,7 @@ export default function ListenersPageContent() {
               <SelectItem value="smb">SMB</SelectItem>
               <SelectItem value="icmp">ICMP</SelectItem>
               <SelectItem value="ssh">SSH</SelectItem>
+              <SelectItem value="h2c">H2C</SelectItem>
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={(val) => setStatusFilter(typeof val === "string" ? val : "")}>
@@ -383,6 +384,8 @@ export default function ListenersPageContent() {
                     <SelectItem value="dns">DNS</SelectItem>
                     <SelectItem value="smb">SMB</SelectItem>
                     <SelectItem value="icmp">ICMP</SelectItem>
+                    <SelectItem value="ssh">SSH</SelectItem>
+                    <SelectItem value="h2c">H2C</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -463,6 +466,8 @@ export default function ListenersPageContent() {
                     <SelectItem value="dns">DNS</SelectItem>
                     <SelectItem value="smb">SMB</SelectItem>
                     <SelectItem value="icmp">ICMP</SelectItem>
+                    <SelectItem value="ssh">SSH</SelectItem>
+                    <SelectItem value="h2c">H2C</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

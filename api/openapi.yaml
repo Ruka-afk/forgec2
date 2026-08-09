@@ -9739,10 +9739,10 @@ components:
           type: string
         scheme:
           type: string
-          enum: [http, https, tcp, tls]
+          enum: [http, https, tcp, tls, dns, icmp, ssh, h2c]
         type:
           type: string
-          enum: [http, tcp]
+          enum: [http, tcp, dns, icmp, ssh, h2c]
         host:
           type: string
         port:
@@ -9778,7 +9778,7 @@ components:
           type: string
         scheme:
           type: string
-          enum: [http, https, tcp, tls]
+          enum: [http, https, tcp, tls, dns, icmp, ssh, h2c]
         host:
           type: string
         port:

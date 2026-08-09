@@ -21,6 +21,7 @@ func newListenerCRUDTestServer(t *testing.T) *Server {
 	cfg := config.DefaultConfig()
 	cfg.Server.Host = "127.0.0.1"
 	cfg.Server.Port = 8000
+	cfg.Server.SSHHostKey = "" // never write a real host key file during tests
 	return &Server{
 		db:                testutil.SetupTestDB(t),
 		cfg:               cfg,
@@ -84,6 +85,90 @@ func TestHandleCreateListener_Validation(t *testing.T) {
 			t.Errorf("expected port=8080, got %d", resp.Listener.Port)
 		}
 	})
+}
+
+func TestHandleCreateListener_SSHandH2C(t *testing.T) {
+	s := newListenerCRUDTestServer(t)
+
+	t.Run("ssh listener created and normalized", func(t *testing.T) {
+		body := `{"name":"test-ssh","scheme":"ssh","host":"127.0.0.1","port":2222}`
+		w, c := newJSONRequest(http.MethodPost, "/api/listeners", body)
+		s.handleCreateListener(c)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			Listener db.Listener `json:"listener"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+		}
+		if resp.Listener.Scheme != "ssh" {
+			t.Errorf("expected scheme=ssh, got %q", resp.Listener.Scheme)
+		}
+		if resp.Listener.Type != "ssh" {
+			t.Errorf("expected type=ssh, got %q", resp.Listener.Type)
+		}
+		var inDB db.Listener
+		if err := s.db.First(&inDB, resp.Listener.ID).Error; err != nil {
+			t.Fatalf("listener not persisted: %v", err)
+		}
+		if inDB.Protocol != "ssh" {
+			t.Errorf("expected protocol=ssh, got %q", inDB.Protocol)
+		}
+	})
+
+	t.Run("h2c listener created and normalized", func(t *testing.T) {
+		body := `{"name":"test-h2c","scheme":"h2c","host":"127.0.0.1","port":8081}`
+		w, c := newJSONRequest(http.MethodPost, "/api/listeners", body)
+		s.handleCreateListener(c)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			Listener db.Listener `json:"listener"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+		}
+		if resp.Listener.Scheme != "h2c" {
+			t.Errorf("expected scheme=h2c, got %q", resp.Listener.Scheme)
+		}
+		if resp.Listener.Type != "h2c" {
+			t.Errorf("expected type=h2c, got %q", resp.Listener.Type)
+		}
+	})
+}
+
+func TestNormalizeListenerProtocol_SSHandH2C(t *testing.T) {
+	cases := []struct {
+		name      string
+		in        db.Listener
+		wantType  string
+		wantSchem string
+	}{
+		{"scheme ssh", db.Listener{Scheme: "ssh"}, "ssh", "ssh"},
+		{"scheme h2c", db.Listener{Scheme: "h2c"}, "h2c", "h2c"},
+		{"protocol ssh", db.Listener{Protocol: "ssh"}, "ssh", "ssh"},
+		{"protocol h2c", db.Listener{Protocol: "h2c"}, "h2c", "h2c"},
+		{"type ssh", db.Listener{Type: "ssh"}, "ssh", "ssh"},
+		{"type h2c", db.Listener{Type: "h2c"}, "h2c", "h2c"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			l := tc.in
+			normalizeListenerProtocol(&l)
+			if l.Type != tc.wantType {
+				t.Errorf("type: got %q want %q", l.Type, tc.wantType)
+			}
+			if l.Scheme != tc.wantSchem {
+				t.Errorf("scheme: got %q want %q", l.Scheme, tc.wantSchem)
+			}
+			if l.Protocol != tc.wantSchem {
+				t.Errorf("protocol: got %q want %q", l.Protocol, tc.wantSchem)
+			}
+		})
+	}
 }
 
 func TestHandleListenerDetail(t *testing.T) {

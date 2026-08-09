@@ -51,6 +51,8 @@ type Server struct {
 	dnsListener           *DNSBeaconListener
 	icmpListener          *ICMPBeaconListener
 	grpcListener          *GRPCListener
+	sshListener           *SSHBeaconListener
+	h2cListener           *H2CBeaconListener
 	smbLn                 net.Listener
 	tcpLn                 net.Listener
 	tcpProtoListener      *TCPProtoListener
@@ -1275,6 +1277,14 @@ func (s *Server) Shutdown() {
 		slog.Info("Shutting down gRPC listener")
 		s.grpcListener.Stop()
 	}
+	if s.sshListener != nil {
+		slog.Info("Shutting down SSH listener")
+		s.sshListener.Close()
+	}
+	if s.h2cListener != nil {
+		slog.Info("Shutting down H2C listener")
+		s.h2cListener.Close()
+	}
 	if s.httpServer != nil {
 		// Wait briefly for in-flight requests to drain before forced shutdown
 		done := make(chan struct{})
@@ -1495,6 +1505,37 @@ func (s *Server) Run() error {
 		}()
 	}
 
+	// Start SSH beacon listener if enabled (config-driven; DB listeners are
+	// restored separately via startExtraListenersFromDB)
+	if s.cfg.Server.SSHEnabled {
+		sshAddr := s.cfg.Server.SSHAddr
+		if sshAddr == "" {
+			sshAddr = ":" + itoa(s.cfg.Server.SSHPort)
+		}
+		cfg, cfgErr := s.newSSHListenerConfig(sshAddr)
+		if cfgErr != nil {
+			slog.Error("Failed to prepare SSH listener", "addr", sshAddr, "err", cfgErr)
+		} else {
+			sl := NewSSHBeaconListener(cfg)
+			sl.SetHandler(s.makeBeaconHandler())
+			if err := sl.Start(); err != nil {
+				slog.Error("Failed to start SSH listener", "addr", sshAddr, "err", err)
+			} else {
+				s.sshListener = sl
+			}
+		}
+	}
+
+	// Start H2C (cleartext HTTP/2) beacon listener if enabled
+	if s.cfg.Listeners.H2C.Enabled && s.cfg.Listeners.H2C.Addr != "" {
+		hl := NewH2CBeaconListener(s.cfg.Listeners.H2C.Addr, s.router)
+		if err := hl.Start(); err != nil {
+			slog.Error("Failed to start H2C listener", "addr", s.cfg.Listeners.H2C.Addr, "err", err)
+		} else {
+			s.h2cListener = hl
+		}
+	}
+
 	// Auto-generate ExtC2 token if empty
 	if s.cfg.RateLimit.ExtC2.APIToken == "" {
 		tokenBytes := make([]byte, 32)
@@ -1647,6 +1688,10 @@ func (s *Server) startExtraListener(key, scheme string) error {
 		return s.startExtraDNSListener(key)
 	case "icmp":
 		return s.startExtraICMPListener(key)
+	case "ssh":
+		return s.startExtraSSHListener(key)
+	case "h2c":
+		return s.startExtraH2CListener(key)
 	default:
 		slog.Warn("Unknown extra listener scheme, skipping", "scheme", scheme, "key", key)
 		return nil
