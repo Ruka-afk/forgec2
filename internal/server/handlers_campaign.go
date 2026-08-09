@@ -243,14 +243,6 @@ func (s *Server) handleMitreTimeline(c *gin.Context) {
 	respond(c, gin.H{"success": true, "data": buildPhaseTimeline(tasks)})
 }
 
-func agentIDList(agents []db.Implant) []string {
-	ids := make([]string, 0, len(agents))
-	for _, a := range agents {
-		ids = append(ids, a.ID)
-	}
-	return ids
-}
-
 func computeCampaignStats(agents []db.Implant, tasks []db.Task) map[string]interface{} {
 	totalTasks := len(tasks)
 	completed := 0

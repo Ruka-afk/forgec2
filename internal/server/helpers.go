@@ -35,17 +35,6 @@ func respondSuccess(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": data})
 }
 
-// respondSuccessWithTotal wraps data with pagination metadata.
-func respondSuccessWithTotal(c *gin.Context, data interface{}, total int64, page, pageSize int) {
-	c.JSON(http.StatusOK, gin.H{
-		"success":   true,
-		"data":      data,
-		"total":     total,
-		"page":      page,
-		"page_size": pageSize,
-	})
-}
-
 // respondError sends a JSON error response with the given HTTP status and message.
 func respondError(c *gin.Context, status int, msg string) {
 	c.JSON(status, gin.H{"success": false, "error": msg})

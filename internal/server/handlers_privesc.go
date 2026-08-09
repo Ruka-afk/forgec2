@@ -215,15 +215,6 @@ func (s *Server) buildPrivescFindings(tasks []db.Task) []gin.H {
 	return out
 }
 
-// privescFinding is the JSON shape the frontend findings panel expects.
-type privescFinding struct {
-	Title          string `json:"title"`
-	Severity       string `json:"severity"`
-	CVEID          string `json:"cve_id"`
-	Description    string `json:"description"`
-	Recommendation string `json:"recommendation"`
-}
-
 // parsePrivescFindings best-effort parses structured findings from agent privesc result text.
 func (s *Server) parsePrivescFindings(result string) []gin.H {
 	findings := make([]gin.H, 0)

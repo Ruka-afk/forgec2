@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"math/bits"
 	"sync"
 )
 
@@ -79,15 +78,6 @@ func (AESEncoder) Decode(data []byte, key []byte) ([]byte, error) {
 }
 
 type SGNEncoder struct{}
-
-func sgnEncodeChunk(decoder []byte, offset int) []byte {
-	_ = offset
-	seed := uint32(0)
-	for _, b := range decoder {
-		seed = bits.RotateLeft32(seed*0x01000193^uint32(b), 5)
-	}
-	return []byte{byte(seed), byte(seed >> 8), byte(seed >> 16), byte(seed >> 24)}
-}
 
 func (SGNEncoder) Encode(data []byte, key []byte) ([]byte, error) {
 	_ = key

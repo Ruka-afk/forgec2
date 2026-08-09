@@ -3,9 +3,6 @@ package server
 import (
 	"fmt"
 	"log/slog"
-	"net/http"
-
-	"github.com/gin-gonic/gin"
 )
 
 type TaskHandler interface {
@@ -196,21 +193,4 @@ func (h *integrityAlertHandler) OnTaskFailed(task *task, result taskResult) erro
 		"error", result.Error,
 	)
 	return nil
-}
-
-func (s *Server) apiListTaskHandlers(c *gin.Context) {
-	if s.taskHandlerRegistry == nil {
-		respondSuccess(c, nil)
-		return
-	}
-	list := s.taskHandlerRegistry.List()
-	data := make([]gin.H, 0, len(list))
-	for typ, entry := range list {
-		data = append(data, gin.H{
-			"type":        typ,
-			"description": entry.Description,
-			"priority":    entry.Priority,
-		})
-	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": data})
 }

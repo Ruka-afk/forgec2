@@ -186,15 +186,6 @@ func (r *ConfigReloader) Reload() error {
 	return nil
 }
 
-var nonHotReloadableFields = map[string]bool{
-	"server.port":    true,
-	"server.tls":     true,
-	"server.dns":     true,
-	"server.grpc":    true,
-	"database.driver": true,
-	"database.path":  true,
-}
-
 func diffConfig(old, new *config.Config) (hotReloadable []string, staticOnly []string) {
 	if old.Server.Port != new.Server.Port {
 		staticOnly = append(staticOnly, "server.port")

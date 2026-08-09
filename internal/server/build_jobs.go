@@ -184,18 +184,6 @@ func (s *Server) buildJobSnapshots() []gin.H {
 	return resp
 }
 
-// isBuildRunning returns true if there are active builds.
-func (s *Server) isBuildRunning() bool {
-	s.buildJobsMu.RLock()
-	defer s.buildJobsMu.RUnlock()
-	for _, j := range s.buildJobs {
-		if j.Status == "building" {
-			return true
-		}
-	}
-	return false
-}
-
 // runBuildAndUpdateJob is a helper to run a build function and update the job.
 func (s *Server) runBuildAndUpdateJob(job *BuildJob, buildFn func() (string, error), platform, format, c2URL string, listenerID uint, filename string) {
 	// A panic in the toolchain must never kill the worker goroutine (that
@@ -308,36 +296,6 @@ func (s *Server) extractAgentsDir() string {
 		}
 	}
 	return agentsDir
-}
-
-// validateAndResolveListener validates the request and resolves the listener.
-// Returns the resolved C2URL, Protocol, DNSDomain, DNSServer, and whether it's P2P/DNS.
-func (s *Server) validateAndResolveListener(listenerID uint, p2pMode, dnsDomain, dnsServer, protocol string) (c2URL, resolvedProtocol, resolvedDNSDomain, resolvedDNSServer string, isP2P, isDNS bool, err error) {
-	isP2P = p2pMode == "parent" || p2pMode == "child"
-	isDNS = dnsDomain != "" || dnsServer != ""
-
-	if !isP2P && !isDNS && listenerID == 0 {
-		return "", "", "", "", false, false, fmt.Errorf("listener or DNS domain is required")
-	}
-
-	if !isP2P && !isDNS {
-		resolved, err := s.resolveListener(listenerID)
-		if err != nil {
-			return "", "", "", "", false, false, fmt.Errorf("invalid listener configuration")
-		}
-		c2URL = resolved.C2URL
-		resolvedProtocol = resolved.Protocol
-		if resolved.DNSDomain != "" {
-			resolvedDNSDomain = resolved.DNSDomain
-			if dnsServer == "" {
-				resolvedDNSServer = resolved.DNSServer
-			}
-		}
-	} else if isDNS && protocol == "" {
-		resolvedProtocol = "dns"
-	}
-
-	return c2URL, resolvedProtocol, resolvedDNSDomain, resolvedDNSServer, isP2P, isDNS, nil
 }
 
 // clampIntervalJitter normalizes interval and jitter values.

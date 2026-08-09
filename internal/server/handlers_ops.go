@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -132,16 +131,4 @@ func (s *Server) logBuild(platform, format, c2URL string, listenerID uint, filen
 	}).Error; err != nil {
 		slog.Error("Failed to create build log", "error", err)
 	}
-}
-
-// parseInt is a simple helper to convert string to int, returns 0 on error
-func parseInt(s string) (int, error) {
-	var r int
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0, fmt.Errorf("not a number: %s", s)
-		}
-		r = r*10 + int(c-'0')
-	}
-	return r, nil
 }

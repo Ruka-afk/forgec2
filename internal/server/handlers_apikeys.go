@@ -35,18 +35,6 @@ func generateAPIKey() (plaintext string, hash string, prefix string, err error) 
 	return plaintext, hash, prefix, nil
 }
 
-func hashAPIKey(key string) string {
-	h := sha256.Sum256([]byte(key))
-	return hex.EncodeToString(h[:])
-}
-
-func maskAPIKey(plaintext string) string {
-	if len(plaintext) <= 12 {
-		return plaintext
-	}
-	return plaintext[:8] + "..." + plaintext[len(plaintext)-4:]
-}
-
 func (s *Server) handleCreateAPIKey(c *gin.Context) {
 	var req struct {
 		Name      string `json:"name"`
@@ -211,34 +199,4 @@ func (s *Server) handleRotateAPIKey(c *gin.Context) {
 		},
 		"message": "Store this key securely - it will not be shown again. Old key has been revoked.",
 	})
-}
-
-// authenticateAPIKey validates an API key from the X-API-Key header.
-func (s *Server) authenticateAPIKey(c *gin.Context) bool {
-	key := c.GetHeader("X-API-Key")
-	if key == "" {
-		return false
-	}
-
-	hash := hashAPIKey(key)
-	var apiKey db.ApiKey
-	if err := s.db.Where("key_hash = ? AND active = ?", hash, true).First(&apiKey).Error; err != nil {
-		return false
-	}
-
-	if !apiKey.ExpiresAt.IsZero() && time.Now().After(apiKey.ExpiresAt) {
-		return false
-	}
-
-	s.db.Model(&apiKey).Update("last_used", time.Now())
-
-	var user db.User
-	if err := s.db.Where("id = ? AND is_active = ?", apiKey.UserID, true).First(&user).Error; err != nil {
-		return false
-	}
-
-	c.Set("user_id", user.ID)
-	c.Set("user", user.Username)
-	c.Set("user_role", user.Role)
-	return true
 }

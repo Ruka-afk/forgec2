@@ -18,11 +18,6 @@ import (
 // strxorConstRegex parses `SName = "hexkey:base64data"` declarations.
 var strxorConstRegex = regexp.MustCompile(`(S[A-Za-z0-9]+)\s*=\s*"([0-9a-fA-F]+:[A-Za-z0-9+/=]+)"`)
 
-type strxorConst struct {
-	name  string
-	plain string
-}
-
 // decodeSConst recovers the plaintext from a `hexkey:base64` value using the
 // same XOR scheme the agent runtime applies in mustDecrypt.
 func decodeSConst(enc string) (string, error) {

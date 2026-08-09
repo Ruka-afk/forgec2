@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"runtime/debug"
 	"strings"
-	"sync"
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
@@ -27,7 +26,6 @@ type SlackBot struct {
 	server       interface{}
 	ctx          context.Context
 	cancel       context.CancelFunc
-	mu           sync.Mutex
 }
 
 func NewSlackBot(cfg config.SlackConfig, database *gorm.DB, srv interface{}) *SlackBot {
@@ -311,11 +309,4 @@ func (b *SlackBot) updateMessage(channel, timestamp, text string) {
 	if err != nil {
 		slog.Error("SlackBot updateMessage error", "err", err)
 	}
-}
-
-func maskToken(token string) string {
-	if len(token) <= 4 {
-		return token
-	}
-	return token[:4] + "..." + token[len(token)-4:]
 }

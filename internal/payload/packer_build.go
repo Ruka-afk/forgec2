@@ -39,14 +39,6 @@ func randomHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-func readFileBase64(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(data), nil
-}
-
 func BuildArtifact(req BuildArtifactRequest, dataDir string) ([]byte, string, error) {
 	tmpl := DefaultArtifactTemplate(req.TemplateName)
 

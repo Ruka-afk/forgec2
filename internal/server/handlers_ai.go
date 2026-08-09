@@ -385,22 +385,6 @@ func (s *Server) parseStreamChunks(resp *http.Response, ch chan<- sseEvent) (too
 	return
 }
 
-func (s *Server) logParseError(bodyBytes []byte, ch chan<- sseEvent) {
-	preview := string(bodyBytes)
-	if len(preview) > AIThinkingPreviewLen {
-		preview = preview[:AIThinkingPreviewLen]
-	}
-	base := strings.TrimRight(s.cfg.AIEndpoint(), "/")
-	hp := base
-	hp = strings.TrimPrefix(hp, "https://")
-	hp = strings.TrimPrefix(hp, "http://")
-	if !strings.Contains(hp, "/") {
-		base += "/v1"
-	}
-	slog.Error("AI response parse error", "url", base+"/chat/completions", "body", preview)
-	ch <- sseEvent{"error", fmt.Sprintf("API returned non-JSON response: %s", preview)}
-}
-
 type sseEvent struct {
 	Type string
 	Data string
@@ -533,15 +517,6 @@ type toolFuncDef struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
 	Parameters  map[string]interface{} `json:"parameters"`
-}
-
-type chatResponse struct {
-	Choices []struct {
-		Message struct {
-			Content   string     `json:"content"`
-			ToolCalls []toolCall `json:"tool_calls"`
-		} `json:"message"`
-	} `json:"choices"`
 }
 
 // 鈹€鈹€ Tool Definitions 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€

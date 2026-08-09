@@ -7,12 +7,10 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -503,35 +501,6 @@ func (s *Server) handleDBVacuum(c *gin.Context) {
 	}
 	slog.Info("Database vacuum completed")
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Database vacuum completed", "size": dbSize})
-}
-
-func (s *Server) handleBackupDatabase(c *gin.Context) {
-	src := s.cfg.Database.Path
-	backupDir := filepath.Join(s.cfg.Server.DataDir, "backups")
-	if err := os.MkdirAll(backupDir, 0700); err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to create backup directory")
-		return
-	}
-	ts := time.Now().Format("20060102_150405")
-	backupPath := filepath.Join(backupDir, fmt.Sprintf("forgec2_%s.db", ts))
-	srcFile, err := os.Open(src)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to open database file")
-		return
-	}
-	defer srcFile.Close()
-	dstFile, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to create backup file")
-		return
-	}
-	defer dstFile.Close()
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to copy database")
-		return
-	}
-	slog.Info("Database backup created", "path", backupPath)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Backup created successfully"})
 }
 
 func (s *Server) handleDownloadConfig(c *gin.Context) {

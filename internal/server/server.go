@@ -55,7 +55,6 @@ type Server struct {
 	h2cListener           *H2CBeaconListener
 	smbLn                 net.Listener
 	tcpLn                 net.Listener
-	tcpProtoListener      *TCPProtoListener
 	screenMonitorImplants map[string]time.Time
 	screenMonitorMu       sync.Mutex
 
@@ -215,13 +214,6 @@ type Server struct {
 
 	// Server-side task handler registry
 	taskHandlerRegistry *TaskHandlerRegistry
-
-	// Dynamic malleable C2 profile manager
-	profileManager *ProfileManager
-
-	// Subsystem containers (grouped fields for decomposition)
-	transport *TransportManager
-	agents    *AgentTracker
 
 	// Password change rate limiter (userID → last change time)
 	pwdChangeTimes   map[uint]time.Time
@@ -451,9 +443,6 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 
 	// Server-side task handler registry
 	s.taskHandlerRegistry = NewTaskHandlerRegistry()
-
-	// Dynamic malleable C2 profile manager
-	s.profileManager = NewProfileManager()
 
 	// Password change rate limiter
 	s.pwdChangeTimes = make(map[uint]time.Time)

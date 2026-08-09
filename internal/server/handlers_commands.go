@@ -56,14 +56,6 @@ func validatePID(s string) error {
 	return nil
 }
 
-func validatePort(s string) error {
-	n, err := strconv.Atoi(s)
-	if err != nil || n < 1 || n > 65535 {
-		return fmt.Errorf("must be a valid port (1-65535)")
-	}
-	return nil
-}
-
 // allowedCallbackMethods restricts callback HTTP methods to safe verbs.
 // DELETE, PUT, PATCH are rejected to prevent SSRF-based request forgery.
 var allowedCallbackMethods = map[string]bool{

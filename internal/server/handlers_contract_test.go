@@ -61,18 +61,6 @@ func assertValidJSON(t *testing.T, body []byte, label string) {
 	}
 }
 
-// assertKeyExists fails unless the body is a JSON object with the given key.
-func assertKeyExists(t *testing.T, body []byte, label, key string) {
-	t.Helper()
-	var bodyObj map[string]any
-	if err := json.Unmarshal(body, &bodyObj); err != nil {
-		t.Fatalf("%s: invalid json: %v; body=%s", label, err, string(body))
-	}
-	if _, ok := bodyObj[key]; !ok {
-		t.Fatalf("%s: missing key %q; body=%s", label, key, string(body))
-	}
-}
-
 // TestContract_Envelope_Dashboard asserts the dashboard chart handlers
 // return valid JSON with the expected data keys.
 func TestContract_Envelope_Dashboard(t *testing.T) {

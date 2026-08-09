@@ -24,17 +24,16 @@ type SIEMEvent struct {
 }
 
 type SIEMWebhook struct {
-	URL     string
-	Token   string
-	Enabled bool
-	client  *http.Client
-	mu      sync.Mutex
-	actions map[string]bool
+	URL        string
+	Token      string
+	Enabled    bool
+	client     *http.Client
+	actions    map[string]bool
 	correlator *EventCorrelator
-	batch    []SIEMEvent
-	batchMu  sync.Mutex
+	batch      []SIEMEvent
+	batchMu    sync.Mutex
 	batchTicker *time.Ticker
-	stopCh   chan struct{}
+	stopCh     chan struct{}
 }
 
 func NewSIEMWebhook(url, token, actions string) *SIEMWebhook {

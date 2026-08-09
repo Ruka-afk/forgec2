@@ -34,7 +34,6 @@ type WireGuardManager struct {
 	peers       map[string]*WireGuardPeer
 	subnet      string
 	dnsServer   string
-	connected   bool
 	stopCh      chan struct{}
 }
 

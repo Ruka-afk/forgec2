@@ -392,12 +392,6 @@ func (s *Server) getConfigJSON(key string) string {
 	return cfg.Value
 }
 
-func (s *Server) setConfigJSON(key, value string) {
-	if err := s.db.Model(&db.ServerConfig{}).Where("key = ?", key).Assign(db.ServerConfig{Value: value}).FirstOrCreate(&db.ServerConfig{Key: key}).Error; err != nil {
-		slog.Error("Failed to set config", "key", key, "error", err)
-	}
-}
-
 func (s *Server) registerBuiltinAutomations() {
 	rule := AutomationRule{
 		ID:        "auto_dc_alert",
