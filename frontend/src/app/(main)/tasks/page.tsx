@@ -15,7 +15,9 @@ import { normalizeAgentList } from "@/lib/agents";
 import { paths } from "@/lib/api-paths";
 import { formatTime } from "@/lib/utils";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
+import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { useCachedData } from "@/lib/hooks/useCachedData";
+import { useWS } from "@/lib/wsContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -92,12 +94,14 @@ function TasksPage() {
 
   const loadTasksAbortRef = useRef<AbortController | null>(null);
 
-  const loadTasks = useCallback(() => {
+  const loadTasks = useCallback((background = false) => {
     loadTasksAbortRef.current?.abort();
     const ac = new AbortController();
     loadTasksAbortRef.current = ac;
-    setLoading(true);
-    setError(null);
+    if (!background) {
+      setLoading(true);
+      setError(null);
+    }
     const params = new URLSearchParams({ page: String(page), pageSize: "50" });
     if (statusFilter) params.set("status", statusFilter);
     if (agentFilter) params.set("agent", agentFilter);
@@ -122,6 +126,21 @@ function TasksPage() {
   }, [page, statusFilter, agentFilter, typeFilter, t]);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
+
+  const loadTasksRef = useRef(loadTasks);
+  loadTasksRef.current = loadTasks;
+
+  const { subscribe } = useWS();
+  useEffect(() => {
+    const unsub = subscribe((msg) => {
+      if (msg.type === "task_update" || msg.type === "task_created" || msg.type === "task_deleted") {
+        loadTasksRef.current(true);
+      }
+    });
+    return () => unsub();
+  }, [subscribe]);
+
+  useVisibleInterval(() => loadTasksRef.current(true), 30000);
 
   const handleExportCSV = () => {
     const headers = ["Time", "Agent", "Type", "Command", "Status", "Result", "Duration"];

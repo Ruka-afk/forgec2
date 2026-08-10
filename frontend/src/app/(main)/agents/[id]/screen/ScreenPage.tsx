@@ -175,7 +175,10 @@ interface ScreenshotItem {
   useEffect(() => {
     if (monitoring && autoRefresh) {
       if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = setInterval(() => captureScreenshot(false), interval * 1000);
+      timerRef.current = setInterval(() => {
+        if (document.hidden) return;
+        captureScreenshot(false);
+      }, interval * 1000);
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
