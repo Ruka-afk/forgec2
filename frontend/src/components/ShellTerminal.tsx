@@ -306,7 +306,7 @@ export default function ShellTerminal({
           return;
         }
 
-        if (data.length === 1) {
+        if (!data.startsWith("\x1b")) {
           t.write(data);
         }
       });
