@@ -129,11 +129,11 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     if (!id) return;
     const unsub = subscribe((msg) => {
       if (msg.type === "agent_online" || msg.type === "agent_offline") {
-        if (String(msg.agent_id) === id) loadDetail();
+        if (String(msg.agent_id) === id) loadDetail(true);
       } else if (msg.type === "agent_data_update" && String(msg.agent_id) === id) {
         setData((prev) => prev ? { ...prev, agent: { ...(prev.agent || {}), ...((msg.data || {}) as Partial<AgentDetailModel>) } } : prev);
       } else if (msg.type === "task_update" && String(msg.agent_id) === id) {
-        loadDetail();
+        loadDetail(true);
         loadScreenshots();
       }
     });

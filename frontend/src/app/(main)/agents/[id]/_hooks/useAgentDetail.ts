@@ -9,10 +9,12 @@ export function useAgentDetail<T>(agentId: string) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
-  const reload = useCallback(async (signal?: AbortSignal) => {
+  const reload = useCallback(async (background = false, signal?: AbortSignal) => {
     if (!agentId) return;
-    setLoading(true);
-    setLoadError(false);
+    if (!background) {
+      setLoading(true);
+      setLoadError(false);
+    }
     try {
       const response = await api.get<T>(`${paths.agents.one(agentId)}?include_screenshots=false`, { signal });
       setData(response);
@@ -28,7 +30,7 @@ export function useAgentDetail<T>(agentId: string) {
 
   useEffect(() => {
     const controller = new AbortController();
-    reload(controller.signal);
+    reload(false, controller.signal);
     return () => controller.abort();
   }, [reload]);
 

@@ -1,43 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { api } from "@/lib/api";
-import { paths } from "@/lib/api-paths";
-import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { useAppStore } from "@/lib/store";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
-interface NavStats {
-  online_count?: number;
-  stale_count?: number;
-  offline_count?: number;
-}
-
 export default function AgentStatusBanner() {
-  const [counts, setCounts] = useState<NavStats | null>(null);
-  const [loadError, setLoadError] = useState(false);
   const [dismissedSig, setDismissedSig] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const { t } = useI18n();
+  const counts = useAppStore((s) => s.stats);
 
-  const load = useCallback(async () => {
-    try {
-      const data = await api.get<NavStats>(paths.dashboard.v1);
-      setCounts(data);
-      setLoadError(false);
-    } catch {
-      setLoadError(true);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-  useVisibleInterval(load, 30000);
-
-  if (loadError && !counts) return null;
   if (!counts) return null;
   const stale = counts.stale_count || 0;
   const offline = counts.offline_count || 0;
