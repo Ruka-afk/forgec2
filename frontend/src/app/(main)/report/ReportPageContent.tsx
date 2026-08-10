@@ -2,11 +2,8 @@
 
 import { useState } from "react";
 import { API_BASE } from "@/lib/constants";
-import { api } from "@/lib/api";
-import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { PageHeader, Spinner, PageSpinner, StatCard } from "@/components/UI";
-import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
