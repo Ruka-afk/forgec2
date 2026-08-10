@@ -100,8 +100,8 @@ export default function AgentsPageContent() {
   );
 
   const loadBeacons = useCallback((opts?: { background?: boolean }) => {
-    loadBeaconsRaw(searchQuery, statusFilter, osFilter, page, 20, tagFilter, opts);
-  }, [loadBeaconsRaw, searchQuery, statusFilter, osFilter, page, tagFilter]);
+    loadBeaconsRaw(searchQuery, statusFilter, osFilter, page, 50, tagFilter, sortKey, sortDir, opts);
+  }, [loadBeaconsRaw, searchQuery, statusFilter, osFilter, page, tagFilter, sortKey, sortDir]);
 
   const loadBeaconsRef = useRef(loadBeacons);
   loadBeaconsRef.current = loadBeacons;
@@ -596,7 +596,7 @@ export default function AgentsPageContent() {
           <ArrowLeftRight className="w-4 h-4" /> {t("agents.swipe_hint")}
         </div>
 
-        <Pagination page={page} pageSize={20} total={total} onPageChange={setPage} />
+        <Pagination page={page} pageSize={50} total={total} onPageChange={setPage} />
       </Card>
       )}
 
@@ -608,7 +608,7 @@ export default function AgentsPageContent() {
             taskCountMap={taskCountMap}
             onSelect={handleSelectAgent}
           />
-          <Pagination page={page} pageSize={20} total={total} onPageChange={setPage} />
+          <Pagination page={page} pageSize={50} total={total} onPageChange={setPage} />
         </>
       )}
 

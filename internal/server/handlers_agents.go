@@ -21,6 +21,7 @@ func (s *Server) handleAgents(c *gin.Context) {
 	statusFilter := c.Query("status")
 	osFilter := c.Query("os")
 	p := parsePagination(c, DefaultPageSize, MaxPageSize)
+	order := agentSortOrder(c.Query("sort_key"), c.Query("sort_dir"))
 
 	query := s.db.Model(&db.Implant{})
 	if search != "" {
@@ -47,7 +48,7 @@ func (s *Server) handleAgents(c *gin.Context) {
 	}
 
 	var agents []db.Implant
-	if err := query.Order("last_seen desc").Offset(p.Offset).Limit(p.PageSize).Find(&agents).Error; err != nil {
+	if err := query.Order(order).Offset(p.Offset).Limit(p.PageSize).Find(&agents).Error; err != nil {
 		handleQueryError(c, err, "Failed to list agents")
 		return
 	}
@@ -79,6 +80,31 @@ func (s *Server) handleAgents(c *gin.Context) {
 	}
 
 	s.renderPageOrJSON(c, data)
+}
+
+// agentSortColumn maps a whitelisted sort key to its DB column. "status" is
+// derived from last_seen (offline < stale < online monotonic in recency), so
+// ordering by last_seen yields the same status ordering.
+var agentSortColumn = map[string]string{
+	"hostname":  "hostname",
+	"username":  "username",
+	"os":        "os",
+	"ip":        "ip",
+	"last_seen": "last_seen",
+	"version":   "version",
+	"status":    "last_seen",
+}
+
+func agentSortOrder(sortKey, sortDir string) string {
+	col, ok := agentSortColumn[sortKey]
+	if !ok {
+		return "last_seen desc"
+	}
+	dir := "asc"
+	if sortDir == "desc" {
+		dir = "desc"
+	}
+	return col + " " + dir
 }
 
 func (s *Server) handleAgentDetail(c *gin.Context) {

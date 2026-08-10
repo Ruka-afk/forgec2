@@ -40,6 +40,8 @@ export function useAgentFilters(beacons: Beacon[]) {
 
   useEffect(() => { if (tagFilter) setPage(1); }, [tagFilter]);
 
+  useEffect(() => { setPage(1); }, [sortKey, sortDir]);
+
   const toggleSort = useCallback((key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("asc"); }
@@ -55,21 +57,9 @@ export function useAgentFilters(beacons: Beacon[]) {
     });
   }, [beacons, linkedFilter]);
 
-  const sortedBeacons = useMemo(() => {
-    const list = [...filteredBeacons];
-    const dir = sortDir === "asc" ? 1 : -1;
-    list.sort((a, b) => {
-      const av = String(a[sortKey] || "");
-      const bv = String(b[sortKey] || "");
-      if (sortKey === "last_seen") {
-        const at = av ? new Date(av).getTime() : 0;
-        const bt = bv ? new Date(bv).getTime() : 0;
-        return (at - bt) * dir;
-      }
-      return av.localeCompare(bv) * dir;
-    });
-    return list;
-  }, [filteredBeacons, sortKey, sortDir]);
+  // Sorting is performed server-side across all pages; the current page's
+  // rows arrive already ordered, so no client-side re-sort is applied.
+  const sortedBeacons = filteredBeacons;
 
   return {
     searchInput, setSearchInput,

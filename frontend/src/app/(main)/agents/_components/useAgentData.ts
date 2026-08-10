@@ -31,7 +31,7 @@ export function useAgentData(t: (key: string) => string) {
   const loadAbortRef = useRef<AbortController | null>(null);
 
   const loadBeacons = useCallback(
-    (search = "", status = "", os = "", page = 1, pageSize = 20, tag_id = "", opts?: { background?: boolean }) => {
+    (search = "", status = "", os = "", page = 1, pageSize = 20, tag_id = "", sort_key = "last_seen", sort_dir = "desc", opts?: { background?: boolean }) => {
       loadAbortRef.current?.abort();
       const ac = new AbortController();
       loadAbortRef.current = ac;
@@ -41,6 +41,8 @@ export function useAgentData(t: (key: string) => string) {
       if (status) p.set("status", status);
       if (os) p.set("os", os);
       if (tag_id) p.set("tag_id", tag_id);
+      p.set("sort_key", sort_key);
+      p.set("sort_dir", sort_dir);
       api
         .get(paths.agents.list(p.toString()), { signal: ac.signal })
         .then((data) => {
