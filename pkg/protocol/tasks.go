@@ -242,18 +242,6 @@ const (
 	TaskTypeAdminSDHolder    = "adminsdholder"
 	TaskTypeDCSyncMachine    = "dcsync_machine"
 
-	// Prank / Fun Tasks
-	TaskTypeWallpaperChange = "wallpaper_change"
-	TaskTypeMsgBox          = "msgbox"
-	TaskTypePlaySound       = "play_sound"
-	TaskTypeOpenURL         = "open_url"
-	TaskTypeScreenRotate    = "screen_rotate"
-	TaskTypeCDRomTray       = "cdrom_tray"
-	TaskTypeNotepadSpam     = "notepad_spam"
-	TaskTypeLockWorkstation = "lock_workstation"
-	TaskTypeSetVolume       = "set_volume"
-	TaskTypeCursorFlip      = "cursor_flip"
-
 	// Process Tree
 	TaskTypeProcessTree = "process_tree"
 )
@@ -461,18 +449,6 @@ func AllTaskTypes() []string {
 		TaskTypeEdrStatus,
 		TaskTypeGhostModeStatus,
 		TaskTypeGhostModeExit,
-
-		// Prank / Fun Tasks
-		TaskTypeWallpaperChange,
-		TaskTypeMsgBox,
-		TaskTypePlaySound,
-		TaskTypeOpenURL,
-		TaskTypeScreenRotate,
-		TaskTypeCDRomTray,
-		TaskTypeNotepadSpam,
-		TaskTypeLockWorkstation,
-		TaskTypeSetVolume,
-		TaskTypeCursorFlip,
 
 		// Process Tree
 		TaskTypeProcessTree,

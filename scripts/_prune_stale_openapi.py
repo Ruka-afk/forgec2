@@ -15,7 +15,7 @@ from pathlib import Path
 OPENAPI = Path("api/openapi.yaml")
 
 AGENTISH = re.compile(
-    r"^/(files/|keylogger/|clipboard/|prank/|screen/|rportfwd/|socks_relay/|"
+    r"^/(files/|keylogger/|clipboard/|screen/|rportfwd/|socks_relay/|"
     r"container_|mimikatz|creds|kerberoast|command$|beacon|browser_steal|"
     r"cookie_export|download|find$|drives$|net$|netstat|killproc|inject|"
     r"execute_assembly|powerpick|persistence|elevate|amsi_|etw_|av$|kill_av|"

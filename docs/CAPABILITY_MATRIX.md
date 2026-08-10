@@ -55,7 +55,6 @@
 | execute_assembly / powerpick / peloader | Hardened | Windows |
 | bof | Hardened | Windows |
 | inject / shinject / threadless… | Hardened | Windows-only suite |
-| prank (msgbox, wallpaper…) | Experimental | Noise; Lab UI |
 
 ## Server product modules
 

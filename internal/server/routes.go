@@ -62,8 +62,6 @@ func (s *Server) registerAgentRoutes(auth *gin.RouterGroup) {
 		agentsRead.GET("/api/agents/:id/process-tree", s.handleGetProcessTree)
 		agentsRead.GET("/agents/:id/config", s.handleGetAgentConfig)
 		agentsRead.GET("/agents/:id/chain", s.handleAgentChainGet)
-		agentsRead.GET("/agents/:id/recording", s.handleAgentRecordingGet)
-		agentsRead.GET("/agents/:id/recording/replay", s.handleAgentRecordingReplay)
 		agentsRead.GET("/agents/:id/status-history", s.handleAgentStatusHistory)
 	}
 
@@ -195,18 +193,6 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/coerce/:type", s.handleCoerce)
 		agentCmd.POST("/relay/start", s.handleNTLMRelayStart)
 		agentCmd.POST("/relay/stop", s.handleNTLMRelayStop)
-
-		// Prank / Fun Tasks
-		agentCmd.POST("/prank/wallpaper", s.handleWallpaperChange)
-		agentCmd.POST("/prank/msgbox", s.handleMsgBox)
-		agentCmd.POST("/prank/sound", s.handlePlaySound)
-		agentCmd.POST("/prank/open_url", s.handleOpenURL)
-		agentCmd.POST("/prank/screen_rotate", s.handleScreenRotate)
-		agentCmd.POST("/prank/cdrom", s.handleCDRomTray)
-		agentCmd.POST("/prank/notepad", s.handleNotepadSpam)
-		agentCmd.POST("/prank/lock", s.handleLockWorkstation)
-		agentCmd.POST("/prank/volume", s.handleSetVolume)
-		agentCmd.POST("/prank/cursor", s.handleCursorFlip)
 	}
 }
 
@@ -897,7 +883,7 @@ func (s *Server) registerCampaignRoutes(auth *gin.RouterGroup) {
 	}
 }
 
-// registerIntegrationRoutes registers BloodHound, AutoTag, scheduled reports, OPSEC, cloud sync, Chrome agents, integrations, rportfwd, agent link, and remote desktop routes.
+// registerIntegrationRoutes registers BloodHound, AutoTag, OPSEC, cloud sync, Chrome agents, integrations, rportfwd, agent link, and remote desktop routes.
 func (s *Server) registerIntegrationRoutes(auth *gin.RouterGroup) {
 	bhRead := auth.Group("/")
 	bhRead.Use(middleware.RequirePermission(db.PermIntelRead))
@@ -929,21 +915,6 @@ func (s *Server) registerIntegrationRoutes(auth *gin.RouterGroup) {
 		autoTagWrite.DELETE("/api/autotag/rules/:id", s.handleAutoTagDelete)
 		autoTagWrite.POST("/api/autotag/apply", s.handleAutoTagApply)
 	}
-
-	scheduledRead := auth.Group("/")
-	scheduledRead.Use(middleware.RequirePermission(db.PermCampaignsRead))
-	{
-		scheduledRead.GET("/scheduled-reports", s.handleScheduledReportList)
-	}
-	scheduledWrite := auth.Group("/")
-	scheduledWrite.Use(middleware.RequirePermission(db.PermCampaignsWrite))
-	{
-		scheduledWrite.POST("/scheduled-reports", s.handleScheduledReportCreate)
-		scheduledWrite.PUT("/scheduled-reports/:id", s.handleScheduledReportUpdate)
-		scheduledWrite.DELETE("/scheduled-reports/:id", s.handleScheduledReportDelete)
-		scheduledWrite.POST("/scheduled-reports/:id/toggle", s.handleScheduledReportToggle)
-	}
-
 	opsecRead := auth.Group("/")
 	opsecRead.Use(middleware.RequirePermission(db.PermOpsecRead))
 	{

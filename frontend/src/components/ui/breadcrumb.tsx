@@ -75,7 +75,6 @@ const SUB_ROUTE_LABELS: Record<string, string> = {
   shell: "agents.shell",
   files: "nav.files",
   screen: "agents.screen_title",
-  recording: "agents.recording_title",
   "remote-desktop": "agents.rdp_title",
   token: "agents.token_title",
   traffic: "nav.traffic",

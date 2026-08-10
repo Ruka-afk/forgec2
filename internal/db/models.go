@@ -971,19 +971,6 @@ type CustomRole struct {
 
 func (CustomRole) TableName() string { return "custom_roles" }
 
-type SessionRecording struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	TaskID    uint      `gorm:"index" json:"task_id"`
-	AgentID   string    `gorm:"index" json:"agent_id"`
-	Operator  string    `json:"operator"`
-	Action    string    `json:"action"`
-	Detail    string    `json:"detail"`
-	Result    string    `json:"result"`
-	Timestamp time.Time `json:"timestamp"`
-}
-
-func (SessionRecording) TableName() string { return "session_recordings" }
-
 type PhishingTemplate struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	Name      string    `gorm:"size:255;not null" json:"name"`
@@ -1248,29 +1235,6 @@ type AIChatMessage struct {
 }
 
 func (AIChatMessage) TableName() string { return "ai_chat_messages" }
-
-// ScheduledReport — recurring report generation and delivery
-type ScheduledReport struct {
-	ID            string    `gorm:"primaryKey;size:36" json:"id"`
-	Name          string    `gorm:"size:200;not null" json:"name"`
-	Enabled       bool      `gorm:"default:true" json:"enabled"`
-	Schedule      string    `gorm:"size:100;not null" json:"schedule"` // "daily HH:MM", "weekly Sun 09:00", etc.
-	Format        string    `gorm:"size:10;default:'html'" json:"format"`
-	IncludeAgents bool      `gorm:"default:true" json:"include_agents"`
-	IncludeTasks  bool      `gorm:"default:true" json:"include_tasks"`
-	IncludeCreds  bool      `gorm:"default:true" json:"include_creds"`
-	IncludeAudit  bool      `gorm:"default:true" json:"include_audit"`
-	DeliveryType  string    `gorm:"size:20" json:"delivery_type"` // "", "email", "webhook", "file"
-	DeliveryTo    string    `gorm:"size:500" json:"delivery_to"`  // email addr / webhook URL / file path
-	LastRun       time.Time `json:"last_run"`
-	NextRun       time.Time `json:"next_run"`
-	RunCount      int       `gorm:"default:0" json:"run_count"`
-	CreatedBy     string    `gorm:"size:100" json:"created_by"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-}
-
-func (ScheduledReport) TableName() string { return "scheduled_reports" }
 
 func (AutoTagRule) TableName() string   { return "auto_tag_rules" }
 func (ScheduledTask) TableName() string { return "scheduled_tasks" }

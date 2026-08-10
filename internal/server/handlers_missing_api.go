@@ -418,7 +418,6 @@ func (s *Server) handleSettingsMaintenancePurge(c *gin.Context) {
 		{"build_logs", "created_at"},
 		{"tasks", "created_at"},
 		{"chat_messages", "created_at"},
-		{"session_recordings", "timestamp"},
 		{"circuit_breaker_events", "created_at"},
 		{"opsec_history", "created_at"},
 	}
@@ -486,35 +485,6 @@ func (s *Server) handleAgentChainClear(c *gin.Context) {
 	}
 	s.LogAuditRecord(c, "agent_chain_clear", "agents", req.AgentID, "Chain cleared", true, nil)
 	respond(c, gin.H{"success": true})
-}
-
-// ── Agent Recording ──────────────────────────────────────────────────
-
-func (s *Server) handleAgentRecordingGet(c *gin.Context) {
-	agentID := c.Query("agent_id")
-	var recordings []db.SessionRecording
-	q := s.db.Order("timestamp DESC").Limit(100)
-	if agentID != "" {
-		q = q.Where("agent_id = ?", agentID)
-	}
-	if err := q.Find(&recordings).Error; err != nil {
-		slog.Error("Failed to query agent recordings", "err", err)
-	}
-	respond(c, gin.H{"recordings": recordings})
-}
-
-func (s *Server) handleAgentRecordingReplay(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		respondError(c, http.StatusBadRequest, "recording id is required")
-		return
-	}
-	var rec db.SessionRecording
-	if err := s.db.First(&rec, "id = ?", id).Error; err != nil {
-		respondError(c, http.StatusNotFound, "recording not found")
-		return
-	}
-	respond(c, gin.H{"recording": rec})
 }
 
 // ── Mesh Route ───────────────────────────────────────────────────────

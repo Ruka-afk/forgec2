@@ -15,22 +15,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CircleAlert, Clock, Download, FileText, Info, Inbox, Key, Lightbulb, ListChecks, PieChart, Radio, Bot, ShieldCheck, TriangleAlert, Trash2, Wand2 } from "lucide-react";
+import { CircleAlert, Download, FileText, Info, Inbox, Key, Lightbulb, ListChecks, PieChart, Radio, Bot, ShieldCheck, TriangleAlert, Trash2, Wand2 } from "lucide-react";
 import { Accordion, AccordionItem, AccordionHeader, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
 import { severityColor } from "./_components/types";
 import { useReportData } from "./_components/useReportData";
 
 export default function ReportPage() {
   const [activeSection, setActiveSection] = useState("overview");
-  const [schedName, setSchedName] = useState("");
-  const [schedSchedule, setSchedSchedule] = useState("daily 08:00");
-  const [schedFormat, setSchedFormat] = useState("html");
-  const [schedDeliveryType, setSchedDeliveryType] = useState("");
-  const [schedDeliveryTo, setSchedDeliveryTo] = useState("");
-  const [creatingSched, setCreatingSched] = useState(false);
-  const [schedActionId, setSchedActionId] = useState<string | null>(null);
 
   const { t } = useI18n();
   const {
@@ -51,8 +43,6 @@ export default function ReportPage() {
     listeners,
     findings,
     history,
-    scheduledReports,
-    loadScheduledReports,
     generateReport,
     deleteReport,
     pdfExportUrl,
@@ -65,7 +55,6 @@ export default function ReportPage() {
     { key: "credentials", label: t("report.sec_credentials"), icon: <Key className="w-5 h-5" /> },
     { key: "network", label: t("report.sec_network"), icon: <Radio className="w-5 h-5" /> },
     { key: "recommendations", label: t("report.sec_recommendations"), icon: <Lightbulb className="w-5 h-5" /> },
-    { key: "scheduled", label: t("report.sec_scheduled"), icon: <Clock className="w-5 h-5" /> },
   ];
 
   const TEMPLATES = [
@@ -416,107 +405,6 @@ export default function ReportPage() {
                 </Accordion>
               )}
             </Card>
-          </TabsContent>
-          <TabsContent value="scheduled" className="mt-0">
-            <div className="space-y-4">
-              <Card className="p-4 sm:p-5">
-                <h2 className="text-lg font-semibold mb-4">{t("report.create_scheduled")}</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label className="mb-1">{t("report.name")}</Label>
-                    <Input value={schedName} onChange={e => setSchedName(e.target.value)} placeholder={t("report.sched_name_ph")} />
-                  </div>
-                  <div>
-                    <Label className="mb-1">{t("report.schedule")}</Label>
-                    <Select value={schedSchedule} onValueChange={(v) => v && setSchedSchedule(v)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="daily 08:00">{t("report.daily_0800")}</SelectItem>
-                        <SelectItem value="daily 18:00">{t("report.daily_1800")}</SelectItem>
-                        <SelectItem value="hour">{t("report.hourly")}</SelectItem>
-                        <SelectItem value="minutes 30">{t("report.every_30min")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="mb-1">{t("report.format")}</Label>
-                    <Select value={schedFormat} onValueChange={(v) => v && setSchedFormat(v)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="html">HTML</SelectItem>
-                        <SelectItem value="json">JSON</SelectItem>
-                        <SelectItem value="pdf">PDF</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="mb-1">{t("report.delivery_method")}</Label>
-                    <div className="flex gap-2">
-                      <Input value={schedDeliveryTo} onChange={e => setSchedDeliveryTo(e.target.value)} placeholder={t("report.dest_ph")} className="flex-1" />
-                      <Select value={schedDeliveryType} onValueChange={(v) => setSchedDeliveryType(v ?? "")}>
-                        <SelectTrigger className="w-28">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          <SelectItem value="email">Email</SelectItem>
-                          <SelectItem value="webhook">Webhook</SelectItem>
-                          <SelectItem value="file">Save File</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-                <Button onClick={async () => {
-                  if (!schedName.trim()) return;
-                  setCreatingSched(true);
-                  try {
-                    const d: { success?: boolean; error?: string } = await api.postJson(paths.report.scheduled, { name: schedName, schedule: schedSchedule, format: schedFormat, delivery_type: schedDeliveryType, delivery_to: schedDeliveryTo, include_agents: true, include_tasks: true, include_creds: true, include_audit: true });
-                     if (d.success) { setSchedName(""); void loadScheduledReports(); toast.success(t("report.toast.scheduled_created")); }
-                   } catch { toast.error(t("report.toast.create_scheduled_failed")); }
-                  setCreatingSched(false);
-                }} disabled={creatingSched} className="mt-4">{creatingSched ? "Creating..." : t("report.create_scheduled")}</Button>
-              </Card>
-              <Card className="overflow-hidden">
-                <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
-                  <h2 className="text-lg font-semibold">{t("report.configured_reports")}</h2>
-                </div>
-                <div className="divide-y divide-border">
-                  {scheduledReports.length === 0 ? (
-                    <div className="py-16 sm:py-20 text-center text-muted-foreground">
-                      <Clock className="w-4 h-4" />
-                      <p className="text-sm">{t("report.no_scheduled")}</p>
-                    </div>
-                  ) : scheduledReports.map(r => (
-                    <div key={r.id} className="p-4 flex items-center justify-between">
-                      <div>
-                        <span className="font-medium">{r.name}</span>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {r.schedule} · {r.format.toUpperCase()} · Next: {r.next_run ? new Date(r.next_run).toLocaleString() : "N/A"} · Runs: {r.run_count}
-                          {r.delivery_type && ` · Deliver via ${r.delivery_type}`}
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={async () => {
-                          setSchedActionId(r.id);
-                          try { await api.post(paths.report.scheduledToggle(r.id)); void loadScheduledReports(); } catch { toast.error(t("report.toast.load_scheduled_failed")); }
-                          setSchedActionId(null);
-                        }} disabled={schedActionId === r.id} className={r.enabled ? "border-emerald-500 text-emerald-600" : ""}>{schedActionId === r.id ? "Toggling..." : r.enabled ? "Enabled" : "Disabled"}</Button>
-                        <Button variant="outline" size="sm" onClick={async () => {
-                          setSchedActionId(r.id);
-                          try { await api.del(paths.report.scheduledOne(r.id)); void loadScheduledReports(); } catch { toast.error(t("report.toast.load_scheduled_failed")); }
-                          setSchedActionId(null);
-                        }} disabled={schedActionId === r.id} className="border-destructive/30 text-destructive">{schedActionId === r.id ? "Deleting..." : "Delete"}</Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
           </TabsContent>
         </div>
       </div>

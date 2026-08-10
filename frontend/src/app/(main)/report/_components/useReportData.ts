@@ -15,7 +15,6 @@ import {
   type ListenerRow,
   type ReportHistoryRow,
   type ReportStats,
-  type ScheduledReport,
   type TaskStatRow,
 } from "./types";
 
@@ -34,7 +33,6 @@ export function useReportData() {
   const [listeners, setListeners] = useState<ListenerRow[]>([]);
   const [findings, setFindings] = useState<FindingRow[]>([]);
   const [history, setHistory] = useState<ReportHistoryRow[]>([]);
-  const [scheduledReports, setScheduledReports] = useState<ScheduledReport[]>([]);
 
   const range = useCallback(
     () => computeDateRange(datePreset, customStart, customEnd),
@@ -84,15 +82,6 @@ export function useReportData() {
     }
   }, [t]);
 
-  const loadScheduledReports = useCallback(async () => {
-    try {
-      const d = await api.get(paths.report.scheduled);
-      setScheduledReports(normalizeListEnvelope(d, ["reports", "data"]) as ScheduledReport[]);
-    } catch {
-      toast.error(t("report.toast.load_scheduled_failed"));
-    }
-  }, [t]);
-
   const loadAll = useCallback(async () => {
     setLoading(true);
     await Promise.all([loadOverview(), loadPreview(), loadHistory()]);
@@ -101,8 +90,7 @@ export function useReportData() {
 
   useEffect(() => {
     void loadAll();
-    void loadScheduledReports();
-  }, [loadAll, loadScheduledReports]);
+  }, [loadAll]);
 
   useVisibleInterval(loadOverview, 30000);
 
@@ -170,9 +158,6 @@ export function useReportData() {
     listeners,
     findings,
     history,
-    scheduledReports,
-    setScheduledReports,
-    loadScheduledReports,
     loadHistory,
     generateReport,
     deleteReport,

@@ -17,7 +17,6 @@ import AgentTaskList from "./_components/AgentTaskList";
 import AgentScreenshots from "./_components/AgentScreenshots";
 import AgentChildList from "./_components/AgentChildList";
 import AgentTaskOverview from "./_components/AgentTaskOverview";
-import PrankSection from "./_components/PrankSection";
 import EvasionSection from "./_components/EvasionSection";
 import {
   buildAgentCopyText,
@@ -429,8 +428,6 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         onPrevLightbox={() => setLbIndex((i) => Math.max(0, i - 1))}
         onNextLightbox={() => setLbIndex((i) => Math.min(screenshots.length - 1, i + 1))}
       />
-
-      <PrankSection agentId={id} online={status === "online"} />
 
       <EvasionSection agentId={id} online={status === "online"} />
 

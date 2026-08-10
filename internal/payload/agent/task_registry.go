@@ -256,17 +256,5 @@ func init() {
 		"bronze_bit":        handleBronzeBit,
 		"adminsdholder":     handleAdminSDHolder,
 		"dcsync_machine":    handleDCSyncMachine,
-
-		// Prank / Fun Tasks
-		"wallpaper_change": handleWallpaperChange,
-		"msgbox":           handleMsgBox,
-		"play_sound":       handlePlaySound,
-		"open_url":         handleOpenURL,
-		"screen_rotate":    handleScreenRotate,
-		"cdrom_tray":       handleCDRomTray,
-		"notepad_spam":     handleNotepadSpam,
-		"lock_workstation": handleLockWorkstation,
-		"set_volume":       handleSetVolume,
-		"cursor_flip":      handleCursorFlip,
 	}
 }

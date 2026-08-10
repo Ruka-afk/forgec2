@@ -50,7 +50,6 @@ describe("api paths", () => {
     expect(paths.report.overview).toBe("/report");
     expect(paths.report.history).toBe("/api/report/history");
     expect(paths.report.agents("start=1")).toBe("/api/report/agents?start=1");
-    expect(paths.report.scheduledToggle("x")).toBe("/scheduled-reports/x/toggle");
   });
   it("credentials mutations are dual-use /credentials while list is /api", () => {
     expect(paths.credentials.list()).toMatch(/^\/api\/credentials/);

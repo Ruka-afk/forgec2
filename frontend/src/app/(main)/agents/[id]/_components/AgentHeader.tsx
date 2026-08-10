@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { CopyButton, StatusBadge, Spinner } from "@/components/UI";
 import type { AgentDetail, AgentStatus } from "@/types/agent";
-import { Activity, Apple, Camera, Clipboard, Crown, Database, FolderOpen, History, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, RefreshCw, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
+import { Activity, Apple, Camera, Clipboard, Crown, Database, FolderOpen, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, RefreshCw, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -138,7 +138,6 @@ export default function AgentHeader({
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/token`} />}><Key className="w-4 h-4" /> {t("agents.token_title")}</DropdownMenuItem>
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/persistence`} />}><LinkIcon className="w-4 h-4" /> {t("agents.persistence_title")}</DropdownMenuItem>
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/remote-desktop`} />}><Monitor className="w-4 h-4" /> {t("agents.rdp_title")}</DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/recording`} />}><History className="w-4 h-4" /> {t("agents.recording_title")}</DropdownMenuItem>
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/config`} />}><SlidersHorizontal className="w-4 h-4" /> {t("agents.config_hot_config")}</DropdownMenuItem>
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/traffic`} />}><Activity className="w-4 h-4" /> {t("agents.traffic_title")}</DropdownMenuItem>
                   {onMigrate && (

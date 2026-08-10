@@ -330,9 +330,6 @@ func DefaultConfig() *Config {
 	cfg.Listeners.H2C.Enabled = false
 	cfg.Listeners.H2C.Addr = ":8081"
 
-	cfg.Listeners.WG.Enabled = false
-	cfg.Listeners.WG.Addr = ":51820"
-
 	return cfg
 }
 
@@ -768,18 +765,6 @@ func (c *Config) Validate() error {
 		errs = append(errs, errors.New("listeners.h2c.addr is required when listeners.h2c.enabled is true"))
 	}
 
-	if c.Listeners.WG.Enabled {
-		if c.Listeners.WG.Addr == "" {
-			errs = append(errs, errors.New("listeners.wg.addr is required when listeners.wg.enabled is true"))
-		}
-		if c.Listeners.WG.PrivateKey == "" {
-			errs = append(errs, errors.New("listeners.wg.private_key is required when listeners.wg.enabled is true"))
-		}
-		if c.Listeners.WG.PeerPublicKey == "" {
-			errs = append(errs, errors.New("listeners.wg.peer_public_key is required when listeners.wg.enabled is true"))
-		}
-	}
-
 	// Crypto validation
 	if c.Crypto.ForceECDH && !strings.HasPrefix(c.Crypto.Key, "ecdh:") {
 		errs = append(errs, errors.New("crypto.force_ecdh requires crypto.key to start with \"ecdh:\""))
@@ -910,7 +895,6 @@ type SlackConfig struct {
 type ListenersConfig struct {
 	MTLS MTLSListenerConfig `yaml:"mtls"`
 	H2C  H2CListenerConfig  `yaml:"h2c"`
-	WG   WGListenerConfig   `yaml:"wg"`
 }
 
 // MTLSListenerConfig configures the mTLS listener.
@@ -926,14 +910,6 @@ type MTLSListenerConfig struct {
 type H2CListenerConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Addr    string `yaml:"addr"`
-}
-
-// WGListenerConfig configures the WireGuard-style UDP listener.
-type WGListenerConfig struct {
-	Enabled       bool   `yaml:"enabled"`
-	Addr          string `yaml:"addr"`
-	PrivateKey    string `yaml:"private_key"`
-	PeerPublicKey string `yaml:"peer_public_key"`
 }
 
 // LoadFromData loads config from byte data

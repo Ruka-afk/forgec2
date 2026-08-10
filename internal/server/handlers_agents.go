@@ -407,9 +407,6 @@ func (s *Server) deleteAgentRecordTx(tx *gorm.DB, id string) error {
 	if err := tx.Where("agent_id = ?", id).Delete(&db.OpsecHistory{}).Error; err != nil {
 		return fmt.Errorf("delete opsec history: %w", err)
 	}
-	if err := tx.Where("agent_id = ?", id).Delete(&db.SessionRecording{}).Error; err != nil {
-		return fmt.Errorf("delete session recordings: %w", err)
-	}
 	if err := tx.Where("agent_id = ?", id).Delete(&db.BloodHoundResult{}).Error; err != nil {
 		return fmt.Errorf("delete bloodhound results: %w", err)
 	}

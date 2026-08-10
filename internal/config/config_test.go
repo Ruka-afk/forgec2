@@ -301,8 +301,6 @@ func TestValidate(t *testing.T) {
 		{"mtls enabled without addr", func(c *Config) { c.Listeners.MTLS.Enabled = true; c.Listeners.MTLS.Addr = "" }, true, "mtls.addr"},
 		{"mtls enabled without cert", func(c *Config) { c.Listeners.MTLS.Enabled = true; c.Listeners.MTLS.CertFile = "" }, true, "mtls.cert_file"},
 		{"h2c enabled without addr", func(c *Config) { c.Listeners.H2C.Enabled = true; c.Listeners.H2C.Addr = "" }, true, "h2c.addr"},
-		{"wg enabled without addr", func(c *Config) { c.Listeners.WG.Enabled = true; c.Listeners.WG.Addr = "" }, true, "wg.addr"},
-		{"wg enabled without private key", func(c *Config) { c.Listeners.WG.Enabled = true; c.Listeners.WG.Addr = ":51820"; c.Listeners.WG.PrivateKey = "" }, true, "wg.private_key"},
 		{"negative AI max_conversation_turns", func(c *Config) { c.AI.MaxConversationTurns = -1 }, true, "max_conversation_turns"},
 		{"negative AI max_tool_rounds", func(c *Config) { c.AI.MaxToolRounds = -1 }, true, "max_tool_rounds"},
 		{"negative AI max_duplicate_tool_calls", func(c *Config) { c.AI.MaxDuplicateToolCalls = -1 }, true, "max_duplicate_tool_calls"},

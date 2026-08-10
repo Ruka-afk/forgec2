@@ -25,7 +25,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 	err = database.AutoMigrate(
 		&db.Implant{}, &db.Task{}, &db.AuditLog{}, &db.Listener{},
 		&db.TokenEntry{}, &db.SocksSession{}, &db.User{},
-		&db.CredentialEntry{}, &db.CloudCred{}, &db.ScheduledReport{},
+		&db.CredentialEntry{}, &db.CloudCred{},
 		&db.BuildLog{}, &db.ScanResult{}, &db.NetworkHost{}, &db.CommandTemplate{},
 		&db.BOFFile{}, &db.BOFLibrary{}, &db.ServerConfig{}, &db.WebhookConfig{},
 		&db.Plugin{}, &db.PluginReview{}, &db.PluginDependency{}, &db.PluginUpdateStatus{},
@@ -33,7 +33,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		&db.GeneratedReport{}, &db.RolePermission{}, &db.MeshPeer{},
 		&db.BloodHoundResult{}, &db.BloodHoundFile{}, &db.Campaign{},
 		&db.CampaignAgent{}, &db.OpsecHistory{}, &db.CircuitBreakerConfig{},
-		&db.CircuitBreakerEvent{}, &db.CustomRole{}, &db.SessionRecording{},
+		&db.CircuitBreakerEvent{}, &db.CustomRole{},
 		&db.PhishingTemplate{}, &db.PhishingCampaign{}, &db.PhishingEvent{},
 		&db.AgentTag{}, &db.AgentTagAssignment{}, &db.AutoTagRule{}, &db.ScheduledTask{}, &db.Notification{},
 		&db.AgentGroup{}, &db.AgentGroupAssignment{}, &db.Workflow{}, &db.WorkflowStep{},

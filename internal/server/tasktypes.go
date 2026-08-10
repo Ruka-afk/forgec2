@@ -263,28 +263,6 @@ func init() {
 		{Type: protocol.TaskTypeEdrStatus, Name: "EDR Status", Description: "Check EDR status", Category: "discovery"},
 		{Type: protocol.TaskTypeGhostModeStatus, Name: "Ghost Mode Status", Description: "Check ghost mode status", Category: "c2"},
 		{Type: protocol.TaskTypeGhostModeExit, Name: "Ghost Mode Exit", Description: "Exit ghost mode", Category: "c2"},
-
-		// Prank / Fun Tasks
-		{Type: protocol.TaskTypeWallpaperChange, Name: "Change Wallpaper", Description: "Change the desktop wallpaper", Category: "impact",
-			Parameters: []TaskTypeParam{{Name: "command", Type: "string", Required: true, Description: "Image URL or local path"}}},
-		{Type: protocol.TaskTypeMsgBox, Name: "Message Box", Description: "Show a Windows MessageBox", Category: "impact",
-			Parameters: []TaskTypeParam{
-				{Name: "command", Type: "string", Required: true, Description: "Message text"},
-				{Name: "shell", Type: "string", Required: false, Description: "Title (default: ForgeC2)"},
-			}},
-		{Type: protocol.TaskTypePlaySound, Name: "Play Sound", Description: "Play a WAV file or system beep", Category: "impact",
-			Parameters: []TaskTypeParam{{Name: "command", Type: "string", Required: false, Description: "WAV file path or URL (empty = system beep)"}}},
-		{Type: protocol.TaskTypeOpenURL, Name: "Open URL", Description: "Open a URL in the default browser", Category: "impact",
-			Parameters: []TaskTypeParam{{Name: "command", Type: "string", Required: true, Description: "URL to open"}}},
-		{Type: protocol.TaskTypeScreenRotate, Name: "Rotate Screen", Description: "Rotate screen 180 degrees (toggle)", Category: "impact"},
-		{Type: protocol.TaskTypeCDRomTray, Name: "CD-ROM Tray", Description: "Open or close the CD-ROM tray", Category: "impact",
-			Parameters: []TaskTypeParam{{Name: "command", Type: "string", Required: true, Description: "open or close"}}},
-		{Type: protocol.TaskTypeNotepadSpam, Name: "Notepad Spam", Description: "Open multiple Notepad windows", Category: "impact",
-			Parameters: []TaskTypeParam{{Name: "command", Type: "string", Required: false, Description: "Number of windows (default 5, max 20)"}}},
-		{Type: protocol.TaskTypeLockWorkstation, Name: "Lock Workstation", Description: "Lock the Windows session", Category: "impact"},
-		{Type: protocol.TaskTypeSetVolume, Name: "Set Volume", Description: "Set system volume (0=mute, 100=max)", Category: "impact",
-			Parameters: []TaskTypeParam{{Name: "command", Type: "string", Required: true, Description: "Volume level 0-100"}}},
-		{Type: protocol.TaskTypeCursorFlip, Name: "Flip Cursor", Description: "Invert mouse X/Y axes (toggle)", Category: "impact"},
 	}
 }
 

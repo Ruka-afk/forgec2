@@ -63,18 +63,6 @@ export interface ReportHistoryRow {
   size?: string;
 }
 
-export interface ScheduledReport {
-  id: string;
-  name: string;
-  enabled: boolean;
-  schedule: string;
-  format: string;
-  last_run: string;
-  next_run: string;
-  run_count: number;
-  delivery_type: string;
-}
-
 export function severityColor(s: string): string {
   if (s === "critical") return "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20";
   if (s === "high") return "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20";

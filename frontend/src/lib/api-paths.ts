@@ -59,9 +59,6 @@ export const paths = {
     runEvasion: (id: string) => `/agents/${id}/run_evasion`,
     profileRotate: (id: string) => `/agents/${id}/profile-rotate`,
     modulesDeploy: (id: string) => `/agents/${id}/modules/deploy`,
-    recording: (id: string, query = "") =>
-      query ? `/agents/${id}/recording?${query}` : `/agents/${id}/recording`,
-    recordingReplay: (id: string) => `/agents/${id}/recording/replay`,
     trafficProfile: (id: string) => `/agents/${id}/traffic-profile`,
     trafficAdapt: (id: string) => `/agents/${id}/traffic-profile/adapt`,
     trafficAutoAdapt: (id: string) => `/agents/${id}/traffic-profile/auto-adapt`,
@@ -294,9 +291,6 @@ export const paths = {
     history: "/api/report/history",
     generate: "/api/report/generate",
     one: (id: string) => `/api/report/${id}`,
-    scheduled: "/scheduled-reports",
-    scheduledOne: (id: string) => `/scheduled-reports/${id}`,
-    scheduledToggle: (id: string) => `/scheduled-reports/${id}/toggle`,
     exportPdf: (query: string) => `/report/export/pdf?${query}`,
   },
   dashboard: {

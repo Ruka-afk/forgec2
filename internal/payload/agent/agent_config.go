@@ -117,7 +117,6 @@ var (
 	smbPipeName      string // resolved SMB pipe name (from SMBPipeName or extracted from C2URL)
 )
 
-var beaconCipher *streamCipher // legacy XOR beacon encryption (nil = disabled)
 var ecdhSess *ecdhSession      // ECDH session for forward-secret encryption (nil = not established)
 var beaconKey string           // parsed from BeaconKeyStr (PSK auth on all transports)
 var inSandbox bool             // set by sandbox detection at startup

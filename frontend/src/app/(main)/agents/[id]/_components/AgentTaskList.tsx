@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/UI";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { timeAgo } from "@/lib/utils";
 import type { AgentTaskRecord } from "@/types/agent";
-import { Camera, ChevronDown, Clipboard, Clock, Database, Download, Folder, Globe, Image, Keyboard, ListChecks, MessageSquare, Music, Shield, Skull, StickyNote, Terminal, Upload } from "lucide-react";
+import { Camera, ChevronDown, Clipboard, Clock, Database, Download, Folder, Keyboard, ListChecks, Shield, Skull, Terminal, Upload } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useI18n } from "@/lib/i18n";
 
@@ -28,15 +28,6 @@ function getTaskTypeIcon(type: string): React.ReactNode {
     case "privesc_check": return <Shield className={s} />;
     case "sleep": return <Clock className={s} />;
     case "hashdump": return <Database className={s} />;
-    // eslint-disable-next-line jsx-a11y/alt-text -- lucide-react Image icon, not an HTML img
-    case "wallpaper_change": return <Image className={s} aria-hidden="true" />;
-    case "msgbox": return <MessageSquare className={s} />;
-    case "play_sound": return <Music className={s} />;
-    case "open_url": return <Globe className={s} />;
-    case "screen_rotate": case "cursor_flip": return <Terminal className={s} />;
-    case "cdrom_tray": return <Terminal className={s} />;
-    case "notepad_spam": return <StickyNote className={s} />;
-    case "lock_workstation": case "set_volume": return <Terminal className={s} />;
     default: return <Terminal className={s} />;
   }
 }
@@ -51,8 +42,6 @@ function getTaskTypeColor(type: string): string {
     case "privesc_check": return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400";
     case "clipboard_get": return "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400";
     case "keylogger_start": case "keylogger_dump": case "keylogger_stop": return "bg-purple-500/15 text-purple-600 dark:text-purple-400";
-    case "wallpaper_change": case "msgbox": case "play_sound": case "open_url": case "screen_rotate": case "cdrom_tray": case "notepad_spam": case "lock_workstation": case "set_volume": case "cursor_flip":
-      return "bg-pink-500/15 text-pink-600 dark:text-pink-400";
     default: return "bg-muted text-muted-foreground";
   }
 }
