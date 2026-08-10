@@ -519,7 +519,6 @@ func (s *Server) handleDownloadConfig(c *gin.Context) {
 		s.cfg.Server.JWTSecret,
 		s.cfg.Auth.PasswordHash,
 		s.cfg.AI.APIKey,
-		s.cfg.SSO.ClientSecret,
 		s.cfg.Integrations.Slack.BotToken,
 		s.cfg.Integrations.Slack.AppToken,
 		s.cfg.Integrations.Slack.SigningSecret,

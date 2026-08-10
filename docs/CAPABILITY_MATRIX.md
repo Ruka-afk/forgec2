@@ -79,7 +79,6 @@
 | Scanner UI | Hardened | Agent-side port scan; not full Nmap |
 | ATT&CK coverage UI | Hardened | Task-type mapping only — not proof of compromise |
 | Circuit breaker UI | Hardened | Listener probe/failover; not full multi-C2 mesh |
-| Prank actions | Experimental | High noise; Lab/agent detail only |
 
 ## Operator rules
 

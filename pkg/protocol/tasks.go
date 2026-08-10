@@ -153,9 +153,6 @@ const (
 	TaskTypeRelayNTLMStop    = "relay_ntlm_stop"
 	TaskTypeNTLMHelp         = "ntlm_help"
 
-	// Macro / VBA
-	TaskTypeMacroExecute = "macro_execute"
-
 	// Certificate Store Theft
 	TaskTypeCertStoreList = "cert_store_list"
 
@@ -365,7 +362,6 @@ func AllTaskTypes() []string {
 		TaskTypeRelayNTLMStart,
 		TaskTypeRelayNTLMStop,
 		TaskTypeNTLMHelp,
-		TaskTypeMacroExecute,
 		TaskTypeCertStoreList,
 		TaskTypeCLRExecAssembly,
 		TaskTypeCLRPowerShell,

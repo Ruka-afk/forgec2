@@ -12,7 +12,6 @@ import (
 type TrafficProfile struct {
 	BaselineInterval   int    // seconds — observed normal interval
 	BaselineJitter     int    // percentage
-	BaselinePacketSize int    // bytes
 	BaselineTLS        string // TLS fingerprint name
 	BaselineUserAgent  string
 	CurrentInterval    int
@@ -23,7 +22,6 @@ type TrafficProfile struct {
 type AdaptationSuggestion struct {
 	DesiredInterval int
 	DesiredJitter   int
-	PadSize         int
 	Reason          string
 }
 
@@ -44,14 +42,13 @@ func initTrafficShaping() {
 	defer trafficMu.Unlock()
 
 	trafficProfile = TrafficProfile{
-		BaselineInterval:   Interval,
-		BaselineJitter:     Jitter,
-		BaselinePacketSize: 0,
-		BaselineTLS:        "",
-		BaselineUserAgent:  UserAgent,
-		CurrentInterval:    Interval,
-		CurrentJitter:      Jitter,
-		AdaptRate:          0.10,
+		BaselineInterval:  Interval,
+		BaselineJitter:    Jitter,
+		BaselineTLS:       "",
+		BaselineUserAgent: UserAgent,
+		CurrentInterval:   Interval,
+		CurrentJitter:     Jitter,
+		AdaptRate:         0.10,
 	}
 	trafficHistory = make([]beaconTimingRecord, 0, maxTrafficSamples)
 }
@@ -103,16 +100,6 @@ func analyzeTrafficBaseline() *AdaptationSuggestion {
 	variance /= float64(len(intervals))
 	stddev := math.Sqrt(variance)
 
-	sizes := make([]float64, 0, len(trafficHistory))
-	for _, r := range trafficHistory {
-		sizes = append(sizes, float64(r.bodySize))
-	}
-	meanSize := 0.0
-	for _, s := range sizes {
-		meanSize += s
-	}
-	meanSize /= float64(len(sizes))
-
 	sugg := &AdaptationSuggestion{
 		DesiredInterval: trafficProfile.CurrentInterval,
 		DesiredJitter:   trafficProfile.CurrentJitter,
@@ -144,19 +131,6 @@ func analyzeTrafficBaseline() *AdaptationSuggestion {
 			}
 			if sugg.Reason == "" {
 				sugg.Reason = "interval deviates from baseline, adjusting"
-			}
-		}
-	}
-
-	if trafficProfile.BaselinePacketSize > 0 && meanSize > 0 {
-		sizeRatio := meanSize / float64(trafficProfile.BaselinePacketSize)
-		if sizeRatio > 3.0 {
-			sugg.PadSize = int(meanSize) / 2
-			if sugg.PadSize > 8192 {
-				sugg.PadSize = 8192
-			}
-			if sugg.Reason == "" {
-				sugg.Reason = "packet size unusually large, adding padding"
 			}
 		}
 	}
@@ -222,15 +196,6 @@ func applyTrafficShaping(body []byte) []byte {
 	sugg := analyzeTrafficBaseline()
 	if sugg != nil {
 		adaptBeaconProfile(sugg)
-	}
-
-	if sugg != nil && sugg.PadSize > 0 {
-		padLen := rng.Intn(sugg.PadSize)
-		if padLen > 0 {
-			pad := make([]byte, padLen)
-			rng.Read(pad)
-			body = append(body, pad...)
-		}
 	}
 
 	return body

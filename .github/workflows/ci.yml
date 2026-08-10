@@ -15,7 +15,7 @@ jobs:
       - run: go mod download
       - run: go vet ./internal/... ./pkg/... ./cmd/...
       - run: go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/logger/... ./internal/malleable/... ./internal/obfuscation/... ./internal/plugin/... ./internal/report/... ./internal/server/... ./pkg/... -count=1 -timeout 5m -coverprofile=coverage.out
-      - run: go build ./cmd/server
+      - run: go build ./...
       - run: go build -o checkopenapi ./cmd/checkopenapi
       - name: OpenAPI check (core paths + min coverage)
         run: |

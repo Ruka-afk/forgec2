@@ -182,7 +182,6 @@ func init() {
 		{Type: protocol.TaskTypeRelayNTLMStart, Name: "NTLM Relay", Description: "Start NTLM relay listener", Category: "credential-access"},
 		{Type: protocol.TaskTypeRelayNTLMStop, Name: "NTLM Relay Stop", Description: "Stop NTLM relay listener", Category: "credential-access"},
 		{Type: protocol.TaskTypeNTLMHelp, Name: "NTLM Help", Description: "Show NTLM relay help", Category: "credential-access"},
-		{Type: protocol.TaskTypeMacroExecute, Name: "Macro Execute", Description: "Execute a VBA macro", Category: "execution"},
 		{Type: protocol.TaskTypeCertStoreList, Name: "Cert Store List", Description: "List certificate store contents", Category: "discovery"},
 		{Type: protocol.TaskTypeCLRExecAssembly, Name: "CLR Exec Assembly", Description: "Execute .NET assembly via CLR", Category: "execution"},
 		{Type: protocol.TaskTypeCLRPowerShell, Name: "CLR PowerShell", Description: "Run PowerShell via CLR", Category: "execution"},

@@ -25,7 +25,7 @@ powershell -File scripts\build-embedded.ps1
 - **Frontend**: Next.js 16, `frontend/` directory, embedded via `//go:embed all:dist` into Go binary
 - **Config**: `config.yaml` at root (also `config.example.yaml` for CI)
 - **OpenAPI spec**: `api/openapi.yaml`, served at `/api/docs`, validated by `cmd/checkopenapi`
-- **Default account**: username `admin` / password `admin` — DO NOT change this default (documented, keep as-is)
+- **Initial account**: username `admin`; password auto-generated on first boot if `auth.default_password` is empty (weak passwords like `admin` are rejected by `isWeakDefaultPassword`)
 
 ## API & Routing
 

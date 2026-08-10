@@ -41,11 +41,6 @@ type Config struct {
 		GRPCAddr             string        `yaml:"grpc_addr"`
 		ICMPEnabled          bool          `yaml:"icmp_enabled"`
 		ICMPAddr             string        `yaml:"icmp_addr"`
-		DNSDoHEnabled        bool          `yaml:"dns_doh_enabled"`
-		DNSDoHURL            string        `yaml:"dns_doh_url"`
-		DNSDoTEnabled        bool          `yaml:"dns_dot_enabled"`
-		DNSDoTAddr           string        `yaml:"dns_dot_addr"`
-		DNSIPv6Enabled       bool          `yaml:"dns_ipv6_enabled"`
 		OfflineThreshold     int           `yaml:"offline_threshold"`      // seconds
 		SessionMaxAgeHours   int           `yaml:"session_max_age_hours"`  // JWT expiry
 		CleanupRetentionDays int           `yaml:"cleanup_retention_days"` // auto-purge cutoff
@@ -60,8 +55,6 @@ type Config struct {
 		SSHPassword          string        `yaml:"ssh_password"`           // SSH password (empty = any password or key-only)
 		SSHKeyAuth           bool          `yaml:"ssh_key_auth"`           // allow public key authentication
 		GeoIPEnabled         bool          `yaml:"geoip_enabled"`          // enable GeoIP lookup via ip-api.com (opt-in)
-		FrontDomains         []string      `yaml:"front_domains"`          // CDN front domains for domain fronting auto-failover
-		FrontCheckInterval   int           `yaml:"front_check_interval"`   // seconds between domain front health checks (default 60)
 		AllowedOrigins       []string      `yaml:"allowed_origins"`        // allowed WebSocket/CORS origins (default: localhost,127.0.0.1,::1)
 		TrustedProxies       []string      `yaml:"trusted_proxies"`        // trusted reverse proxy IPs/CIDRs for X-Forwarded-For (empty = trust none, use direct client IP)
 		CookieDomain         string        `yaml:"cookie_domain"`          // domain for session/CSRF cookies (for cross-origin deployments)
@@ -88,7 +81,6 @@ type Config struct {
 		MinJitter           int    `yaml:"min_jitter"`       // OPSEC: minimum allowed jitter percent (0 = no minimum, default 10)
 		DefaultUA           string `yaml:"default_user_agent"`
 		DefaultSkipTLS      bool   `yaml:"default_skip_tls"`
-		DefaultPinnedCert   string `yaml:"default_pinned_cert"`   // SHA-256 hex of server DER cert for pinning
 		DefaultWorkingStart string `yaml:"default_working_start"` // HH:MM local time (empty = disabled)
 		DefaultWorkingEnd   string `yaml:"default_working_end"`   // HH:MM local time (empty = disabled)
 		DefaultWorkingTZ    string `yaml:"default_working_tz"`    // IANA timezone (e.g. "America/New_York"), empty = UTC
@@ -157,8 +149,6 @@ type Config struct {
 		Actions string `yaml:"actions"` // comma-separated action filters (empty = all)
 	} `yaml:"siem"`
 
-	SSO SSOConfig `yaml:"sso"`
-
 	Integrations struct {
 		Slack SlackConfig `yaml:"slack"`
 	} `yaml:"integrations"`
@@ -217,11 +207,6 @@ func DefaultConfig() *Config {
 	cfg.Server.DNSAddr = ":53"
 	cfg.Server.ICMPEnabled = false
 	cfg.Server.ICMPAddr = "0.0.0.0"
-	cfg.Server.DNSDoHEnabled = false
-	cfg.Server.DNSDoHURL = "https://dns.google/dns-query"
-	cfg.Server.DNSDoTEnabled = false
-	cfg.Server.DNSDoTAddr = "1.1.1.1:853"
-	cfg.Server.DNSIPv6Enabled = false
 	cfg.Server.SSHEnabled = false
 	cfg.Server.SSHPort = 2222
 	cfg.Server.SSHAddr = ""
@@ -235,7 +220,6 @@ func DefaultConfig() *Config {
 	cfg.Server.CleanupRetentionDays = 30
 	cfg.Server.UpdateCheckRepo = "forgec2/forgec2"
 	cfg.Server.UpdateCheckEnabled = false // update checks phone home to api.github.com — opt-in only
-	cfg.Server.FrontCheckInterval = 60
 	cfg.Server.EnablePprof = false
 	cfg.Server.EnableMetrics = false
 	cfg.Server.SocksListenHost = "127.0.0.1"
@@ -311,22 +295,12 @@ func DefaultConfig() *Config {
 	cfg.Socks.Users = []SocksUser{}
 	cfg.Socks.AllowedDests = []string{}
 
-	cfg.SSO.Enabled = false
-	cfg.SSO.Scopes = "openid profile email"
-	cfg.SSO.DefaultRole = "user"
-
 	cfg.RateLimit.ExtC2.Enabled = true
 	cfg.RateLimit.ExtC2.Rate = 10
 	cfg.RateLimit.ExtC2.Burst = 20
 	cfg.RateLimit.ExtC2.CleanupAge = 30
 
 	// Listener defaults
-	cfg.Listeners.MTLS.Enabled = false
-	cfg.Listeners.MTLS.Addr = ":8443"
-	cfg.Listeners.MTLS.CertFile = filepath.Join(cfg.Server.DataDir, "server.crt")
-	cfg.Listeners.MTLS.KeyFile = filepath.Join(cfg.Server.DataDir, "server.key")
-	cfg.Listeners.MTLS.ClientCAFile = filepath.Join(cfg.Server.DataDir, "ca.crt")
-
 	cfg.Listeners.H2C.Enabled = false
 	cfg.Listeners.H2C.Addr = ":8081"
 
@@ -531,9 +505,6 @@ func Load(path string) (*Config, error) {
 			cfg.Server.Port = p
 		}
 	}
-	if envSSOSecret := os.Getenv("FORGEC2_SSO_CLIENT_SECRET"); envSSOSecret != "" {
-		cfg.SSO.ClientSecret = envSSOSecret
-	}
 	if envSlackToken := os.Getenv("FORGEC2_SLACK_BOT_TOKEN"); envSlackToken != "" {
 		cfg.Integrations.Slack.BotToken = envSlackToken
 	}
@@ -673,16 +644,6 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// SSO validation
-	if c.SSO.Enabled {
-		if c.SSO.ClientID == "" {
-			errs = append(errs, errors.New("sso.client_id is required when sso.enabled is true"))
-		}
-		if c.SSO.ClientSecret == "" {
-			errs = append(errs, errors.New("sso.client_secret is required when sso.enabled is true"))
-		}
-	}
-
 	// TLS validation. cert_file/key_file paths are required when TLS is on,
 	// but the files themselves may be absent: the server auto-generates a
 	// self-signed certificate at startup (Run -> GenerateSelfSignedCert).
@@ -717,9 +678,6 @@ func (c *Config) Validate() error {
 	if c.Malleable.Enabled && c.Malleable.StatusCode != 0 && (c.Malleable.StatusCode < 100 || c.Malleable.StatusCode > 599) {
 		errs = append(errs, errors.New("malleable.status_code must be between 100 and 599 or 0 for default"))
 	}
-	if c.Server.FrontCheckInterval < 1 {
-		errs = append(errs, errors.New("server.front_check_interval must be >= 1 second"))
-	}
 	if c.PasswordPolicy.MinLength < 4 {
 		errs = append(errs, errors.New("password_policy.min_length must be >= 4"))
 	}
@@ -746,22 +704,7 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.Listeners.MTLS.Enabled {
-		if c.Listeners.MTLS.Addr == "" {
-			errs = append(errs, errors.New("listeners.mtls.addr is required when listeners.mtls.enabled is true"))
-		}
-		if c.Listeners.MTLS.CertFile == "" {
-			errs = append(errs, errors.New("listeners.mtls.cert_file is required when listeners.mtls.enabled is true"))
-		}
-		if c.Listeners.MTLS.KeyFile == "" {
-			errs = append(errs, errors.New("listeners.mtls.key_file is required when listeners.mtls.enabled is true"))
-		}
-		if c.Listeners.MTLS.ClientCAFile == "" {
-			errs = append(errs, errors.New("listeners.mtls.client_ca_file is required when listeners.mtls.enabled is true"))
-		}
-	}
-
-	if c.Listeners.H2C.Enabled && c.Listeners.H2C.Addr == "" {
+if c.Listeners.H2C.Enabled && c.Listeners.H2C.Addr == "" {
 		errs = append(errs, errors.New("listeners.h2c.addr is required when listeners.h2c.enabled is true"))
 	}
 
@@ -845,27 +788,10 @@ func (c *Config) CopyFrom(src *Config) {
 	c.AI = src.AI
 	c.Logging = src.Logging
 	c.RateLimit = src.RateLimit
-	c.SSO = src.SSO
 	c.Integrations = src.Integrations
 	c.Listeners = src.Listeners
 	c.Socks = src.Socks
 	c.TLSFingerprint = src.TLSFingerprint
-}
-
-// SSOConfig holds enterprise SSO/OIDC/SAML authentication settings
-type SSOConfig struct {
-	Enabled      bool   `yaml:"enabled"`
-	ProviderName string `yaml:"provider_name"` // oidc, azure, google, okta, onelogin, custom
-	DisplayName  string `yaml:"display_name"`  // human-readable name shown on login button (e.g. "Login with Azure AD")
-	ClientID     string `yaml:"client_id"`
-	ClientSecret string `yaml:"client_secret"`
-	RedirectURL  string `yaml:"redirect_url"`
-	AuthURL      string `yaml:"auth_url"`     // authorization endpoint
-	TokenURL     string `yaml:"token_url"`    // token exchange endpoint
-	UserInfoURL  string `yaml:"userinfo_url"` // userinfo endpoint
-	Scopes       string `yaml:"scopes"`       // space-separated (default: "openid profile email")
-	Domains      string `yaml:"domains"`      // comma-separated allowed email domains
-	DefaultRole  string `yaml:"default_role"` // role for auto-provisioned users (admin/user)
 }
 
 // SocksUser holds SOCKS5 username/password auth credentials.
@@ -893,17 +819,7 @@ type SlackConfig struct {
 
 // ListenersConfig holds transport listener configurations.
 type ListenersConfig struct {
-	MTLS MTLSListenerConfig `yaml:"mtls"`
-	H2C  H2CListenerConfig  `yaml:"h2c"`
-}
-
-// MTLSListenerConfig configures the mTLS listener.
-type MTLSListenerConfig struct {
-	Enabled      bool   `yaml:"enabled"`
-	Addr         string `yaml:"addr"`
-	CertFile     string `yaml:"cert_file"`
-	KeyFile      string `yaml:"key_file"`
-	ClientCAFile string `yaml:"client_ca_file"`
+	H2C H2CListenerConfig `yaml:"h2c"`
 }
 
 // H2CListenerConfig configures the H2C (HTTP/2 cleartext) listener.

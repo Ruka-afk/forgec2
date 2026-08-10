@@ -1,15 +1,16 @@
 package server
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net"
 	"os"
 	"runtime/debug"
 
+	"github.com/forgec2/forgec2/pkg/c2pb"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -18,67 +19,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// ForgeC2 gRPC service — manual registration without protoc.
-// Message format: protobuf-encoded BeaconEnvelope wrapping inner payload bytes.
+// GRPCListener serves beacon check-ins over the bidirectional streaming RPC
+// defined in pkg/c2pb (JSON codec). Each stream carries opaque v2 beacon
+// envelopes — one request envelope in, one response envelope out — so the
+// gRPC transport authenticates frames exactly like the HTTP beacon path and
+// cannot bypass beacon_key auth or downgrade to plaintext.
 
-// BeaconEnvelope is the protobuf wrapper for gRPC beacon exchanges.
-type BeaconEnvelope struct {
-	Payload []byte `protobuf:"bytes,1,opt,name=payload,proto3"`
-}
-
-func (m *BeaconEnvelope) Reset()         {}
-func (m *BeaconEnvelope) String() string { return string(m.Payload) }
-func (m *BeaconEnvelope) ProtoMessage()  {}
-
-const grpcServiceName = "forgec2.BeaconService"
-
-// grpcBeaconServer implements the beacon handler
-type grpcBeaconServer struct {
-	handler func(agentID string, reqJSON []byte) []byte
-}
-
-// proxiedHandler wraps the []byte-returning handler into error-returning for gRPC
-func beaconHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	var req BeaconEnvelope
-	if err := dec(&req); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "decode failed: %v", err)
-	}
-
-	svc := srv.(*grpcBeaconServer)
-	if p, ok := peer.FromContext(ctx); ok {
-		slog.Debug("gRPC beacon", "remote", p.Addr.String(), "payload_size", len(req.Payload))
-	}
-
-	// Parse incoming to extract agent ID
-	var envelope struct {
-		UUID string `json:"uuid,omitempty"`
-	}
-	var agentID string
-	if err := json.Unmarshal(req.Payload, &envelope); err == nil {
-		agentID = envelope.UUID
-	} else {
-		slog.Warn("gRPC beacon failed to unmarshal envelope, using fallback agentID", "err", err)
-		agentID = "unknown-" + uuid.New().String()
-	}
-
-	respPayload := svc.handler(agentID, req.Payload)
-	return &BeaconEnvelope{Payload: respPayload}, nil
-}
-
-func handshakeHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	return beaconHandler(srv, ctx, dec, interceptor)
-}
-
-var grpcServiceDesc = grpc.ServiceDesc{
-	ServiceName: grpcServiceName,
-	Methods: []grpc.MethodDesc{
-		{MethodName: "Beacon", Handler: beaconHandler},
-		{MethodName: "Handshake", Handler: handshakeHandler},
-	},
-	Metadata: "beacon.proto",
-}
-
-// GRPCListener wraps the gRPC server for beacon transport
 type GRPCListener struct {
 	addr      string
 	server    *grpc.Server
@@ -105,14 +51,14 @@ func (l *GRPCListener) Start() error {
 		return err
 	}
 
-	opts := []grpc.ServerOption{grpc.MaxRecvMsgSize(GRPCMaxRecvMsgSize)}
+	opts := []grpc.ServerOption{grpc.MaxRecvMsgSize(GRPCMaxRecvMsgSize), grpc.ForceServerCodec(c2pb.JSONCodec)}
 	mode := "insecure"
 	if l.tlsCreds != nil {
 		opts = append(opts, grpc.Creds(l.tlsCreds))
 		mode = "tls"
 	}
 	l.server = grpc.NewServer(opts...)
-	l.server.RegisterService(&grpcServiceDesc, l.beaconSrv)
+	c2pb.RegisterC2ServiceServer(l.server, l.beaconSrv)
 
 	go func() {
 		defer func() {
@@ -138,6 +84,55 @@ func (l *GRPCListener) Stop() error {
 // Close implements io.Closer for use with extraListeners map.
 func (l *GRPCListener) Close() error {
 	return l.Stop()
+}
+
+// grpcBeaconServer implements c2pb.C2ServiceServer. Each stream carries any
+// number of check-in cycles; a cycle is Recv → handler → Send. handler reuses
+// the standard listener beacon path (ECDH/AES-256-GCM, seq replay window,
+// registration/handshake MACs), so the transport adds no trust.
+type grpcBeaconServer struct {
+	handler func(agentID string, reqJSON []byte) []byte
+}
+
+func (s *grpcBeaconServer) Beacon(stream c2pb.C2Service_BeaconServer) error {
+	for {
+		env, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return status.Errorf(codes.Aborted, "recv failed: %v", err)
+		}
+		if len(env.Payload) == 0 {
+			return status.Errorf(codes.InvalidArgument, "empty envelope")
+		}
+
+		if p, ok := peer.FromContext(stream.Context()); ok {
+			slog.Debug("gRPC beacon", "remote", p.Addr.String(), "payload_size", len(env.Payload))
+		}
+
+		// Extract agent ID for logging/failover; the handler authenticates
+		// the frame itself (handshake/registration path uses the UUID).
+		var header struct {
+			UUID string `json:"uuid,omitempty"`
+		}
+		agentID := ""
+		if err := json.Unmarshal(env.Payload, &header); err == nil {
+			agentID = header.UUID
+		} else {
+			agentID = "unknown-" + uuid.New().String()
+		}
+
+		respPayload := s.handler(agentID, env.Payload)
+		if respPayload == nil {
+			// Frame rejected (replay, bad MAC, unknown agent). End this
+			// stream cycle without a response so the agent can fail over.
+			return nil
+		}
+		if err := stream.Send(&c2pb.Envelope{Payload: respPayload}); err != nil {
+			return status.Errorf(codes.Aborted, "send failed: %v", err)
+		}
+	}
 }
 
 // startGRPCListener registers the gRPC listener in server startup.

@@ -14,7 +14,7 @@
     "check:webdist": "node ../scripts/check-webdist.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:paths": "node scripts/check-api-paths.mjs",
-    "check": "npm run check:css && npm run check:i18n && npm run check:paths"
+    "check": "npm run check:css && npm run check:i18n && npm run check:paths && npm run check:webdist"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -45,7 +45,6 @@
     "eslint-config-next": "16.2.10",
     "jsdom": "^25.0.0",
     "postcss": "^8.5.19",
-    "serve": "^14.2.4",
     "shadcn": "^4.13.0",
     "tailwindcss": "^4.3.2",
     "typescript": "^5",

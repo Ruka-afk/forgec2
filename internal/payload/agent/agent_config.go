@@ -67,10 +67,6 @@ var (
 	MTLSKeyStr  string = "" // base64-encoded client key PEM for mTLS
 	MTLSCAStr   string = "" // base64-encoded CA certificate PEM for mTLS
 
-	// WireGuard-style transport
-	WGPrivateKeyStr   string = "" // base64-encoded 32-byte private key
-	WGServerPublicStr string = "" // base64-encoded 32-byte server public key
-
 	// Multi-C2 traffic splitting and failover
 	C2ModeStr      string = s(SC2Mode) // "single", "failover", "roundrobin", "random", "split", "parallel"
 	MaxRetriesStr  string = "10"       // max retries before entering dead mode

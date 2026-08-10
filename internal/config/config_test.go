@@ -35,8 +35,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Server.UpdateCheckEnabled {
 		t.Errorf("expected update_check_enabled false (egress hygiene default), got %v", cfg.Server.UpdateCheckEnabled)
 	}
-	if cfg.Listeners.MTLS.Addr != ":8443" {
-		t.Errorf("expected mTLS addr :8443, got %s", cfg.Listeners.MTLS.Addr)
+	if cfg.Listeners.H2C.Addr != ":8081" {
+		t.Errorf("expected h2c addr :8081, got %s", cfg.Listeners.H2C.Addr)
 	}
 	if cfg.AI.MaxConversationTurns != 0 {
 		t.Errorf("expected AI max_conversation_turns 0 (unlimited), got %d", cfg.AI.MaxConversationTurns)
@@ -294,12 +294,9 @@ func TestValidate(t *testing.T) {
 		{"ssh enabled with zero port", func(c *Config) { c.Server.SSHEnabled = true; c.Server.SSHPort = 0 }, true, "ssh_port"},
 		{"tls enabled without cert", func(c *Config) { c.Server.TLSEnabled = true; c.Server.CertFile = "" }, true, "cert_file"},
 		{"tls enabled without key", func(c *Config) { c.Server.TLSEnabled = true; c.Server.KeyFile = "" }, true, "key_file"},
-		{"sso enabled without client_id", func(c *Config) { c.SSO.Enabled = true; c.SSO.ClientID = "" }, true, "client_id"},
 		{"api capacity zero", func(c *Config) { c.RateLimit.API.Capacity = 0 }, true, "capacity"},
 		{"invalid socks dest", func(c *Config) { c.Socks.Enabled = true; c.Socks.AllowedDests = []string{"nocolon"} }, true, "host:port"},
 		{"valid socks dest", func(c *Config) { c.Socks.Enabled = true; c.Socks.AllowedDests = []string{"10.0.0.1:443"} }, false, ""},
-		{"mtls enabled without addr", func(c *Config) { c.Listeners.MTLS.Enabled = true; c.Listeners.MTLS.Addr = "" }, true, "mtls.addr"},
-		{"mtls enabled without cert", func(c *Config) { c.Listeners.MTLS.Enabled = true; c.Listeners.MTLS.CertFile = "" }, true, "mtls.cert_file"},
 		{"h2c enabled without addr", func(c *Config) { c.Listeners.H2C.Enabled = true; c.Listeners.H2C.Addr = "" }, true, "h2c.addr"},
 		{"negative AI max_conversation_turns", func(c *Config) { c.AI.MaxConversationTurns = -1 }, true, "max_conversation_turns"},
 		{"negative AI max_tool_rounds", func(c *Config) { c.AI.MaxToolRounds = -1 }, true, "max_tool_rounds"},

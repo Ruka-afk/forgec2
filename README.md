@@ -85,7 +85,7 @@ Full per-task, per-OS capability matrix: [docs/CAPABILITY_MATRIX.md](docs/CAPABI
 
 - **60+ pages** — dashboard with live charts (heatmaps, OS distribution, task Gantt, geo, attack paths), agent fleet management, file browser, terminal, token lab, traffic profiles
 - **Multi-operator** — RBAC roles, agent locking, task claiming, audit trail
-- **Automation** — workflow engine, cron scheduler, auto-tagging, scheduled PDF reports
+- **Automation** — workflow engine, task scheduler, auto-tagging, PDF report generation
 - **Teammate tools** — campaigns, phishing (SMTP + tracking), BloodHound ingestion, domain fronting, infrastructure redirectors
 - **Resilience** — circuit breaker for listener health, AES-GCM encrypted DB backups, graceful failover
 

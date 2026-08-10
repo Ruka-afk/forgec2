@@ -56,7 +56,6 @@ Source of truth: `frontend/src/lib/api-paths.ts`.
 | Workflows | `paths.workflows.list` / `one` |
 | Report overview | `paths.report.overview` → `/report` |
 | Report sections | `paths.report.agents/tasks/...` → `/api/report/*` |
-| Scheduled reports | `paths.report.scheduled` |
 | Dashboard | `paths.dashboard.v1` → `/api/v1/dashboard` |
 | Generate profiles | `paths.generate.profiles` |
 

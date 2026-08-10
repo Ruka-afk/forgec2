@@ -162,6 +162,20 @@ paths:
         '302':
           description: Logout successful (redirect to login)
 
+  /api/auth/extend:
+    post:
+      tags: [Authentication]
+      summary: Extend session
+      description: Re-issue the session JWT and replace the session cookie
+      operationId: extendSession
+      security:
+        - SessionCookie: []
+      responses:
+        '204':
+          description: Session extended (Set-Cookie rotated)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /health:
     get:
       tags: [Monitor]
@@ -1506,6 +1520,27 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
+  /settings/beacon-key:
+    get:
+      tags: [Settings]
+      summary: Get beacon pre-shared key
+      description: >-
+        Returns the server-configured beacon PSK so the payload generator can
+        pre-fill the field. Empty when PSK auth is disabled.
+      operationId: getBeaconKey
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Beacon key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  beacon_key:
+                    type: string
 
   /settings/agent:
     post:
@@ -3134,6 +3169,40 @@ paths:
             application/json:
               schema:
                 type: object
+    post:
+      tags: [Timeline]
+      summary: Export timeline as CSV
+      description: >-
+        Export the timeline as a CSV file. Filters are accepted from both
+        query string and form body.
+      operationId: exportTimelineCsv
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: type
+          in: query
+          schema: { type: string }
+        - name: user
+          in: query
+          schema: { type: string }
+        - name: agent
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string }
+          format: date-time
+        - name: to
+          in: query
+          schema: { type: string }
+          format: date-time
+      responses:
+        '200':
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
 
   /api/report/generate:
     post:
@@ -6291,21 +6360,37 @@ paths:
         '200':
           description: OK
 
-  /stage/{xorKey}:
+  /stage/{token}:
     get:
       tags: [Generate]
       summary: Stage download
+      description: >-
+        Serves the AES-256-GCM encrypted stage-2 payload for a signed,
+        single-use stage token. Requires a valid HMAC signature in the
+        `s` query parameter. No authentication (token + signature
+        authorize the fetch).
       operationId: stageDownload
-      security:
-        - SessionCookie: []
       parameters:
-        - name: xorKey
+        - name: token
           in: path
           required: true
           schema: { type: string }
+        - name: s
+          in: query
+          required: true
+          schema: { type: string }
+          description: HMAC signature over the token (stage `s` query param)
       responses:
         '200':
-          description: OK
+          description: Encrypted stage-2 payload (application/octet-stream)
+        '400':
+          description: Invalid stage token
+        '403':
+          description: Invalid signature
+        '404':
+          description: Stage token not found / stage not ready
+        '410':
+          description: Stage token expired or already consumed
 
   /rd/{id}/frame:
     get:
