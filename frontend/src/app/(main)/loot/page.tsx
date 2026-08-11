@@ -240,13 +240,7 @@ function LootPage() {
               <span className="text-xs text-muted-foreground">{filteredScreenshots.length}</span>
             </div>
           </div>
-          {loading ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="rounded-xl border border-border h-24" />
-              ))}
-            </div>
-          ) : filteredScreenshots.length > 0 ? (
+          {filteredScreenshots.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
               {visibleScreenshots.map((s) => (
                 <LootScreenshotCard
@@ -287,16 +281,7 @@ function LootPage() {
               <span className="text-xs text-muted-foreground">{filteredKeylogs.length}</span>
             </div>
           </div>
-          {loading ? (
-            <div className="space-y-3">
-              {[1, 2].map(i => (
-                <div key={i} className="border border-border rounded-xl p-4">
-                  <Skeleton className="h-3 w-32 mb-2" />
-                  <Skeleton className="h-20" />
-                </div>
-              ))}
-            </div>
-          ) : filteredKeylogs.length > 0 ? (
+          {filteredKeylogs.length > 0 ? (
             <div className="space-y-3">
               <Accordion>
                 {visibleKeylogs.map(k => {
@@ -352,13 +337,7 @@ function LootPage() {
             </div>
             <span className="text-xs text-muted-foreground">{filteredDownloads.length}</span>
           </div>
-          {loading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map(i => (
-                <Skeleton key={i} className="h-10" />
-              ))}
-            </div>
-          ) : filteredDownloads.length > 0 ? (
+          {filteredDownloads.length > 0 ? (
             <div className="overflow-x-auto">
             <Table>
               <TableHeader>

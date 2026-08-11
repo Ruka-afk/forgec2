@@ -65,33 +65,53 @@ export default function NotificationsPage() {
   useEffect(() => { loadNotifications(); }, [loadNotifications]);
 
   const handleMarkRead = useCallback(async (id: number) => {
-    await api.put(paths.notifications.markRead(id));
-    loadNotifications();
-  }, [loadNotifications]);
+    try {
+      await api.put(paths.notifications.markRead(id));
+      loadNotifications();
+    } catch {
+      toast.error(t("notifications.toast.mark_read_failed"));
+    }
+  }, [loadNotifications, t]);
 
   const handleMarkAllRead = async () => {
-    await api.put(paths.notifications.readAll);
-    loadNotifications();
+    try {
+      await api.put(paths.notifications.readAll);
+      loadNotifications();
+    } catch {
+      toast.error(t("notifications.toast.mark_all_read_failed"));
+    }
   };
 
   const handleDelete = useCallback(async (id: number) => {
-    await api.del(paths.notifications.one(id));
-    setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
-    loadNotifications();
-  }, [loadNotifications]);
+    try {
+      await api.del(paths.notifications.one(id));
+      setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+      loadNotifications();
+    } catch {
+      toast.error(t("notifications.toast.delete_failed"));
+    }
+  }, [loadNotifications, t]);
 
   const handleClearAll = async () => {
-    await api.del(paths.notifications.root);
-    setSelectedIds(new Set());
-    loadNotifications();
+    try {
+      await api.del(paths.notifications.root);
+      setSelectedIds(new Set());
+      loadNotifications();
+    } catch {
+      toast.error(t("notifications.toast.clear_all_failed"));
+    }
   };
 
   const handleBulkMarkRead = async () => {
-    for (const id of selectedIds) {
-      await api.put(paths.notifications.markRead(id));
+    try {
+      for (const id of selectedIds) {
+        await api.put(paths.notifications.markRead(id));
+      }
+      setSelectedIds(new Set());
+      loadNotifications();
+    } catch {
+      toast.error(t("notifications.toast.mark_read_failed"));
     }
-    setSelectedIds(new Set());
-    loadNotifications();
   };
 
   const toggleSelect = useCallback((id: number) => {

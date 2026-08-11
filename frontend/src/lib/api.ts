@@ -105,11 +105,9 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
     ...extraHeaders,
   };
 
-  if (method !== "GET" && method !== "HEAD") {
-    const csrf = readCsrfCookie();
-    if (csrf) headers["X-CSRF-Token"] = csrf;
-  }
-
+  const isMutation = method !== "GET" && method !== "HEAD";
+  const csrf = isMutation ? readCsrfCookie() : "";
+  if (csrf) headers["X-CSRF-Token"] = csrf;
   const isFormData = options.body instanceof FormData;
   const isUrlEncoded = options.body instanceof URLSearchParams;
   const isString = typeof options.body === "string";
@@ -150,7 +148,12 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
             rateLimitRetryAfter = Math.floor(Date.now() / 1000) + parseInt(retryAfter, 10);
           }
         }
-        let errorMsg = res.status === 403 ? "Forbidden" : `HTTP ${res.status}`;
+        let errorMsg: string;
+        if (res.status === 403) {
+          errorMsg = isMutation && !csrf ? "CSRF token missing - refresh the page and try again" : "Forbidden";
+        } else {
+          errorMsg = `HTTP ${res.status}`;
+        }
         try {
           const errBody = await res.json();
           if (errBody && typeof errBody === "object" && "error" in errBody) {

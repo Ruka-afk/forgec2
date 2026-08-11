@@ -36,6 +36,7 @@ export default function FilesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filesLoading, setFilesLoading] = useState(false);
+  const [filesError, setFilesError] = useState<string | null>(null);
 
   const loadAgents = useCallback(() => {
     setLoading(true);
@@ -59,6 +60,7 @@ export default function FilesPage() {
   const loadFiles = useCallback((agentId: string, path: string) => {
     if (!agentId) return;
     setFilesLoading(true);
+    setFilesError(null);
     api.post(paths.agents.filesLs(agentId), { path })
       .then((data) => {
         const items: FileEntry[] = (data.files || data.entries || data.data || []) as FileEntry[];
@@ -66,6 +68,7 @@ export default function FilesPage() {
       })
       .catch(() => {
         setFiles([]);
+        setFilesError(t("files.toast.load_files_failed"));
         toast.error(t("files.toast.load_files_failed"));
       })
       .finally(() => setFilesLoading(false));
@@ -114,11 +117,7 @@ export default function FilesPage() {
         <div className="lg:col-span-1">
           <Card className="">
             <div className="divide-y divide-border max-h-[70vh] overflow-y-auto">
-              {loading ? (
-                <div className="p-4 sm:p-5 text-center text-muted-foreground/70 text-sm">
-                  <Spinner size="sm" />{t("files.loading")}
-                </div>
-              ) : filteredAgents.length > 0 ? (
+              {filteredAgents.length > 0 ? (
                 filteredAgents.map((a) => (
                   <Button
                     key={a.id}
@@ -159,7 +158,16 @@ export default function FilesPage() {
                 <span className="text-sm font-mono text-foreground truncate">{currentPath}</span>
               </div>
 
-              {filesLoading ? (
+              {filesError ? (
+                <div className="p-4 sm:p-5 text-center">
+                  <p className="text-sm text-destructive">{filesError}</p>
+                  {selectedAgent && (
+                    <Button size="sm" variant="outline" className="mt-3" onClick={() => loadFiles(selectedAgent.id, currentPath)}>
+                      {t("common.try_again")}
+                    </Button>
+                  )}
+                </div>
+              ) : filesLoading ? (
                 <div className="p-4 sm:p-5 text-center text-muted-foreground/70">
                   <Spinner size="sm" className="mb-2" />
                    {t("files.loading_files")}

@@ -6,7 +6,9 @@ import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { formatTime } from "@/lib/utils";
 import { PageHeader } from "@/components/UI";
+import { DataState } from "@/components/ui/data-state";
 import { useI18n } from "@/lib/i18n";
+import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -43,10 +45,13 @@ export default function TrafficPage() {
   const [entries, setEntries] = useState<TrafficEntry[]>([]);
   const [filteredEntries, setFilteredEntries] = useState<TrafficEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [autoScroll, setAutoScroll] = useState(false);
   const [sourceIpFilter, setSourceIpFilter] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const entriesRef = useRef<TrafficEntry[]>([]);
+  const lastErrorToastRef = useRef(0);
   const { t } = useI18n();
 
   const applyFilter = (data: TrafficEntry[], ip: string) => {
@@ -63,12 +68,20 @@ export default function TrafficPage() {
       const arr = Array.isArray(data)
         ? data
         : (data?.data ?? data?.traffic ?? []);
-      setEntries(Array.isArray(arr) ? (arr as TrafficEntry[]) : []);
+      const list = Array.isArray(arr) ? (arr as TrafficEntry[]) : [];
+      entriesRef.current = list;
+      setEntries(list);
+      setError(null);
     } catch {
-      setEntries([]);
+      if (entriesRef.current.length === 0) {
+        setError(t("traffic.toast.load_failed"));
+      } else if (Date.now() - lastErrorToastRef.current > 10000) {
+        lastErrorToastRef.current = Date.now();
+        toast.error(t("traffic.toast.load_failed"));
+      }
     }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => { loadTraffic(); }, [loadTraffic]);
   useVisibleInterval(loadTraffic, autoRefresh ? 5000 : 0);
@@ -91,7 +104,7 @@ export default function TrafficPage() {
     }
   }, [filteredEntries, autoScroll]);
 
-  const clearLog = () => { setEntries([]); setFilteredEntries([]); };
+  const clearLog = () => { entriesRef.current = []; setEntries([]); setFilteredEntries([]); };
 
   const sourceIps = [...new Set(entries.map(e => e.source_ip || "").filter(Boolean))];
 
@@ -182,31 +195,55 @@ export default function TrafficPage() {
           </div>
         </div>
 
-        <div ref={containerRef} className="max-h-[500px] overflow-y-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted border-b border-border sticky top-0">
-                <TableHead className="text-xs font-medium min-w-[80px]">{t("traffic.time")}</TableHead>
-                <TableHead className="text-xs font-medium min-w-[80px]">{t("traffic.col_method")}</TableHead>
-                <TableHead className="text-xs font-medium min-w-[200px]">{t("traffic.col_path")}</TableHead>
-                <TableHead className="text-xs font-medium min-w-[120px]">{t("traffic.col_source_ip")}</TableHead>
-                <TableHead className="text-xs font-medium min-w-[100px]">{t("traffic.col_agent")}</TableHead>
-                <TableHead className="text-xs font-medium min-w-[60px] text-center">{t("traffic.status")}</TableHead>
-                <TableHead className="text-xs font-medium min-w-[60px] text-right">{t("traffic.col_size")}</TableHead>
-                <TableHead className="text-xs font-medium min-w-[70px] text-right">{t("traffic.col_latency")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="font-mono">
-              {loading ? (
-                [1, 2, 3, 4, 5].map(i => (
+        <DataState
+          loading={loading}
+          error={error}
+          onRetry={loadTraffic}
+          empty={!loading && !error && filteredEntries.length === 0}
+          emptyIcon={Network}
+          emptyTitle={t("traffic.empty")}
+          loadingSkeleton={
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted border-b border-border sticky top-0">
+                  <TableHead className="text-xs font-medium min-w-[80px]">{t("traffic.time")}</TableHead>
+                  <TableHead className="text-xs font-medium min-w-[80px]">{t("traffic.col_method")}</TableHead>
+                  <TableHead className="text-xs font-medium min-w-[200px]">{t("traffic.col_path")}</TableHead>
+                  <TableHead className="text-xs font-medium min-w-[120px]">{t("traffic.col_source_ip")}</TableHead>
+                  <TableHead className="text-xs font-medium min-w-[100px]">{t("traffic.col_agent")}</TableHead>
+                  <TableHead className="text-xs font-medium min-w-[60px] text-center">{t("traffic.status")}</TableHead>
+                  <TableHead className="text-xs font-medium min-w-[60px] text-right">{t("traffic.col_size")}</TableHead>
+                  <TableHead className="text-xs font-medium min-w-[70px] text-right">{t("traffic.col_latency")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="font-mono">
+                {[1, 2, 3, 4, 5].map(i => (
                   <TableRow key={i}>
                     {[1, 2, 3, 4, 5, 6, 7, 8].map(j => (
                       <TableCell key={j}><Skeleton className="h-3 w-16" /></TableCell>
                     ))}
                   </TableRow>
-                ))
-              ) : filteredEntries.length > 0 ? (
-                filteredEntries.map((e, i) => {
+                ))}
+              </TableBody>
+            </Table>
+          }
+        >
+          <div ref={containerRef} className="max-h-[500px] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted border-b border-border sticky top-0">
+                  <TableHead className="text-xs font-medium min-w-[80px]">{t("traffic.time")}</TableHead>
+                  <TableHead className="text-xs font-medium min-w-[80px]">{t("traffic.col_method")}</TableHead>
+                  <TableHead className="text-xs font-medium min-w-[200px]">{t("traffic.col_path")}</TableHead>
+                  <TableHead className="text-xs font-medium min-w-[120px]">{t("traffic.col_source_ip")}</TableHead>
+                  <TableHead className="text-xs font-medium min-w-[100px]">{t("traffic.col_agent")}</TableHead>
+                  <TableHead className="text-xs font-medium min-w-[60px] text-center">{t("traffic.status")}</TableHead>
+                  <TableHead className="text-xs font-medium min-w-[60px] text-right">{t("traffic.col_size")}</TableHead>
+                  <TableHead className="text-xs font-medium min-w-[70px] text-right">{t("traffic.col_latency")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="font-mono">
+                {filteredEntries.map((e, i) => {
                   const id = e.id || String(i);
                   const ts = e.timestamp || "";
                   const method = e.method || "";
@@ -233,18 +270,11 @@ export default function TrafficPage() {
                       <TableCell className="text-right text-xs text-muted-foreground">{latency}ms</TableCell>
                     </TableRow>
                   );
-                })
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={8} className="py-16 text-center text-muted-foreground">
-                    <Network className="w-8 h-8 mb-2 text-muted-foreground/70" />
-                    <p>{t("traffic.empty")}</p>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </DataState>
       </Card>
     </div>
   );

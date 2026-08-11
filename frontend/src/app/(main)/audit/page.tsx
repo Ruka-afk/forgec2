@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { DataState } from "@/components/ui/data-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download, FileText, Filter } from "lucide-react";
 import type { AuditLog } from "@/types/audit";
@@ -38,10 +39,10 @@ const SEVERITY_BADGES: Record<string, string> = {
 export default function AuditPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [perPage] = useState(50);
-  const [search, setSearch] = useState("");
   const [userFilter, setUserFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
@@ -63,25 +64,28 @@ export default function AuditPage() {
 
   const loadLogs = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams({
         page: String(page),
         pageSize: String(perPage),
       });
-      if (search) params.set("search", search);
       if (userFilter) params.set("user", userFilter);
       if (actionFilter) params.set("action", actionFilter);
       const data = await api.get(paths.audit.logs(params.toString()), { signal });
       setLogs((data.logs as AuditLog[]) || []);
       setTotal((data.total as number) || 0);
-    } catch {
+    } catch (e) {
+      if ((e as Error).name === "AbortError") return;
       setLogs([]);
       setTotal(0);
-      toast.error(t("audit.toast.load_failed"));
+      const msg = t("audit.toast.load_failed");
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
-  }, [page, perPage, search, userFilter, actionFilter, t]);
+  }, [page, perPage, userFilter, actionFilter, t]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -91,7 +95,6 @@ export default function AuditPage() {
 
   const applyFilters = () => { setPage(1); };
   const resetFilters = () => {
-    setSearch("");
     setUserFilter("");
     setActionFilter("");
     setPage(1);
@@ -205,6 +208,41 @@ export default function AuditPage() {
       </Card>
 
       <Card className="overflow-hidden">
+        <DataState
+          loading={loading}
+          error={error}
+          onRetry={() => loadLogs()}
+          empty={!loading && !error && logs.length === 0}
+          emptyTitle={t("audit.empty")}
+          loadingSkeleton={
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border">
+                    <TableHead className="text-left">{t("audit.time")}</TableHead>
+                    <TableHead className="text-left">{t("audit.user")}</TableHead>
+                    <TableHead className="text-left">IP</TableHead>
+                    <TableHead className="text-left">{t("audit.action")}</TableHead>
+                    <TableHead className="text-left">{t("audit.severity")}</TableHead>
+                    <TableHead className="text-left">{t("audit.resource")}</TableHead>
+                    <TableHead className="text-left">{t("audit.col_target")}</TableHead>
+                    <TableHead className="text-left">{t("audit.status")}</TableHead>
+                    <TableHead className="text-left">{t("audit.details")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      {Array.from({ length: 9 }).map((_, j) => (
+                        <TableCell key={j} className="py-3 px-4"><Skeleton className="h-4 w-full" /></TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          }
+        >
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -221,52 +259,41 @@ export default function AuditPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 9 }).map((_, j) => (
-                      <TableCell key={j} className="py-3 px-4"><Skeleton className="h-4 w-full" /></TableCell>
-                    ))}
+              {logs.filter(Boolean).map((log, i) => {
+                const action = getLogField(log, "action");
+                const severity = getLogField(log, "severity");
+                return (
+                  <TableRow key={getLogField(log, "id") || String(i)} onClick={() => setSelectedLog(log)} className="cursor-pointer"
+                    tabIndex={0} role="button"
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedLog(log); } }}>
+                    <TableCell className="text-xs font-mono whitespace-nowrap">{getLogField(log, "timestamp")}</TableCell>
+                    <TableCell className="text-sm font-medium text-muted-foreground">{getLogField(log, "username")}</TableCell>
+                    <TableCell className="text-xs font-mono">{getLogField(log, "ip")}</TableCell>
+                    <TableCell>
+                      <Badge variant={getActionBadge(action) as "success" | "secondary" | "warning" | "destructive"}>
+                        {action}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={getSeverityBadge(severity) as "secondary" | "warning" | "destructive"}>
+                        {severity}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs max-w-[200px] truncate">{getLogField(log, "resource")}</TableCell>
+                    <TableCell className="text-xs font-mono">{getLogField(log, "target")}</TableCell>
+                    <TableCell>
+                      <Badge variant={(getLogField(log, "status") || "").toLowerCase().includes("fail") ? "destructive" : "success"}>
+                        {getLogField(log, "status")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs max-w-[300px] truncate">{getLogField(log, "details")}</TableCell>
                   </TableRow>
-                ))
-              ) : !loading && logs.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="py-16 text-center">{t("audit.empty")}</TableCell></TableRow>
-              ) : (
-                logs.filter(Boolean).map((log, i) => {
-                  const action = getLogField(log, "action");
-                  const severity = getLogField(log, "severity");
-                  return (
-                    <TableRow key={getLogField(log, "id") || String(i)} onClick={() => setSelectedLog(log)} className="cursor-pointer"
-                      tabIndex={0} role="button"
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedLog(log); } }}>
-                      <TableCell className="text-xs font-mono whitespace-nowrap">{getLogField(log, "timestamp")}</TableCell>
-                      <TableCell className="text-sm font-medium text-muted-foreground">{getLogField(log, "username")}</TableCell>
-                      <TableCell className="text-xs font-mono">{getLogField(log, "ip")}</TableCell>
-                      <TableCell>
-                        <Badge variant={getActionBadge(action) as "success" | "secondary" | "warning" | "destructive"}>
-                          {action}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getSeverityBadge(severity) as "secondary" | "warning" | "destructive"}>
-                          {severity}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs max-w-[200px] truncate">{getLogField(log, "resource")}</TableCell>
-                      <TableCell className="text-xs font-mono">{getLogField(log, "target")}</TableCell>
-                      <TableCell>
-                        <Badge variant={(getLogField(log, "status") || "").toLowerCase().includes("fail") ? "destructive" : "success"}>
-                          {getLogField(log, "status")}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs max-w-[300px] truncate">{getLogField(log, "details")}</TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
+                );
+              })}
             </TableBody>
           </Table>
         </div>
+        </DataState>
 
         <Pagination page={page} pageSize={perPage} total={total} onPageChange={setPage} />
       </Card>
