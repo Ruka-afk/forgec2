@@ -37,8 +37,6 @@ const (
 	PermAuditRead          = "audit.read"
 	PermGroupsRead         = "groups.read"
 	PermGroupsWrite        = "groups.write"
-	PermWorkflowsRead      = "workflows.read"
-	PermWorkflowsWrite     = "workflows.write"
 	PermPluginsRead        = "plugins.read"
 	PermPluginsWrite       = "plugins.write"
 	PermPluginsExecute     = "plugins.execute"
@@ -51,8 +49,6 @@ const (
 	PermOpsecWrite         = "opsec.write"
 	PermIntelRead          = "intel.read"
 	PermIntelWrite         = "intel.write"
-	PermSchedulerRead      = "scheduler.read"
-	PermSchedulerWrite     = "scheduler.write"
 	PermAutomationRead     = "automation.read"
 	PermAutomationWrite    = "automation.write"
 	PermNotificationsRead  = "notifications.read"
@@ -70,7 +66,6 @@ var RolePermissionsMap = map[string][]string{
 		PermSettingsRead, PermSettingsWrite,
 		PermAuditRead,
 		PermGroupsRead, PermGroupsWrite,
-		PermWorkflowsRead, PermWorkflowsWrite,
 		PermPluginsRead, PermPluginsWrite, PermPluginsExecute, PermPluginsDelete,
 		PermRolesRead, PermRolesWrite,
 		PermCampaignsRead, PermCampaignsWrite,
@@ -89,7 +84,6 @@ var RolePermissionsMap = map[string][]string{
 		PermSettingsRead,
 		PermAuditRead,
 		PermGroupsRead, PermGroupsWrite,
-		PermWorkflowsRead, PermWorkflowsWrite,
 		PermRolesRead,
 		PermCampaignsRead,
 		PermOpsecRead,
@@ -841,7 +835,6 @@ func GetAllPermissions() []string {
 		PermSettingsRead, PermSettingsWrite,
 		PermAuditRead,
 		PermGroupsRead, PermGroupsWrite,
-		PermWorkflowsRead, PermWorkflowsWrite,
 		PermPluginsRead, PermPluginsWrite, PermPluginsExecute, PermPluginsDelete,
 		PermRolesRead, PermRolesWrite,
 		PermCampaignsRead, PermCampaignsWrite,
@@ -1160,40 +1153,31 @@ type WorkflowStep struct {
 
 func (WorkflowStep) TableName() string { return "workflow_steps" }
 
-// WorkflowExecution records a single execution of a workflow
-type WorkflowExecution struct {
+// ExecutionLog records a single step execution within a workflow run.
+// Rows are grouped by ExecutionID (one row per step), replacing the former
+// workflow_executions + workflow_step_logs pair with a single simple table.
+type ExecutionLog struct {
 	ID           uint       `gorm:"primaryKey" json:"id"`
+	ExecutionID  string     `gorm:"size:36;index;not null" json:"execution_id"`
 	WorkflowID   string     `gorm:"size:36;index;not null" json:"workflow_id"`
 	WorkflowName string     `gorm:"size:200" json:"workflow_name"`
-	AgentIDs     string     `gorm:"type:text" json:"agent_ids"`
-	Status       string     `gorm:"size:20;default:'running'" json:"status"`
-	TasksCreated int        `json:"tasks_created"`
-	AgentsCount  int        `json:"agents_count"`
-	ErrorMsg     string     `gorm:"type:text" json:"error_msg,omitempty"`
-	StartedAt    time.Time  `json:"started_at"`
-	CompletedAt  *time.Time `json:"completed_at,omitempty"`
-}
-
-func (WorkflowExecution) TableName() string { return "workflow_executions" }
-
-// WorkflowStepLog records individual step execution within a workflow execution
-type WorkflowStepLog struct {
-	ID           uint       `gorm:"primaryKey" json:"id"`
-	ExecutionID  uint       `gorm:"index;not null" json:"execution_id"`
+	AgentID      string     `gorm:"size:100;index" json:"agent_id"`
+	AgentHost    string     `gorm:"size:255" json:"agent_host,omitempty"`
 	StepOrder    int        `json:"step_order"`
 	TaskType     string     `gorm:"size:50" json:"task_type"`
 	Command      string     `gorm:"type:text" json:"command"`
 	TaskID       uint       `json:"task_id"`
-	AgentID      string     `gorm:"size:100" json:"agent_id"`
-	Status       string     `gorm:"size:20" json:"status"`
+	Status       string     `gorm:"size:20" json:"status"` // running/completed/aborted/failed
 	Result       string     `gorm:"type:text" json:"result"`
 	BranchAction string     `gorm:"size:50" json:"branch_action,omitempty"`
 	BranchTarget string     `gorm:"size:255" json:"branch_target,omitempty"`
+	ErrorMsg     string     `gorm:"type:text" json:"error_msg,omitempty"`
 	StartedAt    time.Time  `json:"started_at"`
 	CompletedAt  *time.Time `json:"completed_at,omitempty"`
+	CreatedAt    time.Time  `gorm:"index" json:"created_at"`
 }
 
-func (WorkflowStepLog) TableName() string { return "workflow_step_logs" }
+func (ExecutionLog) TableName() string { return "execution_logs" }
 
 // ChatMessage — multi-operator chat message
 type ChatMessage struct {

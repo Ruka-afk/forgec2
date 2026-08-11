@@ -37,7 +37,7 @@ func newContractDB(t *testing.T) *gorm.DB {
 		&db.PhishingTemplate{}, &db.PhishingCampaign{}, &db.PhishingEvent{},
 		&db.AgentTag{}, &db.AgentTagAssignment{}, &db.AutoTagRule{}, &db.Notification{},
 		&db.AgentGroup{}, &db.AgentGroupAssignment{}, &db.Workflow{}, &db.WorkflowStep{},
-		&db.WorkflowExecution{}, &db.WorkflowStepLog{}, &db.ChatMessage{},
+		&db.ExecutionLog{}, &db.ChatMessage{},
 		&db.StagerToken{}, &db.Redirector{}, &db.AgentLock{},
 		&db.AIChatSession{}, &db.AIChatMessage{}, &db.ExtC2Channel{},
 		&db.UserSession{}, &db.BackupCode{}, &db.AgentStatusEvent{},

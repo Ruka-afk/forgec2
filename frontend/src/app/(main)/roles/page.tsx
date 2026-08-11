@@ -41,7 +41,6 @@ const PERM_GROUPS: Record<string, string[]> = {
   "Settings": ["settings.read", "settings.write"],
   "Audit": ["audit.read"],
   "Groups": ["groups.read", "groups.write"],
-  "Workflows": ["workflows.read", "workflows.write"],
   "Plugins": ["plugins.read", "plugins.write", "plugins.execute", "plugins.delete"],
   "Roles": ["roles.read", "roles.write"],
   "Campaigns": ["campaigns.read", "campaigns.write"],

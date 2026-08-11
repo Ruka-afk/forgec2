@@ -86,7 +86,6 @@ const navSections: NavSection[] = [
       { href: "/bof", labelKey: "nav.bof", icon: FileCode },
       { href: "/scripting", labelKey: "nav.scripting", icon: Code },
       { href: "/toolkit", labelKey: "nav.toolkit", icon: Wrench },
-      { href: "/workflows", labelKey: "nav.workflows", icon: GitBranch },
       { href: "/plugins", labelKey: "nav.plugins", icon: Puzzle },
     ],
   },

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -19,14 +18,6 @@ func NewWorkflowEngine(s *Server) *WorkflowEngine {
 	return &WorkflowEngine{server: s}
 }
 
-func marshalJSON(v interface{}) string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return "[]"
-	}
-	return string(b)
-}
-
 // ExecuteWorkflow runs a workflow with full conditional branching support.
 func (we *WorkflowEngine) ExecuteWorkflow(wf db.Workflow, agentIDs []string) (int, int, error) {
 	var steps []db.WorkflowStep
@@ -38,16 +29,8 @@ func (we *WorkflowEngine) ExecuteWorkflow(wf db.Workflow, agentIDs []string) (in
 		return 0, 0, nil
 	}
 
-	exec := db.WorkflowExecution{
-		WorkflowID:   wf.ID,
-		WorkflowName: wf.Name,
-		AgentIDs:     marshalJSON(agentIDs),
-		Status:       "running",
-		StartedAt:    time.Now(),
-	}
-	if err := we.server.db.Create(&exec).Error; err != nil {
-		slog.Error("Workflow: failed to create execution record", "error", err)
-	}
+	executionID := fmt.Sprintf("e%d", time.Now().UnixNano())
+	now := time.Now()
 
 	taskCount := 0
 	var lastErr string
@@ -59,7 +42,7 @@ func (we *WorkflowEngine) ExecuteWorkflow(wf db.Workflow, agentIDs []string) (in
 
 			repeatCount := 0
 			for {
-				created, jumpTarget, abort := we.executeStep(wf, step, agentID, stepResults, &exec)
+				created, jumpTarget, abort := we.executeStep(wf, step, agentID, executionID, stepResults)
 				taskCount += created
 				if abort {
 					lastErr = fmt.Sprintf("aborted at step %d", step.StepOrder)
@@ -91,20 +74,26 @@ func (we *WorkflowEngine) ExecuteWorkflow(wf db.Workflow, agentIDs []string) (in
 		}
 	}
 
-	now := time.Now()
-	exec.CompletedAt = &now
-	exec.TasksCreated = taskCount
-	exec.AgentsCount = len(agentIDs)
-	if exec.Status == "running" {
+	// If nothing was dispatched (e.g. no matching agents), record a summary
+	// row so the run still shows up in execution history.
+	if taskCount == 0 {
+		status := "completed"
 		if lastErr != "" {
-			exec.Status = "aborted"
-			exec.ErrorMsg = lastErr
-		} else {
-			exec.Status = "completed"
+			status = "aborted"
 		}
-	}
-	if err := we.server.db.Save(&exec).Error; err != nil {
-		slog.Error("Workflow: failed to save execution", "execution_id", exec.ID, "err", err)
+		log := db.ExecutionLog{
+			ExecutionID:  executionID,
+			WorkflowID:   wf.ID,
+			WorkflowName: wf.Name,
+			Status:       status,
+			ErrorMsg:     lastErr,
+			StartedAt:    now,
+			CompletedAt:  &now,
+			CreatedAt:    now,
+		}
+		if err := we.server.db.Create(&log).Error; err != nil {
+			slog.Error("Workflow: failed to write execution summary log", "error", err)
+		}
 	}
 
 	return taskCount, len(agentIDs), nil
@@ -112,31 +101,46 @@ func (we *WorkflowEngine) ExecuteWorkflow(wf db.Workflow, agentIDs []string) (in
 
 // executeStep runs a single workflow step for one agent.
 // Returns: tasks created, jump target (empty = no jump), whether to abort workflow.
-func (we *WorkflowEngine) executeStep(wf db.Workflow, step db.WorkflowStep, agentID string, stepResults map[uint]string, exec *db.WorkflowExecution) (int, string, bool) {
+func (we *WorkflowEngine) executeStep(wf db.Workflow, step db.WorkflowStep, agentID, executionID string, stepResults map[uint]string) (int, string, bool) {
 	startedAt := time.Now()
-	stepLog := db.WorkflowStepLog{
-		ExecutionID: exec.ID,
-		StepOrder:   step.StepOrder,
-		TaskType:    step.TaskType,
-		Command:     step.Command,
-		AgentID:     agentID,
-		Status:      "pending",
-		StartedAt:   startedAt,
+	agentHost := ""
+	var implant db.Implant
+	if err := we.server.db.First(&implant, "id = ?", agentID).Error; err == nil {
+		agentHost = implant.Hostname
+	}
+	stepLog := db.ExecutionLog{
+		ExecutionID:  executionID,
+		WorkflowID:   wf.ID,
+		WorkflowName: wf.Name,
+		AgentID:      agentID,
+		AgentHost:    agentHost,
+		StepOrder:    step.StepOrder,
+		TaskType:     step.TaskType,
+		Command:      step.Command,
+		Status:       "running",
+		StartedAt:    startedAt,
+		CreatedAt:    startedAt,
 	}
 	if err := we.server.db.Create(&stepLog).Error; err != nil {
-		slog.Error("Workflow: failed to create step log", "execution_id", exec.ID, "step", step.StepOrder, "err", err)
+		slog.Error("Workflow: failed to create step log", "execution_id", executionID, "step", step.StepOrder, "err", err)
+	}
+
+	finish := func(status, result, branch, target string) {
+		stepLog.Status = status
+		stepLog.Result = result
+		stepLog.BranchAction = branch
+		stepLog.BranchTarget = target
+		now := time.Now()
+		stepLog.CompletedAt = &now
+		if err := we.server.db.Save(&stepLog).Error; err != nil {
+			slog.Error("Workflow: failed to save step log", "step", step.StepOrder, "err", err)
+		}
 	}
 
 	task, err := we.server.createTask(agentID, step.TaskType, step.Command, step.Shell, "", "", 0, 0)
 	if err != nil {
 		slog.Error("Workflow: failed to create task", "step", step.StepOrder, "agent", agentID, "error", err)
-		stepLog.Status = "failed"
-		stepLog.Result = err.Error()
-		now := time.Now()
-		stepLog.CompletedAt = &now
-		if err := we.server.db.Save(&stepLog).Error; err != nil {
-			slog.Error("Workflow: failed to save step log on error", "step", step.StepOrder, "err", err)
-		}
+		finish("failed", err.Error(), "", "")
 		return 0, "", false
 	}
 	we.server.db.Model(&task).Update("created_by", "workflow")
@@ -170,55 +174,32 @@ func (we *WorkflowEngine) executeStep(wf db.Workflow, step db.WorkflowStep, agen
 	}
 
 	result := stepResults[step.ID]
-	stepLog.Result = result
-	{
-		now := time.Now()
-		stepLog.CompletedAt = &now
-	}
 
 	if step.Condition != "" {
 		matched := we.EvaluateCondition(step.Condition, result)
 		if !matched && step.OnFailure != "" {
 			if step.OnFailure == "abort" {
-				stepLog.BranchAction = "abort"
-				if err := we.server.db.Save(&stepLog).Error; err != nil {
-					slog.Error("Workflow: failed to save abort branch", "step", step.StepOrder, "err", err)
-				}
+				finish("aborted", result, "abort", "")
 				slog.Info("Workflow aborted", "workflow_id", wf.ID, "step", step.StepOrder)
 				return 1, "abort", true
 			}
-			stepLog.BranchAction = "jump"
-			stepLog.BranchTarget = step.OnFailure
-			if err := we.server.db.Save(&stepLog).Error; err != nil {
-				slog.Error("Workflow: failed to save failure jump", "step", step.StepOrder, "err", err)
-			}
+			finish("completed", result, "jump", step.OnFailure)
 			return 1, step.OnFailure, false
 		} else if matched && step.OnSuccess != "" && step.OnSuccess != "continue" {
-			stepLog.BranchAction = "jump"
-			stepLog.BranchTarget = step.OnSuccess
-			if err := we.server.db.Save(&stepLog).Error; err != nil {
-				slog.Error("Workflow: failed to save success jump", "step", step.StepOrder, "err", err)
-			}
+			finish("completed", result, "jump", step.OnSuccess)
 			slog.Info("Workflow branch (success)", "workflow_id", wf.ID, "step", step.StepOrder, "jump_to", step.OnSuccess)
 			return 1, step.OnSuccess, false
 		}
 	} else if step.StopOnFailure {
 		var t db.Task
 		if we.server.db.First(&t, task.ID).Error == nil && t.Status == "failed" {
-			stepLog.BranchAction = "abort"
-			stepLog.BranchTarget = "stop_on_failure"
-			if err := we.server.db.Save(&stepLog).Error; err != nil {
-				slog.Error("Workflow: failed to save stop-on-failure", "step", step.StepOrder, "err", err)
-			}
+			finish("aborted", result, "abort", "stop_on_failure")
 			slog.Info("Workflow stopped on failure", "workflow_id", wf.ID, "step", step.StepOrder)
 			return 1, "", true
 		}
 	}
 
-	stepLog.BranchAction = "continue"
-	if err := we.server.db.Save(&stepLog).Error; err != nil {
-		slog.Error("Workflow: failed to save continue branch", "step", step.StepOrder, "err", err)
-	}
+	finish("completed", result, "continue", "")
 	return 1, "", false
 }
 

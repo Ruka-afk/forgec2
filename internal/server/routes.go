@@ -468,7 +468,7 @@ func (s *Server) registerExtendedRoutes(auth *gin.RouterGroup) {
 	}
 
 	workflowsRead := auth.Group("/")
-	workflowsRead.Use(middleware.RequirePermission(db.PermWorkflowsRead))
+	workflowsRead.Use(middleware.RequirePermission(db.PermAutomationRead))
 	{
 		workflowsRead.GET("/workflows", s.handleAPIWorkflows)
 		workflowsRead.GET("/workflows/:id", s.handleAPIWorkflowsDetail)
@@ -476,7 +476,7 @@ func (s *Server) registerExtendedRoutes(auth *gin.RouterGroup) {
 		workflowsRead.GET("/workflows/:id/executions/:executionId", s.handleGetWorkflowExecution)
 	}
 	workflowsWrite := auth.Group("/")
-	workflowsWrite.Use(middleware.RequirePermission(db.PermWorkflowsWrite))
+	workflowsWrite.Use(middleware.RequirePermission(db.PermAutomationWrite))
 	{
 		workflowsWrite.POST("/workflows", s.handleAPICreateWorkflow)
 		workflowsWrite.PUT("/workflows/:id", s.handleAPIUpdateWorkflow)

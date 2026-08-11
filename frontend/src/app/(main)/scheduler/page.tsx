@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function SchedulerRedirect() {
-  redirect("/automation#scheduled");
+  redirect("/automation#tab=scheduled");
 }

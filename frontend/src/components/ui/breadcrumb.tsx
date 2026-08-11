@@ -29,7 +29,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   traffic: "nav.traffic",
   opsec: "nav.opsec",
   chain: "nav.chain",
-  workflows: "nav.workflows",
   toolkit: "nav.toolkit",
   scripting: "nav.scripting",
   pivoting: "nav.pivoting",

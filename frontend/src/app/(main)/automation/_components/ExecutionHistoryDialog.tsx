@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 
 interface WorkflowExecution {
-  id: number;
+  execution_id: string;
   workflow_id: string;
   workflow_name: string;
   status: string;
@@ -25,16 +25,18 @@ interface WorkflowExecution {
 
 interface StepLog {
   id: number;
-  execution_id: number;
+  execution_id: string;
   step_order: number;
   task_type: string;
   command: string;
   task_id: number;
   agent_id: string;
+  agent_host?: string;
   status: string;
   result: string;
   branch_action: string;
   branch_target: string;
+  error_msg?: string;
   started_at: string;
   completed_at?: string;
 }
@@ -55,7 +57,7 @@ interface ExecutionHistoryDialogProps {
 export default function ExecutionHistoryDialog({ workflowId, onClose }: ExecutionHistoryDialogProps) {
   const { t } = useI18n();
   const [executions, setExecutions] = useState<WorkflowExecution[]>([]);
-  const [selectedExec, setSelectedExec] = useState<number | null>(null);
+  const [selectedExec, setSelectedExec] = useState<string | null>(null);
   const [execLogs, setExecLogs] = useState<StepLog[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -78,7 +80,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
     await openHistory(workflowId);
   }, [workflowId, openHistory]);
 
-  const viewExecution = useCallback(async (execId: number) => {
+  const viewExecution = useCallback(async (execId: string) => {
     setSelectedExec(execId);
     try {
       const data = await api.get(`${paths.workflows.one(String(workflowId))}/executions/${execId}`);
@@ -125,11 +127,12 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
           ) : (
             <div className="flex flex-col gap-2">
               {executions.map(ex => (
-                <div key={ex.id} role="button" tabIndex={0} className="flex items-center gap-3 p-3 rounded-lg bg-muted hover:bg-muted/80 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => viewExecution(ex.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); viewExecution(ex.id); } }}>
+                <div key={ex.execution_id} role="button" tabIndex={0} className="flex items-center gap-3 p-3 rounded-lg bg-muted hover:bg-muted/80 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => viewExecution(ex.execution_id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); viewExecution(ex.execution_id); } }}>
                   {statusBadge(ex.status)}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{ex.workflow_name}</div>
                     <div className="text-xs text-muted-foreground">{ex.agents_count} agent(s), {ex.tasks_created} task(s) &middot; {new Date(ex.started_at).toLocaleString()}</div>
+                    {ex.error_msg && <div className="text-xs text-destructive truncate">{ex.error_msg}</div>}
                   </div>
                   <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                 </div>
@@ -149,10 +152,11 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
                       {log.branch_action}{log.branch_target ? ` → ${log.branch_target}` : ""}
                     </Badge>
                   )}
-                  <span className="text-xs text-muted-foreground ml-auto">{log.agent_id?.substring(0, 12)}</span>
+                  <span className="text-xs text-muted-foreground ml-auto">{log.agent_host || log.agent_id?.substring(0, 12)}</span>
                 </div>
                 {log.command && <div className="text-xs font-mono text-foreground truncate mb-1">{log.command.substring(0, 120)}</div>}
                 {log.result && <div className="text-xs text-muted-foreground whitespace-pre-wrap max-h-24 overflow-y-auto">{log.result.substring(0, 500)}</div>}
+                {log.error_msg && <div className="text-xs text-destructive mt-1">{log.error_msg}</div>}
                 {log.completed_at && <div className="text-(--fs-micro-sm) text-muted-foreground mt-1">{new Date(log.completed_at).toLocaleString()}</div>}
               </div>
             ))}

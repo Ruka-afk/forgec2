@@ -404,6 +404,138 @@ var schemaMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	{
+		// Workflow execution history collapses into a single execution_logs
+		// table (one row per step, grouped by execution_id). Migrate existing
+		// rows so no history is lost, then drop the two legacy tables.
+		ID: "2026-08-11-merge-workflow-history-into-execution-logs",
+		Migrate: func(tx *gorm.DB) error {
+			if !tx.Migrator().HasTable("workflow_executions") {
+				return nil
+			}
+			m := func(sql, label string) {
+				execMigration(tx, sql, label)
+			}
+			m(`CREATE TABLE IF NOT EXISTS execution_logs (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				execution_id VARCHAR(36) NOT NULL,
+				workflow_id VARCHAR(36) NOT NULL,
+				workflow_name VARCHAR(200) DEFAULT '',
+				agent_id VARCHAR(100) DEFAULT '',
+				agent_host VARCHAR(255) DEFAULT '',
+				step_order INTEGER DEFAULT 0,
+				task_type VARCHAR(50) DEFAULT '',
+				command TEXT,
+				task_id INTEGER DEFAULT 0,
+				status VARCHAR(20) DEFAULT '',
+				result TEXT,
+				branch_action VARCHAR(50) DEFAULT '',
+				branch_target VARCHAR(255) DEFAULT '',
+				error_msg TEXT,
+				started_at DATETIME,
+				completed_at DATETIME,
+				created_at DATETIME
+			)`, "create_execution_logs")
+
+			type legacyExec struct {
+				ID           uint
+				WorkflowID   string
+				WorkflowName string
+				Status       string
+				ErrorMsg     string
+				StartedAt    time.Time
+				CompletedAt  *time.Time
+			}
+			type legacyStep struct {
+				ExecutionID  uint
+				StepOrder    int
+				TaskType     string
+				Command      string
+				TaskID       uint
+				AgentID      string
+				Status       string
+				Result       string
+				BranchAction string
+				BranchTarget string
+				StartedAt    time.Time
+				CompletedAt  *time.Time
+			}
+			var execs []legacyExec
+			if err := tx.Table("workflow_executions").Order("id").Find(&execs).Error; err != nil {
+				return err
+			}
+			for _, e := range execs {
+				execID := fmt.Sprintf("wf-%d", e.ID)
+				var steps []legacyStep
+				hasStepLogs := tx.Migrator().HasTable("workflow_step_logs")
+				if err := tx.Table("workflow_step_logs").Where("execution_id = ?", e.ID).Order("step_order").Find(&steps).Error; err != nil && hasStepLogs {
+					return err
+				}
+				if len(steps) == 0 {
+					row := map[string]interface{}{
+						"execution_id":  execID,
+						"workflow_id":   e.WorkflowID,
+						"workflow_name": e.WorkflowName,
+						"status":        e.Status,
+						"error_msg":     e.ErrorMsg,
+						"started_at":    e.StartedAt,
+						"completed_at":  e.CompletedAt,
+						"created_at":    e.StartedAt,
+					}
+					if err := tx.Table("execution_logs").Create(row).Error; err != nil {
+						return err
+					}
+					continue
+				}
+				for _, s := range steps {
+					row := map[string]interface{}{
+						"execution_id":  execID,
+						"workflow_id":   e.WorkflowID,
+						"workflow_name": e.WorkflowName,
+						"agent_id":      s.AgentID,
+						"step_order":    s.StepOrder,
+						"task_type":     s.TaskType,
+						"command":       s.Command,
+						"task_id":       s.TaskID,
+						"status":        s.Status,
+						"result":        s.Result,
+						"branch_action": s.BranchAction,
+						"branch_target": s.BranchTarget,
+						"started_at":    s.StartedAt,
+						"completed_at":  s.CompletedAt,
+						"created_at":    s.StartedAt,
+					}
+					if e.ErrorMsg != "" {
+						row["error_msg"] = e.ErrorMsg
+					}
+					if err := tx.Table("execution_logs").Create(row).Error; err != nil {
+						return err
+					}
+				}
+			}
+			m("DROP TABLE workflow_step_logs", "drop_workflow_step_logs")
+			m("DROP TABLE workflow_executions", "drop_workflow_executions")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			// Irreversible: step logs were flattened into execution_logs.
+			return nil
+		},
+	},
+	{
+		// Remap workflow permissions onto the merged automation surface.
+		ID: "2026-08-11-remap-workflow-perms-to-automation",
+		Migrate: func(tx *gorm.DB) error {
+			execMigration(tx, "UPDATE role_permissions SET permission = 'automation.read' WHERE permission = 'workflows.read'", "remap_workflows_read")
+			execMigration(tx, "UPDATE role_permissions SET permission = 'automation.write' WHERE permission = 'workflows.write'", "remap_workflows_write")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "UPDATE role_permissions SET permission = 'workflows.read' WHERE permission = 'automation.read'", "restore_workflows_read")
+			execMigration(tx, "UPDATE role_permissions SET permission = 'workflows.write' WHERE permission = 'automation.write'", "restore_workflows_write")
+			return nil
+		},
+	},
 }
 
 // indexMigrations create/drop indexes and run AFTER AutoMigrate, so their
@@ -428,8 +560,6 @@ var indexMigrations = []*gormigrate.Migration{
 				execMigration(tx, sql, label)
 			}
 			m("CREATE INDEX IF NOT EXISTS idx_tasks_type_status ON tasks(type, status)", "idx_tasks_type_status")
-			m("CREATE INDEX IF NOT EXISTS idx_workflow_executions_status ON workflow_executions(status)", "idx_workflow_executions_status")
-			m("CREATE INDEX IF NOT EXISTS idx_workflow_executions_workflow_status ON workflow_executions(workflow_id, status)", "idx_workflow_executions_workflow_status")
 			return nil
 		},
 		Rollback: func(tx *gorm.DB) error {
@@ -437,8 +567,6 @@ var indexMigrations = []*gormigrate.Migration{
 				execMigration(tx, sql, label)
 			}
 			m("DROP INDEX IF EXISTS idx_tasks_type_status", "drop_idx_tasks_type_status")
-			m("DROP INDEX IF EXISTS idx_workflow_executions_status", "drop_idx_workflow_executions_status")
-			m("DROP INDEX IF EXISTS idx_workflow_executions_workflow_status", "drop_idx_workflow_executions_workflow_status")
 			return nil
 		},
 	},

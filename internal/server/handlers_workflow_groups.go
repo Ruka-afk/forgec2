@@ -216,26 +216,134 @@ func (s *Server) handleAPIUpdateWorkflow(c *gin.Context) {
 	respond(c, gin.H{"success": true})
 }
 
+// executionSummary is one grouped workflow run (derived from execution_logs).
+type executionSummary struct {
+	ExecutionID  string     `json:"execution_id"`
+	WorkflowID   string     `json:"workflow_id"`
+	WorkflowName string     `json:"workflow_name"`
+	Status       string     `json:"status"`
+	TasksCreated int64      `json:"tasks_created"`
+	AgentsCount  int64      `json:"agents_count"`
+	ErrorMsg     string     `json:"error_msg,omitempty"`
+	StartedAt    time.Time  `json:"started_at"`
+	CompletedAt  *time.Time `json:"completed_at,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+}
+
+// executionStatus derives the aggregate run status from its log rows.
+// aborted > running > failed > completed, matching legacy row semantics.
+func executionStatus(statuses map[string]bool) string {
+	if statuses["aborted"] {
+		return "aborted"
+	}
+	if statuses["running"] || statuses["pending"] {
+		return "running"
+	}
+	if statuses["failed"] {
+		return "failed"
+	}
+	return "completed"
+}
+
 func (s *Server) handleListWorkflowExecutions(c *gin.Context) {
 	workflowID := c.Param("id")
-	var executions []db.WorkflowExecution
-	if err := s.db.Where("workflow_id = ?", workflowID).Order("started_at desc").Limit(50).Find(&executions).Error; err != nil {
-		slog.Error("Failed to list workflow executions", "err", err)
+	type groupRow struct {
+		ExecutionID  string
+		WorkflowID   string
+		WorkflowName string
+		TasksCreated int64
+		AgentsCount  int64
+		ErrorMsg     string
+		StartedAt    time.Time
+		CompletedAt  *time.Time
+		CreatedAt    time.Time
 	}
-	respond(c, gin.H{"executions": executions})
+	var rows []groupRow
+	if err := s.db.Table("execution_logs").
+		Select("execution_id, workflow_id, workflow_name, COUNT(*) AS tasks_created, COUNT(DISTINCT agent_id) AS agents_count, MAX(error_msg) AS error_msg, MIN(started_at) AS started_at, MAX(completed_at) AS completed_at, MIN(created_at) AS created_at").
+		Where("workflow_id = ?", workflowID).
+		Group("execution_id").
+		Order("started_at DESC").
+		Limit(50).
+		Scan(&rows).Error; err != nil {
+		slog.Error("Failed to list workflow executions", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to load executions")
+		return
+	}
+
+	execs := make([]executionSummary, 0, len(rows))
+	for _, r := range rows {
+		statuses := map[string]bool{}
+		var grouped []struct {
+			Status       string
+			BranchAction string
+			BranchTarget string
+		}
+		if err := s.db.Table("execution_logs").
+			Select("status, branch_action, branch_target").
+			Where("execution_id = ?", r.ExecutionID).
+			Group("status, branch_action, branch_target").
+			Scan(&grouped).Error; err == nil {
+			for _, g := range grouped {
+				statuses[g.Status] = true
+				if g.BranchAction == "abort" || g.BranchTarget == "stop_on_failure" {
+					statuses["aborted"] = true
+				}
+			}
+		}
+		execs = append(execs, executionSummary{
+			ExecutionID:  r.ExecutionID,
+			WorkflowID:   r.WorkflowID,
+			WorkflowName: r.WorkflowName,
+			Status:       executionStatus(statuses),
+			TasksCreated: r.TasksCreated,
+			AgentsCount:  r.AgentsCount,
+			ErrorMsg:     r.ErrorMsg,
+			StartedAt:    r.StartedAt,
+			CompletedAt:  r.CompletedAt,
+			CreatedAt:    r.CreatedAt,
+		})
+	}
+	respond(c, gin.H{"executions": execs})
 }
 
 func (s *Server) handleGetWorkflowExecution(c *gin.Context) {
 	executionID := c.Param("executionId")
-	var exec db.WorkflowExecution
-	if !s.findOrFail(c, &exec, executionID, "execution") {
+	var logs []db.ExecutionLog
+	if err := s.db.Where("execution_id = ?", executionID).Order("step_order, id").Find(&logs).Error; err != nil {
+		slog.Error("Failed to query workflow execution logs", "err", err)
+		respondError(c, http.StatusInternalServerError, "failed to load execution")
 		return
 	}
-	var logs []db.WorkflowStepLog
-	if err := s.db.Where("execution_id = ?", exec.ID).Order("step_order").Find(&logs).Error; err != nil {
-		slog.Error("Failed to query workflow step logs", "err", err)
+	if len(logs) == 0 {
+		respondError(c, http.StatusNotFound, "execution not found")
+		return
 	}
-	respond(c, gin.H{"execution": exec, "logs": logs})
+	first := logs[0]
+	summary := executionSummary{
+		ExecutionID:  executionID,
+		WorkflowID:   first.WorkflowID,
+		WorkflowName: first.WorkflowName,
+		StartedAt:    first.StartedAt,
+		CreatedAt:    first.CreatedAt,
+	}
+	for _, l := range logs {
+		if l.CompletedAt != nil && (summary.CompletedAt == nil || l.CompletedAt.After(*summary.CompletedAt)) {
+			summary.CompletedAt = l.CompletedAt
+		}
+		if l.ErrorMsg != "" {
+			summary.ErrorMsg = l.ErrorMsg
+		}
+	}
+	statuses := map[string]bool{}
+	for _, l := range logs {
+		statuses[l.Status] = true
+		if l.BranchAction == "abort" || l.BranchTarget == "stop_on_failure" {
+			statuses["aborted"] = true
+		}
+	}
+	summary.Status = executionStatus(statuses)
+	respond(c, gin.H{"execution": summary, "logs": logs})
 }
 
 func (s *Server) handleAPIDeleteWorkflow(c *gin.Context) {
