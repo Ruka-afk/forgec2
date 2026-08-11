@@ -618,6 +618,7 @@ export default function AgentsPageContent() {
         message={t("agents.confirm_kill_msg").replace("{name}", confirm?.hostname || confirm?.id || "")}
         confirmText={t("agents.confirm_kill_btn")}
         danger
+        requireText={confirm?.hostname || ""}
         onConfirm={() => confirm?.id && killAgent(confirm.id)}
         onCancel={() => setConfirm(null)}
       />
@@ -627,6 +628,7 @@ export default function AgentsPageContent() {
         message={t("agents.confirm_delete_msg").replace("{name}", confirm?.hostname || confirm?.id || "")}
         confirmText={t("agents.confirm_delete_btn")}
         danger
+        requireText={confirm?.hostname || ""}
         onConfirm={() => confirm?.id && deleteAgent(confirm.id)}
         onCancel={() => setConfirm(null)}
       />

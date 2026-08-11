@@ -14,7 +14,7 @@ export const DEFAULT_SHORTCUTS: Record<string, ShortcutDef> = {
   close_modal: { key: "Escape", label: "Close", description: "Close modal or dropdown" },
   refresh: { key: "F5", label: "Refresh", description: "Refresh current page" },
   toggle_lock: { key: "l", ctrl: true, shift: true, label: "Lock Agent", description: "Lock or unlock current agent" },
-  global_search: { key: "k", ctrl: true, label: "Search", description: "Focus global search" },
+  global_search: { key: "k", ctrl: true, label: "Command Palette", description: "Open the command palette" },
 };
 
 const STORAGE_KEY = "forgec2_shortcuts";

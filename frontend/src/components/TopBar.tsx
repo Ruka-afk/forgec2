@@ -62,17 +62,6 @@ function SearchBox() {
     if (q) { router.push(`/search?q=${encodeURIComponent(q)}`); setMobileOpen(false); }
   };
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === "k") {
-        e.preventDefault();
-        document.getElementById("global-search")?.focus();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
   return (
     <>
       {/* Desktop search */}
@@ -81,16 +70,13 @@ function SearchBox() {
         <Input id="global-search" type="text" value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("topbar.search_placeholder")}
-          className="h-9 pl-8 pr-16 text-(--fs-compact) placeholder:text-muted-foreground/70 bg-secondary/50 border-transparent focus:bg-card focus:border-border rounded-xl" />
+          className="h-9 pl-8 pr-4 text-(--fs-compact) placeholder:text-muted-foreground/70 bg-secondary/50 border-transparent focus:bg-card focus:border-border rounded-xl" />
         {query && (
           <Button type="button" onClick={() => setQuery("")}
-            variant="ghost" size="icon-xs" className="absolute right-8 top-1/2 -translate-y-1/2" aria-label={t("common.clear_search")}>
+            variant="ghost" size="icon-xs" className="absolute right-2 top-1/2 -translate-y-1/2" aria-label={t("common.clear_search")}>
             <X className="w-3 h-3" />
           </Button>
         )}
-        <kbd className="absolute right-2 top-1/2 -translate-y-1/2 text-(--fs-micro-sm) text-muted-foreground/70 bg-secondary px-1.5 py-0.5 rounded border border-border">
-          {typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "\u2318K" : "Ctrl+K"}
-        </kbd>
       </form>
       {/* Mobile search toggle */}
       <Button variant="ghost" size="icon" className="sm:hidden" onClick={() => setMobileOpen(!mobileOpen)} aria-label={t("nav.search")}>

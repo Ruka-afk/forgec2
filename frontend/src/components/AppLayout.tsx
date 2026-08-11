@@ -7,6 +7,7 @@ import UpdateBanner from "@/components/UpdateBanner";
 import AgentStatusBanner from "@/components/AgentStatusBanner";
 import ShortcutsHelp from "@/components/ShortcutsHelp";
 import ScrollToTop from "@/components/ScrollToTop";
+import CommandPalette from "@/components/CommandPalette";
 import { Breadcrumb } from "@/components/UI";
 import { usePathname } from "next/navigation";
 import { useAppStore } from "@/lib/store";
@@ -75,6 +76,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <ShortcutsHelp />
       <ScrollToTop />
+      <CommandPalette />
     </div>
   );
 }

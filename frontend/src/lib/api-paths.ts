@@ -118,6 +118,9 @@ export const paths = {
     one: (id: string) => `/users/${id}`,
     password: (id: string) => `/users/${id}/password`,
     forceLogout: (id: string) => `/users/${id}/force-logout`,
+    sessions: (id: string) => `/users/${id}/sessions`,
+    revokeSession: (id: string, sessionId: string | number) => `/users/${id}/sessions/${sessionId}/revoke`,
+    revokeAllSessions: (id: string) => `/users/${id}/sessions/revoke-all`,
   },
   /**
    * Notifications — /notifications only (no /api prefix).

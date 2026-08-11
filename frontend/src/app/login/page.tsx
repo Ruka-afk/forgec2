@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Spinner } from "@/components/UI";
 import { AlertCircle, Lock, Shield, User } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -18,6 +19,7 @@ type LoginFormValues = {
   username: string;
   password: string;
   totpCode: string;
+  rememberMe: boolean;
 };
 
 function LoginForm() {
@@ -33,6 +35,7 @@ function LoginForm() {
         username: z.string().min(1, t("login.username_required")),
         password: z.string().min(1, t("login.password_required")),
         totpCode: z.string().regex(/^[0-9]{0,6}$/, t("login.totp_invalid")),
+        rememberMe: z.boolean(),
       }),
     [t],
   );
@@ -45,8 +48,9 @@ function LoginForm() {
     handleChange,
     handleBlur,
     handleSubmit,
+    setFieldValue,
   } = useForm<LoginFormValues>({
-    initialValues: { username: "", password: "", totpCode: "" },
+    initialValues: { username: "", password: "", totpCode: "", rememberMe: false },
     schema: loginSchema,
     onSubmit: async (vals) => {
       setError("");
@@ -54,6 +58,7 @@ function LoginForm() {
       params.append("username", vals.username);
       params.append("password", vals.password);
       if (vals.totpCode) params.append("totp_code", vals.totpCode);
+      if (vals.rememberMe) params.append("remember_me", "on");
 
       try {
         const response = await fetch("/login", {
@@ -207,6 +212,15 @@ function LoginForm() {
                 <p id="login-totp-error" role="alert" className="text-xs text-destructive mt-1">{errors.totpCode}</p>
               )}
             </div>
+
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <Checkbox
+                checked={values.rememberMe}
+                onCheckedChange={(v) => setFieldValue("rememberMe", v === true)}
+                aria-label={t("login.remember_me")}
+              />
+              <span className="text-xs text-muted-foreground">{t("login.remember_me")}</span>
+            </label>
 
             <Button
               type="submit"

@@ -16,8 +16,9 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Ban, Check, Crown, Key, LogOut, Pencil, Plus, Trash2, User as UserIcon, Users } from "lucide-react";
+import { Ban, Check, Crown, Key, Laptop, LogOut, Pencil, Plus, Trash2, User as UserIcon, Users } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 interface User {
@@ -28,6 +29,20 @@ interface User {
   last_activity?: string;
   last_login?: string;
   created_at?: string;
+}
+
+interface UserSession {
+  id: number;
+  ip?: string;
+  user_agent?: string;
+  device_fingerprint?: string;
+  created_at?: string;
+  expires_at?: string;
+}
+
+function formatSessionDate(raw?: string): string {
+  const d = raw ? new Date(raw) : null;
+  return d && !isNaN(d.getTime()) ? d.toLocaleString() : "-";
 }
 
 function getRoleBadge(role: string) {
@@ -51,7 +66,12 @@ export default function UsersPage() {
   const [passwordUserId, setPasswordUserId] = useState<string>("");
   const [newPassword, setNewPassword] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+  const [cfm, setCfm] = useState<{msg: string; cb: () => void; requireText?: string} | null>(null);
+  const [sessionsUser, setSessionsUser] = useState<User | null>(null);
+  const [sessions, setSessions] = useState<UserSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [revokeLoading, setRevokeLoading] = useState<string | null>(null);
   const { t } = useI18n();
 
   const loadUsers = useCallback(async () => {
@@ -127,8 +147,8 @@ export default function UsersPage() {
     }});
   };
 
-  const handleDelete = (id: string) => {
-    setCfm({msg: t("users.confirm.delete"), cb: async () => {
+  const handleDelete = (id: string, name: string) => {
+    setCfm({msg: t("users.confirm.delete"), requireText: name, cb: async () => {
       setActionLoading(id + "_delete");
       try {
         await api.del(paths.users.one(id));
@@ -166,6 +186,54 @@ export default function UsersPage() {
         await api.post(paths.users.forceLogout(id));
         toast.success(t("users.toast.kick_success"));
       } catch { toast.error(t("users.toast.kick_failed")); }
+    }});
+  };
+
+  const loadSessions = useCallback(async (user: User) => {
+    const uid = user.id;
+    if (!uid) return;
+    setSessionsLoading(true);
+    setSessionsError(null);
+    try {
+      const data = await api.get(paths.users.sessions(uid));
+      setSessions((data.sessions || data.data || []) as UserSession[]);
+    } catch {
+      setSessions([]);
+      setSessionsError(t("users.toast.sessions_load_failed"));
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, [t]);
+
+  const openSessions = (user: User) => {
+    setSessionsUser(user);
+    setSessions([]);
+    void loadSessions(user);
+  };
+
+  const handleRevokeSession = (sessionId: number) => {
+    if (!sessionsUser?.id) return;
+    setRevokeLoading("s" + sessionId);
+    api.post(paths.users.revokeSession(sessionsUser.id, sessionId), {})
+      .then(() => {
+        toast.success(t("users.toast.session_revoked"));
+        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      })
+      .catch(() => toast.error(t("users.toast.session_revoke_failed")))
+      .finally(() => setRevokeLoading(null));
+  };
+
+  const handleRevokeAll = () => {
+    const uid = sessionsUser?.id;
+    if (!uid || !sessionsUser?.username) return;
+    setCfm({msg: t("users.confirm.revoke_all", { name: sessionsUser.username }), cb: async () => {
+      setRevokeLoading("all");
+      try {
+        await api.post(paths.users.revokeAllSessions(uid), {});
+        toast.success(t("users.toast.sessions_revoked"));
+        setSessions([]);
+      } catch { toast.error(t("users.toast.sessions_revoke_failed")); }
+      finally { setRevokeLoading(null); }
     }});
   };
 
@@ -289,13 +357,16 @@ export default function UsersPage() {
                         <Button variant="ghost" size="icon-sm" onClick={() => { setPasswordUserId(uid); setNewPassword(""); setShowPasswordModal(true); }} className="text-primary hover:bg-primary/10" title={t("users.set_password")} aria-label={t("users.set_password")}>
                           <Key className="w-4 h-4" />
                         </Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => openSessions(u)} className="text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/30" title={t("users.sessions")} aria-label={t("users.sessions")}>
+                          <Laptop className="w-4 h-4" />
+                        </Button>
                         <Button variant="ghost" size="icon-sm" onClick={() => handleForceLogout(uid)} className="text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30" title={t("users.force_logout")} aria-label={t("users.force_logout")}>
                           <LogOut className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="icon-sm" onClick={() => handleKick(uid)} className="text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30" title={t("users.kick_user")} aria-label={t("users.kick_user")}>
                           <LogOut className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(uid)} disabled={actionLoading === uid + "_delete"} className="text-destructive hover:bg-destructive/10" title={t("common.delete")} aria-label={t("common.delete")}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(uid, name)} disabled={actionLoading === uid + "_delete"} className="text-destructive hover:bg-destructive/10" title={t("common.delete")} aria-label={t("common.delete")}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -401,7 +472,61 @@ export default function UsersPage() {
           </form>
         </DialogContent>
       </Dialog>
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      <Dialog open={!!sessionsUser} onOpenChange={(v) => { if (!v) { setSessionsUser(null); setSessions([]); } }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t("users.sessions_title")}</DialogTitle>
+            {sessionsUser?.username && <p className="text-xs text-muted-foreground">{t("users.sessions_subtitle", { name: sessionsUser.username })}</p>}
+          </DialogHeader>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">{t("users.showing", { filtered: String(sessions.length), total: String(sessions.length) })}</span>
+            <Button variant="destructive" size="sm" onClick={handleRevokeAll} disabled={sessions.length === 0 || revokeLoading !== null}>
+              <LogOut className="w-4 h-4" /> {t("users.revoke_all_sessions")}
+            </Button>
+          </div>
+          {sessionsError && <p className="text-xs text-destructive">{sessionsError}</p>}
+          {sessionsLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : sessions.length === 0 ? (
+            <div className="py-12 text-center text-muted-foreground text-sm">
+              <Laptop className="w-6 h-6 mx-auto mb-2 opacity-50" />
+              {t("users.sessions_empty")}
+            </div>
+          ) : (
+            <ScrollArea className="max-h-80">
+            <div className="space-y-2">
+              {sessions.map((s) => (
+                <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border bg-card/60">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="shrink-0 w-9 h-9 rounded-lg bg-secondary/70 flex items-center justify-center">
+                      <Laptop className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-foreground font-mono">{s.ip || "-"}</span>
+                        <span className="text-xs text-muted-foreground">{t("users.col_created")}: {formatSessionDate(s.created_at)}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate max-w-md">
+                        {(s.user_agent || "-")}{s.device_fingerprint ? ` · ${s.device_fingerprint}` : ""}
+                      </div>
+                      <div className="text-xs text-muted-foreground/70">
+                        {t("users.col_expires")}: {formatSessionDate(s.expires_at)}
+                      </div>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => handleRevokeSession(s.id)} disabled={revokeLoading !== null} className="text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 shrink-0">
+                    <LogOut className="w-4 h-4" /> {t("users.revoke_session")}
+                  </Button>
+                </div>
+              ))}
+            </div>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
+      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger requireText={cfm?.requireText} onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
     </div>
   );
 }

@@ -84,7 +84,7 @@ export default function ListenersPageContent() {
 
   const [editingListener, setEditingListener] = useState<Listener | null>(null);
   const [showEdit, setShowEdit] = useState(false);
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+  const [cfm, setCfm] = useState<{msg: string; cb: () => void; requireText?: string} | null>(null);
 
   const {
     values: createForm,
@@ -162,7 +162,8 @@ export default function ListenersPageContent() {
   const handleDelete = (listener: Listener) => {
     const id = listener.id || "";
     if (!id) return;
-    setCfm({msg: t("listeners.confirm_delete"), cb: async () => {
+    const name = listener.name || listener.type || "";
+    setCfm({msg: t("listeners.confirm_delete"), requireText: name, cb: async () => {
       await deleteListener(id);
     }});
   };
@@ -520,7 +521,7 @@ export default function ListenersPageContent() {
           </form>
         </DialogContent>
       </Dialog>
-      <ConfirmModal open={!!cfm} title={t("listeners.confirm_title")} message={cfm?.msg || ""} confirmText={t("listeners.confirm_delete_text")} cancelText={t("listeners.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      <ConfirmModal open={!!cfm} title={t("listeners.confirm_title")} message={cfm?.msg || ""} confirmText={t("listeners.confirm_delete_text")} cancelText={t("listeners.cancel")} danger requireText={cfm?.requireText} onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
     </div>
   );
 }

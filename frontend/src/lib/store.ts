@@ -31,6 +31,10 @@ interface AppState {
   currentUserRole: string;
   setCurrentUserRole: (role: string) => void;
 
+  // Command palette
+  commandPaletteOpen: boolean;
+  setCommandPaletteOpen: (open: boolean) => void;
+
   fetchStats: () => Promise<void>;
 }
 
@@ -45,6 +49,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     : false,
   isMobile: false,
   mobileMenuOpen: false,
+  commandPaletteOpen: false,
 
   toggleSidebar: () => {
     const { isMobile, mobileMenuOpen, sidebarCollapsed } = get();
@@ -69,6 +74,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setOnlineUsers: (users) => set({ onlineUsers: users }),
   setCurrentUsername: (name) => set({ currentUsername: name }),
   setCurrentUserRole: (role) => set({ currentUserRole: role }),
+  setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
 
   fetchStats: async () => {
     try {

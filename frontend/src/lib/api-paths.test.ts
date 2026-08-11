@@ -32,6 +32,9 @@ describe("api paths", () => {
     expect(paths.notifications.list()).toMatch(/^\/notifications\?/);
     expect(paths.groups.list).toBe("/groups");
     expect(paths.users.list).toBe("/users");
+    expect(paths.users.sessions("1")).toBe("/users/1/sessions");
+    expect(paths.users.revokeSession("1", 7)).toBe("/users/1/sessions/7/revoke");
+    expect(paths.users.revokeAllSessions("1")).toBe("/users/1/sessions/revoke-all");
     expect(paths.builds.list()).toBe("/builds");
     expect(paths.builds.list("page=1")).toBe("/builds?page=1");
     expect(paths.settings.root).toBe("/settings");
