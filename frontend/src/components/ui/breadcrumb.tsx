@@ -3,62 +3,8 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n";
+import { NAV_SEGMENT_LABELS } from "@/lib/navigation";
 import { Home, ChevronRight as ChevronSep } from "lucide-react";
-
-const SEGMENT_LABELS: Record<string, string> = {
-  dashboard: "nav.dashboard",
-  agents: "nav.beacons",
-  listeners: "nav.listeners",
-  tasks: "nav.tasks",
-  settings: "nav.settings",
-  credentials: "nav.credentials",
-  files: "nav.files",
-  loot: "nav.loot",
-  plugins: "nav.plugins",
-  audit: "nav.audit",
-  tags: "nav.tags",
-  groups: "nav.groups",
-  builds: "nav.builds",
-  generate: "nav.generate",
-  phishing: "nav.phishing",
-  automation: "nav.automation",
-  topology: "nav.topology",
-  ai: "nav.ai",
-  report: "nav.report",
-  campaign: "nav.campaign",
-  traffic: "nav.traffic",
-  opsec: "nav.opsec",
-  chain: "nav.chain",
-  toolkit: "nav.toolkit",
-  scripting: "nav.scripting",
-  pivoting: "nav.pivoting",
-  tokens: "nav.token_store",
-  scanner: "nav.scanner",
-  privesc: "nav.privesc",
-  lateral: "nav.lateral",
-  bof: "nav.bof",
-  chrome: "nav.chrome_c2",
-  cloud: "nav.cloud",
-  ntlm: "nav.ntlm",
-  container: "nav.container",
-  infrastructure: "nav.infrastructure",
-  domain_fronting: "nav.domain_fronting",
-  profiles: "nav.profiles",
-  packer: "nav.packer",
-  stager: "nav.stager",
-  dns: "nav.dns",
-  users: "nav.users",
-  roles: "nav.roles",
-  autotag: "nav.autotag",
-  notifications: "nav.notifications",
-  chat: "nav.chat",
-  integrations: "nav.integrations",
-  attack: "nav.attack",
-  circuit_breaker: "nav.circuit_breaker",
-  bloodhound: "nav.bloodhound",
-  search: "nav.search",
-  timeline: "nav.timeline",
-};
 
 function normalizeKey(seg: string): string {
   return seg.replace(/-/g, "_");
@@ -99,7 +45,7 @@ function Breadcrumb() {
     }
 
     const subKey = SUB_ROUTE_LABELS[seg];
-    const navKey = SEGMENT_LABELS[seg] || SEGMENT_LABELS[normalizeKey(seg)];
+    const navKey = NAV_SEGMENT_LABELS[seg] || NAV_SEGMENT_LABELS[normalizeKey(seg)];
     const label = subKey ? t(subKey) : navKey ? t(navKey) : seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, " ");
 
     items.push({ label, href: i < segments.length - 1 ? accPath : undefined });
