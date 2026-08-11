@@ -20,9 +20,9 @@ import {
   Activity, Bot, Shield, Fish, Zap, Bug, Tags, Layers, Wand2, Clock,
   FolderTree, Bell, MessageSquare, GitBranch, Link as LinkIcon, Boxes,
   Radio, Hammer, Server, Cloud, PenTool, Box, Wrench, Code, Key,
-  Route, IdCard, Archive, Images, SatelliteDish, ArrowLeftRight,
-  FileCode, FileText, Globe, Puzzle, Network, Crosshair, ClipboardList,
-  Plug, Users, Settings, Book, ChevronDown, Search,
+  Route, IdCard, Archive, SatelliteDish, ArrowLeftRight,
+  FileCode, Globe, Puzzle, Network, Crosshair, ClipboardList,
+  Plug, Users, Settings, ChevronDown, Search,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -88,7 +88,6 @@ const navSections: NavSection[] = [
       { href: "/toolkit", labelKey: "nav.toolkit", icon: Wrench },
       { href: "/workflows", labelKey: "nav.workflows", icon: GitBranch },
       { href: "/scheduler", labelKey: "nav.scheduler", icon: Clock },
-      { href: "/command_templates", labelKey: "nav.templates", icon: FileText },
       { href: "/plugins", labelKey: "nav.plugins", icon: Puzzle },
     ],
   },
@@ -111,7 +110,6 @@ const navSections: NavSection[] = [
     items: [
       { href: "/phishing", labelKey: "nav.phishing", icon: Fish },
       { href: "/circuit-breaker", labelKey: "nav.circuit_breaker", icon: Zap },
-      { href: "/screenshots", labelKey: "nav.screenshots", icon: Images },
       { href: "/chrome", labelKey: "nav.chrome_c2", icon: Globe },
       { href: "/cloud", labelKey: "nav.cloud", icon: Cloud },
       { href: "/ntlm", labelKey: "nav.ntlm", icon: Zap },
@@ -129,7 +127,6 @@ const navSections: NavSection[] = [
       { href: "/tags", labelKey: "nav.tags", icon: Tags },
       { href: "/groups", labelKey: "nav.groups", icon: Layers },
       { href: "/autotag", labelKey: "nav.autotag", icon: Wand2 },
-      { href: "/docs", labelKey: "nav.docs", icon: Book },
     ],
   },
 ];

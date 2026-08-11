@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, Suspense, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
@@ -21,18 +22,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Download, FileUp, Images, Keyboard, Terminal, Trash2, X } from "lucide-react";
+import { Download, FileUp, Images, Keyboard, Terminal, Trash2, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Accordion, AccordionItem, AccordionHeader, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
 import { LootScreenshotCard } from "./_components/LootScreenshotCard";
 import { useLootData } from "./_components/useLootData";
 import type { LootTab } from "./_components/types";
 
-export default function LootPage() {
+function LootPage() {
   const { t } = useI18n();
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get("tab") as LootTab) || "screenshots";
   const { data, loading, error, loadLoot } = useLootData();
-  const [modalImg, setModalImg] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<LootTab>("screenshots");
-  const [agentFilter, setAgentFilter] = useState("");
+  const [lbIndex, setLbIndex] = useState(-1);
+  const [activeTab, setActiveTab] = useState<LootTab | null>(initialTab);
+  const [agentFilter, setAgentFilter] = useState(searchParams.get("agent_id") || "");
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [keylogSearch, setKeylogSearch] = useState("");
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
@@ -92,16 +95,19 @@ export default function LootPage() {
     });
   }, []);
 
+  const validTabs: LootTab[] = ["screenshots", "keylogs", "downloads"];
+  const curTab: LootTab = activeTab && validTabs.includes(activeTab) ? activeTab : "screenshots";
+
   const toggleSelectAll = useCallback(() => {
     let items: string[] = [];
-    if (activeTab === "screenshots") items = filteredScreenshots.map(s => s.id);
-    else if (activeTab === "downloads") items = filteredDownloads.map(d => d.id);
+    if (curTab === "screenshots") items = filteredScreenshots.map(s => s.id);
+    else if (curTab === "downloads") items = filteredDownloads.map(d => d.id);
     const allSelected = items.every(id => selectedItems.has(id));
     const next = new Set(selectedItems);
     if (allSelected) items.forEach(id => next.delete(id));
     else items.forEach(id => next.add(id));
     setSelectedItems(next);
-  }, [activeTab, filteredScreenshots, filteredDownloads, selectedItems]);
+  }, [curTab, filteredScreenshots, filteredDownloads, selectedItems]);
 
   const deleteSelected = useCallback(() => {
     if (selectedItems.size === 0) return;
@@ -148,6 +154,21 @@ export default function LootPage() {
     return (size / 1024).toFixed(1) + " KB";
   };
 
+  const lbScreenshots = filteredScreenshots;
+  const lbCurrent = lbIndex >= 0 && lbIndex < lbScreenshots.length ? lbScreenshots[lbIndex] : null;
+  const lbUrl = lbCurrent ? `/screenshots/${lbCurrent.path}` : "";
+
+  useEffect(() => {
+    if (lbIndex < 0) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLbIndex(-1);
+      else if (e.key === "ArrowLeft") setLbIndex((i) => Math.max(0, i - 1));
+      else if (e.key === "ArrowRight") setLbIndex((i) => Math.min(lbScreenshots.length - 1, i + 1));
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [lbIndex, lbScreenshots.length]);
+
   const tabs: { key: LootTab; label: string; icon: React.ReactNode; count: number }[] = [
     { key: "screenshots", label: t("loot.screenshots_tab"), icon: <Images aria-hidden="true" className="w-4 h-4" />, count: filteredScreenshots.length },
     { key: "keylogs", label: t("loot.keylogs_tab"), icon: <Keyboard aria-hidden="true" className="w-4 h-4" />, count: filteredKeylogs.length },
@@ -191,13 +212,13 @@ export default function LootPage() {
           </div>
         }
       >
-      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as LootTab); setSelectedItems(new Set()); setScreenshotPage(1); setKeylogPage(1); setDownloadPage(1); }}>
+      <Tabs value={curTab} onValueChange={(v) => { setActiveTab(v as LootTab); setSelectedItems(new Set()); setScreenshotPage(1); setKeylogPage(1); setDownloadPage(1); }}>
         <TabsList className="mb-4">
           {tabs.map(tab => (
             <TabsTrigger key={tab.key} value={tab.key} className="gap-2">
               {tab.icon}
               <span>{tab.label}</span>
-              <Badge variant={activeTab === tab.key ? "default" : "secondary"}>{tab.count}</Badge>
+              <Badge variant={curTab === tab.key ? "default" : "secondary"}>{tab.count}</Badge>
             </TabsTrigger>
           ))}
         </TabsList>
@@ -227,13 +248,14 @@ export default function LootPage() {
             </div>
           ) : filteredScreenshots.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-              {visibleScreenshots.map(s => (
+              {visibleScreenshots.map((s) => (
                 <LootScreenshotCard
                   key={s.id}
                   screenshot={s}
+                  index={filteredScreenshots.findIndex((item) => item.id === s.id)}
                   isSelected={selectedItems.has(s.id)}
                   onToggleSelect={toggleSelect}
-                  onOpen={(path) => setModalImg(path)}
+                  onOpen={(i) => setLbIndex(i)}
                 />
               ))}
             </div>
@@ -378,18 +400,31 @@ export default function LootPage() {
       </Tabs>
       </DataState>
 
-      {modalImg && (
-        <Dialog open={true} onOpenChange={() => setModalImg(null)}>
-          <DialogContent className="max-w-4xl bg-transparent border-0 p-0" showCloseButton={false}>
+      {lbCurrent && (
+        <Dialog open={true} onOpenChange={() => setLbIndex(-1)}>
+          <DialogContent className="max-w-5xl bg-transparent border-0 p-0" showCloseButton={false}>
             <div className="absolute top-4 right-4 flex gap-2 z-10">
-              <a href={safeHref(modalImg)} download>
+              <a href={safeHref(lbUrl)} download className="inline-flex items-center gap-1">
                 <Button variant="secondary" className="gap-1"><Download aria-hidden="true" className="w-4 h-4" />{t("common.download")}</Button>
               </a>
-              <Button variant="secondary" onClick={() => setModalImg(null)} className="w-10 h-10 p-0" aria-label={t("loot.close_screenshot")}>
+              <Button variant="secondary" onClick={() => setLbIndex(-1)} className="w-10 h-10 p-0" aria-label={t("loot.close_screenshot")}>
                 <X aria-hidden="true" className="w-4 h-4" />
               </Button>
             </div>
-            <img src={safeImageSrc(modalImg)} alt="Screenshot" className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            {lbIndex > 0 && (
+              <Button variant="secondary" onClick={() => setLbIndex((i) => Math.max(0, i - 1))} className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 p-0 rounded-full" aria-label={t("loot.lb_previous")}>
+                <ChevronLeft aria-hidden="true" className="w-4 h-4" />
+              </Button>
+            )}
+            {lbIndex < lbScreenshots.length - 1 && (
+              <Button variant="secondary" onClick={() => setLbIndex((i) => Math.min(lbScreenshots.length - 1, i + 1))} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 p-0 rounded-full" aria-label={t("loot.lb_next")}>
+                <ChevronRight aria-hidden="true" className="w-4 h-4" />
+              </Button>
+            )}
+            <div className="text-center text-xs text-white/80 bg-black/60 rounded-xl px-3 py-1.5 mb-2">
+              {lbIndex + 1} / {lbScreenshots.length} · {lbCurrent.filename} · {formatTime(lbCurrent.created_at)}
+            </div>
+            <img src={safeImageSrc(lbUrl)} alt={lbCurrent.filename} className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </DialogContent>
         </Dialog>
       )}
@@ -397,4 +432,13 @@ export default function LootPage() {
     </div>
   );
 }
+
+export default function LootPageWrapper() {
+  return (
+    <Suspense fallback={null}>
+      <LootPage />
+    </Suspense>
+  );
+}
+
 

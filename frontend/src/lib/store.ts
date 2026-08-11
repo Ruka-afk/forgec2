@@ -3,7 +3,6 @@
 import { create } from "zustand";
 import { api } from "./api";
 import { paths } from "./api-paths";
-import type { Listener } from "@/types/listener";
 import type { DashboardStats } from "@/types/agent";
 
 export interface OnlineUser {
@@ -12,7 +11,6 @@ export interface OnlineUser {
 }
 
 interface AppState {
-  listeners: Listener[];
   stats: DashboardStats | null;
   statsError?: string;
 
@@ -33,12 +31,10 @@ interface AppState {
   currentUserRole: string;
   setCurrentUserRole: (role: string) => void;
 
-  fetchListeners: () => Promise<void>;
   fetchStats: () => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
-  listeners: [],
   stats: null,
   onlineUsers: [],
   currentUsername: "",
@@ -73,16 +69,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setOnlineUsers: (users) => set({ onlineUsers: users }),
   setCurrentUsername: (name) => set({ currentUsername: name }),
   setCurrentUserRole: (role) => set({ currentUserRole: role }),
-
-  fetchListeners: async () => {
-    try {
-      const data = await api.get<{ data?: Listener[]; listeners?: Listener[]; Listeners?: Listener[] }>(paths.listeners.list);
-      const listeners = data.data || data.listeners || [];
-      set({ listeners });
-    } catch {
-      set({ listeners: [] });
-    }
-  },
 
   fetchStats: async () => {
     try {

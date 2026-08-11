@@ -8,13 +8,15 @@ import { useI18n } from "@/lib/i18n";
 
 interface LootScreenshotCardProps {
   screenshot: Screenshot;
+  index: number;
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
-  onOpen: (path: string) => void;
+  onOpen: (index: number) => void;
 }
 
 function LootScreenshotCardInner({
   screenshot: s,
+  index,
   isSelected,
   onToggleSelect,
   onOpen,
@@ -24,7 +26,7 @@ function LootScreenshotCardInner({
     <div className={`group relative rounded-xl overflow-hidden border-2 cursor-pointer bg-muted/50 ${isSelected ? "border-primary ring-2 ring-primary/25 dark:ring-primary/40" : "border-border"}`}>
       <button
         type="button"
-        onClick={() => onOpen(`/screenshots/${s.path}`)}
+        onClick={() => onOpen(index)}
         aria-label={`Open ${s.filename}`}
         className="block w-full focus-visible:outline-none"
       >

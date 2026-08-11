@@ -1,7 +1,8 @@
 import { SettingsData } from "./types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Cpu, RotateCw } from "lucide-react";
+import { API_BASE } from "@/lib/constants";
+import { BookOpen, Cpu, Download, RotateCw } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 export default function AboutSection({
@@ -46,6 +47,24 @@ export default function AboutSection({
         <div className="mt-6 flex flex-wrap gap-3">
           <Button onClick={onCheckUpdate} className="h-10 px-4 bg-primary/10 dark:bg-primary/20 hover:bg-indigo-200 dark:hover:bg-indigo-800 text-primary dark:text-primary rounded-xl text-xs font-medium transition-colors">
             <RotateCw className="w-4 h-4" />{t("settings.about.check_updates")}
+          </Button>
+          <Button
+            variant="outline"
+            className="h-10 px-4 gap-1.5 text-xs rounded-xl"
+            render={
+              <a href={`${API_BASE}/docs/`} target="_blank" rel="noopener noreferrer" />
+            }
+          >
+            <BookOpen className="w-4 h-4" />{t("settings.about.api_docs")}
+          </Button>
+          <Button
+            variant="outline"
+            className="h-10 px-4 gap-1.5 text-xs rounded-xl"
+            render={
+              <a href={`${API_BASE}/docs/openapi.yaml`} target="_blank" rel="noopener noreferrer" />
+            }
+          >
+            <Download className="w-4 h-4" />{t("settings.about.openapi_yaml")}
           </Button>
         </div>
         <div className="mt-6 text-center text-xs text-muted-foreground">

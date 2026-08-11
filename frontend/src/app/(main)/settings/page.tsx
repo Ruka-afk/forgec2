@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -54,10 +54,15 @@ export default function SettingsPage() {
     setLanguage,
   } = useSettingsData();
   const [activeSection, setActiveSection] = useState("profile");
-  const [saving, setSaving] = useState(false);
   const [purgeDays, setPurgeDays] = useState({ tasks: "30", audit: "30" });
+  const [saving, setSaving] = useState(false);
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
   const [cfmInline, setCfmInline] = useState<{msg: string; cb: () => void} | null>(null);
+
+  useEffect(() => {
+    const tab = window.location.hash.match(/^#tab=(.+)$/)?.[1];
+    if (tab) setActiveSection(tab);
+  }, []);
 
   const {
     totpStatus, totpSecret, totpQR, totpBackupCodes,
