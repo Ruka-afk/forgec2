@@ -181,9 +181,9 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
                     <Select value={step.condition || "none"} onValueChange={v => { if (v !== null) updateStep(idx, "condition", v === "none" ? "" : v); }}>
                       <SelectTrigger className="w-40"><SelectValue placeholder={t("workflows.condition_ph")} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">No condition</SelectItem>
-                        <SelectItem value="not_empty">Result not empty</SelectItem>
-                        <SelectItem value="empty">Result empty</SelectItem>
+                        <SelectItem value="none">{t("workflows.cond_none")}</SelectItem>
+                        <SelectItem value="not_empty">{t("workflows.cond_not_empty")}</SelectItem>
+                        <SelectItem value="empty">{t("workflows.cond_empty")}</SelectItem>
                         <SelectItem value="contains('success')">contains(&apos;success&apos;)</SelectItem>
                         <SelectItem value="contains('error')">contains(&apos;error&apos;)</SelectItem>
                         <SelectItem value="equals('0')">equals(&apos;0&apos;)</SelectItem>
@@ -193,11 +193,11 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
                     <Select value={step.on_success || "continue"} onValueChange={v => { if (v !== null) updateStep(idx, "on_success", v); }}>
                       <SelectTrigger className="h-8 text-xs w-32"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="continue">Continue</SelectItem>
-                        <SelectItem value="abort">Abort</SelectItem>
+                        <SelectItem value="continue">{t("workflows.branch_continue")}</SelectItem>
+                        <SelectItem value="abort">{t("workflows.branch_abort")}</SelectItem>
                         {formSteps.filter((_, j) => j !== idx).map((s) => (
                           <SelectItem key={s.step_order} value={String(s.step_order)}>
-                            Go to step {s.step_order}
+                            {t("workflows.go_to_step", { n: s.step_order })}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -206,11 +206,11 @@ export default function WorkflowEditorDialog({ open, onOpenChange, editWf, onSav
                     <Select value={step.on_failure || "continue"} onValueChange={v => { if (v !== null) updateStep(idx, "on_failure", v); }}>
                       <SelectTrigger className="h-8 text-xs w-32"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="continue">Continue</SelectItem>
-                        <SelectItem value="abort">Abort</SelectItem>
+                        <SelectItem value="continue">{t("workflows.branch_continue")}</SelectItem>
+                        <SelectItem value="abort">{t("workflows.branch_abort")}</SelectItem>
                         {formSteps.filter((_, j) => j !== idx).map((s) => (
                           <SelectItem key={s.step_order} value={String(s.step_order)}>
-                            Go to step {s.step_order}
+                            {t("workflows.go_to_step", { n: s.step_order })}
                           </SelectItem>
                         ))}
                       </SelectContent>

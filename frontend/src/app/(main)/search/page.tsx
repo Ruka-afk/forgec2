@@ -111,13 +111,14 @@ function SearchContent() {
 }
 
 export default function SearchPage() {
+  const { t } = useI18n();
   return (
     <Suspense fallback={
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-          <div className="text-xl font-semibold tracking-tight text-foreground leading-tight mb-1">Search Results</div>
+          <div className="text-xl font-semibold tracking-tight text-foreground leading-tight mb-1">{t("search.title")}</div>
         <div className="flex items-center gap-3 p-4 text-muted-foreground">
           <Spinner />
-          <span className="text-sm">Loading...</span>
+          <span className="text-sm">{t("common.loading")}</span>
         </div>
       </div>
     }>

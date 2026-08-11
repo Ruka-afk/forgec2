@@ -17,6 +17,7 @@ import { AlertCircle, BadgeInfo, Check, CircleDot, Info, Key, List, Pencil, Plus
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
+import { formatTime } from "@/lib/utils";
 
 interface Token {
   id?: number;
@@ -400,7 +401,7 @@ export default function AgentTokenPage() {
                         </Tooltip>
                       )}
                     </TableCell>
-                    <TableCell className="px-4 py-3 text-xs font-mono text-muted-foreground">{createdAt ? new Date(createdAt).toLocaleString() : ""}</TableCell>
+                    <TableCell className="px-4 py-3 text-xs font-mono text-muted-foreground">{createdAt ? formatTime(createdAt) : ""}</TableCell>
                     <TableCell className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <Tooltip>

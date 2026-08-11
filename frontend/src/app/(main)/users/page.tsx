@@ -21,6 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Ban, Check, Crown, Key, Laptop, LogOut, Pencil, Plus, Trash2, User as UserIcon, Users } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { formatTime } from "@/lib/utils";
 
 interface User {
   id?: string;
@@ -39,11 +40,6 @@ interface UserSession {
   device_fingerprint?: string;
   created_at?: string;
   expires_at?: string;
-}
-
-function formatSessionDate(raw?: string): string {
-  const d = raw ? new Date(raw) : null;
-  return d && !isNaN(d.getTime()) ? d.toLocaleString() : "-";
 }
 
 function getRoleBadge(role: string) {
@@ -352,10 +348,10 @@ export default function UsersPage() {
                     <StatusBadge status={isActive ? "online" : "offline"} />
                   </TableCell>
                   <TableCell className="py-3 px-4 sm:py-3.5 font-mono text-xs text-muted-foreground">
-                    {u.last_activity || u.last_login || "-"}
+                    {formatTime(u.last_activity || u.last_login)}
                   </TableCell>
                   <TableCell className="py-3 px-4 sm:py-3.5 font-mono text-xs text-muted-foreground">
-                    {u.created_at || "-"}
+                    {formatTime(u.created_at)}
                   </TableCell>
                   {role === "admin" && (
                     <TableCell className="py-3 px-4 sm:py-3.5 text-center">
@@ -523,13 +519,13 @@ export default function UsersPage() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium text-foreground font-mono">{s.ip || "-"}</span>
-                        <span className="text-xs text-muted-foreground">{t("users.col_created")}: {formatSessionDate(s.created_at)}</span>
+                        <span className="text-xs text-muted-foreground">{t("users.col_created")}: {formatTime(s.created_at)}</span>
                       </div>
                       <div className="text-xs text-muted-foreground truncate max-w-md">
                         {(s.user_agent || "-")}{s.device_fingerprint ? ` · ${s.device_fingerprint}` : ""}
                       </div>
                       <div className="text-xs text-muted-foreground/70">
-                        {t("users.col_expires")}: {formatSessionDate(s.expires_at)}
+                        {t("users.col_expires")}: {formatTime(s.expires_at)}
                       </div>
                     </div>
                   </div>

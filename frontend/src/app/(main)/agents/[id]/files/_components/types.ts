@@ -1,3 +1,5 @@
+import { formatTime } from "@/lib/utils";
+
 export interface FileEntry {
   name: string;
   is_dir: boolean;
@@ -60,12 +62,7 @@ export function isImageFile(name: string): boolean {
 
 export function formatTimestamp(ts: string): string {
   if (!ts) return "-";
-  try {
-    const d = new Date(ts);
-    return d.toLocaleDateString() + " " + d.toLocaleTimeString();
-  } catch {
-    return ts;
-  }
+  return formatTime(ts);
 }
 
 export function joinPath(currentPath: string, name: string, osType: "windows" | "linux"): string {

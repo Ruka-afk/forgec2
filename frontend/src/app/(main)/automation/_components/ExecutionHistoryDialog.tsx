@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { History, ChevronRight, X } from "lucide-react";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
+import { formatTime } from "@/lib/utils";
 
 interface WorkflowExecution {
   execution_id: string;
@@ -131,7 +132,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
                   {statusBadge(ex.status)}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{ex.workflow_name}</div>
-                    <div className="text-xs text-muted-foreground">{ex.agents_count} agent(s), {ex.tasks_created} task(s) &middot; {new Date(ex.started_at).toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">{ex.agents_count} agent(s), {ex.tasks_created} task(s) &middot; {formatTime(ex.started_at)}</div>
                     {ex.error_msg && <div className="text-xs text-destructive truncate">{ex.error_msg}</div>}
                   </div>
                   <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -157,7 +158,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
                 {log.command && <div className="text-xs font-mono text-foreground truncate mb-1">{log.command.substring(0, 120)}</div>}
                 {log.result && <div className="text-xs text-muted-foreground whitespace-pre-wrap max-h-24 overflow-y-auto">{log.result.substring(0, 500)}</div>}
                 {log.error_msg && <div className="text-xs text-destructive mt-1">{log.error_msg}</div>}
-                {log.completed_at && <div className="text-(--fs-micro-sm) text-muted-foreground mt-1">{new Date(log.completed_at).toLocaleString()}</div>}
+                {log.completed_at && <div className="text-(--fs-micro-sm) text-muted-foreground mt-1">{formatTime(log.completed_at)}</div>}
               </div>
             ))}
           </div>

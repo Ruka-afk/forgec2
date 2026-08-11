@@ -1,3 +1,5 @@
+import { formatTime } from "@/lib/utils";
+
 export interface RelaySession {
   id?: string;
   agent_id: string;
@@ -42,11 +44,7 @@ export function formatBytes(bytes: number): string {
 
 export function formatCreated(d: string): string {
   if (!d) return "-";
-  try {
-    return new Date(d).toLocaleString();
-  } catch {
-    return d;
-  }
+  return formatTime(d);
 }
 
 export function formatUptime(seconds: number): string {

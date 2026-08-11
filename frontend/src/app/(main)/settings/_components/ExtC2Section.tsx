@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { formatTime } from "@/lib/utils";
 import { Trash2, RefreshCw, Wifi, WifiOff } from "lucide-react";
 
 interface ExtC2Channel {
@@ -106,7 +107,7 @@ export default function ExtC2Section() {
                 <Badge variant="outline" className="text-xs">{ch.type}</Badge>
                 <span className="text-sm font-medium">{ch.channel_id}</span>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">{t("settings.extc2.created")} {new Date(ch.created_at).toLocaleDateString()}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{t("settings.extc2.created")} {formatTime(ch.created_at)}</p>
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={() => handleDelete(ch.id)} className="rounded-xl text-destructive hover:text-destructive">

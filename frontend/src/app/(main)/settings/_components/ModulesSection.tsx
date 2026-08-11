@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState, Spinner } from "@/components/UI";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { formatTime } from "@/lib/utils";
 import { FileCode, Rocket, Trash2, Upload } from "lucide-react";
 
 interface ModuleInfo {
@@ -205,7 +206,7 @@ export default function ModulesSection() {
                   <TableCell className="font-mono text-xs">{m.name}</TableCell>
                   <TableCell className="text-xs">{formatSize(m.size)}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {m.updated_at ? new Date(m.updated_at).toLocaleString() : "-"}
+                    {m.updated_at ? formatTime(m.updated_at) : "-"}
                   </TableCell>
                   <TableCell>
                     <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(m.name)} aria-label={t("common.delete")}>

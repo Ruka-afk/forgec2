@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { AvatarFallback } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/UI";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { timeAgo } from "@/lib/utils";
+import { timeAgo, formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import type { Beacon } from "./types";
 import { avatarColor } from "./types";
@@ -143,7 +143,7 @@ export const AgentRow = memo(function AgentRow({
       )}
       {visibleCols.last_seen && (
       <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4 text-xs text-muted-foreground font-mono whitespace-nowrap" data-label="Last Seen">
-        <span title={lastSeen ? new Date(lastSeen).toLocaleString() : ""}>{timeAgo(lastSeen, t)}</span>
+        <span title={lastSeen ? formatTime(lastSeen) : ""}>{timeAgo(lastSeen, t)}</span>
       </TableCell>
       )}
       {visibleCols.window && (

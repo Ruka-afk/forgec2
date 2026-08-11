@@ -283,26 +283,25 @@ export default function ProfilesPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
                 <div className="bg-secondary rounded-xl p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">Prepend</div>
-                  <div className="text-xs font-mono text-muted-foreground truncate">{activeConfig.prepend || "(empty)"}</div>
+                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.prepend_content")}</div>
+                  <div className="text-xs font-mono text-muted-foreground truncate">{activeConfig.prepend || t("profiles.empty_value")}</div>
                 </div>
                 <div className="bg-secondary rounded-xl p-3 border border-border">
-                  <div className="text-xs text-muted-foreground mb-1">Append</div>
-                  <div className="text-xs font-mono text-muted-foreground truncate">{activeConfig.append || "(empty)"}</div>
+                  <div className="text-xs text-muted-foreground mb-1">{t("profiles.append_content")}</div>
+                  <div className="text-xs font-mono text-muted-foreground truncate">{activeConfig.append || t("profiles.empty_value")}</div>
                 </div>
               </div>
 
               {lastReload && (
                 <div className="text-xs text-emerald-600 flex items-center gap-1">
                   <Clock className="w-4 h-4" />
-                  Last reloaded at {lastReload}
+                  {t("profiles.last_reloaded", { time: lastReload })}
                 </div>
               )}
 
               <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400 mt-3">
                 <AlertTriangle className="w-4 h-4" />
-                Reloading reads config.yaml from disk and applies changes in-memory. Listeners are not restarted.
-                Modified JWT secret takes effect immediately for new sessions.
+                {t("profiles.reload_warning")}
               </div>
             </>
           )}
@@ -313,10 +312,10 @@ export default function ProfilesPage() {
       <Tabs defaultValue="server">
         <TabsList className="mb-6">
           <TabsTrigger value="server" className="gap-2">
-            <Server className="w-4 h-4" />Server Malleable Config
+            <Server className="w-4 h-4" />{t("profiles.tab_server")}
           </TabsTrigger>
           <TabsTrigger value="agents" className="gap-2">
-            <PenTool className="w-4 h-4" />Agent Profiles
+            <PenTool className="w-4 h-4" />{t("profiles.tab_agents")}
           </TabsTrigger>
         </TabsList>
 
@@ -325,46 +324,46 @@ export default function ProfilesPage() {
           <div className="bg-violet-500/10 border-b border-violet-500/20 px-6 py-4">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Shield className="w-4 h-4" /></div>
-              <div><h2 className="text-lg font-semibold text-foreground">Malleable C2 Profile</h2><p className="text-xs text-violet-200">Customize beacon traffic characteristics</p></div>
+              <div><h2 className="text-lg font-semibold text-foreground">{t("profiles.card_title")}</h2><p className="text-xs text-violet-200">{t("profiles.card_desc")}</p></div>
             </div>
           </div>
           <CardContent className="p-4 sm:p-5">
             <form onSubmit={handleSaveMalleable} className="space-y-4">
               <div className="flex items-center gap-3">
                 <Switch checked={malleableForm.enabled} onCheckedChange={(v) => setMalleableForm({ ...malleableForm, enabled: v })} />
-                <span className="text-sm text-muted-foreground">{malleableForm.enabled ? "Enabled" : "Disabled"}</span>
-                <span className="text-xs text-muted-foreground">Override default JSON response format</span>
+                <span className="text-sm text-muted-foreground">{malleableForm.enabled ? t("profiles.enabled") : t("profiles.disabled")}</span>
+                <span className="text-xs text-muted-foreground">{t("profiles.override_json_desc")}</span>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <Label className="text-xs text-muted-foreground mb-1.5">HTTP Status Code</Label>
+                  <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.http_status")}</Label>
                   <Input aria-label={t("profiles.http_status")} name="input-1" type="number" min={100} max={599} value={malleableForm.status_code} onChange={(e) => setMalleableForm({ ...malleableForm, status_code: Number(e.target.value) })} />
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground mb-1.5">Content-Type</Label>
+                  <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.content_type")}</Label>
                   <Input aria-label="application-json" name="application-json-2" type="text" placeholder="application/json" value={malleableForm.content_type} onChange={(e) => setMalleableForm({ ...malleableForm, content_type: e.target.value })} className="font-mono" />
                 </div>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground mb-1.5">Custom Headers (one per line)</Label>
+                <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.custom_headers")}</Label>
                 <Textarea aria-label={t("profiles.custom_headers")} name="textarea-3" rows={3} value={malleableForm.headers_text} onChange={(e) => setMalleableForm({ ...malleableForm, headers_text: e.target.value })} placeholder={"Server: nginx/1.24.0\nX-Powered-By: ASP.NET"} className="font-mono" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-xs text-muted-foreground mb-1.5">Prepend Content</Label>
+                  <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.prepend_label")}</Label>
                   <Textarea aria-label={t("profiles.prepend_content")} name="textarea-4" rows={2} value={malleableForm.prepend} onChange={(e) => setMalleableForm({ ...malleableForm, prepend: e.target.value })} placeholder="<html><body><!--" className="font-mono" />
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground mb-1.5">Append Content</Label>
+                  <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.append_label")}</Label>
                   <Textarea aria-label={t("profiles.append_content")} name="textarea-5" rows={2} value={malleableForm.append} onChange={(e) => setMalleableForm({ ...malleableForm, append: e.target.value })} placeholder="--></body></html>" className="font-mono" />
                 </div>
               </div>
               <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400">
                 <AlertTriangle className="w-4 h-4" />
-                Enabling profile requires compatible agents. Prepend/append is for traffic camouflage only.
+                {t("profiles.camouflage_warning")}
               </div>
               <Button type="submit" disabled={savingMalleable} className="h-11 px-6 bg-primary hover:bg-primary/80 text-primary-foreground rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
-                <Save className="w-4 h-4" />Save Profile
+                <Save className="w-4 h-4" />{t("profiles.save_profile")}
               </Button>
             </form>
           </CardContent>

@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import Link from "next/link";
 import { StatusBadge } from "@/components/UI";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { timeAgo } from "@/lib/utils";
+import { timeAgo, formatTime } from "@/lib/utils";
 import type { AgentTaskRecord } from "@/types/agent";
 import { Camera, ChevronDown, Clipboard, Clock, Database, Download, Folder, Keyboard, ListChecks, Shield, Skull, Terminal, Upload } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
@@ -116,7 +116,7 @@ export default function AgentTaskList({ tasks, agentId, expandedTaskId, onToggle
                     <div className="grid gap-2 pt-3 text-xs md:grid-cols-2">
                       <div><span className="text-muted-foreground/70">{t("agents.tasklist_label_id")}</span> <span className="font-mono text-foreground">{taskId}</span></div>
                       <div><span className="text-muted-foreground/70">{t("agents.tasklist_label_type")}</span> <span className="text-foreground">{tType}</span></div>
-                      <div><span className="text-muted-foreground/70">{t("agents.tasklist_label_created")}</span> <span className="text-foreground">{(task.created_at) ? new Date(String(task.created_at)).toLocaleString() : "\u2014"}</span></div>
+                      <div><span className="text-muted-foreground/70">{t("agents.tasklist_label_created")}</span> <span className="text-foreground">{task.created_at ? formatTime(String(task.created_at)) : "\u2014"}</span></div>
                       {(task.created_by) && <div><span className="text-muted-foreground/70">{t("agents.tasklist_label_by")}</span> <span className="text-foreground">{task.created_by}</span></div>}
                       {(task.command) && <div className="md:col-span-2"><span className="text-muted-foreground/70">{t("agents.tasklist_label_command")}</span> <span className="font-mono text-foreground break-all">{task.command}</span></div>}
                       {(task.result) && <div className="md:col-span-2"><span className="text-muted-foreground/70">{t("agents.tasklist_label_result")}</span><pre className="mt-1 max-h-44 overflow-y-auto rounded-xl border border-border/70 bg-card p-3 font-mono text-xs text-foreground whitespace-pre-wrap break-all">{(task.result || "").substring(0, 2000)}</pre></div>}

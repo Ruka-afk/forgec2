@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Activity, Wand2 } from "lucide-react";
+import { formatTime } from "@/lib/utils";
 
 interface BeaconRecord {
   timestamp: string;
@@ -235,7 +236,7 @@ export default function AgentTrafficPage() {
                         : "—";
                       return (
                         <TableRow key={i}>
-                          <TableCell className="text-foreground">{new Date(rec.timestamp).toLocaleTimeString()}</TableCell>
+                          <TableCell className="text-foreground">{formatTime(rec.timestamp)}</TableCell>
                           <TableCell className="text-right text-foreground">{rec.body_size.toLocaleString()}b</TableCell>
                           <TableCell className="text-right text-foreground">{interval}s</TableCell>
                           <TableCell className="text-right text-foreground">{rec.jitter}%</TableCell>

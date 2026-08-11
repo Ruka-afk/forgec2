@@ -4659,55 +4659,6 @@ paths:
         '200':
           description: OK
 
-  /scheduler/tasks/{id}:
-    put:
-      deprecated: true
-      tags: [Automation]
-      summary: Update scheduled task (merged into automation rules)
-      operationId: schedulerUpdate
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: OK
-    delete:
-      deprecated: true
-      tags: [Automation]
-      summary: Delete scheduled task (merged into automation rules)
-      operationId: schedulerDelete
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: OK
-
-  /scheduler/tasks/{id}/toggle:
-    post:
-      deprecated: true
-      tags: [Automation]
-      summary: Toggle scheduled task (merged into automation rules)
-      operationId: schedulerToggle
-      security:
-        - SessionCookie: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: OK
-
   /token/revert:
     post:
       tags: [Tokens]
@@ -6421,17 +6372,6 @@ paths:
           in: path
           required: true
           schema: { type: string }
-      responses:
-        '200':
-          description: OK
-
-  /ws/agent:
-    get:
-      tags: [Collaboration]
-      summary: Agent websocket
-      operationId: wsAgent
-      security:
-        - SessionCookie: []
       responses:
         '200':
           description: OK
@@ -9151,27 +9091,6 @@ paths:
           description: OK
         '401':
           description: Invalid password
-  /scheduler/tasks:
-    get:
-      deprecated: true
-      tags: [Settings]
-      summary: List scheduled tasks (merged into automation rules)
-      operationId: get__scheduler_tasks
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: OK
-    post:
-      deprecated: true
-      tags: [Settings]
-      summary: Create scheduled task (merged into automation rules)
-      operationId: post__scheduler_tasks
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: Created
   /listeners:
     get:
       tags: [Listeners]

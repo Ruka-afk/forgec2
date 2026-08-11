@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { Archive, Clock, Download, HardDrive, RefreshCw, Upload } from "lucide-react";
 import { EmptyState, Spinner } from "@/components/UI";
+import { formatTime } from "@/lib/utils";
 
 interface BackupInfo {
   name: string;
@@ -21,14 +22,6 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return bytes + " B";
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-}
-
-function formatTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
 }
 
 export default function BackupSection() {

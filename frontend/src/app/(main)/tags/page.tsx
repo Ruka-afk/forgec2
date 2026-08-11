@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatTime } from "@/lib/utils";
 import { Pencil, Plus, Tag, Trash2, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
@@ -196,7 +197,7 @@ export default function TagsPage() {
                 </div>
               </div>
               <div className="text-xs text-muted-foreground">
-                <span>{t("tags.created")} {tag.created_at ? new Date(tag.created_at).toLocaleDateString() : "-"}</span>
+                <span>{t("tags.created")} {tag.created_at ? formatTime(tag.created_at) : "-"}</span>
               </div>
             </Card>
           ))}

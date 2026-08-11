@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { formatTime } from "@/lib/utils";
 import { EmptyState, PageHeader, Pagination, Spinner } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
@@ -276,7 +277,7 @@ export default function BloodHoundPage() {
                        <TableCell className="py-3 px-4 font-mono text-primary">{groups}</TableCell>
                        <TableCell className="py-3 px-4 font-mono text-rose-600 dark:text-rose-400 font-semibold">{das}</TableCell>
                        <TableCell className="py-3 px-4 font-mono text-primary">{spns}</TableCell>
-                      <TableCell className="py-3 px-4 text-xs text-muted-foreground">{time}</TableCell>
+                      <TableCell className="py-3 px-4 text-xs text-muted-foreground">{formatTime(time)}</TableCell>
                       <TableCell className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <Button variant="ghost" size="icon-xs" onClick={() => handleDownload(id)}

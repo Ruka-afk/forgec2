@@ -3,7 +3,7 @@
 import { memo } from "react";
 import { Card } from "@/components/ui/card";
 import { AvatarFallback } from "@/components/ui/avatar";
-import { timeAgo } from "@/lib/utils";
+import { timeAgo, formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import type { Beacon, Tag } from "./types";
 import { avatarColor, formatUptime } from "./types";
@@ -76,7 +76,7 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
               </div>
               <div className="flex items-center gap-1.5">
                 <Clock className="w-3 h-3 text-muted-foreground/50" aria-hidden="true" />
-                <span title={beacon.last_seen ? new Date(beacon.last_seen).toLocaleString() : ""}>{timeAgo(beacon.last_seen || "", t)}</span>
+                <span title={beacon.last_seen ? formatTime(beacon.last_seen) : ""}>{timeAgo(beacon.last_seen || "", t)}</span>
                 {beacon.created_at && <span className="text-(--fs-micro) text-muted-foreground/70 ml-1">{t("format.uptime.up")} {formatUptime(beacon.last_seen || beacon.created_at, t)}</span>}
               </div>
             </div>

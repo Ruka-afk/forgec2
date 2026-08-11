@@ -253,7 +253,7 @@ export default function CircuitBreakerPage() {
                           <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => handleReset(idStr)} aria-label={t("circuit_breaker.reset_healthy")} />}>
                             <RotateCw className="w-4 h-4" />
                           </TooltipTrigger>
-                          <TooltipContent>Reset to healthy</TooltipContent>
+                          <TooltipContent>{t("circuit_breaker.reset_healthy")}</TooltipContent>
                         </Tooltip>
                         <Popover>
                           <PopoverTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("circuit_breaker.force_state")} />}>
