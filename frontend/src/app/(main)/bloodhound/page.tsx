@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useConfirm } from "@/lib/hooks/useConfirm";
-import { EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { EmptyState, PageHeader, Pagination, Spinner } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CheckCircle, CircleAlert, Download, PawPrint, Play, RefreshCw, Table2, Trash2, Upload } from "lucide-react";
+
+const PAGE_SIZE = 10;
 
 
 interface BHResult {
@@ -54,6 +56,7 @@ export default function BloodHoundPage() {
   const [method, setMethod] = useState("DCOnly");
   const [collecting, setCollecting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [page, setPage] = useState(1);
   const { confirm, modal } = useConfirm();
 
   const loadData = useCallback(async () => {
@@ -128,6 +131,10 @@ export default function BloodHoundPage() {
     }
     return undefined;
   };
+
+  const pageCount = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const paginatedResults = results.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
@@ -247,7 +254,7 @@ export default function BloodHoundPage() {
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-border">
-                {results.map((r, i) => {
+                {paginatedResults.map((r, i) => {
                   const id = (getVal(r, ["ID", "id"]) as number) ?? i;
                   const agent = (getVal(r, ["AgentName", "agent_name"]) as string) ?? (getVal(r, ["AgentID", "agent_id"]) as string) ?? "-";
                   const methodVal = (getVal(r, ["Method", "method"]) as string) ?? "-";
@@ -296,6 +303,7 @@ export default function BloodHoundPage() {
           )}
         </div>
         </DataState>
+        <Pagination page={currentPage} pageSize={PAGE_SIZE} total={results.length} onPageChange={setPage} />
       </Card>
       {modal}
     </div>

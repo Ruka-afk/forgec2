@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
-import { PageHeader } from "@/components/UI";
+import { PageHeader, FieldError } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -40,6 +40,7 @@ export default function GroupsPage() {
   const [formDesc, setFormDesc] = useState("");
   const [formColor, setFormColor] = useState("#2ecc71");
   const [formParent, setFormParent] = useState("");
+  const [formErrors, setFormErrors] = useState<{ name?: string; desc?: string }>({});
 
   const fetchGroups = useCallback(async () => {
     setLoading(true);
@@ -72,7 +73,12 @@ export default function GroupsPage() {
   }
 
   async function handleSave() {
-    if (!formName.trim()) return;
+    const errors: { name?: string; desc?: string } = {};
+    if (!formName.trim()) errors.name = t("groups.err_name_required");
+    else if (formName.trim().length > 64) errors.name = t("groups.err_name_max");
+    if (formDesc.length > 200) errors.desc = t("groups.err_desc_max");
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     try {
       const body = { name: formName.trim(), description: formDesc, color: formColor, parent_id: formParent };
       const data: { success?: boolean; error?: string } = editGroup
@@ -155,11 +161,13 @@ export default function GroupsPage() {
           <div className="space-y-4">
             <div>
               <Label htmlFor="group-name">{t("groups.field_name")} *</Label>
-              <Input id="group-name" aria-label={t("groups.a11y_name")} value={formName} onChange={e => setFormName(e.target.value)} placeholder={t("groups.name_placeholder")} />
+              <Input id="group-name" aria-label={t("groups.a11y_name")} value={formName} onChange={e => { setFormName(e.target.value); if (formErrors.name) setFormErrors({ ...formErrors, name: undefined }); }} placeholder={t("groups.name_placeholder")} />
+              <FieldError>{formErrors.name}</FieldError>
             </div>
             <div>
               <Label htmlFor="group-desc">{t("groups.field_desc")}</Label>
-              <Input id="group-desc" aria-label={t("groups.a11y_desc")} value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder={t("groups.desc_placeholder")} />
+              <Input id="group-desc" aria-label={t("groups.a11y_desc")} value={formDesc} onChange={e => { setFormDesc(e.target.value); if (formErrors.desc) setFormErrors({ ...formErrors, desc: undefined }); }} placeholder={t("groups.desc_placeholder")} />
+              <FieldError>{formErrors.desc}</FieldError>
             </div>
             <div>
               <Label htmlFor="group-color">{t("groups.field_color")}</Label>

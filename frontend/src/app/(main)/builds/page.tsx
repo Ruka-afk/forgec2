@@ -13,7 +13,7 @@ import { useWS } from "@/lib/wsContext";
 import { useUrlState } from "@/lib/hooks/useUrlState";
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
-import { Spinner, PageHeader } from "@/components/UI";
+import { Spinner, PageHeader, Pagination } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,8 @@ interface BuildLog {
 }
 
 const PLATFORMS = ["all", "windows", "linux", "macos"];
+
+const PAGE_SIZE = 10;
 
 // dedupeBuilds keeps the first occurrence of each build id (order-stable) so
 // builds arriving both via the list API and via WS-driven refreshes never
@@ -110,6 +112,7 @@ export default function BuildsPage() {
   const [filterStatus, setFilterStatus] = useUrlState("status", "", ["", "success", "failed", "building"] as const);
   const [expandedBuild, setExpandedBuild] = useState<string | null>(null);
   const [versionDist, setVersionDist] = useState<{ version: string; count: number }[]>([]);
+  const [page, setPage] = useState(1);
   const { t } = useI18n();
 
   const loadBuilds = useCallback(async () => {
@@ -164,6 +167,14 @@ export default function BuildsPage() {
   }, [filterPlatform, filterStatus, t]);
 
   useEffect(() => { loadBuilds(); }, [loadBuilds]);
+
+  const pageCount = Math.max(1, Math.ceil(builds.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const paginatedBuilds = builds.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const changePlatform = (p: string) => { setFilterPlatform(p); setPage(1); };
+  const changeStatus = (s: string) => { setFilterStatus(s as "" | "success" | "failed" | "building"); setPage(1); };
+  const clearFilters = () => { setFilterStatus(""); setFilterPlatform("all"); setPage(1); };
 
   // Real-time build updates: refresh when any async build finishes, when the
   // WS reconnects (sync snapshot), or when the socket first connects. A short
@@ -319,7 +330,7 @@ export default function BuildsPage() {
           <div className="flex flex-wrap gap-2">
             {PLATFORMS.map((p) => (
               <Button key={p} variant={filterPlatform === p ? "default" : "outline"} size="sm"
-                onClick={() => setFilterPlatform(p)}
+                onClick={() => changePlatform(p)}
                 className="rounded-xl gap-1.5">
                 {platformIcon(p)}
                 {p === "all" ? t("builds.filter_all") : p.charAt(0).toUpperCase() + p.slice(1)}
@@ -327,7 +338,7 @@ export default function BuildsPage() {
             ))}
           </div>
           <span className="text-sm font-semibold text-muted-foreground ml-2">{t("builds.status")}</span>
-          <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v ?? "")}>
+          <Select value={filterStatus} onValueChange={(v) => changeStatus(v ?? "")}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder={t("builds.filter_all")} />
             </SelectTrigger>
@@ -339,7 +350,7 @@ export default function BuildsPage() {
             </SelectContent>
           </Select>
           {(filterStatus || filterPlatform !== "all") && (
-            <Button variant="outline" size="sm" onClick={() => { setFilterStatus(""); setFilterPlatform("all"); }}
+            <Button variant="outline" size="sm" onClick={clearFilters}
               className="rounded-xl">
               <X className="w-4 h-4" /> {t("builds.clear")}
             </Button>
@@ -377,7 +388,7 @@ export default function BuildsPage() {
         }
       >
       <div className="space-y-3">
-          {builds.map((build, idx) => {
+          {paginatedBuilds.map((build, idx) => {
             const id = build.id || String(idx);
             const status = build.status || "unknown";
             const platform = build.platform || "";
@@ -473,6 +484,7 @@ export default function BuildsPage() {
           })}
       </div>
       </DataState>
+      <Pagination page={currentPage} pageSize={PAGE_SIZE} total={builds.length} onPageChange={setPage} />
     </div>
   );
 }

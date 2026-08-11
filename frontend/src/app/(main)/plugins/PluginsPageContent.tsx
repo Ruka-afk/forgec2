@@ -5,7 +5,7 @@ import { api, getCsrfToken, buildUrl } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadFromResponse } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
-import { PageHeader, Spinner } from "@/components/UI";
+import { PageHeader, Pagination, Spinner } from "@/components/UI";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
@@ -29,6 +29,8 @@ import { PluginCard, PluginListItem, PluginDetailModal, ReviewsModal } from "./_
 import type { Plugin, Review } from "./_components/types";
 import { usePluginsData } from "./_components/usePluginsData";
 
+const PAGE_SIZE = 12;
+
 export default function PluginsPage() {
   const { t } = useI18n();
   const { plugins, loading, error, loadPlugins } = usePluginsData();
@@ -47,6 +49,7 @@ export default function PluginsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [createForm, setCreateForm] = useState({ name: "", description: "", author: "", category: "", version: "1.0.0" });
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [page, setPage] = useState(1);
   const { confirm, modal } = useConfirm();
 
   const filtered = plugins.filter((p) => {
@@ -58,6 +61,13 @@ export default function PluginsPage() {
     const matchCategory = !category || (p.category || "") === category;
     return matchSearch && matchCategory;
   });
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const paginatedFiltered = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const handleSearchChange = (value: string) => { setSearch(value); setPage(1); };
+  const handleCategoryChange = (value: string) => { setCategory(value); setPage(1); };
 
   const setAction = (id: string, action: string | null) => {
     setActionStates((s) => {
@@ -244,7 +254,7 @@ export default function PluginsPage() {
       <Card className="p-4 sm:p-5 mb-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
-            <SearchInput value={search} onChange={setSearch} placeholder={t("plugins.search_ph")} className="max-w-md" label={t("common.search")} />
+            <SearchInput value={search} onChange={handleSearchChange} placeholder={t("plugins.search_ph")} className="max-w-md" label={t("common.search")} />
           </div>
         </div>
       </Card>
@@ -253,7 +263,7 @@ export default function PluginsPage() {
         {PLUGIN_CATEGORIES.map((cat) => {
           const count = cat.key === "" ? plugins.length : plugins.filter((p) => (p.category || "") === cat.key).length;
           return (
-            <Button key={cat.key} variant="outline" size="sm" onClick={() => setCategory(cat.key)} className={`rounded-xl transition-all ${category === cat.key ? "ring-2 ring-primary/50 border-primary/30 " + cat.color : "text-muted-foreground"}`}>
+            <Button key={cat.key} variant="outline" size="sm" onClick={() => handleCategoryChange(cat.key)} className={`rounded-xl transition-all ${category === cat.key ? "ring-2 ring-primary/50 border-primary/30 " + cat.color : "text-muted-foreground"}`}>
               {cat.icon}
               {t(cat.labelKey)}
               <Badge variant="secondary" className="text-(--fs-micro-sm)">{count}</Badge>
@@ -265,14 +275,16 @@ export default function PluginsPage() {
       <DataState loading={loading} error={error} onRetry={loadPlugins} empty={!loading && !error && filtered.length === 0} emptyIcon={Puzzle} emptyTitle={t("plugins.empty")}>
       {viewMode === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((p, i) => <PluginCard key={p.id || String(i)} plugin={p} actionState={actionStates[p.id || String(i)]} onInstall={handleInstall} onUninstall={handleUninstall} onDelete={handleDelete} onToggle={handleToggle} onDetail={() => { setDetailPlugin(p); handleLoadDependencies(p); }} onExecute={() => { setExecutePlugin(p); setShowExecute(true); setExecuteResult(null); }} onExport={() => handleExport(p.id || "")} onUpdate={() => handleUpdate(p.id || "")} onReviews={() => handleLoadReviews(p)} onRating={(r) => handleRating(p.id || "", r)} />)}
+          {paginatedFiltered.map((p, i) => <PluginCard key={p.id || String(i)} plugin={p} actionState={actionStates[p.id || String(i)]} onInstall={handleInstall} onUninstall={handleUninstall} onDelete={handleDelete} onToggle={handleToggle} onDetail={() => { setDetailPlugin(p); handleLoadDependencies(p); }} onExecute={() => { setExecutePlugin(p); setShowExecute(true); setExecuteResult(null); }} onExport={() => handleExport(p.id || "")} onUpdate={() => handleUpdate(p.id || "")} onReviews={() => handleLoadReviews(p)} onRating={(r) => handleRating(p.id || "", r)} />)}
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((p, i) => <PluginListItem key={p.id || String(i)} plugin={p} actionState={actionStates[p.id || String(i)]} onInstall={handleInstall} onUninstall={handleUninstall} onDelete={handleDelete} onToggle={handleToggle} onDetail={() => { setDetailPlugin(p); handleLoadDependencies(p); }} onExecute={() => { setExecutePlugin(p); setShowExecute(true); setExecuteResult(null); }} onExport={() => handleExport(p.id || "")} onUpdate={() => handleUpdate(p.id || "")} onReviews={() => handleLoadReviews(p)} onRating={(r) => handleRating(p.id || "", r)} />)}
+          {paginatedFiltered.map((p, i) => <PluginListItem key={p.id || String(i)} plugin={p} actionState={actionStates[p.id || String(i)]} onInstall={handleInstall} onUninstall={handleUninstall} onDelete={handleDelete} onToggle={handleToggle} onDetail={() => { setDetailPlugin(p); handleLoadDependencies(p); }} onExecute={() => { setExecutePlugin(p); setShowExecute(true); setExecuteResult(null); }} onExport={() => handleExport(p.id || "")} onUpdate={() => handleUpdate(p.id || "")} onReviews={() => handleLoadReviews(p)} onRating={(r) => handleRating(p.id || "", r)} />)}
         </div>
       )}
       </DataState>
+
+      <Pagination page={currentPage} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
 
       {detailPlugin && <PluginDetailModal plugin={detailPlugin} open={!!detailPlugin} onOpenChange={(open) => { if (!open) setDetailPlugin(null); }} />}
 

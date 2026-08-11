@@ -8,7 +8,7 @@ import { paths } from "@/lib/api-paths";
 import { downloadText } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { useForm } from "@/lib/hooks/useForm";
-import { FieldError, PageHeader } from "@/components/UI";
+import { FieldError, PageHeader, Pagination } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -27,6 +27,8 @@ import { CRED_TYPES, TYPE_BADGE_VARIANT, type VaultEntry } from "./_components/t
 import { useCredentialsData } from "./_components/useCredentialsData";
 import { CredentialRow } from "./_components/CredentialRow";
 
+const PAGE_SIZE = 20;
+
 export default function CredentialsPage() {
   const { t } = useI18n();
   const { data, loading, error, reload, loadData } = useCredentialsData();
@@ -39,6 +41,7 @@ export default function CredentialsPage() {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<VaultEntry | null>(null);
+  const [page, setPage] = useState(1);
 
   const [showPasswords, setShowPasswords] = useState<Set<string>>(new Set());
 
@@ -251,6 +254,18 @@ export default function CredentialsPage() {
     return true;
   });
 
+  const pageCount = Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const paginatedEntries = useMemo(
+    () => filteredEntries.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredEntries, currentPage],
+  );
+
+  const handleSearchChange = (value: string) => { setSearchQuery(value); setPage(1); };
+  const handleTypeFilterChange = (value: string | null) => { setTypeFilter(value ?? ""); setPage(1); };
+  const handleConfirmedFilterChange = (value: string | null) => { setConfirmedFilter(value ?? ""); setPage(1); };
+  const handleClearFilters = () => { setSearchQuery(""); setTypeFilter("all"); setConfirmedFilter(""); setPage(1); };
+
   const stats = useMemo(() => ({
     total: data?.VaultCount || 0,
     confirmed: entries.filter(e => e.confirmed).length || 0,
@@ -314,13 +329,13 @@ export default function CredentialsPage() {
         <div className="flex flex-wrap items-center gap-3">
           <SearchInput
             value={searchQuery}
-            onChange={setSearchQuery}
-            onClear={() => setSearchQuery("")}
+            onChange={handleSearchChange}
+            onClear={() => { setSearchQuery(""); setPage(1); }}
             placeholder={t("cred.search_placeholder")}
             className="flex-1 min-w-[200px]"
             label={t("common.search")}
           />
-          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v ?? "")}>
+          <Select value={typeFilter} onValueChange={handleTypeFilterChange}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
@@ -330,7 +345,7 @@ export default function CredentialsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={confirmedFilter} onValueChange={(v) => setConfirmedFilter(v ?? "")}>
+          <Select value={confirmedFilter} onValueChange={handleConfirmedFilterChange}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
@@ -347,7 +362,7 @@ export default function CredentialsPage() {
             <Filter className="w-4 h-4" />{t("cred.filter")}
           </Button>
           <Button
-            onClick={() => { setSearchQuery(""); setTypeFilter("all"); setConfirmedFilter(""); }}
+            onClick={handleClearFilters}
             variant="outline"
             size="lg"
           >
@@ -378,7 +393,7 @@ export default function CredentialsPage() {
                 key={tag}
                 variant="outline"
                 className="cursor-pointer"
-                onClick={() => setSearchQuery(tag)}
+                onClick={() => { setSearchQuery(tag); setPage(1); }}
               >
                 {tag}
               </Badge>
@@ -425,8 +440,7 @@ export default function CredentialsPage() {
                       checked={selectedIds.size === filteredEntries.length && filteredEntries.length > 0}
                       onCheckedChange={() => toggleSelectAll()}
                     />
-                  </TableHead>
-                  <TableHead className="text-left py-3 px-4 font-normal">{t("cred.col_type")}</TableHead>
+                  </TableHead>                  <TableHead className="text-left py-3 px-4 font-normal">{t("cred.col_type")}</TableHead>
                   <TableHead className="text-left py-3 px-4 font-normal">{t("cred.col_username")}</TableHead>
                   <TableHead className="text-left py-3 px-4 font-normal">{t("cred.col_password")}</TableHead>
                   <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal">{t("cred.col_domain")}</TableHead>
@@ -437,7 +451,7 @@ export default function CredentialsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-border">
-                {filteredEntries.map(entry => (
+                {paginatedEntries.map(entry => (
                   <CredentialRow
                     key={entry.id}
                     entry={entry}
@@ -455,6 +469,7 @@ export default function CredentialsPage() {
             </Table>
           </div>
         </DataState>
+        <Pagination page={currentPage} pageSize={PAGE_SIZE} total={filteredEntries.length} onPageChange={setPage} />
       </Card>
 
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>

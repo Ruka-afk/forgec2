@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
-import { DataSpinner, EmptyState, PageHeader } from "@/components/UI";
+import { DataSpinner, EmptyState, FieldError, PageHeader } from "@/components/UI";
 import { toast } from "sonner";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -25,6 +25,8 @@ interface FrontDomain {
   error?: string;
 }
 
+const HOSTNAME_RE = /^(?!.*\/)(?!.*:)[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/;
+
 export default function DomainFrontingPage() {
   const { t } = useI18n();
   const [domains, setDomains] = useState<FrontDomain[]>([]);
@@ -32,6 +34,7 @@ export default function DomainFrontingPage() {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [newDomain, setNewDomain] = useState("");
+  const [domainError, setDomainError] = useState("");
   const [saving, setSaving] = useState(false);
   const { confirm, modal } = useConfirm();
 
@@ -81,7 +84,10 @@ export default function DomainFrontingPage() {
 
   const addDomain = () => {
     const d = newDomain.trim();
-    if (!d) return;
+    if (!d || !HOSTNAME_RE.test(d)) {
+      setDomainError(t("domain_fronting.domain_invalid"));
+      return;
+    }
     if (domains.some((x) => x.domain === d)) {
       toast.error(t("domain_fronting.toast.already_in_list"));
       return;
@@ -89,6 +95,7 @@ export default function DomainFrontingPage() {
     const updated = [...domains.map((x) => x.domain), d];
     saveConfig(updated, autoFailover);
     setNewDomain("");
+    setDomainError("");
   };
 
   const removeDomain = async (domain: string) => {
@@ -238,7 +245,7 @@ export default function DomainFrontingPage() {
               name="input-0"
               type="text"
               value={newDomain}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewDomain(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setNewDomain(e.target.value); if (domainError) setDomainError(""); }}
               onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === "Enter" && addDomain()}
               placeholder={t("domain_fronting.domain_ph")}
               className="flex-1"
@@ -254,6 +261,7 @@ export default function DomainFrontingPage() {
           <p className="text-xs text-muted-foreground mt-1.5">
             {t("domain_fronting.enter_hint_pre")} <code className="text-primary">cdn.cloudflare.com</code>{t("domain_fronting.enter_hint_post")}
           </p>
+          <FieldError>{domainError}</FieldError>
         </div>
       </Card>
 

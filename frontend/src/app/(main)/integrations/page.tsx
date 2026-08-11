@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { EmptyState, FieldError, PageHeader, Spinner } from "@/components/UI";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,7 @@ export default function IntegrationsPage() {
   const [formSMTPUser, setFormSMTPUser] = useState("");
   const [formSMTPPass, setFormSMTPPass] = useState("");
   const [formFrom, setFormFrom] = useState("");
+  const [formErrors, setFormErrors] = useState<{ name?: string; url?: string; smtp?: string }>({});
 
   const fetchIntegrations = useCallback(async () => {
     setLoading(true);
@@ -70,17 +71,21 @@ export default function IntegrationsPage() {
     setFormSMTPUser("");
     setFormSMTPPass("");
     setFormFrom("");
+    setFormErrors({});
   }
 
   async function saveIntegration() {
-    if (!formName.trim()) {
-      toast.error(t("integrations.name_required"));
-      return;
+    const errors: { name?: string; url?: string; smtp?: string } = {};
+    if (!formName.trim()) errors.name = t("integrations.name_required");
+    if (formType !== "email" && !formUrl.trim()) errors.url = t("integrations.url_required");
+    if (formType === "email") {
+      const port = parseInt(formSMTPPort, 10);
+      if (!formSMTPHost.trim() || !port || port < 1 || port > 65535) {
+        errors.smtp = t("integrations.err_smtp_invalid");
+      }
     }
-    if (formType !== "email" && !formUrl.trim()) {
-      toast.error(t("integrations.url_required"));
-      return;
-    }
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setSaving(true);
     try {
       await api.postJson(paths.integrations.list, {
@@ -222,22 +227,24 @@ export default function IntegrationsPage() {
                     <SelectItem value="thehive">TheHive</SelectItem>
                   </SelectContent>
                 </Select>
-                <Input aria-label={t("integrations.a11y_name")} name="int-name" value={formName} onChange={e => setFormName(e.target.value)} placeholder={t("integrations.name_placeholder")} />
-                <Input aria-label={t("integrations.webhook_url")} name="int-url" value={formUrl} onChange={e => setFormUrl(e.target.value)} placeholder={t("integrations.webhook_url")} />
+                <Input aria-label={t("integrations.a11y_name")} name="int-name" value={formName} onChange={e => { setFormName(e.target.value); if (formErrors.name) setFormErrors({ ...formErrors, name: undefined }); }} placeholder={t("integrations.name_placeholder")} />
+                <Input aria-label={t("integrations.webhook_url")} name="int-url" value={formUrl} onChange={e => { setFormUrl(e.target.value); if (formErrors.url) setFormErrors({ ...formErrors, url: undefined }); }} placeholder={t("integrations.webhook_url")} />
               </div>
+              <FieldError>{formErrors.name || formErrors.url}</FieldError>
               <div className="flex flex-col sm:flex-row gap-2">
                 <Input aria-label={t("integrations.email_to")} name="int-to" value={formTo} onChange={e => setFormTo(e.target.value)} placeholder={t("integrations.email_to")} />
                 <Input aria-label={t("integrations.a11y_secret")} name="int-secret" value={formSecret} onChange={e => setFormSecret(e.target.value)} placeholder={t("integrations.secret_token")} />
               </div>
               {formType === "email" && (
                 <div className="flex flex-wrap gap-2">
-                  <Input aria-label={t("integrations.smtp_host")} name="smtp-host" value={formSMTPHost} onChange={e => setFormSMTPHost(e.target.value)} placeholder="SMTP Host" />
-                  <Input aria-label={t("integrations.smtp_port")} name="smtp-port" value={formSMTPPort} onChange={e => setFormSMTPPort(e.target.value)} placeholder="SMTP Port" />
+                  <Input aria-label={t("integrations.smtp_host")} name="smtp-host" value={formSMTPHost} onChange={e => { setFormSMTPHost(e.target.value); if (formErrors.smtp) setFormErrors({ ...formErrors, smtp: undefined }); }} placeholder="SMTP Host" />
+                  <Input aria-label={t("integrations.smtp_port")} name="smtp-port" value={formSMTPPort} onChange={e => { setFormSMTPPort(e.target.value); if (formErrors.smtp) setFormErrors({ ...formErrors, smtp: undefined }); }} placeholder="SMTP Port" />
                   <Input aria-label={t("integrations.smtp_user")} name="smtp-user" value={formSMTPUser} onChange={e => setFormSMTPUser(e.target.value)} placeholder="SMTP User" />
                   <Input aria-label={t("integrations.smtp_pass")} name="smtp-pass" type="password" value={formSMTPPass} onChange={e => setFormSMTPPass(e.target.value)} placeholder="SMTP Pass" />
                   <Input aria-label={t("integrations.from_address")} name="smtp-from" value={formFrom} onChange={e => setFormFrom(e.target.value)} placeholder="From Address" />
                 </div>
               )}
+              {formErrors.smtp && <FieldError>{formErrors.smtp}</FieldError>}
               <Button onClick={saveIntegration} disabled={saving}>
                 {saving ? <Spinner size="xs" /> : null}
                 {t("integrations.save_btn")}

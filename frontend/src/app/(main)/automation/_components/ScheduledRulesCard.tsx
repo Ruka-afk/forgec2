@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { EmptyState } from "@/components/UI";
+import { EmptyState, FieldError } from "@/components/UI";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Button } from "@/components/ui/button";
 import { NormalizedAgent as Agent } from "@/types/agent";
@@ -54,6 +54,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
   const [taskTypes, setTaskTypes] = useState<TaskTypeInfo[]>([]);
   const { confirm, modal } = useConfirm();
   const [saving, setSaving] = useState(false);
+  const [formErrors, setFormErrors] = useState<{ name?: string; agentId?: string; schedule?: string; command?: string }>({});
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -82,6 +83,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
   function resetForm() {
     setName(""); setAgentId(""); setTaskType("shell"); setCommand(""); setParams(""); setSchedule("");
     setEditingId(null);
+    setFormErrors({});
   }
 
   const buildAction = () => {
@@ -89,10 +91,13 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
   };
 
   async function handleSave() {
-    if (!name || !agentId || !schedule) {
-      toast.error(t("scheduler.fields_required"));
-      return;
-    }
+    const errors: { name?: string; agentId?: string; schedule?: string; command?: string } = {};
+    if (!name.trim()) errors.name = t("scheduler.err_name_required");
+    if (!agentId) errors.agentId = t("scheduler.err_agent_required");
+    if (!schedule.trim()) errors.schedule = t("scheduler.err_schedule_required");
+    if (taskType === "shell" && !command.trim()) errors.command = t("scheduler.err_command_required");
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setSaving(true);
     const payload = {
       name,
@@ -186,11 +191,12 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 <div>
                   <Label className="text-xs mb-1">{t("scheduler.name")}</Label>
-                  <Input value={name} onChange={e => setName(e.target.value)} aria-label={t("scheduler.a11y_name")} />
+                  <Input value={name} onChange={e => { setName(e.target.value); if (formErrors.name) setFormErrors({ ...formErrors, name: undefined }); }} aria-label={t("scheduler.a11y_name")} />
+                  <FieldError>{formErrors.name}</FieldError>
                 </div>
                 <div>
                   <Label className="text-xs mb-1">{t("scheduler.agent")}</Label>
-                  <Select value={agentId} onValueChange={(v) => setAgentId(v ?? "")}>
+                  <Select value={agentId} onValueChange={(v) => { setAgentId(v ?? ""); if (formErrors.agentId) setFormErrors({ ...formErrors, agentId: undefined }); }}>
                     <SelectTrigger aria-label={t("scheduler.a11y_agent")}>
                       <SelectValue placeholder={t("scheduler.select_agent")} />
                     </SelectTrigger>
@@ -200,6 +206,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
                       ))}
                     </SelectContent>
                   </Select>
+                  <FieldError>{formErrors.agentId}</FieldError>
                 </div>
                 <div>
                   <Label className="text-xs mb-1">{t("scheduler.task_type")}</Label>
@@ -214,18 +221,20 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
                 </div>
                 <div>
                   <Label className="text-xs mb-1">{t("scheduler.schedule")}</Label>
-                  <Input value={schedule} onChange={e => setSchedule(e.target.value)} placeholder={t("scheduler.schedule_ph")} aria-label={t("scheduler.a11y_expr")} />
+                  <Input value={schedule} onChange={e => { setSchedule(e.target.value); if (formErrors.schedule) setFormErrors({ ...formErrors, schedule: undefined }); }} placeholder={t("scheduler.schedule_ph")} aria-label={t("scheduler.a11y_expr")} />
                   <p className="text-(--fs-xs-sm) text-muted-foreground mt-1 space-y-0.5">
                     <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">every N minutes</code> ·{" "}
                     <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">hourly</code> ·{" "}
                     <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">daily HH:MM</code> ·{" "}
                     <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">* * * * *</code>
                   </p>
+                  <FieldError>{formErrors.schedule}</FieldError>
                 </div>
               </div>
               <div className="mb-4">
                 <Label className="text-xs mb-1">{t("scheduler.command")}</Label>
-                <Input value={command} onChange={e => setCommand(e.target.value)} placeholder={t("scheduler.cmd_ph")} aria-label="Command" />
+                <Input value={command} onChange={e => { setCommand(e.target.value); if (formErrors.command) setFormErrors({ ...formErrors, command: undefined }); }} placeholder={t("scheduler.cmd_ph")} aria-label="Command" />
+                <FieldError>{formErrors.command}</FieldError>
               </div>
               <div className="mb-4">
                 <Label className="text-xs mb-1">{t("scheduler.params")}</Label>

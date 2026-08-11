@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { firstField, normalizeListEnvelope } from "@/lib/envelope";
-import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/UI";
+import { EmptyState, FieldError, PageHeader, StatCard, StatusBadge } from "@/components/UI";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
@@ -61,6 +61,8 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ username: "", password: "", role: "user" });
+  const [formErrors, setFormErrors] = useState<{ username?: string; password?: string }>({});
+  const [passwordError, setPasswordError] = useState("");
   const [role, setUserRole] = useState("admin");
   const [customRoles, setCustomRoles] = useState<string[]>([]);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -114,8 +116,13 @@ export default function UsersPage() {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
+    const errors: { username?: string; password?: string } = {};
+    if (form.username.trim().length < 3) errors.username = t("users.err_username_min");
+    if (form.password.length < 8) errors.password = t("users.err_password_min");
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     try {
-      await api.post(paths.users.add, form);
+      await api.post(paths.users.add, { ...form, username: form.username.trim() });
       toast.success(t("users.toast.created"));
       setShowAdd(false);
       setForm({ username: "", password: "", role: "user" });
@@ -126,6 +133,11 @@ export default function UsersPage() {
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editUser) return;
+    const errors: { username?: string; password?: string } = {};
+    if (form.username.trim().length < 3) errors.username = t("users.err_username_min");
+    if (form.password && form.password.length < 8) errors.password = t("users.err_password_min");
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     try {
       const uid = editUser.id;
       await api.post(paths.users.edit(String(uid)), { username: form.username, role: form.role, ...(form.password ? { password: form.password } : {}) });
@@ -161,6 +173,10 @@ export default function UsersPage() {
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!passwordUserId) return;
+    if (newPassword.length < 8) {
+      setPasswordError(t("users.err_password_min"));
+      return;
+    }
     try {
       await api.post(paths.users.password(passwordUserId), { password: newPassword });
       toast.success(t("users.toast.password_updated"));
@@ -392,11 +408,13 @@ export default function UsersPage() {
           <form onSubmit={handleAdd} className="space-y-4">
             <div>
               <Label htmlFor="add-username">{t("users.label_username")}</Label>
-              <Input id="add-username" type="text" required minLength={3} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+              <Input id="add-username" type="text" required minLength={3} value={form.username} onChange={(e) => { setForm({ ...form, username: e.target.value }); if (formErrors.username) setFormErrors({ ...formErrors, username: undefined }); }} />
+              <FieldError>{formErrors.username}</FieldError>
             </div>
             <div>
               <Label htmlFor="add-password">{t("users.label_password")}</Label>
-              <Input id="add-password" type="password" required minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <Input id="add-password" type="password" required minLength={8} value={form.password} onChange={(e) => { setForm({ ...form, password: e.target.value }); if (formErrors.password) setFormErrors({ ...formErrors, password: undefined }); }} />
+              <FieldError>{formErrors.password}</FieldError>
             </div>
             <div>
               <Label htmlFor="add-role">{t("users.label_role")}</Label>
@@ -424,11 +442,13 @@ export default function UsersPage() {
           <form onSubmit={handleEdit} className="space-y-4">
             <div>
               <Label htmlFor="edit-username">{t("users.label_username")}</Label>
-              <Input id="edit-username" type="text" required minLength={3} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+              <Input id="edit-username" type="text" required minLength={3} value={form.username} onChange={(e) => { setForm({ ...form, username: e.target.value }); if (formErrors.username) setFormErrors({ ...formErrors, username: undefined }); }} />
+              <FieldError>{formErrors.username}</FieldError>
             </div>
             <div>
               <Label htmlFor="edit-password">{t("users.label_password")}</Label>
-              <Input id="edit-password" type="password" placeholder={t("users.placeholder.leave_blank")} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <Input id="edit-password" type="password" placeholder={t("users.placeholder.leave_blank")} value={form.password} onChange={(e) => { setForm({ ...form, password: e.target.value }); if (formErrors.password) setFormErrors({ ...formErrors, password: undefined }); }} />
+              <FieldError>{formErrors.password}</FieldError>
             </div>
             <div>
               <Label htmlFor="edit-role">{t("users.label_role")}</Label>
@@ -459,7 +479,8 @@ export default function UsersPage() {
           <form onSubmit={handleSetPassword} className="space-y-4">
             <div>
               <Label htmlFor="pw-new">{t("users.password_label")}</Label>
-              <Input id="pw-new" type="password" required minLength={8} placeholder={t("users.password_placeholder")} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+              <Input id="pw-new" type="password" required minLength={8} placeholder={t("users.password_placeholder")} value={newPassword} onChange={(e) => { setNewPassword(e.target.value); if (passwordError) setPasswordError(""); }} />
+              <FieldError>{passwordError}</FieldError>
             </div>
             <DialogFooter>
               <Button variant="outline" type="button" onClick={() => setShowPasswordModal(false)}>{t("users.btn.cancel")}</Button>
