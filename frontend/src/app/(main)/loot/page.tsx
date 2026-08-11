@@ -9,7 +9,8 @@ import { downloadText, downloadJSON } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { formatTime } from "@/lib/utils";
 import { safeHref, safeImageSrc } from "@/lib/safeUrl";
-import { ConfirmModal, EmptyState, PageHeader, Pagination, StatusBadge } from "@/components/UI";
+import { EmptyState, PageHeader, Pagination, StatusBadge } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,9 +37,9 @@ function LootPage() {
   const [lbIndex, setLbIndex] = useState(-1);
   const [activeTab, setActiveTab] = useState<LootTab | null>(initialTab);
   const [agentFilter, setAgentFilter] = useState(searchParams.get("agent_id") || "");
+  const { confirm, modal } = useConfirm();
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [keylogSearch, setKeylogSearch] = useState("");
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
   const [screenshotPage, setScreenshotPage] = useState(1);
   const [keylogPage, setKeylogPage] = useState(1);
   const [downloadPage, setDownloadPage] = useState(1);
@@ -109,21 +110,17 @@ function LootPage() {
     setSelectedItems(next);
   }, [curTab, filteredScreenshots, filteredDownloads, selectedItems]);
 
-  const deleteSelected = useCallback(() => {
+  const deleteSelected = useCallback(async () => {
     if (selectedItems.size === 0) return;
-    setCfm({
-      msg: t("loot.confirm_delete_selected", { count: selectedItems.size }),
-      cb: async () => {
-        try {
-          await api.postJson(paths.loot.bulkDelete, { ids: [...selectedItems] });
-          setSelectedItems(new Set());
-          loadLoot();
-        } catch (e) {
-          toast.error(e instanceof Error ? e.message : t("loot.toast.delete_failed"));
-        }
-      },
-    });
-  }, [selectedItems, loadLoot, t]);
+    if (!(await confirm({ message: t("loot.confirm_delete_selected", { count: selectedItems.size }) }))) return;
+    try {
+      await api.postJson(paths.loot.bulkDelete, { ids: [...selectedItems] });
+      setSelectedItems(new Set());
+      loadLoot();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("loot.toast.delete_failed"));
+    }
+  }, [selectedItems, loadLoot, t, confirm]);
 
   const exportAll = (format: "json" | "csv" = "json") => {
     const exportData = {
@@ -407,7 +404,7 @@ function LootPage() {
           </DialogContent>
         </Dialog>
       )}
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.delete")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </div>
   );
 }

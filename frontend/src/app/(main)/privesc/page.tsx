@@ -7,7 +7,8 @@ import { downloadText, downloadJSON } from "@/lib/download";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { useI18n } from "@/lib/i18n";
 import { formatTime } from "@/lib/utils";
-import { ConfirmModal, PageHeader, Spinner } from "@/components/UI";
+import { PageHeader, Spinner } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -78,7 +79,7 @@ export default function PrivescPage() {
   const [expandedFinding, setExpandedFinding] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+  const { confirm, modal } = useConfirm();
 
   const { t } = useI18n();
 
@@ -148,12 +149,11 @@ export default function PrivescPage() {
     } catch { toast.error(t("privesc.toast.load_history_failed")); }
   };
 
-  const handleExecuteExploit = (finding: PrivescFinding) => {
-    setCfm({msg: `${t("privesc.confirm_exploit")}\n\n${finding.title || t("privesc.unknown")}`, cb: async () => {
-      try {
-        await api.postJson(paths.privesc.execute, { agent_id: selectedAgent, check_type: checkType, exploit_command: finding.exploit_command });
-      } catch { toast.error(t("privesc.toast.execute_exploit_failed")); }
-    }});
+  const handleExecuteExploit = async (finding: PrivescFinding) => {
+    if (!(await confirm({ message: `${t("privesc.confirm_exploit")}\n\n${finding.title || t("privesc.unknown")}` }))) return;
+    try {
+      await api.postJson(paths.privesc.execute, { agent_id: selectedAgent, check_type: checkType, exploit_command: finding.exploit_command });
+    } catch { toast.error(t("privesc.toast.execute_exploit_failed")); }
   };
 
   const handleExportJSON = () => {
@@ -395,7 +395,7 @@ export default function PrivescPage() {
         )}
       </Card>
 
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.execute")} cancelText={t("common.cancel")} onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </div>
   );
 }

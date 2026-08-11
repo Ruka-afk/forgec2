@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ConfirmModal } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Trash2, RefreshCw, Wifi, WifiOff } from "lucide-react";
 
 interface ExtC2Channel {
@@ -33,7 +33,7 @@ export default function ExtC2Section() {
   const [botToken, setBotToken] = useState("");
   const [channelId, setChannelId] = useState("");
   const [saving, setSaving] = useState(false);
-  const [cfm, setCfm] = useState<{ msg: string; cb: () => void } | null>(null);
+  const { confirm, modal } = useConfirm();
 
   const fetchChannels = useCallback(async () => {
     try {
@@ -66,16 +66,12 @@ export default function ExtC2Section() {
   };
 
   const handleDelete = async (id: number) => {
-    setCfm({
-      msg: t("settings.extc2.delete_confirm"),
-      cb: async () => {
-        try {
-          await api.del(paths.extc2.config(id));
-          toast.success(t("settings.toast.channel_removed"));
-          fetchChannels();
-        } catch { /* ignore */ }
-      },
-    });
+    if (!(await confirm({ message: t("settings.extc2.delete_confirm") }))) return;
+    try {
+      await api.del(paths.extc2.config(id));
+      toast.success(t("settings.toast.channel_removed"));
+      fetchChannels();
+    } catch { /* ignore */ }
   };
 
   return (
@@ -99,14 +95,7 @@ export default function ExtC2Section() {
         <p className="text-xs text-muted-foreground text-center py-4">{t("settings.extc2.noChannels")}</p>
       )}
 
-      <ConfirmModal
-        open={cfm !== null}
-        title={t("settings.extc2.delete_title")}
-        message={cfm?.msg || ""}
-        danger
-        onConfirm={() => cfm?.cb()}
-        onCancel={() => setCfm(null)}
-      />
+      {modal}
 
       {channels.map(ch => (
         <div key={ch.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/50">

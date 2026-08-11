@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { ConfirmModal, Spinner } from "@/components/UI";
+import { Spinner } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -72,22 +73,21 @@ export default function ConnectionPanel({
   onProfileImport?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
   const { t } = useI18n();
-  const [cfm, setCfm] = useState<{ msg: string; cb: () => void } | null>(null);
+  const { confirm, modal } = useConfirm();
   const [deleting, setDeleting] = useState(false);
   const currentProfile = profilePresets.find(p => p.name === shared.profile);
   const isBuiltin = !shared.profile || shared.profile === "default" || shared.profile === "";
   const currentListener = listeners.find(l => String(l.id) === String(shared.listener_id));
 
-  const handleDeleteProfile = () => {
+  const handleDeleteProfile = async () => {
     if (!shared.profile || isBuiltin) return;
-    setCfm({ msg: t("generate.confirm_delete_profile", { name: shared.profile }), cb: async () => {
-      setDeleting(true);
-      try {
-        await onProfileDeleted?.(shared.profile);
-        changeProfile("default");
-      } catch { toast.error(t("generate.toast.delete_profile_failed")); }
-      setDeleting(false);
-    }});
+    if (!(await confirm({ message: t("generate.confirm_delete_profile", { name: shared.profile }) }))) return;
+    setDeleting(true);
+    try {
+      await onProfileDeleted?.(shared.profile);
+      changeProfile("default");
+    } catch { toast.error(t("generate.toast.delete_profile_failed")); }
+    setDeleting(false);
   };
 
   const transport = shared.beacon_transport || "http";
@@ -322,7 +322,7 @@ export default function ConnectionPanel({
         onClose={() => setShowListenerModal(false)}
       />
 
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={async () => { await cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </CraftPanel>
   );
 }

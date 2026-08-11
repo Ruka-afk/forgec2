@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
-import { EmptyState, PageHeader, ConfirmModal, PageSpinner } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
+import { EmptyState, PageHeader, PageSpinner } from "@/components/UI";
 import { toast } from "sonner";
 import { formatTime, cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -53,7 +54,7 @@ export default function OpsecPage() {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [editingRule, setEditingRule] = useState<OpsecRule | null>(null);
-  const [cfm, setCfm] = useState<{ msg: string; cb: () => void } | null>(null);
+  const { confirm, modal } = useConfirm();
   const [ruleForm, setRuleForm] = useState({
     name: "",
     description: "",
@@ -142,14 +143,13 @@ export default function OpsecPage() {
     }
   };
 
-  const handleDeleteRule = (name: string) => {
-    setCfm({ msg: t("opsec.delete") + ` "${name}"?`, cb: async () => {
-      try {
-        await api.del(paths.opsec.rule(name));
-        toast.success(t("opsec.toast.deleted"));
-      api.get<{ rules: OpsecRule[] }>(paths.opsec.rulesApi).then(d => setRules(d.rules || []));
-      } catch { toast.error(t("opsec.toast.delete_failed")); }
-    }});
+  const handleDeleteRule = async (name: string) => {
+    if (!(await confirm({ message: t("opsec.delete") + ` "${name}"?` }))) return;
+    try {
+      await api.del(paths.opsec.rule(name));
+      toast.success(t("opsec.toast.deleted"));
+    api.get<{ rules: OpsecRule[] }>(paths.opsec.rulesApi).then(d => setRules(d.rules || []));
+    } catch { toast.error(t("opsec.toast.delete_failed")); }
   };
 
   const openEditRule = (rule: OpsecRule) => {
@@ -406,7 +406,7 @@ export default function OpsecPage() {
         </DialogContent>
       </Dialog>
 
-      <ConfirmModal open={!!cfm} title={t("opsec.confirm")} message={cfm?.msg || ""} confirmText={t("opsec.delete")} cancelText={t("opsec.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </>
   );
 }

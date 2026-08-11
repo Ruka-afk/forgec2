@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { useI18n } from "@/lib/i18n";
 import { useForm } from "@/lib/hooks/useForm";
-import { FieldError, EmptyState, PageHeader, ConfirmModal, StatusBadge } from "@/components/UI";
+import { FieldError, EmptyState, PageHeader, StatusBadge } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataError } from "@/components/ui/data-state";
@@ -84,7 +85,7 @@ export default function ListenersPageContent() {
 
   const [editingListener, setEditingListener] = useState<Listener | null>(null);
   const [showEdit, setShowEdit] = useState(false);
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void; requireText?: string} | null>(null);
+  const { confirm, modal } = useConfirm();
 
   const {
     values: createForm,
@@ -159,13 +160,12 @@ export default function ListenersPageContent() {
     await toggleListener(listener);
   };
 
-  const handleDelete = (listener: Listener) => {
+  const handleDelete = async (listener: Listener) => {
     const id = listener.id || "";
     if (!id) return;
     const name = listener.name || listener.type || "";
-    setCfm({msg: t("listeners.confirm_delete"), requireText: name, cb: async () => {
-      await deleteListener(id);
-    }});
+    if (!(await confirm({ message: t("listeners.confirm_delete"), requireText: name }))) return;
+    await deleteListener(id);
   };
 
   const total = listeners.length;
@@ -521,7 +521,7 @@ export default function ListenersPageContent() {
           </form>
         </DialogContent>
       </Dialog>
-      <ConfirmModal open={!!cfm} title={t("listeners.confirm_title")} message={cfm?.msg || ""} confirmText={t("listeners.confirm_delete_text")} cancelText={t("listeners.cancel")} danger requireText={cfm?.requireText} onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </div>
   );
 }

@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { ConfirmModal, EmptyState } from "@/components/UI";
+import { EmptyState } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Button } from "@/components/ui/button";
 import { NormalizedAgent as Agent } from "@/types/agent";
 import { formatTime } from "@/lib/utils";
@@ -51,7 +52,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
   const [params, setParams] = useState("");
   const [schedule, setSchedule] = useState("");
   const [taskTypes, setTaskTypes] = useState<TaskTypeInfo[]>([]);
-  const [cfm, setCfm] = useState<{ msg: string; cb: () => void } | null>(null);
+  const { confirm, modal } = useConfirm();
   const [saving, setSaving] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -133,19 +134,15 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
     }
   }
 
-  function handleDelete(id: string) {
-    setCfm({
-      msg: t("scheduler.delete_confirm"),
-      cb: async () => {
-        try {
-          await api.del(paths.automation.rule(id));
-          fetchData();
-          onChanged?.();
-        } catch {
-          toast.error(t("scheduler.delete_failed"));
-        }
-      },
-    });
+  async function handleDelete(id: string) {
+    if (!(await confirm({ message: t("scheduler.delete_confirm") }))) return;
+    try {
+      await api.del(paths.automation.rule(id));
+      fetchData();
+      onChanged?.();
+    } catch {
+      toast.error(t("scheduler.delete_failed"));
+    }
   }
 
   function editTask(task: ScheduledRule) {
@@ -284,7 +281,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
         )}
       </div>
 
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </Card>
   );
 }

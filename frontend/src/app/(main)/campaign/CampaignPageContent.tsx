@@ -6,7 +6,8 @@ import { paths } from "@/lib/api-paths";
 
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
-import { ConfirmModal, EmptyState, PageHeader, Spinner, StatCard } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
+import { EmptyState, PageHeader, Spinner, StatCard } from "@/components/UI";
 import { toast } from "sonner";
 
 import { Card } from "@/components/ui/card";
@@ -69,7 +70,7 @@ export default function CampaignPageContent() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+  const { confirm, modal } = useConfirm();
 
   const handleCreate = async () => {
     const ok = await createCampaign(newName, newDesc);
@@ -80,10 +81,9 @@ export default function CampaignPageContent() {
     }
   };
 
-  const handleDelete = (id: string) => {
-    setCfm({msg: t("campaign.delete_confirm"), cb: async () => {
-      await deleteCampaign(id);
-    }});
+  const handleDelete = async (id: string) => {
+    if (!(await confirm({ message: t("campaign.delete_confirm") }))) return;
+    await deleteCampaign(id);
   };
 
   const handleStatusChange = async (id: string, status: string) => {
@@ -173,8 +173,8 @@ export default function CampaignPageContent() {
           </Table>
         </Card>
       )}
+      {modal}
     </div>
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
     </>
   );
 }

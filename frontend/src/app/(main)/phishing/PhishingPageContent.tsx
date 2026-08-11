@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { ConfirmModal, EmptyState, PageHeader, PageSpinner } from "@/components/UI";
+import { EmptyState, PageHeader, PageSpinner } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,7 +71,7 @@ export default function PhishingPageContent() {
   const [campaigns, setCampaigns] = useState<PhishingCampaign[]>([]);
   const [captures, setCaptures] = useState<CaptureEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [cfm, setCfm] = useState<{ msg: string; cb: () => void } | null>(null);
+  const { confirm, modal } = useConfirm();
 
   // Template form
   const [showTplForm, setShowTplForm] = useState(false);
@@ -144,11 +145,10 @@ export default function PhishingPageContent() {
     setShowTplForm(true);
   };
 
-  const handleDeleteTpl = (id: number) => {
-    setCfm({ msg: t("phishing.delete_template"), cb: async () => {
-      await api.del(paths.phishing.template(id));
-      loadTemplates();
-    }});
+  const handleDeleteTpl = async (id: number) => {
+    if (!(await confirm({ message: t("phishing.delete_template") }))) return;
+    await api.del(paths.phishing.template(id));
+    loadTemplates();
   };
 
   // ── Campaign CRUD ──────────────────────────────────────────────────────
@@ -183,11 +183,10 @@ export default function PhishingPageContent() {
     } catch { toast.error(t("phishing.toast.save_campaign_failed")); }
   };
 
-  const handleDeleteCamp = (id: number) => {
-    setCfm({ msg: t("phishing.delete_campaign"), cb: async () => {
-      await api.del(paths.phishing.campaign(id));
-      loadCampaigns();
-    }});
+  const handleDeleteCamp = async (id: number) => {
+    if (!(await confirm({ message: t("phishing.delete_campaign") }))) return;
+    await api.del(paths.phishing.campaign(id));
+    loadCampaigns();
   };
 
   if (loading) return <PageSpinner />;
@@ -486,7 +485,7 @@ export default function PhishingPageContent() {
       </TabsContent>
       </Tabs>
 
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.delete")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
-import { EmptyState, PageHeader, ConfirmModal, PageSpinner } from "@/components/UI";
+import { EmptyState, PageHeader, PageSpinner } from "@/components/UI";
 import { toast } from "sonner";
 import { formatTime } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -65,8 +65,6 @@ export default function CircuitBreakerPage() {
   const [loading, setLoading] = useState(true);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [configForm, setConfigForm] = useState<BreakerConfig>(config);
-
-  const [cfm, setCfm] = useState<{ msg: string; cb: () => void } | null>(null);
 
   const loadData = useCallback(() => {
     let failed = 0;
@@ -366,8 +364,6 @@ export default function CircuitBreakerPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
     </>
   );
 }

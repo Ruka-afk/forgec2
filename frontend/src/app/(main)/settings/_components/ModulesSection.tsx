@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EmptyState, Spinner, ConfirmModal } from "@/components/UI";
+import { EmptyState, Spinner } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { FileCode, Rocket, Trash2, Upload } from "lucide-react";
 
 interface ModuleInfo {
@@ -40,7 +41,7 @@ export default function ModulesSection() {
   const [deployAgent, setDeployAgent] = useState("");
   const [deployPath, setDeployPath] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
-  const [cfm, setCfm] = useState<{ name: string } | null>(null);
+  const { confirm, modal } = useConfirm();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,8 +102,9 @@ export default function ModulesSection() {
     e.target.value = "";
   };
 
-  const handleDelete = (name: string) => {
-    setCfm({ name });
+  const handleDelete = async (name: string) => {
+    if (!(await confirm({ message: t("settings.modules.delete_confirm", { name }) }))) return;
+    confirmDelete(name);
   };
 
   const confirmDelete = async (name: string) => {
@@ -216,14 +218,7 @@ export default function ModulesSection() {
           </Table>
         )}
 
-        <ConfirmModal
-          open={cfm !== null}
-          title={t("settings.modules.delete_title")}
-          message={cfm ? t("settings.modules.delete_confirm", { name: cfm.name }) : ""}
-          danger
-          onConfirm={() => { const name = cfm?.name; setCfm(null); if (name) confirmDelete(name); }}
-          onCancel={() => setCfm(null)}
-        />
+        {modal}
 
         {modules.length > 0 && (
           <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">

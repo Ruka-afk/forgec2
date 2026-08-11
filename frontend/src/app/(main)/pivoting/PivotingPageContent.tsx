@@ -3,7 +3,8 @@
 import { useState, useMemo } from "react";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
-import { EmptyState, ConfirmModal, PageHeader, Spinner } from "@/components/UI";
+import { EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,7 +50,7 @@ export default function PivotingPageContent() {
   const [rportLocalPort, setRportLocalPort] = useState(8022);
   const [rportProtocol, setRportProtocol] = useState<"tcp" | "udp">("tcp");
   const [throughAgent, setThroughAgent] = useState("");
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+  const { confirm, modal } = useConfirm();
 
   const startRelay = async () => {
     setStarting(true);
@@ -67,10 +68,9 @@ export default function PivotingPageContent() {
     setLocalStarting(false);
   };
 
-  const stopRelay = (agentId: string) => {
-    setCfm({msg: t("pivoting.disconnect_socks"), cb: async () => {
-      await stopRelayApi(agentId);
-    }});
+  const stopRelay = async (agentId: string) => {
+    if (!(await confirm({ message: t("pivoting.disconnect_socks") }))) return;
+    await stopRelayApi(agentId);
   };
 
   const startRPort = async () => {
@@ -407,8 +407,8 @@ export default function PivotingPageContent() {
           </Card>        </>
       </TabsContent>
       </Tabs>
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.disconnect")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
-    </div>  );
+      {modal}
+    </div>
+  );
 }
-
 

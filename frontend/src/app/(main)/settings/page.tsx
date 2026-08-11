@@ -6,9 +6,8 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadBlob } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { PageHeader, PageSpinner } from "@/components/UI";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Bell, Bot, Cpu, Database, FileCode, Globe, Lock, Palette, Server, Shield, User, Wrench, Archive, Radio, AlertTriangle } from "lucide-react";
@@ -56,8 +55,8 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("profile");
   const [purgeDays, setPurgeDays] = useState({ tasks: "30", audit: "30" });
   const [saving, setSaving] = useState(false);
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
-  const [cfmInline, setCfmInline] = useState<{msg: string; cb: () => void} | null>(null);
+  const { confirm: confirmAction, modal: modalAction } = useConfirm();
+  const { confirm: confirmPurge, modal: modalPurge } = useConfirm();
 
   useEffect(() => {
     const tab = window.location.hash.match(/^#tab=(.+)$/)?.[1];
@@ -124,13 +123,12 @@ export default function SettingsPage() {
     finally { setSaving(false); }
   };
 
-  const handleRegenerateJWT = () => {
-    setCfm({msg: t("settings.confirm.jwt"), cb: async () => {
-      setSaving(true);
-      try { await api.post(paths.settings.jwtRegenerate); toast.success(t("settings.toast.jwt_regenerated")); loadSettings(); }
-      catch { toast.error(t("settings.toast.jwt_failed")); }
-      finally { setSaving(false); }
-    }});
+  const handleRegenerateJWT = async () => {
+    if (!(await confirmAction({ message: t("settings.confirm.jwt") }))) return;
+    setSaving(true);
+    try { await api.post(paths.settings.jwtRegenerate); toast.success(t("settings.toast.jwt_regenerated")); loadSettings(); }
+    catch { toast.error(t("settings.toast.jwt_failed")); }
+    finally { setSaving(false); }
   };
 
   const handleApplyTheme = (th: string) => {
@@ -179,19 +177,18 @@ export default function SettingsPage() {
     } catch { toast.error(t("settings.toast.download_failed")); }
   };
 
-  const handlePurge = (type: string) => {
+  const handlePurge = async (type: string) => {
     const days = type === "tasks" ? purgeDays.tasks : purgeDays.audit;
-    setCfm({msg: t("settings.confirm.purge", { type, days }), cb: async () => {
-      setSaving(true);
-      try {
-        const path = type === "screenshots"
-          ? paths.settings.maintenancePurge
-          : paths.settings.purge(type);
-        await api.post(path, { days });
-        toast.success(t("settings.toast.purge_done", { type }));
-      } catch { toast.error(t("settings.toast.purge_failed", { type })); }
-      finally { setSaving(false); }
-    }});
+    if (!(await confirmAction({ message: t("settings.confirm.purge", { type, days }) }))) return;
+    setSaving(true);
+    try {
+      const path = type === "screenshots"
+        ? paths.settings.maintenancePurge
+        : paths.settings.purge(type);
+      await api.post(path, { days });
+      toast.success(t("settings.toast.purge_done", { type }));
+    } catch { toast.error(t("settings.toast.purge_failed", { type })); }
+    finally { setSaving(false); }
   };
 
   const handleCheckUpdate = async () => {
@@ -274,7 +271,7 @@ export default function SettingsPage() {
               <TabsContent value="malleable" className="mt-0"><MalleableSection form={malleableForm} setForm={setMalleableForm} saving={saving} onSave={handleSaveMalleable} /></TabsContent>
               <TabsContent value="database" className="mt-0"><DatabaseSection data={data} saving={saving} onVacuum={handleVacuum} onBackup={handleBackup} onDownloadDB={handleDownloadDB} /></TabsContent>
               <TabsContent value="backup" className="mt-0"><BackupSection /></TabsContent>
-              <TabsContent value="maintenance" className="mt-0"><MaintenanceSection purgeDays={purgeDays} setPurgeDays={setPurgeDays} saving={saving} onPurge={handlePurge} onPurgeScreenshots={() => setCfmInline({msg: t("settings.confirm.purge_screenshots"), cb: () => handlePurge("screenshots") })} /></TabsContent>
+              <TabsContent value="maintenance" className="mt-0"><MaintenanceSection purgeDays={purgeDays} setPurgeDays={setPurgeDays} saving={saving} onPurge={handlePurge} onPurgeScreenshots={async () => { if (await confirmPurge({ message: t("settings.confirm.purge_screenshots"), confirmText: t("settings.btn.purge") })) handlePurge("screenshots"); }} /></TabsContent>
               <TabsContent value="notifications" className="mt-0"><NotificationsSection /></TabsContent>
               <TabsContent value="about" className="mt-0"><AboutSection data={data} onCheckUpdate={handleCheckUpdate} /></TabsContent>
               <TabsContent value="extc2" className="mt-0"><ExtC2Section /></TabsContent>
@@ -286,30 +283,8 @@ export default function SettingsPage() {
         </div>
       </Tabs>
 
-      <Dialog open={!!cfm} onOpenChange={(open) => { if (!open) setCfm(null); }}>
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>{t("common.confirm")}</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">{cfm?.msg || ""}</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCfm(null)}>{t("common.cancel")}</Button>
-            <Button variant="destructive" onClick={() => { cfm?.cb(); setCfm(null); }}>{t("common.confirm")}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={!!cfmInline} onOpenChange={(open) => { if (!open) setCfmInline(null); }}>
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>{t("common.confirm")}</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">{cfmInline?.msg || ""}</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCfmInline(null)}>{t("common.cancel")}</Button>
-            <Button variant="destructive" onClick={() => { cfmInline?.cb(); setCfmInline(null); }}>{t("settings.btn.purge")}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {modalAction}
+      {modalPurge}
     </div>
   );
 }

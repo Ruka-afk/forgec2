@@ -8,7 +8,8 @@ import { downloadFromResponse } from "@/lib/download";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { useAgentList } from "@/lib/hooks/useAgentList";
-import { ConfirmModal, EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
+import { EmptyState, PageHeader, Spinner } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,7 +54,7 @@ export default function BloodHoundPage() {
   const [method, setMethod] = useState("DCOnly");
   const [collecting, setCollecting] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+  const { confirm, modal } = useConfirm();
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -112,13 +113,12 @@ export default function BloodHoundPage() {
     } catch { toast.error(t("bloodhound.toast.download_report_failed")); }
   };
 
-  const handleDelete = (id: number) => {
-    setCfm({msg: t("bloodhound.delete_report"), cb: async () => {
-      try {
-        await api.del(paths.bloodhound.one(id));
-        loadData();
-      } catch { toast.error(t("bloodhound.toast.delete_report_failed")); }
-    }});
+  const handleDelete = async (id: number) => {
+    if (!(await confirm({ message: t("bloodhound.delete_report") }))) return;
+    try {
+      await api.del(paths.bloodhound.one(id));
+      loadData();
+    } catch { toast.error(t("bloodhound.toast.delete_report_failed")); }
   };
 
   const getVal = (obj: BHResult, keys: (keyof BHResult)[]) => {
@@ -297,7 +297,7 @@ export default function BloodHoundPage() {
         </div>
         </DataState>
       </Card>
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.delete")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </div>
   );
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
-import { ConfirmModal, PageHeader, Spinner } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
+import { PageHeader, Spinner } from "@/components/UI";
 import { useBOFData } from "./_components/useBOFData";
 import { quickBOFLibrary } from "./_components/types";
 import type { QuickBOF } from "./_components/types";
@@ -42,7 +42,7 @@ export default function BOFPage() {
     deleteLibrary,
   } = useBOFData();
 
-  const [cfm, setCfm] = useState<{ msg: string; cb: () => void } | null>(null);
+  const { confirm, modal } = useConfirm();
 
   const handleQuickRun = (bof: QuickBOF) => {
     const bofFile = files.find((f) => (f.name || "").toLowerCase() === bof.name.toLowerCase());
@@ -169,14 +169,14 @@ export default function BOFPage() {
           agents={agents}
           onUploadLibrary={(file, arch, name, desc, author) => uploadLibrary(file, arch, name, desc, author)}
           onRunLibrary={(id, agentId, args) => runLibrary(id, agentId, args)}
-          onDeleteLibrary={(id) => {
-            setCfm({ msg: t("bof.delete_library"), cb: () => deleteLibrary(id) });
+          onDeleteLibrary={async (id) => {
+            if (await confirm({ message: t("bof.delete_library") })) deleteLibrary(id);
           }}
         />
       </TabsContent>
       </Tabs>
 
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.delete")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </div>
   );
 }

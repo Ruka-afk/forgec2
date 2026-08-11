@@ -5,7 +5,8 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { downloadText } from "@/lib/download";
-import { ConfirmModal, EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Button } from "@/components/ui/button";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -58,7 +59,7 @@ export default function StagerPage() {
   const [dnsServer, setDnsServer] = useState("");
   const [skipTls, setSkipTls] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+  const { confirm, modal } = useConfirm();
   const [createdToken, setCreatedToken] = useState<{ token: string; stager_url: string; stage2_size: number; expires_at: string } | null>(null);
 
   const fetchTokens = useCallback(async () => {
@@ -115,14 +116,13 @@ export default function StagerPage() {
     }
   }
 
-  function handleDelete(id: number) {
-    setCfm({msg: t("stager.delete_token"), cb: async () => {
-      try {
-        await api.del(paths.stager.one(id));
-        setMessage(t("stager.toast.deleted"));
-        fetchTokens();
-      } catch { setMessage(t("stager.toast.delete_failed")); }
-    }});
+  async function handleDelete(id: number) {
+    if (!(await confirm({ message: t("stager.delete_token") }))) return;
+    try {
+      await api.del(paths.stager.one(id));
+      setMessage(t("stager.toast.deleted"));
+      fetchTokens();
+    } catch { setMessage(t("stager.toast.delete_failed")); }
   }
 
   function isExpired(t: StagerToken) {
@@ -325,7 +325,7 @@ export default function StagerPage() {
           )}
         </Card>
       </div>
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { downloadText } from "@/lib/download";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ConfirmModal, Spinner } from "@/components/UI";
+import { Spinner } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -32,7 +33,7 @@ export default function FilesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showFind, setShowFind] = useState(false);
-  const [cfm, setCfm] = useState<{ msg: string; cb: () => void } | null>(null);
+  const { confirm, modal } = useConfirm();
 
   const {
     currentPath,
@@ -88,13 +89,9 @@ export default function FilesPage() {
     }
   };
 
-  const handleDelete = (filename: string) => {
-    setCfm({
-      msg: t("agents.files_confirm_delete"),
-      cb: async () => {
-        await deleteFile(filename);
-      },
-    });
+  const handleDelete = async (filename: string) => {
+    if (!(await confirm({ message: t("agents.files_confirm_delete") }))) return;
+    await deleteFile(filename);
   };
 
   const handleUpload = (e: React.FormEvent<HTMLFormElement>) => {
@@ -439,7 +436,7 @@ export default function FilesPage() {
           )}
         </DialogContent>
       </Dialog>
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.delete")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { firstField, normalizeListEnvelope } from "@/lib/envelope";
-import { ConfirmModal, EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/UI";
+import { EmptyState, PageHeader, StatCard, StatusBadge } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -66,7 +67,7 @@ export default function UsersPage() {
   const [passwordUserId, setPasswordUserId] = useState<string>("");
   const [newPassword, setNewPassword] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void; requireText?: string} | null>(null);
+  const { confirm, modal } = useConfirm();
   const [sessionsUser, setSessionsUser] = useState<User | null>(null);
   const [sessions, setSessions] = useState<UserSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
@@ -135,28 +136,26 @@ export default function UsersPage() {
     } catch { toast.error(t("users.toast.update_failed")); }
   };
 
-  const handleToggle = (id: string) => {
-    setCfm({msg: t("users.confirm.toggle"), cb: async () => {
-      setActionLoading(id + "_toggle");
-      try {
-        await api.post(paths.users.toggle(id), {});
-        toast.success(t("users.toast.toggle_success"));
-        loadUsers();
-      } catch { toast.error(t("users.toast.toggle_failed")); }
-      finally { setActionLoading(null); }
-    }});
+  const handleToggle = async (id: string) => {
+    if (!(await confirm({ message: t("users.confirm.toggle") }))) return;
+    setActionLoading(id + "_toggle");
+    try {
+      await api.post(paths.users.toggle(id), {});
+      toast.success(t("users.toast.toggle_success"));
+      loadUsers();
+    } catch { toast.error(t("users.toast.toggle_failed")); }
+    finally { setActionLoading(null); }
   };
 
-  const handleDelete = (id: string, name: string) => {
-    setCfm({msg: t("users.confirm.delete"), requireText: name, cb: async () => {
-      setActionLoading(id + "_delete");
-      try {
-        await api.del(paths.users.one(id));
-        toast.success(t("users.toast.deleted"));
-        loadUsers();
-      } catch { toast.error(t("users.toast.delete_failed")); }
-      finally { setActionLoading(null); }
-    }});
+  const handleDelete = async (id: string, name: string) => {
+    if (!(await confirm({ message: t("users.confirm.delete"), requireText: name }))) return;
+    setActionLoading(id + "_delete");
+    try {
+      await api.del(paths.users.one(id));
+      toast.success(t("users.toast.deleted"));
+      loadUsers();
+    } catch { toast.error(t("users.toast.delete_failed")); }
+    finally { setActionLoading(null); }
   };
 
   const handleSetPassword = async (e: React.FormEvent) => {
@@ -171,22 +170,20 @@ export default function UsersPage() {
     } catch { toast.error(t("users.toast.password_failed")); }
   };
 
-  const handleForceLogout = (id: string) => {
-    setCfm({msg: t("users.confirm.force_logout"), cb: async () => {
-      try {
-        await api.post(paths.users.forceLogout(id));
-        toast.success(t("users.toast.force_logout_success"));
-      } catch { toast.error(t("users.toast.force_logout_failed")); }
-    }});
+  const handleForceLogout = async (id: string) => {
+    if (!(await confirm({ message: t("users.confirm.force_logout") }))) return;
+    try {
+      await api.post(paths.users.forceLogout(id));
+      toast.success(t("users.toast.force_logout_success"));
+    } catch { toast.error(t("users.toast.force_logout_failed")); }
   };
 
-  const handleKick = (id: string) => {
-    setCfm({msg: t("users.confirm.kick"), cb: async () => {
-      try {
-        await api.post(paths.users.forceLogout(id));
-        toast.success(t("users.toast.kick_success"));
-      } catch { toast.error(t("users.toast.kick_failed")); }
-    }});
+  const handleKick = async (id: string) => {
+    if (!(await confirm({ message: t("users.confirm.kick") }))) return;
+    try {
+      await api.post(paths.users.forceLogout(id));
+      toast.success(t("users.toast.kick_success"));
+    } catch { toast.error(t("users.toast.kick_failed")); }
   };
 
   const loadSessions = useCallback(async (user: User) => {
@@ -223,18 +220,17 @@ export default function UsersPage() {
       .finally(() => setRevokeLoading(null));
   };
 
-  const handleRevokeAll = () => {
+  const handleRevokeAll = async () => {
     const uid = sessionsUser?.id;
     if (!uid || !sessionsUser?.username) return;
-    setCfm({msg: t("users.confirm.revoke_all", { name: sessionsUser.username }), cb: async () => {
-      setRevokeLoading("all");
-      try {
-        await api.post(paths.users.revokeAllSessions(uid), {});
-        toast.success(t("users.toast.sessions_revoked"));
-        setSessions([]);
-      } catch { toast.error(t("users.toast.sessions_revoke_failed")); }
-      finally { setRevokeLoading(null); }
-    }});
+    if (!(await confirm({ message: t("users.confirm.revoke_all", { name: sessionsUser.username }) }))) return;
+    setRevokeLoading("all");
+    try {
+      await api.post(paths.users.revokeAllSessions(uid), {});
+      toast.success(t("users.toast.sessions_revoked"));
+      setSessions([]);
+    } catch { toast.error(t("users.toast.sessions_revoke_failed")); }
+    finally { setRevokeLoading(null); }
   };
 
   return (
@@ -526,7 +522,7 @@ export default function UsersPage() {
           )}
         </DialogContent>
       </Dialog>
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger requireText={cfm?.requireText} onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </div>
   );
 }

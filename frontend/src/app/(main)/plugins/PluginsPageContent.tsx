@@ -5,7 +5,8 @@ import { api, getCsrfToken, buildUrl } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadFromResponse } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
-import { ConfirmModal, PageHeader, Spinner } from "@/components/UI";
+import { PageHeader, Spinner } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,7 +47,7 @@ export default function PluginsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [createForm, setCreateForm] = useState({ name: "", description: "", author: "", category: "", version: "1.0.0" });
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+  const { confirm, modal } = useConfirm();
 
   const filtered = plugins.filter((p) => {
     const name = (p.name || "").toLowerCase();
@@ -86,16 +87,15 @@ export default function PluginsPage() {
     finally { setAction(pluginId, null); }
   };
 
-  const handleDelete = (pluginId: string) => {
-    setCfm({msg: t("plugins.confirm_delete_msg"), cb: async () => {
-      setAction(pluginId, "deleting");
-      try {
-        await api.del(paths.plugins.one(pluginId));
-        toast.success(t("plugins.toast.deleted"));
-        loadPlugins();
-      } catch { toast.error(t("plugins.toast.delete_failed")); }
-      finally { setAction(pluginId, null); }
-    }});
+  const handleDelete = async (pluginId: string) => {
+    if (!(await confirm({ message: t("plugins.confirm_delete_msg") }))) return;
+    setAction(pluginId, "deleting");
+    try {
+      await api.del(paths.plugins.one(pluginId));
+      toast.success(t("plugins.toast.deleted"));
+      loadPlugins();
+    } catch { toast.error(t("plugins.toast.delete_failed")); }
+    finally { setAction(pluginId, null); }
   };
 
   const handleToggle = async (pluginId: string, enabled: boolean) => {
@@ -339,7 +339,7 @@ export default function PluginsPage() {
       {reviewsPlugin && (
         <ReviewsModal plugin={reviewsPlugin} reviews={reviews} open={showReviews} onOpenChange={setShowReviews} onPost={handlePostReview} />
       )}
-      <ConfirmModal open={!!cfm} title={t("plugins.confirm_title")} message={cfm?.msg || ""} confirmText={t("plugins.btn_delete")} cancelText={t("plugins.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </div>
   );
 }

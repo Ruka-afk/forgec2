@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { ConfirmModal, EmptyState, PageHeader } from "@/components/UI";
+import { EmptyState, PageHeader } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -66,7 +67,7 @@ export default function AutoTagPage() {
     conditionKeyCounter++;
     return [{ _key: conditionKeyCounter, field: "hostname", op: "contains", value: "" }];
   });
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+  const { confirm, modal } = useConfirm();
   const [message, setMessage] = useState("");
 
   const fetchData = useCallback(async () => {
@@ -109,11 +110,10 @@ export default function AutoTagPage() {
     catch { setMessage(t("autotag.toggle_failed")); }
   }
 
-  function handleDelete(id: string) {
-    setCfm({msg: t("autotag.delete_confirm"), cb: async () => {
-      try { await api.del(paths.autotag.rule(id)); fetchData(); }
-      catch { setMessage(t("autotag.delete_failed")); }
-    }});
+  async function handleDelete(id: string) {
+    if (!(await confirm({ message: t("autotag.delete_confirm") }))) return;
+    try { await api.del(paths.autotag.rule(id)); fetchData(); }
+    catch { setMessage(t("autotag.delete_failed")); }
   }
 
   async function handleApplyAll() {
@@ -299,7 +299,7 @@ export default function AutoTagPage() {
           ))}
         </div>
       )}
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </div>
   );
 }

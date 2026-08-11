@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
-import { ConfirmModal, DataSpinner, EmptyState, PageHeader } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
+import { DataSpinner, EmptyState, PageHeader } from "@/components/UI";
 import { toast } from "sonner";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -32,7 +33,7 @@ export default function DomainFrontingPage() {
   const [checking, setChecking] = useState(false);
   const [newDomain, setNewDomain] = useState("");
   const [saving, setSaving] = useState(false);
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+  const { confirm, modal } = useConfirm();
 
 
 
@@ -90,11 +91,10 @@ export default function DomainFrontingPage() {
     setNewDomain("");
   };
 
-  const removeDomain = (domain: string) => {
-    setCfm({msg: t("domain_fronting.remove_domain", { domain }), cb: () => {
-      const updated = domains.filter((x) => x.domain !== domain).map((x) => x.domain);
-      saveConfig(updated, autoFailover);
-    }});
+  const removeDomain = async (domain: string) => {
+    if (!(await confirm({ message: t("domain_fronting.remove_domain", { domain }) }))) return;
+    const updated = domains.filter((x) => x.domain !== domain).map((x) => x.domain);
+    saveConfig(updated, autoFailover);
   };
 
   const toggleAutoFailover = () => {
@@ -267,7 +267,7 @@ export default function DomainFrontingPage() {
           </div>
         </div>
       </div>
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.remove")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </div>
   );
 }

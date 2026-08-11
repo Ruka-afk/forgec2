@@ -5,7 +5,8 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { PageHeader, ConfirmModal, EmptyState, StatusBadge, PageSpinner } from "@/components/UI";
+import { PageHeader, EmptyState, StatusBadge, PageSpinner } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { DataError } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -46,8 +47,7 @@ export default function AutomationPage() {
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [showWebhookModal, setShowWebhookModal] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
-
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+  const { confirm, modal } = useConfirm();
 
   const eventRules = rules.filter((r) => (r.event_type || r.EventType) !== "schedule");
   const [ruleForm, setRuleForm] = useState({
@@ -141,22 +141,20 @@ export default function AutomationPage() {
     }
   };
 
-  const handleDeleteRule = (id: string) => {
-    setCfm({msg: t("automation.confirm_delete_rule"), cb: async () => {
-      try {
-        await api.del(paths.automation.rule(id));
-        loadData();
-      } catch { toast.error(t("automation.toast.delete_rule_failed")); }
-    }});
+  const handleDeleteRule = async (id: string) => {
+    if (!(await confirm({ message: t("automation.confirm_delete_rule") }))) return;
+    try {
+      await api.del(paths.automation.rule(id));
+      loadData();
+    } catch { toast.error(t("automation.toast.delete_rule_failed")); }
   };
 
-  const handleDeleteWebhook = (id: number) => {
-    setCfm({msg: t("automation.confirm_delete_webhook"), cb: async () => {
-      try {
-        await api.del(paths.automation.webhook(id));
-        loadData();
-      } catch { toast.error(t("automation.toast.delete_webhook_failed")); }
-    }});
+  const handleDeleteWebhook = async (id: number) => {
+    if (!(await confirm({ message: t("automation.confirm_delete_webhook") }))) return;
+    try {
+      await api.del(paths.automation.webhook(id));
+      loadData();
+    } catch { toast.error(t("automation.toast.delete_webhook_failed")); }
   };
 
   const handleSaveAlertRule = async () => {
@@ -168,13 +166,12 @@ export default function AutomationPage() {
     } catch { toast.error(t("automation.toast.save_alert_rule_failed")); }
   };
 
-  const handleDeleteAlertRule = (id: number) => {
-    setCfm({ msg: t("automation.confirm_delete_alert_rule"), cb: async () => {
-      try {
-        await api.del(paths.automation.alertRule(id));
-        loadData();
-      } catch { toast.error(t("automation.toast.delete_alert_rule_failed")); }
-    }});
+  const handleDeleteAlertRule = async (id: number) => {
+    if (!(await confirm({ message: t("automation.confirm_delete_alert_rule") }))) return;
+    try {
+      await api.del(paths.automation.alertRule(id));
+      loadData();
+    } catch { toast.error(t("automation.toast.delete_alert_rule_failed")); }
   };
 
   const handleToggleAlertRule = async (rule: AlertRule) => {
@@ -507,7 +504,7 @@ export default function AutomationPage() {
         onSave={handleSaveAlertRule}
       />
 
-      <ConfirmModal open={!!cfm} title={t("automation.confirm")} message={cfm?.msg || ""} confirmText={t("automation.delete")} cancelText={t("automation.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </div>
   );
 }

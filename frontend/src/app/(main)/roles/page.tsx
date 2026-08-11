@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { ConfirmModal, EmptyState, PageHeader, PageSpinner } from "@/components/UI";
+import { EmptyState, PageHeader, PageSpinner } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,7 +59,7 @@ export default function RolesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+  const { confirm, modal } = useConfirm();
   const [newPerms, setNewPerms] = useState<string[]>([]);
 
   const loadRoles = useCallback(async () => {
@@ -93,16 +94,15 @@ export default function RolesPage() {
     toast.success(t("roles.updated"));
   };
 
-  const handleDelete = (id: number) => {
-    setCfm({msg: t("roles.delete_confirm"), cb: async () => {
-      try {
-        await api.del(paths.roles.one(id));
-        toast.success(t("roles.deleted"));
-        loadRoles();
-      } catch {
-        toast.error(t("roles.delete_failed"));
-      }
-    }});
+  const handleDelete = async (id: number) => {
+    if (!(await confirm({ message: t("roles.delete_confirm") }))) return;
+    try {
+      await api.del(paths.roles.one(id));
+      toast.success(t("roles.deleted"));
+      loadRoles();
+    } catch {
+      toast.error(t("roles.delete_failed"));
+    }
   };
 
   const togglePerm = (perms: string[], perm: string): string[] => {
@@ -187,7 +187,7 @@ export default function RolesPage() {
           ))}
         </div>
       </div>
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </>
   );
 }

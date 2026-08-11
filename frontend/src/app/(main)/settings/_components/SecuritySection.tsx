@@ -1,7 +1,7 @@
-import { useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { SettingsData, PasswordForm } from "./types";
-import { ConfirmModal, Spinner } from "@/components/UI";
+import { Spinner } from "@/components/UI";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +40,7 @@ export default function SecuritySection({
   onDisableTOTP: () => void;
 }) {
   const { t } = useI18n();
-  const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+  const { confirm, modal } = useConfirm();
 
   return (
     <Card className="overflow-hidden">
@@ -159,14 +159,14 @@ export default function SecuritySection({
                 <span className="block text-xs text-muted-foreground mb-1.5">{t("settings.security.enter_2fa_code")}</span>
                 <Input id="totp-disable-code" type="text" aria-label={t("settings.security.enter_2fa_code")} placeholder="123 456" maxLength={8} value={totpDisableCode} onChange={(e) => setTotpDisableCode(e.target.value)} />
               </div>
-              <Button onClick={() => setCfm({msg: t("settings.disable_totp"), cb: () => onDisableTOTP()})} disabled={saving} className="h-11 px-6 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+              <Button onClick={async () => { if (await confirm({ message: t("settings.disable_totp") })) onDisableTOTP(); }} disabled={saving} className="h-11 px-6 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
                 <X className="w-4 h-4" />{t("settings.security.disable_2fa")}
               </Button>
             </div>
           )}
         </div>
       </div>
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.disable")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
     </Card>
   );
 }

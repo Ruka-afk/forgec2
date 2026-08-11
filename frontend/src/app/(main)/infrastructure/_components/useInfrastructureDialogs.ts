@@ -1,14 +1,10 @@
 import { useState } from "react";
-
-export interface ConfirmDialog {
-  msg: string;
-  cb: () => void;
-}
+import { useConfirm } from "@/lib/hooks/useConfirm";
 
 export function useInfrastructureDialogs() {
   const [showGenModal, setShowGenModal] = useState(false);
-  const [cfm, setCfm] = useState<ConfirmDialog | null>(null);
+  const { confirm, modal } = useConfirm();
   const [editingRd, setEditingRd] = useState<number | null>(null);
 
-  return { showGenModal, setShowGenModal, cfm, setCfm, editingRd, setEditingRd };
+  return { showGenModal, setShowGenModal, confirm, modal, editingRd, setEditingRd };
 }

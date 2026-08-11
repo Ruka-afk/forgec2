@@ -6,7 +6,7 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { ConfirmModal, EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { EmptyState, PageHeader, Spinner } from "@/components/UI";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +26,7 @@ import { useInfrastructureRedirectorForm } from "./_components/useInfrastructure
 export default function InfrastructurePage() {
   const { t } = useI18n();
   const { listeners, redirectors, loading, error, loadListeners, loadRedirectors } = useInfrastructureData();
-  const { showGenModal, setShowGenModal, cfm, setCfm, editingRd, setEditingRd } = useInfrastructureDialogs();
+  const { showGenModal, setShowGenModal, confirm, modal, editingRd, setEditingRd } = useInfrastructureDialogs();
   const {
     selectedListener, setSelectedListener, domain, setDomain, port, setPort,
     certPath, setCertPath, keyPath, setKeyPath, wsSupport, setWsSupport,
@@ -225,12 +225,11 @@ export default function InfrastructurePage() {
                                   }} variant="outline" size="sm">
                                     <Pencil className="w-4 h-4" />{t("common.edit")}
                                   </Button>
-                                  <Button onClick={() => {
-                                    setCfm({msg: t("infra.delete_redirector_confirm"), cb: async () => {
-                                      setDeleting(rd.id);
-                                      try { await api.del(paths.redirectors.one(rd.id)); loadRedirectors(); } catch { toast.error(t("infrastructure.toast.delete_redirector_failed")); }
-                                      setDeleting(null);
-                                    }});
+                                  <Button onClick={async () => {
+                                    if (!(await confirm({ message: t("infra.delete_redirector_confirm") }))) return;
+                                    setDeleting(rd.id);
+                                    try { await api.del(paths.redirectors.one(rd.id)); loadRedirectors(); } catch { toast.error(t("infrastructure.toast.delete_redirector_failed")); }
+                                    setDeleting(null);
                                   }} variant="destructive" size="sm">
                                     {deleting === rd.id ? <Spinner size="sm" className="mr-1" /> : <Trash2 className="w-4 h-4 mr-1" />}{deleting === rd.id ? t("infra.deleting") : t("common.delete")}
                                   </Button>
@@ -517,7 +516,7 @@ export default function InfrastructurePage() {
         </Card>
       </TabsContent>
       </Tabs>
-      <ConfirmModal open={!!cfm} title={t("common.confirm")} message={cfm?.msg || ""} confirmText={t("common.confirm")} cancelText={t("common.cancel")} danger onConfirm={() => { cfm?.cb(); setCfm(null); }} onCancel={() => setCfm(null)} />
+      {modal}
       </DataState>
     </div>
   );
