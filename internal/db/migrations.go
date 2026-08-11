@@ -1,7 +1,9 @@
 package db
 
 import (
+	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/go-gormigrate/gormigrate/v2"
 	"gorm.io/gorm"
@@ -291,6 +293,114 @@ var schemaMigrations = []*gormigrate.Migration{
 			execMigration(tx, "ALTER TABLE implants DROP COLUMN identity_pub", "drop_implants_identity_pub")
 			execMigration(tx, "ALTER TABLE implants DROP COLUMN registered", "drop_implants_registered")
 			execMigration(tx, "ALTER TABLE implants DROP COLUMN last_seq", "drop_implants_last_seq")
+			return nil
+		},
+	},
+	{
+		// The legacy scheduled_tasks table was pure CRUD: its schedule string
+		// was never parsed and no loop ever dispatched rows. Scheduler
+		// functionality merges into automation_rules as event_type="schedule"
+		// rules; migrate any existing rows so no data is lost.
+		ID: "2026-08-11-merge-scheduler-into-automation",
+		Migrate: func(tx *gorm.DB) error {
+			if !tx.Migrator().HasTable("scheduled_tasks") {
+				return nil
+			}
+			if !tx.Migrator().HasTable("automation_rules") {
+				execMigration(tx, "DROP TABLE scheduled_tasks", "drop_legacy_scheduled_tasks")
+				return nil
+			}
+			m := func(sql, label string) {
+				execMigration(tx, sql, label)
+			}
+			m("ALTER TABLE automation_rules ADD COLUMN schedule VARCHAR(255) DEFAULT ''", "add_automation_rules_schedule")
+			m("ALTER TABLE automation_rules ADD COLUMN agent_id VARCHAR(36) DEFAULT ''", "add_automation_rules_agent_id")
+			m("ALTER TABLE automation_rules ADD COLUMN task_type VARCHAR(50) DEFAULT ''", "add_automation_rules_task_type")
+			m("ALTER TABLE automation_rules ADD COLUMN command TEXT", "add_automation_rules_command")
+			m("ALTER TABLE automation_rules ADD COLUMN params TEXT", "add_automation_rules_params")
+			m("ALTER TABLE automation_rules ADD COLUMN last_run DATETIME", "add_automation_rules_last_run")
+			m("ALTER TABLE automation_rules ADD COLUMN next_run DATETIME", "add_automation_rules_next_run")
+			m("ALTER TABLE automation_rules ADD COLUMN run_count INTEGER DEFAULT 0", "add_automation_rules_run_count")
+			m("ALTER TABLE automation_rules ADD COLUMN created_by VARCHAR(100) DEFAULT ''", "add_automation_rules_created_by")
+
+			type legacyTask struct {
+				ID        string
+				Name      string
+				Enabled   bool
+				AgentID   string
+				TaskType  string
+				Command   string
+				Params    string
+				Schedule  string
+				LastRun   *time.Time
+				NextRun   *time.Time
+				RunCount  int
+				CreatedBy string
+				CreatedAt time.Time
+				UpdatedAt time.Time
+			}
+			var tasks []legacyTask
+			if err := tx.Table("scheduled_tasks").Find(&tasks).Error; err != nil {
+				return err
+			}
+			for _, t := range tasks {
+				actions, err := json.Marshal([]map[string]interface{}{{
+					"type": "create_task",
+					"params": map[string]string{
+						"agent_id": t.AgentID,
+						"type":     t.TaskType,
+						"command":  t.Command,
+					},
+				}})
+				if err != nil {
+					return err
+				}
+				row := map[string]interface{}{
+					"id":         t.ID,
+					"name":       t.Name,
+					"enabled":    t.Enabled,
+					"event_type": "schedule",
+					"conditions": "[]",
+					"actions":    string(actions),
+					"schedule":   t.Schedule,
+					"agent_id":   t.AgentID,
+					"task_type":  t.TaskType,
+					"command":    t.Command,
+					"params":     t.Params,
+					"run_count":  t.RunCount,
+					"created_by": t.CreatedBy,
+					"created_at": t.CreatedAt,
+					"updated_at": t.UpdatedAt,
+				}
+				if t.LastRun != nil {
+					row["last_run"] = *t.LastRun
+				}
+				if t.NextRun != nil {
+					row["next_run"] = *t.NextRun
+				}
+				if err := tx.Table("automation_rules").Create(row).Error; err != nil {
+					return err
+				}
+			}
+			m("DROP TABLE scheduled_tasks", "drop_legacy_scheduled_tasks")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			// Irreversible: rows were merged into automation_rules.
+			return nil
+		},
+	},
+	{
+		// Remap scheduler permissions onto the merged automation surface.
+		ID: "2026-08-11-remap-scheduler-perms-to-automation",
+		Migrate: func(tx *gorm.DB) error {
+			execMigration(tx, "UPDATE role_permissions SET permission = 'automation.read' WHERE permission = 'scheduler.read'", "remap_scheduler_read")
+			execMigration(tx, "UPDATE role_permissions SET permission = 'automation.write' WHERE permission = 'scheduler.write'", "remap_scheduler_write")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "UPDATE role_permissions SET permission = 'scheduler.read' WHERE permission = 'automation.read'", "restore_scheduler_read")
+			execMigration(tx, "UPDATE role_permissions SET permission = 'scheduler.write' WHERE permission = 'automation.write'", "restore_scheduler_write")
 			return nil
 		},
 	},

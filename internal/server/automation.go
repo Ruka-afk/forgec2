@@ -28,8 +28,19 @@ type AutomationRule struct {
 	Cooldown      int             `json:"cooldown"` // seconds between triggers
 	LastTriggered time.Time       `json:"last_triggered"`
 	RunCount      int             `json:"run_count"`
+	Schedule      string          `json:"schedule"` // cron/interval for event_type="schedule"
+	AgentID       string          `json:"agent_id"`
+	TaskType      string          `json:"task_type"`
+	Command       string          `json:"command"`
+	Params        string          `json:"params"`
+	LastRun       time.Time       `json:"last_run"`
+	NextRun       time.Time       `json:"next_run"`
+	CreatedBy     string          `json:"created_by"`
 	CreatedAt     string          `json:"created_at"`
 }
+
+// EventSchedule is the pseudo event type used to mark schedule-driven rules.
+const EventSchedule = "schedule"
 
 // Action types for automation rules
 const (
@@ -295,6 +306,15 @@ func (s *Server) loadAutomationRules() []AutomationRule {
 			EventType:  dr.EventType,
 			Conditions: conditions,
 			Actions:    actions,
+			Schedule:   dr.Schedule,
+			AgentID:    dr.AgentID,
+			TaskType:   dr.TaskType,
+			Command:    dr.Command,
+			Params:     dr.Params,
+			LastRun:    dr.LastRun,
+			NextRun:    dr.NextRun,
+			RunCount:   dr.RunCount,
+			CreatedBy:  dr.CreatedBy,
 			CreatedAt:  dr.CreatedAt.Format(time.RFC3339),
 		})
 	}
@@ -331,6 +351,15 @@ func (s *Server) saveAutomationRule(rule AutomationRule) error {
 		EventType:  rule.EventType,
 		Conditions: string(conditionsData),
 		Actions:    string(actionsData),
+		Schedule:   rule.Schedule,
+		AgentID:    rule.AgentID,
+		TaskType:   rule.TaskType,
+		Command:    rule.Command,
+		Params:     rule.Params,
+		LastRun:    rule.LastRun,
+		NextRun:    rule.NextRun,
+		RunCount:   rule.RunCount,
+		CreatedBy:  rule.CreatedBy,
 	}
 
 	if rule.CreatedAt != "" {
@@ -426,4 +455,277 @@ func (s *Server) registerBuiltinAutomations() {
 			slog.Warn("Automation: failed to register builtin rule", "id", rule.ID, "error", err)
 		}
 	}
+}
+
+// schedulerLoop periodically dispatches schedule-driven automation rules
+// (event_type="schedule"). It runs every 30s and only touches rules whose
+// next_run is due, so interval and cron expressions both work.
+func (s *Server) schedulerLoop() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			s.dispatchScheduledRules()
+		}
+	}
+}
+
+func (s *Server) dispatchScheduledRules() {
+	now := time.Now()
+	rules := s.loadAutomationRules()
+	for _, rule := range rules {
+		if rule.EventType != EventSchedule || !rule.Enabled || strings.TrimSpace(rule.Schedule) == "" {
+			continue
+		}
+		next := rule.NextRun
+		if next.IsZero() {
+			computed, err := nextScheduleTime(rule.Schedule, now)
+			if err != nil {
+				slog.Warn("Automation: bad schedule, disabling rule", "rule", rule.Name, "schedule", rule.Schedule, "error", err)
+				continue
+			}
+			rule.NextRun = computed
+			if err := s.saveAutomationRule(rule); err != nil {
+				slog.Error("Automation: persist next_run failed", "rule", rule.Name, "error", err)
+			}
+			continue
+		}
+		if next.After(now) {
+			continue
+		}
+
+		evt := Event{
+			Type:    EventSchedule,
+			AgentID: rule.AgentID,
+		}
+		if rule.AgentID != "" {
+			var implant db.Implant
+			if err := s.db.First(&implant, "id = ?", rule.AgentID).Error; err == nil {
+				evt.AgentHost = implant.Hostname
+				evt.AgentIP = implant.IP
+				evt.AgentOS = implant.OS
+				evt.User = implant.Username
+			}
+		}
+		s.evaluateRule(evt, rule)
+
+		rule.LastRun = now
+		rule.RunCount++
+		computed, err := nextScheduleTime(rule.Schedule, now)
+		if err != nil {
+			slog.Warn("Automation: schedule broken after run", "rule", rule.Name, "error", err)
+			rule.Enabled = false
+			computed = time.Time{}
+		}
+		rule.NextRun = computed
+		if err := s.saveAutomationRule(rule); err != nil {
+			slog.Error("Automation: persist run state failed", "rule", rule.Name, "error", err)
+		}
+	}
+}
+
+// nextScheduleTime computes the next occurrence of schedule after `from`.
+// Supported formats (case-insensitive):
+//
+//	"every N minutes" | "every N hours" | "hourly" | "daily HH:MM" |
+//	"weekly DOW HH:MM" (DOW: mon..sun) | 5-field cron "m h dom mon dow"
+func nextScheduleTime(schedule string, from time.Time) (time.Time, error) {
+	s := strings.ToLower(strings.TrimSpace(schedule))
+	if s == "" {
+		return time.Time{}, fmt.Errorf("empty schedule")
+	}
+
+	if strings.HasPrefix(s, "every ") {
+		var n int
+		var unit string
+		if _, err := fmt.Sscanf(strings.TrimPrefix(s, "every "), "%d %s", &n, &unit); err != nil {
+			return time.Time{}, fmt.Errorf("invalid interval: %q", schedule)
+		}
+		unit = strings.TrimSuffix(unit, "s")
+		switch unit {
+		case "minute", "min":
+			if n < 1 {
+				return time.Time{}, fmt.Errorf("interval must be >= 1: %q", schedule)
+			}
+			return from.Add(time.Duration(n) * time.Minute), nil
+		case "hour":
+			if n < 1 {
+				return time.Time{}, fmt.Errorf("interval must be >= 1: %q", schedule)
+			}
+			return from.Add(time.Duration(n) * time.Hour), nil
+		default:
+			return time.Time{}, fmt.Errorf("unsupported interval unit: %q", unit)
+		}
+	}
+
+	if s == "hourly" {
+		return from.Add(time.Hour), nil
+	}
+
+	if strings.HasPrefix(s, "daily ") {
+		hhmm := strings.TrimSpace(strings.TrimPrefix(s, "daily "))
+		next, err := nextDailyTime(hhmm, from)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("invalid daily schedule: %q", schedule)
+		}
+		return next, nil
+	}
+
+	if strings.HasPrefix(s, "weekly ") {
+		rest := strings.TrimSpace(strings.TrimPrefix(s, "weekly "))
+		parts := strings.Fields(rest)
+		if len(parts) != 2 {
+			return time.Time{}, fmt.Errorf("weekly schedule needs 'DOW HH:MM': %q", schedule)
+		}
+		dow, ok := weekdayIndex(parts[0])
+		if !ok {
+			return time.Time{}, fmt.Errorf("unknown weekday: %q", parts[0])
+		}
+		next, err := nextDailyTime(parts[1], from)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("invalid weekly schedule: %q", schedule)
+		}
+		for int(next.Weekday()) != dow {
+			next = next.Add(24 * time.Hour)
+		}
+		return next, nil
+	}
+
+	// Fallback: standard 5-field cron expression.
+	next, err := nextCronTime(s, from)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("unsupported schedule: %q", schedule)
+	}
+	return next, nil
+}
+
+func nextDailyTime(hhmm string, from time.Time) (time.Time, error) {
+	var h, m int
+	if _, err := fmt.Sscanf(hhmm, "%d:%d", &h, &m); err != nil || h < 0 || h > 23 || m < 0 || m > 59 {
+		return time.Time{}, fmt.Errorf("invalid time %q", hhmm)
+	}
+	candidate := time.Date(from.Year(), from.Month(), from.Day(), h, m, 0, 0, from.Location())
+	if !candidate.After(from) {
+		candidate = candidate.Add(24 * time.Hour)
+	}
+	return candidate, nil
+}
+
+func weekdayIndex(dow string) (int, bool) {
+	names := []string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
+	for i, n := range names {
+		if dow == n {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+type cronField struct {
+	raw     string
+	allowed map[int]bool
+	step    int
+}
+
+func parseCronField(raw string, min, max int) (cronField, error) {
+	f := cronField{raw: raw, step: 1, allowed: map[int]bool{}}
+	if raw == "*" {
+		for v := min; v <= max; v++ {
+			f.allowed[v] = true
+		}
+		return f, nil
+	}
+	// step suffix */n or a-b/n
+	step := 1
+	stepPart := ""
+	if idx := strings.IndexByte(raw, '/'); idx >= 0 {
+		stepPart = raw[idx+1:]
+		raw = raw[:idx]
+		fmt.Sscanf(stepPart, "%d", &step)
+		if step < 1 {
+			step = 1
+		}
+		f.step = step
+	}
+	expand := func(from, to int) {
+		for v := from; v <= to; v += step {
+			f.allowed[v] = true
+		}
+	}
+	for _, part := range strings.Split(raw, ",") {
+		if part == "*" {
+			for v := min; v <= max; v += step {
+				f.allowed[v] = true
+			}
+			continue
+		}
+		if idx := strings.IndexByte(part, '-'); idx >= 0 {
+			var a, b int
+			if _, err := fmt.Sscanf(part, "%d-%d", &a, &b); err != nil || a < min || b > max || a > b {
+				return f, fmt.Errorf("bad cron range %q", part)
+			}
+			expand(a, b)
+			continue
+		}
+		var v int
+		if _, err := fmt.Sscanf(part, "%d", &v); err != nil || v < min || v > max {
+			return f, fmt.Errorf("bad cron value %q", part)
+		}
+		expand(v, v)
+	}
+	return f, nil
+}
+
+func cronMatches(field cronField, v int) bool {
+	return field.allowed[v]
+}
+
+// expandWeekdayNames rewrites sun..sat to 0..6 inside a day-of-week cron
+// field so the numeric parser can handle it.
+func expandWeekdayNames(dow string) string {
+	names := []string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
+	for i, n := range names {
+		dow = strings.ReplaceAll(dow, n, fmt.Sprintf("%d", i))
+	}
+	return dow
+}
+
+func nextCronTime(expr string, from time.Time) (time.Time, error) {
+	fields := strings.Fields(expr)
+	if len(fields) != 5 {
+		return time.Time{}, fmt.Errorf("cron must have 5 fields")
+	}
+	minuteF, err := parseCronField(fields[0], 0, 59)
+	if err != nil {
+		return time.Time{}, err
+	}
+	hourF, err := parseCronField(fields[1], 0, 23)
+	if err != nil {
+		return time.Time{}, err
+	}
+	domF, err := parseCronField(fields[2], 1, 31)
+	if err != nil {
+		return time.Time{}, err
+	}
+	monF, err := parseCronField(fields[3], 1, 12)
+	if err != nil {
+		return time.Time{}, err
+	}
+	dowF, err := parseCronField(expandWeekdayNames(fields[4]), 0, 6)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	t := from.Add(time.Minute).Truncate(time.Minute)
+	for i := 0; i < 366*25; i++ {
+		if cronMatches(monF, int(t.Month())) && cronMatches(domF, t.Day()) && cronMatches(dowF, int(t.Weekday())) &&
+			cronMatches(hourF, t.Hour()) && cronMatches(minuteF, t.Minute()) {
+			return t, nil
+		}
+		t = t.Add(time.Minute)
+	}
+	return time.Time{}, fmt.Errorf("no cron match found")
 }

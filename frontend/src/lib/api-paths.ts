@@ -391,11 +391,6 @@ export const paths = {
     list: "/api/roles",
     one: (id: string | number) => `/api/roles/${id}`,
   },
-  scheduler: {
-    tasks: "/scheduler/tasks",
-    task: (id: string | number) => `/scheduler/tasks/${id}`,
-    toggle: (id: string | number) => `/scheduler/tasks/${id}/toggle`,
-  },
   scanner: {
     page: "/scanner",
     scan: "/api/scan",

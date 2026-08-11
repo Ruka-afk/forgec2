@@ -4661,8 +4661,9 @@ paths:
 
   /scheduler/tasks/{id}:
     put:
+      deprecated: true
       tags: [Automation]
-      summary: Update scheduled task
+      summary: Update scheduled task (merged into automation rules)
       operationId: schedulerUpdate
       security:
         - SessionCookie: []
@@ -4675,8 +4676,9 @@ paths:
         '200':
           description: OK
     delete:
+      deprecated: true
       tags: [Automation]
-      summary: Delete scheduled task
+      summary: Delete scheduled task (merged into automation rules)
       operationId: schedulerDelete
       security:
         - SessionCookie: []
@@ -4691,8 +4693,9 @@ paths:
 
   /scheduler/tasks/{id}/toggle:
     post:
+      deprecated: true
       tags: [Automation]
-      summary: Toggle scheduled task
+      summary: Toggle scheduled task (merged into automation rules)
       operationId: schedulerToggle
       security:
         - SessionCookie: []
@@ -9150,8 +9153,9 @@ paths:
           description: Invalid password
   /scheduler/tasks:
     get:
+      deprecated: true
       tags: [Settings]
-      summary: List scheduled tasks
+      summary: List scheduled tasks (merged into automation rules)
       operationId: get__scheduler_tasks
       security:
         - SessionCookie: []
@@ -9159,8 +9163,9 @@ paths:
         '200':
           description: OK
     post:
+      deprecated: true
       tags: [Settings]
-      summary: Create scheduled task
+      summary: Create scheduled task (merged into automation rules)
       operationId: post__scheduler_tasks
       security:
         - SessionCookie: []
@@ -9805,6 +9810,27 @@ components:
           type: string
         actions:
           type: string
+        schedule:
+          type: string
+          description: Cron-like schedule expression for event_type=schedule rules
+        agent_id:
+          type: string
+        task_type:
+          type: string
+        command:
+          type: string
+        params:
+          type: string
+        last_run:
+          type: string
+          format: date-time
+        next_run:
+          type: string
+          format: date-time
+        run_count:
+          type: integer
+        created_by:
+          type: integer
         created_at:
           type: string
           format: date-time
@@ -9824,6 +9850,16 @@ components:
           type: string
         actions:
           type: string
+        schedule:
+          type: string
+        agent_id:
+          type: string
+        task_type:
+          type: string
+        command:
+          type: string
+        params:
+          type: string
 
     AutomationRuleUpdate:
       type: object
@@ -9835,6 +9871,17 @@ components:
         conditions:
           type: string
         actions:
+          type: string
+        schedule:
+          type: string
+        agent_id:
+          type: string
+        task_type:
+          type: string
+        command:
+          type: string
+        params:
+          type: string
           type: string
 
     Webhook:

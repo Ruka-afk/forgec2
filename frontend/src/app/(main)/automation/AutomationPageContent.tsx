@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
@@ -16,6 +16,7 @@ import { useAutomationData } from "./_components/useAutomationData";
 import { RuleDialog } from "./_components/RuleDialog";
 import { WebhookDialog } from "./_components/WebhookDialog";
 import { AlertRuleDialog } from "./_components/AlertRuleDialog";
+import { ScheduledRulesCard } from "./_components/ScheduledRulesCard";
 
 export default function AutomationPage() {
   const { t } = useI18n();
@@ -33,6 +34,15 @@ export default function AutomationPage() {
   const [sendingTest, setSendingTest] = useState(false);
 
   const [cfm, setCfm] = useState<{msg: string; cb: () => void} | null>(null);
+
+  useEffect(() => {
+    if (window.location.hash === "#scheduled") {
+      const el = document.getElementById("scheduled");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [loading]);
+
+  const eventRules = rules.filter((r) => (r.event_type || r.EventType) !== "schedule");
   const [ruleForm, setRuleForm] = useState({
     name: "",
     event_type: "agent.checkin",
@@ -241,18 +251,18 @@ export default function AutomationPage() {
           </div>
           <div className="p-4 sm:p-5">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-xs text-muted-foreground">{t("auto.rules_count", { count: rules.length })}</span>
+              <span className="text-xs text-muted-foreground">{t("auto.rules_count", { count: eventRules.length })}</span>
               <Button onClick={() => setShowRuleModal(true)} size="sm">
                 <Plus className="w-4 h-4" /> {t("auto.new_rule")}
               </Button>
             </div>
             <div className="space-y-2">
-              {rules.length === 0 ? (
+              {eventRules.length === 0 ? (
                 <div className="text-center text-xs text-muted-foreground py-8">
                   <EmptyState icon={Zap} title={t("automation.empty_rules")} message={t("automation.empty_rules_hint")} />
                 </div>
               ) : (
-                rules.map((r, i) => {
+                eventRules.map((r, i) => {
                   const rid = r.id || String(i);
                   const name = r.name || "-";
                   const eventType = r.event_type || "-";
@@ -285,7 +295,11 @@ export default function AutomationPage() {
         </Card>
       </div>
 
-      <Card className="rounded-2xl overflow-hidden">
+      <div className="mt-4">
+        <ScheduledRulesCard onChanged={loadData} />
+      </div>
+
+      <Card className="rounded-2xl overflow-hidden mt-4">
         <div className="px-4 py-3 border-b border-border flex items-center gap-3">
           <div className="w-8 h-8 bg-info/10 rounded-xl flex items-center justify-center text-info"><Globe className="w-4 h-4" /></div>
           <div>

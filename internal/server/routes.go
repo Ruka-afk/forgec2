@@ -629,7 +629,7 @@ func (s *Server) registerMiscRoutes(auth *gin.RouterGroup) {
 // registerAutomationRoutes registers automation rules and BOF repository routes.
 func (s *Server) registerAutomationRoutes(auth *gin.RouterGroup) {
 	autoRead := auth.Group("/")
-	autoRead.Use(middleware.RequirePermission(db.PermSettingsRead))
+	autoRead.Use(middleware.RequirePermission(db.PermAutomationRead))
 	{
 		autoRead.GET("/automation", s.handleAutomationPage)
 		autoRead.GET("/api/automation/rules", s.handleListAutomationRules)
@@ -640,7 +640,7 @@ func (s *Server) registerAutomationRoutes(auth *gin.RouterGroup) {
 		autoRead.GET("/api/bof/repos", s.handleBOFRepoIndex)
 	}
 	autoWrite := auth.Group("/")
-	autoWrite.Use(middleware.RequirePermission(db.PermSettingsWrite))
+	autoWrite.Use(middleware.RequirePermission(db.PermAutomationWrite))
 	{
 		autoWrite.POST("/api/automation/rules", s.handleSaveAutomationRule)
 		autoWrite.PUT("/api/automation/rules/:id", s.handleUpdateAutomationRule)
@@ -793,7 +793,7 @@ func (s *Server) registerUserRoutes(auth *gin.RouterGroup) {
 	}
 }
 
-// registerCampaignRoutes registers campaigns, scheduler, notifications, redirectors, roles, and collab routes.
+// registerCampaignRoutes registers campaigns, notifications, redirectors, roles, and collab routes.
 func (s *Server) registerCampaignRoutes(auth *gin.RouterGroup) {
 	campaignsRead := auth.Group("/")
 	campaignsRead.Use(middleware.RequirePermission(db.PermCampaignsRead))
@@ -813,20 +813,6 @@ func (s *Server) registerCampaignRoutes(auth *gin.RouterGroup) {
 		campaignsWrite.POST("/campaigns/:id", s.handleCampaignUpdate)
 		campaignsWrite.DELETE("/campaigns/:id", s.handleCampaignDelete)
 		campaignsWrite.POST("/campaigns/:id/killchain", s.handleCampaignKillChain)
-	}
-
-	schedulerRead := auth.Group("/")
-	schedulerRead.Use(middleware.RequirePermission(db.PermSchedulerRead))
-	{
-		schedulerRead.GET("/scheduler/tasks", s.handleSchedulerListTasks)
-	}
-	schedulerWrite := auth.Group("/")
-	schedulerWrite.Use(middleware.RequirePermission(db.PermSchedulerWrite))
-	{
-		schedulerWrite.POST("/scheduler/tasks", s.handleSchedulerCreateTask)
-		schedulerWrite.PUT("/scheduler/tasks/:id", s.handleSchedulerUpdateTask)
-		schedulerWrite.POST("/scheduler/tasks/:id/toggle", s.handleSchedulerToggleTask)
-		schedulerWrite.DELETE("/scheduler/tasks/:id", s.handleSchedulerDeleteTask)
 	}
 
 	notificationsRead := auth.Group("/")

@@ -35,7 +35,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		&db.CampaignAgent{}, &db.OpsecHistory{}, &db.CircuitBreakerConfig{},
 		&db.CircuitBreakerEvent{}, &db.CustomRole{},
 		&db.PhishingTemplate{}, &db.PhishingCampaign{}, &db.PhishingEvent{},
-		&db.AgentTag{}, &db.AgentTagAssignment{}, &db.AutoTagRule{}, &db.ScheduledTask{}, &db.Notification{},
+		&db.AgentTag{}, &db.AgentTagAssignment{}, &db.AutoTagRule{}, &db.Notification{},
 		&db.AgentGroup{}, &db.AgentGroupAssignment{}, &db.Workflow{}, &db.WorkflowStep{},
 		&db.WorkflowExecution{}, &db.WorkflowStepLog{}, &db.ChatMessage{},
 		&db.StagerToken{}, &db.Redirector{}, &db.AgentLock{},

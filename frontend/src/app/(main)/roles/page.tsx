@@ -47,7 +47,7 @@ const PERM_GROUPS: Record<string, string[]> = {
   "Campaigns": ["campaigns.read", "campaigns.write"],
   "OPSEC": ["opsec.read", "opsec.write"],
   "Intel": ["intel.read", "intel.write"],
-  "Scheduler": ["scheduler.read", "scheduler.write"],
+  "Automation": ["automation.read", "automation.write"],
   "Notifications": ["notifications.read", "notifications.write"],
 };
 

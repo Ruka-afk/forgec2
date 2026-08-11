@@ -67,7 +67,7 @@ describe("api paths", () => {
     expect(paths.opsec.rules).toBe("/opsec/rules");
     expect(paths.lateral.execute).toBe("/api/lateral/execute");
     expect(paths.phishing.campaigns).toBe("/phishing/campaigns");
-    expect(paths.scheduler.toggle("x")).toBe("/scheduler/tasks/x/toggle");
+    expect(paths.automation.rules).toBe("/api/automation/rules");
   });
   it("ai/plugins/bof helpers", () => {
     expect(paths.ai.sessionMessages("s1")).toBe("/ai/sessions/s1/messages");

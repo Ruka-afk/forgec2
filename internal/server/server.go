@@ -1421,6 +1421,18 @@ func (s *Server) Run() error {
 		}
 	}()
 
+	// schedule-driven automation rules (event_type="schedule")
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("recovered from panic", "err", r, "stack", string(debug.Stack()))
+			}
+		}()
+		s.schedulerLoop()
+	}()
+
 	// Initialize Circuit Breaker
 	s.circuitBreaker = NewCircuitBreaker(s.cfg)
 	s.circuitBreaker.SetOnBurnedHandler(func(targetID string) {

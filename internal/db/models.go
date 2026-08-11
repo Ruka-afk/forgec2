@@ -53,6 +53,8 @@ const (
 	PermIntelWrite         = "intel.write"
 	PermSchedulerRead      = "scheduler.read"
 	PermSchedulerWrite     = "scheduler.write"
+	PermAutomationRead     = "automation.read"
+	PermAutomationWrite    = "automation.write"
 	PermNotificationsRead  = "notifications.read"
 	PermNotificationsWrite = "notifications.write"
 )
@@ -74,7 +76,7 @@ var RolePermissionsMap = map[string][]string{
 		PermCampaignsRead, PermCampaignsWrite,
 		PermOpsecRead, PermOpsecWrite,
 		PermIntelRead, PermIntelWrite,
-		PermSchedulerRead, PermSchedulerWrite,
+		PermAutomationRead, PermAutomationWrite,
 		PermNotificationsRead, PermNotificationsWrite,
 	},
 	RoleUser: {
@@ -92,7 +94,7 @@ var RolePermissionsMap = map[string][]string{
 		PermCampaignsRead,
 		PermOpsecRead,
 		PermIntelRead,
-		PermSchedulerRead,
+		PermAutomationRead,
 		PermNotificationsRead,
 	},
 }
@@ -691,6 +693,15 @@ type AutomationRule struct {
 	EventType  string    `gorm:"size:255;not null" json:"event_type"`
 	Conditions string    `gorm:"type:text" json:"conditions"`
 	Actions    string    `gorm:"type:text" json:"actions"`
+	Schedule   string    `gorm:"size:255;default:''" json:"schedule"` // cron / interval schedule for event_type="schedule"
+	AgentID    string    `gorm:"size:36;default:''" json:"agent_id"`  // target agent for scheduled dispatch
+	TaskType   string    `gorm:"size:50;default:''" json:"task_type"`
+	Command    string    `gorm:"type:text" json:"command"`
+	Params     string    `gorm:"type:text" json:"params"`
+	LastRun    time.Time `json:"last_run"`
+	NextRun    time.Time `json:"next_run"`
+	RunCount   int       `gorm:"default:0" json:"run_count"`
+	CreatedBy  string    `gorm:"size:100" json:"created_by"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
@@ -836,7 +847,7 @@ func GetAllPermissions() []string {
 		PermCampaignsRead, PermCampaignsWrite,
 		PermOpsecRead, PermOpsecWrite,
 		PermIntelRead, PermIntelWrite,
-		PermSchedulerRead, PermSchedulerWrite,
+		PermAutomationRead, PermAutomationWrite,
 		PermNotificationsRead, PermNotificationsWrite,
 	}
 }
@@ -1075,24 +1086,6 @@ type AutoTagRule struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// ScheduledTask is a task that runs on a schedule.
-type ScheduledTask struct {
-	ID        string    `gorm:"primaryKey;size:36" json:"id"`
-	Name      string    `gorm:"size:200;not null" json:"name"`
-	Enabled   bool      `gorm:"default:true" json:"enabled"`
-	AgentID   string    `gorm:"size:36;not null" json:"agent_id"`
-	TaskType  string    `gorm:"size:50;not null" json:"task_type"`
-	Command   string    `gorm:"type:text" json:"command"`
-	Params    string    `gorm:"type:text" json:"params"`
-	Schedule  string    `gorm:"size:100;not null" json:"schedule"`
-	LastRun   time.Time `json:"last_run"`
-	NextRun   time.Time `json:"next_run"`
-	RunCount  int       `gorm:"default:0" json:"run_count"`
-	CreatedBy string    `gorm:"size:100" json:"created_by"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
 type Notification struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	Type      string    `gorm:"size:50;not null;index" json:"type"`
@@ -1237,7 +1230,6 @@ type AIChatMessage struct {
 func (AIChatMessage) TableName() string { return "ai_chat_messages" }
 
 func (AutoTagRule) TableName() string   { return "auto_tag_rules" }
-func (ScheduledTask) TableName() string { return "scheduled_tasks" }
 
 type StagerToken struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`

@@ -51,7 +51,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   users: "nav.users",
   roles: "nav.roles",
   autotag: "nav.autotag",
-  scheduler: "nav.scheduler",
   notifications: "nav.notifications",
   chat: "nav.chat",
   integrations: "nav.integrations",
