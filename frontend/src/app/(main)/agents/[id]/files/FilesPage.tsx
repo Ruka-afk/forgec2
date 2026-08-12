@@ -122,7 +122,7 @@ export default function FilesPage() {
             <Search className="w-4 h-4" />
             {t("agents.files_find")}
           </Button>
-          <Button variant="default" size="sm" onClick={() => setShowUpload(true)} className="">
+          <Button variant="default" size="sm" onClick={() => setShowUpload(true)}>
             <CloudUpload className="w-4 h-4" />
             {t("agents.files_upload")}
           </Button>

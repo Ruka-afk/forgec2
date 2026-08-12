@@ -434,7 +434,7 @@ function CampaignDetailView({
             )}
           </Card>
 
-          <Card className="">
+          <Card>
             <h3 className="text-lg font-semibold mb-3">{t("campaign.agent_breakdown")}</h3>
             {stats.agent_breakdown.length === 0 ? (
               <p className="text-muted-foreground">{t("campaign.empty_agents")}</p>

@@ -157,7 +157,7 @@ export default function BloodHoundPage() {
         </div>
         <div className="flex items-center gap-3">
           <Label className="relative cursor-pointer">
-            <input aria-label={t("bloodhound.upload_exe")} name="input-0" type="file" accept=".exe" onChange={handleUpload} className="" />
+            <input aria-label={t("bloodhound.upload_exe")} name="input-0" type="file" accept=".exe" onChange={handleUpload} />
             <span className="inline-flex shrink-0 items-center justify-center rounded-xl bg-primary px-2.5 py-1.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/80 disabled:pointer-events-none disabled:opacity-50 gap-1.5 cursor-pointer">
               {uploading ? <Spinner size="xs" /> : <Upload className="w-4 h-4" />}
               <span>{uploading ? "Uploading..." : "Upload SharpHound.exe"}</span>

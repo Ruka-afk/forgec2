@@ -118,7 +118,7 @@ export default function BackupSection() {
             {uploading ? <Spinner size="xs" /> : <Upload className="w-4 h-4" />}
             {t("settings.backup.upload_restore")}
           </Button>
-          <input ref={fileInputRef} type="file" accept=".db,.fbk" className="" onChange={handleUploadRestore} />
+          <input ref={fileInputRef} type="file" accept=".db,.fbk" onChange={handleUploadRestore} />
           <Button onClick={loadBackups} disabled={loading} variant="ghost" className="px-3 h-10 rounded-xl text-sm text-muted-foreground">
             {loading ? <Spinner size="xs" /> : <RefreshCw className="w-4 h-4" />}
           </Button>

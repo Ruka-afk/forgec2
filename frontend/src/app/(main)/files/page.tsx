@@ -106,7 +106,7 @@ export default function FilesPage() {
       <DataState loading={loading} error={error} onRetry={loadAgents}>
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div className="lg:col-span-1">
-          <Card className="">
+          <Card>
             <div className="divide-y divide-border max-h-[70vh] overflow-y-auto">
               {filteredAgents.length > 0 ? (
                 filteredAgents.map((a) => (
@@ -136,7 +136,7 @@ export default function FilesPage() {
 
         <div className="lg:col-span-3">
           {selectedAgent ? (
-            <Card className="">
+            <Card>
               <div className="px-4 py-3 border-b border-border flex items-center gap-2">
                 <Tooltip>
                   <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={navigateUp} aria-label={t("files.navigate_up")} />}>

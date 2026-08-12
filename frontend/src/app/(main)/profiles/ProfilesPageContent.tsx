@@ -586,7 +586,7 @@ export default function ProfilesPage() {
             )}
           </div>
 
-          <input aria-label={t("profiles.import_json")} name="input-17" ref={fileInputRef} type="file" accept=".json,application/json" className="" onChange={handleImportProfile} />
+          <input aria-label={t("profiles.import_json")} name="input-17" ref={fileInputRef} type="file" accept=".json,application/json" onChange={handleImportProfile} />
         </div>
       </TabsContent>
       </Tabs>

@@ -465,8 +465,7 @@ export default function InfrastructurePage() {
                 <Checkbox checked={acmeStaging} onCheckedChange={(v) => setAcmeStaging(!!v)} />
                 <span className="text-xs text-muted-foreground">{t("infra.use_staging")}</span>
               </Label>
-              <Button onClick={provisionCert} disabled={acmeProvisioning}
-                className="">
+              <Button onClick={provisionCert} disabled={acmeProvisioning}>
                 {acmeProvisioning ? <Spinner size="xs" /> : <Award className="w-4 h-4" />} {acmeProvisioning ? t("infra.provisioning") : t("infra.auto_provision")}
               </Button>
             </div>
