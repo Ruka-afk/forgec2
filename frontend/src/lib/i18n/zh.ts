@@ -1115,6 +1115,7 @@ export const zh: Record<string, string> = {
     "common.live": "实时",
     "common.loading": "加载中...",
     "common.loading_app": "正在加载 ForgeC2...",
+    "common.load_failed": "加载失败",
     "common.name": "名称",
     "common.next_page": "下一页",
     "common.no_data": "暂无数据",

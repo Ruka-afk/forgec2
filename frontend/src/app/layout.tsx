@@ -36,7 +36,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
-      lang="zh"
+      lang="en"
       suppressHydrationWarning
       className={cn("h-full", "font-sans", inter.variable, jetBrainsMono.variable)}
     >
@@ -52,6 +52,10 @@ export default function RootLayout({
               else if (t === 'system') dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
               else dark = true; /* new users default to dark */
               if (dark) document.documentElement.classList.add('dark');
+            } catch(e){ /* silent */ }
+            try {
+              var l = localStorage.getItem('forgec2_lang');
+              if (l === 'zh') document.documentElement.lang = 'zh';
             } catch(e){ /* silent */ }
           })();
         `}</Script>

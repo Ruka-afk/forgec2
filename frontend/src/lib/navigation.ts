@@ -120,3 +120,31 @@ export const NAV_BY_HREF: Record<string, string> = Object.fromEntries(
 export const NAV_SEGMENT_LABELS: Record<string, string> = Object.fromEntries(
   NAV_ITEMS.map((i) => [i.href.replace(/^\//, "").replace(/-/g, "_"), i.labelKey]),
 );
+
+/** Sub-route segment -> labelKey for per-page document.title. */
+export const SUB_ROUTE_TITLE_KEYS: Record<string, string> = {
+  config: "agents.config_title",
+  shell: "agents.shell",
+  files: "nav.files",
+  screen: "agents.screen_title",
+  "remote-desktop": "agents.rdp_title",
+  token: "agents.token_title",
+  traffic: "nav.traffic",
+  persistence: "agents.persistence_title",
+};
+
+/** Resolve the i18n label key for a pathname (deepest named segment first).
+ *  UUID/numeric segments are skipped so agent detail pages fall back to the
+ *  parent section label. Returns null when no segment has a label. */
+export function getPageTitleKey(pathname: string): string | null {
+  const segments = pathname.split("/").filter(Boolean);
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const seg = segments[i];
+    if (seg.match(/^[0-9a-f]{8}-[0-9a-f]{4}-/i) || seg.match(/^\d+$/)) continue;
+    const subKey = SUB_ROUTE_TITLE_KEYS[seg];
+    if (subKey) return subKey;
+    const navKey = NAV_SEGMENT_LABELS[seg] || NAV_SEGMENT_LABELS[seg.replace(/-/g, "_")];
+    if (navKey) return navKey;
+  }
+  return null;
+}

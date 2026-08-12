@@ -229,8 +229,9 @@ export default function TopologyPage() {
         }
       }
     } catch {
-      setData({ nodes: [], edges: [] });
-      setMeshData({ nodes: [], edges: [] });
+      // Keep the last good graph on transient poll failures — wiping the
+      // data here would destroy/recreate the vis instance (zoom/pan reset).
+      // Only a first-load failure surfaces the empty state (data stays null).
     }
     loadedOnceRef.current = true;
     setLoading(false);

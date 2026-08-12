@@ -12,6 +12,7 @@ import { Breadcrumb } from "@/components/UI";
 import { usePathname } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
+import { getPageTitleKey } from "@/lib/navigation";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -36,6 +37,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname, setMobileMenuOpen]);
+
+  // Per-page document.title derived from the route's nav label.
+  useEffect(() => {
+    if (!pathname || pathname === "/login") return;
+    const titleKey = getPageTitleKey(pathname);
+    if (!titleKey) return;
+    document.title = `${t(titleKey)} — ForgeC2`;
+  }, [pathname, t]);
 
   const handleMenuToggle = useCallback(() => {
     if (isMobile) setMobileMenuOpen(true);

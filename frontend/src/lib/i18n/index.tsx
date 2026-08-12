@@ -14,7 +14,7 @@ interface I18nContextType {
 }
 
 const I18nContext = createContext<I18nContextType>({
-  locale: "zh",
+  locale: "en",
   setLocale: () => {},
   t: (key: string) => key,
   dir: "ltr",
@@ -33,8 +33,8 @@ function loadLocale(locale: Locale): Promise<void> {
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>("zh");
-  const localeRef = useRef<Locale>("zh");
+  const [locale, setLocaleState] = useState<Locale>("en");
+  const localeRef = useRef<Locale>("en");
 
   useEffect(() => {
     const saved = localStorage.getItem("forgec2_lang") as Locale;

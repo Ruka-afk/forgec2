@@ -78,11 +78,11 @@ export function withChartData<T>(
       <div ref={ref}>
         {loading ? (
           <div className="h-24 flex items-center justify-center text-muted-foreground/70 text-xs">
-            <Spinner size="sm" />Loading...
+            <Spinner size="sm" />{t("common.loading")}
           </div>
         ) : error ? (
           <div className="h-24 flex items-center justify-center text-destructive text-xs" role="alert">
-            <AlertTriangle className="w-4 h-4 mr-2 inline" />Failed to load
+            <AlertTriangle className="w-4 h-4 mr-2 inline" />{t("common.load_failed")}
             <Button variant="link" size="sm" onClick={load} className="ml-2">{t("common.retry")}</Button>
           </div>
         ) : data != null ? (

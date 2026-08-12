@@ -1115,6 +1115,7 @@ export const en: Record<string, string> = {
     "common.live": "Live",
     "common.loading": "Loading...",
     "common.loading_app": "Loading ForgeC2...",
+    "common.load_failed": "Failed to load",
     "common.name": "Name",
     "common.next_page": "Next page",
     "common.no_data": "No data",

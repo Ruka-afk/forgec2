@@ -61,6 +61,7 @@ export function getWSURL(path = "/ws"): string {
 
 const MAX_RECONNECT_DELAY = 30000;
 const MAX_RECONNECT_ATTEMPTS = 20;
+const BACKGROUND_RETRY_DELAY_MS = 60000;
 const HEARTBEAT_INTERVAL_MS = 30000;
 const HEARTBEAT_TIMEOUT_MS = 60000;
 const MAX_BUFFER_SIZE = 50;
@@ -117,6 +118,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
     const connect = () => {
       if (disposed) return;
+      if (reconnectRef.current) { clearTimeout(reconnectRef.current); reconnectRef.current = null; }
       if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) return;
 
       // Fan a message out to both subscription channels. Listeners are
@@ -161,6 +163,11 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           reconnectRef.current = setTimeout(connect, delay);
         } else {
           setReconnectFailed(true);
+          // Keep trying at a slow cadence after the fast backoff is exhausted
+          // so the socket recovers without user intervention once the backend
+          // is reachable again. The banner stays up until a connection succeeds.
+          reconnectAttemptRef.current = 0;
+          reconnectRef.current = setTimeout(connect, BACKGROUND_RETRY_DELAY_MS);
         }
       };
       ws.onerror = () => { ws.close(); };
@@ -175,11 +182,27 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       };
     };
 
+    // Hidden tabs throttle intervals (down to ~1/min), so heartbeat checks
+    // can go stale. On return to the foreground, probe immediately: a dead
+    // socket is closed here and the reconnect path takes over.
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (lastPongRef.current === 0 || Date.now() - lastPongRef.current > HEARTBEAT_TIMEOUT_MS) {
+        ws.close();
+        return;
+      }
+      ws.send(JSON.stringify({ type: "ping" }));
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     connect();
 
     return () => {
       disposed = true;
       stopHeartbeat();
+      document.removeEventListener("visibilitychange", onVisibility);
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
       wsRef.current?.close();
     };
@@ -188,6 +211,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const reconnect = useCallback(() => {
     setReconnectFailed(false);
     reconnectAttemptRef.current = 0;
+    if (reconnectRef.current) { clearTimeout(reconnectRef.current); reconnectRef.current = null; }
     if (wsRef.current) wsRef.current.close();
   }, []);
 
