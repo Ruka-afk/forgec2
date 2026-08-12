@@ -10,7 +10,7 @@ import (
 
 var (
 	ntdllKernCB           = syscall.NewLazyDLL("ntdll.dll")
-	procNtQuerySystemInfo = ntdllKernCB.NewProc("NtQuerySystemInformation")
+	procNtQuerySystemInfo = ntdllKernCB.NewProc(s(SProcNtQSI))
 )
 
 const (
@@ -123,7 +123,7 @@ func countSystemProcesses() (uint32, uint32) {
 func runProcessCallbackHardening() string {
 	// Attempt to set process mitigation policies that reduce callback impact
 	ntdll := syscall.NewLazyDLL("ntdll.dll")
-	procSetMitigation := ntdll.NewProc("SetProcessMitigationPolicy")
+	procSetMitigation := ntdll.NewProc(s(SProcMitPolicy))
 
 	// ProcessSignaturePolicy (class 8) - Block non-Microsoft signed DLLs
 	const ProcessSignaturePolicy = 8

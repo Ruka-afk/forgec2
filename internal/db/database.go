@@ -281,11 +281,13 @@ func MigrateOldRoles(db *gorm.DB) {
 	}
 }
 
+// redactString masks a secret entirely; no plaintext fragments are ever
+// allowed into logs or startup output.
 func redactString(s string) string {
-	if len(s) <= 4 {
-		return strings.Repeat("*", len(s))
+	if s == "" {
+		return ""
 	}
-	return s[:2] + strings.Repeat("*", len(s)-4) + s[len(s)-2:]
+	return strings.Repeat("*", len(s))
 }
 
 func redactDSN(dsn string) string {

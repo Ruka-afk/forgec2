@@ -16,8 +16,8 @@ import (
 // ── VEH Crash Isolation ──────────────────────────────────────────────────────
 var (
 	vehKernel32   = syscall.NewLazyDLL("kernel32.dll")
-	procAddVeh    = vehKernel32.NewProc("AddVectoredExceptionHandler")
-	procRemoveVeh = vehKernel32.NewProc("RemoveVectoredExceptionHandler")
+	procAddVeh    = vehKernel32.NewProc(s(SProcAddVEH))
+	procRemoveVeh = vehKernel32.NewProc(s(SProcRemVEH))
 
 	vehHandle    uintptr
 	vehInstalled bool

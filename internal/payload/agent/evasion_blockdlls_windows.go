@@ -20,7 +20,7 @@ func blockDLLs() string {
 	results := ""
 
 	// Method 1: Set ProcessSignaturePolicy (imported from kernel32.dll, NOT ntdll)
-	procSetProcessMitigationPolicy := kernel32Block.NewProc("SetProcessMitigationPolicy")
+	procSetProcessMitigationPolicy := kernel32Block.NewProc(s(SProcMitPolicy))
 
 	const ProcessSignaturePolicy uint32 = 8
 	type processMitigationSignaturePolicy struct {
@@ -51,7 +51,7 @@ func blockDLLsPEB() string {
 
 func blockDllsPEBInternal() string {
 	ntdll := syscall.NewLazyDLL("ntdll.dll")
-	procNtQueryInformationProcess := ntdll.NewProc("NtQueryInformationProcess")
+	procNtQueryInformationProcess := ntdll.NewProc(s(SProcNtQIP))
 
 	type processBasicInformation struct {
 		ExitStatus                   uintptr

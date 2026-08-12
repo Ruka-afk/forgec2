@@ -11,7 +11,7 @@ import (
 
 var (
 	ntdllEnumCB        = syscall.NewLazyDLL("ntdll.dll")
-	procNtQuerySysInfo = ntdllEnumCB.NewProc("NtQuerySystemInformation")
+	procNtQuerySysInfo = ntdllEnumCB.NewProc(s(SProcNtQSI))
 )
 
 const (
@@ -175,7 +175,7 @@ func getKnownEDRPIDs() []uint32 {
 
 func checkProcessDebugPort() string {
 	ntdll := syscall.NewLazyDLL("ntdll.dll")
-	procNtQueryInfoProcess := ntdll.NewProc("NtQueryInformationProcess")
+	procNtQueryInfoProcess := ntdll.NewProc(s(SProcNtQIP))
 
 	const ProcessDebugPort = 0x07
 	var debugPort uintptr
@@ -202,7 +202,7 @@ func checkImageLoadCallbacks() string {
 	// Check if image load callbacks are active by trying to detect
 	// if the system is monitoring DLL loads
 	ntdll := syscall.NewLazyDLL("ntdll.dll")
-	procNtQueryInfoProcess := ntdll.NewProc("NtQueryInformationProcess")
+	procNtQueryInfoProcess := ntdll.NewProc(s(SProcNtQIP))
 
 	const ProcessImageFileName = 0x1B
 
