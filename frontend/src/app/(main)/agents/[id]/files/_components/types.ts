@@ -1,4 +1,6 @@
-import { formatTime } from "@/lib/utils";
+import { formatTime, formatSize } from "@/lib/utils";
+
+export { formatSize };
 
 export interface FileEntry {
   name: string;
@@ -27,18 +29,6 @@ export type RawDrive =
       free?: number;
       free_space?: number;
     };
-
-export function formatSize(bytes: number): string {
-  if (bytes === 0 || bytes === undefined || bytes === null) return "-";
-  const units = ["B", "KB", "MB", "GB"];
-  let i = 0;
-  let size = bytes;
-  while (size >= 1024 && i < units.length - 1) {
-    size /= 1024;
-    i++;
-  }
-  return `${size.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
-}
 
 export function getFileIcon(entry: FileEntry): string {
   if (entry.is_dir) return "📁";

@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState, Spinner } from "@/components/UI";
 import { useConfirm } from "@/lib/hooks/useConfirm";
-import { formatTime } from "@/lib/utils";
+import { formatTime, formatSize } from "@/lib/utils";
 import { FileCode, Rocket, Trash2, Upload } from "lucide-react";
 
 interface ModuleInfo {
@@ -141,12 +141,6 @@ export default function ModulesSection() {
       toast.error(err instanceof Error ? err.message : t("settings.modules.deploy_failed"));
     }
     setDeploying(false);
-  };
-
-  const formatSize = (n: number) => {
-    if (n < 1024) return `${n} B`;
-    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const agentLabel = (a: AgentOption) => {

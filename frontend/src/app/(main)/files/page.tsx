@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
-import { formatTime } from "@/lib/utils";
+import { formatTime, formatSize } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmptyState, PageHeader, Spinner } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
@@ -98,15 +98,6 @@ export default function FilesPage() {
   };
 
   const filteredAgents = agents;
-
-  const formatSize = (bytes: number): string => {
-    if (bytes === 0) return "-";
-    const units = ["B", "KB", "MB", "GB"];
-    let i = 0;
-    let size = bytes;
-    while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
-    return size.toFixed(1) + " " + units[i];
-  };
 
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">

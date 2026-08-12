@@ -56,3 +56,9 @@ powershell -File scripts\build-embedded.ps1
 4. **Handler patterns**: Use `slog.Error("msg", "error", err)` for error logging, check all DB/JSON errors
 5. **Frontend check**: `npm run check` validates CSS (Tailwind v4 PostCSS) and i18n key coverage (en/zh)
 6. **Login CSRF**: Login page does NOT require CSRF (public route). CSRF is enforced only on authenticated routes.
+
+## i18n Policy
+
+- **Only two locales are supported: `en` and `zh`.** Do NOT add any other language (es, fr, de, ja, etc.). All UI strings must be present in BOTH `frontend/src/lib/i18n/en.ts` and `frontend/src/lib/i18n/zh.ts`, or `npm run check:i18n` will fail.
+- **Edit i18n files only via Node scripts** (`fs.readFileSync`/`writeFileSync`). Never use PowerShell `Get-Content`/`Set-Content` on these files — it corrupts Chinese (GBK mojibake) and adds a UTF-8 BOM. See `npm run check:i18n` for the used-key consistency gate.
+- New UI strings must go through `t("key")` — no hardcoded English literals in JSX; add the key to both locales in the same change.

@@ -12,6 +12,18 @@ export function formatTime(iso?: string | null): string {
   return d.toLocaleString()
 }
 
+export function formatSize(bytes: number | undefined | null): string {
+  if (!bytes) return "-"
+  const units = ["B", "KB", "MB", "GB"]
+  let i = 0
+  let size = bytes
+  while (size >= 1024 && i < units.length - 1) {
+    size /= 1024
+    i++
+  }
+  return `${size.toFixed(i > 0 ? 1 : 0)} ${units[i]}`
+}
+
 export function timeAgo(
   iso?: string | null,
   t?: (key: string, params?: Record<string, string | number>) => string
