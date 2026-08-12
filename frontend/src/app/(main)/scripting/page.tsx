@@ -110,13 +110,13 @@ export default function ScriptingPage() {
   const handleRunScript = async () => {
     if (!selectedAgent || !scriptCode.trim()) return;
     setRunning(true);
-    setScriptOutput("Executing script...");
+    setScriptOutput(t("scripting.executing"));
     try {
       const data = await api.postJson(paths.scripts.execute, { agent_id: selectedAgent, code: scriptCode, name: scriptName });
-      setScriptOutput((data.output || data.result || data.error || "Script executed with no output") as string);
+      setScriptOutput((data.output || data.result || data.error || t("scripting.no_output")) as string);
       loadData();
     } catch {
-      setScriptOutput("Error: Failed to execute script");
+      setScriptOutput(t("scripting.exec_failed"));
     }
     setRunning(false);
   };

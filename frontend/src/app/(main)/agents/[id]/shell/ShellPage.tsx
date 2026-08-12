@@ -67,7 +67,7 @@ export default function AgentShellPage() {
             <SelectContent>
               {agents.map((a) => (
                 <SelectItem key={a.id} value={a.id}>
-                  {a.hostname} ({a.ip}) - {a.status}
+                  {a.hostname} ({a.ip}) - {t(`agents.${a.status}_label`)}
                 </SelectItem>
               ))}
             </SelectContent>

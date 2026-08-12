@@ -190,30 +190,30 @@ export default function ChromeC2Page() {
 
                 <div>
                   <Label className="text-xs mb-1">{t("chrome.field_command")}</Label>
-                  <Input aria-label="e.g. get, set, remove, clear, URL, JSON query..." name="input-1"
+                  <Input aria-label={t("chrome.field_command")} name="input-1"
                     type="text"
                     value={taskCommand}
                     onChange={(e) => setTaskCommand(e.target.value)}
-                    placeholder="e.g. get, set, remove, clear, URL, JSON query..."
+                    placeholder={t("chrome.cmd_ph")}
                   />
                 </div>
 
                 <div>
                   <Label className="text-xs mb-1">{t("chrome.field_path")}</Label>
-                  <Input aria-label="e.g. storage key, cookie domain..." name="input-2"
+                  <Input aria-label={t("chrome.field_path")} name="input-2"
                     type="text"
                     value={taskPath}
                     onChange={(e) => setTaskPath(e.target.value)}
-                    placeholder="e.g. storage key, cookie domain..."
+                    placeholder={t("chrome.path_ph")}
                   />
                 </div>
 
                 <div>
                   <Label className="text-xs mb-1">{t("chrome.field_data")}</Label>
-                  <Textarea aria-label="e.g. storage value, JavaScript code..." name="textarea-3"
+                  <Textarea aria-label={t("chrome.field_data")} name="textarea-3"
                     value={taskData}
                     onChange={(e) => setTaskData(e.target.value)}
-                    placeholder="e.g. storage value, JavaScript code..."
+                    placeholder={t("chrome.data_ph")}
                     rows={3}
                     className="resize-none"
                   />

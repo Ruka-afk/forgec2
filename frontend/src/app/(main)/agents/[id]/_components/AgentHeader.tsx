@@ -94,15 +94,15 @@ export default function AgentHeader({
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">IP</span>
+                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">{t("agents.col_ip")}</span>
                     <span className="font-mono text-foreground">{ip}</span>
-                    <CopyButton text={ip} label="IP" />
+                    <CopyButton text={ip} label={t("agents.col_ip")} />
                   </span>
                   {publicIP && (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
                       <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">{t("agents.header_wan")}</span>
                       <span className="font-mono text-foreground">{publicIP}</span>
-                      <CopyButton text={publicIP} label="Public IP" />
+                      <CopyButton text={publicIP} label={t("agents.stats_public_ip")} />
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
@@ -110,7 +110,7 @@ export default function AgentHeader({
                     <span className="text-foreground">{username}</span>
                   </span>
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2.5 py-1">
-                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">OS</span>
+                    <span className="text-(--fs-micro-sm) uppercase tracking-wide text-muted-foreground/70">{t("agents.col_os")}</span>
                     <span className="text-foreground">{os} {arch}</span>
                   </span>
                   {domain && (

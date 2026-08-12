@@ -68,14 +68,14 @@ export const AgentRow = memo(function AgentRow({
     <tr
       className={`group hover:bg-secondary/60 transition-all duration-150 ${borderLeft} even:bg-muted/30 hover:shadow-sm`}
     >
-      <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5" data-label="">
+      <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5">
         <Checkbox aria-label={t("common.select_item")} name={`select-${id}`}
           checked={isSelected}
           onCheckedChange={(v) => onToggleSelect(id, v === true)}
           onClick={(e) => e.stopPropagation()}
         />
       </TableCell>
-      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4" data-label="Hostname">
+      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4">
         <div className="flex items-center gap-2">
           <AvatarFallback name={hostname} size="sm" shape="square" color={avatarColor(hostname)} />
           <div className="min-w-0">
@@ -106,10 +106,10 @@ export const AgentRow = memo(function AgentRow({
         </div>
       </TableCell>
       {visibleCols.username && (
-      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4 text-muted-foreground text-xs font-mono font-medium" data-label="User">{username}</TableCell>
+      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4 text-muted-foreground text-xs font-mono font-medium">{username}</TableCell>
       )}
       {visibleCols.os && (
-      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4" data-label="OS">
+      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4">
         <div className="flex items-center gap-1.5 flex-wrap">
           <Badge variant="secondary" className="text-(--fs-xs-sm) gap-1.5 whitespace-nowrap bg-secondary/60">
             <OsIcon className="w-3 h-3 text-muted-foreground" />
@@ -128,7 +128,7 @@ export const AgentRow = memo(function AgentRow({
       </TableCell>
       )}
       {visibleCols.ip && (
-      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4" data-label="IP">
+      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4">
         <span className="font-mono text-xs text-muted-foreground">{ip}</span>
         <Button
           variant="ghost"
@@ -142,12 +142,12 @@ export const AgentRow = memo(function AgentRow({
       </TableCell>
       )}
       {visibleCols.last_seen && (
-      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4 text-xs text-muted-foreground font-mono whitespace-nowrap" data-label="Last Seen">
+      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4 text-xs text-muted-foreground font-mono whitespace-nowrap">
         <span title={lastSeen ? formatTime(lastSeen) : ""}>{timeAgo(lastSeen, t)}</span>
       </TableCell>
       )}
       {visibleCols.window && (
-      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4 text-xs text-foreground max-w-[140px] max-sm:hidden" data-label="Window">
+      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4 text-xs text-foreground max-w-[140px] max-sm:hidden">
         {activeWindow ? (
           <span className="inline-flex items-center gap-1 truncate" title={activeWindow}>
             <Maximize2 className="w-4 h-4" />
@@ -157,7 +157,7 @@ export const AgentRow = memo(function AgentRow({
       </TableCell>
       )}
       {visibleCols.lock && (
-      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4 text-center max-sm:hidden" data-label="Lock">
+      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4 text-center max-sm:hidden">
         {lockUser ? (
           <span className="inline-flex items-center gap-1 text-xs" title={t("agents.locked_by").replace("{user}", lockUser)}>
             <Lock className="w-4 h-4" />
@@ -171,7 +171,7 @@ export const AgentRow = memo(function AgentRow({
       </TableCell>
       )}
       {visibleCols.tasks && (
-      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4 text-center max-sm:hidden" data-label={t("agents.tasks_label")}>
+      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4 text-center max-sm:hidden">
         <Tooltip>
           <TooltipTrigger render={<span className="text-xs font-mono text-foreground cursor-default">{taskCount}</span>} />
           <TooltipContent side="top">
@@ -190,16 +190,16 @@ export const AgentRow = memo(function AgentRow({
       </TableCell>
       )}
       {visibleCols.version && (
-      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4 text-xs text-muted-foreground/70 max-sm:hidden" data-label="Version">
+      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4 text-xs text-muted-foreground/70 max-sm:hidden">
         {beacon.version || <span className="text-muted-foreground/70">-</span>}
       </TableCell>
       )}
       {visibleCols.status && (
-      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4" data-label="Status">
+      <TableCell className="py-3 px-3 sm:py-3.5 sm:px-4">
         <StatusBadge status={status} pulse={status === "online"} />
       </TableCell>
       )}
-      <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-right" data-label="Actions">
+      <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-right">
         <div className="flex items-center justify-end gap-1">
           <Tooltip>
             <TooltipTrigger render={

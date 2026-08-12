@@ -81,11 +81,14 @@ export default function ShellTerminal({
 
   const [promptChar] = useState(() => PROMPT_CHARS[Math.floor(Math.random() * PROMPT_CHARS.length)]);
   const promptRef = useRef(`\x1b[94m${promptChar}\x1b[0m `);
-  const plainPromptRef = useRef(`${promptChar} `);
   const execRef = useRef<(cmd: string) => Promise<void>>(async () => {});
   const writePromptRef = useRef<() => void>(() => {});
   const lastCommandRef = useRef<string>("");
   const abortRef = useRef<AbortController | null>(null);
+  const waitingWrittenRef = useRef(false);
+  const inputRef = useRef("");
+  const tRef = useRef(t);
+  tRef.current = t;
   const termCleanupRef = useRef<(() => void)>(() => {});
   const [isDragging, setIsDragging] = useState(false);
 
@@ -108,6 +111,7 @@ export default function ShellTerminal({
       loadingRef.current = true;
       setLoading(true);
       lastCommandRef.current = cmd;
+      waitingWrittenRef.current = false;
       try {
         const st = await runTask(
           agentId,
@@ -119,21 +123,22 @@ export default function ShellTerminal({
             timeoutMs: 60000,
             signal: ac.signal,
             onStatus: (s) => {
-              if (s.status === "pending" || s.status === "running") {
-                writeln("⏳ waiting for agent to return output...", "90");
+              if ((s.status === "pending" || s.status === "running") && !waitingWrittenRef.current) {
+                waitingWrittenRef.current = true;
+                writeln(t("shell.waiting_output"), "90");
               }
             },
           },
         );
         if (st.status === "failed") {
-          writeln(st.error || "Command failed", "31");
+          writeln(st.error || t("shell.command_failed"), "31");
         } else if (st.result) {
           const highlighted = highlightOutput(st.result, lastCommandRef.current);
           termRef.current?.write(highlighted.replace(/\n/g, "\r\n"));
           termRef.current?.write("\r\n");
           announce(st.result);
         } else {
-          writeln("(no output)", "33");
+          writeln(t("shell.no_output"), "33");
         }
       } catch (e) {
         if (!ac.signal.aborted) writeln(String(e), "31");
@@ -146,7 +151,7 @@ export default function ShellTerminal({
         }
       }
     },
-    [agentId, shellType, writeln, writePrompt, announce],
+    [agentId, shellType, t, writeln, writePrompt, announce],
   );
 
   useEffect(() => { execRef.current = executeCommand; }, [executeCommand]);
@@ -196,7 +201,7 @@ export default function ShellTerminal({
       fitRef.current = fit;
 
       historyRef.current = loadCommandHistory();
-      term.writeln("\x1b[90mForgeC2 Shell \u00b7 xterm.js \u00b7 Enter to run \u00b7 \u2191\u2193 history \u00b7 Ctrl+L clear\x1b[0m");
+      term.writeln(`\x1b[90m${tRef.current("shell.banner")}\x1b[0m`);
       writePromptRef.current();
 
       term.onData((data: string) => {
@@ -211,36 +216,30 @@ export default function ShellTerminal({
           t.writeln("^C");
           loadingRef.current = false;
           setLoading(false);
+          inputRef.current = "";
           writePromptRef.current();
           return;
         }
         if (loadingRef.current) return;
 
         if (data === "\r") {
-          const cmd = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString().trim() || "";
-          if (cmd.startsWith(plainPromptRef.current.trim())) {
-            const trimmed = cmd.slice(plainPromptRef.current.trim().length).trim();
-            if (trimmed) {
-              t.writeln("");
-              saveCommandHistory(trimmed);
-              historyRef.current = loadCommandHistory();
-              histIdxRef.current = historyRef.current.length;
-              execRef.current(trimmed);
-            } else {
-              t.writeln("");
-              writePromptRef.current();
-            }
+          const cmd = inputRef.current.trim();
+          inputRef.current = "";
+          t.writeln("");
+          if (cmd) {
+            saveCommandHistory(cmd);
+            historyRef.current = loadCommandHistory();
+            histIdxRef.current = historyRef.current.length;
+            execRef.current(cmd);
           } else {
-            t.writeln("");
             writePromptRef.current();
           }
           return;
         }
 
         if (data === "\u007f") {
-          const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
-          const promptLen = plainPromptRef.current.length;
-          if (line.length > promptLen) {
+          if (inputRef.current.length > 0) {
+            inputRef.current = inputRef.current.slice(0, -1);
             t.write("\b \b");
           }
           return;
@@ -250,9 +249,8 @@ export default function ShellTerminal({
           if (historyRef.current.length > 0 && histIdxRef.current > 0) {
             histIdxRef.current--;
             const cmd = historyRef.current[histIdxRef.current];
-            const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
-            const promptLen = plainPromptRef.current.length;
-            for (let i = line.length; i > promptLen; i--) t.write("\b \b");
+            for (let i = inputRef.current.length; i > 0; i--) t.write("\b \b");
+            inputRef.current = cmd;
             t.write(cmd);
           }
           return;
@@ -262,15 +260,13 @@ export default function ShellTerminal({
           if (histIdxRef.current < historyRef.current.length - 1) {
             histIdxRef.current++;
             const cmd = historyRef.current[histIdxRef.current];
-            const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
-            const promptLen = plainPromptRef.current.length;
-            for (let i = line.length; i > promptLen; i--) t.write("\b \b");
+            for (let i = inputRef.current.length; i > 0; i--) t.write("\b \b");
+            inputRef.current = cmd;
             t.write(cmd);
           } else {
             histIdxRef.current = historyRef.current.length;
-            const line = t.buffer.active.getLine(t.buffer.active.cursorY)?.translateToString() || "";
-            const promptLen = plainPromptRef.current.length;
-            for (let i = line.length; i > promptLen; i--) t.write("\b \b");
+            for (let i = inputRef.current.length; i > 0; i--) t.write("\b \b");
+            inputRef.current = "";
           }
           return;
         }
@@ -278,35 +274,31 @@ export default function ShellTerminal({
         if (data === "\x0c") {
           t.clear();
           writePromptRef.current();
+          t.write(inputRef.current);
           return;
         }
 
         if (data === "\x09") {
-          const line = t.buffer.active.getLine(t.buffer.active.cursorY);
-          if (!line) return;
-          const promptLen = plainPromptRef.current.length;
-          const currentInput = line.translateToString().substring(promptLen).trim();
+          const currentInput = inputRef.current.trim();
           const matches = getCompletions(currentInput, osTypeRef.current || "windows");
 
           if (matches.length === 1) {
             const completed = matches[0];
-            const rawLine = line.translateToString();
-            for (let i = rawLine.length - 1; i >= promptLen; i--) {
-              t.write("\b \b");
-            }
+            for (let i = inputRef.current.length; i > 0; i--) t.write("\b \b");
+            inputRef.current = completed;
             t.write(completed);
           } else if (matches.length > 1) {
             t.write("\r\n");
             t.write(matches.join("  "));
             t.write("\r\n");
             t.write(promptRef.current);
-            const rawLine = line.translateToString();
-            t.write(rawLine.substring(promptLen));
+            t.write(inputRef.current);
           }
           return;
         }
 
         if (!data.startsWith("\x1b")) {
+          inputRef.current += data;
           t.write(data);
         }
       });
@@ -321,7 +313,7 @@ export default function ShellTerminal({
     };
 
     initTerminal().catch((err) => {
-      if (!disposed) termRef.current?.writeln(`\x1b[31mTerminal init failed: ${String(err)}\x1b[0m`);
+      if (!disposed) termRef.current?.writeln(`\x1b[31m${tRef.current("shell.init_failed", { error: String(err) })}\x1b[0m`);
     });
 
     return () => {
@@ -349,13 +341,15 @@ export default function ShellTerminal({
     fetchAgentBeaconTiming(agentId)
       .then(({ interval, jitter }) => {
         if (cancelled) return;
-        setBeaconHint(interval === 0 ? `Real-time \u00b1${jitter}%` : `${interval}s \u00b1${jitter}%`);
+        setBeaconHint(interval === 0
+          ? t("shell.beacon_rt", { jitter })
+          : t("shell.beacon_interval", { interval, jitter }));
       })
       .catch(() => {
         if (!cancelled) setBeaconHint("");
       });
     return () => { cancelled = true; };
-  }, [agentId]);
+  }, [agentId, t]);
 
   const quickCommands =
     osType === "linux"
@@ -364,6 +358,7 @@ export default function ShellTerminal({
 
   const runQuick = (cmd: string) => {
     if (loadingRef.current) return;
+    inputRef.current = "";
     termRef.current?.write(`\r\n\x1b[33m${promptRef.current}\x1b[37m${cmd}\x1b[0m\r\n`);
     executeCommand(cmd);
   };
@@ -380,10 +375,10 @@ export default function ShellTerminal({
               <TooltipTrigger>
                 <span className="text-xs text-muted-foreground/70">
                    <Clock className="w-3 h-3 mr-1 inline" />
-                  {beaconHint || "loading..."}
+                  {beaconHint || t("shell.beacon_loading")}
                 </span>
               </TooltipTrigger>
-              <TooltipContent>Beacon timing</TooltipContent>
+              <TooltipContent>{t("shell.beacon_timing")}</TooltipContent>
             </Tooltip>
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -421,7 +416,7 @@ export default function ShellTerminal({
               <TooltipTrigger render={<Button
                   variant="outline"
                   size="icon-sm"
-                  onClick={() => { clearCommandHistory(); historyRef.current = []; histIdxRef.current = 0; termRef.current?.clear(); writeln("History cleared", "33"); }}
+                  onClick={() => { clearCommandHistory(); historyRef.current = []; histIdxRef.current = 0; termRef.current?.clear(); writeln(t("shell.history_cleared"), "33"); }}
                   aria-label={t("common.clear_history")}
                 />}>
                 <Trash2 className="w-4 h-4" />
@@ -454,6 +449,7 @@ export default function ShellTerminal({
             reader.onload = () => {
               const b64 = (reader.result as string).split(",")[1];
               const cmd = `upload ${file.name} ${b64}`;
+              inputRef.current = "";
               if (execRef.current) execRef.current(cmd);
             };
             reader.readAsDataURL(file);
@@ -468,16 +464,16 @@ export default function ShellTerminal({
       <div ref={a11yLogRef} role="log" aria-live="polite" aria-atomic="false" className="sr-only" />
       {loading && (
         <div className="shrink-0 bg-card border-t border-border px-4 py-1.5 text-xs text-emerald-400 flex items-center gap-2">
-           <Spinner size="xs" /> Executing...
+           <Spinner size="xs" /> {t("shell.executing")}
         </div>
       )}
       <div className="shrink-0 bg-background border-t border-border px-4 py-1.5 text-(--fs-micro-sm) text-muted-foreground/70 flex items-center justify-between">
         <span>
            <Keyboard className="w-3 h-3 mr-1 inline" />
-          {osType === "linux" ? "Ctrl+D" : "Ctrl+Z"} · Ctrl+C: interrupt
+          {t("shell.footer_shortcuts", { exitKey: osType === "linux" ? "Ctrl+D" : "Ctrl+Z" })}
         </span>
         <span>
-          Font: {fontSize}px
+          {t("shell.font_label", { size: fontSize })}
         </span>
       </div>
     </div>

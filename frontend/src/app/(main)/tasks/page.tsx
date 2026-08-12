@@ -433,7 +433,7 @@ const TaskRow = memo(function TaskRow({ task, expanded, onToggle, onDetail, onCa
             </Button>
           ) : "-"}
         </TableCell>
-        <TableCell className="max-sm:hidden py-3 px-4" data-label="Claimed By">
+        <TableCell className="max-sm:hidden py-3 px-4">
           {task.claimed_by ? (
             <OperatorBadge username={task.claimed_by} isCurrentUser={task.claimed_by === currentUsername} size="sm" />
           ) : (
