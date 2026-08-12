@@ -202,7 +202,7 @@ export default function TokensPage() {
                         <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleRevert(tid)} aria-label={t("tokens.revert")} />}>
                         <RotateCcw className="w-4 h-4" />
                         </TooltipTrigger>
-                        <TooltipContent>Revert to Self</TooltipContent>
+                        <TooltipContent>{t("tokens.revert")}</TooltipContent>
                       </Tooltip>
                     </TableCell>
                   </TableRow>

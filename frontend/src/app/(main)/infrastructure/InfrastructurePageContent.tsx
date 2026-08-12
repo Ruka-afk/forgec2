@@ -280,7 +280,7 @@ export default function InfrastructurePage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label className="text-xs">{t("infra.ssh_user")}</Label>
-                      <Input aria-label="root" name="input-10" type="text" value={rdSSHUser} onChange={e => setRdSSHUser(e.target.value)} placeholder="root" />
+                      <Input aria-label={t("infra.ssh_user")} name="input-10" type="text" value={rdSSHUser} onChange={e => setRdSSHUser(e.target.value)} placeholder="root" />
                     </div>
                     <div>
                       <Label className="text-xs">{t("infra.ssh_port")}</Label>
@@ -289,11 +289,11 @@ export default function InfrastructurePage() {
                   </div>
                   <div>
                     <Label className="text-xs">{t("infra.ssh_key")}</Label>
-                    <Textarea aria-label="-----BEGIN OPENSSH PRIVATE KEY-----&#10;..." name="textarea-12" value={rdSSHKey} onChange={e => setRdSSHKey(e.target.value)} placeholder={"-----BEGIN OPENSSH PRIVATE KEY-----\n..."} rows={3} className="font-mono text-xs" />
+                    <Textarea aria-label={t("infra.ssh_key")} name="textarea-12" value={rdSSHKey} onChange={e => setRdSSHKey(e.target.value)} placeholder={"-----BEGIN OPENSSH PRIVATE KEY-----\n..."} rows={3} className="font-mono text-xs" />
                   </div>
                   <div>
                     <Label className="text-xs">{t("infra.ssh_password")}</Label>
-                    <Input aria-label="password" name="input-13" type="password" value={rdSSHPassword} onChange={e => setRdSSHPassword(e.target.value)} placeholder="password" />
+                    <Input aria-label={t("infra.ssh_password")} name="input-13" type="password" value={rdSSHPassword} onChange={e => setRdSSHPassword(e.target.value)} placeholder="password" />
                   </div>
                   <div className="flex gap-2">
                     <Button onClick={async () => {

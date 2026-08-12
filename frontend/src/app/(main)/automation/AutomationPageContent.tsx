@@ -431,7 +431,7 @@ export default function AutomationPage() {
                   <div key={r.id} className="flex items-center justify-between p-3 bg-secondary border border-border rounded-xl">
                     <div>
                       <div className="text-sm font-medium text-foreground">{r.name}</div>
-                      <div className="text-xs text-muted-foreground">{r.type} {r.threshold}s</div>
+                      <div className="text-xs text-muted-foreground">{t(`auto.type_${r.type}`)} {r.threshold}s</div>
                     </div>
                     <div className="flex gap-2">
                       <Button onClick={() => handleToggleAlertRule(r)} variant="ghost" size="sm">

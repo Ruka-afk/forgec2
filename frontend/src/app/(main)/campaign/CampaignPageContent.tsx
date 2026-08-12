@@ -156,7 +156,7 @@ export default function CampaignPageContent() {
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 font-medium text-foreground">{c.name}</TableCell>
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5">
                     <Badge className="text-white text-xs font-medium" style={{ background: STATUS_COLORS[c.status] || "#64748b" }}>
-                      {c.status}
+                      {t(`campaign.status_${c.status}`)}
                     </Badge>
                   </TableCell>
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-muted-foreground">{c.agents?.length || 0}</TableCell>
@@ -341,7 +341,7 @@ function CampaignDetailView({
                           <span className={`${
                             task.status === "completed" ? "text-emerald-500" :
                             task.status === "failed" ? "text-destructive" : "text-amber-500"
-                          }`}>{task.status}</span>
+                          }`}>{t(`tasks.${task.status}`)}</span>
                         </div>
                       ))}
                     </div>

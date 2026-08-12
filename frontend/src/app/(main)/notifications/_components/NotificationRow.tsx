@@ -72,7 +72,7 @@ function NotificationRowInner({
         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
           <span>{n.created_at ? formatTime(n.created_at) : "-"}</span>
           {n.agent_id && <span>{t("notifications.agent_prefix")} {n.agent_id.substring(0, 8)}</span>}
-          <Badge variant={SEVERITY_VARIANT[n.severity] || "default"}>{n.severity}</Badge>
+          <Badge variant={SEVERITY_VARIANT[n.severity] || "default"}>{t(`notifications.severity_${n.severity}`)}</Badge>
           <span className="font-mono text-(--fs-micro-sm)">{n.type}</span>
         </div>
       </div>
@@ -82,14 +82,14 @@ function NotificationRowInner({
             <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onMarkRead(n.id)} className="w-8 h-8 p-0" aria-label={t("notifications.mark_read")} />}>
               <Check className="w-4 h-4" />
             </TooltipTrigger>
-            <TooltipContent>Mark read</TooltipContent>
+            <TooltipContent>{t("notifications.mark_read")}</TooltipContent>
           </Tooltip>
         )}
         <Tooltip>
           <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => onDelete(n.id)} className="w-8 h-8 p-0 text-muted-foreground hover:text-destructive" aria-label={t("notifications.delete")} />}>
             <Trash2 className="w-4 h-4" />
           </TooltipTrigger>
-          <TooltipContent>Delete</TooltipContent>
+          <TooltipContent>{t("notifications.delete")}</TooltipContent>
         </Tooltip>
       </div>
     </div>

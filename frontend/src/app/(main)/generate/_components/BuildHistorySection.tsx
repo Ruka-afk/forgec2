@@ -85,11 +85,11 @@ export default function BuildHistorySection({ refreshKey }: { refreshKey?: numbe
                       <TableCell className="text-xs font-mono text-muted-foreground">{b.filename || "\u2014"}</TableCell>
                       <TableCell>
                         {b.status === "success" ? (
-                          <Badge variant="success" className="text-xs gap-1"><CheckCircle2 className="w-4 h-4" /> OK</Badge>
+                          <Badge variant="success" className="text-xs gap-1"><CheckCircle2 className="w-4 h-4" /> {t("builds.success")}</Badge>
                         ) : (
                           <Tooltip>
                             <TooltipTrigger>
-                              <Badge variant="destructive" className="text-xs gap-1"><XCircle className="w-4 h-4" /> Failed</Badge>
+                              <Badge variant="destructive" className="text-xs gap-1"><XCircle className="w-4 h-4" /> {t("builds.error")}</Badge>
                             </TooltipTrigger>
                             <TooltipContent>{b.error}</TooltipContent>
                           </Tooltip>

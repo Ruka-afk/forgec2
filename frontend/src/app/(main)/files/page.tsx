@@ -142,7 +142,7 @@ export default function FilesPage() {
                   <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={navigateUp} aria-label={t("files.navigate_up")} />}>
                   <FolderOpen className="w-4 h-4" />
                   </TooltipTrigger>
-                  <TooltipContent>Up</TooltipContent>
+                  <TooltipContent>{t("files.navigate_up")}</TooltipContent>
                 </Tooltip>
                 <span className="text-sm font-mono text-muted-foreground">{selectedAgent.hostname || selectedAgent.id.substring(0, 8)}</span>
                 <span className="text-xs text-muted-foreground/70">/</span>

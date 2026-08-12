@@ -3,6 +3,7 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
+import { enumLabel } from "@/lib/utils";
 import type { BulkResult } from "./types";
 import { Camera, Clock, History, Power, Terminal, Trash2, X } from "lucide-react";
 
@@ -84,7 +85,7 @@ export function AgentBulkBar({
                         <Terminal className="w-3 h-3" />}
                     </span>
                     <div className="min-w-0">
-                      <span className="font-medium text-foreground">{r.type}</span>
+                      <span className="font-medium text-foreground">{enumLabel(t, "command.type", r.type)}</span>
                       {r.command && <span className="ml-1.5 text-muted-foreground/70">{r.command}</span>}
                       <span className="ml-2 text-muted-foreground/70">{r.agent_ids?.length || 0} agent{(r.agent_ids?.length || 0) !== 1 ? "s" : ""}</span>
                     </div>

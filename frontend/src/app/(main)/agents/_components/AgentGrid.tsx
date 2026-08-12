@@ -3,7 +3,7 @@
 import { memo } from "react";
 import { Card } from "@/components/ui/card";
 import { AvatarFallback } from "@/components/ui/avatar";
-import { timeAgo, formatTime } from "@/lib/utils";
+import { timeAgo, formatTime, enumLabel } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import type { Beacon, Tag } from "./types";
 import { avatarColor, formatUptime } from "./types";
@@ -57,7 +57,7 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <span aria-hidden="true" className={`w-2 h-2 rounded-full ${status === "online" ? "bg-emerald-500 animate-pulse" : status === "stale" ? "bg-amber-500" : "bg-red-500"}`} />
-                <span className="text-(--fs-micro-sm) text-muted-foreground/70 capitalize">{status}</span>
+                <span className="text-(--fs-micro-sm) text-muted-foreground/70 capitalize">{enumLabel(t, "agents", `${status}_label`)}</span>
               </div>
             </div>
             <div className="space-y-1.5 text-xs text-muted-foreground">

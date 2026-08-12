@@ -7,6 +7,7 @@ import { fetchCached } from "@/lib/hooks/useCachedData";
 import { ChartCard } from "@/components/ChartCard";
 import { BarChart3 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { enumLabel } from "@/lib/utils";
 
 interface GanttItem { agent: string; task: string; start: number; duration: number; status: string }
 
@@ -22,7 +23,7 @@ function GanttBody({ data }: { data: GanttItem[] }) {
               style={{ width: `${Math.min(100, Math.max(8, item.duration * 8))}%`, marginLeft: `${Math.min(40, item.start)}%` }} />
           </div>
           <span className="text-(--fs-micro-sm) text-muted-foreground/70 w-20 truncate">{item.task}</span>
-          <span className="text-(--fs-micro-sm) w-14 truncate text-muted-foreground">{item.status}</span>
+          <span className="text-(--fs-micro-sm) w-14 truncate text-muted-foreground">{enumLabel(t, "tasks", item.status)}</span>
         </div>
       ))}
     </div>

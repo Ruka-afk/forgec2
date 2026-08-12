@@ -379,7 +379,7 @@ export default function ProfilesPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <List className="w-4 h-4" />
-                    <span className="text-sm font-semibold text-foreground">Profiles</span>
+                    <span className="text-sm font-semibold text-foreground">{t("profiles.list_title")}</span>
                     <span className="text-xs text-primary ml-1">({profiles.length})</span>
                   </div>
                   <div className="flex gap-1">
@@ -387,7 +387,7 @@ export default function ProfilesPage() {
                       <TooltipTrigger render={<Button onClick={() => fileInputRef.current?.click()} className="w-7 h-7 bg-secondary/50 hover:bg-secondary/70 rounded-xl flex items-center justify-center transition-colors" aria-label={t("profiles.import_btn")} size="icon" />}>
                         <FileDown className="w-4 h-4" />
                       </TooltipTrigger>
-                      <TooltipContent>Import Profile</TooltipContent>
+                      <TooltipContent>{t("profiles.import_btn")}</TooltipContent>
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger render={<Button onClick={() => {
@@ -399,7 +399,7 @@ export default function ProfilesPage() {
                         }} className="w-7 h-7 bg-secondary/50 hover:bg-secondary/70 rounded-xl flex items-center justify-center transition-colors" aria-label={t("profiles.new_profile")} size="icon" />}>
                         <Plus className="w-4 h-4" />
                       </TooltipTrigger>
-                      <TooltipContent>New Profile</TooltipContent>
+                      <TooltipContent>{t("profiles.new_profile")}</TooltipContent>
                     </Tooltip>
                   </div>
                 </div>
@@ -485,15 +485,15 @@ export default function ProfilesPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                       <div className="space-y-4">
                         <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">Profile Name</Label>
+                          <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.profile_name_label")}</Label>
                           <Input aria-label={t("profiles.name_ph")} name="input-7" type="text" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder={t("profiles.name_ph")} />
                         </div>
                         <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">Description</Label>
+                          <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.description")}</Label>
                           <Textarea aria-label={t("profiles.brief_desc")} name="textarea-8" rows={2} value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} placeholder={t("profiles.brief_desc")} />
                         </div>
                         <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">User-Agent</Label>
+                          <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.user_agent_label")}</Label>
                           <div className="flex gap-2">
                             <Input aria-label={t("agents.config.ua")} name="input-9" type="text" value={editing.user_agent} onChange={(e) => setEditing({ ...editing, user_agent: e.target.value })} className="font-mono text-xs" />
                             <Select value="" onValueChange={(v) => { if (v) setEditing({ ...editing, user_agent: v }); }}>
@@ -509,13 +509,13 @@ export default function ProfilesPage() {
                           </div>
                         </div>
                         <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">Beacon URI</Label>
+                          <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.beacon_uri")}</Label>
                           <Input aria-label="/api/v1/beacon" name="input-11" type="text" value={editing.beacon_uri} onChange={(e) => setEditing({ ...editing, beacon_uri: e.target.value })} className="font-mono" placeholder="/api/v1/beacon" />
                         </div>
                       </div>
                       <div className="space-y-4">
                         <div>
-                          <Label className="text-xs text-muted-foreground mb-1.5">HTTP Method</Label>
+                          <Label className="text-xs text-muted-foreground mb-1.5">{t("profiles.http_method")}</Label>
                           <Select value={editing.method} onValueChange={(v) => { if (v) setEditing({ ...editing, method: v }); }}>
                              <SelectTrigger>
                               <SelectValue />
@@ -528,19 +528,19 @@ export default function ProfilesPage() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label className="text-xs text-muted-foreground mb-1.5">Sleep Interval (sec)</Label>
+                            <Label className="text-xs text-muted-foreground mb-1.5">{t("agents.config.sleep")}</Label>
                             <Input aria-label={t("agents.config.sleep")} name="input-13" type="number" min={0} max={86400} value={editing.sleep} onChange={(e) => setEditing({ ...editing, sleep: Number(e.target.value) })} />
                           </div>
                           <div>
-                            <Label className="text-xs text-muted-foreground mb-1.5">Jitter (%)</Label>
+                            <Label className="text-xs text-muted-foreground mb-1.5">{t("agents.config.jitter")}</Label>
                             <Input aria-label={t("agents.config.jitter")} name="input-14" type="number" min={0} max={100} value={editing.jitter} onChange={(e) => setEditing({ ...editing, jitter: Number(e.target.value) })} />
                           </div>
                         </div>
                         <div>
                           <div className="flex items-center justify-between mb-1.5">
-                            <Label className="text-xs text-muted-foreground">Custom Headers</Label>
+                            <Label className="text-xs text-muted-foreground">{t("profiles.custom_headers")}</Label>
                             <Button type="button" onClick={addHeader} className="text-xs text-primary hover:underline flex items-center gap-1" variant="link" size="sm">
-                              <Plus className="w-4 h-4" />Add
+                              <Plus className="w-4 h-4" />{t("profiles.add_header")}
                             </Button>
                           </div>
                           <div className="space-y-2">
@@ -575,7 +575,7 @@ export default function ProfilesPage() {
                   <div className="bg-secondary/60 border-b border-border px-6 py-3">
                     <div className="flex items-center gap-2">
                       <Code className="w-4 h-4" />
-                      <span className="text-sm font-semibold text-foreground">Profile JSON Preview</span>
+                      <span className="text-sm font-semibold text-foreground">{t("profiles.json_preview")}</span>
                     </div>
                   </div>
                   <div className="p-4 bg-card">
@@ -594,7 +594,7 @@ export default function ProfilesPage() {
       <Dialog open={showPushModal} onOpenChange={setShowPushModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Push Profile: {editing.name}</DialogTitle>
+            <DialogTitle>{t("profiles.push_title")}: {editing.name}</DialogTitle>
           </DialogHeader>
           <div className="mb-3">
             <Button onClick={async () => {
@@ -605,15 +605,15 @@ export default function ProfilesPage() {
                 setPushAgents(list.map((a) => ({ id: String(a.id || ""), hostname: String(a.hostname || a.ip || ""), ip: String(a.ip || "") })));
               } catch { toast.error(t("profiles.toast.load_agents_failed")); }
               setLoadingAgents(false);
-            }} disabled={loadingAgents} variant="link" size="sm" className="text-xs text-primary hover:underline disabled:opacity-50">{loadingAgents ? "Loading..." : "Load agents"}</Button>
+            }} disabled={loadingAgents} variant="link" size="sm" className="text-xs text-primary hover:underline disabled:opacity-50">{loadingAgents ? t("common.loading") : t("profiles.load_agents")}</Button>
           </div>
           <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
             {pushAgents.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Click &quot;Load agents&quot; to fetch agent list.</p>
+              <p className="text-sm text-muted-foreground">{t("profiles.load_agents_hint")}</p>
             ) : (
               pushAgents.map(a => (
                 <Label key={a.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-secondary transition-colors cursor-pointer">
-                  <Checkbox aria-label={`Select ${a.hostname}`} name="input-18" checked={pushSelected.includes(a.id)} onCheckedChange={() => {
+                  <Checkbox aria-label={t("profiles.select_agent", { hostname: a.hostname })} name="input-18" checked={pushSelected.includes(a.id)} onCheckedChange={() => {
                     setPushSelected(prev => prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id])
                   }} />
                   <span className="text-sm font-mono">{a.hostname}</span>
@@ -623,7 +623,7 @@ export default function ProfilesPage() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPushModal(false)} className="h-9 px-4">Cancel</Button>
+            <Button variant="outline" onClick={() => setShowPushModal(false)} className="h-9 px-4">{t("common.cancel")}</Button>
             <Button disabled={pushSelected.length === 0 || pushing} onClick={async () => {
               setPushing(true);
               let success = 0, fail = 0;
@@ -642,7 +642,7 @@ export default function ProfilesPage() {
               toast.success(t("profiles.toast.push_complete", { success: String(success), fail: String(fail) }));
               setPushSelected([]);
             }} className="h-9 px-4 rounded-xl text-sm disabled:opacity-50">
-              {pushing ? "Pushing..." : `Push to ${pushSelected.length} agent(s)`}
+              {pushing ? t("profiles.pushing") : t("profiles.push_to", { count: String(pushSelected.length) })}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -42,10 +42,10 @@ export default function ServerSection({
               <Select value={form.log_level} onValueChange={(v) => v && setForm({ ...form, log_level: v })}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="debug">Debug</SelectItem>
-                  <SelectItem value="info">Info</SelectItem>
-                  <SelectItem value="warn">Warning</SelectItem>
-                  <SelectItem value="error">Error</SelectItem>
+                  <SelectItem value="debug">{t("settings.server.log_level_debug")}</SelectItem>
+                  <SelectItem value="info">{t("settings.server.log_level_info")}</SelectItem>
+                  <SelectItem value="warn">{t("settings.server.log_level_warn")}</SelectItem>
+                  <SelectItem value="error">{t("settings.server.log_level_error")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

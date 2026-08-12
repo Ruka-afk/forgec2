@@ -180,7 +180,7 @@ export default function TagsPage() {
                       />}>
                       <Pencil className="w-4 h-4" />
                     </TooltipTrigger>
-                    <TooltipContent>Edit</TooltipContent>
+                    <TooltipContent>{t("common.edit")}</TooltipContent>
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger render={<Button
@@ -192,7 +192,7 @@ export default function TagsPage() {
                       />}>
                       <Trash2 className="w-4 h-4" />
                     </TooltipTrigger>
-                    <TooltipContent>Delete</TooltipContent>
+                    <TooltipContent>{t("common.delete")}</TooltipContent>
                   </Tooltip>
                 </div>
               </div>

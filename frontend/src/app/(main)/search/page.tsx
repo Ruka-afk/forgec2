@@ -97,7 +97,7 @@ function SearchContent() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="text-sm font-medium text-foreground">{r.title}</span>
-                  <Badge variant="secondary" className="text-(--fs-micro-sm) px-1.5 py-0.5 rounded capitalize">{r.type}</Badge>
+                  <Badge variant="secondary" className="text-(--fs-micro-sm) px-1.5 py-0.5 rounded">{t(`search.type_${r.type}`)}</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground truncate">{r.subtitle}</p>
               </div>

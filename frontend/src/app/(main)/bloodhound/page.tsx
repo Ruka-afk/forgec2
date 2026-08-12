@@ -207,7 +207,7 @@ export default function BloodHoundPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="DCOnly">DCOnly</SelectItem>
-                <SelectItem value="All">All</SelectItem>
+                <SelectItem value="All">{t("bloodhound.collect_all")}</SelectItem>
                 <SelectItem value="Session">Session</SelectItem>
                 <SelectItem value="LDAP">LDAP</SelectItem>
               </SelectContent>

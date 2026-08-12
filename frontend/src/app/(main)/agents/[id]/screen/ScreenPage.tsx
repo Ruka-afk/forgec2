@@ -276,7 +276,7 @@ interface ScreenshotItem {
                       <TooltipTrigger>
                         <span className="ml-1 w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
                       </TooltipTrigger>
-                      <TooltipContent>Monitoring active</TooltipContent>
+                      <TooltipContent>{t("agents.screen_monitoring_active")}</TooltipContent>
                     </Tooltip>
                   )}
                   {wsLive && (
@@ -286,7 +286,7 @@ interface ScreenshotItem {
                           <Zap className="w-4 h-4" /> WS
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent>WebSocket live stream</TooltipContent>
+                      <TooltipContent>{t("agents.screen_ws_live")}</TooltipContent>
                     </Tooltip>
                   )}
                 </div>
@@ -404,7 +404,7 @@ interface ScreenshotItem {
                   />}>
                   <Download className="w-4 h-4" />
                 </TooltipTrigger>
-                <TooltipContent>Download</TooltipContent>
+                <TooltipContent>{t("agents.screen_download")}</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger render={<Button
@@ -413,7 +413,7 @@ interface ScreenshotItem {
                   />}>
                   <X className="w-4 h-4" />
                 </TooltipTrigger>
-                <TooltipContent>Close</TooltipContent>
+                <TooltipContent>{t("common.close")}</TooltipContent>
               </Tooltip>
             </div>
             <img src={modalImage} alt={t("agents.screen_alt_full")} className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />

@@ -11,4 +11,7 @@ export const DYNAMIC_PREFIXES = [
   "topbar.",    // topbar dropdown labels
   "section.",   // settings / section headers
   "settings.",  // settings form labels
+  "auto.type_", // automation alert-rule types: t(`auto.type_${r.type}`)
+  "notifications.severity_", // notification badge severities: t(`notifications.severity_${n.severity}`)
+  "search.type_", // search result types: t(`search.type_${r.type}`)
 ];

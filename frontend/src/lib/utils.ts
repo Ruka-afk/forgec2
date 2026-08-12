@@ -50,3 +50,16 @@ export function debounce<T extends (...args: never[]) => void>(fn: T, ms: number
   debounced.cancel = () => { if (timer) clearTimeout(timer) }
   return debounced as T & { cancel: () => void }
 }
+
+/** Translate an enum-ish API value (`prefix.value`) via t(), falling back to
+ *  the raw value when no key exists for it. */
+export function enumLabel(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  prefix: string,
+  value: string | null | undefined
+): string {
+  if (!value) return ""
+  const key = `${prefix}.${value}`
+  const label = t(key)
+  return label === key ? value : label
+}

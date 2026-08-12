@@ -258,7 +258,7 @@ export default function PivotingPageContent() {
               </div>
               <div>                <Label className="text-xs font-medium mb-1 block">{t("pivoting.auth_label")}</Label>
                 <div className="flex items-center gap-3 mt-2">                  <Label className="flex items-center gap-2 cursor-pointer">
-                    <Checkbox checked={localAuthEnabled} onCheckedChange={setLocalAuthEnabled} />                    <span className="text-sm text-muted-foreground">Enable</span>
+                    <Checkbox checked={localAuthEnabled} onCheckedChange={setLocalAuthEnabled} />                    <span className="text-sm text-muted-foreground">{t("pivoting.enable")}</span>
                   </Label>
                 </div>
               </div>
@@ -267,8 +267,8 @@ export default function PivotingPageContent() {
                 <div>                  <Label className="text-xs font-medium mb-1 block">{t("pivoting.username_label")}</Label>
                   <Input aria-label={t("pivoting.operator_label")} name="input-7" type="text" value={localUsername} onChange={e => setLocalUsername(e.target.value)} placeholder="operator" />
                 </div>                <div>
-                  <Label className="text-xs font-medium mb-1 block">Password</Label>
-                  <Input aria-label="????????" name="input-8" type="password" value={localPassword} onChange={e => setLocalPassword(e.target.value)} placeholder="????????" />                </div>
+                  <Label className="text-xs font-medium mb-1 block">{t("pivoting.password")}</Label>
+                  <Input aria-label={t("pivoting.password")} name="input-8" type="password" value={localPassword} onChange={e => setLocalPassword(e.target.value)} placeholder={t("pivoting.password")} />                </div>
               </div>
             )}
             <div className="mt-4 flex items-center gap-3">
@@ -277,14 +277,14 @@ export default function PivotingPageContent() {
                 {localStarting ? t("pivoting.starting") : t("pivoting.start_local_proxy")}
               </Button>
               <Button variant="outline" onClick={() => { setLocalPort(1080); setThroughAgent(""); setLocalAuthEnabled(false); setLocalUsername(""); setLocalPassword(""); }}>
-                Reset
+                {t("pivoting.reset")}
               </Button>
             </div>
           </Card>          <Card className="p-4 sm:p-5">
             <div className="font-semibold text-foreground flex items-center gap-x-2 mb-3">
-              <Network className="w-4 h-4" /> Direct Agent SOCKS            </div>
+              <Network className="w-4 h-4" /> {t("pivoting.direct_socks")}            </div>
             <p className="text-sm text-muted-foreground mb-4">
-              Start a SOCKS listener directly on the agent host. Only usable when you can reach the agent IP.
+              {t("pivoting.direct_socks_desc")}
             </p>
             {agents.length > 0 ? (              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {agents.map(a => (                  <Card key={a.id} className="rounded-2xl hover:border-amber-300 dark:hover:border-amber-700 hover:shadow-sm transition-all">
@@ -299,13 +299,13 @@ export default function PivotingPageContent() {
                         toast.success(t("pivoting.toast.direct_socks", { host: a.hostname, port: String(localPort) }));
                       }}
                         className="w-full text-xs px-3 py-2 transition-colors flex items-center justify-center gap-1.5">
-                        <Play className="w-4 h-4" /> Start SOCKS on :{localPort}
+                        <Play className="w-4 h-4" /> {t("pivoting.start_socks_on", { port: String(localPort) })}
                       </Button>
                     </CardContent>
                   </Card>
                 ))}              </div>
             ) : (
-              <div className="text-muted-foreground text-sm py-4 text-center">No agents online</div>            )}
+              <div className="text-muted-foreground text-sm py-4 text-center">{t("pivoting.no_agents")}</div>            )}
           </Card>
         </>
       </TabsContent>
@@ -315,7 +315,7 @@ export default function PivotingPageContent() {
           <Card className="p-4 sm:p-5">
             <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">              <ArrowLeftRight className="w-4 h-4" />
               <span>{t("pivoting.active_reverse_forwards")}</span>
-              <Badge variant="secondary">{rportForwards.filter(r => r.active).length} active</Badge>
+              <Badge variant="secondary">{rportForwards.filter(r => r.active).length} {t("pivoting.active")}</Badge>
             </div>
             {rportForwards.length === 0 ? (
               <EmptyState icon={ArrowLeftRight} title={t("pivoting.empty_rportfwd_title")} />
@@ -362,23 +362,23 @@ export default function PivotingPageContent() {
           <Card className="p-4 sm:p-5">
             <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">              <PlusCircle className="w-4 h-4" /> New Reverse Port Forward
             </div>            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div>                <Label className="text-xs font-medium mb-1 block">Agent</Label>
+              <div>                <Label className="text-xs font-medium mb-1 block">{t("pivoting.agent")}</Label>
                 <Select value={rportAgent} onValueChange={(v) => setRportAgent(v ?? "")}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="-- Select Agent --" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t("pivoting.select_agent")} /></SelectTrigger>
                   <SelectContent>
                     {agents.map(a => (                    <SelectItem key={a.id} value={a.id}>{a.hostname} ({a.ip})</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>              </div>
               <div>
-                <Label className="text-xs font-medium mb-1 block">Remote Host</Label>                <Input aria-label="127.0.0.1" name="input-10" type="text" value={rportRemoteHost} onChange={e => setRportRemoteHost(e.target.value)} placeholder="127.0.0.1" />
-              </div>              <div>                <Label className="text-xs font-medium mb-1 block">Remote Port</Label>
+                <Label className="text-xs font-medium mb-1 block">{t("pivoting.remote_host")}</Label>                <Input aria-label={t("pivoting.remote_host")} name="input-10" type="text" value={rportRemoteHost} onChange={e => setRportRemoteHost(e.target.value)} placeholder="127.0.0.1" />
+              </div>              <div>                <Label className="text-xs font-medium mb-1 block">{t("pivoting.remote_port")}</Label>
                 <Input aria-label={t("pivoting.remote_port")} name="input-11" type="number" value={rportRemotePort} onChange={e => setRportRemotePort(Number(e.target.value))} min={1} max={65535} />              </div>
               <div>
-                <Label className="text-xs font-medium mb-1 block">Local Port</Label>                <Input aria-label={t("pivoting.local_forward_port")} name="input-12" type="number" value={rportLocalPort} onChange={e => setRportLocalPort(Number(e.target.value))} min={1} max={65535} />              </div>
+                <Label className="text-xs font-medium mb-1 block">{t("pivoting.local_forward_port")}</Label>                <Input aria-label={t("pivoting.local_forward_port")} name="input-12" type="number" value={rportLocalPort} onChange={e => setRportLocalPort(Number(e.target.value))} min={1} max={65535} />              </div>
             </div>            <div className="flex items-center gap-3">
               <div>
-                <Label className="text-xs font-medium mb-1 block">Protocol</Label>
+                <Label className="text-xs font-medium mb-1 block">{t("pivoting.protocol")}</Label>
                 <Select value={rportProtocol} onValueChange={v => setRportProtocol(v as "tcp" | "udp")}>
                   <SelectTrigger className="w-full"><SelectValue placeholder={t("pivoting.protocol_ph")} /></SelectTrigger>
                   <SelectContent>
@@ -389,7 +389,7 @@ export default function PivotingPageContent() {
               </div>
               <Button onClick={startRPort} disabled={!rportAgent}
                 className="h-11 px-6 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
-                <Play className="w-4 h-4" /> Start Forward</Button>
+                <Play className="w-4 h-4" /> {t("pivoting.start_forward")}</Button>
               <Button variant="outline"
                 onClick={() => {
                   toast.info(t("pivoting.toast.refreshing_rport"));
@@ -397,7 +397,7 @@ export default function PivotingPageContent() {
                 }}
                 className="h-11 px-4 flex items-center gap-1.5"
               >
-                <RotateCw className="w-4 h-4" /> Refresh Status
+                <RotateCw className="w-4 h-4" /> {t("pivoting.refresh_status")}
               </Button>
             </div>
             <div className="mt-3 p-3 bg-primary/10 rounded-xl text-xs text-primary flex items-start gap-1.5">

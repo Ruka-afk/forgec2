@@ -154,8 +154,8 @@ export default function RolesPage() {
                   <PermSelector selected={editRole.permissions}
                     onToggle={(p) => setEditRole({ ...editRole, permissions: togglePerm(editRole.permissions, p) })} />
                   <div className="flex gap-2">
-                    <Button onClick={() => handleUpdate(editRole)}>Save</Button>
-                    <Button variant="outline" onClick={() => setEditRole(null)}>Cancel</Button>
+                    <Button onClick={() => handleUpdate(editRole)}>{t("common.save")}</Button>
+                    <Button variant="outline" onClick={() => setEditRole(null)}>{t("common.cancel")}</Button>
                   </div>
                 </div>
               ) : (

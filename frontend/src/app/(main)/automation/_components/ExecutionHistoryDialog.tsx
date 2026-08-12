@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { History, ChevronRight, X } from "lucide-react";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
-import { formatTime } from "@/lib/utils";
+import { formatTime, enumLabel } from "@/lib/utils";
 
 interface WorkflowExecution {
   execution_id: string;
@@ -147,7 +147,7 @@ export default function ExecutionHistoryDialog({ workflowId, onClose }: Executio
                 <div className="flex items-center gap-2 mb-1">
                   <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-(--fs-micro-sm) font-semibold">{log.step_order}</span>
                   <span className="font-semibold text-xs text-primary">{log.task_type}</span>
-                  <Badge variant={log.status === "completed" ? "default" : log.status === "failed" ? "destructive" : "secondary"} className="text-(--fs-micro-sm)">{log.status}</Badge>
+                  <Badge variant={log.status === "completed" ? "default" : log.status === "failed" ? "destructive" : "secondary"} className="text-(--fs-micro-sm)">{enumLabel(t, "tasks", log.status)}</Badge>
                   {log.branch_action && log.branch_action !== "continue" && (
                     <Badge variant="outline" className="text-(--fs-micro-sm)">
                       {log.branch_action}{log.branch_target ? ` → ${log.branch_target}` : ""}
