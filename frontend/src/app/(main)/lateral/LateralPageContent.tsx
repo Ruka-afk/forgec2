@@ -170,22 +170,22 @@ export default function LateralPageContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                  <FolderTree className="w-4 h-4" />Share
+                  <FolderTree className="w-4 h-4" />{t("lateral.a11y_share")}
                 </span>
-                <Input aria-label="ADMIN$" name="admin-0" type="text" placeholder="ADMIN$" className="font-mono" value={form.share} onChange={e => updateForm("share", e.target.value)} />
+                <Input aria-label={t("lateral.a11y_share")} name="admin-0" type="text" placeholder="ADMIN$" className="font-mono" value={form.share} onChange={e => updateForm("share", e.target.value)} />
               </div>
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                  <IdCard className="w-4 h-4" />Username
+                  <IdCard className="w-4 h-4" />{t("lateral.a11y_username")}
                 </span>
-                <Input aria-label="DOMAIN\username" name="domain-username-1" type="text" placeholder="DOMAIN\username" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
+                <Input aria-label={t("lateral.a11y_username")} name="domain-username-1" type="text" placeholder="DOMAIN\username" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
               </div>
             </div>
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                <Lock className="w-4 h-4" />Password
+                <Lock className="w-4 h-4" />{t("lateral.a11y_password")}
               </span>
-              <Input aria-label="Password" name="password-2" type="password" placeholder="Password" className="font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
+              <Input aria-label={t("lateral.a11y_password")} name="password-2" type="password" placeholder={t("lateral.a11y_password")} className="font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
             </div>
           </>
         );
@@ -195,22 +195,22 @@ export default function LateralPageContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                  <Network className="w-4 h-4" />Port
+                  <Network className="w-4 h-4" />{t("lateral.a11y_port")}
                 </span>
-                <Input aria-label="5985" name="5985-3" type="text" placeholder="5985" className="font-mono" value={form.port} onChange={e => updateForm("port", e.target.value)} />
+                <Input aria-label={t("lateral.a11y_port")} name="5985-3" type="text" placeholder="5985" className="font-mono" value={form.port} onChange={e => updateForm("port", e.target.value)} />
               </div>
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                  <IdCard className="w-4 h-4" />Username
+                  <IdCard className="w-4 h-4" />{t("lateral.a11y_username")}
                 </span>
-                <Input aria-label="Administrator" name="administrator-4" type="text" placeholder="Administrator" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
+                <Input aria-label={t("lateral.a11y_username")} name="administrator-4" type="text" placeholder="Administrator" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
               </div>
             </div>
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                <Lock className="w-4 h-4" />Password
+                <Lock className="w-4 h-4" />{t("lateral.a11y_password")}
               </span>
-              <Input aria-label="Password" name="password-5" type="password" placeholder="Password" className="font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
+              <Input aria-label={t("lateral.a11y_password")} name="password-5" type="password" placeholder={t("lateral.a11y_password")} className="font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
             </div>
           </>
         );
@@ -220,22 +220,22 @@ export default function LateralPageContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                  <Code className="w-4 h-4" />Namespace
+                  <Code className="w-4 h-4" />{t("lateral.a11y_namespace")}
                 </span>
-                <Input aria-label="root\cimv2" name="root-cimv2-6" type="text" placeholder="root\cimv2" className="font-mono" value={form.namespace} onChange={e => updateForm("namespace", e.target.value)} />
+                <Input aria-label={t("lateral.a11y_namespace")} name="root-cimv2-6" type="text" placeholder="root\cimv2" className="font-mono" value={form.namespace} onChange={e => updateForm("namespace", e.target.value)} />
               </div>
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                  <IdCard className="w-4 h-4" />Username
+                  <IdCard className="w-4 h-4" />{t("lateral.a11y_username")}
                 </span>
-                <Input aria-label="DOMAIN\username" name="domain-username-7" type="text" placeholder="DOMAIN\username" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
+                <Input aria-label={t("lateral.a11y_username")} name="domain-username-7" type="text" placeholder="DOMAIN\username" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
               </div>
             </div>
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                <Lock className="w-4 h-4" />Password
+                <Lock className="w-4 h-4" />{t("lateral.a11y_password")}
               </span>
-              <Input aria-label="Password" name="password-8" type="password" placeholder="Password" className="font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
+              <Input aria-label={t("lateral.a11y_password")} name="password-8" type="password" placeholder={t("lateral.a11y_password")} className="font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
             </div>
           </>
         );
@@ -245,29 +245,29 @@ export default function LateralPageContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                  <Network className="w-4 h-4" />Port
+                  <Network className="w-4 h-4" />{t("lateral.a11y_port")}
                 </span>
-                <Input aria-label="22" name="22-9" type="text" placeholder="22" className="font-mono" value={form.port} onChange={e => updateForm("port", e.target.value)} />
+                <Input aria-label={t("lateral.a11y_port")} name="22-9" type="text" placeholder="22" className="font-mono" value={form.port} onChange={e => updateForm("port", e.target.value)} />
               </div>
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                  <IdCard className="w-4 h-4" />Username
+                  <IdCard className="w-4 h-4" />{t("lateral.a11y_username")}
                 </span>
-                <Input aria-label="root" name="root-10" type="text" placeholder="root" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
+                <Input aria-label={t("lateral.a11y_username")} name="root-10" type="text" placeholder="root" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                  <Lock className="w-4 h-4" />Password
+                  <Lock className="w-4 h-4" />{t("lateral.a11y_password")}
                 </span>
-                <Input aria-label="Password" name="password-11" type="password" placeholder="Password" className="font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
+                <Input aria-label={t("lateral.a11y_password")} name="password-11" type="password" placeholder={t("lateral.a11y_password")} className="font-mono" value={form.password} onChange={e => updateForm("password", e.target.value)} />
               </div>
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                  <Key className="w-4 h-4" />Key Path (optional)
+                  <Key className="w-4 h-4" />{t("lateral.a11y_key_path")}
                 </span>
-                <Input aria-label="/path/to/key.pem" name="path-to-key-pem-12" type="text" placeholder="/path/to/key.pem" className="font-mono" value={form.key_path} onChange={e => updateForm("key_path", e.target.value)} />
+                <Input aria-label={t("lateral.a11y_key_path")} name="path-to-key-pem-12" type="text" placeholder="/path/to/key.pem" className="font-mono" value={form.key_path} onChange={e => updateForm("key_path", e.target.value)} />
               </div>
             </div>
           </>
@@ -277,15 +277,15 @@ export default function LateralPageContent() {
           <>
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                <IdCard className="w-4 h-4" />Username
+                <IdCard className="w-4 h-4" />{t("lateral.a11y_username")}
               </span>
-              <Input aria-label="Administrator" name="administrator-13" type="text" placeholder="Administrator" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
+              <Input aria-label={t("lateral.a11y_username")} name="administrator-13" type="text" placeholder="Administrator" className="font-mono" value={form.username} onChange={e => updateForm("username", e.target.value)} />
             </div>
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                <Ticket className="w-4 h-4" />NTLM Hash
+                <Ticket className="w-4 h-4" />{t("lateral.a11y_hash")}
               </span>
-              <Input aria-label="aad3b435b51404eeaad3b435b51404ee:..." name="aad3b435b51404eeaad3b435b51404ee-14" type="text" placeholder="aad3b435b51404eeaad3b435b51404ee:..." className="font-mono" value={form.hash} onChange={e => updateForm("hash", e.target.value)} />
+              <Input aria-label={t("lateral.a11y_hash")} name="aad3b435b51404eeaad3b435b51404ee-14" type="text" placeholder="aad3b435b51404eeaad3b435b51404ee:..." className="font-mono" value={form.hash} onChange={e => updateForm("hash", e.target.value)} />
             </div>
           </>
         );
@@ -447,7 +447,7 @@ export default function LateralPageContent() {
             <span className="block text-xs font-semibold text-muted-foreground mb-1.5">
               <Terminal className="w-4 h-4" />{t("lateral.exec_command")}
             </span>
-            <Input aria-label="whoami /all | powershell -enc ..." name="whoami-all-powershell-enc-19" type="text" placeholder="whoami /all | powershell -enc ..." className="font-mono" value={form.command} onChange={e => updateForm("command", e.target.value)} />
+            <Input aria-label={t("lateral.a11y_command")} name="whoami-all-powershell-enc-19" type="text" placeholder="whoami /all | powershell -enc ..." className="font-mono" value={form.command} onChange={e => updateForm("command", e.target.value)} />
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-border">

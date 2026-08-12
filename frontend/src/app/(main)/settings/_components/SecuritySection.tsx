@@ -114,7 +114,7 @@ export default function SecuritySection({
                     <div className="text-xs font-medium text-primary mb-2">{t("settings.security.scan_qr")}</div>
                     <div className="flex items-center gap-4">
                       <div className="w-32 h-32 bg-card rounded-xl border border-primary/30 dark:border-primary/40 flex items-center justify-center shrink-0">
-                        {totpQR ? <img src={totpQR} alt="QR Code" className="max-w-full max-h-full p-2" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} /> : <QrCode className="w-4 h-4" />}
+                        {totpQR ? <img src={totpQR} alt={t("settings.security.qr_alt")} className="max-w-full max-h-full p-2" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} /> : <QrCode className="w-4 h-4" />}
                       </div>
                       <div>
                         <div className="text-xs text-primary mb-1">{t("settings.security.secret_key")}</div>

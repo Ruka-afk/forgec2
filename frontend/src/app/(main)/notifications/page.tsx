@@ -141,14 +141,14 @@ export default function NotificationsPage() {
       <Card className="p-4 sm:p-5 mb-4">
         <div className="flex flex-wrap gap-3">
           <Select value={typeFilter || "all"} onValueChange={(v) => { setTypeFilter(v === "all" ? "" : v ?? ""); setPage(1); }}>
-            <SelectTrigger className="w-full sm:w-48" aria-label="Filter by type"><SelectValue placeholder={t("notifications.all_types")} /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-48" aria-label={t("notifications.a11y_filter_type")}><SelectValue placeholder={t("notifications.all_types")} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("notifications.all_types")}</SelectItem>
               {NOTIF_TYPES.map((tp) => <SelectItem key={tp} value={tp}>{tp.replace("_", " ")}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={severityFilter || "all"} onValueChange={(v) => { setSeverityFilter(v === "all" ? "" : v ?? ""); setPage(1); }}>
-            <SelectTrigger className="w-full sm:w-48" aria-label="Filter by severity"><SelectValue placeholder={t("notifications.all_severity")} /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-48" aria-label={t("notifications.a11y_filter_severity")}><SelectValue placeholder={t("notifications.all_severity")} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("notifications.all_severity")}</SelectItem>
               <SelectItem value="success">{t("notifications.success")}</SelectItem>
@@ -158,7 +158,7 @@ export default function NotificationsPage() {
             </SelectContent>
           </Select>
           <Select value={readFilter || "all"} onValueChange={(v) => { setReadFilter(v === "all" ? "" : v ?? ""); setPage(1); }}>
-            <SelectTrigger className="w-full sm:w-48" aria-label="Filter by status"><SelectValue placeholder={t("notifications.all_status")} /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-48" aria-label={t("notifications.a11y_filter_status")}><SelectValue placeholder={t("notifications.all_status")} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("notifications.all_status")}</SelectItem>
               <SelectItem value="false">{t("notifications.unread")}</SelectItem>

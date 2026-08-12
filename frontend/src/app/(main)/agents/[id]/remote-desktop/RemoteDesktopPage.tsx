@@ -429,7 +429,7 @@ export default function RemoteDesktopPage() {
                 <img
                   ref={imgRef}
                   src={screenData}
-                  alt="Remote Desktop"
+                  alt={t("agents.rdp_title")}
                   className="max-w-full max-h-full object-contain"
                   draggable={false}
                   loading="lazy"

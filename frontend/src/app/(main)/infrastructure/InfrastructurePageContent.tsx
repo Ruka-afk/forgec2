@@ -257,7 +257,7 @@ export default function InfrastructurePage() {
                 <CardContent className="p-4 sm:p-5 space-y-4">
                   <div>
                     <Label className="text-xs">{t("common.name")}</Label>
-                    <Input aria-label={t("infra.name_label")} name="input-7" type="text" value={rdName} onChange={e => setRdName(e.target.value)} placeholder="My Redirector" />
+                    <Input aria-label={t("infra.name_label")} name="input-7" type="text" value={rdName} onChange={e => setRdName(e.target.value)} placeholder={t("infra.name_label")} />
                   </div>
                   <div>
                     <Label className="text-xs">{t("infra.host")}</Label>

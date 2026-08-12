@@ -293,7 +293,7 @@ interface ScreenshotItem {
               </div>              <div className="relative bg-background flex-1 flex items-center justify-center cursor-pointer overflow-hidden"
                 onClick={() => screenshot && openModal(screenshot)}>
                 {screenshot ? (
-                  <img src={screenshot} alt="Screenshot" width={resolution?.width || undefined} height={resolution?.height || undefined} style={{ aspectRatio: resolution ? `${resolution.width} / ${resolution.height}` : undefined }} className="max-w-full max-h-full object-contain" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <img src={screenshot} alt={t("agents.screenshot")} width={resolution?.width || undefined} height={resolution?.height || undefined} style={{ aspectRatio: resolution ? `${resolution.width} / ${resolution.height}` : undefined }} className="max-w-full max-h-full object-contain" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : (
                   <div className="text-center text-muted-foreground/70 py-20">
                     <EmptyState icon={Monitor} title={t("agents.screen_no_screenshots")} message={`${t("agents.screen_start")} / ${t("agents.screen_capture")}`} />
@@ -375,7 +375,7 @@ interface ScreenshotItem {
                   {screenshotGallery.map((item) => (
                     <div key={item.id} className="relative group cursor-pointer rounded-xl overflow-hidden border-2 border-transparent hover:border-primary transition-colors bg-muted"
                       onClick={() => openModal(item.data || "")}>
-                      <img src={item.data} alt="Thumbnail" className="w-full h-auto aspect-video object-cover" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 text-(--fs-micro) text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                      <img src={item.data} alt={t("agents.screen_alt_thumb")} className="w-full h-auto aspect-video object-cover" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 text-(--fs-micro) text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                         {item.timestamp}
                       </div>
                       <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
@@ -416,7 +416,7 @@ interface ScreenshotItem {
                 <TooltipContent>Close</TooltipContent>
               </Tooltip>
             </div>
-            <img src={modalImage} alt="Full size" className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <img src={modalImage} alt={t("agents.screen_alt_full")} className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
         </DialogContent>
       </Dialog>

@@ -230,7 +230,7 @@ function LootPage() {
             <div className="flex items-center gap-3">
               {filteredScreenshots.length > 0 && (
                 <Label className="flex items-center gap-x-2 text-xs text-muted-foreground cursor-pointer">
-                  <Checkbox checked={filteredScreenshots.length > 0 && filteredScreenshots.every(s => selectedItems.has(s.id))} onCheckedChange={toggleSelectAll} aria-label="Select all screenshots" />
+                  <Checkbox checked={filteredScreenshots.length > 0 && filteredScreenshots.every(s => selectedItems.has(s.id))} onCheckedChange={toggleSelectAll} aria-label={t("loot.a11y_select_all")} />
                   {t("loot.select_all")}
                 </Label>
               )}

@@ -126,7 +126,7 @@ export default function RolesPage() {
               <DialogTitle>{t("roles.create_title")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
-              <Input aria-label="Role name (e.g. operator-readonly)" placeholder={t("roles.name_ph")} value={newName}
+              <Input aria-label={t("roles.a11y_name")} placeholder={t("roles.name_ph")} value={newName}
                 onChange={(e) => setNewName(e.target.value)} />
               <Textarea aria-label={t("roles.a11y_desc_short")} rows={2} placeholder={t("roles.desc_ph")} value={newDesc}
                 onChange={(e) => setNewDesc(e.target.value)} />

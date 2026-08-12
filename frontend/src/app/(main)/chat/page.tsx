@@ -154,7 +154,7 @@ export default function ChatPage() {
             </div>
           </DataState>
           <div className="flex gap-2 px-4 py-3 border-t border-border bg-card">
-            <Input aria-label="Type a message... (Enter to send)" name="input-0" value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
+            <Input aria-label={t("chat.input_placeholder")} name="input-0" value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
               placeholder={t("chat.input_placeholder")}
               className="flex-1 h-10" />
             <Button onClick={sendMessage} disabled={!input.trim() || sending}

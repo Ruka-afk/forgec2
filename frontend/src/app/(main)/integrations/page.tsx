@@ -237,11 +237,11 @@ export default function IntegrationsPage() {
               </div>
               {formType === "email" && (
                 <div className="flex flex-wrap gap-2">
-                  <Input aria-label={t("integrations.smtp_host")} name="smtp-host" value={formSMTPHost} onChange={e => { setFormSMTPHost(e.target.value); if (formErrors.smtp) setFormErrors({ ...formErrors, smtp: undefined }); }} placeholder="SMTP Host" />
-                  <Input aria-label={t("integrations.smtp_port")} name="smtp-port" value={formSMTPPort} onChange={e => { setFormSMTPPort(e.target.value); if (formErrors.smtp) setFormErrors({ ...formErrors, smtp: undefined }); }} placeholder="SMTP Port" />
-                  <Input aria-label={t("integrations.smtp_user")} name="smtp-user" value={formSMTPUser} onChange={e => setFormSMTPUser(e.target.value)} placeholder="SMTP User" />
-                  <Input aria-label={t("integrations.smtp_pass")} name="smtp-pass" type="password" value={formSMTPPass} onChange={e => setFormSMTPPass(e.target.value)} placeholder="SMTP Pass" />
-                  <Input aria-label={t("integrations.from_address")} name="smtp-from" value={formFrom} onChange={e => setFormFrom(e.target.value)} placeholder="From Address" />
+                  <Input aria-label={t("integrations.smtp_host")} name="smtp-host" value={formSMTPHost} onChange={e => { setFormSMTPHost(e.target.value); if (formErrors.smtp) setFormErrors({ ...formErrors, smtp: undefined }); }} placeholder={t("integrations.smtp_host")} />
+                  <Input aria-label={t("integrations.smtp_port")} name="smtp-port" value={formSMTPPort} onChange={e => { setFormSMTPPort(e.target.value); if (formErrors.smtp) setFormErrors({ ...formErrors, smtp: undefined }); }} placeholder={t("integrations.smtp_port")} />
+                  <Input aria-label={t("integrations.smtp_user")} name="smtp-user" value={formSMTPUser} onChange={e => setFormSMTPUser(e.target.value)} placeholder={t("integrations.smtp_user")} />
+                  <Input aria-label={t("integrations.smtp_pass")} name="smtp-pass" type="password" value={formSMTPPass} onChange={e => setFormSMTPPass(e.target.value)} placeholder={t("integrations.smtp_pass")} />
+                  <Input aria-label={t("integrations.from_address")} name="smtp-from" value={formFrom} onChange={e => setFormFrom(e.target.value)} placeholder={t("integrations.from_address")} />
                 </div>
               )}
               {formErrors.smtp && <FieldError>{formErrors.smtp}</FieldError>}

@@ -233,7 +233,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
               </div>
               <div className="mb-4">
                 <Label className="text-xs mb-1">{t("scheduler.command")}</Label>
-                <Input value={command} onChange={e => { setCommand(e.target.value); if (formErrors.command) setFormErrors({ ...formErrors, command: undefined }); }} placeholder={t("scheduler.cmd_ph")} aria-label="Command" />
+                <Input value={command} onChange={e => { setCommand(e.target.value); if (formErrors.command) setFormErrors({ ...formErrors, command: undefined }); }} placeholder={t("scheduler.cmd_ph")} aria-label={t("scheduler.command")} />
                 <FieldError>{formErrors.command}</FieldError>
               </div>
               <div className="mb-4">
@@ -262,7 +262,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
           <div className="space-y-2">
             {tasks.map(task => (
               <div key={task.id} className="flex items-center gap-4 p-3 bg-secondary border border-border rounded-xl">
-                <Switch checked={task.enabled} onCheckedChange={() => handleToggle(task.id)} aria-label={task.enabled ? "Disable schedule" : "Enable schedule"} />
+                <Switch checked={task.enabled} onCheckedChange={() => handleToggle(task.id)} aria-label={task.enabled ? t("scheduler.a11y_disable") : t("scheduler.a11y_enable")} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm">{task.name}</span>
