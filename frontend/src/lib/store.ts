@@ -10,6 +10,8 @@ export interface OnlineUser {
   connected_at: string;
 }
 
+let statsInFlight: Promise<void> | null = null;
+
 interface AppState {
   stats: DashboardStats | null;
   statsError?: string;
@@ -77,12 +79,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
 
   fetchStats: async () => {
-    try {
-      const stats = await api.get<DashboardStats>(paths.dashboard.v1);
-      set({ stats, statsError: undefined });
-    } catch (e) {
-      if (process.env.NODE_ENV === "development") console.error("[store] fetchStats failed", e);
-      set({ statsError: e instanceof Error ? e.message : "Failed to load stats" });
-    }
+    if (statsInFlight) return statsInFlight;
+    statsInFlight = (async () => {
+      try {
+        const stats = await api.get<DashboardStats>(paths.dashboard.v1);
+        set({ stats, statsError: undefined });
+      } catch (e) {
+        if (process.env.NODE_ENV === "development") console.error("[store] fetchStats failed", e);
+        set({ statsError: e instanceof Error ? e.message : "Failed to load stats" });
+      } finally {
+        statsInFlight = null;
+      }
+    })();
+    return statsInFlight;
   },
 }));

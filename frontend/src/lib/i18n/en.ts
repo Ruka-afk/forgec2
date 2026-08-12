@@ -3242,7 +3242,9 @@ export const en: Record<string, string> = {
     "topbar.notif.credential_found": "New credential captured",
     "topbar.notif.system_alert": "System alert",
     "topbar.notif.task_done": "Task {type} completed: {cmd}",
+    "topbar.notif.task_done_multi": "{count} tasks completed",
     "topbar.notif.task_failed": "Task {type} failed: {cmd}",
+    "topbar.notif.task_failed_multi": "{count} tasks failed",
     "topbar.notif.update_available": "Update available: v{version}",
     "topbar.notifications": "Notifications",
     "topbar.reconnect": "Reconnect",
@@ -3461,3 +3463,4 @@ export const en: Record<string, string> = {
     "workflows.toast.toggle_failed": "Failed to toggle workflow",
     "workflows.toast.updated": "Workflow updated",
 };
+

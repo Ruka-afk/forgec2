@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { PageHeader, Spinner } from "@/components/UI";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,10 +50,7 @@ export default function DNSPage() {
     fetchStatus(true);
   }, [fetchStatus]);
 
-  useEffect(() => {
-    const interval = setInterval(() => fetchStatus(false, true), 5000);
-    return () => clearInterval(interval);
-  }, [fetchStatus]);
+  useVisibleInterval(() => fetchStatus(false, true), 5000);
 
   const handleStart = async () => {
     setActionLoading(true);

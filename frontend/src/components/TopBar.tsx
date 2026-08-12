@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useWebSocket } from "@/lib/useWebSocket";
 import { useI18n } from "@/lib/i18n";
@@ -195,6 +195,52 @@ function NotificationDropdown() {
     ]);
   }, []);
 
+  // Coalesce bursty task_update WS events into a single notification per
+  // status/task-type within a 4s window, so a large task batch does not flood
+  // the dropdown with dozens of entries.
+  const taskPendingRef = useRef<Map<string, { status: string; taskType: string; cmd: string; count: number }>>(new Map());
+  const taskFlushRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushTaskNotifications = useCallback(() => {
+    taskFlushRef.current = null;
+    const pending = taskPendingRef.current;
+    taskPendingRef.current = new Map();
+    for (const item of pending.values()) {
+      if (item.status === "completed") {
+        pushNotification(
+          "success",
+          item.count === 1
+            ? t("topbar.notif.task_done", { type: item.taskType, cmd: item.cmd })
+            : t("topbar.notif.task_done_multi", { count: item.count }),
+        );
+      } else {
+        pushNotification(
+          "error",
+          item.count === 1
+            ? t("topbar.notif.task_failed", { type: item.taskType, cmd: item.cmd })
+            : t("topbar.notif.task_failed_multi", { count: item.count }),
+        );
+      }
+    }
+  }, [pushNotification, t]);
+
+  const queueTaskNotification = useCallback((status: string, taskType: string, cmd: string) => {
+    const key = `${status}:${taskType}`;
+    const existing = taskPendingRef.current.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      taskPendingRef.current.set(key, { status, taskType, cmd, count: 1 });
+    }
+    if (!taskFlushRef.current) {
+      taskFlushRef.current = setTimeout(flushTaskNotifications, 4000);
+    }
+  }, [flushTaskNotifications]);
+
+  useEffect(() => () => {
+    if (taskFlushRef.current) clearTimeout(taskFlushRef.current);
+  }, []);
+
   const handleWSMessage = useCallback((msg: { type: string; [key: string]: unknown }) => {
     const name = String(msg.hostname || msg.agent_id || "").slice(0, 32);
     if (msg.type === "agent_online") pushNotification("success", t("topbar.notif.agent_online", { name }));
@@ -203,17 +249,19 @@ function NotificationDropdown() {
       const status = String(msg.status || "");
       const type = String(msg.task_type || "");
       const cmd = String(msg.command || "").slice(0, 40);
-      if (status === "completed") pushNotification("success", t("topbar.notif.task_done", { type, cmd }));
-      else if (status === "failed") pushNotification("error", t("topbar.notif.task_failed", { type, cmd }));
+      if (status === "completed" || status === "failed") queueTaskNotification(status, type, cmd);
     } else if (msg.type === "credential_found") pushNotification("success", t("topbar.notif.credential_found"));
     else if (msg.type === "system_alert") pushNotification("warning", String(msg.message || msg.title || t("topbar.notif.system_alert")));
     else if (msg.type === "update_available") pushNotification("info", t("topbar.notif.update_available", { version: String(msg.latest || "") }));
-  }, [pushNotification, t]);
+  }, [pushNotification, queueTaskNotification, t]);
 
   useWebSocket(handleWSMessage);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
-  const markAllRead = () => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  const markAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    api.put(paths.notifications.readAll).catch(() => { /* silent */ });
+  };
 
   const typeColors: Record<string, string> = {
     success: "bg-emerald-500",

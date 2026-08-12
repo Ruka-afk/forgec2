@@ -3242,7 +3242,9 @@ export const zh: Record<string, string> = {
     "topbar.notif.credential_found": "捕获到新凭据",
     "topbar.notif.system_alert": "系统告警",
     "topbar.notif.task_done": "任务 {type} 完成：{cmd}",
+    "topbar.notif.task_done_multi": "{count} 个任务已完成",
     "topbar.notif.task_failed": "任务 {type} 失败：{cmd}",
+    "topbar.notif.task_failed_multi": "{count} 个任务失败",
     "topbar.notif.update_available": "有新版本可用：v{version}",
     "topbar.notifications": "通知",
     "topbar.reconnect": "重新连接",
@@ -3461,3 +3463,4 @@ export const zh: Record<string, string> = {
     "workflows.toast.toggle_failed": "切换工作流状态失败",
     "workflows.toast.updated": "工作流已更新",
 };
+
