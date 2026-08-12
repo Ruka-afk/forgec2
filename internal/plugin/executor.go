@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,7 +72,20 @@ func (e *executor) run(ctx context.Context, pluginDir string, m *Manifest, input
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	runErr := cmd.Run()
+	// Start the process explicitly so a process-tree guard can be attached
+	// (Windows Job Object with KILL_ON_JOB_CLOSE) before it does any work.
+	// On timeout the guard release below also terminates surviving children,
+	// not just the main process.
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start plugin %q: %w", m.Name, err)
+	}
+	guard, guardErr := attachProcessGuard(cmd.Process)
+	if guardErr != nil {
+		slog.Warn("plugin process guard unavailable", "plugin", m.Name, "error", guardErr)
+	}
+
+	runErr := cmd.Wait()
+	guard.release()
 
 	res := &execResult{
 		Stdout: stdout.Bytes(),

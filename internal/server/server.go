@@ -519,6 +519,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	s.monitorCollector.Start()
 
 	s.loadScriptsFromDB()
+	s.installScriptingBridge()
 
 	return s
 }

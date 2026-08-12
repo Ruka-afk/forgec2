@@ -157,10 +157,15 @@ func (s *Server) executeAction(action RuleAction, evt Event) {
 				"event":    evt,
 				"agent_id": evt.AgentID,
 			}
+			// Automation-triggered scripts run with the standard user role
+			// permissions: they can read agents/credentials and queue tasks
+			// (the same powers rule authors already have via other actions),
+			// but cannot reach the network (httpRequest stays admin-only).
+			caller := scripting.Caller{Username: "automation", Role: db.RoleUser}
 			if params.ScriptID != "" {
-				engine.Execute(params.ScriptID, context)
+				engine.Execute(params.ScriptID, context, caller)
 			} else if params.Code != "" {
-				engine.ExecuteCode(params.Code, context)
+				engine.ExecuteCode(params.Code, context, caller)
 			}
 		}
 	case ActionCreateTask:

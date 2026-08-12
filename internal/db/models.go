@@ -791,7 +791,7 @@ func RoleHasPermission(role, permission string) bool {
 // RoleHasPermissionDB checks both built-in and custom DB-backed roles.
 // Requires a database handle to query custom_roles table.
 func RoleHasPermissionDB(database interface {
-	Where(string, ...interface{}) *gorm.DB
+	Where(interface{}, ...interface{}) *gorm.DB
 }, role, permission string) bool {
 	if RoleHasPermission(role, permission) {
 		return true

@@ -26,6 +26,7 @@ type RateLimiter struct {
 	window      time.Duration // time window
 	maxVisitors int           // max entries before eviction
 	stop        chan struct{}
+	stopOnce    sync.Once
 }
 
 type visitor struct {
@@ -73,11 +74,11 @@ func NewRateLimiter(ctx context.Context, limit int, window time.Duration) *RateL
 	return rl
 }
 
-var rateLimiterStopOnce sync.Once
-
-// Stop terminates the cleanup goroutine.
+// Stop terminates the cleanup goroutine. Idempotent per instance: each
+// RateLimiter owns its stop channel, so stopping one must never leak or
+// suppress the cleanup goroutines of other instances.
 func (rl *RateLimiter) Stop() {
-	rateLimiterStopOnce.Do(func() {
+	rl.stopOnce.Do(func() {
 		close(rl.stop)
 	})
 }

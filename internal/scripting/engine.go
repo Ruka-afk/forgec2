@@ -3,6 +3,7 @@ package scripting
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -13,12 +14,41 @@ import (
 	"github.com/dop251/goja_nodejs/require"
 )
 
+// Caller identifies who triggered a script execution. The bridge uses it to
+// enforce permissions: admin callers get full access, everyone else is
+// limited to the permissions of their role.
+type Caller struct {
+	Username string
+	Role     string
+}
+
+// Bridge is the server-side capability layer scripts call through. Every
+// method is synchronous: results are returned to the script, errors are
+// thrown as JavaScript exceptions. Implementations must enforce permissions
+// via Caller before touching the database or the network.
+type Bridge interface {
+	SendTask(caller Caller, agentID, taskType, params string) (uint64, error)
+	GetAgent(caller Caller, agentID string) (map[string]interface{}, error)
+	ListAgents(caller Caller) ([]map[string]interface{}, error)
+	HTTPRequest(caller Caller, method, url string, headers map[string]string, body string, timeoutSecs int) (map[string]interface{}, error)
+	Query(caller Caller, kind string, args map[string]interface{}) (interface{}, error)
+}
+
 type ScriptEngine struct {
 	vm      *goja.Runtime
 	mu      sync.Mutex
+	bridge  Bridge
 	scripts []*LoadedScript
-	events  map[string][]goja.Callable
-	onEvent func(string, interface{})
+	events  map[string][]*eventCallback
+	execMu  sync.Mutex // serializes event callback execution (goja VMs are not goroutine-safe)
+}
+
+// eventCallback stores a registered event handler together with the VM it was
+// registered on: goja values are VM-bound, so callbacks must always run on
+// their owner VM.
+type eventCallback struct {
+	vm *goja.Runtime
+	cb goja.Callable
 }
 
 type LoadedScript struct {
@@ -42,11 +72,10 @@ func NewScriptEngine() *ScriptEngine {
 	console.Enable(vm)
 
 	e := &ScriptEngine{
-		vm:      vm,
-		scripts: make([]*LoadedScript, 0),
-		events:  make(map[string][]goja.Callable),
+		vm:     vm,
+		events: make(map[string][]*eventCallback),
 	}
-	e.registerAPI()
+	e.registerAPI(vm, Caller{Role: "admin"})
 	return e
 }
 
@@ -54,9 +83,23 @@ func GetEngine() *ScriptEngine {
 	return globalEngine
 }
 
-func (e *ScriptEngine) registerAPI() {
-	vm := e.vm
+// SetBridge installs the server-side capability layer. Called once at server
+// startup before any script can execute.
+func (e *ScriptEngine) SetBridge(b Bridge) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.bridge = b
+}
 
+func (e *ScriptEngine) bridgeFor(caller Caller) Bridge {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.bridge
+}
+
+// registerAPI installs the JavaScript API surface on the given VM. The bridge
+// calls are synchronous: on failure the script sees a thrown exception.
+func (e *ScriptEngine) registerAPI(vm *goja.Runtime, caller Caller) {
 	vm.Set("on", func(call goja.FunctionCall) goja.Value {
 		eventType := call.Argument(0).String()
 		cb, ok := goja.AssertFunction(call.Argument(1))
@@ -65,7 +108,7 @@ func (e *ScriptEngine) registerAPI() {
 			return goja.Undefined()
 		}
 		e.mu.Lock()
-		e.events[eventType] = append(e.events[eventType], cb)
+		e.events[eventType] = append(e.events[eventType], &eventCallback{vm: vm, cb: cb})
 		e.mu.Unlock()
 		return goja.Undefined()
 	})
@@ -79,59 +122,106 @@ func (e *ScriptEngine) registerAPI() {
 	})
 
 	vm.Set("sendTask", func(call goja.FunctionCall) goja.Value {
+		bridge := e.bridgeFor(caller)
+		if bridge == nil {
+			panic(vm.NewGoError(errors.New("script bridge is not available")))
+		}
 		agentID := call.Argument(0).String()
 		taskType := call.Argument(1).String()
 		params := call.Argument(2).String()
-
-		if e.onEvent != nil {
-			e.onEvent("sendTask", map[string]interface{}{
-				"agent_id":  agentID,
-				"task_type": taskType,
-				"params":    params,
-			})
+		id, err := bridge.SendTask(caller, agentID, taskType, params)
+		if err != nil {
+			panic(vm.NewGoError(err))
 		}
-		return goja.Undefined()
+		return vm.ToValue(id)
 	})
 
 	vm.Set("getAgent", func(call goja.FunctionCall) goja.Value {
-		agentID := call.Argument(0).String()
-		if e.onEvent != nil {
-			e.onEvent("getAgent", agentID)
+		bridge := e.bridgeFor(caller)
+		if bridge == nil {
+			panic(vm.NewGoError(errors.New("script bridge is not available")))
 		}
-		return goja.Undefined()
+		agentID := call.Argument(0).String()
+		agent, err := bridge.GetAgent(caller, agentID)
+		if err != nil {
+			panic(vm.NewGoError(err))
+		}
+		return vm.ToValue(agent)
 	})
 
 	vm.Set("listAgents", func(call goja.FunctionCall) goja.Value {
-		if e.onEvent != nil {
-			e.onEvent("listAgents", nil)
+		bridge := e.bridgeFor(caller)
+		if bridge == nil {
+			panic(vm.NewGoError(errors.New("script bridge is not available")))
 		}
-		return goja.Undefined()
+		agents, err := bridge.ListAgents(caller)
+		if err != nil {
+			panic(vm.NewGoError(err))
+		}
+		return vm.ToValue(agents)
 	})
 
 	vm.Set("httpRequest", func(call goja.FunctionCall) goja.Value {
-		url := call.Argument(0).String()
-		opts := call.Argument(1).ToObject(vm)
-		_ = opts
-		if e.onEvent != nil {
-			e.onEvent("httpRequest", map[string]interface{}{
-				"url":     url,
-				"options": opts,
-			})
+		bridge := e.bridgeFor(caller)
+		if bridge == nil {
+			panic(vm.NewGoError(errors.New("script bridge is not available")))
 		}
-		return goja.Undefined()
+		rawURL := call.Argument(0).String()
+		opts := map[string]interface{}{}
+		if obj, ok := call.Argument(1).(*goja.Object); ok {
+			for _, k := range obj.Keys() {
+				opts[k] = obj.Get(k).Export()
+			}
+		}
+		method := "GET"
+		if m, ok := opts["method"].(string); ok && m != "" {
+			method = m
+		}
+		headers := map[string]string{}
+		if h, ok := opts["headers"].(map[string]interface{}); ok {
+			for k, v := range h {
+				headers[k] = fmt.Sprintf("%v", v)
+			}
+		}
+		body := ""
+		if b, ok := opts["body"].(string); ok {
+			body = b
+		}
+		timeout := 10
+		if t, ok := opts["timeout"]; ok {
+			if n, ok := toInt64(t); ok && n > 0 {
+				timeout = int(n)
+			}
+		}
+		res, err := bridge.HTTPRequest(caller, method, rawURL, headers, body, timeout)
+		if err != nil {
+			panic(vm.NewGoError(err))
+		}
+		return vm.ToValue(res)
+	})
+
+	vm.Set("query", func(call goja.FunctionCall) goja.Value {
+		bridge := e.bridgeFor(caller)
+		if bridge == nil {
+			panic(vm.NewGoError(errors.New("script bridge is not available")))
+		}
+		kind := call.Argument(0).String()
+		args := map[string]interface{}{}
+		if obj, ok := call.Argument(1).(*goja.Object); ok {
+			for _, k := range obj.Keys() {
+				args[k] = obj.Get(k).Export()
+			}
+		}
+		result, err := bridge.Query(caller, kind, args)
+		if err != nil {
+			panic(vm.NewGoError(err))
+		}
+		return vm.ToValue(result)
 	})
 
 	vm.Set("log", func(call goja.FunctionCall) goja.Value {
 		msg := call.Argument(0).String()
 		slog.Info("script", "message", msg)
-		return goja.Undefined()
-	})
-
-	vm.Set("dbQuery", func(call goja.FunctionCall) goja.Value {
-		query := call.Argument(0).String()
-		if e.onEvent != nil {
-			e.onEvent("dbQuery", query)
-		}
 		return goja.Undefined()
 	})
 
@@ -144,8 +234,16 @@ func (e *ScriptEngine) registerAPI() {
 	})
 }
 
-func (e *ScriptEngine) SetEventHandler(handler func(string, interface{})) {
-	e.onEvent = handler
+func toInt64(v interface{}) (int64, bool) {
+	switch n := v.(type) {
+	case int64:
+		return n, true
+	case int:
+		return int64(n), true
+	case float64:
+		return int64(n), true
+	}
+	return 0, false
 }
 
 func (e *ScriptEngine) LoadScript(id uint, name, code string) error {
@@ -202,31 +300,33 @@ func (e *ScriptEngine) UnloadScript(name string) {
 	}
 }
 
+// FireEvent dispatches an event to all registered handlers. Callbacks always
+// run on their owner VM, serialized so concurrent events cannot race a single
+// goja runtime.
 func (e *ScriptEngine) FireEvent(eventType string, data interface{}) {
 	e.mu.Lock()
-	callbacks := make([]goja.Callable, 0)
+	callbacks := make([]*eventCallback, 0)
 	for _, cb := range e.events[eventType] {
 		callbacks = append(callbacks, cb)
 	}
 	e.mu.Unlock()
 
-	var dataValue goja.Value
-	if data != nil {
-		jsonData, err := json.Marshal(data)
-		if err == nil {
-			var parsed interface{}
-			if json.Unmarshal(jsonData, &parsed) == nil {
-				dataValue = e.vm.ToValue(parsed)
+	e.execMu.Lock()
+	defer e.execMu.Unlock()
+	for _, ec := range callbacks {
+		var dataValue goja.Value
+		if data != nil {
+			if jsonData, err := json.Marshal(data); err == nil {
+				var parsed interface{}
+				if json.Unmarshal(jsonData, &parsed) == nil {
+					dataValue = ec.vm.ToValue(parsed)
+				}
 			}
 		}
-	}
-	if dataValue == nil {
-		dataValue = goja.Undefined()
-	}
-
-	for _, cb := range callbacks {
-		_, err := cb(goja.Undefined(), dataValue)
-		if err != nil {
+		if dataValue == nil {
+			dataValue = goja.Undefined()
+		}
+		if _, err := ec.cb(goja.Undefined(), dataValue); err != nil {
 			slog.Error("script event handler error", "event", eventType, "error", err)
 		}
 	}
@@ -310,22 +410,22 @@ func (e *ScriptEngine) DeleteScript(id string) bool {
 	return false
 }
 
-func (e *ScriptEngine) Execute(scriptID string, context map[string]interface{}) ExecutionResult {
+func (e *ScriptEngine) Execute(scriptID string, context map[string]interface{}, caller Caller) ExecutionResult {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for _, s := range e.scripts {
 		if fmt.Sprintf("%d", s.ID) == scriptID || s.Name == scriptID {
-			return e.executeScript(s.Code, context)
+			return e.executeScript(s.Code, context, caller)
 		}
 	}
 	return ExecutionResult{Success: false, Error: "script not found"}
 }
 
-func (e *ScriptEngine) ExecuteCode(code string, context map[string]interface{}) ExecutionResult {
-	return e.executeScript(code, context)
+func (e *ScriptEngine) ExecuteCode(code string, context map[string]interface{}, caller Caller) ExecutionResult {
+	return e.executeScript(code, context, caller)
 }
 
-func (e *ScriptEngine) executeScript(code string, scriptCtx map[string]interface{}) ExecutionResult {
+func (e *ScriptEngine) executeScript(code string, scriptCtx map[string]interface{}, caller Caller) ExecutionResult {
 	vm := goja.New()
 	registry := new(require.Registry)
 	registry.Enable(vm)
@@ -334,6 +434,8 @@ func (e *ScriptEngine) executeScript(code string, scriptCtx map[string]interface
 	for k, v := range scriptCtx {
 		vm.Set(k, v)
 	}
+
+	e.registerAPI(vm, caller)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

@@ -186,6 +186,10 @@ func (s *Server) handleAPIExecuteScript(c *gin.Context) {
 
 	engine := scripting.GetEngine()
 	var result scripting.ExecutionResult
+	caller := scripting.Caller{
+		Username: c.GetString("username"),
+		Role:     c.GetString("user_role"),
+	}
 
 	if req.ScriptID != "" {
 		if uid, err := strconv.ParseUint(req.ScriptID, 10, 64); err == nil {
@@ -199,9 +203,9 @@ func (s *Server) handleAPIExecuteScript(c *gin.Context) {
 				}
 			}
 		}
-		result = engine.Execute(req.ScriptID, context)
+		result = engine.Execute(req.ScriptID, context, caller)
 	} else if req.Code != "" {
-		result = engine.ExecuteCode(req.Code, context)
+		result = engine.ExecuteCode(req.Code, context, caller)
 	} else {
 		respondError(c, http.StatusBadRequest, "no script_id or code provided")
 		return

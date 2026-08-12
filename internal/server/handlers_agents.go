@@ -607,24 +607,25 @@ func (s *Server) handlePushAgentConfig(c *gin.Context) {
 		return
 	}
 
+	// Validate every field first, then persist the changes in a single write
+	// so concurrent pushes cannot overwrite each other between saves.
+	updates := make(map[string]interface{})
 	if req.Sleep != nil {
 		if *req.Sleep < 1 || *req.Sleep > MaxSleepSeconds {
 			respondError(c, http.StatusBadRequest, "sleep must be between 1 and 86400 seconds")
 			return
 		}
-		agent.CurrentInterval = *req.Sleep
-		if err := s.db.Save(&agent).Error; err != nil {
-			respondError(c, http.StatusInternalServerError, sanitizeError(err, "Update agent"))
-			return
-		}
+		updates["current_interval"] = *req.Sleep
 	}
 	if req.Jitter != nil {
 		if *req.Jitter < 0 || *req.Jitter > MaxJitterPercent {
 			respondError(c, http.StatusBadRequest, "jitter must be between 0 and 100")
 			return
 		}
-		agent.CurrentJitter = *req.Jitter
-		if err := s.db.Save(&agent).Error; err != nil {
+		updates["current_jitter"] = *req.Jitter
+	}
+	if len(updates) > 0 {
+		if err := s.db.Model(&agent).Updates(updates).Error; err != nil {
 			respondError(c, http.StatusInternalServerError, sanitizeError(err, "Update agent"))
 			return
 		}
