@@ -169,7 +169,7 @@ function NotificationDropdown() {
   const { t } = useI18n();
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  useEffect(() => {
+  const loadNotifications = useCallback(() => {
     api.get(paths.notifications.list("page=1&pageSize=20"))
       .then((data) => {
         const list = (data.notifications || data.data || []) as Array<Record<string, unknown>>;
@@ -186,6 +186,10 @@ function NotificationDropdown() {
       })
       .catch(() => { /* silent */ });
   }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
 
   const pushNotification = useCallback((type: Notification["type"], message: string) => {
     const id = notifSeq++;
@@ -271,7 +275,7 @@ function NotificationDropdown() {
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(next) => { if (next) loadNotifications(); }}>
       <DropdownMenuTrigger render={
         <Tooltip>
           <TooltipTrigger render={<Button variant="ghost" size="icon" className="relative" aria-label={t("topbar.notifications")} />}>

@@ -36,12 +36,14 @@ export async function fetchChartData<T>(
   );
 }
 
-export function withChartData<T>(
-  Wrapped: React.ComponentType<ChartDataProps<T>>,
+export function withChartData<T, P extends Record<string, unknown> = Record<string, never>>(
+  Wrapped: React.ComponentType<ChartDataProps<T> & P>,
   endpoint: string,
   transform?: (raw: unknown) => T,
 ) {
-  const ChartDataWrapper = memo(function ChartDataWrapper() {
+  const ChartDataWrapper = memo(function ChartDataWrapper(
+    { endpoint: endpointProp, ...rest }: { endpoint?: string } & P,
+  ) {
     const { t } = useI18n();
     const [data, setData] = useState<T | null>(null);
     const [loading, setLoading] = useState(true);
@@ -64,13 +66,14 @@ export function withChartData<T>(
     }, []);
 
     const load = useCallback(() => {
+      const ep = endpointProp ?? endpoint;
       setLoading(true);
       setError(false);
-      fetchChartData<T>(endpoint, (e) => api.get<unknown>(e), transformRef.current)
+      fetchChartData<T>(ep, (e) => api.get<unknown>(e), transformRef.current)
         .then((value) => setData(value))
         .catch(() => setError(true))
         .finally(() => setLoading(false));
-    }, []);
+    }, [endpointProp]);
 
     useEffect(() => { if (visible) load(); }, [visible, load]);
 
@@ -86,7 +89,7 @@ export function withChartData<T>(
             <Button variant="link" size="sm" onClick={load} className="ml-2">{t("common.retry")}</Button>
           </div>
         ) : data != null ? (
-          <Wrapped data={data as T} loading={false} error={false} onRefresh={load} />
+          <Wrapped data={data as T} loading={false} error={false} onRefresh={load} {...(rest as P)} />
         ) : null}
       </div>
     );

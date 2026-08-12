@@ -167,7 +167,7 @@ export default function DashboardPage() {
       <Suspense fallback={<Skeleton className="h-64 w-full rounded-md" />}>
         {/* Charts Row 1 */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-5">
-          <ChartCard title={t("dashboard.heatmap")} icon={Calendar} iconColor="text-emerald-500 dark:text-emerald-400" exportFilename="activity-heatmap.png" className="animate-fade-slide-up"><LazyHeatmapGrid /></ChartCard>
+          <ChartCard title={t("dashboard.heatmap")} icon={Calendar} iconColor="text-emerald-500 dark:text-emerald-400" exportFilename="activity-heatmap.png" className="animate-fade-slide-up"><LazyHeatmapGrid range={timeRange} /></ChartCard>
           <ChartCard title={t("dashboard.os_dist")} icon={Cpu} iconColor="text-blue-500 dark:text-blue-400" exportFilename="os-distribution.png"><LazyOSDistChart /></ChartCard>
           <ChartCard title={t("dashboard.task_status")} icon={PieChart} iconColor="text-amber-500 dark:text-amber-400" exportFilename="task-status.png"><LazyTaskStatusChart /></ChartCard>
           <ChartCard title={t("dashboard.cred_types")} icon={Key} iconColor="text-purple-500 dark:text-purple-400" exportFilename="credential-types.png"><LazyCredentialTypes /></ChartCard>

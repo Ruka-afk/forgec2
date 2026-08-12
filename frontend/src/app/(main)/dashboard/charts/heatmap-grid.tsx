@@ -8,9 +8,20 @@ import { useI18n } from "@/lib/i18n";
 
 interface HeatmapPoint { day: number; hour: number; count: number }
 
-function HeatmapBody({ data }: { data: HeatmapPoint[] }) {
+function heatmapDays(range: string): number {
+  if (range === "7d") return 7;
+  if (range === "30d") return 30;
+  return 1;
+}
+
+function HeatmapBody({ data, range }: { data: HeatmapPoint[]; range: string }) {
   const { t } = useI18n();
-  const dayLabels = [t("dashboard.day_sun"), t("dashboard.day_mon"), t("dashboard.day_tue"), t("dashboard.day_wed"), t("dashboard.day_thu"), t("dashboard.day_fri"), t("dashboard.day_sat")];
+  const days = heatmapDays(range);
+  const dayLabels = useMemo(() => {
+    const dayNames = [t("dashboard.day_sun"), t("dashboard.day_mon"), t("dashboard.day_tue"), t("dashboard.day_wed"), t("dashboard.day_thu"), t("dashboard.day_fri"), t("dashboard.day_sat")];
+    const dow = new Date().getDay();
+    return Array.from({ length: days }, (_, di) => dayNames[(dow - di + 7) % 7]);
+  }, [days, t]);
   const lookup = useMemo(() => {
     const m: Record<string, number> = {};
     data.forEach((p) => { m[`${p.day}-${p.hour}`] = p.count; });
@@ -22,7 +33,7 @@ function HeatmapBody({ data }: { data: HeatmapPoint[] }) {
         {Array.from({ length: 12 }, (_, h) => <span key={h * 2}>{(h * 2) % 4 === 0 ? h * 2 : ""}</span>)}
       </div>
       {dayLabels.map((day, di) => (
-        <div key={day} className="flex items-center gap-1">
+        <div key={di} className="flex items-center gap-1">
           <span className="text-(--fs-micro-sm) text-muted-foreground/70 w-6 text-right shrink-0">{day.slice(0, 2)}</span>
           <div className="flex-1 grid grid-cols-12 gap-0.5">
             {Array.from({ length: 12 }, (_, hi) => {
@@ -38,8 +49,12 @@ function HeatmapBody({ data }: { data: HeatmapPoint[] }) {
   );
 }
 
-export default withChartData<HeatmapPoint[]>(
-  ({ data }) => <HeatmapBody data={data} />,
+const HeatmapWithData = withChartData<HeatmapPoint[], { range: string }>(
+  ({ data, range }) => <HeatmapBody data={data} range={range} />,
   paths.dashboard.activityHeatmap,
   (raw) => (raw as { data: HeatmapPoint[] }).data || [],
 );
+
+export default function HeatmapGrid({ range }: { range: string }) {
+  return <HeatmapWithData endpoint={`${paths.dashboard.activityHeatmap}?range=${range}`} range={range} />;
+}
