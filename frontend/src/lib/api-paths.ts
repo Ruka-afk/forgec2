@@ -305,6 +305,7 @@ export const paths = {
     taskStatus: "/api/dashboard/task-status",
     taskGantt: (range: string) => `/api/dashboard/task-gantt?range=${range}`,
     listenerTraffic: (range: string) => `/api/dashboard/listener-traffic?range=${range}`,
+    activeMissions: "/api/dashboard/active-missions",
   },
   /**
    * DUAL-USE: GET /loot — SPA vs JSON Accept. Not /api/loot.

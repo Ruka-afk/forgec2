@@ -585,6 +585,7 @@ func (s *Server) registerDashboardCharts(auth *gin.RouterGroup) {
 		dashRead.GET("/api/dashboard/agent-geo", s.handleDashboardAgentGeo)
 		dashRead.GET("/api/dashboard/task-gantt", s.handleDashboardTaskGantt)
 		dashRead.GET("/api/dashboard/attack-path", s.handleDashboardAttackPath)
+		dashRead.GET("/api/dashboard/active-missions", s.handleActiveMissions)
 	}
 }
 

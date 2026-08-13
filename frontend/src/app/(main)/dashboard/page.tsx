@@ -28,6 +28,7 @@ const LazyAgentGeo = React.lazy(() => import("./charts/agent-geo"));
 const LazyAttackPath = React.lazy(() => import("./charts/attack-path"));
 const LazyTaskGanttSection = React.lazy(() => import("./charts/task-gantt"));
 const LazyMonitorAlertsSection = React.lazy(() => import("./charts/monitor-alerts"));
+const LazyActiveMissions = React.lazy(() => import("./_components/ActiveMissions"));
 
 /* ── Audit Strip ── */
 function AuditStrip() {
@@ -186,6 +187,13 @@ export default function DashboardPage() {
           <ChartCard title={t("dashboard.active_alerts")} icon={AlertTriangle} iconColor="text-amber-500"><LazyMonitorAlertsSection /></ChartCard>
         </div>
       </Suspense>
+
+      {/* Active Missions (live) */}
+      <div className="mb-7">
+        <Suspense fallback={<Skeleton className="h-56 w-full rounded-md" />}>
+          <LazyActiveMissions className="animate-fade-slide-up" />
+        </Suspense>
+      </div>
 
       {/* Recent Tasks */}
       <Card className="overflow-hidden animate-fade-slide-up">
