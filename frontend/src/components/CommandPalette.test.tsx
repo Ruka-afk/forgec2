@@ -3,8 +3,10 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { useAppStore } from "@/lib/store";
 import CommandPalette from "@/components/CommandPalette";
 
+const pushMock = vi.fn();
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: pushMock }),
 }));
 
 vi.mock("@/lib/i18n", () => ({
@@ -13,15 +15,29 @@ vi.mock("@/lib/i18n", () => ({
       if (key === "palette.placeholder") return "Type to jump…";
       if (key === "palette.title") return "Command palette";
       if (key === "palette.no_results") return "No results";
+      if (key === "palette.agents") return "Agents";
       if (key === "palette.search_for") return `Search for "${params?.query}"`;
       return key;
     },
   }),
 }));
 
+vi.mock("@/lib/hooks/useAgentList", () => ({
+  useAgentList: () => ({
+    agents: [
+      { id: "a1", hostname: "desktop-win11", username: "corp\\jdoe", ip: "10.0.1.5", os: "windows" },
+      { id: "a2", hostname: "srv-linux-01", username: "root", ip: "10.0.2.10", os: "linux" },
+    ],
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  }),
+}));
+
 describe("CommandPalette", () => {
   beforeEach(() => {
     useAppStore.setState({ commandPaletteOpen: false });
+    pushMock.mockClear();
   });
 
   it("renders nothing while closed", () => {
@@ -47,6 +63,25 @@ describe("CommandPalette", () => {
     expect(screen.queryByText("nav.dashboard")).toBeNull();
     fireEvent.change(input, { target: { value: "kerberoast" } });
     expect(screen.getByText(/search for "kerberoast"/i)).toBeTruthy();
+  });
+
+  it("lists matching agents under the Agents group", () => {
+    useAppStore.setState({ commandPaletteOpen: true });
+    render(<CommandPalette />);
+    const input = screen.getByLabelText(/type to jump/i);
+    fireEvent.change(input, { target: { value: "desktop-win" } });
+    expect(screen.getByText("desktop-win11")).toBeTruthy();
+    expect(screen.getByText("corp\\jdoe · 10.0.1.5")).toBeTruthy();
+    expect(screen.queryByText("srv-linux-01")).toBeNull();
+  });
+
+  it("navigates to the agent page on selection", () => {
+    useAppStore.setState({ commandPaletteOpen: true });
+    render(<CommandPalette />);
+    const input = screen.getByLabelText(/type to jump/i);
+    fireEvent.change(input, { target: { value: "srv-linux" } });
+    fireEvent.click(screen.getByText("srv-linux-01"));
+    expect(pushMock).toHaveBeenCalledWith("/agents/a2");
   });
 
   it("closes on Escape", () => {

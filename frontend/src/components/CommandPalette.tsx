@@ -5,13 +5,15 @@ import { useRouter } from "next/navigation";
 import { NAV_SECTIONS } from "@/lib/navigation";
 import { useI18n } from "@/lib/i18n";
 import { useAppStore } from "@/lib/store";
-import { Search, CornerDownLeft } from "lucide-react";
+import { useAgentList } from "@/lib/hooks/useAgentList";
+import { Search, CornerDownLeft, Server } from "lucide-react";
 
 interface PaletteItem {
   href: string;
   label: string;
   section: string;
   icon: React.ComponentType<{ className?: string }>;
+  subtitle?: string;
 }
 
 function normalize(s: string): string {
@@ -23,6 +25,7 @@ export default function CommandPalette() {
   const router = useRouter();
   const open = useAppStore((s) => s.commandPaletteOpen);
   const setOpen = useAppStore((s) => s.setCommandPaletteOpen);
+  const { agents } = useAgentList();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,13 +46,34 @@ export default function CommandPalette() {
     return out;
   }, [t]);
 
+  const agentItems: PaletteItem[] = useMemo(() => {
+    const q = normalize(query.trim());
+    if (!q) return [];
+    const out: PaletteItem[] = [];
+    for (const agent of agents) {
+      const id = agent.id;
+      if (!id) continue;
+      const haystack = normalize([agent.hostname, agent.ip, agent.username, agent.os].filter(Boolean).join(" "));
+      if (!haystack.includes(q)) continue;
+      out.push({
+        href: `/agents/${id}`,
+        label: agent.hostname ?? id,
+        section: t("palette.agents"),
+        icon: Server,
+        subtitle: [agent.username, agent.ip].filter(Boolean).join(" \u00b7 "),
+      });
+      if (out.length === 6) break;
+    }
+    return out;
+  }, [agents, query, t]);
+
   const filtered = useMemo(() => {
     const q = normalize(query.trim());
     if (!q) return items;
-    return items.filter(
-      (i) => normalize(i.label).includes(q) || normalize(i.href).includes(q) || normalize(i.section).includes(q),
+    return [...items, ...agentItems].filter(
+      (i) => normalize(i.label).includes(q) || normalize(i.href).includes(q) || normalize(i.section).includes(q) || (i.subtitle && normalize(i.subtitle).includes(q)),
     );
-  }, [items, query]);
+  }, [items, agentItems, query]);
 
   const showSearchAction = query.trim().length > 0;
 
@@ -195,7 +219,12 @@ export default function CommandPalette() {
                       <span className="flex items-center justify-center w-6 h-6 rounded-md bg-secondary/70 shrink-0">
                         <Icon className="w-3.5 h-3.5 text-muted-foreground" />
                       </span>
-                      <span className="text-foreground">{item.label}</span>
+                      <span className="flex flex-col min-w-0">
+                        <span className="text-foreground truncate">{item.label}</span>
+                        {item.subtitle && (
+                          <span className="text-xs text-muted-foreground/70 truncate">{item.subtitle}</span>
+                        )}
+                      </span>
                       <span className="text-xs text-muted-foreground/70 font-mono ml-auto truncate max-w-40">{item.href}</span>
                     </button>
                   );
