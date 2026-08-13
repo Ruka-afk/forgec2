@@ -4059,6 +4059,16 @@ paths:
       responses:
         '200':
           description: Status
+  /api/opsec/rekey:
+    get:
+      tags: [Monitor]
+      summary: Crypto session rekey stats (per-agent counts and timestamps)
+      operationId: opsecRekeyStats
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: Rekey statistics
   /chat/history:
     get:
       tags: [Chat]

@@ -115,3 +115,10 @@ rate_limit:
   extc2:
     enabled: false
     api_token: ""
+
+security:
+  # Two-man rule for high-impact operations (kill/uninstall/lateral/ticket
+  # forgery etc.): tasks of those types are created in "pending_approval"
+  # state and require an operator DIFFERENT from the task creator to approve
+  # them before the agent executes them.
+  require_approval: false

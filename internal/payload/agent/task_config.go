@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -23,6 +24,7 @@ type ConfigOverride struct {
 }
 
 var configOverrides struct {
+	sync.RWMutex
 	sleep     int // 0 = not set
 	jitter    int // 0 = not set
 	userAgent string
@@ -43,6 +45,8 @@ func handleConfigPush(task Task, res *TaskResult) {
 		res.Error = "config_push: invalid json: " + err.Error()
 		return
 	}
+	configOverrides.Lock()
+	defer configOverrides.Unlock()
 	if cfg.Sleep > 0 {
 		configOverrides.sleep = cfg.Sleep
 		configOverrides.hasSleep = true
@@ -82,6 +86,8 @@ func handleConfigPush(task Task, res *TaskResult) {
 }
 
 func getActiveSleep() int {
+	configOverrides.RLock()
+	defer configOverrides.RUnlock()
 	if configOverrides.hasSleep {
 		return configOverrides.sleep
 	}
@@ -89,6 +95,8 @@ func getActiveSleep() int {
 }
 
 func getActiveJitter() int {
+	configOverrides.RLock()
+	defer configOverrides.RUnlock()
 	if configOverrides.hasJitter {
 		return configOverrides.jitter
 	}
@@ -96,6 +104,8 @@ func getActiveJitter() int {
 }
 
 func getActiveUserAgentFromConfig() string {
+	configOverrides.RLock()
+	defer configOverrides.RUnlock()
 	if configOverrides.userAgent != "" {
 		return configOverrides.userAgent
 	}
@@ -103,22 +113,34 @@ func getActiveUserAgentFromConfig() string {
 }
 
 func getActiveHeaders() map[string]string {
+	configOverrides.RLock()
+	defer configOverrides.RUnlock()
 	if configOverrides.headers != nil {
-		return configOverrides.headers
+		out := make(map[string]string, len(configOverrides.headers))
+		for k, v := range configOverrides.headers {
+			out[k] = v
+		}
+		return out
 	}
 	return nil
 }
 
 func getActiveBeaconURIFromConfig() string {
-	if configOverrides.beaconURI != "" {
-		return configOverrides.beaconURI
+	configOverrides.RLock()
+	uri := configOverrides.beaconURI
+	configOverrides.RUnlock()
+	if uri != "" {
+		return uri
 	}
 	return getActiveBeaconURI()
 }
 
 func getActiveBeaconMethodFromConfig() string {
-	if configOverrides.method != "" {
-		return configOverrides.method
+	configOverrides.RLock()
+	method := configOverrides.method
+	configOverrides.RUnlock()
+	if method != "" {
+		return method
 	}
 	return getActiveBeaconMethod()
 }

@@ -30,7 +30,7 @@ const (
 	keyEventKeyUp      = 0x0002
 )
 
-func remoteInputStub(payload string) string {
+func remoteInputDispatch(payload string) string {
 	var ev remoteInputEvent
 	if err := json.Unmarshal([]byte(payload), &ev); err != nil {
 		return "remote_input: invalid json: " + err.Error()

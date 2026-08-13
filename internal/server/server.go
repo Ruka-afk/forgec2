@@ -2229,6 +2229,15 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		Size:    size,
 		Status:  "pending",
 	}
+
+	// Two-man rule: when enabled, dangerous task types are created in
+	// pending_approval state and require an operator (different from the
+	// creator) to approve them before the beacon can claim them.
+	if s.cfg != nil && s.cfg.Security.RequireApproval {
+		if info, ok := getTaskTypeInfo(taskType); ok && info.RequiresApproval {
+			task.Status = TaskStatusPendingApproval
+		}
+	}
 	if err := s.db.Create(&task).Error; err != nil {
 		s.agentPendingTasksMu.Lock()
 		s.agentPendingTasks[agentID]--

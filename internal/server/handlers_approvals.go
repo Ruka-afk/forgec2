@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
@@ -39,11 +40,27 @@ func (s *Server) handleApproveTask(c *gin.Context) {
 		return
 	}
 
-	if err := s.db.Model(&task).Update("status", "pending").Error; err != nil {
+	// Two-man rule: the operator that created a dangerous task may not be
+	// the one approving it. AI/automation/system-created tasks have no
+	// human creator and may be approved by any operator.
+	approver := s.currentUsername(c)
+	if task.CreatedBy != "" && task.CreatedBy != "ai" && task.CreatedBy != "automation" && task.CreatedBy != "system" && approver != "" && task.CreatedBy == approver {
+		respondError(c, http.StatusForbidden, "cannot approve your own task (two-man rule)")
+		return
+	}
+
+	updates := map[string]interface{}{
+		"status":      "pending",
+		"approved_by": approver,
+		"approved_at": time.Now(),
+	}
+	if err := s.db.Model(&task).Updates(updates).Error; err != nil {
 		slog.Error("Failed to approve task", "task", taskID, "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to approve task")
 		return
 	}
+	task.Status = "pending"
+	task.ApprovedBy = approver
 
 	slog.Info("Task approved", "agent_id", task.AgentID, "task", taskID, "type", task.Type)
 	s.LogAuditRecord(c, "approve_task", "agent_id", task.AgentID, fmt.Sprintf("Approved task #%d (%s)", taskID, task.Type), true, nil)

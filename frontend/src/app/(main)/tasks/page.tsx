@@ -519,6 +519,9 @@ function TaskDetailModal({ task, onClose, getAgentName, getStatusBadge, getTypeB
           <div><span className="text-muted-foreground">{t("tasks.detail_created")}</span><p className="font-medium text-foreground mt-0.5">{task.created_at ? formatTime(task.created_at) : "-"}</p></div>
           <div><span className="text-muted-foreground">{t("tasks.detail_duration")}</span><p className="font-medium text-foreground mt-0.5">{calcDuration(task.created_at, task.updated_at)}</p></div>
           <div><span className="text-muted-foreground">{t("tasks.detail_by")}</span><p className="font-medium text-foreground mt-0.5">{task.created_by || t("tasks.detail_system")}</p></div>
+          {task.approved_by && (
+            <div><span className="text-muted-foreground">{t("tasks.detail_approved_by")}</span><p className="font-medium text-emerald-700 dark:text-emerald-300 mt-0.5">{task.approved_by}</p></div>
+          )}
         </div>
         <div className="overflow-y-auto flex-1">
           <div className="mb-4">

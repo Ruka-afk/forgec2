@@ -1201,7 +1201,7 @@ func exportVpnCreds() string {
 	return strings.Join(results, "\n")
 }
 
-func remoteInputStub(payload string) string {
+func remoteInputDispatch(payload string) string {
 	// Use xdotool or ydotool to simulate keyboard input on Linux
 	if payload == "" {
 		return "remote_input: no payload provided"

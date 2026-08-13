@@ -189,6 +189,15 @@ type Config struct {
 			CleanupAge int     `yaml:"cleanup_age"` // minutes to keep idle entries
 		} `yaml:"extc2"`
 	} `yaml:"rate_limit"`
+
+	// Security holds operator-facing guardrails.
+	Security struct {
+		// RequireApproval enforces a two-man rule: task types flagged
+		// RequiresApproval (irreversible / high-impact ops) are created
+		// in "pending_approval" state and must be approved by an operator
+		// DIFFERENT from the task creator before the beacon claims them.
+		RequireApproval bool `yaml:"require_approval"`
+	} `yaml:"security"`
 }
 
 // DefaultConfig returns sensible defaults

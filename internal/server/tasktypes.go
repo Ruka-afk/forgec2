@@ -23,7 +23,12 @@ type TaskTypeInfo struct {
 	Category      string          `json:"category,omitempty"`
 	RequiresShell bool            `json:"requires_shell,omitempty"`
 	RequiresElev  bool            `json:"requires_elevation,omitempty"`
-	Parameters    []TaskTypeParam `json:"parameters,omitempty"`
+	// RequiresApproval marks high-impact / irreversible operations. When
+	// security.require_approval is enabled such tasks are created with
+	// status pending_approval and need a SECOND operator (different from
+	// the creator) to approve them before the beacon can claim them.
+	RequiresApproval bool            `json:"requires_approval,omitempty"`
+	Parameters       []TaskTypeParam `json:"parameters,omitempty"`
 }
 
 var registeredTaskTypes []TaskTypeInfo
@@ -263,6 +268,63 @@ func init() {
 		{Type: protocol.TaskTypeGhostModeStatus, Name: "Ghost Mode Status", Description: "Check ghost mode status", Category: "c2"},
 		{Type: protocol.TaskTypeGhostModeExit, Name: "Ghost Mode Exit", Description: "Exit ghost mode", Category: "c2"},
 	}
+	// Two-man-rule classification: high-impact / irreversible operations.
+	// These get RequiresApproval=true in the registry metadata.
+	for i := range registeredTaskTypes {
+		if dangerousTaskTypes[registeredTaskTypes[i].Type] {
+			registeredTaskTypes[i].RequiresApproval = true
+		}
+	}
+}
+
+// dangerousTaskTypes are operations that are irreversible or high-impact:
+// self-destruction, malware manipulation of the host, credential theft from
+// the target environment, persistence, lateral movement, and ticket forgery.
+var dangerousTaskTypes = map[string]bool{
+	protocol.TaskTypeUninstall:           true,
+	protocol.TaskTypeKill:                true,
+	protocol.TaskTypeSelfDelete:          true,
+	protocol.TaskTypeMigrate:             true,
+	protocol.TaskTypeKillAV:              true,
+	protocol.TaskTypeLogWipe:             true,
+	protocol.TaskTypeTrackWipe:           true,
+	protocol.TaskTypeDCSync:              true,
+	protocol.TaskTypeDCSyncMachine:       true,
+	protocol.TaskTypeGoldenTicket:        true,
+	protocol.TaskTypeSilverTicket:        true,
+	protocol.TaskTypeShadowCreds:         true,
+	protocol.TaskTypeInject:              true,
+	protocol.TaskTypeShinject:            true,
+	protocol.TaskTypeShspawn:             true,
+	protocol.TaskTypeReflectDLLInject:    true,
+	protocol.TaskTypeLateral:             true,
+	protocol.TaskTypeLateralWMI:          true,
+	protocol.TaskTypeLateralWinRM:        true,
+	protocol.TaskTypeLateralPsexec:       true,
+	protocol.TaskTypeLateralDCOM:         true,
+	protocol.TaskTypeSSHLateral:          true,
+	protocol.TaskTypePassTheHash:         true,
+	protocol.TaskTypePassTheTicket:       true,
+	protocol.TaskTypePersistenceAdd:      true,
+	protocol.TaskTypeContainerEscape:     true,
+	protocol.TaskTypeBrowserSteal:        true,
+	protocol.TaskTypeCloudSteal:          true,
+	protocol.TaskTypeCoercePrinterBug:    true,
+	protocol.TaskTypeCoercePetitPotam:    true,
+	protocol.TaskTypeCoerceDFS:           true,
+	protocol.TaskTypeRelayNTLMStart:      true,
+	protocol.TaskTypeConstrainedDeleg:    true,
+	protocol.TaskTypeRBCD:                true,
+	protocol.TaskTypeBronzeBit:           true,
+	protocol.TaskTypeAdminSDHolder:       true,
+	protocol.TaskTypeADCSESC1:            true,
+	protocol.TaskTypeADCSESC2:            true,
+	protocol.TaskTypeADCSESC3:            true,
+	protocol.TaskTypeADCSESC4:            true,
+	protocol.TaskTypeADCSESC5:            true,
+	protocol.TaskTypeADCSESC6:            true,
+	protocol.TaskTypeADCSESC7:            true,
+	protocol.TaskTypeADCSESC8:            true,
 }
 
 // GetRegisteredTaskTypes returns a copy of the registered task type list.

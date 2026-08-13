@@ -963,7 +963,7 @@ func exportVpnCreds() string {
 	return strings.Join(results, "\n")
 }
 
-func remoteInputStub(payload string) string {
+func remoteInputDispatch(payload string) string {
 	// Use osascript to simulate keystrokes on macOS
 	if payload == "" {
 		return "remote_input: no payload provided"

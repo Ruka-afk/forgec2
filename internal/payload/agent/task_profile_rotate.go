@@ -6,6 +6,7 @@ package main
 import (
 	"encoding/json"
 	"strings"
+	"sync"
 )
 
 // ProfileRotation defines a new C2 profile to switch to at runtime.
@@ -19,6 +20,7 @@ type ProfileRotation struct {
 }
 
 var profileOverrides struct {
+	sync.RWMutex
 	beaconURI    string
 	beaconMethod string
 	userAgent    string
@@ -35,6 +37,8 @@ func handleProfileRotate(task Task, res *TaskResult) {
 		res.Error = "profile_rotate: invalid json: " + err.Error()
 		return
 	}
+	profileOverrides.Lock()
+	defer profileOverrides.Unlock()
 	if pr.BeaconURI != "" {
 		profileOverrides.beaconURI = pr.BeaconURI
 	}
@@ -54,26 +58,37 @@ func handleProfileRotate(task Task, res *TaskResult) {
 }
 
 func getActiveBeaconURI() string {
-	if profileOverrides.beaconURI != "" {
-		return profileOverrides.beaconURI
+	profileOverrides.RLock()
+	uri := profileOverrides.beaconURI
+	profileOverrides.RUnlock()
+	if uri != "" {
+		return uri
 	}
 	return BeaconURI
 }
 
 func getActiveBeaconMethod() string {
-	if profileOverrides.beaconMethod != "" {
-		return profileOverrides.beaconMethod
+	profileOverrides.RLock()
+	method := profileOverrides.beaconMethod
+	profileOverrides.RUnlock()
+	if method != "" {
+		return method
 	}
 	return BeaconMethod
 }
 
 func getActiveUserAgent() string {
-	if profileOverrides.userAgent != "" {
-		return profileOverrides.userAgent
+	profileOverrides.RLock()
+	ua := profileOverrides.userAgent
+	profileOverrides.RUnlock()
+	if ua != "" {
+		return ua
 	}
 	return UserAgent
 }
 
 func getActiveEncoding() string {
+	profileOverrides.RLock()
+	defer profileOverrides.RUnlock()
 	return profileOverrides.encoding
 }

@@ -45,6 +45,11 @@ type Session struct {
 	CreatedAt    time.Time
 	MessageCount int
 	LastUsed     time.Time
+	// RekeyCount / LastRekeyAt track session rotations: every EstablishSession
+	// that overwrites an existing session for the agent is a rekey (driven by
+	// the server's message-count threshold or by restart recovery).
+	RekeyCount  int
+	LastRekeyAt time.Time
 }
 
 // NewSessionManager creates a new session manager with default thresholds
@@ -120,6 +125,24 @@ func (sm *SessionManager) EstablishSession(agentID string, agentPublicKey []byte
 		return errors.New("session key derivation failed")
 	}
 
+	// Bump rekey bookkeeping when overwriting an existing session
+	// (rekey / restart recovery per the v2 semantics above).
+	if existing, ok := sm.sessions[agentID]; ok {
+		existing.RekeyCount++
+		existing.LastRekeyAt = time.Now()
+		sm.sessions[agentID] = &Session{
+			AgentID:      agentID,
+			SessionKey:   sessionKey,
+			CreatedAt:    time.Now(),
+			MessageCount: 0,
+			LastUsed:     time.Now(),
+			RekeyCount:   existing.RekeyCount,
+			LastRekeyAt:  existing.LastRekeyAt,
+		}
+		sm.mu.Unlock()
+		return nil
+	}
+
 	sm.sessions[agentID] = &Session{
 		AgentID:      agentID,
 		SessionKey:   sessionKey,
@@ -165,6 +188,42 @@ func (sm *SessionManager) GetSession(agentID string) *Session {
 // HasSession reports whether an active session exists for the agent.
 func (sm *SessionManager) HasSession(agentID string) bool {
 	return sm.GetSession(agentID) != nil
+}
+
+// SessionStats is a snapshot of rekey activity across live sessions.
+type SessionStats struct {
+	ActiveSessions int   `json:"active_sessions"`
+	TotalRekeys    int   `json:"total_rekeys"`
+	RekeyCounts    []struct {
+		AgentID      string    `json:"agent_id"`
+		RekeyCount   int       `json:"rekey_count"`
+		LastRekeyAt  time.Time `json:"last_rekey_at,omitempty"`
+		MessageCount int       `json:"message_count"`
+		LastUsed     time.Time `json:"last_used"`
+	} `json:"rekeys_by_agent,omitempty"`
+}
+
+// Stats returns aggregated rekey metrics across all live sessions. Used to
+// feed monitoring endpoints and the Prometheus collector without leaking key
+// material — only counts and timestamps.
+func (sm *SessionManager) Stats() SessionStats {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	var st SessionStats
+	st.ActiveSessions = len(sm.sessions)
+	for id, sess := range sm.sessions {
+		st.TotalRekeys += sess.RekeyCount
+		if sess.RekeyCount > 0 {
+			st.RekeyCounts = append(st.RekeyCounts, struct {
+				AgentID      string    `json:"agent_id"`
+				RekeyCount   int       `json:"rekey_count"`
+				LastRekeyAt  time.Time `json:"last_rekey_at,omitempty"`
+				MessageCount int       `json:"message_count"`
+				LastUsed     time.Time `json:"last_used"`
+			}{AgentID: id, RekeyCount: sess.RekeyCount, LastRekeyAt: sess.LastRekeyAt, MessageCount: sess.MessageCount, LastUsed: sess.LastUsed})
+		}
+	}
+	return st
 }
 
 // IncrementMessageCount tracks message count for session freshness

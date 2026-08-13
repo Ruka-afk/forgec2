@@ -18,6 +18,7 @@ type MetricsCollector struct {
 	ListenersTotal     prometheus.Gauge
 	CredsTotal         prometheus.Gauge
 	UptimeSeconds      prometheus.GaugeFunc
+	SessionRekeysTotal *prometheus.CounterVec // label agent_id; lives server-side, fed from crypto.SessionManager stats
 	RequestDuration    *prometheus.HistogramVec
 	BeaconDuration     *prometheus.HistogramVec
 	TaskExecuteDuration *prometheus.HistogramVec
@@ -55,6 +56,10 @@ func NewMetricsCollector(s *Server) *MetricsCollector {
 		}, func() float64 {
 			return time.Since(s.startTime).Seconds()
 		}),
+		SessionRekeysTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "forgec2_session_rekeys_total",
+			Help: "Total number of crypto session rekeys, per agent.",
+		}, []string{"agent_id"}),
 		RequestDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "forgec2_request_duration_seconds",
 			Help:    "Histogram of API request durations.",
@@ -82,6 +87,7 @@ func (mc *MetricsCollector) Register(reg prometheus.Registerer) {
 		mc.ListenersTotal,
 		mc.CredsTotal,
 		mc.UptimeSeconds,
+		mc.SessionRekeysTotal,
 		mc.RequestDuration,
 		mc.BeaconDuration,
 		mc.TaskExecuteDuration,
@@ -144,4 +150,18 @@ func (s *Server) updateMetricsFromDB() {
 		slog.Error("Failed to count credentials for metrics", "err", err)
 	}
 	s.metrics.CredsTotal.Set(float64(creds))
+
+	// Sync the per-agent rekey counters from the live session manager so the
+	// exported series reflects reality (counters are process-local and reset
+	// on server restart, so Reset+Add is safe and idempotent).
+	if s.sessionManager != nil && s.metrics.SessionRekeysTotal != nil {
+		st := s.sessionManager.Stats()
+		s.metrics.SessionRekeysTotal.Reset()
+		for _, entry := range st.RekeyCounts {
+			c, err := s.metrics.SessionRekeysTotal.GetMetricWithLabelValues(entry.AgentID)
+			if err == nil {
+				c.Add(float64(entry.RekeyCount))
+			}
+		}
+	}
 }

@@ -17,7 +17,10 @@ import (
 func newTasksTestServer(t *testing.T) *Server {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	return &Server{db: testutil.SetupTestDB(t)}
+	s := &Server{db: testutil.SetupTestDB(t)}
+	s.agentPendingTasks = make(map[string]int)
+	s.metrics = NewMetricsCollector(s)
+	return s
 }
 
 func seedTask(t *testing.T, s *Server, agentID, taskType, command, status string) db.Task {

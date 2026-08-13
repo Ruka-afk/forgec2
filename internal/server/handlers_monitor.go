@@ -684,7 +684,8 @@ func (s *Server) BroadcastScreenshot(agentID string, base64Data string) {
 
 // handleAgentRemoteInput accepts remote desktop input events and queues a remote_input task.
 // Payload JSON: {"type":"click|move|key","x":0,"y":0,"key":""}
-// Note: agent-side injection is stub-only (log); full SendInput relay is future work.
+// Agent-side dispatch: Windows (SendInput-equivalent win32 calls), Linux
+// (xdotool/ydotool), macOS (osascript keystrokes).
 func (s *Server) handleAgentRemoteInput(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
@@ -750,4 +751,17 @@ func (s *Server) handleScreenFrame(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// handleGetRekeyStats reports crypto session rekey activity across live
+// agents (counts and timestamps only — no key material).
+func (s *Server) handleGetRekeyStats(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	if s.sessionManager == nil {
+		respondError(c, http.StatusServiceUnavailable, "session manager not initialized")
+		return
+	}
+	respond(c, s.sessionManager.Stats())
 }

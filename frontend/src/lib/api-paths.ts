@@ -368,6 +368,7 @@ export const paths = {
     rules: "/opsec/rules",
     rulesApi: "/api/opsec/rules",
     check: "/api/opsec/check",
+    rekey: "/api/opsec/rekey",
     rule: (name: string) => `/opsec/rules/${encodeURIComponent(name)}`,
   },
   privesc: {

@@ -211,7 +211,12 @@ type Task struct {
 	TotalBytes     int64      `json:"total_bytes,omitempty"` // total file size
 	Transferred    int64      `json:"transferred,omitempty"` // bytes transferred so far
 	CreatedBy      string     `json:"created_by"`            // operator username who created the task
-	ClaimedBy      string     `gorm:"size:255" json:"claimed_by"`
+	// Two-man approval tracking: ApprovedBy is the operator that approved a
+	// pending_approval task. Enforced to differ from CreatedBy for dangerous
+	// task types when security.require_approval_for_dangerous is enabled.
+	ApprovedBy string     `json:"approved_by,omitempty"`
+	ApprovedAt *time.Time `json:"approved_at,omitempty"`
+	ClaimedBy  string     `gorm:"size:255" json:"claimed_by"`
 	ClaimedAt      time.Time  `json:"claimed_at"`
 	AcknowledgedAt *time.Time `gorm:"index" json:"acknowledged_at,omitempty"`
 	// Task callbacks: optional URL to POST results to when task completes

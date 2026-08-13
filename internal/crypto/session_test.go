@@ -197,6 +197,55 @@ func TestSessionManagerEstablishAllowsIdleOverwrite(t *testing.T) {
 	}
 }
 
+func TestSessionManagerRekeyStats(t *testing.T) {
+	sm, _ := NewSessionManager()
+	curve := ecdh.X25519()
+
+	first, _ := curve.GenerateKey(rand.Reader)
+	if err := sm.EstablishSession("agent-1", first.PublicKey().Bytes()); err != nil {
+		t.Fatalf("initial EstablishSession: %v", err)
+	}
+	// First establishment is NOT a rekey.
+	st := sm.Stats()
+	if st.ActiveSessions != 1 {
+		t.Errorf("ActiveSessions = %d, want 1", st.ActiveSessions)
+	}
+	if st.TotalRekeys != 0 {
+		t.Errorf("TotalRekeys after first handshake = %d, want 0", st.TotalRekeys)
+	}
+	if len(st.RekeyCounts) != 0 {
+		t.Errorf("RekeyCounts should be empty, got %d entries", len(st.RekeyCounts))
+	}
+
+	// Three rekeys bump counters and timestamps.
+	for i := 0; i < 3; i++ {
+		k, _ := curve.GenerateKey(rand.Reader)
+		if err := sm.EstablishSession("agent-1", k.PublicKey().Bytes()); err != nil {
+			t.Fatalf("rekey EstablishSession %d: %v", i, err)
+		}
+	}
+
+	st = sm.Stats()
+	if st.TotalRekeys != 3 {
+		t.Errorf("TotalRekeys after 3 rekeys = %d, want 3", st.TotalRekeys)
+	}
+	if len(st.RekeyCounts) != 1 || st.RekeyCounts[0].AgentID != "agent-1" {
+		t.Fatalf("RekeyCounts = %+v, want one entry for agent-1", st.RekeyCounts)
+	}
+	if st.RekeyCounts[0].RekeyCount != 3 {
+		t.Errorf("agent rekey count = %d, want 3", st.RekeyCounts[0].RekeyCount)
+	}
+	if st.RekeyCounts[0].LastRekeyAt.IsZero() {
+		t.Error("LastRekeyAt should be set after a rekey")
+	}
+
+	// The live session must carry the counters too.
+	sess := sm.GetSession("agent-1")
+	if sess == nil || sess.RekeyCount != 3 {
+		t.Errorf("session RekeyCount = %d, want 3", sess.RekeyCount)
+	}
+}
+
 func TestSessionManagerEstablishAllowsExpiredOverwrite(t *testing.T) {
 	sm, _ := NewSessionManagerWithConfig(5 * time.Minute)
 	curve := ecdh.X25519()

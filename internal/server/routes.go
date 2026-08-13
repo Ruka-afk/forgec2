@@ -548,6 +548,7 @@ func (s *Server) registerMonitorRoutes(auth *gin.RouterGroup) {
 		monRead.GET("/api/monitor/alert-rules", s.handleGetAlertRules)
 		monRead.GET("/api/monitor/agent-status", s.handleGetAgentStatus)
 	}
+
 	monWrite := auth.Group("/")
 	monWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
 	{
@@ -566,6 +567,7 @@ func (s *Server) registerMonitorRoutes(auth *gin.RouterGroup) {
 		opsecRead.POST("/api/opsec/check", s.handleOpsecCheck)
 		opsecRead.GET("/api/opsec/rules", s.handleOpsecRulesList)
 		opsecRead.GET("/api/circuit-breaker/status", s.handleCircuitBreakerStatus)
+		opsecRead.GET("/api/opsec/rekey", s.handleGetRekeyStats)
 	}
 }
 

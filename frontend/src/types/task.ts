@@ -7,6 +7,7 @@ export interface Task {
   result: string;
   error: string;
   created_by: string;
+  approved_by?: string;
   claimed_by: string;
   claimed_at: string;
   created_at: string;

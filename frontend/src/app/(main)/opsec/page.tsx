@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { CheckCircle, CircleAlert, History, Key, Network, Pencil, Plus, ShieldCheck, Skull, Syringe, Terminal, Trash2, Users } from "lucide-react";
+import { CheckCircle, CircleAlert, History, Key, Network, Pencil, Plus, RefreshCw, ShieldCheck, Skull, Syringe, Terminal, Trash2, Users } from "lucide-react";
 
 interface OpsecRule {
   name: string;
@@ -46,10 +46,25 @@ interface TestResult {
   results?: { allowed: boolean; rule_name: string; message: string; risk_level: number; action_taken: number }[];
 }
 
+interface RekeyEntry {
+  agent_id: string;
+  rekey_count: number;
+  last_rekey_at?: string;
+  message_count: number;
+  last_used: string;
+}
+
+interface RekeyStats {
+  active_sessions: number;
+  total_rekeys: number;
+  rekeys_by_agent?: RekeyEntry[];
+}
+
 export default function OpsecPage() {
   const { t } = useI18n();
   const [rules, setRules] = useState<OpsecRule[]>([]);
   const [history, setHistory] = useState<OpsecHistoryItem[]>([]);
+  const [rekeyStats, setRekeyStats] = useState<RekeyStats>({ active_sessions: 0, total_rekeys: 0 });
   const [loading, setLoading] = useState(true);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [showRuleModal, setShowRuleModal] = useState(false);
@@ -100,13 +115,16 @@ export default function OpsecPage() {
     Promise.all([
       api.get<{ rules: OpsecRule[] }>(paths.opsec.rulesApi).catch(() => { failed++; return { rules: [] as OpsecRule[] }; }),
       api.get(paths.opsec.history).catch(() => { failed++; return { history: [] }; }),
-    ]).then(([rulesData, histData]) => {
+      api.get<RekeyStats>(paths.opsec.rekey).catch(() => { failed++; return { active_sessions: 0, total_rekeys: 0 } as RekeyStats; }),
+    ]).then(([rulesData, histData, rekeyData]) => {
       setRules(rulesData.rules || []);
       setHistory((histData.history || []) as OpsecHistoryItem[]);
+      setRekeyStats(rekeyData || { active_sessions: 0, total_rekeys: 0 });
       if (failed > 0) toast.error(t("opsec.toast.load_failed"));
     }).catch(() => {
       setRules([]);
       setHistory([]);
+      setRekeyStats({ active_sessions: 0, total_rekeys: 0 });
       toast.error(t("opsec.toast.load_failed"));
     }).finally(() => setLoading(false));
   }, [t]);
@@ -308,6 +326,46 @@ export default function OpsecPage() {
                 </div>
               )}
             </div>
+          )}
+        </Card>
+
+        <Card className="p-4 sm:p-5">
+          <h2 className="text-sm font-semibold text-foreground mb-4">
+            <RefreshCw className="w-4 h-4" />
+            {t("opsec.rekey_title")}
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            <div className="p-3 bg-muted border border-border rounded-xl">
+              <p className="text-xs text-muted-foreground">{t("opsec.rekey_active_sessions")}</p>
+              <p className="text-lg font-semibold text-foreground mt-1">{rekeyStats.active_sessions}</p>
+            </div>
+            <div className="p-3 bg-muted border border-border rounded-xl">
+              <p className="text-xs text-muted-foreground">{t("opsec.rekey_total")}</p>
+              <p className="text-lg font-semibold text-foreground mt-1">{rekeyStats.total_rekeys}</p>
+            </div>
+            <div className="p-3 bg-muted border border-border rounded-xl">
+              <p className="text-xs text-muted-foreground">{t("opsec.rekey_agents")}</p>
+              <p className="text-lg font-semibold text-foreground mt-1">{rekeyStats.rekeys_by_agent?.length ?? 0}</p>
+            </div>
+          </div>
+          {rekeyStats.rekeys_by_agent && rekeyStats.rekeys_by_agent.length > 0 ? (
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {rekeyStats.rekeys_by_agent.map((entry) => (
+                <div key={entry.agent_id} className="flex items-center justify-between gap-3 p-3 bg-muted border border-border rounded-xl text-xs">
+                  <div className="min-w-0">
+                    <code className="font-semibold text-foreground break-all">{entry.agent_id}</code>
+                    <p className="text-muted-foreground mt-0.5">
+                      {t("opsec.rekey_count")}: {entry.rekey_count} · {t("opsec.rekey_messages")}: {entry.message_count}
+                    </p>
+                  </div>
+                  <span className="text-muted-foreground shrink-0">
+                    {entry.last_rekey_at ? formatTime(entry.last_rekey_at) : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState icon={RefreshCw} title={t("opsec.rekey_empty")} message={t("opsec.rekey_empty_desc")} />
           )}
         </Card>
 

