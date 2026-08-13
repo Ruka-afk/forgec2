@@ -330,7 +330,26 @@ function pollTaskWithCancel(
     };
 
     try {
+      let streamedOutput = "";
       unsub = onWSMessage((msg) => {
+        if (msg.type === "task_output" && Number(msg.task_id) === taskId) {
+          // Ordered streaming frame for large shell results: deliver the
+          // accumulated output so callers can render incrementally.
+          streamedOutput += String(msg.chunk ?? "");
+          opts.onStatus?.({
+            id: taskId,
+            status: "running",
+            result: streamedOutput,
+          } as TaskStatus);
+          if (msg.done) {
+            finish({
+              id: taskId,
+              status: "completed",
+              result: streamedOutput,
+            } as TaskStatus);
+          }
+          return;
+        }
         if (msg.type !== "task_update" || Number(msg.task_id) !== taskId) return;
         const status = String(msg.status) as TaskStatus["status"];
         const partial = {

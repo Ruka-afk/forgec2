@@ -112,6 +112,17 @@ export default function ShellTerminal({
       setLoading(true);
       lastCommandRef.current = cmd;
       waitingWrittenRef.current = false;
+      // Bytes already rendered from streaming task_output frames; the final
+      // poll result only appends the remainder.
+      let rendered = 0;
+      const appendOutput = (text: string, announceText: string) => {
+        if (text.length <= rendered) return;
+        const fresh = text.slice(rendered);
+        rendered = text.length;
+        const highlighted = highlightOutput(fresh, lastCommandRef.current);
+        termRef.current?.write(highlighted.replace(/\n/g, "\r\n"));
+        if (announceText) announce(announceText);
+      };
       try {
         const st = await runTask(
           agentId,
@@ -127,16 +138,15 @@ export default function ShellTerminal({
                 waitingWrittenRef.current = true;
                 writeln(t("shell.waiting_output"), "90");
               }
+              if (s.result) appendOutput(s.result, "");
             },
           },
         );
         if (st.status === "failed") {
           writeln(st.error || t("shell.command_failed"), "31");
         } else if (st.result) {
-          const highlighted = highlightOutput(st.result, lastCommandRef.current);
-          termRef.current?.write(highlighted.replace(/\n/g, "\r\n"));
+          appendOutput(st.result, st.result);
           termRef.current?.write("\r\n");
-          announce(st.result);
         } else {
           writeln(t("shell.no_output"), "33");
         }

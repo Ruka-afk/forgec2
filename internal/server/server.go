@@ -1008,7 +1008,13 @@ func (s *Server) broadcastTaskUpdate(agentID string, task db.Task) {
 		"command":    task.Command,
 		"created_by": task.CreatedBy,
 	}
-	if task.Result != "" {
+	if task.Result != "" && task.Type == "shell" && task.Status == "completed" && len(task.Result) > TaskOutputStreamThreshold {
+		// Large shell output is streamed in ordered frames first so the
+		// terminal can render incrementally instead of waiting for one big
+		// result. task_update carries only status + truncated preview.
+		s.broadcastTaskOutputFrames(agentID, task)
+		payload["result"] = truncateString(task.Result, 200)
+	} else if task.Result != "" {
 		payload["result"] = truncateString(task.Result, 200)
 	}
 	if task.Error != "" {
@@ -1020,6 +1026,52 @@ func (s *Server) broadcastTaskUpdate(agentID string, task db.Task) {
 		return
 	}
 	s.broadcastToClients(notification)
+}
+
+// TaskOutputStreamThreshold: results above this size are chunked into
+// task_output frames instead of a single task_update payload.
+const TaskOutputStreamThreshold = 4 * 1024
+
+// TaskOutputFrameSize: target size per streamed frame.
+const TaskOutputFrameSize = 16 * 1024
+
+// broadcastTaskOutputFrames pushes a completed shell result as ordered
+// "task_output" frames, each ending on a line boundary when possible. The
+// final frame carries done:true so clients know the stream is complete.
+func (s *Server) broadcastTaskOutputFrames(agentID string, task db.Task) {
+	result := task.Result
+	for start := 0; start < len(result); {
+		end := start + TaskOutputFrameSize
+		if end >= len(result) {
+			end = len(result)
+		} else {
+			// Prefer a chunk boundary that does not split a line or a
+			// multi-byte UTF-8 rune.
+			for i := end - 1; i > start; i-- {
+				if result[i] == '\n' {
+					end = i + 1
+					break
+				}
+			}
+			if end <= start {
+				end = start + TaskOutputFrameSize
+			}
+		}
+		frame := map[string]interface{}{
+			"type":     "task_output",
+			"agent_id": agentID,
+			"task_id":  task.ID,
+			"chunk":    result[start:end],
+			"done":     end >= len(result),
+		}
+		raw, err := json.Marshal(frame)
+		if err != nil {
+			slog.Error("Failed to marshal task output frame", "err", err)
+			return
+		}
+		s.broadcastToClients(raw)
+		start = end
+	}
 }
 
 func truncateString(s string, max int) string {

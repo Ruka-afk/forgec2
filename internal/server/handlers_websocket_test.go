@@ -93,6 +93,100 @@ func TestHandleOperatorWS_AcceptsValidSession(t *testing.T) {
 // TestBroadcastOperatorEvent_DeliversToLegacyHub verifies the operator event
 // fan-out reaches the legacy /ws hub (buffered channel clients), which is what
 // the browser dashboard actually connects to.
+// TestBroadcastTaskUpdate_StreamsLargeShellOutput verifies that a large
+// completed shell result is emitted as ordered task_output frames (with a
+// trailing done:true) BEFORE the task_update status frame, and that small
+// results skip streaming entirely.
+func TestBroadcastTaskUpdate_StreamsLargeShellOutput(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{
+		db:        newContractDB(t),
+		ctx:       context.Background(),
+		wsClients: make(map[*websocket.Conn]*wsClientConn),
+		wsMutex:   sync.RWMutex{},
+	}
+
+	client := &wsClientConn{
+		conn:    &websocket.Conn{},
+		session: UserSession{Username: "legacy-client"},
+		ch:      make(chan []byte, 64),
+		done:    make(chan struct{}),
+	}
+	s.wsMutex.Lock()
+	s.wsClients[client.conn] = client
+	s.wsMutex.Unlock()
+
+	read := func() map[string]interface{} {
+		select {
+		case msg := <-client.ch:
+			var got map[string]interface{}
+			if err := json.Unmarshal(msg, &got); err != nil {
+				t.Fatalf("invalid frame json %q: %v", msg, err)
+			}
+			return got
+		case <-time.After(2 * time.Second):
+			t.Fatal("frame never reached legacy hub")
+			return nil
+		}
+	}
+
+	big := strings.Repeat("line-of-output-0123456789\n", 3000) // ~90KB
+	s.broadcastTaskUpdate("agent-1", db.Task{
+		ID:     42,
+		Type:   "shell",
+		Status: "completed",
+		Result: big,
+	})
+
+	var rebuilt strings.Builder
+	frameCount := 0
+	for {
+		frame := read()
+		if frame["type"] != "task_output" {
+			t.Fatalf("expected task_output frame, got %v", frame["type"])
+		}
+		frameCount++
+		rebuilt.WriteString(frame["chunk"].(string))
+		if done, _ := frame["done"].(bool); done {
+			break
+		}
+	}
+	if rebuilt.String() != big {
+		t.Fatalf("reassembled output differs from source (frames=%d, bytes=%d vs %d)", frameCount, rebuilt.Len(), len(big))
+	}
+	// Disabled: frame ordering is deterministic here, but asserting it keeps
+	// the test honest about the stream-before-status contract.
+	update := read()
+	if update["type"] != "task_update" {
+		t.Fatalf("expected trailing task_update, got %v", update["type"])
+	}
+	if update["status"] != "completed" {
+		t.Fatalf("task_update status = %v, want completed", update["status"])
+	}
+
+	// Small results must not stream frames.
+	s.broadcastTaskUpdate("agent-1", db.Task{
+		ID:     43,
+		Type:   "shell",
+		Status: "completed",
+		Result: "small output",
+	})
+	frameCount = 0
+	for {
+		frame := read()
+		if frame["type"] == "task_output" {
+			frameCount++
+			continue
+		}
+		if frame["type"] == "task_update" && frame["result"] == "small output" {
+			break
+		}
+	}
+	if frameCount != 0 {
+		t.Fatalf("small result streamed %d task_output frames, want 0", frameCount)
+	}
+}
+
 func TestBroadcastOperatorEvent_DeliversToLegacyHub(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{
