@@ -64,27 +64,6 @@ const AvatarRoot = React.forwardRef<HTMLSpanElement, AvatarRootProps>(
 );
 AvatarRoot.displayName = "AvatarRoot";
 
-interface AvatarImageProps extends React.ComponentProps<"img"> {
-  size?: AvatarSize;
-  shape?: AvatarShape;
-  alt?: string;
-}
-
-function AvatarImage({ className, size = "md", shape = "square", alt = "", ...props }: AvatarImageProps) {
-  return (
-    <img
-      className={cn(
-        "aspect-square h-full w-full object-cover",
-        AVATAR_SIZES[size],
-        AVATAR_SHAPES[shape],
-        className
-      )}
-      alt={alt}
-      {...props}
-    />
-  );
-}
-
 interface AvatarFallbackProps extends React.ComponentProps<"span"> {
   name?: string;
   size?: AvatarSize;
@@ -108,4 +87,4 @@ function AvatarFallback({
   );
 }
 
-export { AvatarRoot, AvatarImage, AvatarFallback, type AvatarSize, type AvatarShape };
+export { AvatarRoot, AvatarFallback, type AvatarSize, type AvatarShape };

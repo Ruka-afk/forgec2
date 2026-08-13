@@ -190,8 +190,6 @@ export const paths = {
     profileImport: "/api/generate/profile/import",
     profileDelete: (name: string) => `/api/generate/profile/${encodeURIComponent(name)}`,
   },
-  /** @deprecated use paths.settings.malleable */
-  settingsMalleable: "/settings/malleable",
   automation: {
     rules: "/api/automation/rules",
     rule: (id: string | number) => `/api/automation/rules/${id}`,

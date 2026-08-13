@@ -8,7 +8,7 @@ import { paths } from "@/lib/api-paths";
 import { downloadText } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { useForm } from "@/lib/hooks/useForm";
-import { FieldError, PageHeader, Pagination } from "@/components/UI";
+import { ConfirmModal, FieldError, PageHeader, Pagination } from "@/components/UI";
 import { DataState } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,7 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, Download, Filter, Lock, Plus, Tag } from "lucide-react";
+import { Download, Filter, Lock, Plus, Tag } from "lucide-react";
 import { CRED_TYPES, TYPE_BADGE_VARIANT, type VaultEntry } from "./_components/types";
 import { useCredentialsData } from "./_components/useCredentialsData";
 import { CredentialRow } from "./_components/CredentialRow";
@@ -684,23 +684,15 @@ export default function CredentialsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!showDeleteConfirm} onOpenChange={(open) => { if (!open) setShowDeleteConfirm(null); }}>
-        <DialogContent className="sm:max-w-sm">
-          <div className="flex flex-col items-center gap-2 py-4">
-            <AlertTriangle className="w-4 h-4" />
-            <DialogTitle>{t("cred.delete_title")}</DialogTitle>
-            <p className="text-sm text-muted-foreground">{t("cred.delete_message")}</p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteConfirm(null)} className="flex-1">
-              {t("common.cancel")}
-            </Button>
-            <Button variant="destructive" onClick={() => showDeleteConfirm && handleDelete(showDeleteConfirm)} className="flex-1">
-              {t("common.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmModal
+        open={!!showDeleteConfirm}
+        title={t("cred.delete_title")}
+        message={t("cred.delete_message")}
+        danger
+        confirmText={t("common.delete")}
+        onCancel={() => setShowDeleteConfirm(null)}
+        onConfirm={() => showDeleteConfirm && handleDelete(showDeleteConfirm)}
+      />
       </div>
     </>
   );
