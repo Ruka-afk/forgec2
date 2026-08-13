@@ -1,10 +1,13 @@
 package payload
 
 import (
+	"bytes"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"math/big"
 	mrand "math/rand"
 	"strings"
@@ -342,12 +345,138 @@ func FormatEvasionBuildNote(payload string) string {
 	)
 }
 
-// GenerateEvasionReport creates an evasion analysis report
+// GenerateEvasionReport performs lightweight static heuristics on the payload
+// bytes — Shannon entropy, zero-run density, and a scan for high-signal
+// plaintext WinAPI/tool strings. It is honest about its limits: it is NOT a
+// substitute for a real AV/EDR scan, and the report says so instead of
+// inventing a detection score.
 func (pg *PayloadGenerator) GenerateEvasionReport(payload string) *EvasionReport {
-	return &EvasionReport{
-		Techniques:      []string{"Real-time analysis not implemented"},
-		Obfuscation:     "Unknown",
-		AVDetection:     "Not analyzed (real analysis not implemented)",
-		Recommendations: []string{"Run external scanner for actual evasion analysis"},
+	data := candidatePayloadBytes(payload)
+	if len(data) == 0 {
+		return &EvasionReport{
+			Techniques:      []string{"Empty or undecodable payload"},
+			Obfuscation:     "Unknown",
+			AVDetection:     "Not analyzed: no payload bytes to inspect",
+			Recommendations: []string{"Provide the payload bytes (raw, hex, or base64) to analyze"},
+		}
 	}
+
+	entropy := shannonEntropy(data)
+	zeroRuns := longestZeroRun(data)
+
+	techniques := []string{}
+	leaked := scanHighSignalStrings(data)
+	if len(leaked) > 0 {
+		techniques = append(techniques, "Plaintext high-signal strings: "+strings.Join(leaked, ", "))
+	}
+	switch {
+	case entropy > 7.5:
+		techniques = append(techniques, "High entropy — likely encrypted or compressed")
+	case entropy > 6.5:
+		techniques = append(techniques, "Elevated entropy — layered encoding suspected")
+	default:
+		techniques = append(techniques, "Low entropy — raw structure, statically recoverable")
+	}
+	if zeroRuns >= 16 {
+		techniques = append(techniques, fmt.Sprintf("Long zero runs (max %d B) — typical of padding/alignment in PEs", zeroRuns))
+	}
+	if len(techniques) == 0 {
+		techniques = []string{"No obvious static indicators at this depth"}
+	}
+
+	obfuscation := "None detected"
+	if entropy > 7.5 {
+		obfuscation = "Encrypted / compressed (by entropy)"
+	} else if entropy > 6.5 {
+		obfuscation = "Structured encoding (by entropy)"
+	}
+
+	detection := "Heuristic only — run an external scanner for a real verdict"
+	if len(leaked) > 0 {
+		detection = "High-risk by heuristics: plaintext indicators present (verify with real scanner)"
+	}
+
+	recommendations := []string{
+		"Run the generated sample through a real AV/EDR sandbox (VirusTotal, Any.Run)",
+	}
+	if len(leaked) > 0 {
+		recommendations = append(recommendations, "Remove plaintext high-signal strings — see Techniques list", "Encrypt string literals at build time (strxor table)")
+	}
+	if zeroRuns >= 16 {
+		recommendations = append(recommendations, "Strip zero padding before delivery (smaller + less characteristic)")
+	}
+
+	return &EvasionReport{
+		Techniques:      techniques,
+		Obfuscation:     obfuscation,
+		AVDetection:     detection,
+		Recommendations: recommendations,
+	}
+}
+
+// candidatePayloadBytes normalizes payload input: hex, then base64, then raw.
+func candidatePayloadBytes(payload string) []byte {
+	if payload == "" {
+		return nil
+	}
+	if data, err := hex.DecodeString(payload); err == nil && len(data) > 0 {
+		return data
+	}
+	if data, err := base64.StdEncoding.DecodeString(payload); err == nil && len(data) > 0 {
+		return data
+	}
+	return []byte(payload)
+}
+
+// shannonEntropy returns the per-byte Shannon entropy of data (0-8 bits).
+func shannonEntropy(data []byte) float64 {
+	if len(data) == 0 {
+		return 0
+	}
+	var counts [256]int
+	for _, b := range data {
+		counts[b]++
+	}
+	var sum float64
+	n := float64(len(data))
+	for _, c := range counts {
+		if c == 0 {
+			continue
+		}
+		p := float64(c) / n
+		sum -= p * math.Log2(p)
+	}
+	return sum
+}
+
+// longestZeroRun returns the length of the longest run of 0x00 bytes.
+func longestZeroRun(data []byte) int {
+	best, cur := 0, 0
+	for _, b := range data {
+		if b == 0 {
+			cur++
+			if cur > best {
+				best = cur
+			}
+		} else {
+			cur = 0
+		}
+	}
+	return best
+}
+
+// scanHighSignalStrings returns high-signal substrings found verbatim in data.
+func scanHighSignalStrings(data []byte) []string {
+	var hits []string
+	for _, s := range []string{
+		"CreateRemoteThread", "VirtualAllocEx", "WriteProcessMemory", "QueueUserAPC",
+		"GetProcAddress", "VirtualProtect", "OpenProcess", "SetWindowsHookEx", "NtUnmapViewOfSection",
+		"mimikatz", "sekurlsa", "kerberos::", "powershell", "cmd.exe", "AMSIScanBuffer",
+		"EtwEventWrite", "NtSetInformationThread", "kernel32.dll", "ntdll.dll",
+	} {
+		if len(s) >= 4 && bytes.Contains(data, []byte(s)) {
+			hits = append(hits, s)
+		}
+	}
+	return hits
 }

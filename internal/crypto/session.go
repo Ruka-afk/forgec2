@@ -7,14 +7,9 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
-	mrand "math/rand"
 	"sync"
 	"time"
 )
-
-// jitterRng is a non-cryptographic RNG seeded once from crypto/rand for beacon
-// jitter calculations. crypto/rand is too expensive for millisecond-level timing.
-var jitterRng = mrand.New(mrand.NewSource(time.Now().UnixNano()))
 
 const (
 	DefaultSessionMaxAge = 10 * time.Minute
@@ -335,78 +330,4 @@ func (sm *SessionManager) CleanupExpiredSessions(maxAge time.Duration) {
 			delete(sm.sessions, agentID)
 		}
 	}
-}
-
-// TrafficObfuscator adds randomness to traffic patterns
-type TrafficObfuscator struct {
-	JitterPercent float64
-	PaddingSize   int
-}
-
-func NewTrafficObfuscator(jitterPercent float64, paddingSize int) *TrafficObfuscator {
-	return &TrafficObfuscator{
-		JitterPercent: jitterPercent,
-		PaddingSize:   paddingSize,
-	}
-}
-
-func (to *TrafficObfuscator) AddJitter(baseDelay time.Duration) time.Duration {
-	if to.JitterPercent == 0 {
-		return baseDelay
-	}
-	jitter := float64(baseDelay) * to.JitterPercent
-	randomJitter := jitterRng.Float64()*jitter*2 - jitter
-	return baseDelay + time.Duration(randomJitter)
-}
-
-func (to *TrafficObfuscator) AddPadding(data []byte) []byte {
-	if to.PaddingSize == 0 {
-		return data
-	}
-	padding := make([]byte, jitterRng.Intn(to.PaddingSize))
-	return append(data, padding...)
-}
-
-func (to *TrafficObfuscator) RemovePadding(data []byte, originalSize int) []byte {
-	if originalSize > len(data) {
-		return data
-	}
-	return data[:originalSize]
-}
-
-// DomainFrontingManager manages multiple CDN domains for fronting
-type DomainFrontingManager struct {
-	domains      []string
-	currentIndex int
-	mu           sync.Mutex
-}
-
-func NewDomainFrontingManager(domains []string) *DomainFrontingManager {
-	return &DomainFrontingManager{
-		domains:      domains,
-		currentIndex: 0,
-	}
-}
-
-func (dfm *DomainFrontingManager) GetNextDomain() string {
-	dfm.mu.Lock()
-	defer dfm.mu.Unlock()
-	if len(dfm.domains) == 0 {
-		return ""
-	}
-	domain := dfm.domains[dfm.currentIndex]
-	dfm.currentIndex = (dfm.currentIndex + 1) % len(dfm.domains)
-	return domain
-}
-
-func (dfm *DomainFrontingManager) Failover() string {
-	return dfm.GetNextDomain()
-}
-
-func (dfm *DomainFrontingManager) GetActiveDomains() []string {
-	dfm.mu.Lock()
-	defer dfm.mu.Unlock()
-	result := make([]string, len(dfm.domains))
-	copy(result, dfm.domains)
-	return result
 }

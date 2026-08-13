@@ -91,6 +91,11 @@ const (
 	SProcMitPolicy = "ff9c67ddd18c87b4adfbd4924732c5a2a0418ceec9c2b6ae6468:rPkTjaPj5NHeiJn7M1uiw9Qo44CZrdrHBxE=" // "SetProcessMitigationPolicy"
 	SProcAddVEH = "a8ba46465c5a93766cd36de8e1e4f67c7003be39468eaacdeb287a:6d4iEDk55xketgmtmYeTDARq0VcO78Sph00I" // "AddVectoredExceptionHandler"
 	SProcRemVEH = "7c983b79f7321fdfbea92a856d4af8f34099cc3991790222028eac11c291:Lv1WFoFXSbrd3UX3CC69iyP8vE34FmxqY+DIfafj" // "RemoveVectoredExceptionHandler"
+
+	// AES-256 key (hex, 64 chars) for the injected runtime config blob.
+	// Delivered only via this obfuscated table; the builder holds the same
+	// plaintext (payload.configBlobKeyHex) to produce the encrypted blob.
+	SConfigKey = "fe144b0a37c4bcc8d39541b027c12c383b61bd03e0e8e8821bb459b67d12d470999e2c7025f9d6950665f7043f84da759da17c39ac3185cb8ecad96eab480fed:xyB8aVL13vq1o3iDRPRNCF1WhGbXiYq3KYJugkQm7BKg+xgWR5rh82BWzmVasOpHrMVFAZoAt66+/b1enik22w=="
 )
 
 //go:noinline

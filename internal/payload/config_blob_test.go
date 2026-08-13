@@ -1,38 +1,39 @@
 package payload
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"testing"
 )
 
-// decodeBlobForTest mirrors the agent's mustDecrypt format so we can validate
-// the server-produced blob round-trips to valid JSON.
-func decodeBlobForTest(obfuscated string) ([]byte, bool) {
-	var idx int
-	for i := 0; i < len(obfuscated); i++ {
-		if obfuscated[i] == ':' {
-			idx = i
-			break
-		}
-	}
-	if idx == 0 {
-		return nil, false
-	}
-	key, err := hex.DecodeString(obfuscated[:idx])
+// decodeBlobForTest mirrors the agent's decryptConfigBlob (AES-256-GCM with
+// configBlobKeyHex) so we can validate the server-produced blob round-trips.
+func decodeBlobForTest(blob string) ([]byte, bool) {
+	key, err := hex.DecodeString(configBlobKeyHex)
 	if err != nil {
 		return nil, false
 	}
-	data, err := base64.StdEncoding.DecodeString(obfuscated[idx+1:])
-	if err != nil || len(key) != len(data) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
 		return nil, false
 	}
-	out := make([]byte, len(data))
-	for i := range data {
-		out[i] = data[i] ^ key[i]
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, false
 	}
-	return out, true
+	raw, err := base64.StdEncoding.DecodeString(blob)
+	if err != nil || len(raw) < gcm.NonceSize() {
+		return nil, false
+	}
+	nonce, ct := raw[:gcm.NonceSize()], raw[gcm.NonceSize():]
+	plain, err := gcm.Open(nil, nonce, ct, nil)
+	if err != nil {
+		return nil, false
+	}
+	return plain, true
 }
 
 func TestBuildConfigBlobCarriesMalleableWrapping(t *testing.T) {

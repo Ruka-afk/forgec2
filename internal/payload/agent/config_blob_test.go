@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -8,18 +10,27 @@ import (
 )
 
 // obfuscateForTest mirrors the server-side payload.obfuscateBlob format:
-// <hex-xor-key>:<base64-ciphertext> where key length == plaintext length.
+// AES-256-GCM with the strxor-delivered SConfigKey.
 func obfuscateForTest(t *testing.T, plain []byte) string {
 	t.Helper()
-	key := make([]byte, len(plain))
-	for i := range key {
-		key[i] = byte(i*31 + 7)
+	key, err := hex.DecodeString(s(SConfigKey))
+	if err != nil {
+		t.Fatal(err)
 	}
-	enc := make([]byte, len(plain))
-	for i := range plain {
-		enc[i] = plain[i] ^ key[i]
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return hex.EncodeToString(key) + ":" + base64.StdEncoding.EncodeToString(enc)
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	for i := range nonce {
+		nonce[i] = byte(i*7 + 3)
+	}
+	sealed := gcm.Seal(nonce, nonce, plain, nil)
+	return base64.StdEncoding.EncodeToString(sealed)
 }
 
 func TestLoadConfigBlobAppliesOverDefaults(t *testing.T) {

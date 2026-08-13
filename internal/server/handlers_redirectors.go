@@ -65,6 +65,7 @@ func (s *Server) handleRedirectorCreate(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Redirector operation"))
 		return
 	}
+	s.syncRedirectorProbe(&rd)
 	respond(c, gin.H{"success": true, "id": rd.ID})
 }
 
@@ -113,12 +114,19 @@ func (s *Server) handleRedirectorUpdate(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to update redirector")
 		return
 	}
+	s.syncRedirectorProbe(&rd)
 	respond(c, gin.H{"success": true})
 }
 
 // handleRedirectorDelete removes a redirector.
 func (s *Server) handleRedirectorDelete(c *gin.Context) {
 	id := c.Param("id")
+	var rd db.Redirector
+	if err := s.db.First(&rd, id).Error; err == nil {
+		if s.circuitBreaker != nil {
+			s.circuitBreaker.UnregisterTarget(redirectorTargetID(&rd))
+		}
+	}
 	if err := s.db.Delete(&db.Redirector{}, "id = ?", id).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Redirector operation"))
 		return
@@ -244,6 +252,10 @@ func (s *Server) handleRedirectorDeploySSH(c *gin.Context) {
 	// Mark the matching redirector active when identifiable.
 	if req.Host != "" {
 		s.db.Model(&db.Redirector{}).Where("host = ?", req.Host).Update("status", "active")
+		var rd db.Redirector
+		if err := s.db.Where("host = ?", req.Host).First(&rd).Error; err == nil {
+			s.syncRedirectorProbe(&rd)
+		}
 	}
 	respond(c, gin.H{
 		"success": true,

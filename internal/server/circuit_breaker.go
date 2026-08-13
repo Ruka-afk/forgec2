@@ -144,25 +144,36 @@ func (cb *CircuitBreaker) probeTarget(target ProbeTarget) ProbeResult {
 		Timestamp: time.Now(),
 	}
 
-	// TCP check
-	addr := fmt.Sprintf("%s:%d", target.Host, target.Port)
-	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: CBDialTimeout}, "tcp", addr, &tls.Config{})
+	// Reachability probing only: TLS certificate verification is skipped
+	// on purpose (IP-address and self-signed-redirector hosts are normal).
+	// Plain HTTP targets get a plain TCP dial; only https/tls targets get a
+	// TLS handshake, so an HTTP-only endpoint is never flagged as burned.
+	var conn net.Conn
+	var err error
+	switch target.Scheme {
+	case "https", "tls":
+		conn, err = tls.DialWithDialer(&net.Dialer{Timeout: CBDialTimeout}, "tcp", fmt.Sprintf("%s:%d", target.Host, target.Port), &tls.Config{InsecureSkipVerify: true})
+	default:
+		conn, err = net.DialTimeout("tcp", fmt.Sprintf("%s:%d", target.Host, target.Port), CBDialTimeout)
+	}
 	if err != nil {
-		result.Error = fmt.Sprintf("TCP/TLS dial failed: %v", err)
+		result.Error = fmt.Sprintf("TCP dial failed: %v", err)
 		result.ResponseTime = time.Since(start)
 		return result
 	}
 	conn.Close()
 	result.TCPOK = true
-	result.TLSOK = true
+	if target.Scheme == "https" || target.Scheme == "tls" {
+		result.TLSOK = true
+		// TLS handshake completion is the health signal for https/tls;
+		// a GET would need a matching certificate to avoid false burns.
+		result.ResponseTime = time.Since(start)
+		return result
+	}
 
-	// HTTP check
-	if target.Scheme == "http" || target.Scheme == "https" {
-		proto := target.Scheme
-		if proto == "" {
-			proto = "https"
-		}
-		url := fmt.Sprintf("%s://%s:%d/health", proto, target.Host, target.Port)
+	// HTTP check (plain http only)
+	if target.Scheme == "http" {
+		url := fmt.Sprintf("http://%s:%d/health", target.Host, target.Port)
 		client := &http.Client{Timeout: CBHealthCheckTimeout}
 		resp, err := client.Get(url)
 		if err == nil {

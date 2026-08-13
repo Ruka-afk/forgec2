@@ -1437,11 +1437,23 @@ func (s *Server) Run() error {
 	// Initialize Circuit Breaker
 	s.circuitBreaker = NewCircuitBreaker(s.cfg)
 	s.circuitBreaker.SetOnBurnedHandler(func(targetID string) {
+		if strings.HasPrefix(targetID, redirectorTargetPrefix) {
+			slog.Warn("Circuit breaker triggered: redirector BURNED", "target_id", targetID)
+			rdID := strings.TrimPrefix(targetID, redirectorTargetPrefix)
+			s.db.Model(&db.Redirector{}).Where("id = ?", rdID).Update("status", "down")
+			s.broadcastOperatorEvent(map[string]interface{}{
+				"type":         "redirector_update",
+				"action":       "burned",
+				"redirector_id": rdID,
+			})
+			return
+		}
 		slog.Warn("Circuit breaker triggered: listener BURNED", "listener_id", targetID)
 		// Automatically push profile rotation to agents on this listener
 		s.rotateAgentsOnBurnedListener(targetID)
 	})
 	s.circuitBreaker.Start()
+	s.registerExistingProbeTargets()
 
 	// start update checker (opt-in; phones home to GitHub releases)
 	if s.cfg.Server.UpdateCheckEnabled {
