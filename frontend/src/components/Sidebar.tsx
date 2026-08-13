@@ -6,7 +6,7 @@ import { useWebSocket } from "@/lib/useWebSocket";
 import { useEffect, useState, useCallback, memo } from "react";
 import { useShallow } from "zustand/shallow";
 import { useI18n } from "@/lib/i18n";
-import { useAppStore } from "@/lib/store";
+import { useAppStore, initStatsWSListener } from "@/lib/store";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
@@ -252,6 +252,7 @@ export default function Sidebar() {
   const collapsed = sidebarCollapsed;
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
+  useEffect(() => { initStatsWSListener(); }, []);
   useVisibleInterval(fetchStats, 30000);
 
   useEffect(() => {

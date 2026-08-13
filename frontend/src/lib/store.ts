@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { api } from "./api";
 import { paths } from "./api-paths";
+import { onWSMessage } from "./wsContext";
 import type { DashboardStats } from "@/types/agent";
 
 export interface OnlineUser {
@@ -11,6 +12,14 @@ export interface OnlineUser {
 }
 
 let statsInFlight: Promise<void> | null = null;
+let statsWSInit = false;
+let statsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+const STATS_REFRESH_DEBOUNCE_MS = 800;
+
+// Events that change global counters (agents, tasks). Debounced so bursts of
+// beacon chatter coalesce into a single dashboard refresh.
+const STATS_EVENTS = new Set(["agent_online", "agent_offline", "agent_data_update", "task_update"]);
 
 interface AppState {
   stats: DashboardStats | null;
@@ -94,3 +103,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     return statsInFlight;
   },
 }));
+
+// Wire WebSocket events to a debounced stats refresh. Idempotent — safe to
+// call from anywhere (Sidebar mounts it once).
+export function initStatsWSListener() {
+  if (statsWSInit) return;
+  statsWSInit = true;
+  onWSMessage((msg) => {
+    if (!STATS_EVENTS.has(String(msg.type))) return;
+    if (statsRefreshTimer) clearTimeout(statsRefreshTimer);
+    statsRefreshTimer = setTimeout(() => {
+      statsRefreshTimer = null;
+      void useAppStore.getState().fetchStats();
+    }, STATS_REFRESH_DEBOUNCE_MS);
+  });
+}
