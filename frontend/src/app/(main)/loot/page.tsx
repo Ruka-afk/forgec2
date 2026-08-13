@@ -9,7 +9,7 @@ import { downloadText, downloadJSON } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { formatTime } from "@/lib/utils";
 import { safeHref, safeImageSrc } from "@/lib/safeUrl";
-import { EmptyState, PageHeader, Pagination, StatusBadge } from "@/components/UI";
+import { EmptyState, PageHeader, Pagination, StatusBadge, CopyButton } from "@/components/UI";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
@@ -26,6 +26,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Download, FileUp, Images, Keyboard, Terminal, Trash2, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Accordion, AccordionItem, AccordionHeader, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
 import { LootScreenshotCard } from "./_components/LootScreenshotCard";
+import KeylogContent from "./_components/KeylogContent";
 import { useLootData } from "./_components/useLootData";
 import type { LootTab } from "./_components/types";
 
@@ -284,24 +285,29 @@ function LootPage() {
                 {visibleKeylogs.map(k => {
                   const agentName = k.agent?.hostname || k.hostname || k.agent_id;
                   const full = k.result || k.error;
+                  const preview = full.split("\n").find(l => l.trim()) || "";
                   return (
                     <AccordionItem key={k.id} value={k.id} className="border border-border rounded-xl overflow-hidden mb-3">
                       <AccordionHeader className="bg-muted/50">
                         <AccordionTrigger className="px-4 py-2 hover:bg-muted/80 flex-1">
-                          <div className="flex items-center gap-x-3 w-full">
+                          <div className="flex items-center gap-x-3 w-full min-w-0">
                             <Terminal aria-hidden="true" className="w-4 h-4 shrink-0" />
                             <span className="font-medium text-sm truncate">{agentName}</span>
-                            <span className="ml-auto text-xs text-muted-foreground">{formatTime(k.created_at)}</span>
+                            <span className="font-mono text-xs text-muted-foreground truncate hidden md:inline">{preview}</span>
+                            <span className="ml-auto text-xs text-muted-foreground shrink-0">{formatTime(k.created_at)}</span>
                           </div>
                         </AccordionTrigger>
                       </AccordionHeader>
                       <AccordionPanel>
                         <div className="flex items-center justify-between px-4 py-1.5 border-b border-border bg-muted/30">
                           <span className="text-xs text-muted-foreground">{t("loot.keylog")}</span>
-                          <Button variant="ghost" size="sm" onClick={() => downloadText(full, `keylog-${agentName}-${k.id}.txt`)} className="text-xs h-auto p-1 text-primary" aria-label={t("common.download")}><Download aria-hidden="true" className="w-4 h-4" /></Button>
+                          <div className="flex items-center gap-1">
+                            <CopyButton text={full} label={t("loot.keylog_copy")} size="icon-xs" />
+                            <Button variant="ghost" size="sm" onClick={() => downloadText(full, `keylog-${agentName}-${k.id}.txt`)} className="text-xs h-auto p-1 text-primary" aria-label={t("common.download")}><Download aria-hidden="true" className="w-4 h-4" /></Button>
+                          </div>
                         </div>
                         <div className="bg-background text-emerald-700 dark:text-emerald-300 font-mono text-xs p-4 max-h-[500px] overflow-y-auto whitespace-pre-wrap break-all">
-                          {full}
+                          <KeylogContent text={full} />
                         </div>
                       </AccordionPanel>
                     </AccordionItem>

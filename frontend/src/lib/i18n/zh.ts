@@ -1844,7 +1844,8 @@ export const zh: Record<string, string> = {
     "loot.export_json": "导出 JSON",
     "loot.file_path": "文件/路径",
     "loot.filter_agent_aria": "按 Agent 筛选",
-    "loot.keylog": "键盘记录",
+    "loot.keylog": "键盘记录",    "loot.keylog_copy": "复制键盘记录",
+
     "loot.keylogs_tab": "键盘记录",
     "loot.keylogs_title": "键盘记录存储",
     "loot.lb_next": "下一张截图",

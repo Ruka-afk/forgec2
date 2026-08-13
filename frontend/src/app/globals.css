@@ -402,6 +402,33 @@ body {
   }
 }
 
+/* ── Keylog sensitive-value highlighting ── */
+mark.keylog-secret {
+  background: color-mix(in oklch, var(--color-destructive) 18%, transparent);
+  color: var(--color-destructive);
+  border-radius: 0.2rem;
+  padding: 0 0.15rem;
+}
+mark.keylog-email,
+mark.keylog-url {
+  background: color-mix(in oklch, var(--color-primary) 14%, transparent);
+  color: var(--color-primary);
+  border-radius: 0.2rem;
+  padding: 0 0.15rem;
+}
+mark.keylog-ip {
+  background: color-mix(in oklch, var(--color-warning) 20%, transparent);
+  color: var(--color-warning);
+  border-radius: 0.2rem;
+  padding: 0 0.15rem;
+}
+mark.keylog-user {
+  background: color-mix(in oklch, var(--color-info) 16%, transparent);
+  color: var(--color-info);
+  border-radius: 0.2rem;
+  padding: 0 0.15rem;
+}
+
 /* ── Page Transitions (View Transitions API) ── */
 @view-transition {
   navigation: auto;
