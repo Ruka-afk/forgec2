@@ -1844,8 +1844,8 @@ export const en: Record<string, string> = {
     "loot.export_json": "Export JSON",
     "loot.file_path": "File/Path",
     "loot.filter_agent_aria": "Filter by agent",
-    "loot.keylog": "Key Log",    "loot.keylog_copy": "Copy key log",
-
+    "loot.keylog": "Key Log",
+    "loot.keylog_copy": "Copy key log",
     "loot.keylogs_tab": "Key Logs",
     "loot.keylogs_title": "Key Log Storage",
     "loot.lb_next": "Next screenshot",
