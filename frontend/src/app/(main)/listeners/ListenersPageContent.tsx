@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
 import { z } from "zod";
 import { useI18n } from "@/lib/i18n";
 import { useForm } from "@/lib/hooks/useForm";
@@ -10,6 +9,7 @@ import { FieldError, EmptyState, PageHeader, StatusBadge } from "@/components/UI
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
 import { DataError } from "@/components/ui/data-state";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeftRight, Copy, Info, Pencil, Plug, Plus, Power, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Check, Copy, Info, Pencil, Plug, Plus, Power, Trash2 } from "lucide-react";
 import type { Listener } from "./_components/types";
 import { emptyCreateForm, emptyEditForm } from "./_components/types";
 import { useListenersData } from "./_components/useListenersData";
@@ -133,13 +133,6 @@ export default function ListenersPageContent() {
       }
     },
   });
-
-  const handleCopy = async (address: string) => {
-    try {
-      await navigator.clipboard.writeText(address);
-      toast.success(t("listeners.toast_address_copied"));
-    } catch { toast.error(t("listeners.toast_copy_failed")); }
-  };
 
   const handleEdit = (listener: Listener) => {
     setEditingListener(listener);
@@ -316,10 +309,19 @@ export default function ListenersPageContent() {
                     <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4 text-xs text-muted-foreground max-w-[150px] truncate">{notes}</TableCell>
                      <TableCell className="py-3 px-4 sm:py-4 sm:px-6 text-right">
                        <div className="flex items-center justify-end gap-1 sm:gap-2">
-                         <Button variant="ghost" onClick={() => handleCopy(`${scheme}://${host}:${port}`)} className="w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-secondary hover:bg-secondary/80 rounded-xl flex items-center justify-center gap-x-1 text-muted-foreground">
-                            <Copy className="w-4 h-4" />
-                            <span className="hidden sm:inline">{t("listeners.copy")}</span>
-                         </Button>
+                         <CopyButton
+                            text={`${scheme}://${host}:${port}`}
+                            title={t("listeners.copy")}
+                            size="icon-xs"
+                            className="w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-secondary hover:bg-secondary/80 rounded-xl flex items-center justify-center gap-x-1 text-muted-foreground"
+                          >
+                            {(copied) => (
+                              <>
+                                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                <span className="hidden sm:inline">{t("listeners.copy")}</span>
+                              </>
+                            )}
+                          </CopyButton>
                          <Button variant="ghost" onClick={() => handleEdit(l)} className="w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-secondary/70 hover:bg-secondary text-foreground rounded-xl flex items-center justify-center gap-x-1">
                             <Pencil className="w-4 h-4" />
                             <span className="hidden sm:inline">{t("listeners.edit")}</span>

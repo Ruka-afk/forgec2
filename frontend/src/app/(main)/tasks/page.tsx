@@ -7,6 +7,7 @@ import { downloadText } from "@/lib/download";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { PageHeader, Pagination, Spinner, StatusBadge } from "@/components/UI";
+import { Badge } from "@/components/ui/badge";
 import { DataState } from "@/components/ui/data-state";
 import OperatorBadge from "@/components/OperatorBadge";
 import { useAppStore } from "@/lib/store";
@@ -245,13 +246,12 @@ function TasksPage() {
   };
 
   const getTypeBadge = (type: string): React.ReactNode => {
-    const colorMap: Record<string, string> = {
-      shell: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-      screenshot: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-      kill: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    const variantMap: Record<string, "warning" | "info" | "destructive" | "secondary"> = {
+      shell: "warning",
+      screenshot: "info",
+      kill: "destructive",
     };
-    const color = colorMap[type] || "bg-secondary text-muted-foreground";
-    return <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg ${color}`}>{type}</span>;
+    return <Badge variant={variantMap[type] || "secondary"}>{type}</Badge>;
   };
 
   return (

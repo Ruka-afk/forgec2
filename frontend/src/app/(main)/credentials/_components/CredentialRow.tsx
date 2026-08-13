@@ -5,11 +5,11 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   CircleCheck,
   CircleQuestionMark,
-  Copy,
   Database,
   Eye,
   EyeOff,
@@ -19,7 +19,6 @@ import {
   Trash2,
   WandSparkles,
 } from "lucide-react";
-import { toast } from "sonner";
 import { TYPE_BADGE_VARIANT, type VaultEntry } from "./types";
 
 interface CredentialRowProps {
@@ -70,14 +69,12 @@ function CredentialRowInner({
             >
               {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
             </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => { navigator.clipboard.writeText(entry.password); toast.success(t("cred.copied")); }}
-              aria-label={t("cred.copy_password")}
-            >
-              <Copy className="w-4 h-4" />
-            </Button>
+            <CopyButton
+              text={entry.password}
+              label={t("cred.copy_password")}
+              title={t("cred.copy_password")}
+              size="icon-xs"
+            />
           </div>
         ) : (
           <span className="text-muted-foreground">-</span>

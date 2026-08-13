@@ -8,7 +8,7 @@ import { DASHBOARD_RANGES } from "@/lib/shortcuts";
 import { useUrlState } from "@/lib/hooks/useUrlState";
 import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/shallow";
-import { EmptyState, PageHeader, StatCard } from "@/components/UI";
+import { EmptyState, PageHeader, StatCard, StatusIndicator } from "@/components/UI";
 import { formatTime } from "@/lib/utils";
 import { ChartCard } from "@/components/ChartCard";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -125,7 +125,7 @@ export default function DashboardPage() {
           </div>
             {s.server_version && (
               <Badge variant="success" className="gap-1.5 px-3 py-1.5 text-xs">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                <StatusIndicator status="healthy" variant="dotOnly" size="sm" pulse ariaLabel={t("dashboard.live")} />
                 v{s.server_version}
               </Badge>
             )}
@@ -200,7 +200,12 @@ export default function DashboardPage() {
           ) : s.recent_tasks.slice(0, 10).map((task, i) => (
             <div key={i} className="flex items-center justify-between px-5 py-3 hover:bg-secondary transition-colors">
               <div className="flex items-center gap-3">
-                <span aria-hidden="true" className={`w-2 h-2 rounded-full shrink-0 ${task.status === "completed" ? "bg-emerald-500" : task.status === "failed" ? "bg-red-500" : task.status === "pending" ? "bg-amber-500" : "bg-blue-500"}`}></span>
+                <StatusIndicator
+                  status={task.status === "completed" ? "completed" : task.status === "failed" ? "failed" : task.status === "pending" ? "pending" : task.status === "cancelled" ? "cancelled" : "running"}
+                  variant="dotOnly"
+                  size="sm"
+                  ariaLabel={task.status}
+                />
                 <span className="text-(--fs-micro-sm) text-muted-foreground w-16 shrink-0">
                   {task.status === "completed" ? t("tasks.completed") : task.status === "failed" ? t("tasks.failed") : task.status === "pending" ? t("tasks.pending") : task.status === "cancelled" ? t("tasks.cancelled") : t("tasks.running")}
                 </span>

@@ -7,12 +7,13 @@ import { EmptyState, PageHeader, Spinner } from "@/components/UI";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Cloud, CloudUpload, Copy, List } from "lucide-react";
+import { Check, Cloud, CloudUpload, Copy, List } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 import type { Agent } from "@/types/agent";
@@ -219,13 +220,18 @@ export default function CloudPage() {
                     {cred.secret_key ? cred.secret_key.substring(0, 40) + "..." : "-"}
                   </TableCell>
                   <TableCell>
-                    <Button variant="outline" size="sm" onClick={() => {
-                      const text = `Provider: ${cred.provider}\nAccess Key: ${cred.access_key_id || "N/A"}\nSecret Key: ${cred.secret_key || "N/A"}\n`;
-                      navigator.clipboard.writeText(text);
-                      toast.success(t("cloud.copied"));
-                    }}>
-                      <Copy className="w-4 h-4" />{t("cloud.copy")}
-                    </Button>
+                    <CopyButton
+                      text={`Provider: ${cred.provider}\nAccess Key: ${cred.access_key_id || "N/A"}\nSecret Key: ${cred.secret_key || "N/A"}\n`}
+                      title={t("cloud.copy")}
+                      className="px-3"
+                    >
+                      {(copied) => (
+                        <>
+                          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          {t("cloud.copy")}
+                        </>
+                      )}
+                    </CopyButton>
                   </TableCell>
                 </TableRow>
               ))}

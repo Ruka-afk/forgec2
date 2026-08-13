@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
-import { EmptyState, PageHeader, PageSpinner } from "@/components/UI";
+import { EmptyState, PageHeader, PageSpinner, StatCard, StatusIndicator } from "@/components/UI";
 import { toast } from "sonner";
 import { formatTime } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,13 +44,6 @@ interface BreakerEvent {
   reason: string;
   created_at: string;
 }
-
-const stateConfig: Record<string, { dot: string; bg: string; text: string; label: string }> = {
-  healthy: { dot: "bg-emerald-500", bg: "bg-emerald-500/10 border-emerald-500/20", text: "text-emerald-700 dark:text-emerald-400", label: "Closed" },
-  unstable: { dot: "bg-amber-500", bg: "bg-amber-500/10 border-amber-500/20", text: "text-amber-700 dark:text-amber-400", label: "Half-Open" },
-  burned: { dot: "bg-destructive", bg: "bg-destructive/10 border-destructive/20", text: "text-destructive", label: "Open" },
-  unknown: { dot: "bg-muted-foreground", bg: "bg-muted border-border", text: "text-muted-foreground", label: "Unknown" },
-};
 
 export default function CircuitBreakerPage() {
   const { t } = useI18n();
@@ -123,21 +116,12 @@ export default function CircuitBreakerPage() {
       <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
         <PageHeader title={t("cb.title")} subtitle={t("cb.subtitle")}>
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-              {healthyCount} {t("cb.closed")}
-            </span>
+            <StatusIndicator status="healthy" variant="dot" label={`${healthyCount} ${t("cb.closed")}`} />
             {unstableCount > 0 && (
-              <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
-                <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
-                {unstableCount} {t("cb.half_open")}
-              </span>
+              <StatusIndicator status="unstable" variant="dot" label={`${unstableCount} ${t("cb.half_open")}`} />
             )}
             {burnedCount > 0 && (
-              <span className="flex items-center gap-1.5 text-xs text-destructive">
-                <span className="w-2 h-2 bg-destructive rounded-full animate-pulse"></span>
-                {burnedCount} {t("cb.open")}
-              </span>
+              <StatusIndicator status="burned" variant="dot" label={`${burnedCount} ${t("cb.open")}`} pulse />
             )}
           </div>
         </PageHeader>
@@ -148,54 +132,10 @@ export default function CircuitBreakerPage() {
         </Card>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
-          <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                <ShieldCheck className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{healthyCount}</div>
-                <div className="text-xs text-muted-foreground">{t("cb.closed")}</div>
-              </div>
-            </div>
-            <div className="text-(--fs-micro-sm) text-muted-foreground">{t("cb.closed_desc")}</div>
-          </Card>
-          <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                <AlertTriangle className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{unstableCount}</div>
-                <div className="text-xs text-muted-foreground">{t("cb.half_open")}</div>
-              </div>
-            </div>
-            <div className="text-(--fs-micro-sm) text-muted-foreground">{t("cb.half_open_desc")}</div>
-          </Card>
-          <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center">
-                <Radio className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-destructive">{burnedCount}</div>
-                <div className="text-xs text-muted-foreground">{t("cb.open")}</div>
-              </div>
-            </div>
-            <div className="text-(--fs-micro-sm) text-muted-foreground">{t("cb.open_desc")}</div>
-          </Card>
-          <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
-                <Gauge className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-primary">{config.health_check_seconds}s</div>
-                <div className="text-xs text-muted-foreground">{t("cb.check_interval")}</div>
-              </div>
-            </div>
-            <div className="text-(--fs-micro-sm) text-muted-foreground">{t("cb.probes_every", { seconds: config.health_check_seconds })}</div>
-          </Card>
+          <StatCard label={t("cb.closed")} value={healthyCount} color="emerald" icon={<ShieldCheck className="w-4 h-4" />} sub={t("cb.closed_desc")} />
+          <StatCard label={t("cb.half_open")} value={unstableCount} color="amber" icon={<AlertTriangle className="w-4 h-4" />} sub={t("cb.half_open_desc")} />
+          <StatCard label={t("cb.open")} value={burnedCount} color="red" icon={<Radio className="w-4 h-4" />} sub={t("cb.open_desc")} />
+          <StatCard label={t("cb.check_interval")} value={`${config.health_check_seconds}s`} color="indigo" icon={<Gauge className="w-4 h-4" />} sub={t("cb.probes_every", { seconds: config.health_check_seconds })} />
         </div>
 
         <Card>
@@ -209,12 +149,12 @@ export default function CircuitBreakerPage() {
             <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-xs uppercase tracking-wider font-semibold">ID</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider font-semibold">{t("cb.col_target")}</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider font-semibold">{t("cb.col_status")}</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider font-semibold">{t("cb.col_fails")}</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider font-semibold">{t("cb.col_last_probe")}</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider font-semibold text-right">{t("cb.col_controls")}</TableHead>
+                <TableHead>ID</TableHead>
+                <TableHead>{t("cb.col_target")}</TableHead>
+                <TableHead>{t("cb.col_status")}</TableHead>
+                <TableHead>{t("cb.col_fails")}</TableHead>
+                <TableHead>{t("cb.col_last_probe")}</TableHead>
+                <TableHead className="text-right">{t("cb.col_controls")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -223,7 +163,6 @@ export default function CircuitBreakerPage() {
                   <TableCell colSpan={6} className="px-4 py-10 text-center text-xs text-muted-foreground"><EmptyState icon={Activity} title={t("cb.empty_listeners")} /></TableCell>
                 </TableRow>
               ) : listeners.map((l) => {
-                const sc = stateConfig[l.status] || stateConfig.unknown;
                 const idStr = l.target;
                 return (
                   <TableRow key={idStr} className="hover:bg-muted transition-colors">
@@ -234,10 +173,12 @@ export default function CircuitBreakerPage() {
                       <span className="text-muted-foreground">{l.scheme}://{l.host}:{l.port}</span>
                     </TableCell>
                     <TableCell className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${sc.dot} ${l.status === "burned" ? "animate-pulse" : ""}`}></span>
-                        <span className={`text-xs font-medium ${sc.text}`}>{sc.label}</span>
-                      </div>
+                      <StatusIndicator
+                        status={l.status === "healthy" ? "healthy" : l.status === "unstable" ? "unstable" : l.status === "burned" ? "burned" : "unknown"}
+                        variant="dot"
+                        label={l.status === "healthy" ? t("cb.closed") : l.status === "unstable" ? t("cb.half_open") : l.status === "burned" ? t("cb.open") : t("cb.unknown")}
+                        pulse={l.status === "burned"}
+                      />
                     </TableCell>
                     <TableCell className="px-4 py-3">
                       <span className={`text-xs font-medium ${l.consecutive_fails >= 3 ? "text-destructive" : l.consecutive_fails > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
@@ -261,13 +202,13 @@ export default function CircuitBreakerPage() {
                           </PopoverTrigger>
                           <PopoverContent align="end" sideOffset={4} className="w-[120px] p-1">
                             <Button variant="ghost" size="xs" onClick={() => handleToggle(idStr, "closed")} className="w-full justify-start text-xs">
-                              <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block mr-2"></span>Close
+                              <StatusIndicator status="healthy" variant="dotOnly" size="sm" ariaLabel={t("cb.closed")} className="mr-2" />{t("cb.closed")}
                             </Button>
                             <Button variant="ghost" size="xs" onClick={() => handleToggle(idStr, "half-open")} className="w-full justify-start text-xs">
-                              <span className="w-2 h-2 bg-amber-500 rounded-full inline-block mr-2"></span>Half-Open
+                              <StatusIndicator status="unstable" variant="dotOnly" size="sm" ariaLabel={t("cb.half_open")} className="mr-2" />{t("cb.half_open")}
                             </Button>
                             <Button variant="ghost" size="xs" onClick={() => handleToggle(idStr, "open")} className="w-full justify-start text-xs">
-                              <span className="w-2 h-2 bg-destructive rounded-full inline-block mr-2"></span>Open
+                              <StatusIndicator status="burned" variant="dotOnly" size="sm" ariaLabel={t("cb.open")} className="mr-2" />{t("cb.open")}
                             </Button>
                           </PopoverContent>
                         </Popover>
@@ -317,9 +258,12 @@ export default function CircuitBreakerPage() {
                       <code className="font-semibold text-foreground">{e.listener_id}</code>
                       <span className="text-muted-foreground">{e.old_state}</span>
                       <ArrowRight className="w-4 h-4" />
-                      <span className={`font-medium ${e.new_state === "healthy" ? "text-emerald-600" : e.new_state === "open" || e.new_state === "burned" ? "text-destructive" : "text-amber-600"}`}>
-                        {e.new_state}
-                      </span>
+                      <StatusIndicator
+                        status={e.new_state === "healthy" ? "healthy" : e.new_state === "open" || e.new_state === "burned" ? "burned" : "unstable"}
+                        variant="dot"
+                        size="sm"
+                        label={e.new_state}
+                      />
                       {e.reason && <span className="text-muted-foreground">({e.reason})</span>}
                     </div>
                     <p className="text-(--fs-micro-sm) text-muted-foreground mt-0.5">{formatTime(e.created_at)}</p>

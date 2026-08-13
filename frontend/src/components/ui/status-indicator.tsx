@@ -7,7 +7,8 @@ type AgentStatus = "online" | "offline" | "stale";
 type TaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 type ConnectionStatus = "connected" | "disconnected" | "reconnecting";
 type GenericStatus = "active" | "inactive" | "locked" | "warning" | "error";
-type Status = AgentStatus | TaskStatus | ConnectionStatus | GenericStatus;
+type BreakerStatus = "healthy" | "unstable" | "burned" | "unknown";
+type Status = AgentStatus | TaskStatus | ConnectionStatus | GenericStatus | BreakerStatus;
 
 type StatusIndicatorVariant = "dot" | "dotOnly" | "badge";
 
@@ -29,6 +30,10 @@ const STATUS_STYLES: Record<string, { dot: string; bg: string; text: string; rin
   locked:       { dot: "bg-red-500", bg: "bg-red-500/10", text: "text-red-700 dark:text-red-400", ring: "ring-red-500/30" },
   warning:      { dot: "bg-amber-500", bg: "bg-amber-500/10", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-500/30" },
   error:        { dot: "bg-red-500", bg: "bg-red-500/10", text: "text-red-700 dark:text-red-400", ring: "ring-red-500/30" },
+  healthy:      { dot: "bg-emerald-500", bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-500/30" },
+  unstable:     { dot: "bg-amber-500", bg: "bg-amber-500/10", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-500/30" },
+  burned:       { dot: "bg-destructive", bg: "bg-destructive/10", text: "text-destructive", ring: "ring-destructive/30" },
+  unknown:      { dot: "bg-muted-foreground", bg: "bg-muted/50", text: "text-muted-foreground", ring: "ring-muted-foreground/30" },
 };
 
 interface StatusIndicatorProps {
@@ -60,6 +65,10 @@ const STATUS_LABELS: Record<string, string> = {
   locked: "Locked",
   warning: "Warning",
   error: "Error",
+  healthy: "Healthy",
+  unstable: "Unstable",
+  burned: "Burned",
+  unknown: "Unknown",
 };
 
 const DOT_SIZES = {

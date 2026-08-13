@@ -8,6 +8,7 @@ import { downloadText } from "@/lib/download";
 import { EmptyState, PageHeader, Spinner } from "@/components/UI";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Button } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -17,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Copy, Download, Trash2 } from "lucide-react";
+import { CircleCheck, Copy, Download, Trash2 } from "lucide-react";
 
 interface StagerToken {
   id: number;
@@ -156,9 +157,14 @@ export default function StagerPage() {
             <div><span className="font-medium">{t("stager.expires")}</span> {formatTime(createdToken.expires_at)}</div>
           </div>
           <div className="flex gap-2 mt-2">
-            <Button variant="secondary" size="sm" onClick={() => { navigator.clipboard.writeText(createdToken.token); toast.success(t("stager.token_copied")); }}>
-              <Copy className="w-4 h-4" />{t("stager.copy_token")}
-            </Button>
+            <CopyButton text={createdToken.token} className="mt-0">
+              {(copied) => (
+                <>
+                  {copied ? <CircleCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {t("stager.copy_token")}
+                </>
+              )}
+            </CopyButton>
             <Button variant="outline" size="sm" onClick={() => downloadToken(createdToken.token, `stager_token_${Date.now()}.txt`)}>
               <Download className="w-4 h-4" />{t("stager.download")}
             </Button>
