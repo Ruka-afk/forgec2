@@ -79,11 +79,7 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		Status:  "pending",
 	}
 
-	if s.cfg != nil && s.cfg.Security.RequireApproval {
-		if info, ok := getTaskTypeInfo(taskType); ok && info.RequiresApproval {
-			task.Status = TaskStatusPendingApproval
-		}
-	}
+	task.Status = s.resolveInitialTaskStatus(taskType)
 	if err := s.db.Create(&task).Error; err != nil {
 		s.agentPendingTasksMu.Lock()
 		s.agentPendingTasks[agentID]--
@@ -108,6 +104,20 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 	}
 	s.metrics.TasksTotal.Inc()
 	return &task, nil
+}
+
+// resolveInitialTaskStatus returns the status a newly created task should start
+// in. When operator approval is required and the task type is flagged, the task
+// waits in pending_approval; otherwise it is immediately pending. Centralizing
+// this keeps the single-task and bulk/batch paths consistent so the two-man
+// rule cannot be bypassed through the batch endpoint.
+func (s *Server) resolveInitialTaskStatus(taskType string) string {
+	if s.cfg != nil && s.cfg.Security.RequireApproval {
+		if info, ok := getTaskTypeInfo(taskType); ok && info.RequiresApproval {
+			return TaskStatusPendingApproval
+		}
+	}
+	return "pending"
 }
 
 // dispatchTask logs the audit action, broadcasts the update via WS, and returns success JSON.

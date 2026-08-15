@@ -96,6 +96,10 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		req.TaskType = "shell"
 	}
 
+	// Operator identity for audit attribution on every batched task.
+	user, _ := c.Get("user")
+	operator, _ := user.(string)
+
 	uniqueIDs := make([]string, 0, len(req.AgentIDs))
 	seen := make(map[string]struct{}, len(req.AgentIDs))
 	for _, id := range req.AgentIDs {
@@ -148,13 +152,14 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		s.agentPendingTasks[agentID]++
 
 		tasks = append(tasks, db.Task{
-			AgentID: agentID,
-			Type:    req.TaskType,
-			Command: req.Command,
-			Shell:   req.Shell,
-			Path:    req.File,
-			Data:    req.Args,
-			Status:  "pending",
+			AgentID:  agentID,
+			Type:     req.TaskType,
+			Command:  req.Command,
+			Shell:    req.Shell,
+			Path:     req.File,
+			Data:     req.Args,
+			Status:   s.resolveInitialTaskStatus(req.TaskType),
+			CreatedBy: operator,
 		})
 		validAgentIDs = append(validAgentIDs, agentID)
 	}
@@ -198,8 +203,6 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	slog.Info("Batch command sent", "count", taskCount, "failed", failedCount, "type", req.TaskType, "command", req.Command)
 	s.LogAuditRecord(c, "batch_command", "agent", "", fmt.Sprintf("%s to %d agents (%d failed)", req.TaskType, taskCount, failedCount), true, nil)
 
-	user, _ := c.Get("user")
-	operator := fmt.Sprintf("%v", user)
 	s.pushBulkResult(BulkResult{
 		Timestamp: time.Now(),
 		Command:   req.Command,

