@@ -439,6 +439,8 @@ func (s *Server) deleteAgentRecordTx(tx *gorm.DB, id string) error {
 	if err := tx.Delete(&db.Implant{}, "id = ?", id).Error; err != nil {
 		return fmt.Errorf("delete agent: %w", err)
 	}
+	// Drop the in-memory pending-task counter for the purged agent.
+	s.decPendingTasks(id)
 	return nil
 }
 

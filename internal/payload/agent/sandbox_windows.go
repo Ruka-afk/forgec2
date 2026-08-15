@@ -334,8 +334,10 @@ func (sd *SandboxDetector) checkHumanPresence() bool {
 	if title1 != title2 || title2 != title3 {
 		return false // human present = NOT sandbox
 	}
-	// No window title changes suggests automation/sandbox
-	return title1 != "" // if we got a title but no changes, suspect
+	// A stable foreground window title is normal human behavior (reading,
+	// watching video, momentarily idle). The only weak signal here is the
+	// complete absence of any foreground window, which suggests automation.
+	return title1 == "" // no foreground window at all -> suspect sandbox
 }
 
 // checkHardwareBreakpoints detects hardware breakpoints via DR register check.

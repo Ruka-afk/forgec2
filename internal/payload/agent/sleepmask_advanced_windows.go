@@ -256,4 +256,5 @@ func advWriteMem(dst uintptr, src []byte, n uintptr) {
 
 func init() {
 	advInitOnce.Do(advInit)
+	advancedMaskFactory = func() SleepMasker { return getAdvancedMask() }
 }

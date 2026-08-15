@@ -65,6 +65,25 @@ type HTTPConfig struct {
 	XForwardedFor string            `json:"x_forwarded_for"`
 }
 
+// HttpPostOutputString serializes the http-post output transform chain into the
+// over-the-wire form the agent parses ("name" or "name:value", steps separated
+// by ';'). Order matches the server's apply order; the agent reverses it on
+// decode. Returns "" when no output transforms are configured.
+func (p *Profile) HttpPostOutputString() string {
+	if p.HttpPost.Output == nil {
+		return ""
+	}
+	parts := make([]string, 0, len(p.HttpPost.Output.Transforms))
+	for _, t := range p.HttpPost.Output.Transforms {
+		if t.Value != "" {
+			parts = append(parts, t.Type+":"+t.Value)
+		} else {
+			parts = append(parts, t.Type)
+		}
+	}
+	return strings.Join(parts, ";")
+}
+
 // Parse parses a CS-style Malleable C2 profile text and returns a Profile.
 func Parse(name, profileText string) (*Profile, error) {
 	p := &Profile{Name: name}

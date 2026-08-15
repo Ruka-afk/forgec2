@@ -81,9 +81,7 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 
 	task.Status = s.resolveInitialTaskStatus(taskType)
 	if err := s.db.Create(&task).Error; err != nil {
-		s.agentPendingTasksMu.Lock()
-		s.agentPendingTasks[agentID]--
-		s.agentPendingTasksMu.Unlock()
+		s.decPendingTasks(agentID)
 		return nil, err
 	}
 	if s.pluginManager != nil {
@@ -200,6 +198,21 @@ func (s *Server) reconcilePendingTaskCounts() {
 	clear(s.agentPendingTasks)
 	for _, r := range results {
 		s.agentPendingTasks[r.AgentID] = r.Count
+	}
+	s.agentPendingTasksMu.Unlock()
+}
+
+// decPendingTasks decrements an agent's pending task counter and removes the
+// map entry when it reaches zero, preventing unbounded map growth across the
+// server lifetime (and leaked counts after an agent is purged).
+func (s *Server) decPendingTasks(agentID string) {
+	s.agentPendingTasksMu.Lock()
+	if n := s.agentPendingTasks[agentID]; n > 0 {
+		if n-1 <= 0 {
+			delete(s.agentPendingTasks, agentID)
+		} else {
+			s.agentPendingTasks[agentID] = n - 1
+		}
 	}
 	s.agentPendingTasksMu.Unlock()
 }

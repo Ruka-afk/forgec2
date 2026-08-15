@@ -724,7 +724,7 @@ func kerberosGoldenTicket(user, domain, sid, krbtgtHash string) (string, error) 
 func kerberosSilverTicket(user, domain, sid, target, rc4Hash string) (string, error) {
 	return "", fmt.Errorf("silver ticket is Windows-only")
 }
-func kerberosASREPRoast() (string, error) {
+func kerberosASREPRoast(args string) (string, error) {
 	return "", fmt.Errorf("ASREP roast is Windows-only")
 }
 func kerberosPassTheHash(user, domain, ntlmHash, target string) (string, error) {

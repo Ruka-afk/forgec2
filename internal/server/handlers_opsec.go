@@ -121,6 +121,7 @@ func (s *Server) handleProfileRotate(c *gin.Context) {
 		BeaconMethod string `json:"beacon_method"`
 		UserAgent    string `json:"user_agent"`
 		Encoding     string `json:"encoding"`
+		C2URL        string `json:"c2_url"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, sanitizeError(err, "OPSEC operation"))
@@ -183,6 +184,7 @@ func (s *Server) rotateAgentsOnBurnedListener(listenerID string) {
 			BeaconMethod: "POST",
 			UserAgent:    defaultUA,
 			Encoding:     "json",
+			C2URL:        fallbackURL,
 		}
 		data, ok := marshalJSONSafe(rotation)
 		if !ok {
@@ -213,4 +215,5 @@ type ProfileRotationData struct {
 	BeaconMethod string `json:"beacon_method"`
 	UserAgent    string `json:"user_agent"`
 	Encoding     string `json:"encoding"`
+	C2URL        string `json:"c2_url"`
 }

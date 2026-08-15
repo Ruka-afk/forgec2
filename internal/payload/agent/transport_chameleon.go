@@ -3,11 +3,8 @@
 package main
 
 import (
-	"context"
 	"crypto/rand"
 	"math/big"
-	"net"
-	"net/http"
 	"sync"
 	"time"
 
@@ -47,37 +44,32 @@ var ja3Profiles = []ja3ProfileEntry{
 
 func initJA3Rotator() {
 	n, _ := rand.Int(rand.Reader, big.NewInt(1440))
-	ja3RotateInterval = (12*60 + int(n.Int64())) * time.Minute
+	ja3RotateInterval = time.Duration(12*60+int(n.Int64())) * time.Minute
 	ja3LastRotate = time.Now()
 	ja3ProfileName = chameleonProfile
 	if ja3ProfileName == "" {
 		ja3ProfileName = "random"
 	}
+	// Route all TLS transports (HTTPS/WSS/mTLS/gRPC/DoT) through the utls
+	// dialer with the rotated JA3 profile selected here.
+	ja3HelloProvider = func() utls.ClientHelloID {
+		return getUTLSHelloID(getJA3Profile())
+	}
 }
 
 func getJA3Profile() string {
 	ja3Mu.RLock()
-	profile := ja3ProfileName
-	interval := ja3RotateInterval
-	lastRotate := ja3LastRotate
+	base := ja3ProfileName
 	ja3Mu.RUnlock()
 
-	if interval > 0 && time.Since(lastRotate) > interval {
-		ja3Mu.Lock()
-		if time.Since(ja3LastRotate) > ja3RotateInterval {
-			ja3LastRotate = time.Now()
-			if ja3ProfileName == "random" || ja3ProfileName == "randomized" {
-				n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(ja3Profiles))))
-				profile = ja3Profiles[n.Int64()].Name
-				ja3ProfileName = profile
-			}
-		} else {
-			profile = ja3ProfileName
-		}
-		ja3Mu.Unlock()
+	// In random mode, pick a fresh ClientHello on every dial so the JA3
+	// fingerprint varies per connection (instead of being pinned for 12-36h,
+	// which is itself a high-fidelity static IOC). Fixed profiles stay stable.
+	if base == "random" || base == "randomized" {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(ja3Profiles))))
+		return ja3Profiles[n.Int64()].Name
 	}
-
-	return profile
+	return base
 }
 
 func getUTLSHelloID(profile string) utls.ClientHelloID {
@@ -91,47 +83,4 @@ func getUTLSHelloID(profile string) utls.ClientHelloID {
 		}
 	}
 	return utls.HelloChrome_Auto
-}
-
-func utlsDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	d := net.Dialer{Timeout: 15 * time.Second}
-	rawConn, err := d.DialContext(ctx, network, addr)
-	if err != nil {
-		return nil, err
-	}
-
-	serverName := addr
-	if h, _, err := net.SplitHostPort(addr); err == nil {
-		serverName = h
-	}
-	if DomainFront != "" {
-		serverName = DomainFront
-	}
-
-	profile := getJA3Profile()
-	helloID := getUTLSHelloID(profile)
-
-	uconn := utls.UClient(rawConn, &utls.Config{
-		InsecureSkipVerify: SkipTLSVerify,
-		ServerName:         serverName,
-	}, helloID)
-	if len(pinnedCertSHA256) > 0 {
-		uconn.Config.VerifyPeerCertificate = verifyPinnedCert
-	}
-
-	if err := uconn.Handshake(); err != nil {
-		rawConn.Close()
-		return nil, err
-	}
-	return uconn, nil
-}
-
-func newUTLSTransport() *http.Transport {
-	tr := &http.Transport{
-		MaxIdleConns:        10,
-		MaxIdleConnsPerHost: 5,
-		IdleConnTimeout:     60 * time.Second,
-	}
-	tr.DialTLSContext = utlsDialContext
-	return tr
 }

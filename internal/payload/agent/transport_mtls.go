@@ -5,27 +5,26 @@ package main
 
 import (
 	"bytes"
-	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	utls "github.com/refraction-networking/utls"
 )
 
 var (
-	mtlsClientCert tls.Certificate
+	mtlsClientCert utls.Certificate
 	mtlsCertLoaded bool
 )
 
 func initMTLS() {
-	mtlsTransport.TLSClientConfig = newAgentTLSConfig("")
-
 	if MTLSCertStr == "" || MTLSKeyStr == "" {
 		return
 	}
-	cert, err := tls.X509KeyPair([]byte(MTLSCertStr), []byte(MTLSKeyStr))
+	cert, err := utls.X509KeyPair([]byte(MTLSCertStr), []byte(MTLSKeyStr))
 	if err != nil {
 		if Debug {
 			fmt.Printf("[!] mTLS: failed to load client cert: %v\n", err)
@@ -38,11 +37,8 @@ func initMTLS() {
 	if MTLSCAStr != "" {
 		pool := x509.NewCertPool()
 		if pool.AppendCertsFromPEM([]byte(MTLSCAStr)) {
-			mtlsTransport.TLSClientConfig.RootCAs = pool
+			mtlsCAPool = pool
 		}
-	}
-	if mtlsCertLoaded {
-		mtlsTransport.TLSClientConfig.Certificates = []tls.Certificate{mtlsClientCert}
 	}
 }
 
@@ -50,6 +46,13 @@ var mtlsTransport = &http.Transport{
 	MaxIdleConns:        10,
 	MaxIdleConnsPerHost: 5,
 	IdleConnTimeout:     60 * time.Second,
+}
+
+func init() {
+	// Route mTLS through the utls dialer so the client handshake uses a
+	// realistic ClientHello (and the loaded client cert/CA) instead of the
+	// Go-stdlib fingerprint.
+	mtlsTransport.DialTLSContext = utlsDialContext
 }
 
 var mtlsClient = &http.Client{

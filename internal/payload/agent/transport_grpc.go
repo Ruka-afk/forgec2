@@ -41,8 +41,9 @@ func initGRPCClient(rawURL string) error {
 
 	var creds credentials.TransportCredentials
 	if useTLS {
-		// grpcs://: TLS on; SkipTLSVerify matches other C2 transports for lab/self-signed certs
-		creds = credentials.NewTLS(newAgentTLSConfig(""))
+		// grpcs://: TLS on, via utls so the handshake uses a realistic
+		// ClientHello instead of the Go-stdlib fingerprint.
+		creds = &utlsCreds{}
 	} else {
 		// grpc:// plain: lab-only insecure transport
 		creds = insecure.NewCredentials()

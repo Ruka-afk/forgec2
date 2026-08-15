@@ -219,13 +219,9 @@ func (s *Server) handleKillSwitch(c *gin.Context) {
 				reclaimed = len(queued)
 				// These tasks will never be observed as completed, so roll
 				// back the per-agent pending counters that arm/ent incremented.
-				s.agentPendingTasksMu.Lock()
 				for _, t := range queued {
-					if s.agentPendingTasks[t.AgentID] > 0 {
-						s.agentPendingTasks[t.AgentID]--
-					}
+					s.decPendingTasks(t.AgentID)
 				}
-				s.agentPendingTasksMu.Unlock()
 			}
 		}
 
