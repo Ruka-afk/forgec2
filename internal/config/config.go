@@ -244,6 +244,13 @@ func DefaultConfig() *Config {
 	cfg.Server.DBMaxIdleConns = 5
 	cfg.Server.DBConnMaxLifetime = 30 * time.Minute
 
+	// Secure by default: enforce the two-man rule for all task types flagged
+	// dangerous (see server/tasktypes.go dangerousTaskTypes). Solo operators
+	// can still approve their own tasks; set security.require_approval: false
+	// to disable. The dangerous list now covers credential-access (creds,
+	// mimikatz, kerberoast, dpapi_*) and destructive delete.
+	cfg.Security.RequireApproval = true
+
 	cfg.Database.Path = filepath.Join(cfg.Server.DataDir, "db/forgec2.db")
 	cfg.Database.Driver = "sqlite"
 	cfg.Server.CertFile = filepath.Join(cfg.Server.DataDir, "server.crt")

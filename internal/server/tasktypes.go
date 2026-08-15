@@ -322,9 +322,26 @@ var dangerousTaskTypes = map[string]bool{
 	protocol.TaskTypeADCSESC3:            true,
 	protocol.TaskTypeADCSESC4:            true,
 	protocol.TaskTypeADCSESC5:            true,
-	protocol.TaskTypeADCSESC6:            true,
-	protocol.TaskTypeADCSESC7:            true,
-	protocol.TaskTypeADCSESC8:            true,
+	protocol.TaskTypeADCSESC6:       true,
+	protocol.TaskTypeADCSESC7:       true,
+	protocol.TaskTypeADCSESC8:       true,
+
+	// Credential-access operations that were previously missing from the
+	// dangerous list: dumping creds, Mimikatz, Kerberoast, and all DPAPI
+	// decryptions are high-impact and must inherit the two-man rule.
+	protocol.TaskTypeCreds:         true,
+	protocol.TaskTypeMimikatz:      true,
+	protocol.TaskTypeKerberoast:    true,
+	protocol.TaskTypeDPAPIMasterKey: true,
+	protocol.TaskTypeDPAPIBlob:     true,
+	protocol.TaskTypeDPAPIBrowser:  true,
+	protocol.TaskTypeCookieExport:  true,
+	protocol.TaskTypeChromeCookies: true,
+
+	// Destructive / irreversible filesystem operations: recursive delete must
+	// be gated so a single operator cannot wipe host data without a second
+	// approval (S4: "delete recursive no confirm").
+	protocol.TaskTypeDelete: true,
 }
 
 // GetRegisteredTaskTypes returns a copy of the registered task type list.

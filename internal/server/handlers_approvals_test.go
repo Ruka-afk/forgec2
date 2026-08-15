@@ -208,3 +208,31 @@ func TestNonDangerousTaskUnaffectedByApproval(t *testing.T) {
 		t.Fatalf("non-dangerous task should stay pending, got %q", task.Status)
 	}
 }
+
+// TestExpandedDangerousTypesRequireApproval locks in the S1/S4 fix: the
+// dangerous list must now cover credential-access (creds, mimikatz, kerberoast,
+// dpapi_*) and destructive delete — none of these may be dispatched without a
+// second approval when the two-man rule is enabled.
+func TestExpandedDangerousTypesRequireApproval(t *testing.T) {
+	s := newTasksTestServer(t)
+	s.cfg = &config.Config{}
+	s.cfg.Security.RequireApproval = true
+
+	dangerous := []string{
+		"creds", "mimikatz", "kerberoast",
+		"dpapi_masterkey", "dpapi_blob", "dpapi_browser",
+		"cookie_export", "chrome_cookies", "delete",
+	}
+	for _, tt := range dangerous {
+		task, err := s.createTask("agent-"+tt, tt, "op", "", "", "", 0, 0)
+		if err != nil {
+			t.Fatalf("createTask(%s): %v", tt, err)
+		}
+		if task.Status != TaskStatusPendingApproval {
+			t.Fatalf("dangerous task type %q must start pending_approval, got %q", tt, task.Status)
+		}
+		if claimed := s.fetchPendingTasks("agent-" + tt); len(claimed) != 0 {
+			t.Fatalf("dangerous task type %q must not be claimable until approved, got %d", tt, len(claimed))
+		}
+	}
+}

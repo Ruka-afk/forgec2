@@ -14,7 +14,10 @@ func lateralWinRM(target, user, pass, cmd string) (string, error) {
 	}
 	ps := ""
 	if user != "" && pass != "" {
+		// Pass the password over STDIN, not argv (S3), so it is not exposed via
+		// the powershell.exe process command line.
 		ps = fmt.Sprintf(`$s=New-Object System.Management.Automation.PSCredential('%s',(ConvertTo-SecureString '%s' -AsPlainText -Force)); Invoke-Command -ComputerName %s -Credential $s -ScriptBlock { cmd /c "%s" }`, user, pass, target, cmd)
+		return runPowerShellStdin(ps)
 	} else {
 		ps = fmt.Sprintf(`Invoke-Command -ComputerName %s -ScriptBlock { cmd /c "%s" }`, target, cmd)
 	}
