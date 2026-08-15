@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"io"
 	"net"
@@ -66,5 +67,34 @@ func TestP2PAuthFailsWithWrongKey(t *testing.T) {
 	serverOk := <-done
 	if serverOk {
 		t.Fatalf("server must reject a peer that fails the HMAC challenge")
+	}
+}
+
+// TestMalleableWrapStripRoundTrip verifies the response-side malleable cover
+// applied to raw (non-HTTP) links (team-server TCP, P2P parent reply) is
+// invertible by the client-side strip, for every prepend/append combination.
+func TestMalleableWrapStripRoundTrip(t *testing.T) {
+	origPre := MalleablePrepend
+	origApp := MalleableAppend
+	t.Cleanup(func() {
+		MalleablePrepend = origPre
+		MalleableAppend = origApp
+	})
+
+	cases := []struct{ pre, app string }{
+		{"", ""},
+		{"<html>", ""},
+		{"", "</html>"},
+		{"<html>", "</html>"},
+		{"PRE-", "-POST"},
+	}
+	body := []byte(`{"uuid":"x","c":"y"}`)
+	for _, c := range cases {
+		MalleablePrepend = c.pre
+		MalleableAppend = c.app
+		wrapped := wrapMalleableResponse(body)
+		if !bytes.Equal(stripMalleableWrapping(wrapped), body) {
+			t.Fatalf("round-trip failed for pre=%q app=%q: %s", c.pre, c.app, stripMalleableWrapping(wrapped))
+		}
 	}
 }

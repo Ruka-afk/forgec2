@@ -1275,6 +1275,25 @@ func stripMalleableWrapping(data []byte) []byte {
 	}
 }
 
+// wrapMalleableResponse applies the response-side malleable prepend/append so a
+// raw (non-HTTP) link — a team-server TCP listener or a P2P parent→child reply
+// — carries the same cover as the HTTP transport. It is the inverse of
+// stripMalleableWrapping and a no-op when nothing is configured, keeping the
+// framing backward-compatible for links that do not use a profile.
+func wrapMalleableResponse(body []byte) []byte {
+	switch {
+	case MalleablePrepend == "" && MalleableAppend == "":
+		return body
+	case MalleablePrepend == "":
+		return append(body, []byte(MalleableAppend)...)
+	case MalleableAppend == "":
+		return append([]byte(MalleablePrepend), body...)
+	default:
+		out := append([]byte(MalleablePrepend), body...)
+		return append(out, []byte(MalleableAppend)...)
+	}
+}
+
 // wrapMalleableRequest applies the request-side malleable transforms
 // (prepend/append) to the agent's OUTGOING beacon body. The server strips this
 // wrapping on inbound (stripMalleableRequest), so the JSON envelope it encloses
@@ -1352,7 +1371,9 @@ func sendTCPBeacon(body []byte) []byte {
 	if _, err := io.ReadFull(conn, rbuf); err != nil {
 		return nil
 	}
-	return rbuf
+	// Mirror the HTTP transport: strip any malleable prepend/append cover the
+	// server wrapped around the raw frame so the enclosed envelope parses.
+	return stripMalleableWrapping(rbuf)
 }
 
 // tryResync applies a server resync signal: a plaintext, MAC-signed envelope

