@@ -123,6 +123,14 @@ type Config struct {
 		Headers     map[string]string `yaml:"headers"`
 		Prepend     string            `yaml:"prepend"`
 		Append      string            `yaml:"append"`
+		// Request-side transforms: applied by the agent to the OUTGOING beacon
+		// body (and as request headers) and stripped by the server on inbound.
+		// Kept separate from the response-side Prepend/Append so operators can
+		// shape upload and download traffic independently (Cobalt-Strike-style
+		// http-get/http-post prepend/append).
+		RequestPrepend  string            `yaml:"request_prepend"`
+		RequestAppend   string            `yaml:"request_append"`
+		RequestHeaders  map[string]string `yaml:"request_headers"`
 	} `yaml:"malleable"`
 
 	AI struct {

@@ -4,7 +4,9 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
-import { EmptyState, PageHeader, PageSpinner, Spinner } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageSpinner, Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -144,14 +146,13 @@ export default function ScriptingPage() {
   }
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("scripting.title")} subtitle={t("scripting.subtitle")}>
+    <PageContainer title={t("scripting.title")} subtitle={t("scripting.subtitle")} actions={<>
         <Button onClick={() => setShowTemplates(!showTemplates)}
           className="bg-primary hover:bg-primary/90 text-primary-foreground">
           <BookOpen className="w-4 h-4" />
           <span className="hidden sm:inline">{t("scripting.templates")}</span>
         </Button>
-      </PageHeader>
+      </>}>
 
       {showTemplates && (
         <Card className="mb-6 p-4 sm:p-5">
@@ -167,7 +168,7 @@ export default function ScriptingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {defaultTemplates.map((t) => (
               <Button key={t.name} variant="outline" onClick={() => handleApplyTemplate(t)}
-                className="text-left p-4 h-auto bg-muted hover:border-purple-400 dark:hover:border-purple-500 transition-colors">
+                className="text-left p-4 h-auto bg-muted hover:border-chart-6 dark:hover:border-chart-6 transition-colors">
                 <div className="text-sm font-medium text-foreground">{t.name}</div>
                 <div className="text-xs text-muted-foreground mt-1">{t.description}</div>
               </Button>
@@ -237,7 +238,7 @@ export default function ScriptingPage() {
                 <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
                   <span className="text-sm font-semibold text-foreground">{t("scripting.api_reference")}</span>
                 </div>
-                <div className="p-3 text-xs font-mono text-blue-600 dark:text-blue-400 space-y-1">
+                <div className="p-3 text-xs font-mono text-info space-y-1">
                   {apiRefs.map((ref) => (
                     <div key={ref} className="py-0.5">{ref}</div>
                   ))}
@@ -272,7 +273,7 @@ export default function ScriptingPage() {
                   <Textarea
                     value={scriptCode}
                     onChange={e => setScriptCode(e.target.value)}
-                    className="flex-1 h-72 p-4 font-mono text-sm bg-background text-emerald-300 resize-none focus:outline-none leading-5 border-none rounded-none"
+                    className="flex-1 h-72 p-4 font-mono text-sm bg-background text-chart-1 resize-none focus:outline-none leading-5 border-none rounded-none"
                     placeholder={t("scripting.code_ph")}
                     spellCheck={false}
                   />
@@ -286,7 +287,7 @@ export default function ScriptingPage() {
                       <Eraser className="w-4 h-4" />{t("scripting.clear")}
                     </Button>
                   </div>
-                  <pre className="p-4 text-xs font-mono text-emerald-300 bg-background m-2 rounded-lg max-h-48 overflow-y-auto whitespace-pre-wrap border border-border">
+                  <pre className="p-4 text-xs font-mono text-chart-1 bg-background m-2 rounded-lg max-h-48 overflow-y-auto whitespace-pre-wrap border border-border">
                     {scriptOutput}
                   </pre>
                 </div>
@@ -326,7 +327,7 @@ export default function ScriptingPage() {
         </TabsContent>
       </Tabs>
       </div>
-    </div>
+    </PageContainer>
   );
 }
 

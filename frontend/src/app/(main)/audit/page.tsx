@@ -5,7 +5,8 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { downloadText } from "@/lib/download";
-import { PageHeader, Pagination } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
+import { Pagination } from "@/components/ui/pagination";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,8 +16,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { DataState } from "@/components/ui/data-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, FileText, Filter } from "lucide-react";
+import { Download, FileText, Filter, Terminal } from "lucide-react";
 import type { AuditLog } from "@/types/audit";
+import { useInteractStore } from "@/lib/interact-store";
+import { auditSessionId, normalizeAuditLogs } from "./_components/audit-log";
 
 const ACTION_BADGES: Record<string, string> = {
   login: "success",
@@ -73,8 +76,9 @@ export default function AuditPage() {
       if (userFilter) params.set("user", userFilter);
       if (actionFilter) params.set("action", actionFilter);
       const data = await api.get(paths.audit.logs(params.toString()), { signal });
-      setLogs((data.logs as AuditLog[]) || []);
-      setTotal((data.total as number) || 0);
+      const payload = (data && typeof data === "object") ? data as Record<string, unknown> : {};
+      setLogs(normalizeAuditLogs(payload.logs));
+      setTotal(Number(payload.total) || 0);
     } catch (e) {
       if ((e as Error).name === "AbortError") return;
       setLogs([]);
@@ -130,6 +134,10 @@ export default function AuditPage() {
     return SEVERITY_BADGES[s] || "secondary";
   };
 
+  const openSession = (agentId: string) => {
+    useInteractStore.getState().open(agentId);
+  };
+
   const getLogField = (log: AuditLog | null, field: keyof AuditLog | "severity") => {
     if (!log) return "";
     switch (field) {
@@ -143,18 +151,18 @@ export default function AuditPage() {
       case "details": return String(log.details || "-");
       case "ip": return String(log.ip || "-");
       case "severity": return String(log.severity || "info");
+      case "agent_id": return String(log.agent_id || "");
       default: return "";
     }
   };
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("audit.title")} subtitle={t("audit.subtitle")}>
+    <PageContainer title={t("audit.title")} subtitle={t("audit.subtitle")} actions={<>
         <Button onClick={handleExport}>
           <Download className="w-4 h-4" />
           <span>{t("audit.export")} CSV</span>
         </Button>
-      </PageHeader>
+      </>}>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <Card className="p-4 sm:p-5">
@@ -228,12 +236,13 @@ export default function AuditPage() {
                     <TableHead className="text-left">{t("audit.col_target")}</TableHead>
                     <TableHead className="text-left">{t("audit.status")}</TableHead>
                     <TableHead className="text-left">{t("audit.details")}</TableHead>
+                    <TableHead className="text-right">{t("audit.interact")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 9 }).map((_, j) => (
+                      {Array.from({ length: 10 }).map((_, j) => (
                         <TableCell key={j} className="py-3 px-4"><Skeleton className="h-4 w-full" /></TableCell>
                       ))}
                     </TableRow>
@@ -256,12 +265,14 @@ export default function AuditPage() {
                 <TableHead className="text-left">{t("audit.col_target")}</TableHead>
                 <TableHead className="text-left">{t("audit.status")}</TableHead>
                 <TableHead className="text-left">{t("audit.details")}</TableHead>
+                <TableHead className="text-right">{t("audit.interact")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {logs.filter(Boolean).map((log, i) => {
                 const action = getLogField(log, "action");
                 const severity = getLogField(log, "severity");
+                const sessionId = auditSessionId(log);
                 return (
                   <TableRow key={getLogField(log, "id") || String(i)} onClick={() => setSelectedLog(log)} className="cursor-pointer"
                     tabIndex={0} role="button"
@@ -287,6 +298,23 @@ export default function AuditPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-xs max-w-[300px] truncate">{getLogField(log, "details")}</TableCell>
+                    <TableCell className="text-right">
+                      {sessionId ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          className="gap-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openSession(sessionId);
+                          }}
+                        >
+                          <Terminal aria-hidden="true" className="w-3.5 h-3.5" />
+                          {t("audit.interact")}
+                        </Button>
+                      ) : null}
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -304,6 +332,19 @@ export default function AuditPage() {
             <DialogTitle>{t("audit.detail_title")}</DialogTitle>
           </DialogHeader>
           {selectedLog && (<div className="space-y-4">
+            {auditSessionId(selectedLog) && (
+              <Button
+                type="button"
+                className="gap-1"
+                onClick={() => {
+                  openSession(auditSessionId(selectedLog));
+                  setSelectedLog(null);
+                }}
+              >
+                <Terminal aria-hidden="true" className="w-4 h-4" />
+                {t("audit.interact")}
+              </Button>
+            )}
             {(["timestamp", "username", "ip", "action", "severity", "resource", "target", "status", "details"] as const).map(field => (
               <div key={field}>
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{field}</span>
@@ -329,6 +370,6 @@ export default function AuditPage() {
           </div>)}
         </DialogContent>
       </Dialog>
-    </div>
+    </PageContainer>
   );
 }

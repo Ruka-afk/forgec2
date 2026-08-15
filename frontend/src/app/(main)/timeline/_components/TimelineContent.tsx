@@ -1,15 +1,16 @@
 "use client";
 
 import { useI18n } from "@/lib/i18n";
-import { EmptyState } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Card } from "@/components/ui/card";
 import { Pagination } from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SearchInput } from "@/components/framework/SearchInput";
 import { Circle, Clock } from "lucide-react";
-import { EVENT_COLORS } from "../page";
-import type { TimelineEvent } from "../page";
+import { EVENT_COLORS } from "./types";
+import type { TimelineEvent } from "./types";
 
 interface TimelineContentProps {
   filteredEvents: TimelineEvent[];
@@ -66,22 +67,10 @@ export default function TimelineContent({
 
       <Card className="p-4 mb-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="text-center">
-            <div className="text-2xl font-bold">{totalEvents}</div>
-            <div className="text-(--fs-micro-sm) text-muted-foreground uppercase tracking-wider mt-0.5">{t("timeline.total_events")}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-emerald-600">{filteredEvents.filter(e => getEventType(e) === "agent_online").length}</div>
-            <div className="text-(--fs-micro-sm) text-muted-foreground uppercase tracking-wider mt-0.5">{t("timeline.agent_events")}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-amber-600">{filteredEvents.filter(e => getEventType(e) === "credential").length}</div>
-            <div className="text-(--fs-micro-sm) text-muted-foreground uppercase tracking-wider mt-0.5">{t("timeline.credential_events")}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-red-600">{filteredEvents.filter(e => getEventType(e) === "alert").length}</div>
-            <div className="text-(--fs-micro-sm) text-muted-foreground uppercase tracking-wider mt-0.5">{t("timeline.alerts")}</div>
-          </div>
+          <StatTile centered labelBelow label={t("timeline.total_events")} value={totalEvents} />
+          <StatTile centered labelBelow label={t("timeline.agent_events")} value={filteredEvents.filter(e => getEventType(e) === "agent_online").length} tone="success" />
+          <StatTile centered labelBelow label={t("timeline.credential_events")} value={filteredEvents.filter(e => getEventType(e) === "credential").length} tone="warning" />
+          <StatTile centered labelBelow label={t("timeline.alerts")} value={filteredEvents.filter(e => getEventType(e) === "alert").length} tone="destructive" />
         </div>
       </Card>
 
@@ -116,7 +105,7 @@ export default function TimelineContent({
                     className="relative flex gap-4 pl-12 cursor-pointer group hover:bg-muted/50 -mx-2 px-2 py-2 rounded-lg transition-colors"
                   >
                     <div className={`absolute left-3 top-1 w-5 h-5 rounded-full ${color.bg} flex items-center justify-center ring-4 ring-background`}>
-                      <span className={color.text}>{color.icon}</span>
+                      <span className={color.text}>{<Circle className="w-2.5 h-2.5" />}</span>
                     </div>
                     <div className="flex-1 -mt-0.5">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">

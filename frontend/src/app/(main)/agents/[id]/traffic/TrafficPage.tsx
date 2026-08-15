@@ -6,7 +6,8 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 
-import { Spinner, PageSpinner } from "@/components/UI";
+import { Spinner, PageSpinner } from "@/components/ui/spinner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -139,10 +140,7 @@ export default function AgentTrafficPage() {
         </div>
 
         {!report ? (
-          <div className="text-center py-12 text-sm text-muted-foreground">
-            <Activity className="w-4 h-4" />
-            <p>{t("agents.traffic_no_data")}</p>
-          </div>
+          <EmptyState icon={Activity} title={t("agents.traffic_no_data")} />
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5 mb-6">

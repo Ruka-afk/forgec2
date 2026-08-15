@@ -59,6 +59,7 @@ func (s *Server) handleBuildLogs(c *gin.Context) {
 	p := parsePagination(c, DefaultPageSize, MaxPageSize)
 	filterStatus := c.Query("status")
 	filterPlatform := c.Query("platform")
+	filterListener := c.Query("listener_id")
 
 	query := s.db.Model(&db.BuildLog{})
 	if filterStatus != "" {
@@ -66,6 +67,9 @@ func (s *Server) handleBuildLogs(c *gin.Context) {
 	}
 	if filterPlatform != "" {
 		query = query.Where("platform = ?", filterPlatform)
+	}
+	if filterListener != "" {
+		query = query.Where("listener_id = ?", filterListener)
 	}
 
 	var total int64

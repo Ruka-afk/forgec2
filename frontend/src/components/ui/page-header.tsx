@@ -19,7 +19,7 @@ export function PageHeader({ title, subtitle, eyebrow, icon, meta, children, cla
           {eyebrow !== undefined && eyebrow !== null && (
             <div className="mono-eyebrow text-muted-foreground/70 mb-1">{eyebrow}</div>
           )}
-          <h1 className="text-[1.375rem] font-semibold tracking-tight text-foreground leading-tight truncate">{title}</h1>
+          <h1 className="text-(--fs-page-title) font-semibold tracking-tight text-foreground leading-tight truncate">{title}</h1>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
             {subtitle && <p className="text-(--fs-compact) text-muted-foreground">{subtitle}</p>}
             {meta && <span className="text-(--fs-compact) text-muted-foreground/50">·</span>}

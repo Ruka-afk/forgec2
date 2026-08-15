@@ -21,7 +21,7 @@ const v2TestMasterKey = "aabbccddeeff00112233445566778899aabbccddeeff00112233445
 func TestV2BeaconRegistrationAuth(t *testing.T) {
 	s, _ := v2TestServer(t)
 	agentUUID := "11111111-2222-4333-8444-555555555555"
-	agent := newTCPTestAgent(t, agentUUID).withRegKey(v2TestMasterKey)
+	agent := v3TestAgent(t, s, agentUUID)
 
 	t.Run("plaintext frame rejected", func(t *testing.T) {
 		body := `{"uuid":"` + agentUUID + `","info":{"hostname":"TESTPC","username":"u","ip":"10.0.0.1"},"pv":1}`
@@ -111,7 +111,7 @@ func TestV2BeaconRegistrationAuth(t *testing.T) {
 	t.Run("encrypted frame for unregistered agent rejected", func(t *testing.T) {
 		// Even with a matching session key, an agent that never registered has
 		// no implant row: the seq gate rejects the ciphertext frame.
-		fresh := newTCPTestAgent(t, "44444444-5555-4333-8444-888888888888").withRegKey(v2TestMasterKey)
+		fresh := v3TestAgent(t, s, "44444444-5555-4333-8444-888888888888")
 		pub, _ := base64.StdEncoding.DecodeString(fresh.publicKeyB64())
 		if err := s.sessionManager.EstablishSession(fresh.uuid, pub); err != nil {
 			t.Fatalf("establish session: %v", err)
@@ -175,7 +175,7 @@ func TestV2OversizedBodyRejectedBeforeDecrypt(t *testing.T) {
 func TestV2RegSeqTamperRejected(t *testing.T) {
 	s, _ := v2TestServer(t)
 	agentUUID := "aaaa1111-2222-4333-8444-333333333333"
-	agent := newTCPTestAgent(t, agentUUID).withRegKey(s.cfg.Server.BeaconKey)
+	agent := v3TestAgent(t, s, agentUUID)
 
 	seq := agent.nextSeq()
 	ts := time.Now().Unix()
@@ -196,7 +196,7 @@ func TestV2RegSeqTamperRejected(t *testing.T) {
 func TestV2HandshakeSeqTamperRejected(t *testing.T) {
 	s, _ := v2TestServer(t)
 	agentUUID := "bbbb2222-3333-4333-8444-444444444444"
-	agent := newTCPTestAgent(t, agentUUID).withRegKey(s.cfg.Server.BeaconKey)
+	agent := v3TestAgent(t, s, agentUUID)
 
 	// Register normally.
 	w := v2Post(t, s, agent.registerFrame())
@@ -227,7 +227,7 @@ func TestV2HandshakeSeqTamperRejected(t *testing.T) {
 func TestV2SeqHardCapLockout(t *testing.T) {
 	s, _ := v2TestServer(t)
 	agentUUID := "cccc3333-4444-4333-8444-555555555555"
-	agent := newTCPTestAgent(t, agentUUID).withRegKey(s.cfg.Server.BeaconKey)
+	agent := v3TestAgent(t, s, agentUUID)
 
 	w := v2Post(t, s, agent.registerFrame())
 	if w.Code != http.StatusOK {

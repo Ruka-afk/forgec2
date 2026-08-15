@@ -4,8 +4,8 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Activity, Bot, Shield, Fish, Zap, Bug, Tags, Layers, Wand2, Clock,
-  FolderTree, Bell, MessageSquare, GitBranch, Link as LinkIcon, Boxes,
-  Radio, Hammer, Server, Cloud, PenTool, Box, Wrench, Code, Key,
+  MessageSquare, GitBranch, Link as LinkIcon, Boxes,
+  Radio, Server, Cloud, Box, Wrench, Code, Key,
   Route, IdCard, Archive, SatelliteDish, ArrowLeftRight,
   FileCode, Globe, Puzzle, Network, Crosshair, ClipboardList,
   Plug, Users, Settings, Search,
@@ -16,74 +16,77 @@ export interface NavItemDef {
   labelKey: string;
   icon: LucideIcon;
   badge?: "agents" | "listeners";
+  /** When false, omitted from the sidebar (still in Ctrl+K). */
+  sidebar?: boolean;
 }
 
 export interface NavSectionDef {
   titleKey: string;
+  /** Always visible in the sidebar; cannot be collapsed. */
+  pinned?: boolean;
+  /** When false, omitted from the sidebar (still in Ctrl+K and breadcrumbs). */
+  sidebar?: boolean;
   items: NavItemDef[];
 }
 
+/** Primary console: 8 items. Everything else stays reachable via More + Ctrl+K. */
 export const NAV_SECTIONS: NavSectionDef[] = [
   {
     titleKey: "operations",
+    pinned: true,
     items: [
       { href: "/dashboard", labelKey: "nav.dashboard", icon: Activity },
       { href: "/agents", labelKey: "nav.beacons", icon: Bug, badge: "agents" },
-      { href: "/tasks", labelKey: "nav.tasks", icon: Clock },
-      { href: "/timeline", labelKey: "nav.timeline", icon: Clock },
-      { href: "/files", labelKey: "nav.files", icon: FolderTree },
-      { href: "/notifications", labelKey: "nav.notifications", icon: Bell },
-      { href: "/search", labelKey: "nav.search", icon: Search },
-      { href: "/automation", labelKey: "nav.automation", icon: Bot },
-      { href: "/opsec", labelKey: "nav.opsec", icon: Shield },
+      { href: "/listeners", labelKey: "nav.listeners", icon: Radio, badge: "listeners" },
+      { href: "/generate", labelKey: "nav.generate", icon: Boxes },
+      { href: "/loot", labelKey: "nav.loot", icon: Archive },
+      { href: "/credentials", labelKey: "nav.credentials", icon: Key },
+      { href: "/timeline", labelKey: "nav.events", icon: Clock },
+      { href: "/settings", labelKey: "nav.settings", icon: Settings },
     ],
   },
   {
     titleKey: "build-deploy",
     items: [
-      { href: "/generate", labelKey: "nav.generate", icon: Boxes },
-      { href: "/listeners", labelKey: "nav.listeners", icon: Radio, badge: "listeners" },
-      { href: "/builds", labelKey: "nav.builds", icon: Hammer },
-      { href: "/profiles", labelKey: "nav.profiles", icon: PenTool },
       { href: "/dns", labelKey: "nav.dns", icon: Network },
       { href: "/infrastructure", labelKey: "nav.infrastructure", icon: Server },
       { href: "/domain-fronting", labelKey: "nav.domain_fronting", icon: Cloud },
-      { href: "/packer", labelKey: "nav.packer", icon: Box },
-      { href: "/stager", labelKey: "nav.stager", icon: GitBranch },
     ],
   },
   {
     titleKey: "post-exploitation",
     items: [
-      { href: "/credentials", labelKey: "nav.credentials", icon: Key },
-      { href: "/loot", labelKey: "nav.loot", icon: Archive },
-      { href: "/lateral", labelKey: "nav.lateral", icon: ArrowLeftRight },
-      { href: "/privesc", labelKey: "nav.privesc", icon: Shield },
-      { href: "/pivoting", labelKey: "nav.pivoting", icon: Route },
-      { href: "/tokens", labelKey: "nav.token_store", icon: IdCard },
-      { href: "/scanner", labelKey: "nav.scanner", icon: SatelliteDish },
+      { href: "/automation", labelKey: "nav.automation", icon: Bot },
       { href: "/bof", labelKey: "nav.bof", icon: FileCode },
-      { href: "/scripting", labelKey: "nav.scripting", icon: Code },
-      { href: "/toolkit", labelKey: "nav.toolkit", icon: Wrench },
       { href: "/plugins", labelKey: "nav.plugins", icon: Puzzle },
+      { href: "/opsec", labelKey: "nav.opsec", icon: Shield, sidebar: false },
+      { href: "/lateral", labelKey: "nav.lateral", icon: ArrowLeftRight, sidebar: false },
+      { href: "/privesc", labelKey: "nav.privesc", icon: Shield, sidebar: false },
+      { href: "/pivoting", labelKey: "nav.pivoting", icon: Route, sidebar: false },
+      { href: "/tokens", labelKey: "nav.token_store", icon: IdCard, sidebar: false },
+      { href: "/scanner", labelKey: "nav.scanner", icon: SatelliteDish, sidebar: false },
+      { href: "/scripting", labelKey: "nav.scripting", icon: Code, sidebar: false },
+      { href: "/toolkit", labelKey: "nav.toolkit", icon: Wrench, sidebar: false },
     ],
   },
   {
     titleKey: "intel-analysis",
     items: [
+      { href: "/search", labelKey: "nav.search", icon: Search },
       { href: "/audit", labelKey: "nav.audit", icon: Shield },
       { href: "/traffic", labelKey: "nav.traffic", icon: Network },
-      { href: "/campaign", labelKey: "nav.campaign", icon: Crosshair },
-      { href: "/attack", labelKey: "nav.attack", icon: Shield },
       { href: "/report", labelKey: "nav.report", icon: ClipboardList },
       { href: "/ai", labelKey: "nav.ai", icon: Bot },
       { href: "/integrations", labelKey: "nav.integrations", icon: Plug },
-      { href: "/bloodhound", labelKey: "nav.bloodhound", icon: Network },
-      { href: "/chat", labelKey: "nav.chat", icon: MessageSquare },
+      { href: "/campaign", labelKey: "nav.campaign", icon: Crosshair, sidebar: false },
+      { href: "/attack", labelKey: "nav.attack", icon: Shield, sidebar: false },
+      { href: "/bloodhound", labelKey: "nav.bloodhound", icon: Network, sidebar: false },
+      { href: "/chat", labelKey: "nav.chat", icon: MessageSquare, sidebar: false },
     ],
   },
   {
     titleKey: "lab",
+    sidebar: false,
     items: [
       { href: "/phishing", labelKey: "nav.phishing", icon: Fish },
       { href: "/circuit-breaker", labelKey: "nav.circuit_breaker", icon: Zap },
@@ -97,8 +100,8 @@ export const NAV_SECTIONS: NavSectionDef[] = [
   },
   {
     titleKey: "system",
+    sidebar: false,
     items: [
-      { href: "/settings", labelKey: "nav.settings", icon: Settings },
       { href: "/users", labelKey: "nav.users", icon: Users },
       { href: "/roles", labelKey: "nav.roles", icon: Shield },
       { href: "/tags", labelKey: "nav.tags", icon: Tags },
@@ -107,6 +110,14 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     ],
   },
 ];
+
+/** Sidebar sections only — Lab and System stay in Ctrl+K. */
+export function sidebarNavSections(sections: NavSectionDef[] = NAV_SECTIONS): NavSectionDef[] {
+  return sections
+    .filter((s) => s.sidebar !== false)
+    .map((s) => ({ ...s, items: s.items.filter((i) => i.sidebar !== false) }))
+    .filter((s) => s.items.length > 0);
+}
 
 /** Flat list of every top-level page. */
 export const NAV_ITEMS: NavItemDef[] = NAV_SECTIONS.flatMap((s) => s.items);

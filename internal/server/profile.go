@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"net/http"
 
 	"github.com/forgec2/forgec2/internal/malleable"
@@ -50,6 +51,31 @@ func (s *Server) applyMalleableProfile(c *gin.Context, body []byte) {
 
 	c.Status(statusCode)
 	c.Writer.WriteString(wrapped)
+}
+
+// stripMalleableRequest removes the request-side malleable prepend/append that
+// the agent wraps around its OUTGOING beacon body (see wrapMalleableRequest on
+// the agent). Mirrors stripMalleableWrapping but uses the request-side tokens
+// from the server's malleable config. The operation is the inverse of the
+// agent's wrap, so the enclosed JSON envelope is recovered unchanged. When no
+// request-side transform is configured the body is returned untouched.
+func (s *Server) stripMalleableRequest(raw []byte) []byte {
+	s.configMu.RLock()
+	prepend := s.cfg.Malleable.RequestPrepend
+	appendStr := s.cfg.Malleable.RequestAppend
+	s.configMu.RUnlock()
+
+	switch {
+	case prepend == "" && appendStr == "":
+		return raw
+	case prepend == "":
+		return bytes.TrimSuffix(raw, []byte(appendStr))
+	case appendStr == "":
+		return bytes.TrimPrefix(raw, []byte(prepend))
+	default:
+		raw = bytes.TrimPrefix(raw, []byte(prepend))
+		return bytes.TrimSuffix(raw, []byte(appendStr))
+	}
 }
 
 func (s *Server) applyProfilePreset(c *gin.Context, body []byte, profile *malleable.Profile) {

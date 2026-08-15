@@ -5,7 +5,8 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
-import { EmptyState, Spinner } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -115,7 +116,7 @@ export default function NotificationsSection() {
         </div>
       ) : (<>
       <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border flex items-center gap-3">
-        <div className="w-8 h-8 bg-sky-100 dark:bg-sky-900/30 rounded-xl flex items-center justify-center text-sky-600"><Bell className="w-4 h-4" /></div>
+        <div className="w-8 h-8 bg-info/15 rounded-xl flex items-center justify-center text-info"><Bell className="w-4 h-4" /></div>
         <div>
           <h2 className="text-sm font-semibold">{t("settings.notifications.title")}</h2>
           <p className="text-(--fs-xs-sm) text-muted-foreground">{t("settings.notifications.subtitle")}</p>
@@ -221,7 +222,7 @@ export default function NotificationsSection() {
               <Button
                 onClick={() => handleTest(i)}
                 disabled={testingIdx === i}
-                className="text-xs px-3 py-1.5 rounded-xl bg-sky-100 hover:bg-sky-200 text-sky-700 dark:bg-sky-900/30 dark:hover:bg-sky-800/40 dark:text-sky-300 flex items-center gap-1.5"
+                className="text-xs px-3 py-1.5 rounded-xl bg-info/15 hover:bg-info/20 text-info dark:bg-info/20 dark:hover:bg-info/40 dark:text-info flex items-center gap-1.5"
               >
                 {testingIdx === i ? <Spinner size="xs" /> : <FlaskConical className="w-4 h-4" />}
                 {testingIdx === i ? t("settings.notifications.sending") : t("settings.notifications.test")}

@@ -63,6 +63,7 @@ var (
 	procGlobalLock               = k32.NewProc("GlobalLock")
 	procGlobalUnlock             = k32.NewProc("GlobalUnlock")
 	procGlobalAlloc              = k32.NewProc("GlobalAlloc")
+	procGlobalSize               = k32.NewProc("GlobalSize")
 	procGlobalFree               = k32.NewProc("GlobalFree")
 )
 

@@ -40,12 +40,3 @@ export async function fetchTaskTypes(): Promise<TaskTypeInfo[]> {
   }
   return cachedTypes;
 }
-
-export function getCachedTaskTypes(): TaskTypeInfo[] {
-  return cachedTypes ?? FALLBACK_TYPES;
-}
-
-export function getTaskTypeLabel(type: string): string {
-  const found = (cachedTypes ?? FALLBACK_TYPES).find(t => t.type === type);
-  return found ? found.name : type;
-}

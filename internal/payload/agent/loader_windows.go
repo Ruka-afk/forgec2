@@ -86,8 +86,11 @@ func executeAssemblyForkRun(b64Data string) (string, error) {
 		return "", fmt.Errorf("CreatePipe failed")
 	}
 
-	psCmd := fmt.Sprintf(
-		`[System.Reflection.Assembly]::LoadFile('%s').EntryPoint.Invoke($null,@($null))`,
+	psCmd := fmt.Sprintf(`$a=[System.Reflection.Assembly]::LoadFile('%s');`+
+		`$ep=$a.EntryPoint;`+
+		`if($ep -ne $null){$ep.Invoke($null,@($null))}`+
+		`else{$ran=$false;foreach($t in $a.GetTypes()){$m=$t.GetMethod('Main',[Reflection.BindingFlags]'Static,Public,NonPublic');if($m -ne $null){$m.Invoke($null,@($null));$ran=$true;break}};`+
+		`if(-not $ran){throw 'assembly has no EntryPoint and no static Main method'}}`,
 		assemblyPath)
 	cmdLine := fmt.Sprintf(
 		"powershell.exe -NoProfile -NonInteractive -Command \"%s\"",

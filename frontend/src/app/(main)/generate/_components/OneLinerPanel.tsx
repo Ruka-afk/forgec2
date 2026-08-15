@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Listener, OneLinerForm, OneLinerType, OneLinerData } from "./types";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,7 +14,7 @@ import { FieldLabel, PayloadCard } from "./PayloadCard";
 import { BuildResult, BuildStatusBadge } from "./BuildResult";
 
 export default function OneLinerPanel({
-  form, setForm, busy, result, onelinerData, listeners, getListenerInfo, onGenerate,
+  form, setForm, busy, result, onelinerData, listeners, getListenerInfo, onGenerate, canGenerate = true,
 }: {
   form: OneLinerForm;
   setForm: React.Dispatch<React.SetStateAction<OneLinerForm>>;
@@ -24,18 +24,19 @@ export default function OneLinerPanel({
   listeners: Listener[];
   getListenerInfo: (id: string) => { scheme: string; host: string; port: string | number; type: string; name: string } | null;
   onGenerate: () => void;
+  canGenerate?: boolean;
 }) {
   const { t } = useI18n();
   return (
     <PayloadCard
       icon={<Terminal className="w-5 h-5" />}
-      tint="bg-rose-500/10 text-rose-600 dark:text-rose-400"
+      tint="bg-chart-5/10 text-chart-5"
       title={t("generate.oneliner_title")}
       subtitle={t("generate.oneliner_subtitle")}
       badge={<BuildStatusBadge busy={busy} result={result === "success" ? "OK" : result} />}
       footer={
         <>
-          <Button type="button" onClick={onGenerate} disabled={busy} className="w-full h-10 rounded-xl font-medium flex items-center justify-center gap-x-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50">
+          <Button type="button" onClick={onGenerate} disabled={busy || !canGenerate} title={!canGenerate ? t("generate.toast.select_listener") : undefined} className="w-full h-10 rounded-xl font-medium flex items-center justify-center gap-x-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50">
             {busy ? <><Spinner size="xs" /> {t("generate.panel.generating")}</> : <><Zap className="w-4 h-4" /> {t("generate.oneliner_generate")}</>}
           </Button>
           <BuildResult busy={busy} result={result === "success" ? null : result} />
@@ -107,16 +108,16 @@ export default function OneLinerPanel({
 
       {result === "success" && onelinerData ? (
         <div className="mt-2">
-          <div className="mb-3 flex items-center gap-x-2 text-xs text-emerald-600">
+          <div className="mb-3 flex items-center gap-x-2 text-xs text-success">
             <CheckCircle2 className="h-4 w-4" />
             {t("generate.oneliner_download_url")} <code className="rounded bg-muted px-2 py-0.5 text-xs">{onelinerData.download_url}</code> {t("generate.oneliner_valid")}
           </div>
           <div className="space-y-2">
             {onelinerData.types.map((item: OneLinerType, idx: number) => (
-              <div key={idx} className="rounded-xl border border-border p-3 transition-colors hover:border-rose-300 dark:hover:border-rose-800">
+              <div key={idx} className="rounded-xl border border-border p-3 transition-colors hover:border-chart-5/40 dark:hover:border-chart-5/40">
                 <div className="mb-1.5 flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-rose-500/10 text-(--fs-micro-sm) font-semibold text-rose-600 dark:text-rose-400">{idx + 1}</span>
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-chart-5/10 text-(--fs-micro-sm) font-semibold text-chart-5">{idx + 1}</span>
                     <span className="truncate text-sm font-medium text-foreground">{item.name}</span>
                     <span className="truncate text-(--fs-micro-sm) text-muted-foreground">{item.desc}</span>
                   </div>

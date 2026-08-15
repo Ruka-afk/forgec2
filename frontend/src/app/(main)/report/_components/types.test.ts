@@ -3,9 +3,9 @@ import { computeDateRange, severityColor } from "./types";
 
 describe("report helpers", () => {
   it("severityColor maps known levels", () => {
-    expect(severityColor("critical")).toMatch(/red/);
-    expect(severityColor("high")).toMatch(/orange/);
-    expect(severityColor("medium")).toMatch(/yellow/);
+    expect(severityColor("critical")).toMatch(/destructive/);
+    expect(severityColor("high")).toMatch(/warning/);
+    expect(severityColor("medium")).toMatch(/warning/);
     expect(severityColor("unknown")).toMatch(/muted/);
   });
 

@@ -7,7 +7,7 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { exportElementPng } from "@/lib/chartExport";
-import { PageHeader } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,7 +97,7 @@ function TopologySidebar({
                   </Button>
                 </div>
                 {routeMsg && (
-                  <p className={`text-xs mt-1 ${routeMsg.includes("success") ? "text-emerald-500" : "text-red-500"}`}>
+                  <p className={`text-xs mt-1 ${routeMsg.includes("success") ? "text-success" : "text-destructive"}`}>
                     {routeMsg}
                   </p>
                 )}
@@ -127,7 +127,7 @@ function TopologySidebar({
         <div className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50"></span>
+              <span className="w-3 h-3 rounded-full bg-success shadow-lg shadow-success/50"></span>
               <span className="text-xs text-muted-foreground">{t("topology.legend_online")}</span>
             </div>
             <span className="text-xs font-mono text-muted-foreground">{onlineCount}</span>
@@ -149,7 +149,7 @@ function TopologySidebar({
           {useMeshSource && (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-violet-500"></span>
+                <span className="w-3 h-3 rounded-full bg-chart-6"></span>
                 <span className="text-xs text-muted-foreground">{t("topology.legend_peer")}</span>
               </div>
               <span className="text-xs font-mono text-muted-foreground">{meshNodeCount}</span>
@@ -161,11 +161,11 @@ function TopologySidebar({
               <span className="text-xs text-muted-foreground">{t("topology.edge_c2")}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-6 h-0.5 border-t-2 border-dashed border-amber-500"></span>
+              <span className="w-6 h-0.5 border-t-2 border-dashed border-warning/50"></span>
               <span className="text-xs text-muted-foreground">{t("topology.edge_p2p")}</span>
             </div>
             <div className="flex items-center gap-2 mt-2">
-              <span className="w-6 h-0.5 border-t-2 border-dashed border-emerald-500"></span>
+              <span className="w-6 h-0.5 border-t-2 border-dashed border-success"></span>
               <span className="text-xs text-muted-foreground">{t("topology.edge_mesh")}</span>
             </div>
           </div>
@@ -173,7 +173,7 @@ function TopologySidebar({
       </Card>
 
       <Card className="overflow-hidden p-0">
-        <div className="bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5">
+        <div className="bg-success/10 border border-success/20 px-4 py-2.5">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4" />
             <span className="text-xs font-semibold text-foreground">{t("topology.quick_actions")}</span>
@@ -182,7 +182,7 @@ function TopologySidebar({
         <div className="p-4 space-y-2">
           <Button variant="ghost" size="sm" onClick={togglePhysics} className="w-full justify-between">
             <span><Snowflake className="w-4 h-4" />{t("topology.physics")}</span>
-            <span className={`font-mono ${physicsEnabled ? "text-emerald-500" : "text-muted-foreground"}`}>{physicsEnabled ? t("topology.on") : t("topology.off")}</span>
+            <span className={`font-mono ${physicsEnabled ? "text-success" : "text-muted-foreground"}`}>{physicsEnabled ? t("topology.on") : t("topology.off")}</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={exportPng} className="w-full justify-between">
             <span><Download className="w-4 h-4" />{t("topology.export_png")}</span>
@@ -303,10 +303,9 @@ export default function TopologyPage() {
   const meshEdgeCount = useMeshSource ? (meshData?.edges || []).length : 0;
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("topology.title")} subtitle={useMeshSource ? t("topology.p2p_view") : t("topology.c2_view")}>
+    <PageContainer title={t("topology.title")} subtitle={useMeshSource ? t("topology.p2p_view") : t("topology.c2_view")} actions={<>
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span className="w-2 h-2 rounded-full bg-success animate-pulse"></span>
           <span className="text-xs font-medium text-muted-foreground">{onlineCount} {t("topology.online")}</span>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg">
@@ -332,7 +331,7 @@ export default function TopologyPage() {
         <Button variant="ghost" size="xs" onClick={() => loadTopology()} className="flex items-center gap-1.5">
           <RotateCw className="w-4 h-4" /> {t("topology.refresh")}
         </Button>
-      </PageHeader>
+      </>}>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
         <div className="xl:col-span-3">
@@ -340,9 +339,9 @@ export default function TopologyPage() {
             <div className="bg-card border-b border-border px-4 py-2.5 flex items-center justify-between border-b border-border">
               <div className="flex items-center gap-2">
                 <div className="flex gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-destructive"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-chart-4"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-success"></span>
                 </div>
                 <span className="text-xs text-muted-foreground font-mono ml-2">network-topology://view</span>
               </div>
@@ -415,6 +414,6 @@ export default function TopologyPage() {
           </div>
         </SheetContent>
       </Sheet>
-    </div>
+    </PageContainer>
   );
 }

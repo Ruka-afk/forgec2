@@ -7,6 +7,8 @@ import { timeAgo, formatTime, enumLabel } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import type { Beacon, Tag } from "./types";
 import { avatarColor, formatUptime } from "./types";
+import type { AgentMenuPoint } from "./agent-menu-actions";
+import { groupBeaconsByHost } from "./groupBeaconsByHost";
 import { Apple, Clock, Globe, Monitor, Terminal } from "lucide-react";
 
 function getOsIcon(os: string) {
@@ -21,42 +23,55 @@ interface AgentGridProps {
   beacons: Beacon[];
   tagsByAgent: Record<string, Tag[]>;
   taskCountMap: Record<string, number>;
-  onSelect: (id: string) => void;
+  activeId?: string | null;
+  onInteract: (id: string) => void;
+  onDetails: (id: string) => void;
+  onMenu: (point: AgentMenuPoint) => void;
 }
 
-export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCountMap, onSelect }: AgentGridProps) {
+export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCountMap, activeId, onInteract, onDetails, onMenu }: AgentGridProps) {
   const { t } = useI18n();
+  const groups = groupBeaconsByHost(beacons);
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 p-4">
-      {beacons.map((beacon) => {
+      {groups.map((group) => {
+        const beacon = group.sessions[0];
         const id = beacon.id || "";
-        const hostname = beacon.hostname || "-";
-        const ip = beacon.ip || "-";
-        const os = beacon.os || "";
-        const status = beacon.status || "offline";
+        const hostname = group.hostname || "-";
+        const ip = group.ip || "-";
+        const os = group.os || "";
+        const status = group.status || "offline";
+        const sessionN = group.sessions.length;
         const OsIcon = getOsIcon(os);
-        const borderColor = status === "online" ? "border-emerald-500" :
-          status === "stale" ? "border-amber-500" : "border-red-500";
+        const borderColor = status === "online" ? "border-l-success" :
+          status === "stale" ? "border-l-warning" : "border-l-destructive";
         return (
           <Card
             key={id}
             role="button"
             tabIndex={0}
             aria-label={`${hostname} ${os} ${status} ${ip}`}
-            onClick={() => onSelect(id)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(id); } }}
-            className={`p-4 cursor-pointer hover:ring-2 hover:ring-primary/50 hover:shadow-md transition-all duration-200 border-l-4 ${borderColor} group ring-0 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70`}
+            onClick={() => onInteract(id)}
+            onDoubleClick={() => onDetails(id)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              onMenu({ x: e.clientX, y: e.clientY, beacon });
+            }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onInteract(id); } }}
+            className={`p-4 cursor-pointer hover:ring-2 hover:ring-primary/50 hover:shadow-md transition-all duration-200 border-l-4 ${borderColor} group ring-0 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 ${activeId === id ? "ring-2 ring-primary/50" : ""}`}
           >
             <div className="flex items-start justify-between mb-2">
               <div className="flex items-center gap-2.5 min-w-0">
                 <AvatarFallback name={hostname} size="md" shape="xl" color={avatarColor(hostname)} />
                 <div className="min-w-0">
                   <span className="font-semibold text-sm text-primary truncate block group-hover:underline">{hostname}</span>
-                  <span className="text-(--fs-xs-sm) text-muted-foreground/70 truncate block">{beacon.username || ""}</span>
+                  <span className="text-(--fs-xs-sm) text-muted-foreground/70 truncate block">
+                    {sessionN > 1 ? t("agents.host_sessions", { n: sessionN }) : (beacon.username || "")}
+                  </span>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <span aria-hidden="true" className={`w-2 h-2 rounded-full ${status === "online" ? "bg-emerald-500 animate-pulse" : status === "stale" ? "bg-amber-500" : "bg-red-500"}`} />
+                <span aria-hidden="true" className={`w-2 h-2 rounded-full ${status === "online" ? "bg-success animate-pulse" : status === "stale" ? "bg-warning" : "bg-destructive"}`} />
                 <span className="text-(--fs-micro-sm) text-muted-foreground/70 capitalize">{enumLabel(t, "agents", `${status}_label`)}</span>
               </div>
             </div>
@@ -66,8 +81,8 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
                 <span>{os}{beacon.arch ? ` ${beacon.arch}` : ""}</span>
                 {beacon.integrity && <span className={`px-1 py-0.5 rounded text-(--fs-micro) font-semibold ${
                   beacon.integrity === "System" ? "bg-destructive/10 text-destructive" :
-                  beacon.integrity === "High" ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400" :
-                  "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400"
+                  beacon.integrity === "High" ? "bg-success/15 text-success" :
+                  "bg-warning/15 text-warning"
                 }`}>{beacon.integrity}</span>}
               </div>
               <div className="flex items-center gap-1.5">

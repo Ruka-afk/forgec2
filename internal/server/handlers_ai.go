@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
-	urlpkg "net/url"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -20,13 +18,30 @@ import (
 
 // 鈹€鈹€ AI Chat Page 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
+// aiConfigPublicView returns a redacted view of the AI configuration safe to
+// send to any authenticated user. The provider API key is NEVER included
+// (S1): only non-secret display fields are exposed.
+func (s *Server) aiConfigPublicView() gin.H {
+	return gin.H{
+		"enabled":       s.cfg.AI.Enabled,
+		"provider":      s.cfg.AI.Provider,
+		"model":         s.cfg.AI.Model,
+		"endpoint":      s.cfg.AI.Endpoint,
+		"system_prompt": s.cfg.AI.SystemPrompt,
+		"allow_execute": s.cfg.AI.AllowExecute,
+	}
+}
+
 func (s *Server) handleAIPage(c *gin.Context) {
 	stats := s.getNavStats()
 	data := gin.H{
 		"Title":        "ForgeC2 - AI Assistant",
 		"ActiveNav":    "ai",
 		"IsFullPage":   true,
-		"AIConfig":     s.cfg.AI,
+		// Never embed the raw AIConfig: it carries the provider API key. Send a
+		// redacted view so the key is never exposed to any authenticated user
+		// (including non-admin operators) via the JSON page data (S1).
+		"AIConfig":     s.aiConfigPublicView(),
 		"AIConfigured": s.cfg.AI.Enabled && s.cfg.AI.APIKey != "",
 		"AIHasAPIKey":  s.cfg.AI.APIKey != "",
 	}
@@ -399,13 +414,11 @@ func (s *Server) aiDoRequest(ctx context.Context, payload []byte) (*http.Respons
 		baseURL += "/v1"
 	}
 
-	parsedURL, err := urlpkg.Parse(baseURL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid AI endpoint URL: %w", err)
-	}
-	hostname := parsedURL.Hostname()
-	if ip := net.ParseIP(hostname); ip != nil && isPrivateIP(hostname) {
-		return nil, fmt.Errorf("AI endpoint targets private/internal IP: %s", hostname)
+	// SSRF guard: resolve the endpoint and reject any loopback/private/
+	// link-local/metadata address (incl. DNS-rebinding), matching the outbound
+	// fetch protection used elsewhere (S4). Also validates the URL is well-formed.
+	if err := validateExternalURL(baseURL); err != nil {
+		return nil, fmt.Errorf("AI endpoint blocked: %w", err)
 	}
 
 	var urlStr string
@@ -435,8 +448,11 @@ func (s *Server) aiDoRequest(ctx context.Context, payload []byte) (*http.Respons
 
 	backoff := []time.Duration{time.Second, 3 * time.Second, 7 * time.Second}
 	var lastErr error
+	// ssrfSafeClient re-validates every redirect hop so a public endpoint
+	// cannot pivot into internal targets while carrying the API key (S4).
+	aiClient := ssrfSafeClient(s.httpClient)
 	for attempt := 0; attempt <= aiRetryMax; attempt++ {
-		resp, err := s.httpClient.Do(httpReq)
+		resp, err := aiClient.Do(httpReq)
 		if err != nil {
 			lastErr = fmt.Errorf("request failed: %w", err)
 			if attempt < aiRetryMax {

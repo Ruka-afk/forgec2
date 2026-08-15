@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { describeProcessSnapshot } from "../_components/process-snapshot";
 
 export function useAgentProcessTree(agentId: string, emptyMessage: string, errorMessage: string) {
   const [processList, setProcessList] = useState<string | null>(null);
@@ -20,7 +21,8 @@ export function useAgentProcessTree(agentId: string, emptyMessage: string, error
     setLoading(true);
     try {
       const response = await api.get(paths.agents.processTree(agentId), { signal }) as Record<string, unknown>;
-      setProcessList((response.processes as string) || emptyMessage);
+      const snap = describeProcessSnapshot(response);
+      setProcessList(snap.text || emptyMessage);
     } catch {
       setProcessList(errorMessage);
     } finally {

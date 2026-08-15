@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -27,13 +29,13 @@ func newTestFileServer(t *testing.T, database *gorm.DB) *Server {
 	cfg := config.DefaultConfig()
 	cfg.Server.BeaconKey = strings.Repeat("ab", 32) // 64 hex chars = 32 bytes
 	return &Server{
-		db:                  database,
-		cfg:                 cfg,
-		fileChains:          newFileChainState(),
-		wsClients:           make(map[*websocket.Conn]*wsClientConn),
-		agentPendingTasks:   make(map[string]int),
-		ctx:                 context.Background(),
-		metrics:             &MetricsCollector{TasksTotal: prometheus.NewCounter(prometheus.CounterOpts{})},
+		db:                    database,
+		cfg:                   cfg,
+		fileChains:            newFileChainState(),
+		wsClients:             make(map[*websocket.Conn]*wsClientConn),
+		agentPendingTasks:     make(map[string]int),
+		ctx:                   context.Background(),
+		metrics:               &MetricsCollector{TasksTotal: prometheus.NewCounter(prometheus.CounterOpts{})},
 		screenMonitorImplants: make(map[string]time.Time),
 	}
 }
@@ -308,6 +310,117 @@ func TestHandleUploadFile(t *testing.T) {
 		srv.handleUploadFile(c)
 		assertStatus(t, w, http.StatusOK)
 		assertSuccessJSON(t, w)
+
+		var task db.Task
+		if err := database.Where("agent_id = ? AND type = ?", agent.ID, "upload").Order("id desc").First(&task).Error; err != nil {
+			t.Fatalf("load push task: %v", err)
+		}
+		if task.Data == "" {
+			t.Fatal("push task must carry file bytes")
+		}
+	})
+
+	t.Run("path alias is accepted as target_path", func(t *testing.T) {
+		var buf bytes.Buffer
+		writer := multipart.NewWriter(&buf)
+		writer.WriteField("path", `C:\temp\alias.bin`)
+		part, _ := writer.CreateFormFile("file", "alias.bin")
+		part.Write([]byte("alias"))
+		writer.Close()
+
+		w, c := newMultipartContext(http.MethodPost, "/", bytes.NewReader(buf.Bytes()), writer.Boundary())
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+		srv.handleUploadFile(c)
+		assertStatus(t, w, http.StatusOK)
+		assertSuccessJSON(t, w)
+	})
+}
+
+// ---------------------------------------------------------------------------
+// TestHandleFileUploadFromAgent (exfil) + TestHandleFileExfilGet
+// ---------------------------------------------------------------------------
+
+func TestHandleFileUploadFromAgent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := newContractDB(t)
+	srv := newTestFileServer(t, database)
+	agent := seedImplant(t, database)
+
+	t.Run("rejects multipart file (that is a push, not exfil)", func(t *testing.T) {
+		var buf bytes.Buffer
+		writer := multipart.NewWriter(&buf)
+		writer.WriteField("path", `C:\temp\secret.txt`)
+		part, _ := writer.CreateFormFile("file", "payload.bin")
+		part.Write([]byte("should-not-be-pushed-here"))
+		writer.Close()
+
+		w, c := newMultipartContext(http.MethodPost, "/", bytes.NewReader(buf.Bytes()), writer.Boundary())
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+		srv.handleFileUploadFromAgent(c)
+		assertStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("path-only queues an exfil upload with no payload bytes", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("path", `C:\Users\admin\secret.txt`)
+		form.Set("size", "1048576")
+		w, c := newFormContext(http.MethodPost, "/", &form)
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+		srv.handleFileUploadFromAgent(c)
+		assertStatus(t, w, http.StatusOK)
+		assertSuccessJSON(t, w)
+
+		var task db.Task
+		if err := database.Where("agent_id = ? AND type = ? AND path = ?", agent.ID, "upload", `C:\Users\admin\secret.txt`).Order("id desc").First(&task).Error; err != nil {
+			t.Fatalf("load exfil task: %v", err)
+		}
+		if task.Data != "" {
+			t.Fatal("exfil task must not carry operator file bytes")
+		}
+		if task.Size != 1048576 {
+			t.Fatalf("size: want 1048576, got %d", task.Size)
+		}
+	})
+}
+
+func TestHandleFileExfilGet(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := newContractDB(t)
+	srv := newTestFileServer(t, database)
+	agent := seedImplant(t, database)
+	srv.cfg.Server.DataDir = t.TempDir()
+
+	t.Run("missing agent returns 404", func(t *testing.T) {
+		w, c := newFormContext(http.MethodGet, "/", nil)
+		c.Params = gin.Params{{Key: "id", Value: "nonexistent"}, {Key: "filename", Value: "a.txt"}}
+		srv.handleFileExfilGet(c)
+		assertStatus(t, w, http.StatusNotFound)
+	})
+
+	t.Run("traversal filename is rejected", func(t *testing.T) {
+		w, c := newFormContext(http.MethodGet, "/", nil)
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}, {Key: "filename", Value: "..\\secret.txt"}}
+		srv.handleFileExfilGet(c)
+		if w.Code == http.StatusOK {
+			t.Fatalf("traversal must not succeed: %s", w.Body.String())
+		}
+	})
+
+	t.Run("serves a saved exfil blob", func(t *testing.T) {
+		base := filepath.Join(srv.cfg.Server.DataDir, "uploads", agent.ID)
+		if err := os.MkdirAll(base, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(base, "loot.txt"), []byte("exfil-bytes"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		w, c := newFormContext(http.MethodGet, "/", nil)
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}, {Key: "filename", Value: "loot.txt"}}
+		srv.handleFileExfilGet(c)
+		assertStatus(t, w, http.StatusOK)
+		if !bytes.Contains(w.Body.Bytes(), []byte("exfil-bytes")) {
+			t.Fatalf("expected exfil body, got %s", w.Body.String())
+		}
 	})
 }
 

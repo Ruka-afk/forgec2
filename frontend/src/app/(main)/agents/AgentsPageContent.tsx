@@ -11,7 +11,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataError } from "@/components/ui/data-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ConfirmModal, PageHeader, Pagination } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
+import { ConfirmModal, Pagination } from "@/components/UI";
 import { AgentFilters } from "./_components/AgentFilters";
 import { AgentBulkBar } from "./_components/AgentBulkBar";
 import { AgentRow } from "./_components/AgentRow";
@@ -100,7 +101,7 @@ export default function AgentsPageContent() {
   );
 
   const loadBeacons = useCallback((opts?: { background?: boolean }) => {
-    loadBeaconsRaw(searchQuery, statusFilter, osFilter, page, 50, tagFilter, sortKey, sortDir, opts);
+    loadBeaconsRaw(searchQuery, statusFilter, osFilter, page, 50, tagFilter, sortKey, sortDir);
   }, [loadBeaconsRaw, searchQuery, statusFilter, osFilter, page, tagFilter, sortKey, sortDir]);
 
   const loadBeaconsRef = useRef(loadBeacons);
@@ -353,19 +354,11 @@ export default function AgentsPageContent() {
   const emptyColSpan = Object.values(visibleCols).filter(Boolean).length + 2;
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      {error && (
-        <DataError
-          message={error}
-          onRetry={() => { setError(null); loadBeacons(); }}
-          onDismiss={() => setError(null)}
-          className="mb-4"
-        />
-      )}
-      <PageHeader
-        title={t("agents.title")}
-        subtitle={`${total} ${t("agents.total_label")} · ${onlineCount} ${t("agents.online_label")}${staleCount > 0 ? `, ${staleCount} ${t("agents.stale_label")}` : ""}${offlineCount > 0 ? `, ${offlineCount} ${t("agents.offline_label")}` : ""}`}
-      >
+    <PageContainer
+      title={t("agents.title")}
+      subtitle={`${total} ${t("agents.total_label")} · ${onlineCount} ${t("agents.online_label")}${staleCount > 0 ? `, ${staleCount} ${t("agents.stale_label")}` : ""}${offlineCount > 0 ? `, ${offlineCount} ${t("agents.offline_label")}` : ""}`}
+      className="animate-fade-slide-up"
+      actions={<>
         <Button
           variant="outline"
           onClick={() => { setBulkMode((p) => !p); if (!bulkMode) setSelected(new Set()); }}
@@ -434,7 +427,16 @@ export default function AgentsPageContent() {
           <span className="hidden sm:inline">{t("agents.generate_implant")}</span>
           <span className="sm:hidden">{t("agents.new")}</span>
         </Button>
-      </PageHeader>
+      </>}
+    >
+      {error && (
+        <DataError
+          message={error}
+          onRetry={() => { setError(null); loadBeacons(); }}
+          onDismiss={() => setError(null)}
+          className="mb-4"
+        />
+      )}
 
       <AgentBulkBar
         selected={selected}
@@ -551,16 +553,13 @@ export default function AgentsPageContent() {
                 beacon={beacon}
                 isSelected={selected.has(beacon.id || "")}
                 onToggleSelect={toggleSelect}
-                onScreenshot={sendScreenshot}
-                onQuickSleep={openQuickSleep}
-                onNotes={openNotesEdit}
-                onConfirm={handleRowConfirm}
-                onSelect={handleSelectAgent}
+                onInteract={handleSelectAgent}
+                onDetails={handleSelectAgent}
+                onMenu={() => {}}
+                onEditNotes={(b) => openNotesEdit({} as React.MouseEvent, b)}
                 taskCount={taskCountMap[beacon.id || ""] ?? 0}
                 lockUser={agentLocks[beacon.id || ""] || null}
                 visibleCols={visibleCols}
-                copiedField={copiedField}
-                onCopy={handleRowCopy}
               />
             ))}
             {!loading && agentVirtualized && agentTotalHeight - agentOffsetTop - visibleBeacons.length * AGENT_ROW_H > 0 && (
@@ -606,7 +605,9 @@ export default function AgentsPageContent() {
             beacons={sortedBeacons}
             tagsByAgent={tagsByAgent}
             taskCountMap={taskCountMap}
-            onSelect={handleSelectAgent}
+            onInteract={handleSelectAgent}
+            onDetails={handleSelectAgent}
+            onMenu={() => {}}
           />
           <Pagination page={page} pageSize={50} total={total} onPageChange={setPage} />
         </>
@@ -719,7 +720,7 @@ export default function AgentsPageContent() {
           {selectedAgentId && <AgentDetailPage agentId={selectedAgentId} onClose={handleCloseDetail} />}
         </SheetContent>
       </Sheet>
-    </div>
+    </PageContainer>
   );
 }
 

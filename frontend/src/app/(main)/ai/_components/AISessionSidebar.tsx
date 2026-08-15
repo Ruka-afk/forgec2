@@ -40,14 +40,15 @@ export default function AISessionSidebar({ sessions, activeSessionId, onSelect, 
                   : "hover:bg-muted transition-colors text-muted-foreground"
               }`}
             >
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => onSelect(s.id)}
-                className="flex items-center gap-2 flex-1 min-w-0 py-1 text-left rounded-md focus-visible:outline-none"
+                className="h-auto flex-1 min-w-0 justify-start gap-2 px-1.5 py-1 text-left font-normal"
               >
                 <MessageSquare className="w-4 h-4 shrink-0" aria-hidden="true" />
                 <span className="flex-1 truncate">{s.title}</span>
-              </button>
+              </Button>
               <Button
                 variant="ghost" size="icon-xs"
                 onClick={() => onRename(s.id, s.title)}

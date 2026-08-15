@@ -98,6 +98,12 @@ func randomizeStrxor() ([]byte, error) {
 	b.WriteString(header)
 	b.WriteString("const (\n")
 	for _, m := range matches {
+		// SConfigKey is a var (declared outside the const block) and is set
+		// per build via -ldflags -X main.SConfigKey; never re-emit it as a
+		// const, or the linker override would be silently ignored.
+		if m[1] == "SConfigKey" {
+			continue
+		}
 		plain, err := decodeSConst(m[2])
 		if err != nil {
 			return nil, fmt.Errorf("decode %s: %w", m[1], err)

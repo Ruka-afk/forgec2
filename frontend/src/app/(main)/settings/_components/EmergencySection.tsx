@@ -83,7 +83,7 @@ export default function EmergencySection() {
               </div>
             )}
           </div>
-          <div className={`text-xs font-semibold px-3 py-1 rounded-full ${armed ? "bg-destructive/20 text-destructive" : "bg-emerald-500/15 text-emerald-500"}`}>
+          <div className={`text-xs font-semibold px-3 py-1 rounded-full ${armed ? "bg-destructive/20 text-destructive" : "bg-success/15 text-success"}`}>
             {armed ? t("settings.emergency.badge_armed") : t("settings.emergency.badge_safe")}
           </div>
         </div>

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { AlertCircle, Lock, Shield, User } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useForm } from "@/lib/hooks/useForm";
@@ -118,7 +118,7 @@ function LoginForm() {
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-background via-muted/30 to-primary/5 dark:from-background dark:via-primary/[0.03] dark:to-primary/8">
       <div className="absolute rounded-full blur-(--blur-orb) opacity-15 dark:opacity-10 w-72 h-72 bg-primary/30 top-[-10%] left-[-5%] animate-orb-float" style={{ animationDelay: "0s" }} />
       <div className="absolute rounded-full blur-(--blur-orb) opacity-15 dark:opacity-10 w-56 h-56 bg-primary/20 bottom-[-5%] right-[-3%] animate-orb-float" style={{ animationDelay: "2s" }} />
-      <div className="absolute rounded-full blur-(--blur-orb) opacity-15 dark:opacity-10 w-40 h-40 bg-violet-400/15 top-[40%] right-[20%] animate-orb-float" style={{ animationDelay: "4s" }} />
+      <div className="absolute rounded-full blur-(--blur-orb) opacity-15 dark:opacity-10 w-40 h-40 bg-chart-6/15 top-[40%] right-[20%] animate-orb-float" style={{ animationDelay: "4s" }} />
 
       <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.04] [background-image:linear-gradient(var(--border)_1px,transparent_1px),linear-gradient(90deg,var(--border)_1px,transparent_1px)] [background-size:40px_40px]" />
 
@@ -154,7 +154,7 @@ function LoginForm() {
                   value={values.username}
                   onChange={handleChange("username")}
                   onBlur={handleBlur("username")}
-                  className="h-11 pl-9 transition-colors"
+                  className="h-9 pl-9 transition-colors"
                   aria-invalid={!!(touched.username && errors.username)}
                   aria-describedby={errors.username ? "login-username-error" : undefined}
                   autoComplete="username"
@@ -175,7 +175,7 @@ function LoginForm() {
                   value={values.password}
                   onChange={handleChange("password")}
                   onBlur={handleBlur("password")}
-                  className="h-11 pl-9 transition-colors"
+                  className="h-9 pl-9 transition-colors"
                   aria-invalid={!!(touched.password && errors.password)}
                   aria-describedby={errors.password ? "login-password-error" : undefined}
                   autoComplete="current-password"
@@ -203,7 +203,7 @@ function LoginForm() {
                   onChange={handleChange("totpCode")}
                   onBlur={handleBlur("totpCode")}
                   placeholder="000000"
-                  className="h-11 pl-9 font-mono tracking-(--tracking-wide) text-center transition-colors"
+                  className="h-9 pl-9 font-mono tracking-(--tracking-wide) text-center transition-colors"
                   aria-invalid={!!(touched.totpCode && errors.totpCode)}
                   aria-describedby={errors.totpCode ? "login-totp-error" : undefined}
                 />
@@ -224,8 +224,9 @@ function LoginForm() {
 
             <Button
               type="submit"
+              size="lg"
               disabled={isSubmitting}
-              className="w-full h-11 font-semibold transition-all duration-200 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 active:scale-[0.98]"
+              className="w-full font-semibold transition-all duration-200 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 active:scale-[0.98]"
             >
               {isSubmitting ? (
                 <span className="flex items-center justify-center gap-2">

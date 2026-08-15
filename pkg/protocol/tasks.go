@@ -239,7 +239,7 @@ const (
 	TaskTypeAdminSDHolder    = "adminsdholder"
 	TaskTypeDCSyncMachine    = "dcsync_machine"
 
-	// Process Tree
+	// Process list alias (implant handlePS; not a live tree viewer)
 	TaskTypeProcessTree = "process_tree"
 )
 
@@ -446,7 +446,7 @@ func AllTaskTypes() []string {
 		TaskTypeGhostModeStatus,
 		TaskTypeGhostModeExit,
 
-		// Process Tree
+		// Process list alias
 		TaskTypeProcessTree,
 	}
 }

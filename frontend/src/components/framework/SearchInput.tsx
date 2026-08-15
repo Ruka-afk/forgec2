@@ -2,6 +2,8 @@
 
 import { useId } from "react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { Search, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -19,6 +21,7 @@ export function SearchInput({
   className,
   inputClassName,
   label = "Search",
+  id: idProp,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -27,8 +30,10 @@ export function SearchInput({
   className?: string;
   inputClassName?: string;
   label?: string;
+  id?: string;
 }) {
-  const id = useId();
+  const genId = useId();
+  const id = idProp || genId;
   const { t } = useI18n();
   const clear = onClear ?? (() => onChange(""));
   return (
@@ -37,9 +42,9 @@ export function SearchInput({
         className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60"
         aria-hidden="true"
       />
-      <label htmlFor={id} className="sr-only">
+      <Label htmlFor={id} className="sr-only">
         {label}
-      </label>
+      </Label>
       <Input
         id={id}
         type="text"
@@ -54,14 +59,16 @@ export function SearchInput({
         )}
       />
       {value && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-xs"
           onClick={clear}
           aria-label={t("search.clear")}
-          className="absolute right-2 top-1/2 -translate-y-1/2 grid h-5 w-5 place-items-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground"
         >
           <X className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       )}
     </div>
   );

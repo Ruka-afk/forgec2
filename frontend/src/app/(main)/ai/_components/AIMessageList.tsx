@@ -1,7 +1,7 @@
 "use client";
 
 import { useI18n } from "@/lib/i18n";
-import { CopyButton } from "@/components/UI";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -73,13 +73,13 @@ export function AIMessageList({
           }
           return (
             <div key={i} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-1 ${msg.role === "user" ? "bg-secondary" : msg.role === "tool" ? "bg-amber-100 dark:bg-amber-900/40" : "bg-primary/10 dark:bg-primary/25"}`}>
-                {msg.role === "user" ? <User className="w-4 h-4 text-muted-foreground" /> : msg.role === "tool" ? <Wrench className="w-4 h-4 text-amber-500" /> : <Bot className="w-4 h-4 text-primary" />}
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-1 ${msg.role === "user" ? "bg-secondary" : msg.role === "tool" ? "bg-warning/15" : "bg-primary/10 dark:bg-primary/25"}`}>
+                {msg.role === "user" ? <User className="w-4 h-4 text-muted-foreground" /> : msg.role === "tool" ? <Wrench className="w-4 h-4 text-warning" /> : <Bot className="w-4 h-4 text-primary" />}
               </div>
               <div className={`max-w-[80%] ${msg.role === "user" ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-md" : "bg-card text-card-foreground ring-1 ring-foreground/10 rounded-tl-md"} px-4 py-3`}>
                 <div className="flex items-center justify-between gap-2 mb-1">
                   {msg.tool_name ? (
-                    <div className="text-(--fs-micro-sm) font-mono text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <div className="text-(--fs-micro-sm) font-mono text-warning flex items-center gap-1">
                       <Terminal className="w-4 h-4" />
                       {msg.tool_name}
                     </div>

@@ -1,6 +1,9 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 /**
  * F3 blueprint — persistent side panel that reflects the current craft
@@ -15,23 +18,25 @@ export function CraftPanel({
   className,
   bodyClassName,
 }: {
-  title: React.ReactNode;
-  badge?: React.ReactNode;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
+  title: ReactNode;
+  badge?: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
   className?: string;
   bodyClassName?: string;
 }) {
   return (
-    <aside className={cn("flex max-h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-1", className)}>
-      <div className="flex items-center justify-between gap-2 border-b border-border/60 px-5 py-3.5">
-        <h2 className="mono-eyebrow text-muted-foreground">{title}</h2>
-        {badge}
-      </div>
-      <div className={cn("min-h-0 flex-1 overflow-y-auto p-5", bodyClassName)}>{children}</div>
-      {footer && (
-        <div className="border-t border-border/60 bg-muted/30 px-5 py-3">{footer}</div>
-      )}
-    </aside>
+    <Card className={cn("flex max-h-full flex-col overflow-hidden shadow-1", className)}>
+      <CardHeader className="border-b py-3.5">
+        <CardTitle className="mono-eyebrow text-muted-foreground font-normal">{title}</CardTitle>
+        {badge && <CardAction>{badge}</CardAction>}
+      </CardHeader>
+      <CardContent className={cn("min-h-0 flex-1 p-0", bodyClassName)}>
+        <ScrollArea className="h-full">
+          <div className="p-5">{children}</div>
+        </ScrollArea>
+      </CardContent>
+      {footer && <CardFooter>{footer}</CardFooter>}
+    </Card>
   );
 }

@@ -6,7 +6,7 @@ import { API_BASE } from "@/lib/constants";
 import { downloadText } from "@/lib/download";
 import { api, getCsrfToken } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { PageHeader } from "@/components/UI";
+import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";

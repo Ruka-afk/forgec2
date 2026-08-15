@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
-import { StatusBadge } from "@/components/UI";
+import { StatusBadge } from "@/components/ui/status-indicator";
 import { GitBranch } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { getOSIcon, type AgentDetailModel } from "./agent-detail-utils";

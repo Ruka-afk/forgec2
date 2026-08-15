@@ -35,6 +35,10 @@
   --success: oklch(0.61 0.15 158);
   --success-foreground: oklch(0.985 0 0);
   --radius: 0.75rem;
+  /* small-control caps (buttons, selects must not over-round).
+     Derived directly from --radius so xs < sm actually differ. */
+  --radius-control-xs: calc(var(--radius) * 0.55);
+  --radius-control-sm: calc(var(--radius) * 0.7);
 
   /* layered surfaces (dark-optimized, used in .dark) */
   --surface-1: oklch(0.145 0.016 265);
@@ -47,11 +51,37 @@
   --sidebar-accent: oklch(0.945 0.008 265);
   --sidebar-accent-foreground: oklch(0.215 0.022 265);
 
-  --fs-micro: 0.5625rem;
-  --fs-micro-sm: 0.625rem;
-  --fs-xs-sm: 0.6875rem;
-  --fs-compact: 0.8125rem;
-  --fs-body-sm: 0.84375rem;
+  --fs-micro: 0.5625rem;      /* 9px  — badge counters, kbd */
+  --fs-micro-sm: 0.625rem;    /* 10px — eyebrow, tiny labels */
+  --fs-xs-sm: 0.6875rem;      /* 11px — dense captions */
+  --fs-compact: 0.8125rem;    /* 13px — dense UI text */
+  --fs-body-sm: 0.84375rem;   /* 13.5px — card body captions */
+  --fs-body: 0.9375rem;       /* 15px — default body (html root) */
+  --fs-xs: 0.75rem;           /* 12px */
+  --fs-sm: 0.875rem;          /* 14px */
+  --fs-base: 1rem;            /* 16px */
+  --fs-lg: 1.125rem;          /* 18px — section titles */
+  --fs-xl: 1.25rem;           /* 20px */
+  --fs-2xl: 1.5rem;           /* 24px — stat values */
+  --fs-3xl: 1.875rem;         /* 30px */
+  --fs-4xl: 2.25rem;          /* 36px — page hero */
+  --fs-5xl: 3rem;             /* 48px */
+  --fs-6xl: 3.75rem;          /* 60px */
+  --fs-7xl: 4.5rem;           /* 72px — error pages */
+  --fs-page-title: 1.375rem;  /* 22px — PageHeader h1 */
+  --fs-stat-value: 1.625rem;  /* 26px — StatCard value */
+  --fs-prose: 1.05rem;        /* 16.8px — markdown body */
+
+  /* line-height ramp (Tailwind v4 defaults, rem-based) */
+  --lh-xs: 1rem;
+  --lh-sm: 1.25rem;
+  --lh-base: 1.5rem;
+  --lh-lg: 1.75rem;
+  --lh-xl: 1.75rem;
+  --lh-2xl: 2rem;
+  --lh-3xl: 2.25rem;
+  --lh-4xl: 2.5rem;
+  --lh-body: 1.625;
 
   --avatar-1: oklch(0.53 0.225 265);
   --avatar-2: oklch(0.60 0.18 155);
@@ -145,8 +175,8 @@
 html { -webkit-text-size-adjust: 100%; height: 100%; scroll-behavior: smooth; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 body {
   font-family: var(--font-sans);
-  font-size: 0.9375rem;
-  line-height: 1.625;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
   color: var(--foreground);
   transition: background-color 0.3s ease, color 0.3s ease;
   height: 100%;
@@ -193,11 +223,6 @@ body {
   75% { transform: translate(15px, 5px) scale(1.02); }
 }
 
-@keyframes statusPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
 /* ══════════════════════════════════════════
    TAILWIND UTILITIES (animation classes)
    ══════════════════════════════════════════ */
@@ -220,9 +245,6 @@ body {
   }
   .animate-orb-float {
     animation: orbFloat 8s ease-in-out infinite;
-  }
-  .animate-status-pulse {
-    animation: statusPulse 1.6s ease-in-out infinite;
   }
 }
 
@@ -328,6 +350,25 @@ body {
 }
 
 @theme inline {
+  --text-xs: var(--fs-xs);
+  --text-xs--line-height: var(--lh-xs);
+  --text-sm: var(--fs-sm);
+  --text-sm--line-height: var(--lh-sm);
+  --text-base: var(--fs-base);
+  --text-base--line-height: var(--lh-base);
+  --text-lg: var(--fs-lg);
+  --text-lg--line-height: var(--lh-lg);
+  --text-xl: var(--fs-xl);
+  --text-xl--line-height: var(--lh-xl);
+  --text-2xl: var(--fs-2xl);
+  --text-2xl--line-height: var(--lh-2xl);
+  --text-3xl: var(--fs-3xl);
+  --text-3xl--line-height: var(--lh-3xl);
+  --text-4xl: var(--fs-4xl);
+  --text-4xl--line-height: var(--lh-4xl);
+  --text-5xl: var(--fs-5xl);
+  --text-6xl: var(--fs-6xl);
+  --text-7xl: var(--fs-7xl);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -359,6 +400,9 @@ body {
   --shadow-1: var(--elevation-1);
   --shadow-2: var(--elevation-2);
   --shadow-3: var(--elevation-3);
+  --shadow-sm: var(--elevation-1);
+  --shadow-md: var(--elevation-2);
+  --shadow-lg: var(--elevation-3);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -440,6 +484,13 @@ mark.keylog-user {
 
 ::view-transition-new(root) {
   animation: fadeSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
 }
 
 @keyframes fadeSlideOut {

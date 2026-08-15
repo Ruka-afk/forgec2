@@ -16,7 +16,7 @@ export default function DatabaseSection({
   const { t } = useI18n();
   return (
     <Card className="overflow-hidden">
-      <div className="bg-cyan-500/10 border-b border-cyan-500/20 px-6 py-4">
+      <div className="bg-chart-2/10 border-b border-chart-2/20 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Database className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-foreground">{t("settings.database.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.database.subtitle")}</p></div>
@@ -39,13 +39,13 @@ export default function DatabaseSection({
           ))}
         </div>
         <div className="flex flex-wrap gap-3">
-          <Button onClick={onVacuum} disabled={saving} className="px-4 h-10 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+          <Button onClick={onVacuum} size="lg" disabled={saving} className="px-4 bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors disabled:opacity-50">
             <Minimize2 className="w-4 h-4" />{t("settings.database.vacuum")}
           </Button>
-          <Button onClick={onBackup} disabled={saving} className="px-4 h-10 bg-accent hover:bg-accent/80 text-accent-foreground rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+          <Button onClick={onBackup} size="lg" disabled={saving} className="px-4 bg-accent hover:bg-accent/80 text-accent-foreground text-sm font-medium transition-colors disabled:opacity-50">
             <Copy className="w-4 h-4" />{t("settings.database.backup")}
           </Button>
-          <Button onClick={onDownloadDB} className="px-4 h-10 bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 dark:hover:bg-emerald-800 text-emerald-700 dark:text-emerald-400 rounded-xl text-sm font-medium transition-colors">
+          <Button onClick={onDownloadDB} size="lg" className="px-4 bg-success/15 hover:bg-success/20 dark:hover:bg-success/60 text-success text-sm font-medium transition-colors">
             <Download className="w-4 h-4" />{t("settings.database.download")}
           </Button>
         </div>

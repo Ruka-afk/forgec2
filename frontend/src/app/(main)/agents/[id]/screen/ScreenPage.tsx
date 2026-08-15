@@ -5,7 +5,8 @@ import { useParams } from "next/navigation";
 import { useWS } from "@/lib/wsContext";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { EmptyState, Spinner } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -209,9 +210,9 @@ interface ScreenshotItem {
   }, [subscribe, id, applyFrame]);
 
   const statusIndicator = () => {
-    if (status === "capturing") return { color: "bg-amber-400 animate-pulse", text: "Capturing...", icon: <Spinner size="xs" /> };
+    if (status === "capturing") return { color: "bg-warning animate-pulse", text: "Capturing...", icon: <Spinner size="xs" /> };
     if (status === "error") return { color: "bg-destructive", text: "Error", icon: <TriangleAlert className="w-3 h-3" /> };
-    if (monitoring && monitoringStatus === "connected") return { color: "bg-emerald-400 animate-pulse", text: t("agents.rdp_connected"), icon: <span className="w-1.5 h-1.5 rounded-full bg-current" /> };
+    if (monitoring && monitoringStatus === "connected") return { color: "bg-success/60 animate-pulse", text: t("agents.rdp_connected"), icon: <span className="w-1.5 h-1.5 rounded-full bg-current" /> };
     return { color: "bg-muted-foreground", text: t("agents.rdp_standby"), icon: <span className="w-1.5 h-1.5 rounded-full bg-current" /> };
   };
 
@@ -274,7 +275,7 @@ interface ScreenshotItem {
                   {monitoring && (
                     <Tooltip>
                       <TooltipTrigger>
-                        <span className="ml-1 w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                        <span className="ml-1 w-2 h-2 bg-success rounded-full animate-pulse"></span>
                       </TooltipTrigger>
                       <TooltipContent>{t("agents.screen_monitoring_active")}</TooltipContent>
                     </Tooltip>
@@ -282,7 +283,7 @@ interface ScreenshotItem {
                   {wsLive && (
                     <Tooltip>
                       <TooltipTrigger>
-                        <span className="text-(--fs-micro-sm) text-emerald-400 flex items-center gap-1">
+                        <span className="text-(--fs-micro-sm) text-chart-1 flex items-center gap-1">
                           <Zap className="w-4 h-4" /> WS
                         </span>
                       </TooltipTrigger>
@@ -312,7 +313,7 @@ interface ScreenshotItem {
             <Card className="p-4 shrink-0">
               <div className="text-xs text-muted-foreground mb-3 font-semibold uppercase tracking-wider flex items-center justify-between">
                 <span>{t("agents.screen_controls")}</span>
-                 <span className={`flex items-center gap-1.5 text-(--fs-micro-sm) font-normal ${monitoring ? "text-emerald-500" : "text-muted-foreground/70"}`}>                  <span className={`w-1.5 h-1.5 rounded-full ${monitoring ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`}></span>                  {monitoring ? "LIVE" : "OFF"}
+                 <span className={`flex items-center gap-1.5 text-(--fs-micro-sm) font-normal ${monitoring ? "text-success" : "text-muted-foreground/70"}`}>                  <span className={`w-1.5 h-1.5 rounded-full ${monitoring ? "bg-success animate-pulse" : "bg-muted-foreground"}`}></span>                  {monitoring ? "LIVE" : "OFF"}
                 </span>
               </div>
               <div className="space-y-3">

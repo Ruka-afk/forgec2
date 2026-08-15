@@ -142,6 +142,9 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 		"MalleableHeaders": s.cfg.Malleable.Headers,
 		"MalleablePrepend": s.cfg.Malleable.Prepend,
 		"MalleableAppend":  s.cfg.Malleable.Append,
+		"MalleableRequestPrepend": s.cfg.Malleable.RequestPrepend,
+		"MalleableRequestAppend":  s.cfg.Malleable.RequestAppend,
+		"MalleableRequestHeaders": s.cfg.Malleable.RequestHeaders,
 		"WorkingStart":     s.cfg.Implant.DefaultWorkingStart,
 		"WorkingEnd":       s.cfg.Implant.DefaultWorkingEnd,
 		"WorkingTZ":        s.cfg.Implant.DefaultWorkingTZ,
@@ -389,6 +392,8 @@ func (s *Server) handleSaveMalleableProfile(c *gin.Context) {
 	}
 	s.cfg.Malleable.Prepend = c.PostForm("prepend")
 	s.cfg.Malleable.Append = c.PostForm("append")
+	s.cfg.Malleable.RequestPrepend = c.PostForm("request_prepend")
+	s.cfg.Malleable.RequestAppend = c.PostForm("request_append")
 
 	if headersText := c.PostForm("headers_text"); headersText != "" {
 		headers := make(map[string]string)
@@ -407,6 +412,26 @@ func (s *Server) handleSaveMalleableProfile(c *gin.Context) {
 		}
 		if len(headers) > 0 {
 			s.cfg.Malleable.Headers = headers
+		}
+	}
+
+	if reqHeadersText := c.PostForm("request_headers_text"); reqHeadersText != "" {
+		headers := make(map[string]string)
+		for _, line := range strings.Split(reqHeadersText, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			if idx := strings.Index(line, ":"); idx > 0 {
+				k := strings.TrimSpace(line[:idx])
+				v := strings.TrimSpace(line[idx+1:])
+				if k != "" {
+					headers[k] = v
+				}
+			}
+		}
+		if len(headers) > 0 {
+			s.cfg.Malleable.RequestHeaders = headers
 		}
 	}
 
@@ -515,14 +540,27 @@ func (s *Server) handleDownloadConfig(c *gin.Context) {
 		return
 	}
 	redacted := string(data)
+	// Exhaustive list of every secret material in config.yaml. The server
+	// holds the crown-jewel keys (loot/TOTP/CSRF/ExtC2/backup encryption, the
+	// v2 fleet beacon key, SSH password, extc2 API token) — none may leak via
+	// the admin "Download Config" endpoint (S2). Keep this list in sync with
+	// config.go's secret fields.
 	secrets := []string{
 		s.cfg.Server.JWTSecret,
+		s.cfg.Server.BeaconKey,
+		s.cfg.Server.SSHPassword,
 		s.cfg.Auth.PasswordHash,
 		s.cfg.AI.APIKey,
 		s.cfg.Integrations.Slack.BotToken,
 		s.cfg.Integrations.Slack.AppToken,
 		s.cfg.Integrations.Slack.SigningSecret,
 		s.cfg.Crypto.Key,
+		s.cfg.Crypto.LootKey,
+		s.cfg.Crypto.TotpKey,
+		s.cfg.Crypto.CsrfKey,
+		s.cfg.Crypto.ExtC2Key,
+		s.cfg.Crypto.BackupKey,
+		s.cfg.RateLimit.ExtC2.APIToken,
 	}
 	for _, secret := range secrets {
 		if secret != "" {

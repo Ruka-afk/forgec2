@@ -4,7 +4,11 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
-import { EmptyState, PageHeader, PageSpinner, StatCard, StatusIndicator } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageSpinner } from "@/components/ui/spinner";
+import { StatCard } from "@/components/ui/animated-stat-card";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { toast } from "sonner";
 import { formatTime } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -62,9 +66,9 @@ export default function CircuitBreakerPage() {
   const loadData = useCallback(() => {
     let failed = 0;
     Promise.all([
-      api.get<{ listeners?: ListenerDetail[] }>("/circuit-breaker/detail").catch(() => { failed++; return { listeners: [] as ListenerDetail[] }; }),
-      api.get<{ failure_threshold?: number; cooldown_seconds?: number; half_open_max_reqs?: number; health_check_seconds?: number }>("/circuit-breaker/config").catch((): Partial<BreakerConfig> => { failed++; return {}; }),
-      api.get<{ events?: BreakerEvent[] }>("/circuit-breaker/events").catch(() => { failed++; return { events: [] as BreakerEvent[] }; }),
+      api.get<{ listeners?: ListenerDetail[] }>(paths.circuitBreaker.detail).catch(() => { failed++; return { listeners: [] as ListenerDetail[] }; }),
+      api.get<{ failure_threshold?: number; cooldown_seconds?: number; half_open_max_reqs?: number; health_check_seconds?: number }>(paths.circuitBreaker.config).catch((): Partial<BreakerConfig> => { failed++; return {}; }),
+      api.get<{ events?: BreakerEvent[] }>(paths.circuitBreaker.events).catch(() => { failed++; return { events: [] as BreakerEvent[] }; }),
     ]).then(([detData, cfgData, evtData]) => {
       setListeners((detData.listeners || []) as ListenerDetail[]);
       if ((cfgData as Record<string, unknown>).failure_threshold !== undefined) {
@@ -113,20 +117,19 @@ export default function CircuitBreakerPage() {
   return (
     <>
 
-      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
-        <PageHeader title={t("cb.title")} subtitle={t("cb.subtitle")}>
-          <div className="flex items-center gap-3">
-            <StatusIndicator status="healthy" variant="dot" label={`${healthyCount} ${t("cb.closed")}`} />
-            {unstableCount > 0 && (
-              <StatusIndicator status="unstable" variant="dot" label={`${unstableCount} ${t("cb.half_open")}`} />
-            )}
-            {burnedCount > 0 && (
-              <StatusIndicator status="burned" variant="dot" label={`${burnedCount} ${t("cb.open")}`} pulse />
-            )}
-          </div>
-        </PageHeader>
+      <PageContainer title={t("cb.title")} subtitle={t("cb.subtitle")} contentClassName="space-y-6" actions={<>
+        <div className="flex items-center gap-3">
+          <StatusIndicator status="healthy" variant="dot" label={`${healthyCount} ${t("cb.closed")}`} />
+          {unstableCount > 0 && (
+            <StatusIndicator status="unstable" variant="dot" label={`${unstableCount} ${t("cb.half_open")}`} />
+          )}
+          {burnedCount > 0 && (
+            <StatusIndicator status="burned" variant="dot" label={`${burnedCount} ${t("cb.open")}`} pulse />
+          )}
+        </div>
+      </>}>
 
-        <Card className="p-3 border-amber-500/40 bg-amber-500/10 text-sm text-amber-800 dark:text-amber-200">
+        <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
           <div className="font-semibold">{t("cb.honesty_title")}</div>
           <div className="text-xs text-muted-foreground mt-0.5">{t("cb.honesty_desc")}</div>
         </Card>
@@ -134,7 +137,7 @@ export default function CircuitBreakerPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
           <StatCard label={t("cb.closed")} value={healthyCount} color="emerald" icon={<ShieldCheck className="w-4 h-4" />} sub={t("cb.closed_desc")} />
           <StatCard label={t("cb.half_open")} value={unstableCount} color="amber" icon={<AlertTriangle className="w-4 h-4" />} sub={t("cb.half_open_desc")} />
-          <StatCard label={t("cb.open")} value={burnedCount} color="red" icon={<Radio className="w-4 h-4" />} sub={t("cb.open_desc")} />
+          <StatCard label={t("cb.open")} value={burnedCount} color="destructive" icon={<Radio className="w-4 h-4" />} sub={t("cb.open_desc")} />
           <StatCard label={t("cb.check_interval")} value={`${config.health_check_seconds}s`} color="indigo" icon={<Gauge className="w-4 h-4" />} sub={t("cb.probes_every", { seconds: config.health_check_seconds })} />
         </div>
 
@@ -181,7 +184,7 @@ export default function CircuitBreakerPage() {
                       />
                     </TableCell>
                     <TableCell className="px-4 py-3">
-                      <span className={`text-xs font-medium ${l.consecutive_fails >= 3 ? "text-destructive" : l.consecutive_fails > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
+                      <span className={`text-xs font-medium ${l.consecutive_fails >= 3 ? "text-destructive" : l.consecutive_fails > 0 ? "text-warning" : "text-muted-foreground"}`}>
                         {l.consecutive_fails}
                       </span>
                     </TableCell>
@@ -270,10 +273,10 @@ export default function CircuitBreakerPage() {
                   </div>
                 </div>
               ))}
-            </div>
+             </div>
           )}
         </Card>
-      </div>
+      </PageContainer>
 
       <Dialog open={showConfigModal} onOpenChange={setShowConfigModal}>
         <DialogContent className="sm:max-w-md">

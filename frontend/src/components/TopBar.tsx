@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ConnectionDot } from "@/components/ui/connection-dot";
 import {
   Menu, Search, X, Moon, Sun, Monitor, Bell, BellOff,
   Settings, Shield, LogOut, ChevronDown, AlertTriangle,
@@ -268,10 +269,10 @@ function NotificationDropdown() {
   };
 
   const typeColors: Record<string, string> = {
-    success: "bg-emerald-500",
-    warning: "bg-amber-500",
-    error: "bg-red-500",
-    info: "bg-blue-500",
+    success: "bg-success",
+    warning: "bg-warning",
+    error: "bg-destructive",
+    info: "bg-info",
   };
 
   return (
@@ -344,7 +345,7 @@ function UserDropdown() {
             name={name}
             size="md"
             shape="square"
-            className="bg-gradient-to-br from-primary to-primary/80 shadow-sm shadow-primary/20 text-white"
+            className="bg-gradient-to-br from-primary to-primary/80 shadow-sm shadow-primary/20 text-primary-foreground"
           />
         </div>
         <div className="hidden md:block text-left">
@@ -401,7 +402,7 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
           <Tooltip>
             <TooltipTrigger>
               <span role="status" aria-live="polite" className="flex items-center gap-2">
-                <span aria-hidden="true" className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : reconnectFailed ? "bg-red-500" : "bg-amber-500 animate-pulse"}`} />
+                <ConnectionDot connected={connected} reconnectFailed={reconnectFailed} />
                 <span className="text-(--fs-micro-sm) text-muted-foreground/70 hidden lg:inline">{connected ? t("common.live") : reconnectFailed ? t("common.offline") : t("topbar.reconnecting")}</span>
               </span>
             </TooltipTrigger>

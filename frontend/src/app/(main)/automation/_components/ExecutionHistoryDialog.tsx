@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -43,10 +43,10 @@ interface StepLog {
 }
 
 const statusBadge = (status: string) => {
-  const cls = status === "completed" ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-    : status === "failed" ? "bg-red-500/15 text-red-600 dark:text-red-400"
-    : status === "aborted" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-    : "bg-blue-500/15 text-blue-600 dark:text-blue-400";
+  const cls = status === "completed" ? "bg-success/15 text-success"
+    : status === "failed" ? "bg-destructive/15 text-destructive"
+    : status === "aborted" ? "bg-warning/15 text-warning"
+    : "bg-info/15 text-info";
   return <Badge className={cls}>{status}</Badge>;
 };
 

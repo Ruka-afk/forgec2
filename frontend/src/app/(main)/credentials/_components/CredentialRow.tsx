@@ -82,7 +82,7 @@ function CredentialRowInner({
       </TableCell>
       <TableCell className="max-sm:hidden py-3 px-4 text-muted-foreground">{entry.domain || "-"}</TableCell>
       <TableCell className="max-sm:hidden py-3 px-4 text-xs text-muted-foreground">
-        {entry.source === "mimikatz" ? <WandSparkles className="w-3 h-3 text-amber-600 dark:text-amber-400 mr-1" /> : entry.source === "sam" ? <Database className="w-3 h-3 text-blue-500 mr-1" /> : entry.source === "kerberoast" ? <Shield className="w-3 h-3 text-orange-500 mr-1" /> : <PenLine className="w-3 h-3 text-muted-foreground mr-1" />}
+        {entry.source === "mimikatz" ? <WandSparkles className="w-3 h-3 text-warning mr-1" /> : entry.source === "sam" ? <Database className="w-3 h-3 text-info mr-1" /> : entry.source === "kerberoast" ? <Shield className="w-3 h-3 text-warning mr-1" /> : <PenLine className="w-3 h-3 text-muted-foreground mr-1" />}
         {entry.source || "manual"}
       </TableCell>
       <TableCell className="max-sm:hidden py-3 px-4">
@@ -90,7 +90,7 @@ function CredentialRowInner({
           variant="ghost"
           size="sm"
           onClick={() => onToggleConfirm(entry)}
-          className={entry.confirmed ? "text-primary hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30" : "text-muted-foreground hover:bg-muted"}
+          className={entry.confirmed ? "text-primary hover:bg-success/10 dark:text-chart-1 dark:hover:bg-success/20" : "text-muted-foreground hover:bg-muted"}
         >
           {entry.confirmed ? <CircleCheck className="w-4 h-4" /> : <CircleQuestionMark className="w-4 h-4" />}
           {entry.confirmed ? t("cred.confirmed") : t("cred.unconfirmed")}

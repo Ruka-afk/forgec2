@@ -27,7 +27,6 @@ import (
 	"github.com/forgec2/forgec2/internal/plugin"
 	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/forgec2/forgec2/internal/server/opsec"
-	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/prometheus/client_golang/prometheus"
@@ -176,6 +175,17 @@ type Server struct {
 	buildQueue     chan *queuedBuild
 	buildQueueOnce sync.Once
 
+	// buildSem bounds total concurrent toolchain invocations (queue worker AND
+	// synchronous stager/one-liner/shellcode builds) so a flood of generate
+	// requests cannot exhaust CPU/RAM. Lazily initialized on first submit.
+	buildSem chan struct{}
+
+	// transientArtifacts tracks generated files (stager/one-liner builds) that
+	// are served once and never tracked as BuildJobs, so they must be reaped
+	// separately to avoid unbounded growth of data/agents.
+	transientArtifacts   map[string]time.Time
+	transientArtifactsMu sync.Mutex
+
 	// Serializes lazy /stage stage-2 payload builds per token so concurrent
 	// fetches for the same token do not trigger redundant toolchain builds.
 	stageBuildLocks   map[string]*sync.Mutex
@@ -236,7 +246,7 @@ type Server struct {
 
 	// Fleet kill-switch broadcast state (mirrors the KillSwitch DB row; the
 	// beacon hot path reads this cache instead of querying on every check-in)
-	killSwitchMu   sync.RWMutex
+	killSwitchMu    sync.RWMutex
 	killSwitchArmed bool
 	killSwitchToken string
 
@@ -396,6 +406,9 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 	// Start periodic cleanup for login lockout entries
 	s.loginLockout.startCleanup(s.ctx, cfg.RateLimit.Login.Window)
 
+	// Start periodic cleanup for beacon seq-flood lockout entries (S5)
+	s.startSeqLockoutCleanup(s.ctx)
+
 	// Beacon payload encryption via ECDH session (cfg.Crypto.Key = "ecdh:")
 	if strings.HasPrefix(cfg.Crypto.Key, "ecdh:") {
 		sm, err := crypto.NewSessionManager()
@@ -427,6 +440,27 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 				select {
 				case <-ticker.C:
 					s.sessionManager.CleanupExpiredSessions(30 * time.Minute)
+				case <-s.ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+
+	// Periodic cleanup of orphaned v3 registration secrets: a secret is created
+	// before the toolchain runs, so a failed build leaves an unbound, unusable
+	// row. Sweep unbound secrets older than regSecretOrphanTTL so they don't
+	// accumulate indefinitely.
+	if s.regSecrets != nil {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			ticker := time.NewTicker(time.Hour)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					s.cleanupOrphanedRegSecrets(regSecretOrphanTTL)
 				case <-s.ctx.Done():
 					return
 				}
@@ -1188,6 +1222,9 @@ func (s *Server) cleanupStaleMapEntries() {
 }
 
 func (s *Server) offlineThreshold() time.Duration {
+	if s.cfg == nil {
+		return time.Duration(DefaultOfflineThresholdSec) * time.Second
+	}
 	d := s.cfg.Server.OfflineThreshold
 	if d < 1 {
 		slog.Warn("OfflineThreshold is invalid, using default", "configured", d, "default", DefaultOfflineThresholdSec)
@@ -1494,8 +1531,8 @@ func (s *Server) Run() error {
 			rdID := strings.TrimPrefix(targetID, redirectorTargetPrefix)
 			s.db.Model(&db.Redirector{}).Where("id = ?", rdID).Update("status", "down")
 			s.broadcastOperatorEvent(map[string]interface{}{
-				"type":         "redirector_update",
-				"action":       "burned",
+				"type":          "redirector_update",
+				"action":        "burned",
 				"redirector_id": rdID,
 			})
 			return
@@ -1647,6 +1684,10 @@ func (s *Server) Run() error {
 	}
 
 	slog.Info("Starting ForgeC2 server", "addr", addr, "tls", s.cfg.Server.TLSEnabled)
+
+	if s.cfg.Server.GeoIPEnabled {
+		slog.Warn("GeoIP lookups are ENABLED: the public IP of every beaconing host will be sent to the third-party service ip-api.com. Disable server.geoip_enabled unless this exfiltration is acceptable for the engagement.")
+	}
 
 	s.httpServer = s.newHTTPServer(addr)
 	if s.cfg.Server.TLSEnabled {
@@ -1975,83 +2016,6 @@ func (s *Server) periodicRPortFwdCleanup() {
 	}
 }
 
-// requeueStaleTasks retries only tasks whose delivery was never acknowledged.
-// Acknowledged tasks may still be executing and must never be dispatched twice.
-func (s *Server) requeueStaleTasks() {
-	cutoff := time.Now().Add(-StaleRunningTaskTimeout)
-	var staleTasks []db.Task
-	if err := s.db.Where("status = ? AND claimed_at < ? AND acknowledged_at IS NULL", "running", cutoff).Limit(1000).Find(&staleTasks).Error; err != nil {
-		slog.Error("Failed to find stale running tasks", "error", err)
-		return
-	}
-	if len(staleTasks) == 0 {
-		return
-	}
-	taskIDs := make([]uint, len(staleTasks))
-	for i, t := range staleTasks {
-		taskIDs[i] = t.ID
-	}
-	if err := s.db.Model(&db.Task{}).Where("id IN ?", taskIDs).
-		Updates(map[string]interface{}{"status": "pending", "claimed_by": "", "claimed_at": time.Time{}}).Error; err != nil {
-		slog.Error("Failed to requeue stale running tasks", "count", len(taskIDs), "error", err)
-		return
-	}
-	slog.Info("Requeued stale running tasks to pending", "count", len(staleTasks))
-}
-
-// failStaleAcknowledgedTasks marks tasks that were acknowledged by an agent but
-// never produced a result. Acknowledged tasks may still be executing, so they
-// must never be dispatched twice; after AckedTaskResultTimeout they are failed
-// rather than left "running" forever.
-func (s *Server) failStaleAcknowledgedTasks() {
-	cutoff := time.Now().Add(-AckedTaskResultTimeout)
-	var staleTasks []db.Task
-	if err := s.db.Where("status = ? AND acknowledged_at IS NOT NULL AND acknowledged_at < ?", "running", cutoff).Limit(1000).Find(&staleTasks).Error; err != nil {
-		slog.Error("Failed to find stale acknowledged tasks", "error", err)
-		return
-	}
-	if len(staleTasks) == 0 {
-		return
-	}
-	taskIDs := make([]uint, len(staleTasks))
-	for i, t := range staleTasks {
-		taskIDs[i] = t.ID
-	}
-	if err := s.db.Model(&db.Task{}).Where("id IN ?", taskIDs).
-		Updates(map[string]interface{}{
-			"status": "failed",
-			"error":  "task acknowledged but no result received within timeout",
-			"result": "",
-		}).Error; err != nil {
-		slog.Error("Failed to fail stale acknowledged tasks", "count", len(taskIDs), "error", err)
-		return
-	}
-	slog.Info("Failed stale acknowledged tasks with no result", "count", len(staleTasks))
-}
-
-// reconcilePendingTaskCounts recomputes the in-memory pending task counter
-// from the DB to fix any drift caused by unusual task completion paths.
-func (s *Server) reconcilePendingTaskCounts() {
-	var results []struct {
-		AgentID string
-		Count   int
-	}
-	if err := s.db.Model(&db.Task{}).
-		Select("agent_id, COUNT(*) as count").
-		Where("status IN ?", []string{"pending", "running"}).
-		Group("agent_id").
-		Find(&results).Error; err != nil {
-		slog.Error("Failed to reconcile pending task counts", "error", err)
-		return
-	}
-	s.agentPendingTasksMu.Lock()
-	clear(s.agentPendingTasks)
-	for _, r := range results {
-		s.agentPendingTasks[r.AgentID] = r.Count
-	}
-	s.agentPendingTasksMu.Unlock()
-}
-
 func itoa(i int) string {
 	return strconv.Itoa(i)
 }
@@ -2209,125 +2173,6 @@ func (s *Server) ActivityMiddleware() gin.HandlerFunc {
 		}()
 		c.Next()
 	}
-}
-
-// getAgentOrFail fetches agent by ID. On failure writes JSON 404 and returns false.
-func (s *Server) getAgentOrFail(c *gin.Context, id string) (db.Implant, bool) {
-	var agent db.Implant
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
-		slog.Error("Agent not found", "agent_id", id, "error", err)
-		respondError(c, http.StatusNotFound, "agent not found")
-		return agent, false
-	}
-	return agent, true
-}
-
-// createTask creates and persists a new pending task. Returns the task or error.
-func (s *Server) createTask(agentID, taskType, command, shell, path, data string, offset, size int64) (*db.Task, error) {
-	// Validate task type against the registry
-	if !IsKnownTaskType(taskType) && !protocol.ValidTaskType(taskType) {
-		return nil, fmt.Errorf("unknown task type: %s", taskType)
-	}
-
-	// Validate command length to prevent abuse
-	if len(command) > MaxCommandLength {
-		return nil, fmt.Errorf("command too long (max %d characters)", MaxCommandLength)
-	}
-
-	// Validate required parameters from the registry metadata
-	if info, ok := getTaskTypeInfo(taskType); ok {
-		for _, p := range info.Parameters {
-			if p.Required {
-				switch p.Name {
-				case "command":
-					if command == "" {
-						return nil, fmt.Errorf("task type %s requires 'command' parameter", taskType)
-					}
-				case "shell":
-					if shell == "" {
-						return nil, fmt.Errorf("task type %s requires 'shell' parameter", taskType)
-					}
-				case "path":
-					if path == "" {
-						return nil, fmt.Errorf("task type %s requires 'path' parameter", taskType)
-					}
-				case "data":
-					if data == "" {
-						return nil, fmt.Errorf("task type %s requires 'data' parameter", taskType)
-					}
-				}
-			}
-		}
-	}
-
-	// Per-agent task queue depth limit — prevents a single compromised agent from flooding the queue
-	s.agentPendingTasksMu.Lock()
-	pending := s.agentPendingTasks[agentID]
-	if pending >= MaxPendingTasksPerAgent {
-		s.agentPendingTasksMu.Unlock()
-		return nil, fmt.Errorf("agent %s has %d pending tasks (limit %d)", agentID, pending, MaxPendingTasksPerAgent)
-	}
-	s.agentPendingTasks[agentID] = pending + 1
-	s.agentPendingTasksMu.Unlock()
-
-	task := db.Task{
-		AgentID: agentID,
-		Type:    taskType,
-		Command: command,
-		Shell:   shell,
-		Path:    path,
-		Data:    data,
-		Offset:  offset,
-		Size:    size,
-		Status:  "pending",
-	}
-
-	// Two-man rule: when enabled, dangerous task types are created in
-	// pending_approval state and require an operator (different from the
-	// creator) to approve them before the beacon can claim them.
-	if s.cfg != nil && s.cfg.Security.RequireApproval {
-		if info, ok := getTaskTypeInfo(taskType); ok && info.RequiresApproval {
-			task.Status = TaskStatusPendingApproval
-		}
-	}
-	if err := s.db.Create(&task).Error; err != nil {
-		s.agentPendingTasksMu.Lock()
-		s.agentPendingTasks[agentID]--
-		s.agentPendingTasksMu.Unlock()
-		return nil, err
-	}
-	if s.pluginManager != nil {
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
-			s.pluginManager.ExecuteHook(s.ctx, plugin.Event{
-				Type:      plugin.EventTaskCreated,
-				Timestamp: time.Now(),
-				AgentID:   agentID,
-				Payload: map[string]interface{}{
-					"task_id":   task.ID,
-					"task_type": taskType,
-					"command":   command,
-				},
-			})
-		}()
-	}
-	s.metrics.TasksTotal.Inc()
-	return &task, nil
-}
-
-// dispatchTask logs the audit action, broadcasts the update via WS, and returns success JSON.
-// Sets CreatedBy from the authenticated user in context.
-func (s *Server) dispatchTask(c *gin.Context, task *db.Task, auditAction, details string) {
-	// Set task attribution from context
-	user, _ := c.Get("user")
-	if username, ok := user.(string); ok && username != "" && task.CreatedBy == "" {
-		task.CreatedBy = username
-		s.db.Model(task).Update("created_by", username)
-	}
-	s.LogAuditRecord(c, auditAction, "agent", task.AgentID, details, true, nil)
-	s.broadcastTaskUpdate(task.AgentID, *task)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
 }
 
 // handleHealthCheck provides health/ready endpoints for monitoring

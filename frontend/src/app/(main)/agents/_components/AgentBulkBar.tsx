@@ -74,9 +74,9 @@ export function AgentBulkBar({
               {bulkResults.map((r, i) => (
                 <div key={r.id || i} className="flex items-center justify-between px-3 py-2 bg-muted rounded-xl text-xs">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-white text-(--fs-micro-sm) font-bold shrink-0 ${
-                      r.type === "kill" ? "bg-orange-500" :
-                      r.type === "uninstall" ? "bg-red-500" :
+                    <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-primary-foreground text-(--fs-micro-sm) font-bold shrink-0 ${
+                      r.type === "kill" ? "bg-chart-4" :
+                      r.type === "uninstall" ? "bg-destructive" :
                       "bg-primary/100"
                     }`}>
                       {r.type === "kill" ? <Power className="w-3 h-3" /> :

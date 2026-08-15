@@ -50,7 +50,7 @@ export default function RootLayout({
               if (t === 'dark') dark = true;
               else if (t === 'light') dark = false;
               else if (t === 'system') dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-              else dark = true; /* new users default to dark */
+              else dark = true;
               if (dark) document.documentElement.classList.add('dark');
             } catch(e){ /* silent */ }
             try {

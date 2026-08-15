@@ -9,13 +9,21 @@ import (
 
 // Smoke test: generate a real Windows agent with the config-blob ldflags to
 // ensure the full build pipeline (go mod tidy + go build + blob injection)
-// produces a working binary on every supported Windows arch.
+// produces a working binary on supported Windows arches, and that unsupported
+// arches (386) are rejected loudly rather than silently built as amd64.
 func TestSmokeGenerateWindowsEXE(t *testing.T) {
 	if os.Getenv("FORGEC2_SMOKE_BUILD") != "1" {
 		t.Skip("set FORGEC2_SMOKE_BUILD=1 to run the real agent build")
 	}
-	for _, arch := range []string{"amd64", "386"} {
-		t.Run("windows-"+arch, func(t *testing.T) {
+	for _, tc := range []struct {
+		arch    string
+		wantErr bool
+	}{
+		{"amd64", false},
+		{"arm64", false},
+		{"386", true},
+	} {
+		t.Run("windows-"+tc.arch, func(t *testing.T) {
 			outDir := t.TempDir()
 			cfg := ImplantConfig{
 				C2URL:           "http://127.0.0.1:8080",
@@ -28,11 +36,17 @@ func TestSmokeGenerateWindowsEXE(t *testing.T) {
 				ListenerID:      1,
 				Filename:        "smoketest",
 				BeaconTransport: "http",
-				Architecture:    arch,
+				Architecture:    tc.arch,
 			}
 			path, err := GenerateWindowsEXE(cfg, outDir)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("GenerateWindowsEXE(%s) expected rejection, got path %q", tc.arch, path)
+				}
+				return
+			}
 			if err != nil {
-				t.Fatalf("GenerateWindowsEXE(%s) failed: %v", arch, err)
+				t.Fatalf("GenerateWindowsEXE(%s) failed: %v", tc.arch, err)
 			}
 			if _, err := os.Stat(path); err != nil {
 				t.Fatalf("output missing: %v", err)

@@ -5,11 +5,13 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { Archive, Clock, Download, HardDrive, RefreshCw, Upload } from "lucide-react";
-import { EmptyState, Spinner } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Spinner } from "@/components/ui/spinner";
 import { formatTime, formatSize } from "@/lib/utils";
 
 interface BackupInfo {
@@ -96,30 +98,30 @@ export default function BackupSection() {
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-4">
+      <div className="bg-warning/10 border-b border-warning/20 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center">
-            <Archive className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <Archive className="w-4 h-4 text-warning" />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-foreground">{t("settings.backup.title")}</h2>
-            <p className="text-xs text-amber-100">{t("settings.backup.subtitle")}</p>
+            <p className="text-xs text-warning-foreground">{t("settings.backup.subtitle")}</p>
           </div>
         </div>
       </div>
 
       <div className="p-4 sm:p-5 space-y-5">
         <div className="flex flex-wrap gap-3">
-          <Button onClick={handleCreateBackup} disabled={creating} className="px-4 h-10 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+          <Button onClick={handleCreateBackup} size="lg" disabled={creating} className="px-4 bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors disabled:opacity-50">
             {creating ? <Spinner size="xs" /> : <Archive className="w-4 h-4" />}
             {t("settings.backup.create")}
           </Button>
-          <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="px-4 h-10 bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 dark:hover:bg-emerald-800 text-emerald-700 dark:text-emerald-400 rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+          <Button onClick={() => fileInputRef.current?.click()} size="lg" disabled={uploading} className="px-4 bg-success/15 hover:bg-success/20 dark:hover:bg-success/60 text-success text-sm font-medium transition-colors disabled:opacity-50">
             {uploading ? <Spinner size="xs" /> : <Upload className="w-4 h-4" />}
             {t("settings.backup.upload_restore")}
           </Button>
-          <input ref={fileInputRef} type="file" accept=".db,.fbk" onChange={handleUploadRestore} />
-          <Button onClick={loadBackups} disabled={loading} variant="ghost" className="px-3 h-10 rounded-xl text-sm text-muted-foreground">
+          <Input ref={fileInputRef} type="file" accept=".db,.fbk" onChange={handleUploadRestore} className="hidden" />
+          <Button onClick={loadBackups} size="lg" disabled={loading} variant="ghost" className="px-3 text-sm text-muted-foreground">
             {loading ? <Spinner size="xs" /> : <RefreshCw className="w-4 h-4" />}
           </Button>
         </div>
@@ -154,7 +156,7 @@ export default function BackupSection() {
                   }} className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground">
                     <Download className="w-3.5 h-3.5" />
                   </Button>
-                  <Button variant="ghost" size="sm" disabled={restoring === b.name} onClick={() => setConfirmRestore(b)} className="h-8 px-3 text-xs text-amber-600 dark:text-amber-400 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/20">
+                  <Button variant="ghost" size="sm" disabled={restoring === b.name} onClick={() => setConfirmRestore(b)} className="h-8 px-3 text-xs text-warning hover:text-warning hover:bg-warning/15">
                     {restoring === b.name ? <Spinner size="xs" /> : t("settings.backup.restore")}
                   </Button>
                 </div>
@@ -164,22 +166,7 @@ export default function BackupSection() {
         )}
       </div>
 
-      <Dialog open={!!confirmRestore} onOpenChange={(open) => { if (!open) setConfirmRestore(null); }}>
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>{t("settings.backup.restore_title")}</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            {t("settings.backup.restore_message").replace("{name}", confirmRestore?.name ?? "")}
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmRestore(null)}>{t("common.cancel")}</Button>
-            <Button variant="destructive" onClick={() => { if (confirmRestore) handleRestoreFromServer(confirmRestore.name); }}>
-              Restore &amp; Restart
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmModal open={!!confirmRestore} title={t("settings.backup.restore_title")} message={t("settings.backup.restore_message").replace("{name}", confirmRestore?.name ?? "")} danger onConfirm={() => { if (confirmRestore) handleRestoreFromServer(confirmRestore.name); }} onCancel={() => setConfirmRestore(null)} />
     </Card>
   );
 }

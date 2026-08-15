@@ -1,6 +1,6 @@
 import React from "react";
 import type { ReactNode } from "react";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,14 +25,15 @@ interface BinaryPanelProps {
   busy: boolean;
   result: ReactNode;
   onGenerate: () => void;
+  canGenerate?: boolean;
 }
 
 const VARIANT_CONFIG: Record<BinaryVariant, { tint: string; icon: ReactNode; titleKey: string; subtitleKey: string; btnKey: string; showP2P: boolean }> = {
-  exe: { tint: "bg-warning/10 text-amber-600 dark:text-amber-400", icon: <AppWindow className="w-5 h-5" />, titleKey: "generate.panel.exe_title", subtitleKey: "generate.panel.exe_subtitle", btnKey: "generate.panel.generate_exe", showP2P: true },
+  exe: { tint: "bg-warning/10 text-warning", icon: <AppWindow className="w-5 h-5" />, titleKey: "generate.panel.exe_title", subtitleKey: "generate.panel.exe_subtitle", btnKey: "generate.panel.generate_exe", showP2P: true },
   dll: { tint: "bg-destructive/10 text-destructive", icon: <Puzzle className="w-5 h-5" />, titleKey: "generate.panel.dll_title", subtitleKey: "generate.panel.dll_subtitle", btnKey: "generate.panel.generate_dll", showP2P: false },
 };
 
-export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setForm, busy, result, onGenerate }: BinaryPanelProps) {
+export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setForm, busy, result, onGenerate, canGenerate = true }: BinaryPanelProps) {
   const { t } = useI18n();
   const cfg = VARIANT_CONFIG[variant];
   const id = `binary-${variant}`;
@@ -45,7 +46,7 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
       badge={<BuildStatusBadge busy={busy} result={result} />}
       footer={
         <>
-          <Button type="button" onClick={onGenerate} disabled={busy} className={BTN_CLASS}>
+          <Button type="button" onClick={onGenerate} disabled={busy || !canGenerate} title={!canGenerate ? t("generate.toast.select_listener_first") : undefined} className={BTN_CLASS}>
             {busy ? <><Spinner /> {t("generate.panel.generating")}</> : <><Download className="w-4 h-4" /> {t(cfg.btnKey)}</>}
           </Button>
           <BuildResult busy={busy} result={result} />
@@ -167,14 +168,15 @@ interface UnixPanelProps {
   busy: boolean;
   result: ReactNode;
   onGenerate: () => void;
+  canGenerate?: boolean;
 }
 
 const UNIX_CONFIG: Record<UnixVariant, { tint: string; icon: ReactNode; titleKey: string; subtitleKey: string; btnKey: string }> = {
-  linux: { tint: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400", icon: <HardDrive className="w-5 h-5" />, titleKey: "generate.panel.elf_title", subtitleKey: "generate.panel.unix_subtitle", btnKey: "generate.panel.generate_elf" },
+  linux: { tint: "bg-success/10 text-success", icon: <HardDrive className="w-5 h-5" />, titleKey: "generate.panel.elf_title", subtitleKey: "generate.panel.unix_subtitle", btnKey: "generate.panel.generate_elf" },
   macos: { tint: "bg-primary/10 text-primary", icon: <Apple className="w-5 h-5" />, titleKey: "generate.panel.macos_title", subtitleKey: "generate.panel.unix_subtitle", btnKey: "generate.panel.generate_macos" },
 };
 
-export const UnixPanel = React.memo(function UnixPanel({ variant, form, setForm, busy, result, onGenerate }: UnixPanelProps) {
+export const UnixPanel = React.memo(function UnixPanel({ variant, form, setForm, busy, result, onGenerate, canGenerate = true }: UnixPanelProps) {
   const { t } = useI18n();
   const cfg = UNIX_CONFIG[variant];
   const id = `unix-${variant}`;
@@ -187,7 +189,7 @@ export const UnixPanel = React.memo(function UnixPanel({ variant, form, setForm,
       badge={<BuildStatusBadge busy={busy} result={result} />}
       footer={
         <>
-          <Button type="button" onClick={onGenerate} disabled={busy} className={BTN_CLASS}>
+          <Button type="button" onClick={onGenerate} disabled={busy || !canGenerate} title={!canGenerate ? t("generate.toast.select_listener_first") : undefined} className={BTN_CLASS}>
             {busy ? <><Spinner /> {t("generate.panel.generating")}</> : <><Download className="w-4 h-4" /> {t(cfg.btnKey)}</>}
           </Button>
           <BuildResult busy={busy} result={result} />
@@ -239,14 +241,15 @@ interface StagerPanelProps {
   busy: boolean;
   result: ReactNode;
   onGenerate: () => void;
+  canGenerate?: boolean;
 }
 
 const STAGER_CONFIG: Record<StagerVariant, { tint: string; icon: ReactNode; titleKey: string; subtitleKey: string }> = {
-  windows: { tint: "bg-violet-500/10 text-violet-600 dark:text-violet-400", icon: <PackageOpen className="w-5 h-5" />, titleKey: "generate.panel.stager_win_title", subtitleKey: "generate.panel.stager_subtitle" },
-  linux: { tint: "bg-teal-500/10 text-teal-600 dark:text-teal-400", icon: <Package className="w-5 h-5" />, titleKey: "generate.panel.stager_linux_title", subtitleKey: "generate.panel.stager_subtitle" },
+  windows: { tint: "bg-chart-6/violet text-chart-6", icon: <PackageOpen className="w-5 h-5" />, titleKey: "generate.panel.stager_win_title", subtitleKey: "generate.panel.stager_subtitle" },
+  linux: { tint: "bg-chart-2/10 text-chart-2 dark:text-chart-2", icon: <Package className="w-5 h-5" />, titleKey: "generate.panel.stager_linux_title", subtitleKey: "generate.panel.stager_subtitle" },
 };
 
-export const StagerPanel = React.memo(function StagerPanel({ variant, form, setForm, busy, result, onGenerate }: StagerPanelProps) {
+export const StagerPanel = React.memo(function StagerPanel({ variant, form, setForm, busy, result, onGenerate, canGenerate = true }: StagerPanelProps) {
   const { t } = useI18n();
   const cfg = STAGER_CONFIG[variant];
   const id = `stager-${variant}`;
@@ -259,7 +262,7 @@ export const StagerPanel = React.memo(function StagerPanel({ variant, form, setF
       badge={<BuildStatusBadge busy={busy} result={result} />}
       footer={
         <>
-          <Button type="button" onClick={onGenerate} disabled={busy} className={BTN_CLASS}>
+          <Button type="button" onClick={onGenerate} disabled={busy || !canGenerate} title={!canGenerate ? t("generate.toast.select_listener_first") : undefined} className={BTN_CLASS}>
             {busy ? <><Spinner /> {t("generate.panel.generating")}</> : <><Download className="w-4 h-4" /> {t("generate.panel.generate_loader")}</>}
           </Button>
           <BuildResult busy={busy} result={result} />
@@ -281,25 +284,26 @@ export const StagerPanel = React.memo(function StagerPanel({ variant, form, setF
 // ─── ShellcodePanel ────────────────────────────────────────────
 
 export const ShellcodePanel = React.memo(function ShellcodePanel({
-  form, setForm, busy, result, onGenerate,
+  form, setForm, busy, result, onGenerate, canGenerate = true,
 }: {
   form: ShellcodeForm;
   setForm: React.Dispatch<React.SetStateAction<ShellcodeForm>>;
   busy: boolean;
   result: ReactNode;
   onGenerate: () => void;
+  canGenerate?: boolean;
 }) {
   const { t } = useI18n();
   return (
     <PayloadCard
       icon={<Binary className="w-5 h-5" />}
-      tint="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
+      tint="bg-chart-2/10 text-info"
       title={t("generate.panel.shellcode_title")}
       subtitle={t("generate.panel.shellcode_subtitle")}
       badge={<BuildStatusBadge busy={busy} result={result} />}
       footer={
         <>
-          <Button type="button" onClick={onGenerate} disabled={busy} className={BTN_CLASS}>
+          <Button type="button" onClick={onGenerate} disabled={busy || !canGenerate} title={!canGenerate ? t("generate.toast.select_listener_first") : undefined} className={BTN_CLASS}>
             {busy ? <><Spinner /> {t("generate.panel.generating")}</> : <><Download className="w-4 h-4" /> {t("generate.panel.generate_shellcode")}</>}
           </Button>
           <BuildResult busy={busy} result={result} />
@@ -321,7 +325,7 @@ export const ShellcodePanel = React.memo(function ShellcodePanel({
 // ─── DonutPanel ────────────────────────────────────────────────
 
 export const DonutPanel = React.memo(function DonutPanel({
-  form, setForm, busy, result, onGenerate, fileRef,
+  form, setForm, busy, result, onGenerate, fileRef, canGenerate = true,
 }: {
   form: DonutForm;
   setForm: React.Dispatch<React.SetStateAction<DonutForm>>;
@@ -329,18 +333,19 @@ export const DonutPanel = React.memo(function DonutPanel({
   result: ReactNode;
   onGenerate: () => void;
   fileRef: React.RefObject<HTMLInputElement | null>;
+  canGenerate?: boolean;
 }) {
   const { t } = useI18n();
   return (
     <PayloadCard
       icon={<Disc className="w-5 h-5" />}
-      tint="bg-orange-500/10 text-orange-600 dark:text-orange-400"
+      tint="bg-warning/10 text-warning"
       title={t("generate.panel.donut_title")}
       subtitle={t("generate.panel.donut_subtitle")}
       badge={<BuildStatusBadge busy={busy} result={result} />}
       footer={
         <>
-          <Button type="button" onClick={onGenerate} disabled={busy} className={BTN_CLASS}>
+          <Button type="button" onClick={onGenerate} disabled={busy || !canGenerate} title={!canGenerate ? t("generate.toast.select_listener_first") : undefined} className={BTN_CLASS}>
             {busy ? <><Spinner /> {t("generate.panel.generating")}</> : <><Download className="w-4 h-4" /> {t("generate.panel.generate_donut")}</>}
           </Button>
           <BuildResult busy={busy} result={result} />
@@ -349,7 +354,7 @@ export const DonutPanel = React.memo(function DonutPanel({
     >
       <div>
         <FieldLabel>{t("generate.panel.dotnet_assembly")}</FieldLabel>
-        <input aria-label={t("generate.panel.upload_assembly_aria")} name="donut-assembly" ref={fileRef} type="file" accept=".exe,.dll" onChange={(e) => setForm({ ...form, assembly: e.target.files?.[0] || null })} className="w-full text-sm file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/10 dark:file:bg-indigo-900/30 dark:file:text-primary dark:hover:file:bg-indigo-800/40" />
+        <Input aria-label={t("generate.panel.upload_assembly_aria")} name="donut-assembly" ref={fileRef} type="file" accept=".exe,.dll" onChange={(e) => setForm({ ...form, assembly: e.target.files?.[0] || null })} />
       </div>
       <div>
         <FieldLabel>{t("generate.panel.arch")}</FieldLabel>
@@ -386,7 +391,7 @@ export const DonutPanel = React.memo(function DonutPanel({
 // ─── PS1Panel ──────────────────────────────────────────────────
 
 export const PS1Panel = React.memo(function PS1Panel({
-  form, setForm, busy, result, code, originalLen, obfuscatedLen, onGenerate,
+  form, setForm, busy, result, code, originalLen, obfuscatedLen, onGenerate, canGenerate = true,
 }: {
   form: PS1Form;
   setForm: React.Dispatch<React.SetStateAction<PS1Form>>;
@@ -396,6 +401,7 @@ export const PS1Panel = React.memo(function PS1Panel({
   originalLen?: number;
   obfuscatedLen?: number;
   onGenerate: () => void;
+  canGenerate?: boolean;
 }) {
   const { t } = useI18n();
   return (
@@ -407,7 +413,7 @@ export const PS1Panel = React.memo(function PS1Panel({
       badge={<BuildStatusBadge busy={busy} result={result} />}
       footer={
         <>
-          <Button type="button" onClick={onGenerate} disabled={busy} className={BTN_CLASS}>
+          <Button type="button" onClick={onGenerate} disabled={busy || !canGenerate} title={!canGenerate ? t("generate.toast.select_listener_first") : undefined} className={BTN_CLASS}>
             {busy ? <><Spinner /> {t("generate.panel.generating")}</> : <><Wand2 className="w-4 h-4" /> {t("generate.panel.generate_ps1")}</>}
           </Button>
           <BuildResult busy={busy} result={result} />
@@ -429,12 +435,12 @@ export const PS1Panel = React.memo(function PS1Panel({
       {code ? (
         <div className="mt-1">
           <div className="mb-2 flex items-center justify-between">
-            <span className="flex items-center gap-x-1.5 text-xs font-medium text-emerald-600">
+            <span className="flex items-center gap-x-1.5 text-xs font-medium text-success">
               <CheckCircle2 className="h-4 w-4" /> {t("generate.panel.generated_sizes", { original: originalLen ?? 0, obfuscated: obfuscatedLen ?? 0 })}
             </span>
             <CopyButton text={code} label={t("generate.panel.copy")} size="xs" />
           </div>
-          <Textarea aria-label={t("generate.panel.ps1_title")} name="ps1-output" readOnly value={code} className="h-48 resize-none bg-background p-3 font-mono text-xs text-emerald-400 border-border" />
+          <Textarea aria-label={t("generate.panel.ps1_title")} name="ps1-output" readOnly value={code} className="h-48 resize-none bg-background p-3 font-mono text-xs text-chart-1 border-border" />
           <div className="mt-1 flex items-center gap-x-1.5 text-xs text-muted-foreground"><Info className="h-4 w-4" /> {t("generate.panel.paste_ps")}</div>
         </div>
       ) : null}

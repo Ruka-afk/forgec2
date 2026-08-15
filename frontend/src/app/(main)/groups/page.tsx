@@ -1,10 +1,12 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
-import { PageHeader, FieldError } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
+import { FieldError } from "@/components/ui/field-error";
 import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -13,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Layers, Plus } from "lucide-react";
 
@@ -30,9 +33,15 @@ interface AgentGroup {
 
 export default function GroupsPage() {
   const { t } = useI18n();
-  const [groups, setGroups] = useState<AgentGroup[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error, refresh: fetchGroups } = useApiResource<AgentGroup[]>({
+    fetcher: async () => {
+      const data = await api.get(paths.groups.list);
+      return normalizeListEnvelope(data, ["groups", "data"]) as AgentGroup[];
+    },
+    toastThrottleMs: 10_000,
+    errorMessage: t("groups.toast.load_failed"),
+  });
+  const groups = data ?? [];
   const [showModal, setShowModal] = useState(false);
   const [editGroup, setEditGroup] = useState<AgentGroup | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -41,24 +50,6 @@ export default function GroupsPage() {
   const [formColor, setFormColor] = useState("#2ecc71");
   const [formParent, setFormParent] = useState("");
   const [formErrors, setFormErrors] = useState<{ name?: string; desc?: string }>({});
-
-  const fetchGroups = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.get(paths.groups.list);
-      setGroups(normalizeListEnvelope(data, ["groups", "data"]) as AgentGroup[]);
-    } catch (e) {
-      setGroups([]);
-      const msg = e instanceof Error ? e.message : t("groups.toast.load_failed");
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => { fetchGroups(); }, [fetchGroups]);
 
   function openCreate() {
     setEditGroup(null);
@@ -128,10 +119,9 @@ export default function GroupsPage() {
   }
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("groups.title")} subtitle={t("groups.subtitle")}>
+    <PageContainer title={t("groups.title")} subtitle={t("groups.subtitle")} actions={<>
         <Button onClick={openCreate}><Plus className="w-4 h-4" /> {t("groups.new")}</Button>
-      </PageHeader>
+      </>}>
       <DataState
         loading={loading}
         error={error}
@@ -161,13 +151,13 @@ export default function GroupsPage() {
           <div className="space-y-4">
             <div>
               <Label htmlFor="group-name">{t("groups.field_name")} *</Label>
-              <Input id="group-name" aria-label={t("groups.a11y_name")} value={formName} onChange={e => { setFormName(e.target.value); if (formErrors.name) setFormErrors({ ...formErrors, name: undefined }); }} placeholder={t("groups.name_placeholder")} />
-              <FieldError>{formErrors.name}</FieldError>
+              <Input id="group-name" aria-label={t("groups.a11y_name")} value={formName} onChange={e => { setFormName(e.target.value); if (formErrors.name) setFormErrors({ ...formErrors, name: undefined }); }} placeholder={t("groups.name_placeholder")} aria-invalid={!!formErrors.name} aria-describedby={formErrors.name ? "group-name-error" : undefined} />
+              <FieldError id="group-name-error">{formErrors.name}</FieldError>
             </div>
             <div>
               <Label htmlFor="group-desc">{t("groups.field_desc")}</Label>
-              <Input id="group-desc" aria-label={t("groups.a11y_desc")} value={formDesc} onChange={e => { setFormDesc(e.target.value); if (formErrors.desc) setFormErrors({ ...formErrors, desc: undefined }); }} placeholder={t("groups.desc_placeholder")} />
-              <FieldError>{formErrors.desc}</FieldError>
+              <Input id="group-desc" aria-label={t("groups.a11y_desc")} value={formDesc} onChange={e => { setFormDesc(e.target.value); if (formErrors.desc) setFormErrors({ ...formErrors, desc: undefined }); }} placeholder={t("groups.desc_placeholder")} aria-invalid={!!formErrors.desc} aria-describedby={formErrors.desc ? "group-desc-error" : undefined} />
+              <FieldError id="group-desc-error">{formErrors.desc}</FieldError>
             </div>
             <div>
               <Label htmlFor="group-color">{t("groups.field_color")}</Label>
@@ -194,18 +184,7 @@ export default function GroupsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={deleteId !== null} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{t("groups.delete_title")}</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">{t("groups.delete_msg")}</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>{t("groups.cancel")}</Button>
-            <Button variant="destructive" onClick={handleDelete}>{t("groups.delete")}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+      <ConfirmModal open={deleteId !== null} title={t("groups.delete_title")} message={t("groups.delete_msg")} danger onConfirm={handleDelete} onCancel={() => setDeleteId(null)} />
+    </PageContainer>
   );
 }

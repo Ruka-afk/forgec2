@@ -7,12 +7,16 @@ import { paths } from "@/lib/api-paths";
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
-import { EmptyState, PageHeader, Spinner, StatCard } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
+import { Spinner } from "@/components/ui/spinner";
+import { StatCard } from "@/components/ui/animated-stat-card";
 import { toast } from "sonner";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-indicator";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -42,7 +46,6 @@ import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   PHASE_ORDER,
   PHASE_PHASE_COLORS,
-  STATUS_COLORS,
   type Campaign,
   type CampaignMITRE,
   type CampaignStats,
@@ -96,12 +99,16 @@ export default function CampaignPageContent() {
 
   return (
     <>
-      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("campaign.title")} subtitle={t("campaign.subtitle")}>
+      <PageContainer title={t("campaign.title")} subtitle={t("campaign.subtitle")} actions={<>
         <Button onClick={() => setShowCreate(true)}>
           <Plus className="w-4 h-4" />{t("campaign.new")}
         </Button>
-      </PageHeader>
+      </>}>
+
+      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+        <div className="font-semibold">{t("campaign.honesty_title")}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{t("campaign.honesty_desc")}</div>
+      </Card>
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="sm:max-w-md">
@@ -155,9 +162,7 @@ export default function CampaignPageContent() {
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedCampaign(c.id); } }}>
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 font-medium text-foreground">{c.name}</TableCell>
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5">
-                    <Badge className="text-white text-xs font-medium" style={{ background: STATUS_COLORS[c.status] || "#64748b" }}>
-                      {t(`campaign.status_${c.status}`)}
-                    </Badge>
+                    <StatusBadge status={c.status} label={t(`campaign.status_${c.status}`)} />
                   </TableCell>
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-muted-foreground">{c.agents?.length || 0}</TableCell>
                   <TableCell className="py-3 px-4 sm:py-3.5 sm:px-5 text-muted-foreground text-sm">{formatTime(c.created_at)}</TableCell>
@@ -174,7 +179,7 @@ export default function CampaignPageContent() {
         </Card>
       )}
       {modal}
-    </div>
+    </PageContainer>
     </>
   );
 }
@@ -277,7 +282,7 @@ function CampaignDetailView({
             <StatCard label={t("campaign.total_agents")} value={stats.total_agents} />
             <StatCard label={t("campaign.total_tasks")} value={stats.total_tasks} />
             <StatCard label={t("campaign.completed")} value={stats.completed_tasks} color="emerald" />
-            <StatCard label={t("campaign.failed")} value={stats.failed_tasks} color="red" />
+            <StatCard label={t("campaign.failed")} value={stats.failed_tasks} color="destructive" />
           </div>
 
           {/* Kill Chain Phase Progress Bar */}
@@ -308,15 +313,15 @@ function CampaignDetailView({
                         onClick={() => handlePhaseClick(phase)}
                         className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all cursor-pointer min-w-[80px] h-auto ${
                           expandedPhase === phase ? "ring-2 ring-primary" : ""
-                        } ${isCompleted ? "bg-emerald-500/15" : isPending ? "" : "bg-amber-500/15"}`}
+                        } ${isCompleted ? "bg-success/15" : isPending ? "" : "bg-warning/15"}`}
                         title={phase}
                       >
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white transition-colors ${
-                            isCompleted ? "bg-emerald-500" : isPending ? "bg-muted-foreground" : "bg-amber-500"
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                            isCompleted ? "bg-success text-success-foreground" : isPending ? "bg-muted-foreground text-white" : "bg-warning text-warning-foreground"
                           }`}>
                             {isCompleted ? <Check className="w-4 h-4" /> : isPending ? "" : <Play className="w-4 h-4" />}
                           </div>
-                          <span className={`text-(--fs-micro-sm) text-center leading-tight ${isCompleted ? "text-emerald-700 dark:text-emerald-400 font-medium" : isPending ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"}`}>
+                          <span className={`text-(--fs-micro-sm) text-center leading-tight ${isCompleted ? "text-success font-medium" : isPending ? "text-muted-foreground" : "text-warning"}`}>
                             {phase.split(" ").slice(0, 2).join("\n")}
                           </span>
                           {found && (
@@ -339,8 +344,8 @@ function CampaignDetailView({
                           <span className="font-mono">{task.task_type}</span>
                           <span className="text-muted-foreground">{task.hostname || task.agent_id?.slice(0, 8)}</span>
                           <span className={`${
-                            task.status === "completed" ? "text-emerald-500" :
-                            task.status === "failed" ? "text-destructive" : "text-amber-500"
+                            task.status === "completed" ? "text-success" :
+                            task.status === "failed" ? "text-destructive" : "text-warning"
                           }`}>{t(`tasks.${task.status}`)}</span>
                         </div>
                       ))}

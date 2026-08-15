@@ -12,12 +12,15 @@ import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import type { DashboardStats } from "@/types/agent";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { StatusDot } from "@/components/ui/status-dot";
+import { ConnectionDot } from "@/components/ui/connection-dot";
 import { Shield, ChevronDown } from "lucide-react";
-import { NAV_SECTIONS as navSections } from "@/lib/navigation";
+import { sidebarNavSections } from "@/lib/navigation";
 import {
   defaultSidebarSections as defaultSections,
   mergeSidebarSections,
@@ -102,13 +105,13 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
   const query = searching ? searchQuery.toLowerCase() : "";
 
   const filteredSections = searching
-    ? navSections.map((section) => ({
+    ? sidebarNavSections().map((section) => ({
         ...section,
         items: section.items.filter((item) =>
           t(item.labelKey).toLowerCase().includes(query)
         ),
       })).filter((section) => section.items.length > 0)
-    : navSections;
+    : sidebarNavSections();
 
   return (
     <nav className={collapsed ? 'flex flex-col items-center gap-1' : 'space-y-0 text-(--fs-body-sm)'}>
@@ -118,10 +121,13 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => toggleSection(section.titleKey)}
-              className={`w-full flex items-center gap-x-1 px-2 pt-1 pb-0.5 cursor-pointer select-none transition-colors hover:text-foreground justify-start ${idx > 0 ? 'mt-2.5 border-t border-border/40 pt-2.5' : ''}`}
+              onClick={() => { if (!section.pinned) toggleSection(section.titleKey); }}
+              disabled={section.pinned}
+              className={`w-full flex items-center gap-x-1 px-2 pt-1 pb-0.5 cursor-pointer select-none transition-colors hover:text-foreground justify-start disabled:opacity-100 disabled:cursor-default ${idx > 0 ? 'mt-2.5 border-t border-border/40 pt-2.5' : ''}`}
             >
-              <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform duration-200 ${(searching || sections[section.titleKey]) ? '' : '-rotate-90'}`} />
+              {!section.pinned && (
+                <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform duration-200 ${(searching || sections[section.titleKey]) ? '' : '-rotate-90'}`} />
+              )}
               <span className="mono-eyebrow text-muted-foreground/60">{t("section." + section.titleKey)}</span>
               {section.titleKey === "lab" && (
                 <Badge variant="secondary" className="ml-auto px-1.5 py-px text-(--fs-micro) leading-none rounded bg-warning/15 text-warning-foreground font-medium">
@@ -130,7 +136,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
               )}
             </Button>
           )}
-          {(searching || sections[section.titleKey]) && section.items.map((item) => {
+          {(searching || section.pinned || sections[section.titleKey]) && section.items.map((item) => {
             const Icon = item.icon;
             const linkEl = (
               <Link
@@ -145,10 +151,10 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
                 <span className="relative inline-flex">
                   <Icon className={collapsed ? 'w-5 h-5' : 'w-4 h-4'} />
                   {collapsed && item.badge === "agents" && stats != null && (stats.online_agents ?? 0) > 0 && (
-                    <span className="absolute -top-1 -right-2 w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <StatusDot tone="success" size="xs" className="absolute -top-1 -right-2" />
                   )}
                   {collapsed && item.badge === "listeners" && stats != null && (stats.total_listeners ?? 0) > 0 && (
-                    <span className="absolute -top-1 -right-2 w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <StatusDot tone="success" size="xs" className="absolute -top-1 -right-2" />
                   )}
                 </span>
                 {!collapsed && (
@@ -195,25 +201,25 @@ const SidebarFooter = memo(function SidebarFooter({ collapsed, connected, reconn
         <div className="space-y-1">
           <div className="mono-eyebrow text-muted-foreground/50">{t("sidebar.online_operators")}</div>
           {currentUsername && (
-            <div className="flex items-center gap-x-2 text-(--fs-xs-sm) text-foreground font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
-              <span className="truncate mono-cell">{t("sidebar.current_operator", { username: currentUsername })}</span>
-            </div>
-          )}
-          {onlineUsers.filter((u) => u.username !== currentUsername).map((u) => (
-            <div key={u.username} className="flex items-center gap-x-2 text-(--fs-xs-sm) text-muted-foreground">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-              <span className="truncate">{u.username}</span>
-            </div>
-          ))}
+              <div className="flex items-center gap-x-2 text-(--fs-xs-sm) text-foreground font-medium">
+                <StatusDot tone="success" size="xs" pulse />
+                <span className="truncate mono-cell">{t("sidebar.current_operator", { username: currentUsername })}</span>
+              </div>
+            )}
+            {onlineUsers.filter((u) => u.username !== currentUsername).map((u) => (
+              <div key={u.username} className="flex items-center gap-x-2 text-(--fs-xs-sm) text-muted-foreground">
+                <StatusDot tone="success" size="xs" />
+                <span className="truncate">{u.username}</span>
+              </div>
+            ))}
         </div>
       )}
       <div role="status" aria-live="polite" className="flex items-center gap-x-2 rounded-md bg-secondary/50 dark:bg-secondary/30 border border-border/40 px-2 py-1.5">
-        <span aria-hidden="true" className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : reconnectFailed ? "bg-red-500" : "bg-amber-500 animate-pulse"}`} />
+        <ConnectionDot connected={connected} reconnectFailed={reconnectFailed} />
         <span className="mono-cell text-(--fs-micro-sm) text-muted-foreground/80">
           {connected ? t("common.live") : t("common.disconnected")}
         </span>
-        {!connected && <span className={`ml-auto text-(--fs-micro) font-medium ${reconnectFailed ? "text-destructive" : "text-amber-500"}`}>{reconnectFailed ? t("sidebar.offline") : t("sidebar.reconnecting")}</span>}
+        {!connected && <span className={`ml-auto text-(--fs-micro) font-medium ${reconnectFailed ? "text-destructive" : "text-warning"}`}>{reconnectFailed ? t("sidebar.offline") : t("sidebar.reconnecting")}</span>}
       </div>
     </div>
   );
@@ -294,13 +300,13 @@ export default function Sidebar() {
       />
       {!collapsed && (
         <div className="px-2 pt-2">
-          <input
+          <Input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t("common.search") + "..."}
             aria-label={t("common.search")}
-            className="w-full h-8 px-2.5 text-(--fs-xs-sm) bg-secondary/50 border border-border rounded-xl placeholder:text-muted-foreground/70 focus:bg-card focus:border-border transition-colors"
+            className="h-8 bg-secondary/50 text-(--fs-xs-sm) placeholder:text-muted-foreground/70"
           />
         </div>
       )}

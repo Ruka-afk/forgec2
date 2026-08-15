@@ -5,7 +5,8 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
-import { PageHeader, Spinner } from "@/components/UI";
+import { Spinner } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,19 +84,20 @@ export default function DNSPage() {
 
   if (loading) {
     return (
-      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-        <PageHeader title={t("dns.title")} subtitle={t("dns.subtitle")} />
+      <PageContainer title={t("dns.title")} subtitle={t("dns.subtitle")}>
         <div className="flex items-center justify-center py-20">
           <Spinner size="lg" />
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={<><Globe className="w-4 h-4" />{t("dns.title")}</>} subtitle={t("dns.subtitle")}>
-        {status?.running ? (
+    <PageContainer
+      title={<><Globe className="w-4 h-4" />{t("dns.title")}</>}
+      subtitle={t("dns.subtitle")}
+      actions={
+        status?.running ? (
           <Button variant="destructive" size="sm" onClick={handleStop} disabled={actionLoading}>
             {actionLoading ? <Spinner size="xs" /> : <Square className="w-3.5 h-3.5" />}
             <span>{actionLoading ? t("dns.stopping") : t("dns.stop")}</span>
@@ -105,8 +107,9 @@ export default function DNSPage() {
             {actionLoading ? <Spinner size="xs" /> : <Play className="w-3.5 h-3.5" />}
             <span>{actionLoading ? t("dns.starting") : t("dns.start")}</span>
           </Button>
-        )}
-      </PageHeader>
+        )
+      }
+    >
 
       {/* Status Card */}
       <Card className="p-4 sm:p-5 mb-6">
@@ -249,6 +252,6 @@ export default function DNSPage() {
           </div>
         </div>
       </Card>
-    </div>
+    </PageContainer>
   );
 }

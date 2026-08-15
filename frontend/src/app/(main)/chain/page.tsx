@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 
-import { PageHeader, PageSpinner } from "@/components/UI";
+import { PageSpinner } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -118,11 +119,7 @@ export default function ChainPage() {
   }
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader
-        title={<span><Link className="w-4 h-4" />{t("chain.multi_hop")}</span>}
-        subtitle={t("chain.subtitle")}
-      />
+    <PageContainer title={<span><Link className="w-4 h-4" />{t("chain.multi_hop")}</span>} subtitle={t("chain.subtitle")}>
 
       {/* Agent Selector */}
       <Card className="p-4 mb-6">
@@ -287,6 +284,6 @@ export default function ChainPage() {
           </Button>
         </Card>
       )}
-    </div>
+    </PageContainer>
   );
 }

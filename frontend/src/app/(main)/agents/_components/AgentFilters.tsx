@@ -40,6 +40,7 @@ export function AgentFilters({
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex gap-2 flex-wrap">
           <SearchInput
+            id="agent-search"
             value={searchInput}
             onChange={setSearchInput}
             onClear={() => setSearchInput("")}
@@ -108,7 +109,7 @@ export function AgentFilters({
             </DropdownMenuContent>
           </DropdownMenu>
           <div className="hidden sm:flex items-center gap-1.5 ml-auto text-(--fs-xs-sm)">
-            {onlineCount > 0 && <Badge variant="secondary" className="gap-1 text-emerald-600 dark:text-emerald-400"><Wifi className="w-4 h-4" />{onlineCount}</Badge>}
+            {onlineCount > 0 && <Badge variant="secondary" className="gap-1 text-success"><Wifi className="w-4 h-4" />{onlineCount}</Badge>}
             {windowsCount > 0 && <Badge variant="secondary" className="gap-1"><Monitor className="w-4 h-4" />{windowsCount}</Badge>}
             {linuxCount > 0 && <Badge variant="secondary" className="gap-1"><Terminal className="w-4 h-4" />{linuxCount}</Badge>}
             {darwinCount > 0 && <Badge variant="secondary" className="gap-1"><Apple className="w-4 h-4" />{darwinCount}</Badge>}

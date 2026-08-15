@@ -1,7 +1,7 @@
 "use client";
 
 import { useI18n } from "@/lib/i18n";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +48,7 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-2 cursor-pointer">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="w-2 h-2 rounded-full bg-success" />
             <span className="text-sm text-muted-foreground">{t("ai.enable_ai")}</span>
           </span>
         </div>
@@ -91,10 +91,10 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
           <Checkbox checked={allowExecute} onCheckedChange={(v) => setAllowExecute(v === true)} className="mt-1" />
           <span>
             <span className="text-sm text-muted-foreground">{t("ai.allow_execute")}</span>
-            <span className="block text-(--fs-xs-sm) text-amber-600 dark:text-amber-400 mt-0.5">{t("ai.allow_execute_warn")}</span>
+            <span className="block text-(--fs-xs-sm) text-warning mt-0.5">{t("ai.allow_execute_warn")}</span>
           </span>
         </Label>
-        <Button type="button" onClick={onSave} disabled={configSaving} className="w-full h-10">
+        <Button type="button" onClick={onSave} size="lg" disabled={configSaving} className="w-full">
           {configSaving ? <><Spinner size="xs" className="mr-2" />{t("common.saving")}</> : t("common.save")}
         </Button>
       </div>

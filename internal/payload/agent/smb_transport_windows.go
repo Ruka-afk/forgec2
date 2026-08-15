@@ -159,6 +159,12 @@ func serveOneSMBCient(pipeName string) error {
 	if childID == "" {
 		return fmt.Errorf("empty child UUID")
 	}
+	// Bind this connection to the claimed child UUID; reject if another
+	// connection already owns it or the relay is at capacity.
+	if !p2pClaimChild(conn, childID) {
+		return fmt.Errorf("child UUID %s already owned by another connection", childID)
+	}
+	defer p2pReleaseChild(conn)
 	if !p2pQueueChildFrame(childID, body) {
 		return fmt.Errorf("queue child frame")
 	}

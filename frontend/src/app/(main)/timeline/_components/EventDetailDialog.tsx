@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ExternalLink } from "lucide-react";
-import { EVENT_COLORS } from "../page";
-import type { TimelineEvent } from "../page";
+import { EVENT_COLORS } from "./types";
+import type { TimelineEvent } from "./types";
 import { safeHref } from "@/lib/safeUrl";
 
 interface EventDetailDialogProps {

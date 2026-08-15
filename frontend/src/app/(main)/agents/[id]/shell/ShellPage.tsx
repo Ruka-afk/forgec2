@@ -11,8 +11,7 @@ import { useI18n } from "@/lib/i18n";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { ChevronRight } from "lucide-react";
-import { Spinner } from "@/components/UI";
-
+import { Spinner } from "@/components/ui/spinner";
 const ShellTerminal = dynamic(() => import("@/components/ShellTerminal"), {
   ssr: false,
   loading: () => <div className="flex items-center justify-center h-96"><Spinner /></div>,

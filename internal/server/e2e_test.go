@@ -92,7 +92,7 @@ func TestE2E_Beacon_Task_ResultFlow(t *testing.T) {
 	r := s.router
 
 	agentUUID := "11111111-2222-4333-8444-555555555555"
-	agent := newTCPTestAgent(t, agentUUID).withRegKey(v2TestMasterKey)
+	agent := v3TestAgent(t, s, agentUUID)
 
 	// Helper: clear dedup cache so each beacon is processed
 	clearDedup := func() {

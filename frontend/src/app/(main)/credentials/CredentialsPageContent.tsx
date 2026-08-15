@@ -8,7 +8,10 @@ import { paths } from "@/lib/api-paths";
 import { downloadText } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { useForm } from "@/lib/hooks/useForm";
-import { ConfirmModal, FieldError, PageHeader, Pagination } from "@/components/UI";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { FieldError } from "@/components/ui/field-error";
+import { PageContainer } from "@/components/ui/page-container";
+import { Pagination } from "@/components/ui/pagination";
 import { DataState } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -26,6 +30,7 @@ import { Download, Filter, Lock, Plus, Tag } from "lucide-react";
 import { CRED_TYPES, TYPE_BADGE_VARIANT, type VaultEntry } from "./_components/types";
 import { useCredentialsData } from "./_components/useCredentialsData";
 import { CredentialRow } from "./_components/CredentialRow";
+import { CredHarvestCard } from "./_components/CredHarvestCard";
 
 const PAGE_SIZE = 20;
 
@@ -278,40 +283,49 @@ export default function CredentialsPage() {
 
   return (
     <>
-      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("cred.title")} subtitle={t("cred.subtitle")}>
-        {filteredEntries.length > 0 && (
-          <Button
-            onClick={exportCSV}
-            size="lg"
-            className="gap-x-2"
-          >
-            <Download className="w-4 h-4" />
-            <span>{t("cred.export_csv")}</span>
-          </Button>
-        )}
-        <Button
-          onClick={() => { resetForm(); setShowAddModal(true); }}
-          size="lg"
-          className="gap-x-2"
-        >
-          <Plus className="w-4 h-4" />
-          <span>{t("cred.add")}</span>
-        </Button>
-      </PageHeader>
+      <PageContainer
+        title={t("cred.title")}
+        subtitle={t("cred.subtitle")}
+        actions={
+          <>
+            {filteredEntries.length > 0 && (
+              <Button
+                onClick={exportCSV}
+                size="lg"
+                className="gap-x-2"
+              >
+                <Download className="w-4 h-4" />
+                <span>{t("cred.export_csv")}</span>
+              </Button>
+            )}
+            <Button
+              onClick={() => { resetForm(); setShowAddModal(true); }}
+              size="lg"
+              className="gap-x-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>{t("cred.add")}</span>
+            </Button>
+          </>
+        }
+      >
+
+      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+        <div className="font-semibold">{t("cred.honesty_title")}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{t("cred.honesty_desc")}</div>
+      </Card>
+
+      <CredHarvestCard />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
-          <div className="text-2xl font-bold">{stats.total}</div>
-          <div className="text-xs text-muted-foreground mt-1">{t("cred.stat_total")}</div>
+          <StatTile labelBelow label={t("cred.stat_total")} value={stats.total} />
         </Card>
         <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
-          <div className="text-2xl font-bold text-primary dark:text-emerald-400">{stats.confirmed}</div>
-          <div className="text-xs text-muted-foreground mt-1">{t("cred.stat_confirmed")}</div>
+          <StatTile labelBelow label={t("cred.stat_confirmed")} value={stats.confirmed} tone="primary" />
         </Card>
         <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
-          <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{stats.unconfirmed}</div>
-          <div className="text-xs text-muted-foreground mt-1">{t("cred.stat_unconfirmed")}</div>
+          <StatTile labelBelow label={t("cred.stat_unconfirmed")} value={stats.unconfirmed} tone="warning" />
         </Card>
         <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
           <div className="flex flex-wrap gap-1 mt-1">
@@ -321,7 +335,7 @@ export default function CredentialsPage() {
               </Badge>
             ))}
           </div>
-          <div className="text-xs text-muted-foreground mt-1">{t("cred.stat_by_type")}</div>
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-1">{t("cred.stat_by_type")}</div>
         </Card>
       </div>
 
@@ -693,7 +707,7 @@ export default function CredentialsPage() {
         onCancel={() => setShowDeleteConfirm(null)}
         onConfirm={() => showDeleteConfirm && handleDelete(showDeleteConfirm)}
       />
-      </div>
+    </PageContainer>
     </>
   );
 }

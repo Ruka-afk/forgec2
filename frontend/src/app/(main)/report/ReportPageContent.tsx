@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { API_BASE } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n";
-import { PageHeader, Spinner, PageSpinner, StatCard } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
+import { Spinner, PageSpinner } from "@/components/ui/spinner";
+import { StatCard } from "@/components/ui/animated-stat-card";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -12,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableEmptyState } from "@/components/ui/table";
 import { CircleAlert, Download, FileText, Info, Inbox, Key, Lightbulb, ListChecks, PieChart, Radio, Bot, ShieldCheck, TriangleAlert, Trash2, Wand2 } from "lucide-react";
 import { Accordion, AccordionItem, AccordionHeader, AccordionTrigger, AccordionPanel } from "@/components/ui/accordion";
 import { severityColor } from "./_components/types";
@@ -44,6 +46,8 @@ export default function ReportPage() {
     deleteReport,
     pdfExportUrl,
   } = useReportData();
+
+  const totalCreds = useMemo(() => creds.reduce((s, c) => s + (c.count ?? 0), 0), [creds]);
 
   const SECTIONS = [
     { key: "overview", label: t("report.sec_overview"), icon: <PieChart className="w-5 h-5" /> },
@@ -88,30 +92,31 @@ export default function ReportPage() {
   };
 
   if (loading) {
-    return (
-      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-        <PageSpinner />
-      </div>
-    );
+    return <PageContainer loading />;
   }
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={<><FileText className="w-4 h-4" />{t("report.title")}</>} subtitle={t("report.subtitle")}>
-        <Button onClick={handleExportPDF} variant="destructive" className="gap-x-2">
-          <FileText className="w-4 h-4" />{t("report.export_pdf")}
-        </Button>
-        <Button onClick={handleGenerate} disabled={generating} className="gap-x-2">
-          {generating ? <Spinner size="xs" /> : <Wand2 className="w-4 h-4" />}
-          {generating ? t("report.generating") : t("report.generate")}
-        </Button>
-      </PageHeader>
+    <PageContainer
+      title={<><FileText className="w-4 h-4" />{t("report.title")}</>}
+      subtitle={t("report.subtitle")}
+      actions={
+        <>
+          <Button onClick={handleExportPDF} variant="destructive" className="gap-x-2">
+            <FileText className="w-4 h-4" />{t("report.export_pdf")}
+          </Button>
+          <Button onClick={handleGenerate} disabled={generating} className="gap-x-2">
+            {generating ? <Spinner size="xs" /> : <Wand2 className="w-4 h-4" />}
+            {generating ? t("report.generating") : t("report.generate")}
+          </Button>
+        </>
+      }
+    >
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard color="indigo" label={t("report.stat_agents_total")} value={stats.total_agents || 0} sub={`${stats.online_agents || 0} ${t("report.online")}`} subColor="text-emerald-600" />
+        <StatCard color="indigo" label={t("report.stat_agents_total")} value={stats.total_agents || 0} sub={`${stats.online_agents || 0} ${t("report.online")}`} subColor="text-success" />
         <StatCard color="emerald" label={t("report.stat_task_exec")} value={stats.total_tasks || 0} sub={`${stats.success_tasks || 0} ${t("report.success")} / ${stats.failed_tasks || 0} ${t("report.failed")}`} subColor="text-muted-foreground" />
         <StatCard color="amber" label={t("report.stat_creds")} value={stats.total_creds || 0} sub={t("report.collected")} subColor="text-muted-foreground" />
-        <StatCard color="red" label={t("report.stat_findings")} value={stats.total_findings || 0} sub={`${t("report.critical")}: ${stats.critical_findings || 0} | ${t("report.high")} ${stats.high_findings || 0}`} subColor="text-destructive" />
+        <StatCard color="destructive" label={t("report.stat_findings")} value={stats.total_findings || 0} sub={`${t("report.critical")}: ${stats.critical_findings || 0} | ${t("report.high")} ${stats.high_findings || 0}`} subColor="text-destructive" />
       </div>
 
       <Tabs value={activeSection} onValueChange={setActiveSection}>
@@ -223,7 +228,7 @@ export default function ReportPage() {
                   </TableHeader>
                   <TableBody>
                     {agents.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} className="py-16 sm:py-20 text-center text-muted-foreground"><Inbox className="w-4 h-4" />{t("report.no_data")}</TableCell></TableRow>
+                      <TableEmptyState colSpan={5} message={t("report.no_data")} />
                     ) : agents.map((a, i) => (
                       <TableRow key={a.id || i}>
                         <TableCell className="font-medium truncate max-w-[200px]">{a.hostname || "-"}</TableCell>
@@ -232,7 +237,7 @@ export default function ReportPage() {
                         <TableCell className="text-xs">{a.last_seen || "-"}</TableCell>
                         <TableCell>
                           <Badge variant={a.status === "online" ? "success" : "secondary"} className="gap-1">
-                            <span className={`w-1.5 h-1.5 rounded-full ${a.status === "online" ? "bg-emerald-500" : "bg-muted-foreground"}`}></span>
+                            <span className={`w-1.5 h-1.5 rounded-full ${a.status === "online" ? "bg-success" : "bg-muted-foreground"}`}></span>
                             {a.status || "unknown"}
                           </Badge>
                         </TableCell>
@@ -262,12 +267,12 @@ export default function ReportPage() {
                   </TableHeader>
                   <TableBody>
                     {taskStats.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} className="py-16 sm:py-20 text-center text-muted-foreground"><Inbox className="w-4 h-4" />{t("report.no_data")}</TableCell></TableRow>
+                      <TableEmptyState colSpan={5} message={t("report.no_data")} />
                     ) : taskStats.map((ts) => (
                       <TableRow key={ts.type}>
                         <TableCell className="font-medium">{ts.type || "-"}</TableCell>
                         <TableCell>{ts.total ?? 0}</TableCell>
-                        <TableCell className="text-emerald-600 dark:text-emerald-400">{ts.success ?? 0}</TableCell>
+                        <TableCell className="text-success">{ts.success ?? 0}</TableCell>
                         <TableCell className="text-destructive">{ts.failed ?? 0}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -286,7 +291,7 @@ export default function ReportPage() {
           <TabsContent value="credentials" className="mt-0">
             <Card className="overflow-hidden">
               <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
-                <h2 className="text-lg font-semibold text-foreground">{t("report.cred_summary")}<span className="text-sm font-normal text-muted-foreground ml-2">{t("report.total_prefix")}{creds.reduce((s, c) => s + (c.count ?? 0), 0)} {t("report.items")}</span></h2>
+                <h2 className="text-lg font-semibold text-foreground">{t("report.cred_summary")}<span className="text-sm font-normal text-muted-foreground ml-2">{t("report.total_prefix")}{totalCreds} {t("report.items")}</span></h2>
               </div>
               <div className="overflow-x-auto">
                 <Table>
@@ -299,7 +304,7 @@ export default function ReportPage() {
                   </TableHeader>
                   <TableBody>
                     {creds.length === 0 ? (
-                      <TableRow><TableCell colSpan={3} className="py-16 sm:py-20 text-center text-muted-foreground"><Inbox className="w-4 h-4" />{t("report.no_data")}</TableCell></TableRow>
+                      <TableEmptyState colSpan={3} message={t("report.no_data")} />
                     ) : creds.map((c) => (
                       <TableRow key={c.type}>
                         <TableCell className="font-medium">{c.type || "-"}</TableCell>
@@ -331,14 +336,14 @@ export default function ReportPage() {
                   </TableHeader>
                   <TableBody>
                     {listeners.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} className="py-16 sm:py-20 text-center text-muted-foreground"><Inbox className="w-4 h-4" />{t("report.no_data")}</TableCell></TableRow>
+                      <TableEmptyState colSpan={5} message={t("report.no_data")} />
                     ) : listeners.map((l, i) => (
                       <TableRow key={l.id || i}>
                         <TableCell className="font-medium">{l.name || "-"}</TableCell>
                         <TableCell><Badge variant="secondary" className="font-mono">{l.protocol || "-"}</Badge></TableCell>
                         <TableCell>
-                          <span className={`inline-flex items-center gap-1 text-xs font-medium ${l.status === "active" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${l.status === "active" ? "bg-emerald-500" : "bg-muted-foreground"}`}></span>
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium ${l.status === "active" ? "text-success" : "text-muted-foreground"}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${l.status === "active" ? "bg-success" : "bg-muted-foreground"}`}></span>
                             {l.status || "-"}
                           </span>
                         </TableCell>
@@ -372,7 +377,7 @@ export default function ReportPage() {
                           <AccordionTrigger className="px-4 py-3 hover:bg-muted/50">
                             <div className="flex items-start gap-3 flex-1 text-left">
                               <div className="mt-0.5">
-                                {f.severity === "critical" ? <CircleAlert className="w-4 h-4 text-destructive" /> : f.severity === "high" ? <TriangleAlert className="w-4 h-4 text-orange-500" /> : f.severity === "medium" ? <CircleAlert className="w-4 h-4 text-yellow-500" /> : <Info className="w-4 h-4 text-blue-500" />}
+                                {f.severity === "critical" ? <CircleAlert className="w-4 h-4 text-destructive" /> : f.severity === "high" ? <TriangleAlert className="w-4 h-4 text-warning" /> : f.severity === "medium" ? <CircleAlert className="w-4 h-4 text-warning" /> : <Info className="w-4 h-4 text-info" />}
                               </div>
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
@@ -406,6 +411,6 @@ export default function ReportPage() {
         </div>
       </div>
       </Tabs>
-    </div>
+    </PageContainer>
   );
 }

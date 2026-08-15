@@ -6,9 +6,11 @@
 # Full verification (do this before committing):
 go build ./... ; go vet ./internal/... ./pkg/... ./cmd/... ; go test ./internal/... -count=1 -timeout 5m
 
-# Frontend verification:
-cd frontend; npm run build; npm run check
-npx tsc --noEmit          # TypeScript check
+# Frontend verification (inside frontend/):
+npm run build             # Next.js static export -> frontend/out
+npm run check             # css + i18n(en/zh) + api-paths + webdist gates
+npx tsc --noEmit          # type check (noUnusedLocals is OFF: unused imports are NOT flagged — remove them by hand)
+npm test                  # vitest unit tests
 
 # Backend-only dev loop:
 powershell -File scripts\dev-backend.ps1
@@ -56,9 +58,23 @@ powershell -File scripts\build-embedded.ps1
 4. **Handler patterns**: Use `slog.Error("msg", "error", err)` for error logging, check all DB/JSON errors
 5. **Frontend check**: `npm run check` validates CSS (Tailwind v4 PostCSS) and i18n key coverage (en/zh)
 6. **Login CSRF**: Login page does NOT require CSRF (public route). CSRF is enforced only on authenticated routes.
+7. **Frontend embed sync**: `check:webdist` compares `frontend/out` to the embedded `internal/webdist/dist`. After editing frontend source, run `powershell -File scripts/build-embedded.ps1` (builds + copies to webdist + builds Go). Plain `npm run build` leaves `check:webdist` failing because the embed is stale.
+8. **tsc unused imports**: `noUnusedLocals` is not enabled, so dead imports pass `tsc` silently. Before deleting an exported helper, grep the whole `src` tree and drop now-unused imports by hand.
 
 ## i18n Policy
 
 - **Only two locales are supported: `en` and `zh`.** Do NOT add any other language (es, fr, de, ja, etc.). All UI strings must be present in BOTH `frontend/src/lib/i18n/en.ts` and `frontend/src/lib/i18n/zh.ts`, or `npm run check:i18n` will fail.
-- **Edit i18n files only via Node scripts** (`fs.readFileSync`/`writeFileSync`). Never use PowerShell `Get-Content`/`Set-Content` on these files — it corrupts Chinese (GBK mojibake) and adds a UTF-8 BOM. See `npm run check:i18n` for the used-key consistency gate.
+- **i18n files are UTF-8, no BOM**: Never use PowerShell `Get-Content`/`Set-Content` (or any GBK-encoding write) on `zh.ts` — it corrupts Chinese and adds a BOM. Edit via the Edit tool or Node `fs` (`fs.readFileSync`/`writeFileSync`). Gate: `npm run check:i18n` enforces used-key consistency across en/zh.
 - New UI strings must go through `t("key")` — no hardcoded English literals in JSX; add the key to both locales in the same change.
+
+## Frontend Conventions
+
+- **Page layout**: All standard `(main)` pages wrap content in `PageContainer` (`@/components/ui/page-container.tsx`) instead of a raw `<div className="max-w-(--content-width) mx-auto pb-12 …">` + `<PageHeader>`. Pass `title`/`subtitle` and use the `actions` slot for header buttons.
+  - **Embedded sub-views** (panel-rendered page-contents such as `tasks`/`builds`/`profiles`/`packer`/`stager`/`notifications`) pass `embedded={embedded}` and render the header conditionally: `title={!embedded ? t("x.title") : undefined}` so the header is omitted when embedded.
+  - **Intentionally full-bleed (do NOT wrap)**: `agents/[id]/{AgentDetailPage,files,persistence,remote-desktop,screen,shell}` and `chat/page` are terminal/chat views under the passthrough `agents/[id]/layout.tsx`.
+  - After migrating a page to `PageContainer`, delete its now-unused `PageHeader` import (PageContainer renders `PageHeader` internally). Never import `PageHeader` for a page that does not render it.
+- **Shared state components**: Use `EmptyState` (`@/components/ui/empty-state.tsx`) for empty lists, `ErrorState` (`@/components/ui/error-state.tsx`) for error alerts (icon + title + message + optional `action`), and `Banner` (`@/components/ui/banner.tsx`, `tone` + optional `icon`/`action`) for success/warning/info/destructive result strips. Do NOT hand-roll inline `<div className="…bg-destructive/10…">` boxes or ad-hoc success/error banners.
+- **Confirmations**: Use `ConfirmModal` (`@/components/ui/confirm-modal.tsx`) or the Promise-based `useConfirm()` hook (`@/lib/hooks/useConfirm.tsx`) for delete/destructive confirmations. Never use the native `window.confirm`.
+- **Loading states**: A single route-level spinner lives at `frontend/src/app/(main)/loading.tsx`. Per-route `loading.tsx` is kept ONLY for custom skeletons: `dns`, `groups`, `listeners`, `tags`, `tasks`. Do NOT add a `loading` fallback prop to page components or create new generic `loading.tsx`.
+- **Design tokens**: Prefer semantic classes / CSS variables (`text-destructive`, `bg-success`, `border-border`, chart palette via `--chart-1..6`). Avoid raw hex colors and hardcoded `emerald/amber/red/blue/rose/orange` status shades except inside `vis.js` graph configs (`TopologyGraph.tsx`). Keep buttons at the default `rounded-lg` (do not override with `rounded-xl`).
+- **Dead code**: Before deleting an exported helper, grep the whole `src` tree; remove callers and now-orphaned module vars together. Keep `api-schemas.ts` Zod schemas that back `parseResponse` (e.g. `AgentSchema`, `TaskSchema`); only drop fully-unused exports.

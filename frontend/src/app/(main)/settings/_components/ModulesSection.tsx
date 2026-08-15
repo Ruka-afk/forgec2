@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EmptyState, Spinner } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { formatTime, formatSize } from "@/lib/utils";
 import { FileCode, Rocket, Trash2, Upload } from "lucide-react";
@@ -152,14 +153,14 @@ export default function ModulesSection() {
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-violet-500/10 border-b border-violet-500/20 px-6 py-4">
+      <div className="bg-chart-6/violet border-b border-chart-6/violet px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center">
-            <FileCode className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+            <FileCode className="w-4 h-4 text-chart-6" />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-foreground">{t("settings.modules.title")}</h2>
-            <p className="text-xs text-violet-100">{t("settings.modules.subtitle")}</p>
+            <p className="text-xs text-chart-6">{t("settings.modules.subtitle")}</p>
           </div>
         </div>
       </div>
@@ -168,13 +169,13 @@ export default function ModulesSection() {
         {(() => {
           const hasMimi = modules.some((m) => /invoke-mimikatz|mimikatz\.ps1/i.test(m.name));
           return (
-            <div className={`text-xs rounded-xl px-3 py-2 border ${hasMimi ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-warning/30 bg-warning/10 text-amber-800 dark:text-amber-200"}`}>
+            <div className={`text-xs rounded-xl px-3 py-2 border ${hasMimi ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-warning-foreground"}`}>
               {hasMimi ? t("settings.modules.mimikatz_ready") : t("settings.modules.mimikatz_missing")}
             </div>
           );
         })()}
         <div className="flex gap-2">
-          <input ref={fileRef} type="file" className="hidden" accept=".ps1,.exe,.dll,.bin,.zip" onChange={handleUpload} />
+          <Input ref={fileRef} type="file" className="hidden" accept=".ps1,.exe,.dll,.bin,.zip" onChange={handleUpload} />
           <Button onClick={() => fileRef.current?.click()} disabled={uploading}>
             {uploading ? <Spinner size="xs" /> : <Upload className="w-4 h-4" />}
             {t("settings.modules.upload")}
@@ -218,7 +219,7 @@ export default function ModulesSection() {
         {modules.length > 0 && (
           <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <Rocket className="w-4 h-4 text-violet-500" />
+              <Rocket className="w-4 h-4 text-chart-6" />
               <h3 className="text-sm font-medium">{t("settings.modules.deploy_title")}</h3>
             </div>
             <p className="text-xs text-muted-foreground">{t("settings.modules.deploy_hint")}</p>

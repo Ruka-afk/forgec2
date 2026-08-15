@@ -3,6 +3,7 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { Inbox } from "lucide-react"
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
@@ -104,6 +105,30 @@ function TableCaption({
   )
 }
 
+function TableEmptyState({
+  colSpan,
+  message,
+  icon: Icon = Inbox,
+  className,
+}: {
+  colSpan: number;
+  message?: React.ReactNode;
+  icon?: React.ComponentType<{ className?: string }>;
+  className?: string;
+}) {
+  return (
+    <TableRow>
+      <TableCell
+        colSpan={colSpan}
+        className={cn("py-16 sm:py-20 text-center text-muted-foreground", className)}
+      >
+        {Icon && <Icon className="w-4 h-4" />}
+        {message}
+      </TableCell>
+    </TableRow>
+  );
+}
+
 export {
   Table,
   TableHeader,
@@ -113,4 +138,5 @@ export {
   TableRow,
   TableCell,
   TableCaption,
+  TableEmptyState,
 }

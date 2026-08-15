@@ -107,6 +107,11 @@ type BeaconResponse struct {
 
 	ECDHPub   string `json:"ecdh_pub,omitempty"`
 	CipherB64 string `json:"c,omitempty"`
+
+	// LastSeq is the server's authoritative highest acknowledged sequence
+	// number. The agent fast-forwards its local sequence if it has fallen
+	// behind (e.g. after a state reset) rather than blindly jumping.
+	LastSeq uint64 `json:"last_seq,omitempty"`
 }
 
 // RelayedTask carries tasks destined for child agents (P2P).

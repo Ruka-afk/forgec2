@@ -8,7 +8,8 @@ import AgentStatusBanner from "@/components/AgentStatusBanner";
 import ShortcutsHelp from "@/components/ShortcutsHelp";
 import ScrollToTop from "@/components/ScrollToTop";
 import CommandPalette from "@/components/CommandPalette";
-import { Breadcrumb } from "@/components/UI";
+import GlobalInteractDock from "@/components/GlobalInteractDock";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { usePathname } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
@@ -81,6 +82,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {children}
           </div>
         </main>
+        <GlobalInteractDock />
       </div>
 
       <ShortcutsHelp />

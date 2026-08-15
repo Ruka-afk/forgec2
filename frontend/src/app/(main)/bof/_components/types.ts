@@ -104,8 +104,8 @@ export const formatBytes = (bytes: number | string | undefined) => {
 
 export const getStatusColor = (status: string) => {
   const s = status?.toLowerCase() ?? "";
-  if (s === "success" || s === "completed") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
-  if (s === "failed") return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
-  if (s === "running") return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
-  return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
+  if (s === "success" || s === "completed") return "bg-success/15 text-success";
+  if (s === "failed") return "bg-destructive/15 text-destructive";
+  if (s === "running") return "bg-info/15 text-info";
+  return "bg-warning/15 text-warning dark:bg-warning/20 dark:text-warning";
 };

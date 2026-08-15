@@ -4,11 +4,11 @@ import { useRef, memo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CopyButton, Spinner } from "@/components/UI";
+import { CopyButton } from "@/components/ui/copy-button";
+import { Spinner } from "@/components/ui/spinner";
 import { timeAgo, formatTime } from "@/lib/utils";
 import type { AgentDetail, AgentDetailData, AgentStatus } from "@/types/agent";
-import AgentHealthRing, { getHealthColor } from "./AgentHealthRing";
-import { Calendar, Check, ChevronDown, Clipboard, Cpu, FileCode, FileText, GitBranch, Network, Radio, X } from "lucide-react";
+import { Calendar, Check, ChevronDown, Clipboard, Cpu, FileCode, FileText, Radio, X } from "lucide-react";
 import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useI18n } from "@/lib/i18n";
 
@@ -51,9 +51,6 @@ function InfoRow({ label, value, mono, title, copyValue, copyLabel, isSelect }: 
 export interface AgentStatsGridProps {
   agent: Partial<AgentDetail>;
   data: AgentDetailData;
-  healthScore: number;
-  activityBuckets: number[];
-  maxActivity: number;
   sleepValue: number;
   jitterValue: number;
   onSleepChange: (v: number) => void;
@@ -73,7 +70,7 @@ export interface AgentStatsGridProps {
 }
 
 export default memo(function AgentStatsGrid({
-  agent, data, healthScore, activityBuckets, maxActivity,
+  agent, data,
   sleepValue, jitterValue, onSleepChange, onJitterChange,
   onApplySleep,   sleepSaving, status, childAgents, childrenExpanded,
   onToggleChildren, onExportJSON, onExportMarkdown, onCopyAllInfo,
@@ -90,8 +87,6 @@ export default memo(function AgentStatsGrid({
   const domain = agent.domain || "";
   const country = agent.country || "";
   const city = agent.city || "";
-  const latitude = agent.latitude;
-  const longitude = agent.longitude;
   const interval = agent.current_interval ?? 0;
   const jitter = agent.current_jitter ?? 0;
   const uptime = data.uptime || "\u2014";
@@ -102,33 +97,25 @@ export default memo(function AgentStatsGrid({
   const createdAt = agent.created_at || "";
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-      <Card className="p-4 gap-0 overflow-hidden border-border/70 bg-card/90 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30"><div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><Cpu className="w-3.5 h-3.5" />{t("agents.stats_system")}</div><div className="space-y-2.5">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
+      <Card className="p-4 gap-0 overflow-hidden">
+        <div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><Cpu className="w-3.5 h-3.5" />{t("agents.stats_system")}</div>
+        <div className="space-y-2.5">
         <InfoRow label={t("agents.stats_agent_id")} value={agentID || "\u2014"} mono copyValue={agentID || undefined} copyLabel={t("agents.stats_agent_id")} isSelect />
         <InfoRow label={t("agents.stats_pid")} value={pid ? String(pid) : "\u2014"} />
         <InfoRow label={t("agents.stats_process")} value={processName || "\u2014"} />
         <InfoRow label={t("agents.stats_version")} value={version} />
         <InfoRow label={t("agents.stats_username")} value={username} />
-      </div></Card>
-      <Card className="p-4 gap-0 overflow-hidden border-border/70 bg-card/90 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30"><div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><Network className="w-3.5 h-3.5" />{t("agents.stats_network")}</div><div className="space-y-2.5">
         <InfoRow label={t("agents.stats_local_ip")} value={ip} copyValue={ip !== "\u2014" ? ip : undefined} copyLabel={t("agents.stats_local_ip")} />
         <InfoRow label={t("agents.stats_public_ip")} value={publicIP || "\u2014"} copyValue={publicIP || undefined} copyLabel={t("agents.stats_public_ip")} />
         <InfoRow label={t("agents.stats_domain")} value={domain || "\u2014"} />
         <InfoRow label={t("agents.stats_location")} value={[country, city].filter(Boolean).join(", ") || "\u2014"} />
         <InfoRow label={t("agents.stats_listener")} value={agent.listener_id ? `#${agent.listener_id}` : "\u2014"} />
-        {latitude != null && longitude != null && latitude !== 0 && longitude !== 0 && (
-          <div className="mt-2 rounded-lg overflow-hidden border border-border">
-            <img
-              src={`https://staticmap.openstreetmap.de/staticmap.php?center=${latitude},${longitude}&zoom=10&size=300x150&markers=${latitude},${longitude},red-pushpin`}
-              alt={`Map: ${latitude}, ${longitude}`}
-              className="w-full h-auto"
-              loading="lazy"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-          </div>
-        )}
-      </div></Card>
-      <Card className="p-4 gap-0 overflow-hidden border-border/70 bg-card/90 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30"><div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><Radio className="w-3.5 h-3.5" />{t("agents.stats_beacon")}</div><div className="space-y-2.5">
+        </div>
+      </Card>
+      <Card className="p-4 gap-0 overflow-hidden">
+        <div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><Radio className="w-3.5 h-3.5" />{t("agents.stats_beacon")}</div>
+        <div className="space-y-2.5">
         <InfoRow label={t("agents.stats_sleep")} value={interval ? `${interval}s` : "\u2014"} />
         <InfoRow label={t("agents.stats_jitter")} value={jitter ? `${jitter}%` : "\u2014"} />
         <InfoRow label={t("agents.stats_uptime")} value={uptime} />
@@ -147,21 +134,6 @@ export default memo(function AgentStatsGrid({
             </Button>
           </div>
         </div>
-        <div className="pt-2 mt-2 border-t border-border">
-          <div className="text-(--fs-micro-sm) text-muted-foreground/70 mb-1.5">{t("agents.stats_activity_24h")}</div>
-          <div className="flex items-end gap-[2px] h-8">
-            {activityBuckets.map((count, i) => {
-              const pct = count > 0 ? Math.max(10, (count / maxActivity) * 100) : 0;
-              return (
-                <div key={i} className={`flex-1 rounded-sm transition-all ${count > 0 ? "bg-emerald-500" : "bg-secondary"}`}
-                  style={{ height: count > 0 ? `${pct}%` : "2px" }}
-                  title={`${Math.floor(i)}h: ${count} tasks`}></div>
-              );
-            })}
-          </div>
-        </div>
-      </div></Card>
-      <Card className="p-4 gap-0 overflow-hidden border-border/70 bg-card/90 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30"><div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><GitBranch className="w-3.5 h-3.5" />{t("agents.stats_activity")}</div><div className="space-y-2.5">
         {activeWindow ? (<div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground/70 shrink-0">{t("agents.stats_window")}</span><span className="text-xs text-foreground font-medium truncate max-w-[120px]" title={activeWindow}>{activeWindow}</span></div>) : <InfoRow label={t("agents.stats_window")} value="\u2014" />}
         {parentID && <InfoRow label={t("agents.stats_parent")} value={parentID.substring(0, 8) + "..."} />}
         {peerCount > 0 && <InfoRow label={t("agents.stats_peers")} value={String(peerCount)} />}
@@ -183,15 +155,6 @@ export default memo(function AgentStatsGrid({
                   <Calendar className="w-3 h-3" /> {t("agents.set")}
                 </Button>
               )}
-            </div>
-          </div>
-        </div>
-        <div className="pt-2 mt-2 border-t border-border">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-(--fs-micro-sm) text-muted-foreground/70">{t("agents.stats_health")}</span>
-            <div className="flex items-center gap-2">
-              <span className={`text-sm font-bold ${getHealthColor(healthScore)}`}>{healthScore}</span>
-              <AgentHealthRing score={healthScore} size={32} />
             </div>
           </div>
         </div>

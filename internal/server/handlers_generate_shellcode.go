@@ -55,7 +55,13 @@ func (s *Server) handleGenerateDonut(c *gin.Context) {
 		Entropy:    3,
 	}
 
-	sc, err := payload.GenerateDonutShellcode(cfg)
+	sc, err := s.withBuildSlot(func() (string, error) {
+		out, err := payload.GenerateDonutShellcode(cfg)
+		if err != nil {
+			return "", err
+		}
+		return string(out), nil
+	})
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Shellcode generation"))
 		return
@@ -63,7 +69,7 @@ func (s *Server) handleGenerateDonut(c *gin.Context) {
 
 	outName := sanitizeFilename(c.DefaultPostForm("filename", "loader.bin"))
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, outName))
-	c.Data(http.StatusOK, "application/octet-stream", sc)
+	c.Data(http.StatusOK, "application/octet-stream", []byte(sc))
 }
 
 func (s *Server) handleGenerateShellcode(c *gin.Context) {

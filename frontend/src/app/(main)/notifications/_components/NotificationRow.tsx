@@ -60,7 +60,7 @@ function NotificationRowInner({
         aria-label={`Select notification ${n.title}`}
         className="mt-1 shrink-0"
       />
-      <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs ${SEVERITY_VARIANT[n.severity] === "success" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : SEVERITY_VARIANT[n.severity] === "destructive" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : SEVERITY_VARIANT[n.severity] === "warning" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"}`}>
+      <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs ${SEVERITY_VARIANT[n.severity] === "success" ? "bg-success/15 text-success" : SEVERITY_VARIANT[n.severity] === "destructive" ? "bg-destructive/15 text-destructive" : SEVERITY_VARIANT[n.severity] === "warning" ? "bg-warning/15 text-warning dark:bg-warning/20 dark:text-warning" : "bg-info/15 text-info"}`}>
         {SEVERITY_ICONS[n.severity] || <Info className="w-4 h-4" />}
       </div>
       <div className="flex-1 min-w-0">

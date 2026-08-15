@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FieldError } from "@/components/UI";
+import { FieldError } from "@/components/ui/field-error";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useI18n } from "@/lib/i18n";

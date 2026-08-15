@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
-import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import {
   computeDateRange,
   type AgentRow,
@@ -20,37 +20,41 @@ import {
 
 export function useReportData() {
   const { t } = useI18n();
-  const [stats, setStats] = useState<ReportStats>({});
-  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [datePreset, setDatePreset] = useState("30d");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [template, setTemplate] = useState("full");
-  const [agents, setAgents] = useState<AgentRow[]>([]);
-  const [taskStats, setTaskStats] = useState<TaskStatRow[]>([]);
-  const [creds, setCreds] = useState<CredRow[]>([]);
-  const [listeners, setListeners] = useState<ListenerRow[]>([]);
-  const [findings, setFindings] = useState<FindingRow[]>([]);
-  const [history, setHistory] = useState<ReportHistoryRow[]>([]);
 
   const range = useCallback(
     () => computeDateRange(datePreset, customStart, customEnd),
     [datePreset, customStart, customEnd],
   );
 
-  const loadOverview = useCallback(async () => {
-    try {
-      const data: ReportStats = await api.get(paths.report.overview);
-      setStats(data);
-    } catch {
-      toast.error(t("report.toast.load_overview_failed"));
-    }
-  }, [t]);
+  const { data: statsData, loading: loadingOverview } = useApiResource<ReportStats>({
+    fetcher: async () => api.get<ReportStats>(paths.report.overview),
+    pollMs: 30_000,
+    toastThrottleMs: 30_000,
+    errorMessage: t("report.toast.load_overview_failed"),
+  });
+  const stats = statsData ?? {};
 
-  const loadPreview = useCallback(async () => {
-    try {
-      const { start, end } = range();
+  const dateRef = useRef({ datePreset, customStart, customEnd });
+  dateRef.current = { datePreset, customStart, customEnd };
+
+  const { data: preview, loading: loadingPreview, refresh: refreshPreview } = useApiResource<{
+    agents: AgentRow[];
+    taskStats: TaskStatRow[];
+    creds: CredRow[];
+    listeners: ListenerRow[];
+    findings: FindingRow[];
+  }>({
+    fetcher: async () => {
+      const { start, end } = computeDateRange(
+        dateRef.current.datePreset,
+        dateRef.current.customStart,
+        dateRef.current.customEnd,
+      );
       const qs = new URLSearchParams();
       if (start) qs.set("start", start);
       if (end) qs.set("end", end);
@@ -63,40 +67,41 @@ export function useReportData() {
         api.get<{ listeners?: ListenerRow[] }>(paths.report.network(q)),
         api.get<{ findings?: FindingRow[] }>(paths.report.findings(q)),
       ]);
-      setAgents(agentsResp.agents || []);
-      setTaskStats(tasksResp.stats || []);
-      setCreds(credsResp.credentials || []);
-      setListeners(netResp.listeners || []);
-      setFindings(findResp.findings || []);
-    } catch {
-      toast.error(t("report.toast.load_preview_failed"));
-    }
-  }, [range, t]);
+      return {
+        agents: agentsResp.agents || [],
+        taskStats: tasksResp.stats || [],
+        creds: credsResp.credentials || [],
+        listeners: netResp.listeners || [],
+        findings: findResp.findings || [],
+      };
+    },
+    toastThrottleMs: 10_000,
+    errorMessage: t("report.toast.load_preview_failed"),
+  });
 
-  const loadHistory = useCallback(async () => {
-    try {
-      const data = await api.get(paths.report.history);
-      setHistory(normalizeListEnvelope(data, ["reports", "Reports", "data"]) as ReportHistoryRow[]);
-    } catch {
-      toast.error(t("report.toast.load_history_failed"));
-    }
-  }, [t]);
-
-  const loadAll = useCallback(async () => {
-    setLoading(true);
-    await Promise.all([loadOverview(), loadPreview(), loadHistory()]);
-    setLoading(false);
-  }, [loadOverview, loadPreview, loadHistory]);
-
+  const skipFirstDateRef = useRef(true);
   useEffect(() => {
-    void loadAll();
-  }, [loadAll]);
+    if (skipFirstDateRef.current) {
+      skipFirstDateRef.current = false;
+      return;
+    }
+    void refreshPreview();
+  }, [datePreset, customStart, customEnd, refreshPreview]);
 
-  useVisibleInterval(loadOverview, 30000);
+  const { data: historyData, loading: loadingHistory, refresh: loadHistory } = useApiResource<ReportHistoryRow[]>({
+    fetcher: async () =>
+      normalizeListEnvelope(await api.get(paths.report.history), ["reports", "Reports", "data"]) as ReportHistoryRow[],
+    toastThrottleMs: 10_000,
+    errorMessage: t("report.toast.load_history_failed"),
+  });
 
-  useEffect(() => {
-    if (!loading) void loadPreview();
-  }, [datePreset, customStart, customEnd, loading, loadPreview]);
+  const loading = loadingOverview || loadingPreview || loadingHistory;
+  const history = historyData ?? [];
+  const agents = preview?.agents ?? [];
+  const taskStats = preview?.taskStats ?? [];
+  const creds = preview?.creds ?? [];
+  const listeners = preview?.listeners ?? [];
+  const findings = preview?.findings ?? [];
 
   const generateReport = useCallback(
     async (sections: string[]) => {

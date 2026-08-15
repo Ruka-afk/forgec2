@@ -158,14 +158,18 @@ type Implant struct {
 	SecretID    string    `gorm:"size:64;default:''" json:"secret_id,omitempty"`    // v3 per-implant registration secret id (bound at registration)
 	CreatedAt   time.Time `gorm:"index" json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	// Soft delete: operators can remove an agent from the UI without losing its
+	// intel. Normal queries exclude deleted rows; reconciliation paths use
+	// Unscoped so a removed agent that beacons again is restored, not duplicated.
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 }
 
 // RegSecret is a v3 per-implant registration secret generated at build time.
 // Only the secret_id is public (compiled into the implant); the sealed secret
 // lives here at rest and is unsealed server-side to verify beacon frames.
 type RegSecret struct {
-	ID        string    `gorm:"primaryKey" json:"id"` // public secret id (compiled into the implant)
-	SecretEnc string    `gorm:"type:text" json:"-"`   // AES-256-GCM sealed registration secret
+	ID        string    `gorm:"primaryKey" json:"id"`                         // public secret id (compiled into the implant)
+	SecretEnc string    `gorm:"type:text" json:"-"`                           // AES-256-GCM sealed registration secret
 	AgentID   string    `gorm:"size:36;default:''" json:"agent_id,omitempty"` // bound after first registration
 	Bound     bool      `gorm:"default:false" json:"bound"`
 	CreatedAt time.Time `json:"created_at"`
@@ -189,34 +193,34 @@ type KillSwitch struct {
 
 // Task represents a command/task sent to an agent
 type Task struct {
-	ID       uint   `gorm:"primaryKey" json:"id"`
-	AgentID  string `gorm:"index" json:"agent_id"`
-	Type     string `json:"type"`
-	Command  string `json:"command"`
-	Shell    string `json:"shell"`
-	Path     string `json:"path,omitempty"`
-	Data     string `json:"data,omitempty"`
-	Offset   int64  `json:"offset,omitempty"`
-	Size     int64  `json:"size,omitempty"`
+	ID      uint   `gorm:"primaryKey" json:"id"`
+	AgentID string `gorm:"index" json:"agent_id"`
+	Type    string `json:"type"`
+	Command string `json:"command"`
+	Shell   string `json:"shell"`
+	Path    string `json:"path,omitempty"`
+	Data    string `json:"data,omitempty"`
+	Offset  int64  `json:"offset,omitempty"`
+	Size    int64  `json:"size,omitempty"`
 	// PrevMAC/MAC carry the chunked file-transfer HMAC integrity chain on
 	// push-upload tasks (hex); the agent verifies Data against them.
-	PrevMAC string `json:"prev_mac,omitempty"`
-	MAC     string `json:"mac,omitempty"`
-	Status  string `gorm:"index" json:"status"`
+	PrevMAC  string `json:"prev_mac,omitempty"`
+	MAC      string `json:"mac,omitempty"`
+	Status   string `gorm:"index" json:"status"`
 	Priority int    `gorm:"default:1" json:"priority"` // 0=low, 1=normal, 2=high, 3=urgent
 	Result   string `json:"result"`
 	Error    string `json:"error"`
 	// File transfer progress tracking (optimization)
-	Progress       int        `json:"progress,omitempty"`    // 0-100 percentage
-	TotalBytes     int64      `json:"total_bytes,omitempty"` // total file size
-	Transferred    int64      `json:"transferred,omitempty"` // bytes transferred so far
-	CreatedBy      string     `json:"created_by"`            // operator username who created the task
+	Progress    int    `json:"progress,omitempty"`    // 0-100 percentage
+	TotalBytes  int64  `json:"total_bytes,omitempty"` // total file size
+	Transferred int64  `json:"transferred,omitempty"` // bytes transferred so far
+	CreatedBy   string `json:"created_by"`            // operator username who created the task
 	// Two-man approval tracking: ApprovedBy is the operator that approved a
 	// pending_approval task. Enforced to differ from CreatedBy for dangerous
 	// task types when security.require_approval_for_dangerous is enabled.
-	ApprovedBy string     `json:"approved_by,omitempty"`
-	ApprovedAt *time.Time `json:"approved_at,omitempty"`
-	ClaimedBy  string     `gorm:"size:255" json:"claimed_by"`
+	ApprovedBy     string     `json:"approved_by,omitempty"`
+	ApprovedAt     *time.Time `json:"approved_at,omitempty"`
+	ClaimedBy      string     `gorm:"size:255" json:"claimed_by"`
 	ClaimedAt      time.Time  `json:"claimed_at"`
 	AcknowledgedAt *time.Time `gorm:"index" json:"acknowledged_at,omitempty"`
 	// Task callbacks: optional URL to POST results to when task completes
@@ -226,6 +230,43 @@ type Task struct {
 	CreatedAt      time.Time `gorm:"index" json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 	Agent          Implant   `gorm:"foreignKey:AgentID" json:"-"`
+}
+
+// AfterFind transparently decrypts task Result/Error (AES-256-GCM, FC2ENC:)
+// on every load so callers always see plaintext. DecryptLoot is a no-op for
+// legacy plaintext values, preserving backward compatibility with existing
+// task rows. This keeps command output (which frequently contains credentials,
+// tokens, and file contents) encrypted at rest in the database (H3).
+func (t *Task) AfterFind(_ *gorm.DB) error {
+	if t.Result != "" {
+		if dec, err := crypto.DecryptLoot(t.Result); err == nil {
+			t.Result = dec
+		}
+	}
+	if t.Error != "" {
+		if dec, err := crypto.DecryptLoot(t.Error); err == nil {
+			t.Error = dec
+		}
+	}
+	return nil
+}
+
+// EncryptTaskFields encrypts Result/Error for storage. It is applied at the
+// explicit DB write sites (beacon results, extc2 results) so the ciphertext
+// persisted differs from the in-memory plaintext used for broadcasts,
+// callbacks, and credential parsing. If loot encryption is unconfigured the
+// original values are returned so no data is lost.
+func (t *Task) EncryptTaskFields() {
+	if t.Result != "" {
+		if enc, err := crypto.EncryptLoot(t.Result); err == nil {
+			t.Result = enc
+		}
+	}
+	if t.Error != "" {
+		if enc, err := crypto.EncryptLoot(t.Error); err == nil {
+			t.Error = enc
+		}
+	}
 }
 
 // AuditLog represents a security audit log entry
@@ -1218,7 +1259,7 @@ type AIChatMessage struct {
 
 func (AIChatMessage) TableName() string { return "ai_chat_messages" }
 
-func (AutoTagRule) TableName() string   { return "auto_tag_rules" }
+func (AutoTagRule) TableName() string { return "auto_tag_rules" }
 
 type StagerToken struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`

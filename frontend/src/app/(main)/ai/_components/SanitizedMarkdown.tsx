@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { renderMarkdown } from "@/lib/markdown";
 import { sanitizeHtml } from "@/lib/sanitize";
-import { MdContent } from "@/components/UI";
-
+import { MdContent } from "@/components/ui/md-content";
 export function SanitizedMarkdown({ content }: { content: string }) {
   const [safe, setSafe] = useState<string>("");
   useEffect(() => {

@@ -2,7 +2,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { EmptyState, FieldError, PageHeader, Spinner } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FieldError } from "@/components/ui/field-error";
+import { PageContainer } from "@/components/ui/page-container";
+import { ErrorState } from "@/components/ui/error-state";
+import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -160,10 +164,9 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("integrations.title")} subtitle={t("integrations.subtitle")}>
+    <PageContainer title={t("integrations.title")} subtitle={t("integrations.subtitle")} actions={<>
         <Button variant="ghost" onClick={fetchIntegrations}><RefreshCw className="w-4 h-4" /> {t("integrations.refresh")}</Button>
-      </PageHeader>
+      </>}>
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Spinner />
@@ -171,7 +174,7 @@ export default function IntegrationsPage() {
       ) : (
         <>
           {loadError && (
-            <Card className="p-3 mb-4 border-destructive/40 text-sm text-destructive">{loadError}</Card>
+            <ErrorState message={loadError} className="mb-4" />
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 mb-6">
             {integrations.length === 0 ? (
@@ -227,24 +230,24 @@ export default function IntegrationsPage() {
                     <SelectItem value="thehive">TheHive</SelectItem>
                   </SelectContent>
                 </Select>
-                <Input aria-label={t("integrations.a11y_name")} name="int-name" value={formName} onChange={e => { setFormName(e.target.value); if (formErrors.name) setFormErrors({ ...formErrors, name: undefined }); }} placeholder={t("integrations.name_placeholder")} />
-                <Input aria-label={t("integrations.webhook_url")} name="int-url" value={formUrl} onChange={e => { setFormUrl(e.target.value); if (formErrors.url) setFormErrors({ ...formErrors, url: undefined }); }} placeholder={t("integrations.webhook_url")} />
+                <Input id="int-name" aria-label={t("integrations.a11y_name")} name="int-name" value={formName} onChange={e => { setFormName(e.target.value); if (formErrors.name) setFormErrors({ ...formErrors, name: undefined }); }} placeholder={t("integrations.name_placeholder")} aria-invalid={!!formErrors.name} aria-describedby={formErrors.name ? "int-name-error" : undefined} />
+                <Input id="int-url" aria-label={t("integrations.webhook_url")} name="int-url" value={formUrl} onChange={e => { setFormUrl(e.target.value); if (formErrors.url) setFormErrors({ ...formErrors, url: undefined }); }} placeholder={t("integrations.webhook_url")} aria-invalid={!!formErrors.url} aria-describedby={formErrors.url ? "int-name-error" : undefined} />
               </div>
-              <FieldError>{formErrors.name || formErrors.url}</FieldError>
+              <FieldError id="int-name-error">{formErrors.name || formErrors.url}</FieldError>
               <div className="flex flex-col sm:flex-row gap-2">
                 <Input aria-label={t("integrations.email_to")} name="int-to" value={formTo} onChange={e => setFormTo(e.target.value)} placeholder={t("integrations.email_to")} />
                 <Input aria-label={t("integrations.a11y_secret")} name="int-secret" value={formSecret} onChange={e => setFormSecret(e.target.value)} placeholder={t("integrations.secret_token")} />
               </div>
               {formType === "email" && (
                 <div className="flex flex-wrap gap-2">
-                  <Input aria-label={t("integrations.smtp_host")} name="smtp-host" value={formSMTPHost} onChange={e => { setFormSMTPHost(e.target.value); if (formErrors.smtp) setFormErrors({ ...formErrors, smtp: undefined }); }} placeholder={t("integrations.smtp_host")} />
-                  <Input aria-label={t("integrations.smtp_port")} name="smtp-port" value={formSMTPPort} onChange={e => { setFormSMTPPort(e.target.value); if (formErrors.smtp) setFormErrors({ ...formErrors, smtp: undefined }); }} placeholder={t("integrations.smtp_port")} />
+                  <Input id="int-smtp-host" aria-label={t("integrations.smtp_host")} name="smtp-host" value={formSMTPHost} onChange={e => { setFormSMTPHost(e.target.value); if (formErrors.smtp) setFormErrors({ ...formErrors, smtp: undefined }); }} placeholder={t("integrations.smtp_host")} aria-invalid={!!formErrors.smtp} aria-describedby={formErrors.smtp ? "int-smtp-error" : undefined} />
+                  <Input id="int-smtp-port" aria-label={t("integrations.smtp_port")} name="smtp-port" value={formSMTPPort} onChange={e => { setFormSMTPPort(e.target.value); if (formErrors.smtp) setFormErrors({ ...formErrors, smtp: undefined }); }} placeholder={t("integrations.smtp_port")} aria-invalid={!!formErrors.smtp} aria-describedby={formErrors.smtp ? "int-smtp-error" : undefined} />
                   <Input aria-label={t("integrations.smtp_user")} name="smtp-user" value={formSMTPUser} onChange={e => setFormSMTPUser(e.target.value)} placeholder={t("integrations.smtp_user")} />
                   <Input aria-label={t("integrations.smtp_pass")} name="smtp-pass" type="password" value={formSMTPPass} onChange={e => setFormSMTPPass(e.target.value)} placeholder={t("integrations.smtp_pass")} />
                   <Input aria-label={t("integrations.from_address")} name="smtp-from" value={formFrom} onChange={e => setFormFrom(e.target.value)} placeholder={t("integrations.from_address")} />
                 </div>
               )}
-              {formErrors.smtp && <FieldError>{formErrors.smtp}</FieldError>}
+              {formErrors.smtp && <FieldError id="int-smtp-error">{formErrors.smtp}</FieldError>}
               <Button onClick={saveIntegration} disabled={saving}>
                 {saving ? <Spinner size="xs" /> : null}
                 {t("integrations.save_btn")}
@@ -264,6 +267,6 @@ export default function IntegrationsPage() {
           </Card>
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }

@@ -45,21 +45,23 @@ export default function AboutSection({
           </div>
         </div>
         <div className="mt-6 flex flex-wrap gap-3">
-          <Button onClick={onCheckUpdate} className="h-10 px-4 bg-primary/10 dark:bg-primary/20 hover:bg-indigo-200 dark:hover:bg-indigo-800 text-primary dark:text-primary rounded-xl text-xs font-medium transition-colors">
+          <Button onClick={onCheckUpdate} size="lg" className="px-4 bg-primary/10 dark:bg-primary/20 hover:bg-chart-3/20 dark:hover:bg-chart-3 text-primary dark:text-primary text-xs font-medium transition-colors">
             <RotateCw className="w-4 h-4" />{t("settings.about.check_updates")}
           </Button>
-          <Button
-            variant="outline"
-            className="h-10 px-4 gap-1.5 text-xs rounded-xl"
+            <Button
+              variant="outline"
+              size="lg"
+              className="px-4 gap-1.5 text-xs"
             render={
               <a href={`${API_BASE}/docs/`} target="_blank" rel="noopener noreferrer" />
             }
           >
             <BookOpen className="w-4 h-4" />{t("settings.about.api_docs")}
           </Button>
-          <Button
-            variant="outline"
-            className="h-10 px-4 gap-1.5 text-xs rounded-xl"
+            <Button
+              variant="outline"
+              size="lg"
+              className="px-4 gap-1.5 text-xs"
             render={
               <a href={`${API_BASE}/docs/openapi.yaml`} target="_blank" rel="noopener noreferrer" />
             }

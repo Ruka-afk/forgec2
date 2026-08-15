@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/crypto"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -313,6 +314,10 @@ func (s *Server) handleExternalC2WebSocket(c *gin.Context) {
 func (s *Server) processExternalC2Result(agentID string, taskID uint, result string) {
 	if taskID == 0 {
 		return
+	}
+	// Encrypt result at rest (H3) so command output is not stored as plaintext.
+	if enc, err := crypto.EncryptLoot(result); err == nil {
+		result = enc
 	}
 	if err := s.db.Model(&db.Task{}).Where("id = ? AND agent_id = ?", taskID, agentID).Updates(map[string]interface{}{
 		"status":     "completed",

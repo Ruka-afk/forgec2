@@ -5,7 +5,8 @@ import { api, getCsrfToken, buildUrl } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadFromResponse } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
-import { PageHeader, Pagination, Spinner } from "@/components/UI";
+import { Pagination, Spinner } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
@@ -228,8 +229,7 @@ export default function PluginsPage() {
   };
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={<><Puzzle className="w-4 h-4" />{t("plugins.title")}</>} subtitle={t("plugins.subtitle", { count: String(plugins.length) })}>
+    <PageContainer title={<><Puzzle className="w-4 h-4" />{t("plugins.title")}</>} subtitle={t("plugins.subtitle", { count: String(plugins.length) })} actions={<>
         <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" size="lg" onClick={handleUpdateCheck}>
             <CheckCircle className="w-4 h-4" /> {t("plugins.check_updates")}
@@ -249,7 +249,7 @@ export default function PluginsPage() {
             </Button>
           </div>
         </div>
-      </PageHeader>
+      </>}>
 
       <Card className="p-4 sm:p-5 mb-4">
         <div className="flex flex-col sm:flex-row gap-3">
@@ -352,6 +352,6 @@ export default function PluginsPage() {
         <ReviewsModal plugin={reviewsPlugin} reviews={reviews} open={showReviews} onOpenChange={setShowReviews} onPost={handlePostReview} />
       )}
       {modal}
-    </div>
+    </PageContainer>
   );
 }

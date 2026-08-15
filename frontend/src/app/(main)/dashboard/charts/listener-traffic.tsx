@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchCached } from "@/lib/hooks/useCachedData";
 import { ChartCard } from "@/components/ChartCard";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { ArrowLeftRight } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
@@ -73,7 +73,7 @@ function ListenerTrafficInner({ range }: { range: string }) {
 export default function ListenerTrafficSection({ range, className }: { range: string; className?: string }) {
   const { t } = useI18n();
   return (
-    <ChartCard title={t("dashboard.listener_traffic")} icon={ArrowLeftRight} iconColor="text-cyan-500 dark:text-cyan-400" exportFilename="listener-traffic.png" className={className}>
+    <ChartCard title={t("dashboard.listener_traffic")} icon={ArrowLeftRight} iconColor="cyan" exportFilename="listener-traffic.png" className={className}>
       <ListenerTrafficInner range={range} />
     </ChartCard>
   );

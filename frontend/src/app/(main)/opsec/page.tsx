@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { Banner } from "@/components/ui/banner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
-import { EmptyState, PageHeader, PageSpinner } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageSpinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { formatTime, cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -90,15 +93,15 @@ export default function OpsecPage() {
 
   const riskLabels: Record<number, { label: string; cls: string }> = {
     1: { label: t("opsec.risk_low"), cls: "bg-secondary text-muted-foreground" },
-    2: { label: t("opsec.risk_medium"), cls: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" },
-    3: { label: t("opsec.risk_high"), cls: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400" },
-    4: { label: t("opsec.risk_critical"), cls: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" },
+    2: { label: t("opsec.risk_medium"), cls: "bg-warning/15 dark:bg-chart-4/20 text-warning" },
+    3: { label: t("opsec.risk_high"), cls: "bg-warning/15 text-warning" },
+    4: { label: t("opsec.risk_critical"), cls: "bg-destructive/15 text-destructive" },
   };
 
   const actionLabels: Record<number, { label: string; cls: string }> = {
-    0: { label: t("opsec.action_block"), cls: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" },
-    1: { label: t("opsec.action_warn"), cls: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400" },
-    2: { label: t("opsec.action_bypass"), cls: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400" },
+    0: { label: t("opsec.action_block"), cls: "bg-destructive/15 text-destructive" },
+    1: { label: t("opsec.action_warn"), cls: "bg-warning/15 text-warning" },
+    2: { label: t("opsec.action_bypass"), cls: "bg-success/15 text-success" },
   };
 
   const testTypes = [
@@ -186,15 +189,14 @@ export default function OpsecPage() {
 
   return (
     <>
-      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
-        <PageHeader title={t("opsec.title")} subtitle={t("opsec.subtitle")}>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-              {rules.length} {t("opsec.active_rules")}
-            </span>
-          </div>
-        </PageHeader>
+      <PageContainer title={t("opsec.title")} subtitle={t("opsec.subtitle")} contentClassName="space-y-6" actions={<>
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 bg-success rounded-full animate-pulse"></span>
+          <span className="text-xs text-success font-medium">
+            {rules.length} {t("opsec.active_rules")}
+          </span>
+        </div>
+      </>}>
 
         <Card>
           <CardContent>
@@ -303,14 +305,8 @@ export default function OpsecPage() {
             ))}
           </div>
           {testResult && (
-            <div className={cn(
-              "mt-4 p-4 rounded-xl text-sm",
-              testResult.allowed
-                ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
-                : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
-            )}>
+            <Banner tone={testResult.allowed ? "success" : "destructive"} icon={testResult.allowed ? <CheckCircle className="w-4 h-4" /> : <CircleAlert className="w-4 h-4" />} className="mt-4">
               <div className="flex items-center gap-2 mb-2">
-                {testResult.allowed ? <CheckCircle className="w-4 h-4" /> : <CircleAlert className="w-4 h-4" />}
                 <span className="font-semibold">{testResult.allowed ? t("opsec.allowed") : t("opsec.blocked")}</span>
               </div>
               <p className="text-xs text-muted-foreground mb-2">{testResult.messages || t("opsec.no_rule")}</p>
@@ -318,14 +314,14 @@ export default function OpsecPage() {
                 <div className="space-y-1">
                   {testResult.results.map((r) => (
                     <div key={r.rule_name} className="flex items-center gap-2 text-xs">
-                      <span className={cn("w-2 h-2 rounded-full", r.allowed ? "bg-emerald-500" : "bg-red-500")}></span>
+                      <span className={cn("w-2 h-2 rounded-full", r.allowed ? "bg-success" : "bg-destructive")}></span>
                       <code className="text-muted-foreground">{r.rule_name}</code>
                       <span className="opacity-60">- {r.message}</span>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
+            </Banner>
           )}
         </Card>
 
@@ -380,15 +376,15 @@ export default function OpsecPage() {
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {history.map((h) => (
                 <div key={h.id} className="flex items-start gap-3 p-3 bg-muted border border-border rounded-xl">
-                  <span className={cn("w-2 h-2 mt-1 rounded-full shrink-0", h.allowed ? "bg-emerald-500" : "bg-red-500")}></span>
+                  <span className={cn("w-2 h-2 mt-1 rounded-full shrink-0", h.allowed ? "bg-success" : "bg-destructive")}></span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 text-xs">
                       <code className="font-semibold text-foreground">{h.rule_name}</code>
                       <span className={cn(
                         "px-1.5 py-0.5 rounded text-(--fs-micro-sm) font-medium",
-                        h.risk_level >= 4 ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-                        h.risk_level >= 3 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" :
-                        "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                        h.risk_level >= 4 ? "bg-destructive/15 text-destructive" :
+                        h.risk_level >= 3 ? "bg-warning/15 text-warning dark:bg-warning/20 dark:text-warning" :
+                        "bg-warning/15 text-warning"
                       )}>
                         L{h.risk_level}
                       </span>
@@ -400,10 +396,10 @@ export default function OpsecPage() {
                   </div>
                 </div>
               ))}
-            </div>
+             </div>
           )}
         </Card>
-      </div>
+      </PageContainer>
 
       <Dialog open={showRuleModal} onOpenChange={setShowRuleModal}>
         <DialogContent className="sm:max-w-lg">

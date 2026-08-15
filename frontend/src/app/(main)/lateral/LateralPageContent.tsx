@@ -4,9 +4,12 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
-import { PageHeader, PageSpinner, Spinner } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageSpinner, Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
+import { IconBadge } from "@/components/ui/icon-badge";
+import { StatCard } from "@/components/ui/animated-stat-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -298,58 +301,22 @@ export default function LateralPageContent() {
     return <PageSpinner />;
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("lateral.title")} subtitle={`SMB/WinRM/WMI/PsExec ${t("lateral.subtitle_exec")} / Pass-the-Hash`} />
+    <PageContainer title={t("lateral.title")} subtitle={`SMB/WinRM/WMI/PsExec ${t("lateral.subtitle_exec")} / Pass-the-Hash`}>
 
-      <Card className="p-3 mb-4 border-amber-500/40 bg-amber-500/10 text-sm text-amber-800 dark:text-amber-200">
+      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
         <div className="font-semibold">{t("lateral.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("lateral.honesty_desc")}</div>
       </Card>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <Card className=" hover:shadow-lg dark:hover:shadow-black/30 transition-shadow px-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("lateral.online_implant")}</div>
-              <div className="text-2xl font-bold mt-2 text-emerald-600">{stats.online_agents || 0}</div>
-              <div className="text-xs text-muted-foreground mt-1">{t("lateral.pivot_available")}</div>
-            </div>
-            <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center">
-              <Bot className="w-4 h-4" />
-            </div>
-          </div>
-        </Card>
-        <Card className=" hover:shadow-lg dark:hover:shadow-black/30 transition-shadow px-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("lateral.available_creds")}</div>
-              <div className="text-2xl font-bold mt-2 text-amber-600">{stats.total_creds || 0}</div>
-              <div className="text-xs text-muted-foreground mt-1">{t("lateral.cred_vault")}</div>
-            </div>
-            <div className="w-12 h-12 bg-amber-50 dark:bg-amber-900/20 rounded-xl flex items-center justify-center">
-              <Key className="w-4 h-4" />
-            </div>
-          </div>
-        </Card>
-        <Card className=" hover:shadow-lg dark:hover:shadow-black/30 transition-shadow px-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("lateral.history_tasks")}</div>
-              <div className="text-2xl font-bold mt-2 text-primary">{stats.total_tasks || 0}</div>
-              <div className="text-xs text-muted-foreground mt-1">{t("lateral.lateral_records")}</div>
-            </div>
-            <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-              <Network className="w-4 h-4" />
-            </div>
-          </div>
-        </Card>
+        <StatCard label={t("lateral.online_implant")} value={stats.online_agents || 0} color="success" icon={<Bot className="w-4 h-4" />} sub={t("lateral.pivot_available")} />
+        <StatCard label={t("lateral.available_creds")} value={stats.total_creds || 0} color="warning" icon={<Key className="w-4 h-4" />} sub={t("lateral.cred_vault")} />
+        <StatCard label={t("lateral.history_tasks")} value={stats.total_tasks || 0} color="primary" icon={<Network className="w-4 h-4" />} sub={t("lateral.lateral_records")} />
       </div>
 
       <Card className=" mb-6 px-4">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-primary/10 dark:bg-primary/15 rounded-xl flex items-center justify-center">
-            <GitBranch className="w-4 h-4" />
-          </div>
+          <IconBadge icon={GitBranch} color="primary" size="xl" className="dark:bg-primary/15" />
           <div>
             <div className="text-sm font-semibold text-foreground">{t("lateral.new_task")}</div>
             <div className="text-xs text-muted-foreground">{t("lateral.select_target_method")}</div>
@@ -451,8 +418,8 @@ export default function LateralPageContent() {
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-border">
-            <Button onClick={handleSubmit} disabled={submitting || !form.source || !form.target}
-              className="flex-1 h-11 disabled:opacity-50 disabled:cursor-not-allowed">
+            <Button onClick={handleSubmit} size="lg" disabled={submitting || !form.source || !form.target}
+              className="flex-1 disabled:opacity-50 disabled:cursor-not-allowed">
               {submitting ? <Spinner size="xs" /> : <Rocket className="w-4 h-4" />}
               <span>{submitting ? t("lateral.executing") : t("lateral.execute_lateral")}</span>
             </Button>
@@ -506,7 +473,7 @@ export default function LateralPageContent() {
           </div>
         )}
       </Card>
-    </div>
+    </PageContainer>
   );
 }
 

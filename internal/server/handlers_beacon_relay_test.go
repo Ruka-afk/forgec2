@@ -18,7 +18,7 @@ func TestP2PRelayDeliversEncryptedChildReply(t *testing.T) {
 	s, database := v2TestServer(t)
 
 	parentUUID := "11111111-2222-4333-8444-111111111111"
-	parent := newTCPTestAgent(t, parentUUID).withRegKey(s.cfg.Server.BeaconKey)
+	parent := v3TestAgent(t, s, parentUUID)
 
 	// Parent registers directly with the server.
 	var regResp struct {
@@ -39,7 +39,7 @@ func TestP2PRelayDeliversEncryptedChildReply(t *testing.T) {
 	// Child registers DIRECTLY too (first contact establishes its session),
 	// then beacons exclusively through the parent.
 	childUUID := "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
-	child := newTCPTestAgent(t, childUUID).withRegKey(s.cfg.Server.BeaconKey)
+	child := v3TestAgent(t, s, childUUID)
 	w := v2Post(t, s, child.registerFrame())
 	if w.Code != http.StatusOK {
 		t.Fatalf("child registration: expected 200, got %d; body=%s", w.Code, w.Body.String())
@@ -159,7 +159,7 @@ func TestP2PRelayRejectsUnlinkedChild(t *testing.T) {
 	s, database := v2TestServer(t)
 
 	parentUUID := "99999999-8888-4777-8666-555555555555"
-	parent := newTCPTestAgent(t, parentUUID).withRegKey(s.cfg.Server.BeaconKey)
+	parent := v3TestAgent(t, s, parentUUID)
 	var regResp struct {
 		Seq     uint64 `json:"seq"`
 		RegOK   bool   `json:"reg_ok"`
@@ -181,7 +181,7 @@ func TestP2PRelayRejectsUnlinkedChild(t *testing.T) {
 	if err := database.Create(&db.Implant{ID: childUUID, ParentID: otherParent}).Error; err != nil {
 		t.Fatalf("create child: %v", err)
 	}
-	child := newTCPTestAgent(t, childUUID).withRegKey(s.cfg.Server.BeaconKey)
+	child := v3TestAgent(t, s, childUUID)
 	var childReg struct {
 		Seq     uint64 `json:"seq"`
 		RegOK   bool   `json:"reg_ok"`

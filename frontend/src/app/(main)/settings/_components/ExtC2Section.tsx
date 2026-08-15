@@ -101,7 +101,7 @@ export default function ExtC2Section() {
       {channels.map(ch => (
         <div key={ch.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
           <div className="flex items-center gap-3">
-            {ch.enabled ? <Wifi className="w-4 h-4 text-green-500" /> : <WifiOff className="w-4 h-4 text-muted-foreground" />}
+            {ch.enabled ? <Wifi className="w-4 h-4 text-success" /> : <WifiOff className="w-4 h-4 text-muted-foreground" />}
             <div>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-xs">{ch.type}</Badge>

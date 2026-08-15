@@ -1,9 +1,10 @@
 "use client";
+import { PageContainer } from "@/components/ui/page-container";
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { EmptyState, PageHeader } from "@/components/UI";
+import { EmptyState } from "@/components/UI";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -150,7 +151,14 @@ export default function AutoTagPage() {
   }
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <PageContainer title={t("autotag.title")} subtitle={t("autotag.subtitle")} actions={<>
+        <Button onClick={handleApplyAll}>
+          <Play className="w-4 h-4" /> {t("autotag.apply_all")}
+        </Button>
+        <Button onClick={() => { resetForm(); setShowForm(true); }}>
+          <Plus className="w-4 h-4" /> {t("autotag.new_rule")}
+        </Button>
+      </>}>
       {message && (
         <div className="mb-4 px-4 py-2 rounded-xl bg-info/8 text-info text-sm border border-info/20 flex items-center justify-between animate-fade-in">
           <span>{message}</span>
@@ -160,14 +168,7 @@ export default function AutoTagPage() {
         </div>
       )}
 
-      <PageHeader title={t("autotag.title")} subtitle={t("autotag.subtitle")}>
-        <Button onClick={handleApplyAll}>
-          <Play className="w-4 h-4" /> {t("autotag.apply_all")}
-        </Button>
-        <Button onClick={() => { resetForm(); setShowForm(true); }}>
-          <Plus className="w-4 h-4" /> {t("autotag.new_rule")}
-        </Button>
-      </PageHeader>
+      
 
       <Dialog open={showForm} onOpenChange={(open) => { if (!open) { setShowForm(false); resetForm(); } }}>
         <DialogContent className="sm:max-w-xl">
@@ -300,6 +301,6 @@ export default function AutoTagPage() {
         </div>
       )}
       {modal}
-    </div>
+    </PageContainer>
   );
 }

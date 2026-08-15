@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { firstField, normalizeListEnvelope } from "@/lib/envelope";
-import { EmptyState, FieldError, PageHeader, StatCard, StatusBadge } from "@/components/UI";
+import { EmptyState, FieldError, StatCard, StatusBadge } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
@@ -246,8 +247,7 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={<><Users className="w-4 h-4" />{t("users.title")}</>} subtitle={t("users.subtitle")}>
+    <PageContainer title={<><Users className="w-4 h-4" />{t("users.title")}</>} subtitle={t("users.subtitle")} actions={<>
         <div className="flex items-center gap-2">
           <SearchInput value={search} onChange={setSearch} placeholder={t("users.search_placeholder")} className="w-48" label={t("common.search")} />
           {role === "admin" && (
@@ -256,7 +256,7 @@ export default function UsersPage() {
             </Button>
           )}
         </div>
-      </PageHeader>
+      </>}>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <StatCard label={t("users.stat_total")} value={totalUsers} color="indigo" style={{ animationDelay: "0ms" }} className="opacity-0 animate-fade-slide-up" />
@@ -540,7 +540,7 @@ export default function UsersPage() {
         </DialogContent>
       </Dialog>
       {modal}
-    </div>
+    </PageContainer>
   );
 }
 

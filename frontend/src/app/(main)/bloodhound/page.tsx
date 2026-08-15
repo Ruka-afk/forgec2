@@ -10,10 +10,15 @@ import { useI18n } from "@/lib/i18n";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { formatTime } from "@/lib/utils";
-import { EmptyState, PageHeader, Pagination, Spinner } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
+import { Pagination } from "@/components/ui/pagination";
+import { Spinner } from "@/components/ui/spinner";
 import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -138,13 +143,12 @@ export default function BloodHoundPage() {
   const paginatedResults = results.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("bloodhound.title")} subtitle={t("bloodhound.subtitle")} />
+    <PageContainer title={t("bloodhound.title")} subtitle={t("bloodhound.subtitle")}>
 
       <Card className="px-4 sm:px-5 mb-6 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${binaryStatus.uploaded ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-amber-100 dark:bg-amber-900/30"}`}>
-            {binaryStatus.uploaded ? <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /> : <CircleAlert className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${binaryStatus.uploaded ? "bg-success/15" : "bg-warning/15"}`}>
+            {binaryStatus.uploaded ? <CheckCircle className="w-5 h-5 text-success" /> : <CircleAlert className="w-5 h-5 text-warning" />}
           </div>
           <div>
             <div className="text-sm font-semibold text-foreground">{t("bloodhound.sharp_hound_status")}</div>
@@ -157,14 +161,14 @@ export default function BloodHoundPage() {
         </div>
         <div className="flex items-center gap-3">
           <Label className="relative cursor-pointer">
-            <input aria-label={t("bloodhound.upload_exe")} name="input-0" type="file" accept=".exe" onChange={handleUpload} />
+            <Input aria-label={t("bloodhound.upload_exe")} name="input-0" type="file" accept=".exe" onChange={handleUpload} className="sr-only" />
             <span className="inline-flex shrink-0 items-center justify-center rounded-xl bg-primary px-2.5 py-1.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/80 disabled:pointer-events-none disabled:opacity-50 gap-1.5 cursor-pointer">
               {uploading ? <Spinner size="xs" /> : <Upload className="w-4 h-4" />}
               <span>{uploading ? t("bloodhound.uploading") : t("bloodhound.upload_btn")}</span>
             </span>
           </Label>
           {binaryStatus.uploaded && (
-            <span className="text-xs text-emerald-600 dark:text-emerald-400">
+            <span className="text-xs text-success">
               <CheckCircle className="w-4 h-4" />{binaryStatus.filename}
             </span>
           )}
@@ -173,9 +177,7 @@ export default function BloodHoundPage() {
 
       <Card className="px-4 sm:px-5 mb-6 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-            <PawPrint className="w-4 h-4" />
-          </div>
+          <IconBadge icon={PawPrint} color="primary" size="xl" />
           <div>
             <div className="text-sm font-semibold text-foreground">{t("bloodhound.new_collection_task")}</div>
             <div className="text-xs text-muted-foreground">{t("bloodhound.new_collection_desc")}</div>
@@ -275,13 +277,13 @@ export default function BloodHoundPage() {
                        <TableCell className="py-3 px-4 font-mono text-primary">{users}</TableCell>
                        <TableCell className="py-3 px-4 font-mono text-primary">{computers}</TableCell>
                        <TableCell className="py-3 px-4 font-mono text-primary">{groups}</TableCell>
-                       <TableCell className="py-3 px-4 font-mono text-rose-600 dark:text-rose-400 font-semibold">{das}</TableCell>
+                       <TableCell className="py-3 px-4 font-mono text-chart-5 font-semibold">{das}</TableCell>
                        <TableCell className="py-3 px-4 font-mono text-primary">{spns}</TableCell>
                       <TableCell className="py-3 px-4 text-xs text-muted-foreground">{formatTime(time)}</TableCell>
                       <TableCell className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <Button variant="ghost" size="icon-xs" onClick={() => handleDownload(id)}
-                            className="bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 rounded-xl transition-colors"
+                            className="bg-success/15 hover:bg-success/25 text-success rounded-xl transition-colors"
                             aria-label={t("bloodhound.download_report")}>
                             <Download className="w-4 h-4" />
                           </Button>
@@ -307,7 +309,7 @@ export default function BloodHoundPage() {
         <Pagination page={currentPage} pageSize={PAGE_SIZE} total={results.length} onPageChange={setPage} />
       </Card>
       {modal}
-    </div>
+    </PageContainer>
   );
 }
 

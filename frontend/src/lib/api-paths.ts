@@ -51,6 +51,13 @@ export const paths = {
     filesLs: (id: string) => `/agents/${id}/files/ls`,
     filesRead: (id: string) => `/agents/${id}/files/read`,
     filesDelete: (id: string) => `/agents/${id}/files/delete`,
+    /** Queue implant→server exfil (path only — do not attach a file). */
+    filesExfil: (id: string) => `/agents/${id}/files/pull`,
+    filesExfilGet: (id: string, filename: string) =>
+      `/agents/${id}/files/exfil/${encodeURIComponent(filename)}`,
+    /** Push a teamserver file onto the implant. */
+    filesPush: (id: string) => `/agents/${id}/files/push`,
+    /** Agent fetches a URL onto its own disk. */
     download: (id: string) => `/agents/${id}/download`,
     drives: (id: string) => `/agents/${id}/drives`,
     find: (id: string) => `/agents/${id}/find`,
@@ -68,6 +75,7 @@ export const paths = {
     socks: (id: string) => `/agents/${id}/socks`,
     socksRelayStart: (id: string) => `/agents/${id}/socks_relay/start`,
     socksRelayStop: (id: string) => `/agents/${id}/socks_relay/stop`,
+    socksRelayStatus: (id: string) => `/agents/${id}/socks_relay/status`,
     chain: (id: string) => `/agents/${id}/chain`,
     chainSet: (id: string) => `/agents/${id}/chain/set`,
     chainClear: (id: string) => `/agents/${id}/chain/clear`,
@@ -253,7 +261,9 @@ export const paths = {
     history: (channel: string) => `/chat/history?channel=${encodeURIComponent(channel)}`,
   },
   circuitBreaker: {
+    detail: "/circuit-breaker/detail",
     config: "/circuit-breaker/config",
+    events: "/circuit-breaker/events",
     reset: (listenerId: string | number) => `/circuit-breaker/reset/${listenerId}`,
     toggle: (listenerId: string | number) => `/circuit-breaker/toggle/${listenerId}`,
   },

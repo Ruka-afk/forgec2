@@ -5,7 +5,8 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
-import { DataSpinner, EmptyState, FieldError, PageHeader } from "@/components/UI";
+import { DataSpinner, EmptyState, FieldError } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
 import { toast } from "sonner";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -109,8 +110,7 @@ export default function DomainFrontingPage() {
   };
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={<><Cloud className="w-4 h-4" />{t("domain_fronting.title")}</>} subtitle={t("domain_fronting.subtitle")}>
+    <PageContainer title={<><Cloud className="w-4 h-4" />{t("domain_fronting.title")}</>} subtitle={t("domain_fronting.subtitle")} actions={<>
         <Button onClick={handleCheck} disabled={checking || loading} size="sm">
           <HeartPulse className={`w-4 h-4 ${checking ? "animate-pulse" : ""}`} />
           {checking ? "Checking..." : "Health Check"}
@@ -118,7 +118,7 @@ export default function DomainFrontingPage() {
         <Button onClick={fetchStatus} variant="ghost" size="sm">
           <RotateCw className="w-4 h-4" /> Refresh
         </Button>
-      </PageHeader>
+      </>}>
 
       {/* Auto-failover toggle */}
       <Card className="p-4 sm:p-5 mb-6 flex items-center justify-between">
@@ -276,6 +276,6 @@ export default function DomainFrontingPage() {
         </div>
       </div>
       {modal}
-    </div>
+    </PageContainer>
   );
 }

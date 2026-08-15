@@ -10,7 +10,7 @@ export default function ProfileSection({ data }: { data: SettingsData }) {
   const currentRole = data.current_user_role || "user";
   const getRoleBadge = () => {
     if (currentRole === "admin") return { icon: <Crown className="w-2.5 h-2.5" />, text: t("settings.profile.admin"), cls: "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary" };
-    return { icon: <User className="w-2.5 h-2.5" />, text: t("settings.profile.user"), cls: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300" };
+    return { icon: <User className="w-2.5 h-2.5" />, text: t("settings.profile.user"), cls: "bg-info/15 text-info" };
   };
   const roleBadge = getRoleBadge();
 

@@ -170,6 +170,12 @@ func (a *tcpTestAgent) handshakeFrame() string {
 		"ts":       ts,
 		"ecdh_pub": pub,
 	}
+	if a.secretID != "" {
+		// v3: the per-implant secret id is carried on handshake frames too, so
+		// the server can authenticate the handshake against the secret store
+		// even after the implant row is deleted.
+		env["secret_id"] = a.secretID
+	}
 	if a.regKey != nil {
 		mac := hmac.New(sha256.New, a.regKey)
 		mac.Write([]byte(a.uuid))
@@ -237,6 +243,7 @@ func initTCPBeaconServer(t *testing.T, database *gorm.DB) *Server {
 		db:                    database,
 		cfg:                   &config.Config{},
 		sessionManager:        sm,
+		regSecrets:            crypto.NewRegSecretStore(make([]byte, 32)),
 		beaconDedupCache:      make(map[string]time.Time),
 		eventManager:          NewEventManager(database),
 		socksEngine:           newSocksRelayEngine(),
@@ -255,6 +262,21 @@ func tcpFrameConn(t *testing.T, s *Server) (net.Conn, func()) {
 	s.wg.Add(1)
 	go s.handleTCPConnection(serverSide)
 	return clientSide, func() { clientSide.Close() }
+}
+
+// v3TestAgent builds a test agent that carries a freshly minted per-implant
+// v3 secret (the v2 master-key path is deprecated and rejected).
+func v3TestAgent(t *testing.T, s *Server, uuid string) *tcpTestAgent {
+	t.Helper()
+	id, secretB64, err := s.createRegSecret()
+	if err != nil {
+		t.Fatalf("createRegSecret: %v", err)
+	}
+	secret, err := base64.StdEncoding.DecodeString(secretB64)
+	if err != nil || len(secret) != 32 {
+		t.Fatalf("v3 secret invalid: err=%v len=%d", err, len(secret))
+	}
+	return newTCPTestAgent(t, uuid).withRawRegKey(secret).withSecretID(id)
 }
 
 func tcpWriteFrame(t *testing.T, conn net.Conn, payload []byte) {
@@ -315,7 +337,7 @@ func TestTCPBeaconRejectsPlaintext(t *testing.T) {
 // TestTCPBeaconV2RegisterAndEncrypted verifies the full v2 registration +
 // encrypted exchange over the raw TCP transport, matching the HTTP beacon wire
 // protocol.
-func TestTCPBeaconV2RegisterAndEncrypted(t *testing.T) {
+func TestTCPBeaconV3RegisterAndEncrypted(t *testing.T) {
 	ginSetTestMode(t)
 	database := testutil.SetupTestDB(t)
 	s := initTCPBeaconServer(t, database)
@@ -325,7 +347,18 @@ func TestTCPBeaconV2RegisterAndEncrypted(t *testing.T) {
 	conn, done := tcpFrameConn(t, s)
 	defer done()
 
-	agent := newTCPTestAgent(t, "aaaaaaaa-bbbb-4333-8444-cccccccccccc").withRegKey(s.cfg.Server.BeaconKey)
+	// v3 per-implant secret (master-key path is deprecated).
+	secretID, secretB64, err := s.createRegSecret()
+	if err != nil {
+		t.Fatalf("createRegSecret: %v", err)
+	}
+	secret, err := base64.StdEncoding.DecodeString(secretB64)
+	if err != nil || len(secret) != 32 {
+		t.Fatalf("v3 secret invalid: err=%v len=%d", err, len(secret))
+	}
+	agent := newTCPTestAgent(t, "aaaaaaaa-bbbb-4333-8444-cccccccccccc").
+		withRawRegKey(secret).
+		withSecretID(secretID)
 
 	// Step 1: registration envelope
 	tcpWriteFrame(t, conn, []byte(agent.registerFrame()))
@@ -407,7 +440,17 @@ func TestTCPBeaconRestartRecovery(t *testing.T) {
 	conn, done := tcpFrameConn(t, s)
 	defer done()
 
-	agent := newTCPTestAgent(t, "dddddddd-eeee-4333-8444-ffffffffffff").withRegKey(masterKey)
+	secretID, secretB64, err := s.createRegSecret()
+	if err != nil {
+		t.Fatalf("createRegSecret: %v", err)
+	}
+	secret, err := base64.StdEncoding.DecodeString(secretB64)
+	if err != nil || len(secret) != 32 {
+		t.Fatalf("v3 secret invalid: err=%v len=%d", err, len(secret))
+	}
+	agent := newTCPTestAgent(t, "dddddddd-eeee-4333-8444-ffffffffffff").
+		withRawRegKey(secret).
+		withSecretID(secretID)
 
 	// Register (seq 1) then one encrypted beacon (seq 2).
 	tcpWriteFrame(t, conn, []byte(agent.registerFrame()))
@@ -532,6 +575,31 @@ func TestTCPBeaconUnauthenticatedFrameClosesConn(t *testing.T) {
 	var msgLen uint32
 	if err := binary.Read(conn, binary.BigEndian, &msgLen); err == nil {
 		t.Fatalf("expected connection close for unauthenticated frame, got frame length %d", msgLen)
+	}
+}
+
+// TestTCPBeaconRejectsV2MasterKey verifies the deprecated v2 master-key
+// registration path is rejected: an implant that presents no per-implant
+// secret_id (the old globally-derived key) is refused, forcing v3 per-implant
+// secrets.
+func TestTCPBeaconRejectsV2MasterKey(t *testing.T) {
+	ginSetTestMode(t)
+	database := testutil.SetupTestDB(t)
+	s := initTCPBeaconServer(t, database)
+	s.configMu.Lock()
+	s.cfg.Server.BeaconKey = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"
+	s.configMu.Unlock()
+	conn, done := tcpFrameConn(t, s)
+	defer done()
+
+	// v2 master-key derived key, but NO secret_id.
+	agent := newTCPTestAgent(t, "eeeeeeee-cccc-4333-8444-dddddddddddd").withRegKey(s.cfg.Server.BeaconKey)
+
+	tcpWriteFrame(t, conn, []byte(agent.registerFrame()))
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	var msgLen uint32
+	if err := binary.Read(conn, binary.BigEndian, &msgLen); err == nil {
+		t.Fatalf("expected connection close for v2 master-key frame, got length %d", msgLen)
 	}
 }
 

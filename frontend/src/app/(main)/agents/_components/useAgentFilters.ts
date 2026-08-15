@@ -27,17 +27,6 @@ export function useAgentFilters(beacons: Beacon[]) {
 
   useEffect(() => { if (searchInput) setPage(1); }, [searchInput]);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement)?.tagName)) {
-        e.preventDefault();
-        document.getElementById("agent-search")?.focus();
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, []);
-
   useEffect(() => { if (tagFilter) setPage(1); }, [tagFilter]);
 
   useEffect(() => { setPage(1); }, [sortKey, sortDir]);

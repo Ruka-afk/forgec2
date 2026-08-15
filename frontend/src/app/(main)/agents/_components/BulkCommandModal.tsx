@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useI18n } from "@/lib/i18n";
+import { Banner } from "@/components/ui/banner";
 import { COMMAND_TYPES } from "./types";
+import { credActionDef } from "../../credentials/_components/cred-quality";
 import { EVASION_TECHNIQUES, EVASION_GROUPS } from "./evasion-techniques";
 
 interface BulkCommandModalProps {
@@ -60,11 +62,11 @@ export function BulkCommandModal({
           {t("agents.send_command_to").replace("{n}", String(selectedCount)).replace("{s}", selectedCount !== 1 ? "s" : "")}
         </p>
         {confirmStep && isDestructive && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+          <Banner tone="destructive">
             {cmdType === "kill"
               ? t("agents.confirm_bulk_kill_msg").replace("{count}", String(selectedCount))
               : t("agents.confirm_bulk_uninstall_msg").replace("{count}", String(selectedCount))}
-          </div>
+          </Banner>
         )}
         <div className="space-y-3">
           <div>
@@ -75,7 +77,10 @@ export function BulkCommandModal({
               </SelectTrigger>
               <SelectContent>
                 {COMMAND_TYPES.map((ct) => (
-                  <SelectItem key={ct.value} value={ct.value}>{t(ct.labelKey)}</SelectItem>
+                  <SelectItem key={ct.value} value={ct.value}>
+                    {t(ct.labelKey)}
+                    {credActionDef(ct.value)?.quality === "scripted" ? ` (${t("cred.quality_scripted")})` : ""}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { paths } from "@/lib/api-paths";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { EmptyState, PageHeader } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
 import { formatTime } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,29 +39,24 @@ interface Agent {
 
 export default function TokensPage() {
   const { t } = useI18n();
-  const [tokens, setTokens] = useState<Token[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [loading, setLoading] = useState(true);
   const [integrityFilter, setIntegrityFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
+  const { data, loading, refresh } = useApiResource<{ tokens: Token[]; agents: Agent[] }>({
+    fetcher: async () => {
       const [tokenData, agentData] = await Promise.all([
         api.get(paths.tokens.list),
         api.get(paths.agents.list("page=1&pageSize=200")),
       ]) as Record<string, unknown>[];
-      setTokens((tokenData.tokens || tokenData.data || tokenData || []) as Token[]);
-      setAgents((agentData.agents || agentData.data || agentData || []) as Agent[]);
-    } catch {
-      setTokens([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { loadData(); }, [loadData]);
+      return {
+        tokens: (tokenData.tokens || tokenData.data || tokenData || []) as Token[],
+        agents: (agentData.agents || agentData.data || agentData || []) as Agent[],
+      };
+    },
+    errorMessage: "Failed to load tokens",
+  });
+  const tokens = data?.tokens ?? [];
+  const agents = data?.agents ?? [];
 
   const agentMap: Record<string, string> = {};
   agents.forEach((a) => { agentMap[a.id] = a.hostname || a.id?.substring(0, 8) || ""; });
@@ -75,7 +72,7 @@ export default function TokensPage() {
   const handleRevert = async (tokenId: string) => {
     try {
       await api.post(paths.agents.tokenRevert(tokenId));
-      loadData();
+      refresh();
     } catch { toast.error(t("tokens.revert_failed")); }
   };
 
@@ -98,12 +95,15 @@ export default function TokensPage() {
   };
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={<><BadgeInfo className="w-4 h-4" />{t("tokens.title")}</>} subtitle={`${t("tokens.subtitle")} ${filtered.length} ${t("tokens.count")}`}>
-        <Button onClick={loadData} className="gap-2">
+    <PageContainer
+      title={<><BadgeInfo className="w-4 h-4" />{t("tokens.title")}</>}
+      subtitle={`${t("tokens.subtitle")} ${filtered.length} ${t("tokens.count")}`}
+      actions={
+        <Button onClick={() => refresh()} className="gap-2">
           <RotateCw className="w-4 h-4" /> {t("tokens.refresh")}
         </Button>
-      </PageHeader>
+      }
+    >
 
       <Card className="mb-4">
         <CardContent className="p-4 sm:p-5">
@@ -139,12 +139,13 @@ export default function TokensPage() {
           const count = tokens.filter((t) => (t.integrity || "Medium") === level).length;
           return (
             <Card key={level} className={`relative p-3 transition-all ${integrityFilter === level ? "ring-2 ring-primary" : ""}`}>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setIntegrityFilter(integrityFilter === level ? "" : level)}
                 aria-pressed={integrityFilter === level}
                 aria-label={level}
-                className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="absolute inset-0 z-10 h-auto rounded-xl"
               />
               <div className="text-xs text-muted-foreground">{level}</div>
               <div className="text-lg font-bold">{count}</div>
@@ -190,7 +191,7 @@ export default function TokensPage() {
                     <TableCell>
                       {active ? (
                         <Badge variant="warning" className="gap-1.5 text-xs">
-                          <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>{t("tokens.active")}
+                          <span className="w-2 h-2 bg-warning rounded-full animate-pulse"></span>{t("tokens.active")}
                         </Badge>
                       ) : (
                         <Badge variant="secondary" className="text-xs">{t("tokens.inactive")}</Badge>
@@ -224,7 +225,7 @@ export default function TokensPage() {
           </Table>
         </div>
       </Card>
-    </div>
+    </PageContainer>
   );
 }
 

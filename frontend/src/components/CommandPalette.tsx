@@ -7,6 +7,11 @@ import { useI18n } from "@/lib/i18n";
 import { useAppStore } from "@/lib/store";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { Search, CornerDownLeft, Server } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface PaletteItem {
   href: string;
@@ -146,8 +151,6 @@ export default function CommandPalette() {
     }
   }, [activeIndex]);
 
-  if (!open) return null;
-
   const groups = new Map<string, PaletteItem[]>();
   for (const item of filtered) {
     const list = groups.get(item.section) || [];
@@ -158,82 +161,91 @@ export default function CommandPalette() {
   const searchOffset = showSearchAction ? 1 : 0;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] px-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("palette.title")}
-      onClick={close}
-    >
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={close}
-      />
-      <div
-        className="relative w-full max-w-xl rounded-2xl border border-border bg-card shadow-2xl shadow-black/20 overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+    <Dialog open={open} onOpenChange={(next) => { if (!next) close(); }}>
+      <DialogContent
+        showCloseButton={false}
+        className="top-[18vh] translate-y-0 sm:max-w-xl gap-0 overflow-hidden p-0"
+        aria-label={t("palette.title")}
       >
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border/60">
-          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-          <input
+        <DialogTitle className="sr-only">{t("palette.title")}</DialogTitle>
+        <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+          <Search className="w-4 h-4 shrink-0 text-muted-foreground" />
+          <Input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("palette.placeholder")}
-            className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground/70"
             aria-label={t("palette.placeholder")}
+            role="combobox"
+            aria-expanded={open}
+            aria-controls="command-palette-list"
+            aria-autocomplete="list"
+            aria-activedescendant={activeIndex >= 0 ? `palette-option-${activeIndex}` : undefined}
+            className="h-8 flex-1 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 dark:bg-transparent"
           />
-          <kbd className="text-(--fs-micro-sm) text-muted-foreground/70 bg-secondary px-1.5 py-0.5 rounded border border-border">Esc</kbd>
+          <Kbd>Esc</Kbd>
         </div>
 
-        <div ref={listRef} className="max-h-[45vh] overflow-y-auto py-2">
-          {showSearchAction && (
-            <button
-              data-active={activeIndex === 0}
-              onClick={handleSubmitSearch}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm ${activeIndex === 0 ? "bg-primary/10" : ""}`}
-            >
-              <Search className="w-4 h-4 text-muted-foreground" />
-              <span className="text-primary">{t("palette.search_for", { query: query.trim() })}</span>
-              <CornerDownLeft className="w-3.5 h-3.5 text-muted-foreground/60 ml-auto" />
-            </button>
-          )}
-          {filtered.length === 0 ? (
-            <div className="px-4 py-10 text-center text-sm text-muted-foreground">{t("palette.no_results")}</div>
-          ) : (
-            [...groups.entries()].map(([section, group]) => (
-              <div key={section}>
-                <div className="px-4 pt-3 pb-1.5 text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70">
-                  {section}
+        <ScrollArea className="max-h-[45vh]">
+          <div ref={listRef} id="command-palette-list" role="listbox" aria-label={t("palette.title")} className="py-2">
+            {showSearchAction && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  role="option"
+                  id="palette-option-0"
+                  aria-selected={activeIndex === 0}
+                  data-active={activeIndex === 0}
+                  onClick={handleSubmitSearch}
+                  className={`h-auto w-full justify-start gap-3 rounded-none px-4 py-2.5 text-left text-sm ${activeIndex === 0 ? "bg-primary/10" : ""}`}
+                >
+                <Search className="w-4 h-4 text-muted-foreground" />
+                <span className="text-primary">{t("palette.search_for", { query: query.trim() })}</span>
+                <CornerDownLeft className="ml-auto w-3.5 h-3.5 text-muted-foreground/60" />
+              </Button>
+            )}
+            {filtered.length === 0 ? (
+              <div className="px-4 py-10 text-center text-sm text-muted-foreground">{t("palette.no_results")}</div>
+            ) : (
+              [...groups.entries()].map(([section, group]) => (
+                <div key={section}>
+                  <div className="px-4 pt-3 pb-1.5 text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70">
+                    {section}
+                  </div>
+                  {group.map((item) => {
+                    const globalIndex = searchOffset + filtered.indexOf(item);
+                    const Icon = item.icon;
+                    return (
+                      <Button
+                        key={item.href}
+                        type="button"
+                        variant="ghost"
+                        role="option"
+                        id={`palette-option-${globalIndex}`}
+                        aria-selected={activeIndex === globalIndex}
+                        data-active={activeIndex === globalIndex}
+                        onClick={() => handleSelect(filtered.indexOf(item))}
+                        className={`h-auto w-full justify-start gap-3 rounded-none px-4 py-2.5 text-left text-sm ${activeIndex === globalIndex ? "bg-primary/10" : ""}`}
+                      >
+                        <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-secondary/70">
+                          <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+                        </span>
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate text-foreground">{item.label}</span>
+                          {item.subtitle && (
+                            <span className="truncate text-xs text-muted-foreground/70">{item.subtitle}</span>
+                          )}
+                        </span>
+                        <span className="ml-auto max-w-40 truncate font-mono text-xs text-muted-foreground/70">{item.href}</span>
+                      </Button>
+                    );
+                  })}
                 </div>
-                {group.map((item) => {
-                  const globalIndex = searchOffset + filtered.indexOf(item);
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.href}
-                      data-active={activeIndex === globalIndex}
-                      onClick={() => handleSelect(filtered.indexOf(item))}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm ${activeIndex === globalIndex ? "bg-primary/10" : ""}`}
-                    >
-                      <span className="flex items-center justify-center w-6 h-6 rounded-md bg-secondary/70 shrink-0">
-                        <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-                      </span>
-                      <span className="flex flex-col min-w-0">
-                        <span className="text-foreground truncate">{item.label}</span>
-                        {item.subtitle && (
-                          <span className="text-xs text-muted-foreground/70 truncate">{item.subtitle}</span>
-                        )}
-                      </span>
-                      <span className="text-xs text-muted-foreground/70 font-mono ml-auto truncate max-w-40">{item.href}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
+              ))
+            )}
+          </div>
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
   );
 }

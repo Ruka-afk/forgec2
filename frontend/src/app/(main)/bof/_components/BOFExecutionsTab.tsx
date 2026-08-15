@@ -3,7 +3,7 @@
 import type { Execution } from "./types";
 import { getStatusColor } from "./types";
 import { Badge } from "@/components/ui/badge";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
 import { Terminal } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -33,7 +33,7 @@ export default function BOFExecutionsTab({ executions, loading }: BOFExecutionsT
             <div key={ex.id || i} className="px-5 py-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900/20 rounded-lg flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <div className="w-8 h-8 bg-success/15 rounded-lg flex items-center justify-center text-success">
                     <Terminal className="w-4 h-4" />
                   </div>
                   <div>
@@ -51,7 +51,7 @@ export default function BOFExecutionsTab({ executions, loading }: BOFExecutionsT
                 </div>
               </div>
               {(ex.result) && (
-                <pre className="text-xs font-mono text-emerald-300 bg-card rounded-lg p-3 mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap border border-border">
+                <pre className="text-xs font-mono text-chart-1 bg-card rounded-lg p-3 mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap border border-border">
                   {ex.result}
                 </pre>
               )}

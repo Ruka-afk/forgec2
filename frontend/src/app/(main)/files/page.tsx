@@ -1,207 +1,23 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { api } from "@/lib/api";
-import { formatTime, formatSize } from "@/lib/utils";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { EmptyState, PageHeader, Spinner } from "@/components/UI";
-import { DataState } from "@/components/ui/data-state";
-import { NormalizedAgent as Agent } from "@/types/agent";
-import { normalizeAgentList } from "@/lib/agents";
-import { paths } from "@/lib/api-paths";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { File, FolderOpen, MousePointerClick, Search } from "lucide-react";
-import { useI18n } from "@/lib/i18n";
-import { toast } from "sonner";
+import { Suspense, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-interface FileEntry {
-  name: string;
-  is_dir: boolean;
-  size: number;
-  mod_time: string;
+function FilesRedirectInner() {
+  const router = useRouter();
+  const sp = useSearchParams();
+  useEffect(() => {
+    const id = sp.get("agent_id") || sp.get("id");
+    router.replace(id ? `/agents/${encodeURIComponent(id)}/files` : "/agents");
+  }, [router, sp]);
+  return null;
 }
 
-export default function FilesPage() {
-  const { t } = useI18n();
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  const [currentPath, setCurrentPath] = useState("C:\\");
-  const [files, setFiles] = useState<FileEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [filesLoading, setFilesLoading] = useState(false);
-  const [filesError, setFilesError] = useState<string | null>(null);
-
-  const loadAgents = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    api.get(paths.agents.list("page=1&pageSize=200"))
-      .then((data) => {
-        if (mountedRef.current) setAgents(normalizeAgentList(data) as Agent[]);
-      })
-      .catch((e) => {
-        if (!mountedRef.current) return;
-        setAgents([]);
-        const msg = e instanceof Error ? e.message : t("files.toast.load_agents_failed");
-        setError(msg);
-        toast.error(msg);
-      })
-      .finally(() => { if (mountedRef.current) setLoading(false); });
-  }, [t]);
-
-  useEffect(() => { loadAgents(); }, [loadAgents]);
-
-  const loadFiles = useCallback((agentId: string, path: string) => {
-    if (!agentId) return;
-    setFilesLoading(true);
-    setFilesError(null);
-    api.post(paths.agents.filesLs(agentId), { path })
-      .then((data) => {
-        const items: FileEntry[] = (data.files || data.entries || data.data || []) as FileEntry[];
-        setFiles(items);
-      })
-      .catch(() => {
-        setFiles([]);
-        setFilesError(t("files.toast.load_files_failed"));
-        toast.error(t("files.toast.load_files_failed"));
-      })
-      .finally(() => setFilesLoading(false));
-  }, [t]);
-
-  const selectAgent = (agent: Agent) => {
-    setSelectedAgent(agent);
-    setCurrentPath("C:\\");
-    setFiles([]);
-    setTimeout(() => loadFiles(agent.id, "C:\\"), 100);
-  };
-
-  const navigateDir = (name: string) => {
-    if (!selectedAgent) return;
-    const newPath = currentPath.endsWith("\\") ? currentPath + name : currentPath + "\\" + name;
-    setCurrentPath(newPath);
-    loadFiles(selectedAgent.id, newPath);
-  };
-
-  const navigateUp = () => {
-    if (!selectedAgent || currentPath === "C:\\") return;
-    const parts = currentPath.replace(/\\$/, "").split("\\");
-    parts.pop();
-    const parent = parts.join("\\") + "\\";
-    setCurrentPath(parent);
-    loadFiles(selectedAgent.id, parent);
-  };
-
-  const filteredAgents = agents;
-
+/** Global /files was a second browser that treated ls ACKs as listings. */
+export default function FilesRedirect() {
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("files.title")} subtitle={t("files.subtitle")} />
-
-      <DataState loading={loading} error={error} onRetry={loadAgents}>
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-1">
-          <Card>
-            <div className="divide-y divide-border max-h-[70vh] overflow-y-auto">
-              {filteredAgents.length > 0 ? (
-                filteredAgents.map((a) => (
-                  <Button
-                    key={a.id}
-                    variant="ghost"
-                    onClick={() => selectAgent(a)}
-                    className={`w-full justify-start text-left px-3 py-3 hover:bg-muted transition-colors rounded-none ${
-                      selectedAgent?.id === a.id ? "bg-primary/10 border-l-2 border-primary" : ""
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${a.status === "online" ? "bg-emerald-500" : "bg-muted-foreground"}`}></span>
-                      <span className="font-medium text-sm text-foreground truncate">{a.hostname || a.id.substring(0, 8)}</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground/70 mt-0.5 ml-4 truncate">{a.ip} · {a.os}</div>
-                  </Button>
-                ))
-              ) : (
-                <div className="p-4 sm:p-5 text-center text-muted-foreground/70 text-sm">
-                  <EmptyState icon={Search} title={t("files.no_agents")} message={t("files.no_agents_hint")} />
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
-
-        <div className="lg:col-span-3">
-          {selectedAgent ? (
-            <Card>
-              <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                <Tooltip>
-                  <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={navigateUp} aria-label={t("files.navigate_up")} />}>
-                  <FolderOpen className="w-4 h-4" />
-                  </TooltipTrigger>
-                  <TooltipContent>{t("files.navigate_up")}</TooltipContent>
-                </Tooltip>
-                <span className="text-sm font-mono text-muted-foreground">{selectedAgent.hostname || selectedAgent.id.substring(0, 8)}</span>
-                <span className="text-xs text-muted-foreground/70">/</span>
-                <span className="text-sm font-mono text-foreground truncate">{currentPath}</span>
-              </div>
-
-              {filesError ? (
-                <div className="p-4 sm:p-5 text-center">
-                  <p className="text-sm text-destructive">{filesError}</p>
-                  {selectedAgent && (
-                    <Button size="sm" variant="outline" className="mt-3" onClick={() => loadFiles(selectedAgent.id, currentPath)}>
-                      {t("common.try_again")}
-                    </Button>
-                  )}
-                </div>
-              ) : filesLoading ? (
-                <div className="p-4 sm:p-5 text-center text-muted-foreground/70">
-                  <Spinner size="sm" className="mb-2" />
-                   {t("files.loading_files")}
-                </div>
-              ) : files.length > 0 ? (
-                <div className="divide-y divide-border">
-                  {files.filter((f) => f.name).map((f) => (
-                    <div
-                      key={f.name}
-                      role={f.is_dir ? "button" : undefined}
-                      tabIndex={f.is_dir ? 0 : undefined}
-                      onClick={() => f.is_dir && navigateDir(f.name)}
-                      onKeyDown={f.is_dir ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigateDir(f.name); } } : undefined}
-                      className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                        f.is_dir ? "cursor-pointer hover:bg-muted" : ""
-                      }`}
-                    >
-                      {f.is_dir ? <FolderOpen className="w-5 h-5 text-amber-400" /> : <File className="w-5 h-5 text-muted-foreground" />}
-                      <span className={`flex-1 truncate ${f.is_dir ? "font-medium text-foreground" : "text-muted-foreground"}`}>
-                        {f.name}
-                      </span>
-                      {!f.is_dir && <span className="text-xs text-muted-foreground/70 w-20 text-right">{formatSize(f.size)}</span>}
-                      <span className="text-xs text-muted-foreground/70 w-32 text-right hidden sm:block">{formatTime(f.mod_time)}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-4 sm:p-5 text-center text-muted-foreground/70">
-                  <FolderOpen className="w-4 h-4 mb-2" />
-                  {t("files.no_files")}
-                </div>
-              )}
-            </Card>
-          ) : (
-            <Card className="p-12 text-center text-muted-foreground/70">
-              <MousePointerClick className="w-4 h-4" />
-              <p className="text-sm">{t("files.select_agent")}</p>
-            </Card>
-          )}
-        </div>
-      </div>
-      </DataState>
-    </div>
+    <Suspense fallback={null}>
+      <FilesRedirectInner />
+    </Suspense>
   );
 }
-

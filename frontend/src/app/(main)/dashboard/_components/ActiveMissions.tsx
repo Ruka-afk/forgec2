@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { onWSMessage } from "@/lib/wsContext";
 import { useI18n } from "@/lib/i18n";
-import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
-import { EmptyState } from "@/components/UI";
+import { useApiResource } from "@/lib/hooks/useApiResource";
+import { EmptyState } from "@/components/ui/empty-state";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,33 +48,21 @@ function formatDuration(ms: number): string {
 
 export default function ActiveMissions({ className = "" }: { className?: string }) {
   const { t } = useI18n();
-  const [missions, setMissions] = useState<Mission[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState<number | null>(null);
-  const inFlight = useRef(false);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(id);
   }, []);
 
-  const load = useCallback(async () => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    try {
+  const { data, error, refresh: load } = useApiResource<{ missions: Mission[] }>({
+    fetcher: async () => {
       const data = await api.get<{ missions: Mission[] }>(paths.dashboard.activeMissions);
-      setMissions(data?.missions || []);
-      setError(null);
-    } catch (e) {
-      if (process.env.NODE_ENV === "development") console.error("[ActiveMissions] load failed", e);
-      setError(e instanceof Error ? e.message : "Failed to load missions");
-    } finally {
-      inFlight.current = false;
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-  useVisibleInterval(load, 30000);
+      return { missions: data?.missions || [] };
+    },
+    pollMs: 30_000,
+    errorMessage: "Failed to load missions",
+  });
 
   // WS task_update events (status transitions to/from pending/running) change
   // the board — refetch on each. Debounced so beacon bursts coalesce.
@@ -91,6 +79,7 @@ export default function ActiveMissions({ className = "" }: { className?: string 
     };
   }, [load]);
 
+  const missions = data?.missions ?? [];
   const active = missions.slice(0, MAX_MISSIONS);
 
   return (

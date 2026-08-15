@@ -331,13 +331,17 @@ func (s *Server) handleUpdateListener(c *gin.Context) {
 	if updates.ICMPAddr != "" {
 		l.ICMPAddr = updates.ICMPAddr
 	}
+	// Capture the old listener key BEFORE Save mutates l, so we stop the
+	// previously-running listener (not the new one) when its bind address
+	// changes. GORM's Save writes back all fields, so computing the key
+	// afterwards would target the new config and leave the old one orphaned.
+	oldKey := listenerKey(&l)
 	if err := s.db.Save(&l).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Listener update"))
 		return
 	}
 
 	// Sync extra listener state (start/stop/restart)
-	oldKey := listenerKey(&l)
 	changed := updates.Host != "" || updates.Port != 0 || updates.Scheme != "" || updates.Protocol != "" || updates.Type != "" ||
 		updates.DNSDomain != "" || updates.DNSListenAddr != "" || updates.ICMPAddr != ""
 	if changed {

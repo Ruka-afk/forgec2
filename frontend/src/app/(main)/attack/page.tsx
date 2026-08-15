@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { MITRE_PHASE_COLORS } from "@/lib/colors";
-import { PageHeader, PageSpinner } from "@/components/UI";
+import { PageSpinner } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -137,15 +138,14 @@ export default function AttackPage() {
 
   if (loading && !data) {
     return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageContainer title={t("attack.title")} subtitle={t("attack.subtitle")}>
         <PageSpinner />
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("attack.title")} subtitle={t("attack.subtitle")}>
+    <PageContainer title={t("attack.title")} subtitle={t("attack.subtitle")} actions={<>
         <Select value={selectedAgent || "all"} onValueChange={(v) => setSelectedAgent(v === "all" ? "" : v ?? "")}>
           <SelectTrigger className="max-w-[250px]">
             <SelectValue placeholder={t("attack.all_agents")} />
@@ -161,7 +161,7 @@ export default function AttackPage() {
               ))}
           </SelectContent>
         </Select>
-      </PageHeader>
+      </>}>
 
       <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
         <div className="font-semibold">{t("attack.honesty_title")}</div>
@@ -300,7 +300,7 @@ export default function AttackPage() {
           );
         })}
       </div>
-    </div>
+    </PageContainer>
   );
 }
 

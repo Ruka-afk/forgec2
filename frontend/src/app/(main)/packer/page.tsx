@@ -1,13 +1,7 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { Spinner } from "@/components/UI";
+import RedirectToGenerateTab from "../generate/_components/RedirectToGenerateTab";
 
-const PackerPageContent = dynamic(
-  () => import("./PackerPageContent"),
-  { ssr: false, loading: () => <div className="flex items-center justify-center h-64"><Spinner /></div> }
-);
-
-export default function PackerPage() {
-  return <PackerPageContent />;
+export default function PackerRedirect() {
+  return <RedirectToGenerateTab tab="packer" />;
 }

@@ -14,4 +14,5 @@ export const DYNAMIC_PREFIXES = [
   "auto.type_", // automation alert-rule types: t(`auto.type_${r.type}`)
   "notifications.severity_", // notification badge severities: t(`notifications.severity_${n.severity}`)
   "search.type_", // search result types: t(`search.type_${r.type}`)
+  "generate.format_", // payload format picker: t(PAYLOAD_FORMAT_LABEL[key])
 ];

@@ -3,12 +3,14 @@
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
-import { PageHeader, Spinner } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
+import { Spinner } from "@/components/ui/spinner";
 import { useBOFData } from "./_components/useBOFData";
 import { quickBOFLibrary } from "./_components/types";
 import type { QuickBOF } from "./_components/types";
 import dynamic from "next/dynamic";
 import { Card } from "@/components/ui/card";
+import { StatCard } from "@/components/ui/animated-stat-card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -61,48 +63,19 @@ export default function BOFPage() {
     );
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("bof.title")} subtitle={t("bof.subtitle")} />
+    <PageContainer title={t("bof.title")} subtitle={t("bof.subtitle")}>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5 mb-6">
-        <Card className="p-4 sm:p-5 flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary/10 dark:bg-primary/15 rounded-xl flex items-center justify-center">
-            <Box className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="text-2xl font-bold tabular-nums text-foreground">{files.length}</div>
-            <div className="text-xs text-muted-foreground">{t("bof.stat_uploaded")}</div>
-          </div>
-        </Card>
-        <Card className="p-4 sm:p-5 flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center">
-            <Check className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="text-2xl font-bold tabular-nums text-foreground">{executions.length}</div>
-            <div className="text-xs text-muted-foreground">{t("bof.stat_executions")}</div>
-          </div>
-        </Card>
-        <Card className="p-4 sm:p-5 flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/20 rounded-xl flex items-center justify-center">
-            <PieChart className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="text-2xl font-bold tabular-nums text-foreground">
-              {executions.length > 0 ? `${Math.round((executions.filter((e) => (e.status) === "success").length / executions.length) * 100)}%` : "N/A"}
-            </div>
-            <div className="text-xs text-muted-foreground">{t("bof.stat_success_rate")}</div>
-          </div>
-        </Card>
-        <Card className="p-4 sm:p-5 flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-            <BookOpen className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="text-2xl font-bold tabular-nums text-foreground">{agents.length}</div>
-            <div className="text-xs text-muted-foreground">{t("bof.stat_available_agents")}</div>
-          </div>
-        </Card>
+        <StatCard label={t("bof.stat_uploaded")} value={files.length} color="primary" icon={<Box className="w-4 h-4" />} iconSide="left" />
+        <StatCard label={t("bof.stat_executions")} value={executions.length} color="success" icon={<Check className="w-4 h-4" />} iconSide="left" />
+        <StatCard
+          label={t("bof.stat_success_rate")}
+          value={executions.length > 0 ? `${Math.round((executions.filter((e) => (e.status) === "success").length / executions.length) * 100)}%` : "N/A"}
+          color="warning"
+          icon={<PieChart className="w-4 h-4" />}
+          iconSide="left"
+        />
+        <StatCard label={t("bof.stat_available_agents")} value={agents.length} color="primary" icon={<BookOpen className="w-4 h-4" />} iconSide="left" />
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
@@ -177,7 +150,7 @@ export default function BOFPage() {
       </Tabs>
 
       {modal}
-    </div>
+    </PageContainer>
   );
 }
 

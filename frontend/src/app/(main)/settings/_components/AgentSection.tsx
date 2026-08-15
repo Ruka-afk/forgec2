@@ -18,7 +18,7 @@ export default function AgentSection({
   const { t } = useI18n();
   return (
     <Card className="overflow-hidden">
-      <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-6 py-4">
+      <div className="bg-success/10 border-b border-success/20 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Bot className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-foreground">{t("settings.agent.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.agent.subtitle")}</p></div>
@@ -67,7 +67,7 @@ export default function AgentSection({
             </div>
             <p className="text-(--fs-micro-sm) text-muted-foreground mt-2">{t("settings.agent.working_hint")}</p>
           </div>
-          <Button type="submit" disabled={saving} className="h-11 px-6 rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+          <Button type="submit" size="lg" disabled={saving} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">
             <Save className="w-4 h-4" />{t("settings.agent.save")}
           </Button>
         </form>

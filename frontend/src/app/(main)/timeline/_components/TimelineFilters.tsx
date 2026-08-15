@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { User, X } from "lucide-react";
-import { EVENT_COLORS, EVENT_TYPES } from "../page";
+import { EVENT_COLORS, EVENT_TYPES } from "./types";
 import { useI18n } from "@/lib/i18n";
 
 interface TimelineFiltersProps {

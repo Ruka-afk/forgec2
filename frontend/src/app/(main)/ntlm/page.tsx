@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { EmptyState, Spinner } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
+import { ErrorState } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -113,8 +115,7 @@ export default function NtlmPage() {
   ];
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={<><Zap className="w-4 h-4" />{t("ntlm.title")}</>} subtitle={t("ntlm.subtitle")} />
+    <PageContainer title={<><Zap className="w-4 h-4" />{t("ntlm.title")}</>} subtitle={t("ntlm.subtitle")}>
 
       <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
         <div className="font-semibold">{t("ntlm.experimental_title")}</div>
@@ -122,10 +123,7 @@ export default function NtlmPage() {
       </Card>
 
       {agentsError && (
-        <div className="mb-4 px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/30 text-sm text-destructive flex items-center justify-between">
-          <span>{agentsError}</span>
-          <Button variant="ghost" size="sm" onClick={() => setAgentsError(null)} aria-label={t("common.dismiss")}>&times;</Button>
-        </div>
+        <ErrorState message={agentsError} className="mb-4" action={<Button variant="ghost" size="sm" onClick={() => setAgentsError(null)} aria-label={t("common.dismiss")}>&times;</Button>} />
       )}
 
       {/* Tabs */}
@@ -324,7 +322,7 @@ export default function NtlmPage() {
         </Card>
       </TabsContent>
       </Tabs>
-    </div>
+    </PageContainer>
   );
 }
 

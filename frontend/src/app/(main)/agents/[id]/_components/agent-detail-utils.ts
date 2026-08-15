@@ -85,65 +85,8 @@ export function getOSIcon(os: string): typeof Monitor {
   }
 }
 
-export function computeHealthScore(
-  status: string,
-  successRate: number,
-  lastSeen: string,
-  tasks: TaskEntry[],
-): number {
-  let score = 0;
-  if (status === "online") score += 40;
-  else return 0;
-  score += Math.round((successRate / 100) * 30);
-  if (lastSeen) {
-    const diffMs = Date.now() - new Date(lastSeen).getTime();
-    const diffMin = diffMs / 60000;
-    if (diffMin < 5) score += 15;
-    else if (diffMin < 60) score += 10;
-    else if (diffMin < 1440) score += 5;
-  }
-  const recentFailed = tasks.slice(0, 10).some((t) => (t.status) === "failed");
-  if (!recentFailed) score += 15;
-  return Math.min(100, Math.max(0, score));
-}
-
-export function computeActivityBuckets(tasks: TaskEntry[], now: number): { activityBuckets: number[]; maxActivity: number } {
-  const buckets: number[] = Array.from({ length: 24 }, () => 0);
-  const oneDayAgo = now - 24 * 60 * 60 * 1000;
-  for (const t of tasks) {
-    const created = t.created_at;
-    if (!created) continue;
-    const ts = new Date(created).getTime();
-    if (ts < oneDayAgo) continue;
-    const bucketIndex = Math.floor(((ts - oneDayAgo) / (24 * 60 * 60 * 1000)) * 24);
-    if (bucketIndex >= 0 && bucketIndex < 24) buckets[bucketIndex]++;
-  }
-  return { activityBuckets: buckets, maxActivity: Math.max(...buckets, 1) };
-}
-
-export function computeSparklinePoints(tasks: TaskEntry[]): { x: number; y: number; dur: number }[] {
-  const completedTasksList = tasks.filter((t) => (t.status) === "completed");
-  const last10 = completedTasksList.slice(0, 10).reverse();
-  if (last10.length === 0) return [];
-  const durations = last10.map((t) => {
-    const created = new Date(t.created_at || "").getTime();
-    const updated = new Date(t.updated_at || "").getTime();
-    if (!created || !updated || updated <= created) return 1000;
-    return updated - created;
-  });
-  const maxDur = Math.max(...durations, 1);
-  const minDur = Math.min(...durations, 0);
-  const range = maxDur - minDur || 1;
-  return durations.map((dur, i) => ({
-    x: (i / Math.max(durations.length - 1, 1)) * 100,
-    y: 20 - ((dur - minDur) / range) * 18,
-    dur,
-  }));
-}
-
 export function buildAgentMarkdown(
   data: AgentDetailResponse,
-  healthScore: number,
 ): string {
   const agent = data.agent || {};
   const hostname = agent.hostname || "—";
@@ -173,7 +116,6 @@ export function buildAgentMarkdown(
     `| Status | ${status} |`,
     `| Uptime | ${uptime} |`,
     `| Tasks | ${totalTasks} (${completedTasks} completed, ${pendingTasks} pending, ${failedTasks} failed) |`,
-    `| Health Score | ${healthScore}/100 |`,
     "",
   ].join("\n");
 }

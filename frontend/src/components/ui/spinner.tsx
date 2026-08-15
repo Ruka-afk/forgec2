@@ -13,9 +13,9 @@ const SPINNER_SIZES: Record<SpinnerSize, string> = {
 const SPINNER_COLORS: Record<string, string> = {
   indigo: "border-primary border-t-transparent",
   white: "border-white border-t-transparent",
-  blue: "border-blue-500 border-t-transparent",
-  emerald: "border-emerald-500 border-t-transparent",
-  red: "border-red-500 border-t-transparent",
+  blue: "border-info border-t-transparent",
+  emerald: "border-success border-t-transparent",
+  red: "border-destructive border-t-transparent",
 };
 
 export function Spinner({ size = "md", color = "indigo", className = "", label }: { size?: SpinnerSize; color?: string; className?: string; label?: string }) {

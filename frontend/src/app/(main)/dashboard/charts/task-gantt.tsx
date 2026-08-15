@@ -19,7 +19,7 @@ function GanttBody({ data }: { data: GanttItem[] }) {
         <div key={i} className="flex items-center gap-2 text-xs">
           <span className="w-16 truncate text-muted-foreground font-mono text-(--fs-micro-sm)">{item.agent}</span>
           <div className="flex-1 h-3 bg-secondary rounded-full overflow-hidden">
-            <div className={`h-full rounded-full ${item.status === "completed" ? "bg-emerald-500" : item.status === "failed" ? "bg-red-500" : "bg-amber-500"}`}
+            <div className={`h-full rounded-full ${item.status === "completed" ? "bg-success" : item.status === "failed" ? "bg-destructive" : "bg-warning"}`}
               style={{ width: `${Math.min(100, Math.max(8, item.duration * 8))}%`, marginLeft: `${Math.min(40, item.start)}%` }} />
           </div>
           <span className="text-(--fs-micro-sm) text-muted-foreground/70 w-20 truncate">{item.task}</span>
@@ -58,7 +58,7 @@ export default function TaskGanttSection({ range }: { range: string }) {
     return () => controller.abort();
   }, [range]);
   return (
-    <ChartCard title={t("dashboard.task_gantt")} icon={BarChart3} iconColor="text-violet-500 dark:text-violet-400" loading={loading} exportFilename="task-gantt.png">
+    <ChartCard title={t("dashboard.task_gantt")} icon={BarChart3} iconColor="violet" loading={loading} exportFilename="task-gantt.png">
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground/70 text-center py-6">
           {loadError ? t("dashboard.gantt_load_failed") : t("dashboard.no_gantt_data")}

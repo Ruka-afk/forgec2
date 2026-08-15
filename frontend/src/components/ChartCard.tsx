@@ -10,11 +10,12 @@ import { IconBadge } from "@/components/ui/icon-badge";
 import { Download, RefreshCw, AlertTriangle, type LucideIcon } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/lib/i18n";
+import type { Hue } from "@/lib/ui/statusStyles";
 
 interface ChartCardProps {
   title: string;
   icon: LucideIcon;
-  iconColor: string;
+  iconColor?: Hue;
   children: ReactNode;
   onRefresh?: () => void;
   loading?: boolean;
@@ -23,7 +24,7 @@ interface ChartCardProps {
   className?: string;
 }
 
-export function ChartCard({ title, icon: Icon, iconColor, children, onRefresh, loading, error, exportFilename, className }: ChartCardProps) {
+export function ChartCard({ title, icon: Icon, iconColor = "primary", children, onRefresh, loading, error, exportFilename, className }: ChartCardProps) {
   const { t } = useI18n();
   const chartRef = useRef<HTMLDivElement>(null);
   const handleExport = async () => {
@@ -34,11 +35,7 @@ export function ChartCard({ title, icon: Icon, iconColor, children, onRefresh, l
     <Card role="region" aria-label={title} className={`p-5 sm:p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30 ${className || ""}`}>
       <div className="flex items-center justify-between mb-4 pb-4 border-b border-border/50">
         <div className="font-semibold text-foreground flex items-center gap-x-2.5 text-(--fs-body-sm)">
-          <IconBadge
-            icon={Icon}
-            color={iconColor.includes("emerald") ? "emerald" : iconColor.includes("amber") ? "amber" : iconColor.includes("red") ? "red" : "primary"}
-            size="md"
-          />
+          <IconBadge icon={Icon} color={iconColor} size="md" />
           <span>{title}</span>
         </div>
         <div className="flex items-center gap-0.5">
@@ -62,8 +59,8 @@ export function ChartCard({ title, icon: Icon, iconColor, children, onRefresh, l
       </div>
       {error ? (
         <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center mb-3">
-            <AlertTriangle className="w-6 h-6 text-amber-500" />
+          <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center mb-3">
+            <AlertTriangle className="w-6 h-6 text-warning" />
           </div>
           <span className="text-sm font-medium">{t("chart.load_failed")}</span>
           <span className="text-xs text-muted-foreground/70 mt-1">{t("chart.try_later")}</span>

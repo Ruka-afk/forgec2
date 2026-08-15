@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useWS } from "@/lib/wsContext";
 import { formatTime } from "@/lib/utils";
-import { PageHeader } from "@/components/UI";
+import { PageHeader } from "@/components/ui/page-header";
 import { DataState } from "@/components/ui/data-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";

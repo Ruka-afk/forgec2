@@ -9,10 +9,16 @@ import (
 	"testing"
 )
 
-// obfuscateForTest mirrors the server-side payload.obfuscateBlob format:
-// AES-256-GCM with the strxor-delivered SConfigKey.
+// obfuscateForTest mirrors the server-side payload.obfuscateBlobKeyed format:
+// AES-256-GCM with the strxor-delivered SConfigKey. The test installs its own
+// per-test key (the production default is empty/fail-closed), exactly as the
+// builder would inject one via -ldflags -X main.SConfigKey.
 func obfuscateForTest(t *testing.T, plain []byte) string {
 	t.Helper()
+	const testKeyHex = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	if SConfigKey == "" {
+		SConfigKey = obfuscate(testKeyHex)
+	}
 	key, err := hex.DecodeString(s(SConfigKey))
 	if err != nil {
 		t.Fatal(err)

@@ -83,6 +83,130 @@ func TestHandleListAgents(t *testing.T) {
 	}
 }
 
+func TestImplantHostKey(t *testing.T) {
+	if got := implantHostKey(db.Implant{Hostname: " DC01 ", IP: "10.0.0.1"}); got != "h:dc01" {
+		t.Fatalf("hostname key: %q", got)
+	}
+	if got := implantHostKey(db.Implant{IP: "10.0.0.2"}); got != "ip:10.0.0.2" {
+		t.Fatalf("ip key: %q", got)
+	}
+	if got := implantHostKey(db.Implant{PublicIP: "1.2.3.4", ID: "x"}); got != "ip:1.2.3.4" {
+		t.Fatalf("public ip key: %q", got)
+	}
+	if got := implantHostKey(db.Implant{ID: "sess-1"}); got != "id:sess-1" {
+		t.Fatalf("id key: %q", got)
+	}
+}
+
+func TestHandleListAgentsGroupByHost(t *testing.T) {
+	s := newAgentTestServer(t)
+	now := time.Now()
+	seed := []db.Implant{
+		{ID: "s1", Hostname: "BOX", Username: "a", IP: "10.0.0.1", LastSeen: now.Add(-2 * time.Minute)},
+		{ID: "s2", Hostname: "box", Username: "b", IP: "10.0.0.1", LastSeen: now.Add(-1 * time.Minute)},
+		{ID: "s3", Hostname: "OTHER", Username: "c", IP: "10.0.0.9", LastSeen: now},
+	}
+	for _, a := range seed {
+		if err := s.db.Create(&a).Error; err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/api/agents?group=host&page=1&page_size=1&sort_key=last_seen&sort_dir=desc", nil)
+	s.handleListAgents(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Agents []struct {
+			ID       string `json:"id"`
+			Hostname string `json:"hostname"`
+		} `json:"agents"`
+		Total int    `json:"total"`
+		Group string `json:"group"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("json: %v body=%s", err, w.Body.String())
+	}
+	if resp.Group != "host" {
+		t.Fatalf("expected group=host, got %q", resp.Group)
+	}
+	if resp.Total != 2 {
+		t.Fatalf("expected 2 hosts, got %d", resp.Total)
+	}
+	if len(resp.Agents) != 1 {
+		t.Fatalf("page_size=1 should return one host; got %d agents %v", len(resp.Agents), resp.Agents)
+	}
+	if resp.Agents[0].ID != "s3" {
+		t.Fatalf("newest host should be OTHER, got %+v", resp.Agents)
+	}
+
+	w2 := httptest.NewRecorder()
+	c2, _ := gin.CreateTestContext(w2)
+	c2.Request, _ = http.NewRequest(http.MethodGet, "/api/agents?group=host&page=2&page_size=1", nil)
+	s.handleListAgents(c2)
+	var page2 struct {
+		Agents []struct {
+			ID string `json:"id"`
+		} `json:"agents"`
+		Total int `json:"total"`
+	}
+	if err := json.Unmarshal(w2.Body.Bytes(), &page2); err != nil {
+		t.Fatalf("page2 json: %v", err)
+	}
+	if page2.Total != 2 || len(page2.Agents) != 2 {
+		t.Fatalf("page 2 should return both BOX sessions, got total=%d n=%d ids=%v", page2.Total, len(page2.Agents), page2.Agents)
+	}
+	got := map[string]bool{}
+	for _, a := range page2.Agents {
+		got[a.ID] = true
+	}
+	if !got["s1"] || !got["s2"] {
+		t.Fatalf("expected s1+s2 on host page 2, got %v", page2.Agents)
+	}
+}
+
+func TestAgentListEnvelopeShared(t *testing.T) {
+	s := newAgentTestServer(t)
+	if err := s.db.Create(&db.Implant{ID: "a1", Hostname: "H", IP: "10.0.0.1", LastSeen: time.Now()}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	hit := func(fn func(*gin.Context)) map[string]any {
+		t.Helper()
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		req, _ := http.NewRequest(http.MethodGet, "/api/agents?page=1&page_size=10", nil)
+		c.Request = req
+		c.Set("user_role", "operator")
+		fn(c)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status %d body=%s", w.Code, w.Body.String())
+		}
+		var m map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil {
+			t.Fatalf("json: %v", err)
+		}
+		return m
+	}
+
+	a := hit(s.handleListAgents)
+	b := hit(s.apiListAgents)
+	for _, m := range []map[string]any{a, b} {
+		if m["success"] != true {
+			t.Fatalf("expected success=true, got %v", m["success"])
+		}
+		if _, ok := m["agents"].([]any); !ok {
+			t.Fatalf("missing agents[]: %v", m)
+		}
+		if _, ok := m["data"].([]any); !ok {
+			t.Fatalf("missing data[]: %v", m)
+		}
+	}
+}
+
 func TestHandleAgentDetail(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		s := newAgentTestServer(t)

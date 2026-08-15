@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { formatTime } from "@/lib/utils";
-import { PageHeader } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
 import { DataState } from "@/components/ui/data-state";
 import { useI18n } from "@/lib/i18n";
-import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -41,62 +41,36 @@ interface TrafficEntry {
   Protocol?: string;
 }
 
+const EMPTY_TRAFFIC: TrafficEntry[] = [];
+
+function applyFilter(data: TrafficEntry[], ip: string) {
+  if (!ip) return data;
+  return data.filter((e) => (e.source_ip || "").includes(ip));
+}
+
 export default function TrafficPage() {
-  const [entries, setEntries] = useState<TrafficEntry[]>([]);
   const [filteredEntries, setFilteredEntries] = useState<TrafficEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [autoScroll, setAutoScroll] = useState(false);
   const [sourceIpFilter, setSourceIpFilter] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
-  const entriesRef = useRef<TrafficEntry[]>([]);
-  const lastErrorToastRef = useRef(0);
   const { t } = useI18n();
 
-  const applyFilter = (data: TrafficEntry[], ip: string) => {
-    if (!ip) return data;
-    return data.filter(e => {
-      const entryIp = e.source_ip || "";
-      return entryIp.includes(ip);
-    });
-  };
-
-  const loadTraffic = useCallback(async () => {
-    try {
+  const { data, loading, error, refresh: loadTraffic, setData } = useApiResource<TrafficEntry[]>({
+    fetcher: async () => {
       const data = await api.get(paths.traffic.page);
-      const arr = Array.isArray(data)
-        ? data
-        : (data?.data ?? data?.traffic ?? []);
-      const list = Array.isArray(arr) ? (arr as TrafficEntry[]) : [];
-      entriesRef.current = list;
-      setEntries(list);
-      setError(null);
-    } catch {
-      if (entriesRef.current.length === 0) {
-        setError(t("traffic.toast.load_failed"));
-      } else if (Date.now() - lastErrorToastRef.current > 10000) {
-        lastErrorToastRef.current = Date.now();
-        toast.error(t("traffic.toast.load_failed"));
-      }
-    }
-    setLoading(false);
-  }, [t]);
-
-  useEffect(() => { loadTraffic(); }, [loadTraffic]);
-  useVisibleInterval(loadTraffic, autoRefresh ? 5000 : 0);
-
-  const applyFilterToEntries = useCallback((ip: string) => {
-    setFilteredEntries(applyFilter(entries, ip));
-  }, [entries]);
+      const arr = Array.isArray(data) ? data : (data?.data ?? data?.traffic ?? []);
+      return Array.isArray(arr) ? (arr as TrafficEntry[]) : [];
+    },
+    pollMs: autoRefresh ? 5_000 : 0,
+    toastThrottleMs: 10_000,
+    errorMessage: t("traffic.toast.load_failed"),
+  });
+  const entries = data ?? EMPTY_TRAFFIC;
 
   useEffect(() => {
-    if (sourceIpFilter) {
-      applyFilterToEntries(sourceIpFilter);
-    } else {
-      setFilteredEntries(entries);
-    }
-  }, [sourceIpFilter, entries, applyFilterToEntries]);
+    setFilteredEntries(applyFilter(entries, sourceIpFilter));
+  }, [sourceIpFilter, entries]);
 
   useEffect(() => {
     if (autoScroll && containerRef.current) {
@@ -104,7 +78,7 @@ export default function TrafficPage() {
     }
   }, [filteredEntries, autoScroll]);
 
-  const clearLog = () => { entriesRef.current = []; setEntries([]); setFilteredEntries([]); };
+  const clearLog = () => { setData(null); };
 
   const sourceIps = [...new Set(entries.map(e => e.source_ip || "").filter(Boolean))];
 
@@ -123,17 +97,16 @@ export default function TrafficPage() {
 
   const getMethodStyle = (method: string) => {
     const m = method.toUpperCase();
-    if (m === "POST") return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
-    if (m === "GET") return "bg-blue-500/10 text-blue-700 dark:text-blue-400";
-    if (m === "BEACON") return "bg-purple-500/10 text-purple-700 dark:text-purple-400";
-    if (m === "PUT") return "bg-amber-500/10 text-amber-700 dark:text-amber-400";
-    if (m === "DELETE") return "bg-red-500/10 text-red-700 dark:text-red-400";
+    if (m === "POST") return "bg-success/10 text-success";
+    if (m === "GET") return "bg-info/10 text-info";
+    if (m === "BEACON") return "bg-chart-6/10 text-chart-6";
+    if (m === "PUT") return "bg-warning/10 text-warning";
+    if (m === "DELETE") return "bg-destructive/10 text-destructive";
     return "bg-muted text-muted-foreground";
   };
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("traffic.title")} subtitle={`${t("traffic.request_log")} · C2 Beacon ${t("traffic.comm_record")}`}>
+    <PageContainer title={t("traffic.title")} subtitle={`${t("traffic.request_log")} · C2 Beacon ${t("traffic.comm_record")}`} actions={<>
         <div className="flex items-center gap-2 flex-wrap">
           <Label className="flex items-center gap-x-2 text-sm text-muted-foreground cursor-pointer">
             <Checkbox checked={autoRefresh} onCheckedChange={setAutoRefresh} />
@@ -152,35 +125,23 @@ export default function TrafficPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={loadTraffic} className="h-11">
+          <Button onClick={loadTraffic} size="lg" className="">
             <RefreshCw className="w-4 h-4" />
             <span>{t("traffic.refresh")}</span>
           </Button>
-          <Button onClick={clearLog} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground h-11">
+          <Button onClick={clearLog} size="lg" className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
             <Trash2 className="w-4 h-4" />
             <span>{t("traffic.clear")}</span>
           </Button>
         </div>
-      </PageHeader>
+      </>}>
 
       <Card className="p-4 mb-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
-          <div className="text-center">
-            <div className="text-xs text-muted-foreground mb-1">{t("traffic.total_requests")}</div>
-            <div className="text-2xl font-bold text-primary">{totalRequests}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs text-muted-foreground mb-1">{t("traffic.beacons")}</div>
-            <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{beacons}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs text-muted-foreground mb-1">{t("traffic.errors")}</div>
-            <div className="text-2xl font-bold text-red-600 dark:text-red-400">{errors}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs text-muted-foreground mb-1">{t("traffic.data_transfer")}</div>
-            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatBytes(dataTransferred)}</div>
-          </div>
+          <StatTile centered label={t("traffic.total_requests")} value={totalRequests} tone="primary" />
+          <StatTile centered label={t("traffic.beacons")} value={beacons} tone="violet" />
+          <StatTile centered label={t("traffic.errors")} value={errors} tone="destructive" />
+          <StatTile centered label={t("traffic.data_transfer")} value={formatBytes(dataTransferred)} tone="success" />
         </div>
       </Card>
 
@@ -264,7 +225,7 @@ export default function TrafficPage() {
                       <TableCell className="text-xs text-muted-foreground">{ip}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{agent ? agent.substring(0, 8) : "-"}</TableCell>
                       <TableCell className="text-center">
-                        <span className={`text-xs font-medium ${status >= 400 ? "text-red-500 dark:text-red-400" : status >= 300 ? "text-amber-500 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>{status}</span>
+                        <span className={`text-xs font-medium ${status >= 400 ? "text-destructive" : status >= 300 ? "text-warning" : "text-success"}`}>{status}</span>
                       </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">{formatBytes(size)}</TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">{latency}ms</TableCell>
@@ -276,7 +237,7 @@ export default function TrafficPage() {
           </div>
         </DataState>
       </Card>
-    </div>
+    </PageContainer>
   );
 }
 

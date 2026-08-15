@@ -3,8 +3,9 @@
 import { useState } from "react";
 import type { BOFLibraryItem } from "./types";
 import { formatBytes } from "./types";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -76,27 +77,21 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Card className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary/10 dark:bg-primary/15 rounded-xl flex items-center justify-center">
-            <Layers className="w-4 h-4" />
-          </div>
+          <IconBadge icon={Layers} color="primary" size="xl" className="dark:bg-primary/15" />
           <div>
             <div className="text-xl font-bold text-foreground">{libraryItems.length}</div>
             <div className="text-xs text-muted-foreground">{t("bof.library_bofs")}</div>
           </div>
         </Card>
         <Card className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center">
-            <Cpu className="w-4 h-4" />
-          </div>
+          <IconBadge icon={Cpu} color="success" size="xl" />
           <div>
             <div className="text-xl font-bold text-foreground">{libraryItems.filter((i) => i.arch === "x64").length}</div>
             <div className="text-xs text-muted-foreground">{t("bof.stat_x64")}</div>
           </div>
         </Card>
         <Card className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-            <User className="w-4 h-4" />
-          </div>
+          <IconBadge icon={User} color="primary" size="xl" />
           <div>
             <div className="text-xl font-bold text-foreground">{new Set(libraryItems.map((i) => i.author).filter(Boolean)).size}</div>
             <div className="text-xs text-muted-foreground">{t("bof.authors")}</div>
@@ -140,7 +135,7 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
                             setLibRunArgs("");
                             setShowLibRun(true);
                           }}
-                          className="px-3 py-1.5 text-xs bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-lg border border-emerald-200 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+                          className="px-3 py-1.5 text-xs bg-success/15 text-success rounded-lg border border-success/30 hover:bg-success/15 transition-colors"
                         >
                           <Play className="w-4 h-4" />{t("bof.run")}
                         </Button>
@@ -171,28 +166,28 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
           <form onSubmit={handleLibUpload} className="space-y-4">
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.bof_file")} (.o)</span>
-              <input
+              <Input
                 type="file"
                 accept=".o"
                 onChange={(e) => setLibUploadFile(e.target.files?.[0] || null)}
                 required
                 aria-label={t("bof.bof_file")}
-                className="w-full bg-muted border border-border rounded-xl px-4 h-10 text-sm file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary/10 file:text-primary dark:file:bg-primary/20 dark:file:text-primary"
+                className="h-9 bg-muted"
               />
             </div>
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.name")}</span>
-              <Input aria-label={t("bof.bof_name")} placeholder={t("bof.bof_name")} required value={libUploadName} onChange={(e) => setLibUploadName(e.target.value)} className="w-full h-10" />
+              <Input aria-label={t("bof.bof_name")} placeholder={t("bof.bof_name")} required value={libUploadName} onChange={(e) => setLibUploadName(e.target.value)} className="w-full h-9" />
             </div>
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.description")}</span>
-              <Input aria-label={t("bof.description")} placeholder={t("bof.brief_desc")} value={libUploadDesc} onChange={(e) => setLibUploadDesc(e.target.value)} className="w-full h-10" />
+              <Input aria-label={t("bof.description")} placeholder={t("bof.brief_desc")} value={libUploadDesc} onChange={(e) => setLibUploadDesc(e.target.value)} className="w-full h-9" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.architecture")}</span>
                 <Select value={libUploadArch} onValueChange={(v) => setLibUploadArch(v ?? "")}>
-                  <SelectTrigger aria-label={t("bof.architecture")} className="w-full h-10">
+                  <SelectTrigger aria-label={t("bof.architecture")} className="w-full h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -204,11 +199,11 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
               </div>
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.author")}</span>
-                <Input aria-label={t("bof.author")} placeholder={t("bof.author_placeholder")} value={libUploadAuthor} onChange={(e) => setLibUploadAuthor(e.target.value)} className="w-full h-10" />
+                <Input aria-label={t("bof.author")} placeholder={t("bof.author_placeholder")} value={libUploadAuthor} onChange={(e) => setLibUploadAuthor(e.target.value)} className="w-full h-9" />
               </div>
             </div>
             <DialogFooter>
-              <Button type="submit" className="w-full h-10 rounded-xl text-sm font-medium transition-colors">
+              <Button type="submit" size="lg" className="w-full text-sm font-medium transition-colors">
                 {t("bof.upload_library_title")}
               </Button>
             </DialogFooter>
@@ -225,7 +220,7 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.agent")}</span>
               <Select value={libRunAgent} onValueChange={(v) => setLibRunAgent(v ?? "")}>
-                <SelectTrigger aria-label={t("bof.agent")} className="w-full h-10">
+                <SelectTrigger aria-label={t("bof.agent")} className="w-full h-9">
                   <SelectValue placeholder={t("bof.select_agent")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -239,10 +234,10 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
             </div>
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.arguments")}</span>
-              <Input aria-label={t("bof.bof_args")} placeholder={t("bof.bof_args")} value={libRunArgs} onChange={(e) => setLibRunArgs(e.target.value)} className="w-full h-10 font-mono" />
+              <Input aria-label={t("bof.bof_args")} placeholder={t("bof.bof_args")} value={libRunArgs} onChange={(e) => setLibRunArgs(e.target.value)} className="w-full h-9 font-mono" />
             </div>
             <DialogFooter>
-              <Button type="submit" className="w-full h-10 rounded-xl text-sm font-medium transition-colors">
+              <Button type="submit" size="lg" className="w-full text-sm font-medium transition-colors">
                 {t("bof.run")}
               </Button>
             </DialogFooter>

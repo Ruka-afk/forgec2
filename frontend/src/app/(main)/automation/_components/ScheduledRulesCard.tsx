@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { EmptyState, FieldError } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FieldError } from "@/components/ui/field-error";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Button } from "@/components/ui/button";
 import { NormalizedAgent as Agent } from "@/types/agent";
@@ -191,13 +192,13 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 <div>
                   <Label className="text-xs mb-1">{t("scheduler.name")}</Label>
-                  <Input value={name} onChange={e => { setName(e.target.value); if (formErrors.name) setFormErrors({ ...formErrors, name: undefined }); }} aria-label={t("scheduler.a11y_name")} />
-                  <FieldError>{formErrors.name}</FieldError>
+                  <Input id="sched-name" value={name} onChange={e => { setName(e.target.value); if (formErrors.name) setFormErrors({ ...formErrors, name: undefined }); }} aria-label={t("scheduler.a11y_name")} aria-invalid={!!formErrors.name} aria-describedby={formErrors.name ? "sched-name-error" : undefined} />
+                  <FieldError id="sched-name-error">{formErrors.name}</FieldError>
                 </div>
                 <div>
                   <Label className="text-xs mb-1">{t("scheduler.agent")}</Label>
                   <Select value={agentId} onValueChange={(v) => { setAgentId(v ?? ""); if (formErrors.agentId) setFormErrors({ ...formErrors, agentId: undefined }); }}>
-                    <SelectTrigger aria-label={t("scheduler.a11y_agent")}>
+                    <SelectTrigger id="sched-agent" aria-label={t("scheduler.a11y_agent")} aria-invalid={!!formErrors.agentId} aria-describedby={formErrors.agentId ? "sched-agent-error" : undefined}>
                       <SelectValue placeholder={t("scheduler.select_agent")} />
                     </SelectTrigger>
                     <SelectContent>
@@ -206,7 +207,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
                       ))}
                     </SelectContent>
                   </Select>
-                  <FieldError>{formErrors.agentId}</FieldError>
+                  <FieldError id="sched-agent-error">{formErrors.agentId}</FieldError>
                 </div>
                 <div>
                   <Label className="text-xs mb-1">{t("scheduler.task_type")}</Label>
@@ -221,20 +222,20 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
                 </div>
                 <div>
                   <Label className="text-xs mb-1">{t("scheduler.schedule")}</Label>
-                  <Input value={schedule} onChange={e => { setSchedule(e.target.value); if (formErrors.schedule) setFormErrors({ ...formErrors, schedule: undefined }); }} placeholder={t("scheduler.schedule_ph")} aria-label={t("scheduler.a11y_expr")} />
+                  <Input id="sched-schedule" value={schedule} onChange={e => { setSchedule(e.target.value); if (formErrors.schedule) setFormErrors({ ...formErrors, schedule: undefined }); }} placeholder={t("scheduler.schedule_ph")} aria-label={t("scheduler.a11y_expr")} aria-invalid={!!formErrors.schedule} aria-describedby={formErrors.schedule ? "sched-schedule-error" : undefined} />
                   <p className="text-(--fs-xs-sm) text-muted-foreground mt-1 space-y-0.5">
                     <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">every N minutes</code> ·{" "}
                     <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">hourly</code> ·{" "}
                     <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">daily HH:MM</code> ·{" "}
                     <code className="px-1 bg-muted rounded text-(--fs-micro-sm)">* * * * *</code>
                   </p>
-                  <FieldError>{formErrors.schedule}</FieldError>
+                  <FieldError id="sched-schedule-error">{formErrors.schedule}</FieldError>
                 </div>
               </div>
               <div className="mb-4">
                 <Label className="text-xs mb-1">{t("scheduler.command")}</Label>
-                <Input value={command} onChange={e => { setCommand(e.target.value); if (formErrors.command) setFormErrors({ ...formErrors, command: undefined }); }} placeholder={t("scheduler.cmd_ph")} aria-label={t("scheduler.command")} />
-                <FieldError>{formErrors.command}</FieldError>
+                  <Input id="sched-command" value={command} onChange={e => { setCommand(e.target.value); if (formErrors.command) setFormErrors({ ...formErrors, command: undefined }); }} placeholder={t("scheduler.cmd_ph")} aria-label={t("scheduler.command")} aria-invalid={!!formErrors.command} aria-describedby={formErrors.command ? "sched-command-error" : undefined} />
+                  <FieldError id="sched-command-error">{formErrors.command}</FieldError>
               </div>
               <div className="mb-4">
                 <Label className="text-xs mb-1">{t("scheduler.params")}</Label>

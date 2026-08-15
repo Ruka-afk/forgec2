@@ -33,7 +33,7 @@ export function CopyButton({ text, label, title, className, size = "icon-xs", ch
   };
 
   const defaultIcon = copied
-    ? <Check className="w-2.5 h-2.5 text-emerald-500" />
+    ? <Check className="w-2.5 h-2.5 text-success" />
     : <Copy className="w-2.5 h-2.5" />;
 
   return (

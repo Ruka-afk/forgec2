@@ -3,9 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
+import { Spinner } from "@/components/ui/spinner";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { Card } from "@/components/ui/card";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -105,8 +108,7 @@ export default function CloudPage() {
   const getHostname = (a: Agent) => a.hostname || "";
   const getIP = (a: Agent) => a.ip || "";
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("cloud.title")} subtitle={t("cloud.subtitle")} />
+    <PageContainer title={t("cloud.title")} subtitle={t("cloud.subtitle")}>
 
       <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
         <div className="font-semibold">{t("cloud.experimental_title")}</div>
@@ -115,9 +117,7 @@ export default function CloudPage() {
 
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-sky-100 dark:bg-sky-900/30 rounded-xl flex items-center justify-center">
-            <Cloud className="w-4 h-4" />
-          </div>
+          <IconBadge icon={Cloud} color="info" size="xl" />
           <div>
             <div className="text-sm font-semibold text-foreground">{t("cloud.dispatch_title")}</div>
             <div className="text-xs text-muted-foreground">{t("cloud.dispatch_desc")}</div>
@@ -168,9 +168,7 @@ export default function CloudPage() {
 
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center">
-            <List className="w-4 h-4" />
-          </div>
+          <IconBadge icon={List} color="primary" size="xl" className="dark:bg-primary/20" />
           <div>
             <div className="text-sm font-semibold text-foreground">{t("cloud.stolen_title")}</div>
             <div className="text-xs text-muted-foreground">{t("cloud.stolen_desc")}</div>
@@ -205,9 +203,9 @@ export default function CloudPage() {
                 <TableRow key={cred.id}>
                   <TableCell>
                     <Badge variant="secondary" className={`text-(--fs-micro-sm) px-2 py-0.5 rounded-full font-medium ${
-                      cred.provider === "aws" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                      cred.provider === "aws" ? "bg-warning/15 text-warning dark:bg-warning/20 dark:text-warning" :
                       cred.provider === "gcp" ? "bg-primary/10 text-primary" :
-                      cred.provider === "azure" ? "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400" :
+                      cred.provider === "azure" ? "bg-info/15 text-info" :
                       ""
                     }`}>
                       {cred.provider.toUpperCase()}
@@ -243,7 +241,7 @@ export default function CloudPage() {
             </div>
           )}
       </Card>
-    </div>
+    </PageContainer>
   );
 }
 

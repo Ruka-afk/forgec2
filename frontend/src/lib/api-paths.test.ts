@@ -20,8 +20,12 @@ describe("api paths", () => {
     expect(paths.agents.bulkResults()).toMatch(/^\/agents\/bulk\/results/);
     expect(paths.agents.cmd("x", "shell")).toBe("/agents/x/shell");
     expect(paths.agents.cmd("x", "/files/ls")).toBe("/agents/x/files/ls");
+    expect(paths.agents.filesPush("x")).toBe("/agents/x/files/push");
+    expect(paths.agents.filesExfil("x")).toBe("/agents/x/files/pull");
+    expect(paths.agents.filesExfilGet("x", "secret.txt")).toBe("/agents/x/files/exfil/secret.txt");
     expect(paths.agents.tokenList("x")).toBe("/agents/x/token/list?format=json");
     expect(paths.agents.socksRelayStart("x")).toBe("/agents/x/socks_relay/start");
+    expect(paths.agents.socksRelayStatus("x")).toBe("/agents/x/socks_relay/status");
   });
   it("loot is dual-use under /loot not /api/loot", () => {
     expect(paths.loot.page).toBe("/loot");
@@ -79,5 +83,11 @@ describe("api paths", () => {
     expect(paths.bloodhound.list).toBe("/bloodhound/list");
     expect(paths.chat.history("ops")).toBe("/chat/history?channel=ops");
     expect(paths.mitre.phases).toBe("/mitre/phases");
+  });
+  it("circuit breaker detail/events live on the dual-use prefix", () => {
+    expect(paths.circuitBreaker.detail).toBe("/circuit-breaker/detail");
+    expect(paths.circuitBreaker.events).toBe("/circuit-breaker/events");
+    expect(paths.circuitBreaker.config).toBe("/circuit-breaker/config");
+    expect(paths.circuitBreaker.reset(7)).toBe("/circuit-breaker/reset/7");
   });
 });

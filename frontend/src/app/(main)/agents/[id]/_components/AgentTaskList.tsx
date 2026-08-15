@@ -2,13 +2,15 @@
 
 import { Card } from "@/components/ui/card";
 import Link from "next/link";
-import { StatusBadge } from "@/components/UI";
+import { StatusBadge } from "@/components/ui/status-indicator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { timeAgo, formatTime } from "@/lib/utils";
 import type { AgentTaskRecord } from "@/types/agent";
 import { Camera, ChevronDown, Clipboard, Clock, Database, Download, Folder, Keyboard, ListChecks, Shield, Skull, Terminal, Upload } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useI18n } from "@/lib/i18n";
+
+import { hueStyles, hueForTaskType } from "@/lib/ui/statusStyles";
 
 const MAX_VISIBLE_TASKS = 8;
 
@@ -33,17 +35,8 @@ function getTaskTypeIcon(type: string): React.ReactNode {
 }
 
 function getTaskTypeColor(type: string): string {
-  switch (type) {
-    case "shell": return "bg-primary/10 text-primary";
-    case "screenshot": return "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400";
-    case "ps": return "bg-muted text-muted-foreground";
-    case "kill": return "bg-destructive/10 text-destructive";
-    case "hashdump": case "creds_dump": return "bg-amber-500/15 text-amber-600 dark:text-amber-400";
-    case "privesc_check": return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400";
-    case "clipboard_get": return "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400";
-    case "keylogger_start": case "keylogger_dump": case "keylogger_stop": return "bg-purple-500/15 text-purple-600 dark:text-purple-400";
-    default: return "bg-muted text-muted-foreground";
-  }
+  const hue = hueStyles[hueForTaskType(type)];
+  return `${hue.bg} ${hue.text}`;
 }
 
 export interface AgentTaskListProps {
@@ -59,10 +52,10 @@ export default function AgentTaskList({ tasks, agentId, expandedTaskId, onToggle
 
   return (
     <Card className="mb-4 overflow-hidden border-border/70 bg-card/90 shadow-sm">
-      <div className="h-1 w-full bg-gradient-to-r from-primary via-cyan-500 to-emerald-500" />
+      <div className="h-1 w-full bg-gradient-to-r from-primary via-chart-2 to-chart-1" />
       <div className="px-4 py-3 flex items-center justify-between border-b border-border/70">
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2"><ListChecks className="w-3.5 h-3.5 text-primary" />{t("agents.tasklist_recent")}</h3>
-        <Link href={`/tasks?agent_id=${agentId}`} className="text-xs text-primary hover:underline">{t("agents.tasklist_view_all")} &rarr;</Link>
+        <Link href={`/timeline?tab=tasks&agent_id=${agentId}`} className="text-xs text-primary hover:underline">{t("agents.tasklist_view_all")} &rarr;</Link>
       </div>
       <div className="divide-y divide-border/70">
         {tasks.slice(0, MAX_VISIBLE_TASKS).map((task, i) => {

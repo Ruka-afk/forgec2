@@ -17,7 +17,7 @@ export default function MaintenanceSection({
   const { t } = useI18n();
   return (
     <Card className="overflow-hidden">
-      <div className="bg-orange-500/10 border-b border-orange-500/20 px-6 py-4">
+      <div className="bg-warning/10 border-b border-warning/20 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Wand2 className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-foreground">{t("settings.maintenance.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.maintenance.subtitle")}</p></div>

@@ -6,8 +6,9 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { useConfirm } from "@/lib/hooks/useConfirm";
 
-import { Spinner, PageSpinner } from "@/components/UI";
+import { Spinner, PageSpinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,16 @@ import { CalendarCheck, Cog, Boxes, FolderOpen, Puzzle, Server, Settings } from 
 import { Bug, Info, Link as LinkIcon, ListChecks, Plug, RotateCw, Trash2 } from "lucide-react";
 
 import type { AgentDetail } from "@/types/agent";
+import { persistenceMethodQuality, type DestQuality } from "../_components/dest-quality";
+import { implantBlocksDest } from "../../_components/implant-version";
+
+function PersistQualityMark({ quality }: { quality: DestQuality }) {
+  const { t } = useI18n();
+  if (quality === "experimental") return <>{t("generate.quality_experimental")}</>;
+  if (quality === "scripted") return <>{t("cred.quality_scripted")}</>;
+  if (quality === "core") return <>{t("generate.quality_core")}</>;
+  return <>{t("generate.quality_hardened")}</>;
+}
 
 const PERSISTENCE_METHODS: { key: string; labelKey: string; icon: React.ReactNode }[] = [
   { key: "registry", labelKey: "agents.persistence_registry", icon: <Settings className="w-4 h-4" /> },
@@ -84,16 +95,22 @@ export default function AgentPersistencePage() {
 
   useEffect(() => { loadAgent(); }, [loadAgent]);
   useEffect(() => { if (id) listPersistence(); }, [id, listPersistence]);
+  const confirmDialog = useConfirm();
 
   const addPersistence = async (method: string) => {
     if (!id) return;
-    if (!window.confirm(t("agents.persistence_install") + "?")) return;
+    if (implantBlocksDest(agent?.version, persistenceMethodQuality(method))) {
+      toast.error(t("agents.version_unknown_dest"));
+      return;
+    }
+    const okInstall = await confirmDialog.confirm({ message: t("agents.persistence_install") + "?", danger: true });
+    if (!okInstall) return;
     setActionLoading(method);
     try {
       const data = await api.post(paths.agents.persistence(id), { action: "add", method });
       if (data.success) {
         setInstalledMethods((prev) => (prev.includes(method) ? prev : [...prev, method]));
-        toast.success(t("agents.persistence_install_success") + ` (task #${data.task_id})`);
+        toast.success(t("agents.persistence_task_queued", { id: String(data.task_id ?? "") }));
       } else {
         toast.error((data.error as string) || t("agents.persistence_install_failed"));
       }
@@ -106,13 +123,14 @@ export default function AgentPersistencePage() {
 
   const removePersistence = async (method: string) => {
     if (!id) return;
-    if (!window.confirm(t("agents.persistence_remove") + "?")) return;
+    const okRemove = await confirmDialog.confirm({ message: t("agents.persistence_remove") + "?", danger: true });
+    if (!okRemove) return;
     setActionLoading(`remove_${method}`);
     try {
       const data = await api.post(paths.agents.persistence(id), { action: "remove", method });
       if (data.success) {
         setInstalledMethods((prev) => prev.filter((m) => m !== method));
-        toast.success(t("agents.persistence_remove_success") + ` (task #${data.task_id})`);
+        toast.success(t("agents.persistence_task_queued", { id: String(data.task_id ?? "") }));
       } else {
         toast.error((data.error as string) || t("agents.persistence_remove_failed"));
       }
@@ -124,7 +142,7 @@ export default function AgentPersistencePage() {
   };
 
   const agentStatus = agent?.status || "offline";
-  const statusColor = agentStatus === "online" ? "bg-emerald-500" : agentStatus === "stale" ? "bg-amber-500" : "bg-red-500";
+  const statusColor = agentStatus === "online" ? "bg-success" : agentStatus === "stale" ? "bg-warning" : "bg-destructive";
   const hostname = agent?.hostname || "unknown";
 
   if (loading) {
@@ -173,6 +191,11 @@ export default function AgentPersistencePage() {
         </div>
       </Card>
 
+      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+        <div className="font-semibold">{t("agents.persistence_honesty_title")}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{t("agents.persistence_honesty_desc")}</div>
+      </Card>
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Card className="p-4 sm:p-5">
           <div className="flex items-center gap-2 mb-4">
@@ -180,11 +203,15 @@ export default function AgentPersistencePage() {
             <h3 className="text-sm font-semibold text-foreground">{t("agents.persistence_install")}</h3>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {PERSISTENCE_METHODS.map((method) => (
+            {PERSISTENCE_METHODS.map((method) => {
+              const quality = persistenceMethodQuality(method.key) ?? "hardened";
+              const versionBlocked = implantBlocksDest(agent.version, quality);
+              return (
               <Button
                 key={method.key}
                 onClick={() => addPersistence(method.key)}
-                disabled={actionLoading === method.key}
+                disabled={actionLoading === method.key || versionBlocked}
+                title={versionBlocked ? t("agents.version_unknown_dest") : undefined}
                 variant="outline"
                 size="sm"
                 className="flex items-center gap-3 px-4 py-3 h-auto justify-start"
@@ -194,9 +221,15 @@ export default function AgentPersistencePage() {
                 ) : (
                   <span className="text-primary shrink-0">{method.icon}</span>
                 )}
-                <span className="text-left leading-tight">{t(method.labelKey)}</span>
+                <span className="text-left leading-tight">
+                  {t(method.labelKey)}
+                  <span className="block text-(--fs-micro) font-normal text-muted-foreground">
+                    <PersistQualityMark quality={quality} />
+                  </span>
+                </span>
               </Button>
-            ))}
+              );
+            })}
           </div>
         </Card>
 
@@ -265,6 +298,7 @@ export default function AgentPersistencePage() {
           )}
         </Card>
       </div>
+      {confirmDialog.modal}
     </div>
   );
 }

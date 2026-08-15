@@ -16,6 +16,7 @@ export interface DownloadTask {
   agent_id: string;
   hostname?: string;
   agent?: { hostname: string };
+  type?: string;
   command: string;
   result: string;
   status: string;

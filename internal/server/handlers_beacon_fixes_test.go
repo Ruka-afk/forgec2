@@ -44,7 +44,7 @@ func TestBadCiphertextDoesNotAdvanceReplayWindow(t *testing.T) {
 	conn, done := tcpFrameConn(t, s)
 	defer done()
 
-	agent := newTCPTestAgent(t, "aaaaaaaa-bbbb-4333-8444-cccccccccccc").withRegKey(s.cfg.Server.BeaconKey)
+	agent := v3TestAgent(t, s, "aaaaaaaa-bbbb-4333-8444-cccccccccccc")
 
 	// Register (seq 1) and establish the ECDH session.
 	tcpWriteFrame(t, conn, []byte(agent.registerFrame()))
@@ -137,7 +137,7 @@ func TestExtC2ReceiveEndToEnd(t *testing.T) {
 	s.configMu.Unlock()
 
 	agentUUID := "33333333-4444-4333-8444-555555555555"
-	agent := newTCPTestAgent(t, agentUUID).withRegKey(s.cfg.Server.BeaconKey)
+	agent := v3TestAgent(t, s, agentUUID)
 
 	wrap := func(raw string) string {
 		b, _ := json.Marshal(extC2ReceiveRequest{BeaconID: "attacker-chosen-id", Raw: base64.StdEncoding.EncodeToString([]byte(raw))})
@@ -271,7 +271,7 @@ func TestBadRegHMACCreatesNoImplantRow(t *testing.T) {
 	}
 
 	// The genuine agent registers fine afterwards with the same UUID.
-	genuine := newTCPTestAgent(t, agentUUID).withRegKey(s.cfg.Server.BeaconKey)
+	genuine := v3TestAgent(t, s, agentUUID)
 	w = v2Post(t, s, genuine.registerFrame())
 	if w.Code != http.StatusOK {
 		t.Fatalf("genuine registration after rejected attempt must succeed, got %d; body=%s", w.Code, w.Body.String())

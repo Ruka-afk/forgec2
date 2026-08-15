@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { useI18n } from "@/lib/i18n";
-import { PageHeader, ConfirmModal } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { DataState } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,7 +17,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatTime } from "@/lib/utils";
 import { Pencil, Plus, Tag, Trash2, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { toast } from "sonner";
 
 interface Tag {
   id: string;
@@ -38,31 +39,20 @@ const TAG_COLORS = [
 
 export default function TagsPage() {
   const { t } = useI18n();
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error, refresh: loadTags } = useApiResource<Tag[]>({
+    fetcher: async () => {
+      const data = await fetchTags();
+      return (data.tags || []) as Tag[];
+    },
+    toastThrottleMs: 10_000,
+    errorMessage: t("tags.toast.load_failed"),
+  });
+  const tags = data ?? [];
   const [modal, setModal] = useState<{ mode: "create" | "edit"; tag?: Tag } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<Tag | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [formName, setFormName] = useState("");
   const [formColor, setFormColor] = useState("#3498db");
-
-  const loadTags = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    fetchTags()
-      .then((data) => {
-        setTags((data.tags || []) as Tag[]);
-      })
-      .catch(() => {
-        setTags([]);
-        setError(t("tags.toast.load_failed"));
-        toast.error(t("tags.toast.load_failed"));
-      })
-      .finally(() => setLoading(false));
-  }, [t]);
-
-  useEffect(() => { loadTags(); }, [loadTags]);
 
   const openCreate = () => {
     setFormName("");
@@ -120,7 +110,19 @@ export default function TagsPage() {
   };
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <PageContainer
+      title={t("tags.title")}
+      subtitle={`${tags.length} ${t("tags.total")}`}
+      actions={
+        <Button
+          onClick={openCreate}
+          className="inline-flex items-center justify-center gap-x-2 px-4 sm:px-5 text-sm font-medium text-primary-foreground min-w-[2.75rem] min-h-[2.75rem]"
+        >
+          <Plus className="w-4 h-4" />
+          <span>{t("tags.create")}</span>
+        </Button>
+      }
+    >
       {actionMsg && (
         <div className="mb-3 px-4 py-2 bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/40 rounded-xl text-sm text-primary dark:text-primary flex items-center justify-between">
           <span>{actionMsg}</span>
@@ -128,19 +130,9 @@ export default function TagsPage() {
         </div>
       )}
 
-      <PageHeader title={t("tags.title")} subtitle={`${tags.length} ${t("tags.total")}`}>
-        <Button
-          onClick={openCreate}
-          className="inline-flex items-center justify-center gap-x-2 px-4 sm:px-5 h-11 sm:h-10 rounded-xl text-sm font-medium text-white min-w-[2.75rem] min-h-[2.75rem]"
-        >
-          <Plus className="w-4 h-4" />
-          <span>{t("tags.create")}</span>
-        </Button>
-      </PageHeader>
-
       
 
-      <DataState loading={loading} error={error} onRetry={loadTags} empty={!loading && !error && tags.length === 0} emptyIcon={Tag} emptyTitle={t("tags.empty")} emptyMessage={t("tags.empty_desc")} emptyAction={<Button onClick={openCreate} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl min-w-[2.75rem] min-h-[2.75rem]"><Plus className="w-4 h-4" /><span>{t("tags.create")}</span></Button>} loadingSkeleton={
+      <DataState loading={loading} error={error} onRetry={loadTags} empty={!loading && !error && tags.length === 0} emptyIcon={Tag} emptyTitle={t("tags.empty")} emptyMessage={t("tags.empty_desc")} emptyAction={<Button onClick={openCreate} className="inline-flex items-center gap-2 px-4 py-2.5 min-w-[2.75rem] min-h-[2.75rem]"><Plus className="w-4 h-4" /><span>{t("tags.create")}</span></Button>} loadingSkeleton={
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <Card key={"skel-" + i} className="p-4 sm:p-5">
@@ -216,7 +208,7 @@ export default function TagsPage() {
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder={t("tags.name_placeholder")}
-                className="text-sm h-11"
+                className="text-sm h-9"
                 autoFocus
                 onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
               />
@@ -238,11 +230,11 @@ export default function TagsPage() {
               </div>
               <div className="mt-2 flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">{t("tags.color_custom")}</span>
-                <input aria-label={t("groups.a11y_color")} name="input-1"
+                <Input aria-label={t("groups.a11y_color")} name="input-1"
                   type="color"
                   value={formColor}
                   onChange={(e) => setFormColor(e.target.value)}
-                  className="w-8 h-8 rounded cursor-pointer border border-border"
+                  className="h-8 w-8 cursor-pointer p-0.5"
                 />
                 <span className="text-xs font-mono text-muted-foreground">{formColor}</span>
               </div>
@@ -277,6 +269,6 @@ export default function TagsPage() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteConfirm(null)}
       />
-    </div>
+    </PageContainer>
   );
 }

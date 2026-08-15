@@ -12,13 +12,35 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 )
 
+// sanitizeWritePath rejects destination paths that attempt directory traversal
+// via ".." components. An operator normally supplies explicit, well-formed
+// absolute or relative paths; rejecting ".." prevents a forged/compromised task
+// (or a URL-derived default that resolves to "..") from escaping the intended
+// directory when the agent writes to disk. On Windows, Go's filepath.Clean
+// normalizes both "/" and "\" separators, so the ".." check catches leading
+// traversal segments after cleaning.
+func sanitizeWritePath(p string) (string, error) {
+	clean := filepath.Clean(p)
+	if clean == ".." {
+		return "", fmt.Errorf("path traversal rejected in %q", p)
+	}
+	for _, part := range strings.Split(clean, string(filepath.Separator)) {
+		if part == ".." {
+			return "", fmt.Errorf("path traversal rejected in %q", p)
+		}
+	}
+	return clean, nil
+}
+
 // File-transfer resource limits (server mirrors them; see internal/server).
 const (
-	maxReadFileSize      = 64 << 20 // whole-file "read" task cap (use the download task instead)
-	maxDownloadChunkSize = 4 << 20  // per-chunk cap for offset-based file pulls
+	maxReadFileSize      = 64 << 20  // whole-file "read" task cap (use the download task instead)
+	maxDownloadChunkSize = 4 << 20   // per-chunk cap for offset-based file pulls
 	maxURLDownloadSize   = 256 << 20 // agent-side HTTP download cap
 	maxUploadPushSize    = 50 << 20  // single push-chunk decode cap (mirrors server MaxUploadSize)
 )
@@ -159,7 +181,11 @@ func uploadFileChunk(taskID uint, path string, offset int64, b64Content string, 
 	if err := verifyFileChunk(taskID, expectedMACHex, data); err != nil {
 		return err // refuse to write unverified data
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
+	cleanPath, err := sanitizeWritePath(path)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(cleanPath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("open file for write failed: %w", err)
 	}
@@ -174,10 +200,14 @@ func uploadFileChunk(taskID uint, path string, offset int64, b64Content string, 
 }
 
 // downloadFromURL downloads a file from HTTP URL to dest path on disk,
-// enforcing a response size cap.
+// enforcing a response size cap and rejecting directory-traversal destinations.
 func downloadFromURL(urlStr, destPath string) error {
 	if destPath == "" {
 		return fmt.Errorf("destination path required")
+	}
+	cleanDest, err := sanitizeWritePath(destPath)
+	if err != nil {
+		return err
 	}
 	req, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
@@ -202,5 +232,5 @@ func downloadFromURL(urlStr, destPath string) error {
 	if len(data) > maxURLDownloadSize {
 		return fmt.Errorf("download exceeds size cap (%d bytes)", maxURLDownloadSize)
 	}
-	return os.WriteFile(destPath, data, 0644)
+	return os.WriteFile(cleanDest, data, 0644)
 }

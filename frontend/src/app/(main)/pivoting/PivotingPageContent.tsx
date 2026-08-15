@@ -3,7 +3,9 @@
 import { useState, useMemo } from "react";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
-import { EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
+import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -87,20 +89,25 @@ export default function PivotingPageContent() {
     await stopRPortApi(rportAgent, id);
   };
 
-  const maxBytes = useMemo(() => Math.max(...sessions.map(s => Math.max(s.bytes_in || 0, s.bytes_out || 0)), 0), [sessions]);
-  const maxRPortBytes = useMemo(() => Math.max(...rportForwards.map(r => Math.max(r.bytes_in || 0, r.bytes_out || 0)), 0), [rportForwards]);
+  const maxBytes = useMemo(
+    () => sessions.reduce((m, s) => Math.max(m, s.bytes_in || 0, s.bytes_out || 0), 0),
+    [sessions],
+  );
+  const maxRPortBytes = useMemo(
+    () => rportForwards.reduce((m, r) => Math.max(m, r.bytes_in || 0, r.bytes_out || 0), 0),
+    [rportForwards],
+  );
   const tabOverallMax = Math.max(maxBytes, maxRPortBytes, 1);
 
   const activeSessions = useMemo(() => sessions.filter(s => s.active), [sessions]);
   const stoppedSessions = useMemo(() => sessions.filter(s => !s.active), [sessions]);
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
-      <PageHeader title={<><Route className="w-4 h-4" />{t("pivoting.title")}</>} subtitle={t("pivoting.subtitle")}>
+    <PageContainer title={<><Route className="w-4 h-4" />{t("pivoting.title")}</>} subtitle={t("pivoting.subtitle")} contentClassName="space-y-6" actions={<>
         <Button variant="outline" onClick={loadData}>
           <RotateCw className="w-4 h-4" /> Refresh
         </Button>
-      </PageHeader>
+      </>}>
 
       {throughAgent && (
         <div className="bg-info/8 border border-info/20 rounded-xl px-4 py-2.5 flex items-center gap-2 animate-fade-in">
@@ -125,7 +132,7 @@ export default function PivotingPageContent() {
               <tab.Icon className="w-4 h-4" />
               <span>{tab.label}</span>
               {tab.key === "relay" && activeSessions.length > 0 && (
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                <span className="w-2 h-2 bg-success rounded-full animate-pulse"></span>
               )}
             </TabsTrigger>
           ))}
@@ -147,10 +154,10 @@ export default function PivotingPageContent() {
               <EmptyState icon={Radio} title={t("pivoting.empty_relay_title")} message={t("pivoting.empty_relay_message")} />
             ) : (
               <div className="space-y-3">                {sessions.map((s, i) => (
-                  <div key={s.id || i} className={`border rounded-xl p-4 transition-colors ${s.active ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-900/20" : "border-border opacity-60"}`}>
+                  <div key={s.id || i} className={`border rounded-xl p-4 transition-colors ${s.active ? "border-success/30 bg-success/10/50 dark:border-success/40 dark:bg-success/20" : "border-border opacity-60"}`}>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-x-3">
-                        <span className={`w-2.5 h-2.5 rounded-full ${s.active ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`}></span>
+                        <span className={`w-2.5 h-2.5 rounded-full ${s.active ? "bg-success animate-pulse" : "bg-muted-foreground"}`}></span>
                         <div>
                           <div className="font-medium text-sm text-foreground">{s.agent_id.substring(0, 12)}... {s.hostname && <span className="text-muted-foreground font-normal">({s.hostname})</span>}</div>
                           <div className="text-xs text-muted-foreground">Port {s.listen_port} {s.active ? "Running" : "Stopped"}  {formatCreated(s.created_at)}</div>
@@ -181,8 +188,8 @@ export default function PivotingPageContent() {
                       <span className="flex items-center gap-1"><ArrowUp className="w-4 h-4" />{formatBytes(s.bytes_out || 0)} up</span>
                     </div>
                     <div className="flex h-2 bg-secondary rounded-full overflow-hidden">
-                      <div className="bg-emerald-500 transition-all" style={{ width: `${tabOverallMax > 0 ? ((s.bytes_in || 0) / tabOverallMax) * 100 : 0}%` }}></div>
-                      <div className="bg-blue-500 transition-all" style={{ width: `${tabOverallMax > 0 ? ((s.bytes_out || 0) / tabOverallMax) * 100 : 0}%` }}></div>
+                      <div className="bg-success transition-all" style={{ width: `${tabOverallMax > 0 ? ((s.bytes_in || 0) / tabOverallMax) * 100 : 0}%` }}></div>
+                      <div className="bg-info transition-all" style={{ width: `${tabOverallMax > 0 ? ((s.bytes_out || 0) / tabOverallMax) * 100 : 0}%` }}></div>
                     </div>                  </div>
                 ))}
               </div>            )}
@@ -220,8 +227,8 @@ export default function PivotingPageContent() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={startRelay} disabled={!selectedAgent || starting}
-                className="lg:col-span-2 h-11 px-6 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-medium whitespace-nowrap transition-colors flex items-center justify-center gap-2">
+              <Button onClick={startRelay} size="lg" disabled={!selectedAgent || starting}
+                className="lg:col-span-2 px-6 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap transition-colors flex items-center justify-center gap-2">
                 {starting ? <><Spinner size="xs" /> {t("pivoting.starting")}</> : <><Play className="w-4 h-4" /> {t("pivoting.start")} {relayProtocol.toUpperCase()} Relay</>}
               </Button>
             </div>
@@ -287,7 +294,7 @@ export default function PivotingPageContent() {
               {t("pivoting.direct_socks_desc")}
             </p>
             {agents.length > 0 ? (              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {agents.map(a => (                  <Card key={a.id} className="rounded-2xl hover:border-amber-300 dark:hover:border-amber-700 hover:shadow-sm transition-all">
+                {agents.map(a => (                  <Card key={a.id} className="rounded-2xl hover:border-warning/40 dark:hover:border-warning hover:shadow-sm transition-all">
                     <CardContent className="p-4">
                       <div className="flex justify-between items-center mb-1">
                         <div className="font-medium text-foreground">{a.hostname}</div>
@@ -322,15 +329,15 @@ export default function PivotingPageContent() {
             ) : (
               <div className="space-y-3">
                 {rportForwards.map(rf => (
-                  <div key={rf.id} className={`rounded-xl p-4 transition-colors border ${rf.active ? "border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-900/20" : "border-border opacity-60"}`}>
+                  <div key={rf.id} className={`rounded-xl p-4 transition-colors border ${rf.active ? "border-info/30 bg-info/10 dark:border-info/40 dark:bg-info/20" : "border-border opacity-60"}`}>
                     <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-x-3">                        <span className={`w-2.5 h-2.5 rounded-full ${rf.active ? "bg-blue-500 animate-pulse" : "bg-muted-foreground"}`}></span>
+                      <div className="flex items-center gap-x-3">                        <span className={`w-2.5 h-2.5 rounded-full ${rf.active ? "bg-info animate-pulse" : "bg-muted-foreground"}`}></span>
                         <div>                          <div className="text-sm font-medium text-foreground flex items-center gap-2">                            <span className="font-mono">{rf.remote_host}:{rf.remote_port}</span>
                             <ArrowRight className="w-4 h-4" />
                             <span className="font-mono">localhost:{rf.local_port}</span>
                             <Badge variant="outline">{rf.protocol.toUpperCase()}</Badge>
                           </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">Agent: {rf.agent_id.substring(0, 12)}... {rf.active ? `Up: ${formatUptime(rf.uptime)}` : "Stopped"}{rf.error && <span className="text-red-500 ml-2">{rf.error}</span>}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">Agent: {rf.agent_id.substring(0, 12)}... {rf.active ? `Up: ${formatUptime(rf.uptime)}` : "Stopped"}{rf.error && <span className="text-destructive ml-2">{rf.error}</span>}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -351,8 +358,8 @@ export default function PivotingPageContent() {
                     <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><ArrowDown className="w-4 h-4" />{formatBytes(rf.bytes_in || 0)}</span>
                       <span className="flex items-center gap-1"><ArrowUp className="w-4 h-4" />{formatBytes(rf.bytes_out || 0)}</span>                    </div>
-                    <div className="flex h-2 bg-secondary rounded-full overflow-hidden">                      <div className="bg-emerald-500 transition-all" style={{ width: `${tabOverallMax > 0 ? ((rf.bytes_in || 0) / tabOverallMax) * 100 : 0}%` }}></div>
-                      <div className="bg-blue-500 transition-all" style={{ width: `${tabOverallMax > 0 ? ((rf.bytes_out || 0) / tabOverallMax) * 100 : 0}%` }}></div>
+                    <div className="flex h-2 bg-secondary rounded-full overflow-hidden">                      <div className="bg-success transition-all" style={{ width: `${tabOverallMax > 0 ? ((rf.bytes_in || 0) / tabOverallMax) * 100 : 0}%` }}></div>
+                      <div className="bg-info transition-all" style={{ width: `${tabOverallMax > 0 ? ((rf.bytes_out || 0) / tabOverallMax) * 100 : 0}%` }}></div>
                     </div>
                   </div>
                 ))}
@@ -387,15 +394,15 @@ export default function PivotingPageContent() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={startRPort} disabled={!rportAgent}
-                className="h-11 px-6 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+              <Button onClick={startRPort} size="lg" disabled={!rportAgent}
+                className="px-6 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors flex items-center gap-2">
                 <Play className="w-4 h-4" /> {t("pivoting.start_forward")}</Button>
-              <Button variant="outline"
+              <Button variant="outline" size="lg"
                 onClick={() => {
                   toast.info(t("pivoting.toast.refreshing_rport"));
                   void loadData();
                 }}
-                className="h-11 px-4 flex items-center gap-1.5"
+                className="px-4 flex items-center gap-1.5"
               >
                 <RotateCw className="w-4 h-4" /> {t("pivoting.refresh_status")}
               </Button>
@@ -408,7 +415,7 @@ export default function PivotingPageContent() {
       </TabsContent>
       </Tabs>
       {modal}
-    </div>
+    </PageContainer>
   );
 }
 

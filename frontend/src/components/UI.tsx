@@ -1,9 +1,8 @@
-// Re-export all components from their individual files
+/** @deprecated Import from `@/components/ui/*` instead. Kept as a compatibility barrel. */
 export { Spinner, PageSpinner } from "@/components/ui/spinner";
 export { PageHeader } from "@/components/ui/page-header";
 export { EmptyState } from "@/components/ui/empty-state";
-export { StatusIndicator } from "@/components/ui/status-indicator";
-export { StatusIndicator as StatusBadge } from "@/components/ui/status-indicator";
+export { StatusIndicator, StatusBadge } from "@/components/ui/status-indicator";
 export { Pagination } from "@/components/ui/pagination";
 export { ConfirmModal } from "@/components/ui/confirm-modal";
 export { CopyButton } from "@/components/ui/copy-button";
@@ -16,3 +15,4 @@ export { StatCard } from "@/components/ui/animated-stat-card";
 export { DataState, DataSpinner, DataError } from "@/components/ui/data-state";
 export { ChartCard } from "@/components/ChartCard";
 export { Separator } from "@/components/ui/separator";
+export { Kbd } from "@/components/ui/kbd";

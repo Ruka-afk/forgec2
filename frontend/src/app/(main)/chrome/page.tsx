@@ -1,13 +1,15 @@
 "use client";
+import { PageContainer } from "@/components/ui/page-container";
 import { useState, useEffect, useCallback } from "react";
 
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { Banner } from "@/components/ui/banner";
 import { toast } from "sonner";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { DataState } from "@/components/ui/data-state";
-import { EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { EmptyState, Spinner } from "@/components/UI";
 import { timeAgo } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -108,15 +110,7 @@ export default function ChromeC2Page() {
   };
 
   return (
-      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up space-y-4">
-      <Card className="p-3 border-amber-500/40 bg-amber-500/10 text-sm text-amber-800 dark:text-amber-200">
-        <div className="font-semibold">{t("chrome.experimental_title")}</div>
-        <div className="text-xs text-muted-foreground mt-0.5">{t("chrome.experimental_desc")}</div>
-      </Card>
-      <PageHeader
-        title={<span><Globe className="w-4 h-4 text-primary mr-2 inline" />{t("chrome.title")}</span>}
-        subtitle={`${agents.length} extension agent${agents.length !== 1 ? "s" : ""} ${t("chrome.connected")}`}
-      >
+      <PageContainer title={<span><Globe className="w-4 h-4 text-primary mr-2 inline" />{t("chrome.title")}</span>} subtitle={`${agents.length} extension agent${agents.length !== 1 ? "s" : ""} ${t("chrome.connected")}`} actions={<>
         <a
           href="/forgec2-chrome-c2.zip"
         >
@@ -124,7 +118,12 @@ export default function ChromeC2Page() {
             <Download className="w-4 h-4" />{t("chrome.download_ext")}
           </Button>
         </a>
-      </PageHeader>
+      </>}>
+      <Card className="p-3 border-amber-500/40 bg-amber-500/10 text-sm text-amber-800 dark:text-amber-200">
+        <div className="font-semibold">{t("chrome.experimental_title")}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{t("chrome.experimental_desc")}</div>
+      </Card>
+      
 
       <DataState loading={loading} error={error} onRetry={fetchAgents}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -228,15 +227,15 @@ export default function ChromeC2Page() {
                 </Button>
 
                 {msg && (
-                  <div className={`text-xs px-3 py-2 rounded-lg ${msg.startsWith(t("chrome.toast.send_failed")) || msg.startsWith(t("chrome.select_agent")) ? "bg-destructive/10 text-destructive" : "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600"}`}>
+                  <Banner tone={msg.startsWith(t("chrome.toast.send_failed")) || msg.startsWith(t("chrome.select_agent")) ? "destructive" : "success"} className="text-xs">
                     {msg}
-                  </div>
+                  </Banner>
                 )}
               </div>
             </Card>
           </div>
         </div>
       </DataState>
-    </div>
+    </PageContainer>
   );
 }

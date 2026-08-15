@@ -20,7 +20,7 @@ export default function ThemeSection({ theme, onApplyTheme }: { theme: string; o
           <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Palette className="w-4 h-4" /></div>
           <div>
             <h2 className="text-lg font-semibold text-foreground">{t("settings.theme_title")}</h2>
-            <p className="text-xs text-violet-200">{t("settings.theme_subtitle")}</p>
+            <p className="text-xs text-chart-6">{t("settings.theme_subtitle")}</p>
           </div>
         </div>
       </div>
@@ -34,7 +34,7 @@ export default function ThemeSection({ theme, onApplyTheme }: { theme: string; o
             {modes.map(({ id, icon: Icon, descKey }) => (
               <Button key={id} onClick={() => onApplyTheme(id)} variant="ghost"
                 className={`p-4 border rounded-xl transition-colors capitalize ${theme === id ? "border-primary bg-primary/10 dark:bg-primary/20" : "bg-muted border-border hover:border-primary hover:bg-primary/10 dark:hover:bg-primary/20"}`}>
-                <div className={`text-2xl mb-2 ${id === "light" ? "text-amber-500" : id === "dark" ? "text-indigo-400" : "text-muted-foreground"}`}>
+                <div className={`text-2xl mb-2 ${id === "light" ? "text-warning" : id === "dark" ? "text-chart-3" : "text-muted-foreground"}`}>
                   <Icon className="w-6 h-6" />
                 </div>
                 <div className="text-sm font-medium text-muted-foreground">{t(`settings.theme_${id}`)}</div>

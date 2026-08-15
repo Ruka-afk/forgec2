@@ -5,24 +5,31 @@ import Link from "next/link";
 import { z } from "zod";
 import { useI18n } from "@/lib/i18n";
 import { useForm } from "@/lib/hooks/useForm";
-import { FieldError, EmptyState, PageHeader, StatusBadge } from "@/components/UI";
+import { FieldError } from "@/components/ui/field-error";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
+import { StatusBadge } from "@/components/ui/status-indicator";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { DataError } from "@/components/ui/data-state";
 import { Badge } from "@/components/ui/badge";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeftRight, Check, Copy, Info, Pencil, Plug, Plus, Power, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Check, Copy, Info, Pencil, Plug, Plus, Power, SlidersHorizontal, Trash2 } from "lucide-react";
 import type { Listener } from "./_components/types";
 import { emptyCreateForm, emptyEditForm } from "./_components/types";
 import { useListenersData } from "./_components/useListenersData";
 import type { CreateListenerForm, EditListenerForm } from "./_components/types";
+import { ListenerHealthCell } from "./_components/ListenerHealthCell";
+import { ListenerBreakerConfigDialog } from "./_components/ListenerBreakerConfigDialog";
+import { healthForListener, isProblemHealth } from "./_components/listener-health";
 
 export default function ListenersPageContent() {
   const { t } = useI18n();
@@ -32,15 +39,19 @@ export default function ListenersPageContent() {
     error,
     setError,
     agentCountMap,
+    healthByTarget,
     creating,
     createListener,
     updateListener,
     toggleListener,
     deleteListener,
+    resetHealth,
   } = useListenersData();
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [healthFilter, setHealthFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [showBreakerConfig, setShowBreakerConfig] = useState(false);
 
   const portSchema = useMemo(
     () =>
@@ -161,23 +172,44 @@ export default function ListenersPageContent() {
     await deleteListener(id);
   };
 
-  const total = listeners.length;
-  const enabledCount = listeners.filter(l => l.enabled === true).length;
-  const httpCount = listeners.filter(l => (l.type) === "http").length;
-  const tcpCount = listeners.filter(l => (l.type) === "tcp").length;
-  const dnsCount = listeners.filter(l => (l.type) === "dns").length;
-
-  const filtered = listeners.filter(l => {
-    const type = l.type || "";
-    if (typeFilter && type !== typeFilter) return false;
-    const enabled = l.enabled === true;
-    if (statusFilter === "enabled" && !enabled) return false;
-    if (statusFilter === "disabled" && enabled) return false;
-    return true;
-  });
+  const { total, enabledCount, httpCount, tcpCount, dnsCount, burnedCount, filtered } = useMemo(() => {
+    const total = listeners.length;
+    const enabledCount = listeners.filter((l) => l.enabled === true).length;
+    const httpCount = listeners.filter((l) => l.type === "http").length;
+    const tcpCount = listeners.filter((l) => l.type === "tcp").length;
+    const dnsCount = listeners.filter((l) => l.type === "dns").length;
+    const burnedCount = listeners.filter((l) => healthForListener(healthByTarget, l.id || l.ID)?.status === "burned").length;
+    const filtered = listeners.filter((l) => {
+      const type = l.type || "";
+      if (typeFilter && type !== typeFilter) return false;
+      const enabled = l.enabled === true;
+      if (statusFilter === "enabled" && !enabled) return false;
+      if (statusFilter === "disabled" && enabled) return false;
+      const health = healthForListener(healthByTarget, l.id || l.ID);
+      if (healthFilter === "problem" && !isProblemHealth(health)) return false;
+      if (healthFilter === "burned" && health?.status !== "burned") return false;
+      return true;
+    });
+    return { total, enabledCount, httpCount, tcpCount, dnsCount, burnedCount, filtered };
+  }, [listeners, healthByTarget, typeFilter, statusFilter, healthFilter]);
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <PageContainer
+      title={t("listeners.title")}
+      subtitle={t("listeners.subtitle")}
+      actions={
+        <>
+          <Button variant="outline" onClick={() => setShowBreakerConfig(true)}>
+            <SlidersHorizontal className="w-4 h-4" />
+            <span>{t("listeners.breaker_config")}</span>
+          </Button>
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus className="w-4 h-4" />
+            <span>{t("listeners.create_listener")}</span>
+          </Button>
+        </>
+      }
+    >
       {error && (
         <DataError
           message={error}
@@ -185,34 +217,14 @@ export default function ListenersPageContent() {
           className="mb-4"
         />
       )}
-      <PageHeader title={t("listeners.title")} subtitle={t("listeners.subtitle")}>
-        <Button onClick={() => setShowCreate(true)}>
-          <Plus className="w-4 h-4" />
-          <span>{t("listeners.create_listener")}</span>
-        </Button>
-      </PageHeader>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Card className="rounded-2xl p-4 sm:p-5">
-          <div className="text-(--fs-micro-sm) sm:text-xs text-muted-foreground">{t("listeners.total")}</div>
-          <div className="text-2xl font-bold mt-1 text-foreground">{loading ? "..." : total}</div>
-        </Card>
-        <Card className="rounded-2xl p-4 sm:p-5">
-          <div className="text-(--fs-micro-sm) sm:text-xs text-muted-foreground">{t("listeners.running")}</div>
-          <div className="text-2xl font-bold mt-1 text-emerald-600">{loading ? "..." : enabledCount}</div>
-        </Card>
-        <Card className="rounded-2xl p-4 sm:p-5">
-          <div className="text-(--fs-micro-sm) sm:text-xs text-muted-foreground">{t("listeners.http")}</div>
-          <div className="text-2xl font-bold mt-1 text-foreground">{loading ? "..." : httpCount}</div>
-        </Card>
-        <Card className="rounded-2xl p-4 sm:p-5">
-          <div className="text-(--fs-micro-sm) sm:text-xs text-muted-foreground">{t("listeners.tcp")}</div>
-          <div className="text-2xl font-bold mt-1 text-foreground">{loading ? "..." : tcpCount}</div>
-        </Card>
-        <Card className="rounded-2xl p-4 sm:p-5 col-span-2 sm:col-span-1">
-          <div className="text-(--fs-micro-sm) sm:text-xs text-muted-foreground">{t("listeners.dns")}</div>
-          <div className="text-2xl font-bold mt-1 text-primary">{loading ? "..." : dnsCount}</div>
-        </Card>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4 mb-4 sm:mb-6">
+        <Card className="rounded-2xl p-4 sm:p-5"><StatTile label={t("listeners.total")} value={loading ? "..." : total} /></Card>
+        <Card className="rounded-2xl p-4 sm:p-5"><StatTile label={t("listeners.running")} value={loading ? "..." : enabledCount} tone="success" /></Card>
+        <Card className="rounded-2xl p-4 sm:p-5"><StatTile label={t("listeners.burned")} value={loading ? "..." : burnedCount} tone={burnedCount > 0 ? "destructive" : undefined} /></Card>
+        <Card className="rounded-2xl p-4 sm:p-5"><StatTile label={t("listeners.http")} value={loading ? "..." : httpCount} /></Card>
+        <Card className="rounded-2xl p-4 sm:p-5"><StatTile label={t("listeners.tcp")} value={loading ? "..." : tcpCount} /></Card>
+        <Card className="rounded-2xl p-4 sm:p-5"><StatTile label={t("listeners.dns")} value={loading ? "..." : dnsCount} tone="primary" /></Card>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -243,6 +255,16 @@ export default function ListenersPageContent() {
               <SelectItem value="disabled">{t("listeners.disabled")}</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={healthFilter} onValueChange={(val) => setHealthFilter(typeof val === "string" ? val : "")}>
+            <SelectTrigger className="flex-1 h-11">
+              <SelectValue placeholder={t("listeners.filter_health_all")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">{t("listeners.filter_health_all")}</SelectItem>
+              <SelectItem value="problem">{t("listeners.filter_health_problem")}</SelectItem>
+              <SelectItem value="burned">{t("listeners.health_burned")}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -257,6 +279,7 @@ export default function ListenersPageContent() {
               <TableHead className="max-sm:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[160px]">{t("listeners.col_address")}</TableHead>
               <TableHead className="max-sm:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[60px]">{t("listeners.col_agents")}</TableHead>
               <TableHead className="text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[80px]">{t("listeners.col_status")}</TableHead>
+              <TableHead className="text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[120px]">{t("listeners.col_health")}</TableHead>
               <TableHead className="max-sm:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[120px]">{t("listeners.col_notes")}</TableHead>
               <TableHead className="text-right py-3 px-4 sm:py-4 sm:px-6 font-medium text-muted-foreground min-w-[200px]">{t("listeners.col_actions")}</TableHead>
             </TableRow>
@@ -271,12 +294,13 @@ export default function ListenersPageContent() {
                   <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4"><Skeleton className="h-4 w-32" /></TableCell>
                   <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4"><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell className="py-3 px-3 sm:py-4 sm:px-4"><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell className="py-3 px-3 sm:py-4 sm:px-4"><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell className="py-3 px-4 sm:py-4 sm:px-6 text-right"><div className="flex items-center justify-end gap-1 sm:gap-2"><Skeleton className="h-8 w-20 rounded-lg" /><Skeleton className="h-8 w-20 rounded-lg" /><Skeleton className="h-8 w-20 rounded-lg" /><Skeleton className="h-8 w-20 rounded-lg" /></div></TableCell>
                 </TableRow>
               ))
             ) : filtered.length > 0 ? (
               filtered.map(l => {
-                const id = l.id || "";
+                const id = String(l.id || l.ID || "");
                 const name = l.name || "";
                 const type = l.type || "";
                 const scheme = l.scheme || l.protocol || type;
@@ -286,6 +310,7 @@ export default function ListenersPageContent() {
                 const notes = l.notes || "-";
                 const tags = l.tags || "";
                 const tagList = tags.split(",").map(t => t.trim()).filter(Boolean);
+                const health = healthForListener(healthByTarget, id);
                 return (
                   <TableRow key={id} className="hover:bg-muted/50 transition-colors">
                     <TableCell className="py-3 px-4 sm:py-4 sm:px-6 font-medium"><Link href={`/listeners/${id}`} className="text-primary hover:underline">{name}</Link></TableCell>
@@ -305,6 +330,9 @@ export default function ListenersPageContent() {
                     </TableCell>
                     <TableCell className="py-3 px-3 sm:py-4 sm:px-4">
                       <StatusBadge status={enabled ? "online" : "offline"} />
+                    </TableCell>
+                    <TableCell className="py-3 px-3 sm:py-4 sm:px-4">
+                      <ListenerHealthCell health={health} onReset={health ? () => void resetHealth(id) : undefined} />
                     </TableCell>
                     <TableCell className="max-sm:hidden py-3 px-3 sm:py-4 sm:px-4 text-xs text-muted-foreground max-w-[150px] truncate">{notes}</TableCell>
                      <TableCell className="py-3 px-4 sm:py-4 sm:px-6 text-right">
@@ -326,7 +354,7 @@ export default function ListenersPageContent() {
                             <Pencil className="w-4 h-4" />
                             <span className="hidden sm:inline">{t("listeners.edit")}</span>
                          </Button>
-                         <Button variant="ghost" onClick={() => handleToggle(l)} className={`w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs ${enabled ? "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/60" : "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/60"} rounded-xl flex items-center justify-center gap-x-1`}>
+                         <Button variant="ghost" onClick={() => handleToggle(l)} className={`w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs ${enabled ? "bg-warning/15 text-warning hover:bg-warning/15" : "bg-success/15 text-success hover:bg-success/15"} rounded-xl flex items-center justify-center gap-x-1`}>
                             <Power className="w-4 h-4" />
                                <span className="hidden sm:inline">{enabled ? t("listeners.stop") : t("listeners.start")}</span>
                          </Button>
@@ -341,7 +369,7 @@ export default function ListenersPageContent() {
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
                   <EmptyState icon={Plug} title={t("listeners.empty_title")} message={t("listeners.empty_message")} />
                 </TableCell>
               </TableRow>
@@ -524,7 +552,8 @@ export default function ListenersPageContent() {
         </DialogContent>
       </Dialog>
       {modal}
-    </div>
+      <ListenerBreakerConfigDialog open={showBreakerConfig} onOpenChange={setShowBreakerConfig} />
+    </PageContainer>
   );
 }
 

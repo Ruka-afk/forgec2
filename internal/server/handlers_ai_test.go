@@ -2,9 +2,11 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/config"
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -70,6 +72,52 @@ func TestResolveAIToolLimits_CustomCaps(t *testing.T) {
 	limits := resolveAIToolLimits(10, 8, 3)
 	if limits.maxConversationTurns != 10 || limits.maxToolRounds != 8 || limits.maxDuplicateToolCalls != 3 {
 		t.Fatalf("unexpected limits: %+v", limits)
+	}
+}
+
+// TestAIConfigPublicViewRedactsAPIKey ensures the AI page data never exposes
+// the provider API key to any authenticated user (S1).
+func TestAIConfigPublicViewRedactsAPIKey(t *testing.T) {
+	s := &Server{
+		ctx: context.Background(),
+		cfg: &config.Config{},
+	}
+	s.cfg.AI.Enabled = true
+	s.cfg.AI.Provider = "deepseek"
+	s.cfg.AI.Model = "deepseek-chat"
+	s.cfg.AI.APIKey = "sk-SUPER-SECRET-KEY-12345"
+	s.cfg.AI.Endpoint = "https://api.deepseek.com"
+
+	view := s.aiConfigPublicView()
+
+	if view["api_key"] != nil {
+		t.Fatal("api_key must not be present in the public AI config view")
+	}
+	// Marshal and assert the secret string is nowhere in the payload.
+	raw, err := json.Marshal(view)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if containsStr(string(raw), "sk-SUPER-SECRET-KEY-12345") {
+		t.Fatal("API key leaked into AI config view")
+	}
+	if view["provider"] != "deepseek" || view["model"] != "deepseek-chat" {
+		t.Fatalf("non-secret fields should be present: %+v", view)
+	}
+}
+
+// TestAIDoRequestBlocksInternalEndpoint ensures the AI request path rejects
+// internal/metadata/link-local endpoints via the SSRF guard before any
+// outbound request carrying the API key is made (S4).
+func TestAIDoRequestBlocksInternalEndpoint(t *testing.T) {
+	s := &Server{ctx: context.Background(), cfg: &config.Config{}}
+	s.cfg.AI.Provider = "openai"
+	s.cfg.AI.Endpoint = "http://169.254.169.254"
+	s.cfg.AI.APIKey = "sk-test"
+
+	_, err := s.aiDoRequest(context.Background(), []byte(`{}`))
+	if err == nil {
+		t.Fatal("expected aiDoRequest to block internal/metadata endpoint")
 	}
 }
 

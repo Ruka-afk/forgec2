@@ -37,6 +37,9 @@ type StagerConfig struct {
 	SkipTLSVerify bool
 	DNSDomain     string
 	DNSServer     string
+	BeaconKey     string // PSK used to derive registration auth (empty = no PSK auth)
+	RegSecretID   string // v3 per-implant registration secret id
+	RegSecret     string // v3 per-implant registration secret, base64
 }
 
 type StagerResult struct {
@@ -226,6 +229,9 @@ func GenerateStagerStage2(cfg StagerConfig, outputDir string) (string, error) {
 		Architecture:  cfg.Architecture,
 		DNSDomain:     cfg.DNSDomain,
 		DNSServer:     cfg.DNSServer,
+		BeaconKey:     cfg.BeaconKey,
+		RegSecretID:   cfg.RegSecretID,
+		RegSecret:     cfg.RegSecret,
 	}
 
 	if !filepath.IsAbs(outputDir) {
@@ -262,6 +268,9 @@ func GenerateStagerStage2Linux(cfg StagerConfig, outputDir string) (string, erro
 		Profile:       cfg.Profile,
 		ListenerID:    cfg.ListenerID,
 		Architecture:  cfg.Architecture,
+		BeaconKey:     cfg.BeaconKey,
+		RegSecretID:   cfg.RegSecretID,
+		RegSecret:     cfg.RegSecret,
 	}
 
 	if !filepath.IsAbs(outputDir) {

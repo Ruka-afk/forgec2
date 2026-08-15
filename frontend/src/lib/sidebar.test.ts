@@ -27,6 +27,7 @@ describe("mergeSidebarSections", () => {
     const merged = mergeSidebarSections(old);
     expect(merged.operations).toBe(false);
     expect(merged.lab).toBe(false);
-    expect(merged.system).toBe(true);
+    expect(merged.system).toBe(false);
+    expect(merged["build-deploy"]).toBe(true);
   });
 });

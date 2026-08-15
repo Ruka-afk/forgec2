@@ -1,6 +1,6 @@
 import { useI18n } from "@/lib/i18n";
 import { SettingsData, PasswordForm } from "./types";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -68,7 +68,7 @@ export default function SecuritySection({
                 <Input id="sec-confirm-pw" type="password" minLength={8} value={passwordForm.confirm} onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })} />
               </div>
             </div>
-            <Button type="submit" disabled={saving} className="h-11 px-6 rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+            <Button type="submit" size="lg" disabled={saving} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">
               <Save className="w-4 h-4" />{t("settings.security.change_password")}
             </Button>
           </form>
@@ -78,10 +78,10 @@ export default function SecuritySection({
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="w-4 h-4" />{t("settings.security.jwt_secret")}</h3>
           <div className="flex items-center gap-4 p-4 bg-warning/10 rounded-xl border border-warning/20">
             <div className="flex-1">
-              <div className="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">{t("settings.security.current_key")}</div>
-              <code className="text-sm font-mono text-amber-800 dark:text-amber-300 break-all select-all">{data.jwt_masked ?? "????????"}</code>
+              <div className="text-xs text-warning font-medium mb-1">{t("settings.security.current_key")}</div>
+              <code className="text-sm font-mono text-warning-foreground break-all select-all">{data.jwt_masked ?? "????????"}</code>
             </div>
-            <Button onClick={onRegenerateJWT} disabled={saving} className="shrink-0 px-4 h-10 bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25 rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+            <Button onClick={onRegenerateJWT} size="lg" disabled={saving} className="shrink-0 px-4 bg-warning/15 text-warning hover:bg-warning/25 text-sm font-medium transition-colors disabled:opacity-50">
               <RotateCw className="w-4 h-4" />{t("settings.security.regenerate")}
             </Button>
           </div>
@@ -105,7 +105,7 @@ export default function SecuritySection({
                 <Badge variant="secondary" className="px-3 py-1.5 text-xs">{t("settings.security.disabled")}</Badge>
               </div>
               {!showTotpSetup ? (
-                <Button onClick={onGenerateTOTP} className="h-11 px-6 rounded-xl text-sm font-medium transition-colors">
+                <Button onClick={onGenerateTOTP} size="lg" className="px-6 text-sm font-medium transition-colors">
                   <QrCode className="w-4 h-4" />{t("settings.security.setup_2fa")}
                 </Button>
               ) : (
@@ -136,7 +136,7 @@ export default function SecuritySection({
                       {t("settings.security.save_backup_codes")} <div className="mt-2 font-mono font-semibold whitespace-pre-wrap">{totpBackupCodes}</div>
                     </div>
                   )}
-                  <Button onClick={onEnableTOTP} disabled={saving} className="h-11 px-6 rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+                  <Button onClick={onEnableTOTP} size="lg" disabled={saving} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">
                     <Check className="w-4 h-4" />{t("settings.security.enable_2fa")}
                   </Button>
                 </div>
@@ -144,12 +144,12 @@ export default function SecuritySection({
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4">
+              <div className="bg-success/15 border border-success/30 rounded-xl p-4">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4" />
-                  <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">{t("settings.security.2fa_enabled")}</span>
+                  <span className="text-sm font-medium text-success">{t("settings.security.2fa_enabled")}</span>
                 </div>
-                <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">{t("settings.security.2fa_login_hint")}</div>
+                <div className="text-xs text-success mt-1">{t("settings.security.2fa_login_hint")}</div>
               </div>
               <div>
                 <span className="block text-xs text-muted-foreground mb-1.5">{t("settings.security.enter_pw_disable")}</span>
@@ -159,7 +159,7 @@ export default function SecuritySection({
                 <span className="block text-xs text-muted-foreground mb-1.5">{t("settings.security.enter_2fa_code")}</span>
                 <Input id="totp-disable-code" type="text" aria-label={t("settings.security.enter_2fa_code")} placeholder="123 456" maxLength={8} value={totpDisableCode} onChange={(e) => setTotpDisableCode(e.target.value)} />
               </div>
-              <Button onClick={async () => { if (await confirm({ message: t("settings.disable_totp") })) onDisableTOTP(); }} disabled={saving} className="h-11 px-6 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+              <Button onClick={async () => { if (await confirm({ message: t("settings.disable_totp") })) onDisableTOTP(); }} size="lg" disabled={saving} className="px-6 bg-destructive/10 hover:bg-destructive/20 text-destructive text-sm font-medium transition-colors disabled:opacity-50">
                 <X className="w-4 h-4" />{t("settings.security.disable_2fa")}
               </Button>
             </div>

@@ -10,10 +10,10 @@ interface TaskCounts { completed: number; pending: number; failed: number; runni
 function TaskBody({ data }: { data: TaskCounts }) {
   const { t } = useI18n();
   const items = [
-    { label: t("tasks.completed"), value: Number(data.completed) || 0, color: "bg-emerald-500" },
-    { label: t("tasks.pending"), value: Number(data.pending) || 0, color: "bg-amber-500" },
-    { label: t("tasks.failed"), value: Number(data.failed) || 0, color: "bg-red-500" },
-    { label: t("tasks.running"), value: Number(data.running) || 0, color: "bg-blue-500" },
+    { label: t("tasks.completed"), value: Number(data.completed) || 0, color: "bg-success" },
+    { label: t("tasks.pending"), value: Number(data.pending) || 0, color: "bg-warning" },
+    { label: t("tasks.failed"), value: Number(data.failed) || 0, color: "bg-destructive" },
+    { label: t("tasks.running"), value: Number(data.running) || 0, color: "bg-info" },
   ];
   const total = items.reduce((s, i) => s + i.value, 0);
   if (total === 0) return <p className="text-xs text-muted-foreground/70 text-center py-4">{t("dashboard.no_tasks_yet")}</p>;

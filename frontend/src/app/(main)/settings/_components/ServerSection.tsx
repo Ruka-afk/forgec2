@@ -52,7 +52,7 @@ export default function ServerSection({
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">{t("settings.server.tls")}</span>
               <div className="h-11 flex items-center">
-                <span className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-xl ${data.tls_enabled ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400" : "bg-secondary text-muted-foreground"}`}>
+                <span className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-xl ${data.tls_enabled ? "bg-success/15 text-success" : "bg-secondary text-muted-foreground"}`}>
                   {data.tls_enabled ? <Lock className="w-3 h-3 mr-1" /> : <Unlock className="w-3 h-3 mr-1" />}
                   {data.tls_enabled ? t("settings.server.enabled") : t("settings.server.disabled")}
                 </span>
@@ -89,7 +89,7 @@ export default function ServerSection({
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button type="submit" disabled={saving} className="h-11 px-6 rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+            <Button type="submit" size="lg" disabled={saving} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">
               <Save className="w-4 h-4" />{t("settings.server.save")}
             </Button>
             <span className="text-xs text-muted-foreground"><Info className="w-4 h-4" />{t("settings.server.restart_hint")}</span>

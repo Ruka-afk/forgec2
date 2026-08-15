@@ -29,20 +29,4 @@ export async function sanitizeHtml(html: string): Promise<string> {
   });
 }
 
-let _dompurifyReady: DOMPurify.DOMPurifyI | null = null;
-let _dompurifyReadyPromise: Promise<DOMPurify.DOMPurifyI> | null = null;
 
-export function getDOMPurifySync(): DOMPurify.DOMPurifyI | null {
-  return _dompurifyReady;
-}
-
-export function ensureDOMPurifyReady(): Promise<DOMPurify.DOMPurifyI> {
-  if (_dompurifyReady) return Promise.resolve(_dompurifyReady);
-  if (!_dompurifyReadyPromise) {
-    _dompurifyReadyPromise = getDOMPurify().then((dp) => {
-      _dompurifyReady = dp as unknown as DOMPurify.DOMPurifyI;
-      return dp as unknown as DOMPurify.DOMPurifyI;
-    });
-  }
-  return _dompurifyReadyPromise;
-}

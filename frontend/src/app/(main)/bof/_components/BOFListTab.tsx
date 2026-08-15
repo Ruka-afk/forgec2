@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { BOFFile } from "./types";
 import { formatBytes } from "./types";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,7 +111,7 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
                           setRunArgs("");
                           setShowRun(true);
                         }}
-                        className="px-3 py-1.5 text-xs bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-lg border border-emerald-200 dark:border-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+                        className="px-3 py-1.5 text-xs bg-success/15 text-success rounded-lg border border-success/30 hover:bg-success/15 transition-colors"
                       >
                         <Play className="w-4 h-4" />{t("bof.run")}
                       </Button>
@@ -159,13 +159,13 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
           <form onSubmit={handleUpload} className="space-y-4">
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.bof_file")} (.o)</span>
-              <input
+              <Input
                 type="file"
                 accept=".o"
                 onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                 required
                 aria-label={t("bof.bof_file")}
-                className="w-full bg-muted border border-border rounded-xl px-4 h-10 text-sm file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary/10 file:text-primary dark:file:bg-primary/20 dark:file:text-primary"
+                className="h-9 bg-muted"
               />
             </div>
             <div>
@@ -176,7 +176,7 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
                 required
                 value={uploadName}
                 onChange={(e) => setUploadName(e.target.value)}
-                className="w-full h-10"
+                className="w-full h-9"
               />
             </div>
             <div>
@@ -186,13 +186,13 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
                 placeholder={t("bof.brief_desc")}
                 value={uploadDesc}
                 onChange={(e) => setUploadDesc(e.target.value)}
-                className="w-full h-10"
+                className="w-full h-9"
               />
             </div>
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.architecture")}</span>
               <Select value={uploadArch} onValueChange={(v) => setUploadArch(v ?? "")}>
-                <SelectTrigger aria-label={t("bof.architecture")} className="w-full h-10">
+                <SelectTrigger aria-label={t("bof.architecture")} className="w-full h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -202,7 +202,7 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
               </Select>
             </div>
             <DialogFooter>
-              <Button type="submit" className="w-full h-10 rounded-xl text-sm font-medium transition-colors">
+              <Button type="submit" size="lg" className="w-full text-sm font-medium transition-colors">
                 {t("bof.upload_title")}
               </Button>
             </DialogFooter>
@@ -219,7 +219,7 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.agent")}</span>
               <Select value={runAgent} onValueChange={(v) => setRunAgent(v ?? "")}>
-                <SelectTrigger aria-label={t("bof.agent")} className="w-full h-10">
+                <SelectTrigger aria-label={t("bof.agent")} className="w-full h-9">
                   <SelectValue placeholder={t("bof.select_agent")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -233,10 +233,10 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
             </div>
             <div>
               <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.arguments")}</span>
-              <Input aria-label={t("bof.bof_args")} placeholder={t("bof.bof_args")} value={runArgs} onChange={(e) => setRunArgs(e.target.value)} className="w-full h-10 font-mono" />
+              <Input aria-label={t("bof.bof_args")} placeholder={t("bof.bof_args")} value={runArgs} onChange={(e) => setRunArgs(e.target.value)} className="w-full h-9 font-mono" />
             </div>
             <DialogFooter>
-              <Button type="submit" className="w-full h-10 rounded-xl text-sm font-medium transition-colors">
+              <Button type="submit" size="lg" className="w-full text-sm font-medium transition-colors">
                 {t("bof.run")}
               </Button>
             </DialogFooter>
@@ -285,14 +285,14 @@ export default function BOFListTab({ files, loading, onUpload, onDelete, onRun, 
             <form onSubmit={handleEdit} className="space-y-4">
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.name")}</span>
-                <Input aria-label={t("bof.bof_name")} value={editTarget.name || ""} onChange={(e) => setEditTarget({ ...editTarget, name: e.target.value })} className="w-full h-10 font-mono" />
+                <Input aria-label={t("bof.bof_name")} value={editTarget.name || ""} onChange={(e) => setEditTarget({ ...editTarget, name: e.target.value })} className="w-full h-9 font-mono" />
               </div>
               <div>
                 <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bof.description")}</span>
-                <Input aria-label={t("bof.description")} value={editTarget.description || ""} onChange={(e) => setEditTarget({ ...editTarget, Description: e.target.value })} className="w-full h-10" />
+                <Input aria-label={t("bof.description")} value={editTarget.description || ""} onChange={(e) => setEditTarget({ ...editTarget, Description: e.target.value })} className="w-full h-9" />
               </div>
               <DialogFooter>
-                <Button type="submit" className="w-full h-10 rounded-xl text-sm font-medium transition-colors">
+                <Button type="submit" size="lg" className="w-full text-sm font-medium transition-colors">
                   {t("common.save")}
                 </Button>
               </DialogFooter>

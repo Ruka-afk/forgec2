@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { api } from "@/lib/api";
 import { fetchCached } from "@/lib/hooks/useCachedData";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
 import { useI18n } from "@/lib/i18n";

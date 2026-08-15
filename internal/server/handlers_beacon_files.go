@@ -1,0 +1,114 @@
+package server
+
+import (
+	"encoding/base64"
+	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
+
+	"github.com/forgec2/forgec2/internal/db"
+)
+
+// saveFileChunk writes a base64-encoded file chunk to disk for upload/download
+// results. Returns true if the caller should skip normal task-result processing.
+func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefix string, resultPrefix string) bool {
+	uploadBase := safeJoin(filepath.Join(s.cfg.Server.DataDir, "uploads"), uuid)
+	if uploadBase == "" {
+		slog.Error("Invalid agent ID for upload path", "agent_id", uuid)
+		task.Result = "ERROR: invalid agent id"
+		if err := s.db.Save(task).Error; err != nil {
+			slog.Error("Failed to save invalid agent id error", "task_id", task.ID, "error", err)
+		}
+		return true
+	}
+	if err := os.MkdirAll(uploadBase, 0700); err != nil {
+		slog.Error("Failed to create uploads dir", "agent_id", uuid, "error", err)
+	}
+	filename := r.Filename
+	if filename == "" {
+		filename = fmt.Sprintf("file_%d", task.ID)
+	}
+	filePath := safeJoin(uploadBase, filename)
+	if filePath == "" {
+		task.Result = "ERROR: invalid filename (path traversal blocked)"
+		if err := s.db.Save(task).Error; err != nil {
+			slog.Error("Failed to save file path traversal error", "task_id", task.ID, "error", err)
+		}
+		return true
+	}
+	decoded, err := base64.StdEncoding.DecodeString(r.Output)
+	if err != nil {
+		task.Result = fmt.Sprintf("ERROR: base64 decode failed: %v", err)
+		if len(task.Result) > MaxResultSize {
+			task.Result = truncateString(task.Result, MaxResultSize)
+		}
+		if saveErr := s.db.Save(task).Error; saveErr != nil {
+			slog.Error("Failed to save decode error", "task_id", task.ID, "error", saveErr)
+		}
+		return true
+	}
+	if len(decoded) > MaxTransferChunkSize {
+		task.Result = fmt.Sprintf("ERROR: chunk too large (%d bytes, max %d)", len(decoded), MaxTransferChunkSize)
+		if saveErr := s.db.Save(task).Error; saveErr != nil {
+			slog.Error("Failed to save chunk size error", "task_id", task.ID, "error", saveErr)
+		}
+		slog.Warn("Oversized exfil chunk rejected", "agent_id", uuid, "task_id", task.ID, "size", len(decoded))
+		return true
+	}
+	if err := s.verifyAndCommitChain(uuid, task.ID, r.MAC, decoded); err != nil {
+		task.Result = fmt.Sprintf("ERROR: %v", err)
+		if saveErr := s.db.Save(task).Error; saveErr != nil {
+			slog.Error("Failed to save integrity error", "task_id", task.ID, "error", saveErr)
+		}
+		slog.Warn("File chunk integrity failure", "agent_id", uuid, "task_id", task.ID, "error", err)
+		return true
+	}
+	f, ferr := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0600)
+	if ferr != nil {
+		task.Result = fmt.Sprintf("ERROR: open file failed: %v", ferr)
+		if len(task.Result) > MaxResultSize {
+			task.Result = truncateString(task.Result, MaxResultSize)
+		}
+		if saveErr := s.db.Save(task).Error; saveErr != nil {
+			slog.Error("Failed to save open file error", "task_id", task.ID, "error", saveErr)
+		}
+		return true
+	}
+	defer f.Close()
+	off := r.Offset
+	if off == 0 {
+		off = task.Offset
+	}
+	if off > 0 {
+		if _, err := f.Seek(off, 0); err != nil {
+			task.Result = fmt.Sprintf("ERROR: seek failed: %v", err)
+			if len(task.Result) > MaxResultSize {
+				task.Result = truncateString(task.Result, MaxResultSize)
+			}
+			if err := s.db.Save(task).Error; err != nil {
+				slog.Error("Failed to save "+logPrefix+" seek error", "task_id", task.ID, "error", err)
+			}
+			return true
+		}
+	}
+	if _, err := f.Write(decoded); err != nil {
+		task.Result = fmt.Sprintf("ERROR: write failed: %v", err)
+		if len(task.Result) > MaxResultSize {
+			task.Result = truncateString(task.Result, MaxResultSize)
+		}
+		if err := s.db.Save(task).Error; err != nil {
+			slog.Error("Failed to save "+logPrefix+" write error", "task_id", task.ID, "error", err)
+		}
+		return true
+	}
+	task.Result = fmt.Sprintf("%s: %s offset %d (%d bytes)", resultPrefix, filename, off, r.Size)
+	if len(task.Result) > MaxResultSize {
+		task.Result = truncateString(task.Result, MaxResultSize)
+	}
+	if err := s.db.Save(task).Error; err != nil {
+		slog.Error("Failed to save "+logPrefix+" success", "task_id", task.ID, "error", err)
+	}
+	slog.Info("File chunk "+logPrefix, "agent_id", uuid, "file", filename, "offset", off, "size", r.Size)
+	return false
+}

@@ -19,7 +19,7 @@ export default function MalleableSection({
   const { t } = useI18n();
   return (
     <Card className="overflow-hidden">
-      <div className="bg-violet-500/10 border-b border-violet-500/20 px-6 py-4">
+      <div className="bg-chart-6/violet border-b border-chart-6/violet px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Shield className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-foreground">{t("settings.malleable.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.malleable.subtitle")}</p></div>
@@ -60,7 +60,7 @@ export default function MalleableSection({
             <AlertTriangle className="w-4 h-4" />
             {t("settings.malleable.warning")}
           </div>
-          <Button type="submit" disabled={saving} className="h-11 px-6 rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+          <Button type="submit" size="lg" disabled={saving} className="px-6 text-sm font-medium transition-colors disabled:opacity-50">
             <Save className="w-4 h-4" />{t("settings.malleable.save")}
           </Button>
         </form>

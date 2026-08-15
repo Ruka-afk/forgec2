@@ -3,16 +3,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-
-const COLOR_MAP: Record<string, { text: string; bg: string; glow: string }> = {
-  indigo:  { text: "text-primary", bg: "bg-primary/10", glow: "shadow-primary/10" },
-  emerald: { text: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-500/10", glow: "shadow-emerald-500/10" },
-  amber:   { text: "text-amber-600 dark:text-amber-400", bg: "bg-amber-500/10", glow: "shadow-amber-500/10" },
-  red:     { text: "text-destructive", bg: "bg-destructive/10", glow: "shadow-destructive/10" },
-  blue:    { text: "text-blue-600 dark:text-blue-400", bg: "bg-blue-500/10", glow: "shadow-blue-500/10" },
-  purple:  { text: "text-purple-600 dark:text-purple-400", bg: "bg-purple-500/10", glow: "shadow-purple-500/10" },
-  cyan:    { text: "text-cyan-600 dark:text-cyan-400", bg: "bg-cyan-500/10", glow: "shadow-cyan-500/10" },
-};
+import { hueStyles, resolveHue, type Hue } from "@/lib/ui/statusStyles";
 
 export const StatCard = memo(function StatCard({
   label,
@@ -23,17 +14,19 @@ export const StatCard = memo(function StatCard({
   icon,
   dot,
   dotTone,
+  iconSide = "right",
   className,
   style,
 }: {
   label: string;
   value: number | string;
-  color?: string;
+  color?: Hue | string;
   sub?: string;
   subColor?: string;
   icon?: React.ReactNode;
   dot?: boolean;
   dotTone?: string;
+  iconSide?: "left" | "right";
   className?: string;
   style?: React.CSSProperties;
 }) {
@@ -62,7 +55,9 @@ export const StatCard = memo(function StatCard({
     requestAnimationFrame(animate);
   }, [value]);
 
-  const colors = COLOR_MAP[color] || COLOR_MAP.indigo;
+  const colors = hueStyles[resolveHue(color)];
+  const dotClasses =
+    dotTone === "ok" ? "bg-success" : dotTone === "warn" ? "bg-warning" : dotTone === "crit" ? "bg-destructive" : "bg-info";
 
   return (
     <Card
@@ -72,13 +67,13 @@ export const StatCard = memo(function StatCard({
         className
       )}
     >
-      <div className="flex items-start justify-between">
+      <div className={cn("flex items-start justify-between", iconSide === "left" && "flex-row-reverse")}>
         <div className="flex-1 min-w-0">
           <p className="mono-eyebrow text-muted-foreground/70">{label}</p>
-          <p className="mt-1.5 text-[1.625rem] font-bold leading-none text-foreground font-mono font-variant-numeric tabular-nums" aria-live="polite">{displayValue}</p>
-          <div className="flex items-center gap-1.5 mt-2 min-h-4">
+          <p className="mt-1.5 text-(--fs-stat-value) font-bold leading-none text-foreground font-mono font-variant-numeric tabular-nums" aria-live="polite">{displayValue}</p>
+          <div className={cn("flex items-center gap-1.5 mt-2 min-h-4", iconSide === "left" && "justify-start")}>
             {dot && (
-              <span className={`w-1.5 h-1.5 rounded-full ${dotTone === "ok" ? "bg-emerald-500" : dotTone === "warn" ? "bg-amber-500" : dotTone === "crit" ? "bg-destructive" : "bg-info"} animate-pulse`} />
+              <span className={cn("w-1.5 h-1.5 rounded-full", dotClasses, "animate-pulse")} />
             )}
             {sub && <p className={cn("text-xs", subColor || colors.text)}>{sub}</p>}
           </div>

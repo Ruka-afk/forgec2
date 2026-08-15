@@ -30,8 +30,9 @@ try {
     $p = Start-Process -WindowStyle Hidden -FilePath ".\forgec2-server.exe" -ArgumentList "-config config.yaml" -PassThru
     Start-Sleep -Seconds 3
 
-    # 5. Health check
-    $health = Invoke-RestMethod -Uri "http://127.0.0.1:8000/health" -ErrorAction SilentlyContinue
+    # 5. Health check (port is overridable via $env:FORGEC2_PORT to match server.port)
+    $healthPort = if ($env:FORGEC2_PORT) { $env:FORGEC2_PORT } else { "8000" }
+    $health = Invoke-RestMethod -Uri "http://127.0.0.1:$healthPort/health" -ErrorAction SilentlyContinue
     if ($null -eq $health -or $health.status -ne "ok") {
         Write-Warning "Server health check failed (PID $($p.Id))"
         exit 1

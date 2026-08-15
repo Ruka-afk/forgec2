@@ -3,7 +3,9 @@
 import { useState, useRef, useCallback } from "react";
 import { SettingsData } from "./types";
 import { Card } from "@/components/ui/card";
+import { ErrorState } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
@@ -126,7 +128,7 @@ export default function CertificatesSection({
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-6 py-4">
+      <div className="bg-success/10 border-b border-success/20 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Shield className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-foreground">{t("settings.certificates.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.certificates.subtitle")}</p></div>
@@ -136,16 +138,13 @@ export default function CertificatesSection({
         {cert.subject ? (
           <>
             {cert.is_self_signed && (
-              <div className="mb-4 px-4 py-3 bg-warning/10 dark:bg-amber-900/20 border border-warning/20 dark:border-amber-800 rounded-xl text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
+              <div className="mb-4 px-4 py-3 bg-warning/10 dark:bg-warning/20 border border-warning/20 dark:border-warning/40 rounded-xl text-sm text-warning flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 {t("settings.certificates.self_signed_warning")}
               </div>
             )}
             {isExpiringSoon && (
-              <div className="mb-4 px-4 py-3 bg-destructive/10 dark:bg-red-900/20 border border-destructive/20 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-300 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                {t("settings.certificates.expiring_soon", { days: String(cert.expires_in) })}
-              </div>
+              <ErrorState message={t("settings.certificates.expiring_soon", { days: String(cert.expires_in) })} icon={AlertTriangle} className="mb-4" />
             )}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
               <div className="bg-muted rounded-xl p-4 border border-border">
@@ -158,7 +157,7 @@ export default function CertificatesSection({
               </div>
               <div className="bg-muted rounded-xl p-4 border border-border">
                 <div className="text-xs text-muted-foreground">{t("settings.certificates.expires_in")}</div>
-                <div className={`font-semibold text-sm mt-1 ${isExpiringSoon ? "text-red-600" : "text-foreground"}`}>
+                <div className={`font-semibold text-sm mt-1 ${isExpiringSoon ? "text-destructive" : "text-foreground"}`}>
                   {typeof cert.expires_in === "number" ? <>{cert.expires_in} {t("settings.certificates.days")}</> : "-"}
                 </div>
               </div>
@@ -169,7 +168,7 @@ export default function CertificatesSection({
               <div className="bg-muted rounded-xl p-4 border border-border">
                 <div className="text-xs text-muted-foreground">{t("settings.certificates.type")}</div>
                 <div className="font-semibold text-sm text-foreground mt-1 flex items-center gap-1.5">
-                  {cert.is_self_signed ? <CheckCircle className="w-3.5 h-3.5 text-amber-500" /> : <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />}
+                  {cert.is_self_signed ? <CheckCircle className="w-3.5 h-3.5 text-warning" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}
                   {cert.is_self_signed ? t("settings.certificates.self_signed") : t("settings.certificates.trusted")}
                 </div>
               </div>
@@ -179,15 +178,15 @@ export default function CertificatesSection({
           <div className="text-center py-8 text-muted-foreground/70 text-sm">{t("settings.certificates.no_cert")}</div>
         )}
         <div className="flex flex-wrap gap-3">
-          <input type="file" ref={certInputRef} className="hidden" accept=".crt,.pem,.cer" onChange={handleCertFileChange} />
-          <input type="file" ref={keyInputRef} className="hidden" accept=".key,.pem" onChange={handleKeyFileChange} />
-          <Button onClick={() => { setPendingCertFile(null); setWaitingForKey(false); certInputRef.current?.click(); }} disabled={uploading || saving} className="px-4 h-10 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+          <Input type="file" ref={certInputRef} className="hidden" accept=".crt,.pem,.cer" onChange={handleCertFileChange} />
+          <Input type="file" ref={keyInputRef} className="hidden" accept=".key,.pem" onChange={handleKeyFileChange} />
+          <Button onClick={() => { setPendingCertFile(null); setWaitingForKey(false); certInputRef.current?.click(); }} size="lg" disabled={uploading || saving} className="px-4 bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors disabled:opacity-50">
             <Upload className="w-4 h-4" />{waitingForKey ? t("settings.certificates.choose_key") : t("settings.certificates.upload")}
           </Button>
-          <Button onClick={() => setShowRegenDialog(true)} disabled={uploading || saving} className="px-4 h-10 bg-accent hover:bg-accent/80 text-accent-foreground rounded-xl text-sm font-medium transition-colors disabled:opacity-50">
+          <Button onClick={() => setShowRegenDialog(true)} size="lg" disabled={uploading || saving} className="px-4 bg-accent hover:bg-accent/80 text-accent-foreground text-sm font-medium transition-colors disabled:opacity-50">
             <RefreshCw className="w-4 h-4" />{t("settings.certificates.regenerate")}
           </Button>
-          <Button onClick={loadCertInfo} disabled={loadingCert || saving} variant="outline" className="px-4 h-10 rounded-xl text-sm font-medium">
+          <Button onClick={loadCertInfo} size="lg" disabled={loadingCert || saving} variant="outline" className="px-4 text-sm font-medium">
             <Globe className="w-4 h-4" />{t("settings.certificates.refresh")}
           </Button>
         </div>

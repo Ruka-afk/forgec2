@@ -5,7 +5,8 @@ import { useParams } from "next/navigation";
 import { useWS } from "@/lib/wsContext";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { EmptyState, Spinner } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Badge } from "@/components/ui/badge";
 import { Clock, Compass, Expand, Keyboard, Maximize2, Mouse, Play, Square, TriangleAlert, Users, Wifi, Zap } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { isExperimentalDesktop } from "../_components/session-quality";
+import { implantBlocksDest } from "../../_components/implant-version";
 
 interface ResolutionOption {
   value: string;
@@ -58,6 +61,7 @@ export default function RemoteDesktopPage() {
   const [showCursor, setShowCursor] = useState(false);
   const [nativeWidth, setNativeWidth] = useState(0);
   const [nativeHeight, setNativeHeight] = useState(0);
+  const [agentVersion, setAgentVersion] = useState("");
 
   const imgRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -70,6 +74,19 @@ export default function RemoteDesktopPage() {
   const { subscribe } = useWS();
 
   const pollInterval = INTERVAL_BY_RES[resolution] ?? 1000;
+  const versionBlocked = implantBlocksDest(agentVersion, "experimental");
+
+  useEffect(() => {
+    if (!id) return;
+    const ac = new AbortController();
+    api.get(paths.agents.one(id), { signal: ac.signal })
+      .then((data) => {
+        const raw = (data.agent || data) as { version?: string };
+        setAgentVersion(String(raw.version || ""));
+      })
+      .catch(() => setAgentVersion(""));
+    return () => ac.abort();
+  }, [id]);
 
   // Skip polls while the tab is hidden and never start a capture while the
   // previous one is still in flight — keeps slow links from stacking requests.
@@ -114,6 +131,10 @@ export default function RemoteDesktopPage() {
 
   const startMonitoring = async () => {
     if (!id) return;
+    if (versionBlocked) {
+      toast.error(t("agents.version_unknown_dest"));
+      return;
+    }
     setMonitoring(true);
     monitoringRef.current = true;
     setStatus("capturing");
@@ -278,17 +299,17 @@ export default function RemoteDesktopPage() {
       icon: <span className="w-1.5 h-1.5 rounded-full bg-current" />,
     },
     capturing: {
-      color: "bg-amber-400 animate-pulse",
+      color: "bg-warning animate-pulse",
       text: t("agents.rdp_starting"),
       icon: <Spinner size="xs" />,
     },
     connected: {
-      color: "bg-emerald-400 animate-pulse",
+      color: "bg-success/60 animate-pulse",
       text: t("agents.rdp_connected"),
       icon: <span className="w-1.5 h-1.5 rounded-full bg-current" />,
     },
     error: {
-      color: "bg-red-500",
+      color: "bg-destructive",
       text: t("agents.rdp_error"),
       icon: <TriangleAlert className="w-3 h-3" />,
     },
@@ -298,7 +319,7 @@ export default function RemoteDesktopPage() {
 
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up space-y-4">
-      <Card className="p-3 border-amber-500/40 bg-amber-500/10 text-sm text-amber-800 dark:text-amber-200 flex items-start gap-2">
+      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground flex items-start gap-2">
         <TriangleAlert className="w-4 h-4 mt-0.5 shrink-0" />
         <div>
           <div className="font-semibold">{t("agents.rdp_experimental_title")}</div>
@@ -311,6 +332,9 @@ export default function RemoteDesktopPage() {
             <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
             <Users className="w-4 h-4" />
             {t("agents.rdp_title")}
+            {isExperimentalDesktop("remote-desktop") ? (
+              <span className="text-(--fs-micro) font-normal text-warning">{t("generate.quality_experimental")}</span>
+            ) : null}
           </h1>
           <Badge variant="secondary" className="text-xs text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded-lg">
             {id}
@@ -348,7 +372,9 @@ export default function RemoteDesktopPage() {
           </Tooltip>
           {!monitoring ? (
             <Button
-              onClick={startMonitoring}
+              onClick={() => void startMonitoring()}
+              disabled={versionBlocked}
+              title={versionBlocked ? t("agents.version_unknown_dest") : undefined}
             >
               <Play className="w-4 h-4" />
               {t("agents.rdp_start")}
@@ -378,7 +404,7 @@ export default function RemoteDesktopPage() {
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span
-                className={`flex items-center gap-1.5 ${status === "error" ? "text-red-500" : ""}`}
+                className={`flex items-center gap-1.5 ${status === "error" ? "text-destructive" : ""}`}
               >
                 <span className={`w-2 h-2 rounded-full ${indicator.color}`}></span>
                 {indicator.icon}
@@ -392,7 +418,7 @@ export default function RemoteDesktopPage() {
                 <Tooltip>
                   <TooltipTrigger>
                     <span
-                      className="ml-1 w-2 h-2 bg-emerald-500 rounded-full animate-pulse"
+                      className="ml-1 w-2 h-2 bg-success rounded-full animate-pulse"
                     ></span>
                   </TooltipTrigger>
                   <TooltipContent>{t("agents.rdp_monitoring_active")}</TooltipContent>
@@ -402,7 +428,7 @@ export default function RemoteDesktopPage() {
                 <Tooltip>
                   <TooltipTrigger>
                     <span
-                      className="text-(--fs-micro-sm) text-emerald-400 flex items-center gap-1"
+                      className="text-(--fs-micro-sm) text-chart-1 flex items-center gap-1"
                     >
                       <Zap className="w-4 h-4" /> WS
                     </span>
@@ -532,10 +558,10 @@ export default function RemoteDesktopPage() {
               </div>
               <div className="text-sm text-foreground">
                 <span
-                   className={`inline-flex items-center gap-1 ${monitoring ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/70"}`}
+                   className={`inline-flex items-center gap-1 ${monitoring ? "text-success" : "text-muted-foreground/70"}`}
                 >
                   <span
-                    className={`w-1.5 h-1.5 rounded-full ${monitoring ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/50"}`}
+                    className={`w-1.5 h-1.5 rounded-full ${monitoring ? "bg-success animate-pulse" : "bg-muted-foreground/50"}`}
                   ></span>
                   {monitoring ? t("agents.rdp_session_active") : t("agents.rdp_disconnected")}
                 </span>

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -113,5 +114,25 @@ func TestInjectRandomizedStrxor(t *testing.T) {
 	consts := strxorConstants(t, out)
 	if len(consts) == 0 {
 		t.Fatal("no constants extracted from injected strxor.go")
+	}
+}
+
+// TestRandomizeStrxorPreservesSConfigKeyVar guards against a regression where
+// SConfigKey (the per-build config-blob AES key, delivered via -ldflags -X
+// main.SConfigKey) was rewritten into the const block by randomizeStrxor,
+// turning it into a const the linker cannot override. If that happens the
+// injected key is silently dropped and the agent fails to decrypt the config
+// blob (it never beacons). SConfigKey must survive as a var.
+func TestRandomizeStrxorPreservesSConfigKeyVar(t *testing.T) {
+	gen, err := randomizeStrxor()
+	if err != nil {
+		t.Fatalf("randomizeStrxor: %v", err)
+	}
+	text := string(gen)
+	if strings.Contains(text, "const SConfigKey") {
+		t.Fatal("randomizeStrxor re-emitted SConfigKey as a const; -X main.SConfigKey override would be ignored")
+	}
+	if !strings.Contains(text, "var SConfigKey") {
+		t.Fatal("randomizeStrxor dropped SConfigKey; the per-build key cannot be injected")
 	}
 }

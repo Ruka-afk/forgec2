@@ -7,10 +7,11 @@ import { paths } from "@/lib/api-paths";
 import { downloadBlob } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
-import { PageHeader, PageSpinner } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageSpinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Bell, Bot, Cpu, Database, FileCode, Globe, Lock, Palette, Server, Shield, User, Wrench, Archive, Radio, AlertTriangle } from "lucide-react";
+import { Bell, Bot, Cpu, Database, FileCode, Globe, Lock, Palette, Server, Shield, User, Users, Wrench, Archive, Radio, AlertTriangle } from "lucide-react";
 import { useTOTP } from "./_components/useTOTP";
 import { useSettingsData } from "./_components/useSettingsData";
 import ProfileSection from "./_components/ProfileSection";
@@ -31,6 +32,7 @@ const ExtC2Section = dynamic(() => import("./_components/ExtC2Section"), { ssr: 
 const CertificatesSection = dynamic(() => import("./_components/CertificatesSection"), { ssr: false });
 const ModulesSection = dynamic(() => import("./_components/ModulesSection"), { ssr: false });
 const EmergencySection = dynamic(() => import("./_components/EmergencySection"), { ssr: false });
+const AccessSection = dynamic(() => import("./_components/AccessSection"), { ssr: false });
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -206,6 +208,7 @@ export default function SettingsPage() {
     { key: "theme", label: t("settings.theme"), icon: <Palette className="w-4 h-4" /> },
     { key: "language", label: t("settings.language"), icon: <Globe className="w-4 h-4" /> },
     { key: "security", label: t("settings.security"), icon: <Lock className="w-4 h-4" /> },
+    { key: "access", label: t("settings.access"), icon: <Users className="w-4 h-4" /> },
     { key: "server", label: t("settings.server"), icon: <Server className="w-4 h-4" /> },
     { key: "agent", label: t("settings.agent"), icon: <Bot className="w-4 h-4" /> },
     { key: "malleable", label: t("settings.malleable"), icon: <Shield className="w-4 h-4" /> },
@@ -221,8 +224,7 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("settings.title")} subtitle={t("settings.subtitle")} />
+    <PageContainer title={t("settings.title")} subtitle={t("settings.subtitle")}>
 
       <Tabs value={activeSection} onValueChange={setActiveSection}>
         <div className="flex flex-col lg:flex-row gap-4">
@@ -254,6 +256,7 @@ export default function SettingsPage() {
               <TabsContent value="profile" className="mt-0"><ProfileSection data={data} /></TabsContent>
               <TabsContent value="theme" className="mt-0"><ThemeSection theme={theme} onApplyTheme={handleApplyTheme} /></TabsContent>
               <TabsContent value="language" className="mt-0"><LanguageSection language={language} onSetLanguage={handleSetLanguage} /></TabsContent>
+              <TabsContent value="access" className="mt-0"><AccessSection /></TabsContent>
               <TabsContent value="security" className="mt-0">
                 <SecuritySection
                   data={data} passwordForm={passwordForm} setPasswordForm={setPasswordForm}
@@ -285,6 +288,6 @@ export default function SettingsPage() {
 
       {modalAction}
       {modalPurge}
-    </div>
+    </PageContainer>
   );
 }

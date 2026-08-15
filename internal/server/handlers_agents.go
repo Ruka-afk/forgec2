@@ -465,52 +465,200 @@ func (s *Server) deleteAgentRecord(id string) bool {
 	return true
 }
 
-// handleListAgents returns all agents as JSON for dropdowns
+// implantHostKey matches the frontend host aggregation key:
+// lowercase hostname, then IP / public IP, then session id.
+func implantHostKey(a db.Implant) string {
+	host := strings.ToLower(strings.TrimSpace(a.Hostname))
+	if host != "" {
+		return "h:" + host
+	}
+	ip := strings.TrimSpace(a.IP)
+	if ip == "" {
+		ip = strings.TrimSpace(a.PublicIP)
+	}
+	if ip != "" {
+		return "ip:" + ip
+	}
+	return "id:" + a.ID
+}
+
+func (s *Server) implantListQuery(c *gin.Context) *gorm.DB {
+	query := s.db.Model(&db.Implant{})
+	if search := c.Query("search"); search != "" {
+		like := "%" + escapeLike(search) + "%"
+		query = query.Where("(hostname LIKE ? ESCAPE '\\' OR username LIKE ? ESCAPE '\\' OR ip LIKE ? ESCAPE '\\')", like, like, like)
+	}
+	offlineCutoff := time.Now().Add(-s.offlineThreshold())
+	staleCutoff := time.Now().Add(-s.staleThreshold())
+	switch c.Query("status") {
+	case "online":
+		query = query.Where("last_seen > ?", offlineCutoff)
+	case "stale":
+		query = query.Where("last_seen <= ? AND last_seen > ?", offlineCutoff, staleCutoff)
+	case "offline":
+		query = query.Where("last_seen <= ?", staleCutoff)
+	}
+	if osFilter := c.Query("os"); osFilter != "" {
+		query = query.Where("LOWER(os) LIKE ? ESCAPE '\\'", "%"+escapeLike(osFilter)+"%")
+	}
+	if tagID := c.Query("tag_id"); tagID != "" {
+		query = query.Joins("JOIN agent_tag_assignments ON agent_tag_assignments.implant_id = implants.id").
+			Where("agent_tag_assignments.agent_tag_id = ?", tagID)
+	}
+	return query
+}
+
+type implantHostBucket struct {
+	key     string
+	agents  []db.Implant
+	sortAt  time.Time
+	sortStr string
+}
+
+func groupImplantsByHost(matched []db.Implant) []*implantHostBucket {
+	order := make([]*implantHostBucket, 0)
+	index := make(map[string]*implantHostBucket, len(matched))
+	for _, a := range matched {
+		key := implantHostKey(a)
+		g, ok := index[key]
+		if !ok {
+			g = &implantHostBucket{key: key, sortStr: key}
+			index[key] = g
+			order = append(order, g)
+		}
+		g.agents = append(g.agents, a)
+		if a.LastSeen.After(g.sortAt) {
+			g.sortAt = a.LastSeen
+		}
+		if hn := strings.ToLower(strings.TrimSpace(a.Hostname)); hn != "" {
+			g.sortStr = hn
+		}
+	}
+	return order
+}
+
+func sortHostBuckets(order []*implantHostBucket, sortKey, sortDir string) {
+	desc := sortDir != "asc"
+	sort.SliceStable(order, func(i, j int) bool {
+		a, b := order[i], order[j]
+		switch sortKey {
+		case "hostname":
+			if a.sortStr == b.sortStr {
+				return a.sortAt.After(b.sortAt)
+			}
+			if desc {
+				return a.sortStr > b.sortStr
+			}
+			return a.sortStr < b.sortStr
+		default:
+			if a.sortAt.Equal(b.sortAt) {
+				return a.sortStr < b.sortStr
+			}
+			if desc {
+				return a.sortAt.After(b.sortAt)
+			}
+			return a.sortAt.Before(b.sortAt)
+		}
+	})
+}
+
+func paginateHostBuckets(order []*implantHostBucket, page, pageSize int) ([]db.Implant, int64) {
+	total := int64(len(order))
+	if page < 1 {
+		page = 1
+	}
+	start := (page - 1) * pageSize
+	if start > len(order) {
+		start = len(order)
+	}
+	end := start + pageSize
+	if end > len(order) {
+		end = len(order)
+	}
+	var out []db.Implant
+	for _, g := range order[start:end] {
+		out = append(out, g.agents...)
+	}
+	return out, total
+}
+
+func (s *Server) listAgentsGroupedByHost(query *gorm.DB, page, pageSize int, sortKey, sortDir string) ([]db.Implant, int64, error) {
+	var matched []db.Implant
+	if err := query.Find(&matched).Error; err != nil {
+		return nil, 0, err
+	}
+	order := groupImplantsByHost(matched)
+	sortHostBuckets(order, sortKey, sortDir)
+	out, total := paginateHostBuckets(order, page, pageSize)
+	return out, total, nil
+}
+
+// handleListAgents returns agents as JSON. group=host paginates distinct hosts
+// and returns every session on those hosts so the console can group without
+// splitting a machine across pages.
 func (s *Server) handleListAgents(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", c.DefaultQuery("pageSize", "0")))
+	s.writeAgentListJSON(c)
+}
+
+type agentListItem struct {
+	db.Implant
+	TaskStats *db.TaskStats `json:"taskStats,omitempty"`
+}
+
+func parseAgentListPage(c *gin.Context) (page, pageSize int) {
+	page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ = strconv.Atoi(c.DefaultQuery("page_size", c.DefaultQuery("pageSize", "0")))
 	if page < 1 {
 		page = 1
 	}
 	if pageSize < 1 || pageSize > MaxPageSize {
 		pageSize = DefaultPageSize
 	}
+	return page, pageSize
+}
 
-	var total int64
-	if err := s.db.Model(&db.Implant{}).Count(&total).Error; err != nil {
-		handleQueryError(c, err, "Failed to count agents")
-		return
-	}
-
+// writeAgentListJSON is the single operator list contract for GET /api/agents
+// and GET /api/v1/agents: success + snake_case agents/data + pagination.
+func (s *Server) writeAgentListJSON(c *gin.Context) {
+	page, pageSize := parseAgentListPage(c)
+	query := s.implantListQuery(c)
 	var agents []db.Implant
-	offset := (page - 1) * pageSize
-	if err := s.db.Order("hostname asc").Offset(offset).Limit(pageSize).Find(&agents).Error; err != nil {
+	var total int64
+	var err error
+	groupHost := c.Query("group") == "host"
+	if groupHost {
+		agents, total, err = s.listAgentsGroupedByHost(query, page, pageSize, c.Query("sort_key"), c.Query("sort_dir"))
+	} else if err = query.Count(&total).Error; err == nil {
+		err = query.Order(agentSortOrder(c.Query("sort_key"), c.Query("sort_dir"))).
+			Offset((page - 1) * pageSize).Limit(pageSize).Find(&agents).Error
+	}
+	if err != nil {
 		handleQueryError(c, err, "Failed to list agents")
 		return
 	}
-	type agentBrief struct {
-		ID       string `json:"id"`
-		Hostname string `json:"hostname"`
-		IP       string `json:"ip"`
-		Status   string `json:"status"`
-		OS       string `json:"os"`
+
+	ids := make([]string, len(agents))
+	for i := range agents {
+		ids[i] = agents[i].ID
+		agents[i].Status = s.agentStatus(agents[i]).Status
 	}
-	results := make([]agentBrief, 0, len(agents))
-	for _, a := range agents {
-		results = append(results, agentBrief{
-			ID:       a.ID,
-			Hostname: a.Hostname,
-			IP:       a.IP,
-			Status:   s.agentStatus(a).Status,
-			OS:       a.OS,
-		})
+	stats := computeTaskStats(s.db, ids)
+	resp := make([]agentListItem, len(agents))
+	for i, a := range agents {
+		resp[i] = agentListItem{Implant: a, TaskStats: stats[a.ID]}
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"agents":    results,
+	out := gin.H{
+		"success":   true,
+		"agents":    resp,
+		"data":      resp,
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
-	})
+	}
+	if groupHost {
+		out["group"] = "host"
+	}
+	c.JSON(http.StatusOK, out)
 }
 
 // handleListUnlinkedAgents returns agents without a parent for linking dropdown

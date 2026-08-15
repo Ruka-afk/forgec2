@@ -1,4 +1,5 @@
 "use client";
+import { PageContainer } from "@/components/ui/page-container";
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
@@ -6,7 +7,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
-import { PageSpinner, PageHeader } from "@/components/UI";
+import { PageSpinner } from "@/components/UI";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -96,10 +97,10 @@ export default function ListenerDetailPage() {
   const createdAt = listener.created_at || "-";
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <PageContainer title={name} subtitle={`${scheme}://${host}:${port}`}>
       <div className="flex items-center gap-x-4 mb-6">
         <div>
-          <PageHeader title={name} subtitle={`${scheme}://${host}:${port}`} />
+          
         </div>
         <div className="ml-auto">
           {isEnabled ? (
@@ -196,6 +197,6 @@ export default function ListenerDetailPage() {
           </Table>
         </Card>
       </div>
-    </div>
+    </PageContainer>
   );
 }

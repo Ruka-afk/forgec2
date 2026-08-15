@@ -5,9 +5,9 @@ import type { Agent, AgentStatus, NormalizedAgent } from "@/types/agent";
 
 export type { NormalizedAgent as AgentSummary };
 
-/** Normalize agent list envelopes from /agents, /api/agents, or bare arrays. */
+/** Normalize agent list envelopes. Canonical keys are agents then data. */
 export function normalizeAgentList(data: unknown): Agent[] {
-  return firstArray(data, ["agents", "Agents", "data", "Beacons", "beacons"]) as Agent[];
+  return firstArray(data, ["agents", "data", "Agents", "Beacons", "beacons"]) as Agent[];
 }
 
 function toNormalized(r: Record<string, unknown>): NormalizedAgent {

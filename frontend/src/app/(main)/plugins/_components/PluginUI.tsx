@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useI18n } from "@/lib/i18n";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,7 +34,7 @@ export function ReviewsModal({ plugin, reviews, open, onOpenChange, onPost }: { 
           <div className="flex items-center gap-1 mb-2">
             {[1, 2, 3, 4, 5].map((s) => (
               <Button key={s} variant="ghost" size="icon-xs" onClick={() => setRating(s)} className="text-lg" aria-label={`${s} star`}>
-                <Star className={`w-4 h-4 ${s <= rating ? "text-amber-400 fill-amber-400" : "text-muted-foreground"}`} />
+                <Star className={`w-4 h-4 ${s <= rating ? "text-warning fill-warning" : "text-muted-foreground"}`} />
               </Button>
             ))}
           </div>
@@ -48,7 +49,7 @@ export function ReviewsModal({ plugin, reviews, open, onOpenChange, onPost }: { 
                 <span className="text-xs font-medium text-muted-foreground">{r.user || t("plugins.anonymous")}</span>
                 <div className="flex items-center gap-0.5">
                   {[1, 2, 3, 4, 5].map((s) => (
-                    <Star key={s} className={`w-2.5 h-2.5 ${s <= (r.rating || 0) ? "text-amber-400 fill-amber-400" : "text-muted-foreground"}`} />
+                    <Star key={s} className={`w-2.5 h-2.5 ${s <= (r.rating || 0) ? "text-warning fill-warning" : "text-muted-foreground"}`} />
                   ))}
                 </div>
               </div>
@@ -95,16 +96,14 @@ export function PluginCard({ plugin, actionState, onInstall, onUninstall, onDele
     <Card className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-all group">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center shrink-0">
-            <Puzzle className="w-4 h-4 text-primary" />
-          </div>
+<IconBadge icon={Puzzle} color="primary" size="xl" className="dark:bg-primary/20" />
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground truncate cursor-pointer hover:text-primary dark:hover:text-primary transition-colors" onClick={onDetail}>{name}</h3>
             <p className="text-xs text-muted-foreground">v{version} &middot; {author}</p>
           </div>
         </div>
         {updateAvail && (
-          <Button size="xs" onClick={(e) => { e.stopPropagation(); onUpdate(); }} className="shrink-0 px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-(--fs-micro-sm) font-medium rounded-xl hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors" title={t("plugins.update_available")}>
+          <Button size="xs" onClick={(e) => { e.stopPropagation(); onUpdate(); }} className="shrink-0 px-2 py-0.5 bg-warning/15 text-warning text-(--fs-micro-sm) font-medium rounded-xl hover:bg-warning/15 transition-colors" title={t("plugins.update_available")}>
             <ArrowUp className="w-4 h-4" />{t("plugins.update")}
           </Button>
         )}
@@ -123,7 +122,7 @@ export function PluginCard({ plugin, actionState, onInstall, onUninstall, onDele
       <div className="flex items-center gap-0.5 mb-1">
         {[1, 2, 3, 4, 5].map((s) => (
           <Button key={s} variant="ghost" size="icon-xs" onClick={() => onRating(s)} onMouseEnter={() => setHoverRating(s)} onMouseLeave={() => setHoverRating(0)} className="p-0.5" aria-label={`${s} star`}>
-            <Star className={`w-2.5 h-2.5 transition-colors ${s <= (hoverRating || rating) ? "text-amber-400 fill-amber-400" : "text-muted-foreground"}`} />
+            <Star className={`w-2.5 h-2.5 transition-colors ${s <= (hoverRating || rating) ? "text-warning fill-warning" : "text-muted-foreground"}`} />
           </Button>
         ))}
         <span className="text-(--fs-micro-sm) text-muted-foreground ml-1">{(hoverRating || rating).toFixed(1)}</span>
@@ -147,17 +146,17 @@ export function PluginCard({ plugin, actionState, onInstall, onUninstall, onDele
           <span className="text-(--fs-micro-sm) text-muted-foreground">{t("plugins.not_installed")}</span>
         )}
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon-xs" onClick={onExecute} disabled={!installed} className="text-muted-foreground hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 disabled:opacity-30" aria-label={t("plugins.execute")}><Play className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon-xs" onClick={onExecute} disabled={!installed} className="text-muted-foreground hover:text-success hover:bg-success/15 disabled:opacity-30" aria-label={t("plugins.execute")}><Play className="w-4 h-4" /></Button>
           <Button variant="ghost" size="icon-xs" onClick={onExport} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-primary/20" aria-label={t("plugins.export")}><Download className="w-4 h-4" /></Button>
           {installed ? (
             <>
-              <Button size="xs" onClick={() => onUninstall(id)} disabled={actionState === "uninstalling"} className="px-2 py-1 text-(--fs-micro-sm) font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50">{actionState === "uninstalling" ? <Spinner /> : t("plugins.uninstall")}</Button>
+              <Button size="xs" onClick={() => onUninstall(id)} disabled={actionState === "uninstalling"} className="px-2 py-1 text-(--fs-micro-sm) font-medium text-warning bg-warning/15 hover:bg-warning/15 transition-colors disabled:opacity-50">{actionState === "uninstalling" ? <Spinner /> : t("plugins.uninstall")}</Button>
               <Button variant="ghost" size="icon-xs" onClick={() => onDelete(id)} disabled={actionState === "deleting"} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50" aria-label={t("plugins.delete")}><Trash2 className="w-4 h-4" /></Button>
             </>
           ) : (
-            <Button size="xs" onClick={() => onInstall(id)} disabled={actionState === "installing"} className="px-2.5 py-1 text-(--fs-micro-sm) font-medium text-primary bg-primary/10 dark:bg-primary/20 hover:bg-primary/10 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50">{actionState === "installing" ? <><Spinner className="mr-1" />...</> : t("plugins.install")}</Button>
+            <Button size="xs" onClick={() => onInstall(id)} disabled={actionState === "installing"} className="px-2.5 py-1 text-(--fs-micro-sm) font-medium text-primary bg-primary/10 dark:bg-primary/20 hover:bg-primary/10 dark:hover:bg-chart-3/20 transition-colors disabled:opacity-50">{actionState === "installing" ? <><Spinner className="mr-1" />...</> : t("plugins.install")}</Button>
           )}
-          <Button variant="ghost" size="icon-xs" onClick={onDetail} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-indigo-900/20" aria-label={t("plugins.details")}><Info className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon-xs" onClick={onDetail} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" aria-label={t("plugins.details")}><Info className="w-4 h-4" /></Button>
         </div>
       </div>
     </Card>
@@ -194,35 +193,33 @@ export function PluginListItem({ plugin, actionState, onInstall, onUninstall, on
   return (
     <Card className="p-4 hover:shadow-lg dark:hover:shadow-black/30 transition-all">
       <div className="flex items-center gap-4">
-        <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center shrink-0">
-          <Puzzle className="w-4 h-4" />
-        </div>
+<IconBadge icon={Puzzle} color="primary" size="xl" className="dark:bg-primary/20" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-foreground truncate cursor-pointer hover:text-primary dark:hover:text-primary transition-colors" onClick={onDetail}>{name}</h3>
             <span className="text-(--fs-micro-sm) text-muted-foreground">v{version}</span>
             {catInfo && <span className={`text-(--fs-micro-sm) px-1.5 py-0.5 rounded ${catInfo.color}`}>{t(catInfo.labelKey)}</span>}
-            {updateAvail && <Button size="xs" onClick={onUpdate} className="text-(--fs-micro-sm) px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200"><ArrowUp className="w-4 h-4" />{t("plugins.update")}</Button>}
+            {updateAvail && <Button size="xs" onClick={onUpdate} className="text-(--fs-micro-sm) px-1.5 py-0.5 rounded bg-warning/15 text-warning hover:bg-warning/20"><ArrowUp className="w-4 h-4" />{t("plugins.update")}</Button>}
           </div>
           <p className="text-xs text-muted-foreground truncate">{desc || t("plugins.no_desc_short")}</p>
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
-          {[1, 2, 3, 4, 5].map((s) => <Button key={s} variant="ghost" size="icon-xs" onClick={() => onRating(s)} aria-label={`${s} star`}><Star className={`w-2.5 h-2.5 hover:text-amber-400 transition-colors ${s <= rating ? "text-amber-400 fill-amber-400" : "text-muted-foreground"}`} /></Button>)}
+          {[1, 2, 3, 4, 5].map((s) => <Button key={s} variant="ghost" size="icon-xs" onClick={() => onRating(s)} aria-label={`${s} star`}><Star className={`w-2.5 h-2.5 hover:text-warning transition-colors ${s <= rating ? "text-warning fill-warning" : "text-muted-foreground"}`} /></Button>)}
         <Button variant="ghost" size="xs" onClick={onReviews} className="text-(--fs-micro-sm) text-primary ml-1 hover:underline">{t("plugins.reviews")}</Button>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <Button variant="ghost" size="icon-xs" onClick={onExecute} disabled={!installed} className="text-muted-foreground hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 disabled:opacity-30" aria-label={t("plugins.execute")}><Play className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon-xs" onClick={onExecute} disabled={!installed} className="text-muted-foreground hover:text-success hover:bg-success/15 disabled:opacity-30" aria-label={t("plugins.execute")}><Play className="w-4 h-4" /></Button>
           <Button variant="ghost" size="icon-xs" onClick={onExport} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-primary/20" aria-label={t("plugins.export")}><Download className="w-4 h-4" /></Button>
           {installed ? (
             <>
               <Switch checked={enabled} onCheckedChange={() => onToggle(id, !enabled)} disabled={actionState === "toggling"} className="shrink-0" />
-              <Button size="xs" onClick={() => onUninstall(id)} disabled={actionState === "uninstalling"} className="px-2 py-1 text-(--fs-micro-sm) font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50">{actionState === "uninstalling" ? <Spinner /> : t("plugins.uninstall")}</Button>
+              <Button size="xs" onClick={() => onUninstall(id)} disabled={actionState === "uninstalling"} className="px-2 py-1 text-(--fs-micro-sm) font-medium text-warning bg-warning/15 hover:bg-warning/15 transition-colors disabled:opacity-50">{actionState === "uninstalling" ? <Spinner /> : t("plugins.uninstall")}</Button>
               <Button variant="ghost" size="icon-xs" onClick={() => onDelete(id)} disabled={actionState === "deleting"} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50" aria-label={t("plugins.delete")}><Trash2 className="w-4 h-4" /></Button>
             </>
           ) : (
-            <Button onClick={() => onInstall(id)} disabled={actionState === "installing"} className="px-2.5 py-1 text-(--fs-micro-sm) font-medium text-primary bg-primary/10 dark:bg-primary/20 hover:bg-primary/10 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50">{actionState === "installing" ? <><Spinner className="mr-1" />{t("plugins.installing")}</> : t("plugins.install")}</Button>
+            <Button onClick={() => onInstall(id)} disabled={actionState === "installing"} className="px-2.5 py-1 text-(--fs-micro-sm) font-medium text-primary bg-primary/10 dark:bg-primary/20 hover:bg-primary/10 dark:hover:bg-chart-3/20 transition-colors disabled:opacity-50">{actionState === "installing" ? <><Spinner className="mr-1" />{t("plugins.installing")}</> : t("plugins.install")}</Button>
           )}
-          <Button variant="ghost" size="icon-xs" onClick={onDetail} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-indigo-900/20" aria-label={t("plugins.details")}><Info className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="icon-xs" onClick={onDetail} className="text-muted-foreground hover:text-primary hover:bg-primary/10 dark:hover:bg-chart-3/20" aria-label={t("plugins.details")}><Info className="w-4 h-4" /></Button>
         </div>
       </div>
       {deps.length > 0 && (
@@ -261,9 +258,7 @@ export function PluginDetailModal({ plugin, open, onOpenChange }: {
       <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0">
         <DialogHeader className="px-6 py-4 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center">
-              <Puzzle className="w-4 h-4 text-primary" />
-            </div>
+<IconBadge icon={Puzzle} color="primary" size="xl" className="dark:bg-primary/20" />
             <div>
               <DialogTitle>{name}</DialogTitle>
               <p className="text-xs text-muted-foreground">v{version} &middot; {author}</p>
@@ -295,7 +290,7 @@ export function PluginDetailModal({ plugin, open, onOpenChange }: {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-0.5">
               {[1, 2, 3, 4, 5].map((s) => (
-                <Star key={s} className={`w-3 h-3 ${s <= rating ? "text-amber-400 fill-amber-400" : "text-muted-foreground"}`} />
+                <Star key={s} className={`w-3 h-3 ${s <= rating ? "text-warning fill-warning" : "text-muted-foreground"}`} />
               ))}
               <span className="text-xs text-muted-foreground ml-1">{rating.toFixed(1)}</span>
             </div>

@@ -41,8 +41,9 @@ describe("CommandPalette", () => {
   });
 
   it("renders nothing while closed", () => {
-    const { container } = render(<CommandPalette />);
-    expect(container.firstChild).toBeNull();
+    render(<CommandPalette />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByLabelText(/type to jump/i)).toBeNull();
   });
 
   it("lists all nav pages when open", () => {

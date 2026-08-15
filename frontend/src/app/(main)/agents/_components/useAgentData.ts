@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { useCachedData } from "@/lib/hooks/useCachedData";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import type { Beacon } from "./types";
 
 export type AgentTag = { id: string; name: string; color: string };
@@ -20,59 +21,90 @@ export interface AgentDataState {
   agentLocks: Record<string, string>;
 }
 
+export interface BeaconQueryParams {
+  search: string;
+  status: string;
+  os: string;
+  page: number;
+  pageSize: number;
+  tag_id: string;
+  sort_key: string;
+  sort_dir: string;
+}
+
+interface BeaconPage {
+  list: Beacon[];
+  total: number;
+  countMap: Record<string, number>;
+}
+
+const DEFAULT_QUERY: BeaconQueryParams = {
+  search: "",
+  status: "",
+  os: "",
+  page: 1,
+  pageSize: 20,
+  tag_id: "",
+  sort_key: "last_seen",
+  sort_dir: "desc",
+};
+
 export function useAgentData(t: (key: string) => string) {
-  const [beacons, setBeacons] = useState<Beacon[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const queryRef = useRef<BeaconQueryParams>(DEFAULT_QUERY);
   const [tagsByAgent, setTagsByAgent] = useState<Record<string, AgentTag[]>>({});
-  const [taskCountMap, setTaskCountMap] = useState<Record<string, number>>({});
   const [agentLocks, setAgentLocks] = useState<Record<string, string>>({});
-  const loadAbortRef = useRef<AbortController | null>(null);
+
+  const { data, loading, error, setError, refresh: refreshList, setData } = useApiResource<BeaconPage>({
+    fetcher: async (signal) => {
+      const q = queryRef.current;
+      const p = new URLSearchParams({
+        page: String(q.page),
+        page_size: String(q.pageSize),
+        group: "host",
+      });
+      if (q.search) p.set("search", q.search);
+      if (q.status) p.set("status", q.status);
+      if (q.os) p.set("os", q.os);
+      if (q.tag_id) p.set("tag_id", q.tag_id);
+      p.set("sort_key", q.sort_key);
+      p.set("sort_dir", q.sort_dir);
+      const d = await api.get(paths.agents.list(p.toString()), { signal });
+      const list = (d.agents || []) as Beacon[];
+      const countMap: Record<string, number> = {};
+      for (const b of list) {
+        const aid = b.id || "";
+        if (!aid) continue;
+        const ts = b.taskStats;
+        countMap[aid] = ts
+          ? (ts.pending || 0) + (ts.running || 0) + (ts.completed || 0) + (ts.failed || 0)
+          : 0;
+      }
+      return { list, total: Number(d.total) || list.length, countMap };
+    },
+    errorMessage: t("agents.load_failed"),
+  });
+
+  const beacons = useMemo(() => data?.list ?? [], [data]);
+  const total = data?.total ?? 0;
+  const taskCountMap = useMemo(() => data?.countMap ?? {}, [data]);
 
   const loadBeacons = useCallback(
-    (search = "", status = "", os = "", page = 1, pageSize = 20, tag_id = "", sort_key = "last_seen", sort_dir = "desc", opts?: { background?: boolean }) => {
-      loadAbortRef.current?.abort();
-      const ac = new AbortController();
-      loadAbortRef.current = ac;
-      if (!opts?.background) setLoading(true);
-      const p = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
-      if (search) p.set("search", search);
-      if (status) p.set("status", status);
-      if (os) p.set("os", os);
-      if (tag_id) p.set("tag_id", tag_id);
-      p.set("sort_key", sort_key);
-      p.set("sort_dir", sort_dir);
-      api
-        .get(paths.agents.list(p.toString()), { signal: ac.signal })
-        .then((data) => {
-          if (ac.signal.aborted) return;
-          const list = (data.agents || []) as Beacon[];
-          setBeacons(list);
-          setTotal(Number(data.total) || list.length);
-
-          const countMap: Record<string, number> = {};
-          for (const b of list) {
-            const aid = b.id || "";
-            if (!aid) continue;
-            const ts = b.taskStats;
-            countMap[aid] = ts
-              ? (ts.pending || 0) + (ts.running || 0) + (ts.completed || 0) + (ts.failed || 0)
-              : 0;
-          }
-          setTaskCountMap(countMap);
-        })
-        .catch(() => {
-          if (ac.signal.aborted) return;
-          setBeacons([]);
-          setTotal(0);
-          setError(t("agents.load_failed"));
-        })
-        .finally(() => {
-          if (!ac.signal.aborted) setLoading(false);
-        });
+    (search = "", status = "", os = "", page = 1, pageSize = 20, tag_id = "", sort_key = "last_seen", sort_dir = "desc") => {
+      queryRef.current = { search, status, os, page, pageSize, tag_id, sort_key, sort_dir };
+      void refreshList();
     },
-    [t],
+    [refreshList],
+  );
+
+  const setBeacons = useCallback<React.Dispatch<React.SetStateAction<Beacon[]>>>(
+    (action) => {
+      setData((prev) => {
+        const base = prev?.list ?? [];
+        const next = typeof action === "function" ? (action as (b: Beacon[]) => Beacon[])(base) : action;
+        return { list: next, total: prev?.total ?? next.length, countMap: prev?.countMap ?? {} };
+      });
+    },
+    [setData],
   );
 
   const loadLocks = useCallback(() => {

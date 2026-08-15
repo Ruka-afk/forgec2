@@ -64,10 +64,10 @@ export interface ReportHistoryRow {
 }
 
 export function severityColor(s: string): string {
-  if (s === "critical") return "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20";
-  if (s === "high") return "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20";
-  if (s === "medium") return "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20";
-  if (s === "low") return "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20";
+  if (s === "critical") return "bg-destructive/10 text-destructive border-destructive/20";
+  if (s === "high") return "bg-warning/10 text-warning border-warning/20";
+  if (s === "medium") return "bg-warning/10 text-warning border-warning/20";
+  if (s === "low") return "bg-info/10 text-info border-info/20";
   return "bg-secondary/50 text-muted-foreground border-border";
 }
 

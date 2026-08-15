@@ -1,50 +1,41 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
-import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import type { PivotAgent, RelaySession, RPortForwardStatus } from "./types";
 
 export function usePivotingData() {
   const { t } = useI18n();
-  const [sessions, setSessions] = useState<RelaySession[]>([]);
-  const [agents, setAgents] = useState<PivotAgent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [rportForwards, setRportForwards] = useState<RPortForwardStatus[]>([]);
 
-  const loadData = useCallback(async () => {
-    try {
+  const { data, loading, refresh: loadData } = useApiResource<{
+    sessions: RelaySession[];
+    agents: PivotAgent[];
+    rportForwards: RPortForwardStatus[];
+  }>({
+    fetcher: async () => {
       const [sessData, agentsData, rportData] = await Promise.all([
         api.get(paths.socks.sessions).catch(() => null),
         api.get(paths.agents.list("status=online")).catch(() => null),
         api.get(paths.rportfwd.status).catch(() => null),
       ]);
-      if (sessData) {
-        setSessions(normalizeListEnvelope(sessData, ["sessions", "data"]) as RelaySession[]);
-      }
-      if (agentsData) {
-        setAgents(normalizeListEnvelope(agentsData, ["agents", "data"]) as PivotAgent[]);
-      }
-      if (rportData) {
-        setRportForwards(normalizeListEnvelope(rportData, ["forwards", "data"]) as RPortForwardStatus[]);
-      }
-    } catch {
-      setSessions([]);
-      setAgents([]);
-      toast.error(t("pivoting.toast.load_failed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
-  useVisibleInterval(loadData, 5000);
+      return {
+        sessions: sessData ? normalizeListEnvelope(sessData, ["sessions", "data"]) as RelaySession[] : [],
+        agents: agentsData ? normalizeListEnvelope(agentsData, ["agents", "data"]) as PivotAgent[] : [],
+        rportForwards: rportData ? normalizeListEnvelope(rportData, ["forwards", "data"]) as RPortForwardStatus[] : [],
+      };
+    },
+    pollMs: 5_000,
+    toastThrottleMs: 5_000,
+    errorMessage: t("pivoting.toast.load_failed"),
+  });
+  const sessions = data?.sessions ?? [];
+  const agents = data?.agents ?? [];
+  const rportForwards = data?.rportForwards ?? [];
 
   const startRelay = useCallback(
     async (selectedAgent: string, relayPort: number, relayHost: string, relayProtocol: string) => {

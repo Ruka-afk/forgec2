@@ -65,15 +65,18 @@ func deriveAgentRegKey(beaconKeyHex, agentID string) []byte {
 // loadAgentRegKey returns the agent's registration key. v3: when a per-implant
 // registration secret was compiled in (RegSecretStr), it is used directly — the
 // fleet master beacon key is NOT present in the binary, so extracting it yields
-// nothing about any other implant. v2 legacy: derived from the compiled-in
-// master beacon key. Returns nil when neither is available.
+// nothing about any other implant. v2 legacy derivation from a fleet-shared
+// master key is intentionally DISABLED: any v2 implant could recompute any
+// other agent's registration key (HKDF(master, victimUUID)) and impersonate it,
+// collapsing fleet isolation. A v2-only build (no RegSecretStr) therefore fails
+// closed and cannot beacon — the server already rejects an empty SecretID.
 func loadAgentRegKey() []byte {
 	if RegSecretStr != "" {
 		if secret, err := base64.StdEncoding.DecodeString(RegSecretStr); err == nil && len(secret) == 32 {
 			return secret
 		}
 	}
-	return deriveAgentRegKey(beaconKey, agentUUID)
+	return nil
 }
 
 // deriveAgentSessionKey derives the AES-256-GCM session key from an X25519
@@ -203,12 +206,30 @@ func (es *ecdhSession) establishFromServerKey(serverPubB64 string) error {
 	return nil
 }
 
-// invalidate drops the session key so the next beacon performs a fresh
-// authenticated handshake (rekey / server restart recovery).
+// zeroizeKey overwrites a key buffer with zeros. This is best-effort secret
+// hygiene: it does not guarantee the bytes are absent from swap or core dumps,
+// but removes them from the process heap as soon as they are no longer needed.
+func zeroizeKey(b []byte) {
+	for i := range b {
+		b[i] = 0
+	}
+}
+
+// invalidate drops the session key and generates a fresh ephemeral keypair so
+// the next handshake derives a brand-new ECDH shared secret. Without key
+// rotation, rekey/restart recovery reused the same private key and every
+// session derived the identical AES-GCM key (no forward secrecy on rotation).
 func (es *ecdhSession) invalidate() {
 	es.mu.Lock()
+	defer es.mu.Unlock()
+	// Best-effort wipe of the active session key before rotating.
+	if es.sessionKey != nil {
+		zeroizeKey(es.sessionKey)
+	}
+	if k, err := ecdh.X25519().GenerateKey(rand.Reader); err == nil {
+		es.privateKey = k
+	}
 	es.sessionKey = nil
-	es.mu.Unlock()
 }
 
 // encryptAESGCM encrypts plaintext with AES-256-GCM using the session key.

@@ -2,6 +2,7 @@
 
 import { memo } from "react";
 import { cn } from "@/lib/utils";
+import { toneForStatus, toneStyles } from "@/lib/ui/statusStyles";
 
 type AgentStatus = "online" | "offline" | "stale";
 type TaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
@@ -11,30 +12,6 @@ type BreakerStatus = "healthy" | "unstable" | "burned" | "unknown";
 type Status = AgentStatus | TaskStatus | ConnectionStatus | GenericStatus | BreakerStatus;
 
 type StatusIndicatorVariant = "dot" | "dotOnly" | "badge";
-
-const STATUS_STYLES: Record<string, { dot: string; bg: string; text: string; ring?: string }> = {
-  online:       { dot: "bg-emerald-500", bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-500/30" },
-  offline:      { dot: "bg-muted-foreground", bg: "bg-muted/50", text: "text-muted-foreground", ring: "ring-muted-foreground/30" },
-  stale:        { dot: "bg-amber-500", bg: "bg-amber-500/10", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-500/30" },
-  pending:      { dot: "bg-muted-foreground", bg: "bg-muted/50", text: "text-muted-foreground", ring: "ring-muted-foreground/30" },
-  running:      { dot: "bg-blue-500", bg: "bg-blue-500/10", text: "text-blue-700 dark:text-blue-400", ring: "ring-blue-500/30" },
-  completed:    { dot: "bg-emerald-500", bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-500/30" },
-  failed:       { dot: "bg-red-500", bg: "bg-red-500/10", text: "text-red-700 dark:text-red-400", ring: "ring-red-500/30" },
-  cancelled:    { dot: "bg-muted-foreground", bg: "bg-muted/50", text: "text-muted-foreground", ring: "ring-muted-foreground/30" },
-  pending_approval: { dot: "bg-amber-500", bg: "bg-amber-500/10", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-500/30" },
-  connected:    { dot: "bg-emerald-500", bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-500/30" },
-  disconnected: { dot: "bg-red-500", bg: "bg-red-500/10", text: "text-red-700 dark:text-red-400", ring: "ring-red-500/30" },
-  reconnecting: { dot: "bg-amber-500", bg: "bg-amber-500/10", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-500/30" },
-  active:       { dot: "bg-emerald-500", bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-500/30" },
-  inactive:     { dot: "bg-muted-foreground", bg: "bg-muted/50", text: "text-muted-foreground", ring: "ring-muted-foreground/30" },
-  locked:       { dot: "bg-red-500", bg: "bg-red-500/10", text: "text-red-700 dark:text-red-400", ring: "ring-red-500/30" },
-  warning:      { dot: "bg-amber-500", bg: "bg-amber-500/10", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-500/30" },
-  error:        { dot: "bg-red-500", bg: "bg-red-500/10", text: "text-red-700 dark:text-red-400", ring: "ring-red-500/30" },
-  healthy:      { dot: "bg-emerald-500", bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-500/30" },
-  unstable:     { dot: "bg-amber-500", bg: "bg-amber-500/10", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-500/30" },
-  burned:       { dot: "bg-destructive", bg: "bg-destructive/10", text: "text-destructive", ring: "ring-destructive/30" },
-  unknown:      { dot: "bg-muted-foreground", bg: "bg-muted/50", text: "text-muted-foreground", ring: "ring-muted-foreground/30" },
-};
 
 interface StatusIndicatorProps {
   status: Status | string;
@@ -86,7 +63,7 @@ export const StatusIndicator = memo(function StatusIndicator({
   ariaLabel,
   className,
 }: StatusIndicatorProps) {
-  const cfg = STATUS_STYLES[status] || STATUS_STYLES.offline;
+  const cfg = toneStyles[toneForStatus(status)];
   const displayLabel = label ?? STATUS_LABELS[status] ?? status;
   const accessibleLabel = ariaLabel ?? displayLabel;
   const dotSize = DOT_SIZES[size];
@@ -155,3 +132,5 @@ export const StatusIndicator = memo(function StatusIndicator({
     </span>
   );
 });
+
+export const StatusBadge = StatusIndicator;

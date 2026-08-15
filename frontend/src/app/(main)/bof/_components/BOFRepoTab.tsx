@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import type { RepoItem } from "./types";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -87,27 +88,21 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
     <div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Card className="p-4 sm:p-5 flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-            <Layers className="w-4 h-4" />
-          </div>
+          <IconBadge icon={Layers} color="primary" size="xl" />
           <div>
             <div className="text-xl font-bold text-foreground">{repoItems.length}</div>
             <div className="text-xs text-muted-foreground">{t("bof.community_bofs")}</div>
           </div>
         </Card>
         <Card className="p-4 sm:p-5 flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center">
-            <Download className="w-4 h-4" />
-          </div>
+          <IconBadge icon={Download} color="success" size="xl" />
           <div>
             <div className="text-xl font-bold text-foreground">{repoItems.filter((i) => i.imported).length}</div>
             <div className="text-xs text-muted-foreground">{t("bof.stat_imported")}</div>
           </div>
         </Card>
         <Card className="p-4 sm:p-5 flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/20 rounded-xl flex items-center justify-center">
-            <Star className="w-4 h-4" />
-          </div>
+          <IconBadge icon={Star} color="warning" size="xl" />
           <div>
             <div className="text-xl font-bold text-foreground">{repoItems.filter((i) => (i.rating ?? 0) >= 4).length}</div>
             <div className="text-xs text-muted-foreground">{t("bof.highly_rated")}</div>
@@ -130,16 +125,16 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
             pattern="https?://.*"
             value={importUrl}
             onChange={(e) => setImportUrl(e.target.value)}
-            className="flex-1 h-10 text-foreground"
+            className="flex-1 h-9 text-foreground"
           />
           <Input
             aria-label={t("bof.bof_name")}
             placeholder={t("bof.bof_name_optional")}
             value={importName}
             onChange={(e) => setImportName(e.target.value)}
-            className="w-52 h-10 text-foreground"
+            className="w-52 h-9 text-foreground"
           />
-          <Button type="submit" className="px-5 h-10 rounded-xl text-sm font-medium transition-colors">
+          <Button type="submit" size="lg" className="px-5 text-sm font-medium transition-colors">
             <Download className="w-4 h-4" />{t("bof.import")}
           </Button>
         </form>
@@ -149,7 +144,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
               importStatus.loading
                 ? "bg-primary/10 text-primary"
                 : importStatus.success
-                  ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400"
+                  ? "bg-success/15 text-success"
                   : "bg-destructive/10 text-destructive"
             }`}
           >
@@ -236,7 +231,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
               <Card key={itemId} className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${imported ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400" : "bg-primary/10 text-primary"}`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${imported ? "bg-success/15 text-success" : "bg-primary/10 text-primary"}`}>
                       <Box className="w-4 h-4" />
                     </div>
                     <div>

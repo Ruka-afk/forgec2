@@ -7,7 +7,7 @@ import { paths } from "@/lib/api-paths";
 import type { AgentDetail } from "@/types/agent";
 import { useI18n } from "@/lib/i18n";
 
-import { Spinner, PageSpinner } from "@/components/UI";
+import { Spinner, PageSpinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -161,7 +161,7 @@ export default function AgentConfigPage() {
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
       {hasPending && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-4 py-3 text-sm text-amber-800 dark:text-amber-200 flex items-center gap-2">
+        <div className="bg-warning/15 border border-warning/30 rounded-xl px-4 py-3 text-sm text-warning-foreground flex items-center gap-2">
           <Clock className="w-4 h-4" />
           {t("agents.config_pending_push")}
         </div>

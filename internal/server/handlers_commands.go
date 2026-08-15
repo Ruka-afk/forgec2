@@ -200,14 +200,15 @@ func (s *Server) handleGetTaskStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":      task.ID,
-		"status":  task.Status,
-		"result":  task.Result,
-		"error":   task.Error,
-		"command": task.Command,
-		"type":    task.Type,
-		"agent":   task.Agent.Hostname,
-		"created": task.CreatedAt.Format("2006-01-02 15:04:05"),
+		"id":         task.ID,
+		"status":     task.Status,
+		"result":     task.Result,
+		"error":      task.Error,
+		"command":    task.Command,
+		"type":       task.Type,
+		"agent":      task.Agent.Hostname,
+		"created":    task.CreatedAt.Format("2006-01-02 15:04:05"),
+		"created_by": task.CreatedBy,
 	})
 }
 

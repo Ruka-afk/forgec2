@@ -32,6 +32,7 @@ func v2TestServer(t *testing.T) (*Server, *gorm.DB) {
 		db:                database,
 		cfg:               &config.Config{},
 		sessionManager:    sm,
+		regSecrets:        crypto.NewRegSecretStore(make([]byte, 32)),
 		beaconDedupCache:  make(map[string]time.Time),
 		eventManager:      NewEventManager(database),
 		socksEngine:       newSocksRelayEngine(),
@@ -64,7 +65,7 @@ func TestV2HandshakeDoesNotClaimTasks(t *testing.T) {
 	s, database := v2TestServer(t)
 
 	agentUUID := "22222222-3333-4333-8444-666666666666"
-	agent := newTCPTestAgent(t, agentUUID).withRegKey(s.cfg.Server.BeaconKey)
+	agent := v3TestAgent(t, s, agentUUID)
 
 	// Register first (also must not claim tasks).
 	w := v2Post(t, s, agent.registerFrame())
@@ -123,7 +124,7 @@ func TestV2EncryptedBeaconDeliversTaskAfterRegistration(t *testing.T) {
 	s, database := v2TestServer(t)
 
 	agentUUID := "33333333-4444-4333-8444-777777777777"
-	agent := newTCPTestAgent(t, agentUUID).withRegKey(s.cfg.Server.BeaconKey)
+	agent := v3TestAgent(t, s, agentUUID)
 
 	// Register.
 	w := v2Post(t, s, agent.registerFrame())

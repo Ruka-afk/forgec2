@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { EmptyState, PageHeader, PageSpinner } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
+import { PageSpinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -340,7 +342,7 @@ export default function PhishingPageContent() {
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right text-muted-foreground">{c.cred_count}</TableCell>
                       <TableCell className="px-4 py-3 sm:py-3.5 text-right">
                         {c.status === "draft" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleLaunch(cid)} className="text-primary hover:text-primary dark:hover:text-primary mr-3" aria-label={t("phishing.launch")} />}><Play className="w-4 h-4" /></TooltipTrigger><TooltipContent>{t("phishing.launch")}</TooltipContent></Tooltip>}
-                        {c.status === "running" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleStop(cid)} className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 mr-3" aria-label={t("phishing.stop")} />}><Square className="w-4 h-4" /></TooltipTrigger><TooltipContent>{t("phishing.stop")}</TooltipContent></Tooltip>}
+                        {c.status === "running" && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleStop(cid)} className="text-warning hover:text-warning-foreground mr-3" aria-label={t("phishing.stop")} />}><Square className="w-4 h-4" /></TooltipTrigger><TooltipContent>{t("phishing.stop")}</TooltipContent></Tooltip>}
                         {(c.status === "draft" || c.status === "completed") && <Tooltip><TooltipTrigger render={<Button variant="ghost" size="icon-xs" onClick={() => handleDeleteCamp(cid)} className="text-muted-foreground hover:text-destructive" aria-label={t("phishing.delete")} />}><Trash2 className="w-4 h-4" /></TooltipTrigger><TooltipContent>{t("phishing.delete")}</TooltipContent></Tooltip>}
                       </TableCell>
                     </TableRow>
@@ -458,8 +460,7 @@ export default function PhishingPageContent() {
   }
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("phishing.title")} subtitle={t("phishing.subtitle")} />
+    <PageContainer title={t("phishing.title")} subtitle={t("phishing.subtitle")}>
 
       {/* Tabs */}
       <Tabs defaultValue="templates">
@@ -486,7 +487,7 @@ export default function PhishingPageContent() {
       </Tabs>
 
       {modal}
-    </div>
+    </PageContainer>
   );
 }
 

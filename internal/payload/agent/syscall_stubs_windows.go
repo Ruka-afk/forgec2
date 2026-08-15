@@ -5,8 +5,11 @@ package main
 
 import (
 	"fmt"
+	"runtime"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 // ── Syscall Manager ──
@@ -587,14 +590,70 @@ func ntBuildPipeName(pipeName string) (*uint16, *ntUnicodeString) {
 }
 
 // ntBuildObjAttr builds a complete OBJECT_ATTRIBUTES for a named pipe path.
-func ntBuildObjAttr(pipeName string) (*uint16, *ntUnicodeString, *ntObjectAttributes) {
+// secDesc is the (optional) SECURITY_DESCRIPTOR pointer restricting pipe
+// access; pass 0 to use the default (process) DACL.
+func ntBuildObjAttr(pipeName string, secDesc uintptr) (*uint16, *ntUnicodeString, *ntObjectAttributes) {
 	buf, us := ntBuildPipeName(pipeName)
 	oa := &ntObjectAttributes{
-		Length:     uint32(unsafe.Sizeof(ntObjectAttributes{})),
-		ObjectName: us,
-		Attributes: 0x40, // OBJ_CASE_INSENSITIVE
+		Length:            uint32(unsafe.Sizeof(ntObjectAttributes{})),
+		ObjectName:        us,
+		Attributes:        0x40, // OBJ_CASE_INSENSITIVE
+		SecurityDescriptor: secDesc,
 	}
 	return buf, us, oa
+}
+
+// ntBuildRestrictedPipeSD builds a SECURITY_DESCRIPTOR whose DACL grants only
+// the agent's own token SID FILE_READ_DATA|FILE_WRITE_DATA on the named pipe.
+// This stops other local principals (including admins) from connecting to the
+// parent relay pipe to claim child UUIDs or observe relay traffic (B1).
+// Returns nil (and the caller falls back to the default DACL) if it cannot be
+// built, so the relay is never broken by an unexpected error.
+func ntBuildRestrictedPipeSD() *windows.SECURITY_DESCRIPTOR {
+	var tok windows.Token
+	if err := windows.OpenProcessToken(windows.CurrentProcess(), windows.TOKEN_QUERY, &tok); err != nil {
+		return nil
+	}
+	defer tok.Close()
+
+	var sidLen uint32
+	if err := windows.GetTokenInformation(tok, windows.TokenUser, nil, 0, &sidLen); err != nil {
+		return nil
+	}
+	buf := make([]byte, sidLen)
+	if err := windows.GetTokenInformation(tok, windows.TokenUser, &buf[0], sidLen, &sidLen); err != nil {
+		return nil
+	}
+	tu := (*windows.Tokenuser)(unsafe.Pointer(&buf[0]))
+	sid := (*windows.SID)(unsafe.Pointer(tu.User.Sid))
+
+	sd, err := windows.NewSecurityDescriptor()
+	if err != nil {
+		return nil
+	}
+	ea := []windows.EXPLICIT_ACCESS{{
+		AccessPermissions: windows.FILE_READ_DATA | windows.FILE_WRITE_DATA,
+		AccessMode:        windows.GRANT_ACCESS,
+		Trustee: windows.TRUSTEE{
+			TrusteeForm:  windows.TRUSTEE_IS_SID,
+			TrusteeType:  windows.TRUSTEE_IS_USER,
+			TrusteeValue: windows.TrusteeValueFromSID(sid),
+		},
+	}}
+	dacl, err := windows.ACLFromEntries(ea, nil)
+	if err != nil {
+		return nil
+	}
+	if err := sd.SetDACL(dacl, true, false); err != nil {
+		return nil
+	}
+	// NtCreateNamedPipeFile expects a self-relative SECURITY_DESCRIPTOR, but
+	// NewSecurityDescriptor returns an absolute one; convert it.
+	selfRel, err := sd.ToSelfRelative()
+	if err != nil {
+		return nil
+	}
+	return selfRel
 }
 
 // syscallNtCreateNamedPipeFile creates the server end of a named pipe.
@@ -608,30 +667,47 @@ func syscallNtCreateNamedPipeFile(sm *syscallManager, pipeName string, maxInstan
 		}
 	}
 
-	_, _, oa := ntBuildObjAttr(pipeName)
-	var iosb ntIoStatusBlock
-	var handle uintptr
-
 	// Default timeout: 5 seconds expressed as negative 100ns intervals (relative)
 	var timeout int64 = -5 * 10000000 // 5 seconds in 100ns units, negative = relative
 
-	r1, _, _ := syscall.Syscall15(stub, 14,
-		uintptr(unsafe.Pointer(&handle)),  // FileHandle (out)
-		0xC0000000,                        // DesiredAccess: GENERIC_READ | GENERIC_WRITE
-		uintptr(unsafe.Pointer(oa)),       // ObjectAttributes
-		uintptr(unsafe.Pointer(&iosb)),    // IoStatusBlock (out)
-		3,                                 // ShareAccess: FILE_SHARE_READ | FILE_SHARE_WRITE
-		3,                                 // CreateDisposition: FILE_OPEN_IF
-		0x20,                              // CreateOptions: FILE_SYNCHRONOUS_IO_NONALERT
-		0,                                 // NamedPipeType: FILE_PIPE_BYTE_STREAM_TYPE
-		0,                                 // ReadMode: FILE_PIPE_BYTE_STREAM_MODE
-		0,                                 // CompletionMode: FILE_PIPE_QUEUE_OPERATION
-		uintptr(maxInstances),             // MaximumInstances
-		4096,                              // InboundQuota
-		4096,                              // OutboundQuota
-		uintptr(unsafe.Pointer(&timeout)), // DefaultTimeout
-		0,
-	)
+	// Issue NtCreateNamedPipeFile with the given OBJECT_ATTRIBUTES.
+	createOnce := func(oa *ntObjectAttributes) (uintptr, uintptr) {
+		var iosb ntIoStatusBlock
+		var handle uintptr
+		r1, _, _ := syscall.Syscall15(stub, 14,
+			uintptr(unsafe.Pointer(&handle)),  // FileHandle (out)
+			0xC0000000,                        // DesiredAccess: GENERIC_READ | GENERIC_WRITE
+			uintptr(unsafe.Pointer(oa)),       // ObjectAttributes
+			uintptr(unsafe.Pointer(&iosb)),    // IoStatusBlock (out)
+			3,                                 // ShareAccess: FILE_SHARE_READ | FILE_SHARE_WRITE
+			3,                                 // CreateDisposition: FILE_OPEN_IF
+			0x20,                              // CreateOptions: FILE_SYNCHRONOUS_IO_NONALERT
+			0,                                 // NamedPipeType: FILE_PIPE_BYTE_STREAM_TYPE
+			0,                                 // ReadMode: FILE_PIPE_BYTE_STREAM_MODE
+			0,                                 // CompletionMode: FILE_PIPE_QUEUE_OPERATION
+			uintptr(maxInstances),             // MaximumInstances
+			4096,                              // InboundQuota
+			4096,                              // OutboundQuota
+			uintptr(unsafe.Pointer(&timeout)), // DefaultTimeout
+			0,
+		)
+		return handle, r1
+	}
+
+	// Restrict the relay pipe to the agent's own token SID so other local
+	// principals cannot connect to it and claim child UUIDs / observe relay
+	// traffic (B1). Fall back to the default DACL if the restricted SD cannot
+	// be built or is rejected, so the relay still comes up.
+	sd := ntBuildRestrictedPipeSD()
+	_, _, oa := ntBuildObjAttr(pipeName, uintptr(unsafe.Pointer(sd)))
+	defer runtime.KeepAlive(sd)
+
+	handle, r1 := createOnce(oa)
+	if r1 != 0 && sd != nil {
+		// Restricted DACL rejected — retry once with the default DACL.
+		_, _, oaDef := ntBuildObjAttr(pipeName, 0)
+		handle, r1 = createOnce(oaDef)
+	}
 	if r1 != 0 {
 		return 0, fmt.Errorf("NtCreateNamedPipeFile failed: 0x%X", r1)
 	}
@@ -648,7 +724,7 @@ func syscallNtOpenPipe(sm *syscallManager, pipeName string) (uintptr, error) {
 		}
 	}
 
-	_, _, oa := ntBuildObjAttr(pipeName)
+	_, _, oa := ntBuildObjAttr(pipeName, 0)
 	var iosb ntIoStatusBlock
 	var handle uintptr
 

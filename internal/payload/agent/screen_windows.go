@@ -301,8 +301,25 @@ func clipboardGetWindows() (string, error) {
 	}
 	defer procGlobalUnlock.Call(h)
 
-	// Cast clipboard global memory handle to byte slice for CF_TEXT read
-	return string((*[1 << 20]byte)(unsafe.Pointer(ptr))[:]), nil
+	// Cast clipboard global memory handle to byte slice for CF_TEXT read.
+	// Use the actual allocation size from GlobalSize — a fixed 1MB view would
+	// read past the allocation into adjacent heap memory on smaller clips.
+	size, _, _ := procGlobalSize.Call(h)
+	if size == 0 {
+		return "", fmt.Errorf("global size failed")
+	}
+	buf := (*[1 << 20]byte)(unsafe.Pointer(ptr))[:size]
+	// CF_TEXT is NUL-terminated; return only up to the terminator. Returning
+	// the whole buffer would also leak the uninitialized bytes that follow the
+	// string within the allocation.
+	n := size
+	for i := uintptr(0); i < size; i++ {
+		if buf[i] == 0 {
+			n = i
+			break
+		}
+	}
+	return string(buf[:n]), nil
 }
 
 func clipboardSetWindows(data string) error {
@@ -322,8 +339,14 @@ func clipboardSetWindows(data string) error {
 
 	ptr, _, _ := procGlobalLock.Call(hMem)
 	if ptr != 0 {
-	// Cast global memory handle to byte slice for clipboard write
-		copy((*[1 << 20]byte)(unsafe.Pointer(ptr))[:], []byte(data))
+		// Size the destination view to the actual allocation, never a fixed
+		// 1MB view that could extend past the Global's real bounds.
+		allocSize, _, _ := procGlobalSize.Call(hMem)
+		n := uintptr(len(data))
+		if allocSize != 0 && allocSize < n {
+			n = allocSize
+		}
+		copy((*[1 << 20]byte)(unsafe.Pointer(ptr))[:n], []byte(data))
 		procGlobalUnlock.Call(hMem)
 	}
 

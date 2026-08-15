@@ -64,10 +64,6 @@ export class ApiError extends Error {
   }
 }
 
-export function isForbiddenError(e: unknown): boolean {
-  return e instanceof ApiError && e.status === 403;
-}
-
 export function handleUnauthorized(res: Pick<Response, "status">): void {
   // Only session expiry (401) forces re-login. 403 = authenticated but denied — stay put.
   if (res.status !== 401 || typeof window === "undefined") return;
@@ -445,44 +441,6 @@ export async function runTask(
   });
 }
 
-export function runTaskWithCancel(
-  agentId: string,
-  path: string,
-  opts: RunTaskOptions = {},
-): PollTaskHandle {
-  const ac = new AbortController();
-  const postFn = opts.method === "postJson" ? api.postJson : api.post;
-  let pollCleanup: (() => void) | null = null;
-
-  const promise = postFn<{ success?: boolean; task_id?: number; error?: string }>(
-    path,
-    (opts.body as Record<string, string>) || {},
-  ).then((res) => {
-    if (ac.signal.aborted) throw new Error("cancelled");
-    const taskId = res.task_id;
-    if (!taskId) {
-      const errMsg = (res as Record<string, unknown>).error;
-      throw new Error(typeof errMsg === "string" ? errMsg : "Failed to queue task (no task_id returned)");
-    }
-    const h = pollTaskWithCancel(agentId, taskId, {
-      intervalMs: opts.intervalMs,
-      timeoutMs: opts.timeoutMs,
-      signal: ac.signal,
-      onStatus: opts.onStatus,
-    });
-    pollCleanup = h.cancel;
-    return h.promise;
-  });
-
-  return {
-    promise,
-    cancel: () => {
-      pollCleanup?.();
-      ac.abort();
-    },
-  };
-}
-
 // ── Type-safe API wrappers ──
 // Uses Zod schemas from ./api-schemas to validate API responses at runtime.
 // Import and use these instead of raw api.get/post when you want type safety.
@@ -490,14 +448,4 @@ export function runTaskWithCancel(
 import { parseResponse, AgentSchema, TaskSchema } from "./api-schemas";
 import type { Agent, Task as TaskType } from "./api-schemas";
 
-export const typedApi = {
-  async getAgent(id: string): Promise<Agent> {
-    const data = await api.get(paths.agents.one(id));
-    return parseResponse(AgentSchema, data);
-  },
 
-  async getTask(agentId: string, taskId: string): Promise<TaskType> {
-    const data = await api.get(paths.agents.task(agentId, taskId));
-    return parseResponse(TaskSchema, data);
-  },
-};

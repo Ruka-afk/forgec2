@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,18 +18,18 @@ import { Listener, ProfilePreset, SharedState, clampInterval, clampJitter } from
 import ListenerModal from "./ListenerModal";
 import { FileCode2, Import, KeyRound, Lock, Network, Plus, Radio, Timer, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  isExperimentalTransport,
+  visibleBeaconTransports,
+  type TransportQuality,
+} from "./transport-quality";
 
-const TRANSPORTS = [
-  { value: "http", label: "HTTP(S)" },
-  { value: "wss", label: "WSS" },
-  { value: "grpc", label: "gRPC" },
-  { value: "ssh", label: "SSH" },
-  { value: "tcp", label: "TCP" },
-  { value: "dns", label: "DNS" },
-  { value: "icmp", label: "ICMP" },
-  { value: "mtls", label: "mTLS" },
-  { value: "h2c", label: "H2C" },
-];
+function TransportQualityLabel({ quality }: { quality: TransportQuality }) {
+  const { t } = useI18n();
+  if (quality === "core") return <>{t("generate.quality_core")}</>;
+  if (quality === "hardened") return <>{t("generate.quality_hardened")}</>;
+  return <>{t("generate.quality_experimental")}</>;
+}
 
 const CONDITIONAL_TRANSPORTS = ["grpc", "ssh", "wss", "mtls", "h2c", "icmp"];
 
@@ -75,6 +75,9 @@ export default function ConnectionPanel({
   const { t } = useI18n();
   const { confirm, modal } = useConfirm();
   const [deleting, setDeleting] = useState(false);
+  const [showExperimental, setShowExperimental] = useState(() =>
+    isExperimentalTransport(shared.beacon_transport || "http"),
+  );
   const currentProfile = profilePresets.find(p => p.name === shared.profile);
   const isBuiltin = !shared.profile || shared.profile === "default" || shared.profile === "";
   const currentListener = listeners.find(l => String(l.id) === String(shared.listener_id));
@@ -91,6 +94,10 @@ export default function ConnectionPanel({
   };
 
   const transport = shared.beacon_transport || "http";
+
+  useEffect(() => {
+    if (isExperimentalTransport(transport)) setShowExperimental(true);
+  }, [transport]);
 
   return (
     <CraftPanel
@@ -148,29 +155,41 @@ export default function ConnectionPanel({
       <ConfigSection title={t("generate.beacon_transport")} icon={<Network className="h-4 w-4" />}>
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-1.5">
-            {TRANSPORTS.map((tr) => {
+            {visibleBeaconTransports(showExperimental).map((tr) => {
               const active = transport === tr.value;
               return (
-                <button
+                <Button
                   key={tr.value}
                   type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => {
                     const proto = ["tcp", "dns", "icmp"].includes(tr.value) ? tr.value : "http";
                     setShared(s => ({ ...s, beacon_transport: tr.value, protocol: proto }));
                   }}
                   aria-pressed={active}
                   className={cn(
-                    "rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors",
+                    "h-auto rounded-lg px-2 py-1.5 text-xs font-medium",
                     active
                       ? "border-primary/40 bg-primary/10 text-primary"
                       : "border-border text-muted-foreground hover:border-primary/30 hover:text-foreground",
                   )}
                 >
-                  {tr.label}
-                </button>
+                  <span className="block">{tr.label}</span>
+                  <span className="block text-(--fs-micro) font-normal opacity-70"><TransportQualityLabel quality={tr.quality} /></span>
+                </Button>
               );
             })}
           </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-auto px-1 text-xs text-muted-foreground"
+            onClick={() => setShowExperimental((v) => !v)}
+          >
+            {showExperimental ? t("generate.hide_experimental") : t("generate.show_experimental")}
+          </Button>
           {CONDITIONAL_TRANSPORTS.includes(transport) && (
             <div className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
               <div className="font-semibold mb-0.5">{t("generate.transport_security_title")}</div>
@@ -251,7 +270,7 @@ export default function ConnectionPanel({
             )}
           </div>
           {profileLocked && (
-            <p className="flex items-center gap-1 text-(--fs-xs-sm) text-amber-600 dark:text-amber-400">
+            <p className="flex items-center gap-1 text-(--fs-xs-sm) text-warning">
               <Lock className="h-3.5 w-3.5" />{t("generate.profile_locked")}
             </p>
           )}
@@ -313,7 +332,7 @@ export default function ConnectionPanel({
         </div>
       </ConfigSection>
 
-      <input aria-label={t("generate.import_profile")} name="profile-import" ref={fileInputRef} type="file" accept=".json,application/json" className="hidden" onChange={onProfileImport} />
+      <Input aria-label={t("generate.import_profile")} name="profile-import" ref={fileInputRef} type="file" accept=".json,application/json" className="hidden" onChange={onProfileImport} />
 
       <ListenerModal
         show={showListenerModal}

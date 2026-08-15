@@ -8,8 +8,9 @@ import { paths } from "@/lib/api-paths";
 import { fetchAgentBeaconTiming, loadCommandHistory, saveCommandHistory } from "@/lib/shell";
 import { getCompletions } from "@/lib/completions";
 import { highlightOutput } from "@/lib/highlight";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Clock, Type, Trash2, Keyboard } from "lucide-react";
@@ -42,11 +43,13 @@ export default function ShellTerminal({
   shellType = "cmd",
   showHeader = true,
   osType = "windows",
+  className,
 }: {
   agentId: string;
   shellType?: string;
   showHeader?: boolean;
   osType?: string;
+  className?: string;
 }) {
   const { resolved } = useTheme();
   const { t } = useI18n();
@@ -374,11 +377,11 @@ export default function ShellTerminal({
   };
 
   return (
-    <div className="h-[calc(100vh-9rem)] flex flex-col bg-background text-foreground rounded-xl overflow-hidden border border-border relative">
+    <div className={className || "h-[calc(100vh-9rem)] flex flex-col bg-background text-foreground rounded-xl overflow-hidden border border-border relative"}>
       {showHeader && (
         <div className="shrink-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full shrink-0"></span>
+            <StatusDot tone="success" />
             <span className="font-semibold text-sm text-foreground truncate">{t("shell.title")}</span>
             <span className="text-xs text-muted-foreground font-mono uppercase">{shellType}</span>
             <Tooltip>
@@ -473,7 +476,7 @@ export default function ShellTerminal({
       )}
       <div ref={a11yLogRef} role="log" aria-live="polite" aria-atomic="false" className="sr-only" />
       {loading && (
-        <div className="shrink-0 bg-card border-t border-border px-4 py-1.5 text-xs text-emerald-400 flex items-center gap-2">
+        <div className="shrink-0 bg-card border-t border-border px-4 py-1.5 text-xs text-chart-1 flex items-center gap-2">
            <Spinner size="xs" /> {t("shell.executing")}
         </div>
       )}

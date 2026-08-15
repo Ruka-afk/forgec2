@@ -1,6 +1,6 @@
 export type AgentStatus = "online" | "stale" | "offline";
 
-export type TaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+export type TaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled" | "pending_approval";
 
 export interface AgentBase {
   id: string;

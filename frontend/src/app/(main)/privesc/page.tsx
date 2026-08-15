@@ -7,7 +7,8 @@ import { downloadText, downloadJSON } from "@/lib/download";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { useI18n } from "@/lib/i18n";
 import { formatTime } from "@/lib/utils";
-import { PageHeader, Spinner } from "@/components/UI";
+import { Spinner } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -176,8 +177,7 @@ export default function PrivescPage() {
   const lowCount = findings.filter((f) => f.severity === "low").length;
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={<><TrendingUp className="w-4 h-4" />{t("privesc.title")}</>} subtitle={t("privesc.subtitle")}>
+    <PageContainer title={<><TrendingUp className="w-4 h-4" />{t("privesc.title")}</>} subtitle={t("privesc.subtitle")} actions={<>
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" onClick={handleExportJSON}>
             <FileCode className="w-4 h-4" /> JSON
@@ -186,7 +186,7 @@ export default function PrivescPage() {
             <FileSpreadsheet className="w-4 h-4" /> CSV
           </Button>
         </div>
-      </PageHeader>
+      </>}>
 
       <Card className="p-3 mb-4 border-amber-500/40 bg-amber-500/10 text-sm text-amber-800 dark:text-amber-200">
         <div className="font-semibold">{t("privesc.honesty_title")}</div>
@@ -396,7 +396,7 @@ export default function PrivescPage() {
       </Card>
 
       {modal}
-    </div>
+    </PageContainer>
   );
 }
 

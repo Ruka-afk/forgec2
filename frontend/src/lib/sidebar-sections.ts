@@ -1,14 +1,14 @@
 export const defaultSidebarSections: Record<string, boolean> = {
   operations: true,
-  "build-deploy": true,
-  "post-exploitation": true,
+  "build-deploy": false,
+  "post-exploitation": false,
   "intel-analysis": false,
   lab: false,
-  system: true,
+  system: false,
 };
 
 /** Bump when default open/closed sections change so operators pick up new defaults. */
-export const SIDEBAR_SECTIONS_KEY = "forgec2_sidebar_sections_v2";
+export const SIDEBAR_SECTIONS_KEY = "forgec2_sidebar_sections_v3";
 export const SIDEBAR_SECTIONS_LEGACY_KEY = "forgec2_sidebar_sections";
 
 /** Merge saved prefs with current defaults so new section keys inherit defaults. */

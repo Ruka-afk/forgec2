@@ -92,10 +92,6 @@ const (
 	SProcAddVEH = "a8ba46465c5a93766cd36de8e1e4f67c7003be39468eaacdeb287a:6d4iEDk55xketgmtmYeTDARq0VcO78Sph00I" // "AddVectoredExceptionHandler"
 	SProcRemVEH = "7c983b79f7321fdfbea92a856d4af8f34099cc3991790222028eac11c291:Lv1WFoFXSbrd3UX3CC69iyP8vE34FmxqY+DIfafj" // "RemoveVectoredExceptionHandler"
 
-	// AES-256 key (hex, 64 chars) for the injected runtime config blob.
-	// Delivered only via this obfuscated table; the builder holds the same
-	// plaintext (payload.configBlobKeyHex) to produce the encrypted blob.
-	SConfigKey = "fe144b0a37c4bcc8d39541b027c12c383b61bd03e0e8e8821bb459b67d12d470999e2c7025f9d6950665f7043f84da759da17c39ac3185cb8ecad96eab480fed:xyB8aVL13vq1o3iDRPRNCF1WhGbXiYq3KYJugkQm7BKg+xgWR5rh82BWzmVasOpHrMVFAZoAt66+/b1enik22w=="
 )
 
 //go:noinline
@@ -137,3 +133,15 @@ func obfuscate(plaintext string) string {
 	}
 	return hex.EncodeToString(key) + ":" + base64.StdEncoding.EncodeToString(encrypted)
 }
+
+// SConfigKey is the AES-256 key (hex, 64 chars) for the injected runtime config
+// blob, delivered obfuscated via the strxor table. It is a var (not a const) and
+// is declared here — outside the const block that randomizeStrxor rewrites — so
+// the builder can override it per build with -ldflags -X main.SConfigKey=<obf>
+// using a fresh random key, removing the fleet-wide shared constant.
+//
+// The default is the empty string so that a binary built WITHOUT a per-build key
+// injection fails closed: decryptConfigBlob cannot derive a valid key and the
+// agent safely falls back to its build-time defaults rather than trusting a
+// known, source-embedded constant.
+var SConfigKey = ""

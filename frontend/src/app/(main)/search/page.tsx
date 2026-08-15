@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { EmptyState, Spinner, PageHeader } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Spinner } from "@/components/ui/spinner";
+import { PageContainer } from "@/components/ui/page-container";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ChevronRight, Search } from "lucide-react";
@@ -21,12 +23,12 @@ interface SearchResult {
 }
 
 const typeColors: Record<string, string> = {
-  agent: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  agent: "bg-success/10 text-success",
   listener: "bg-primary/10 text-primary",
-  credential: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  bof: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-  user: "bg-pink-500/10 text-pink-600 dark:text-pink-400",
-  task: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
+  credential: "bg-warning/10 text-warning",
+  bof: "bg-chart-6/purple text-chart-6",
+  user: "bg-chart-5/10 text-chart-5 dark:text-chart-5",
+  task: "bg-chart-2/10 text-info",
 };
 
 function SearchContent() {
@@ -60,8 +62,7 @@ function SearchContent() {
   }, [query, doSearch]);
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("search.title")} />
+    <PageContainer title={t("search.title")}>
       <p className="text-sm text-muted-foreground mb-6">
         {query ? (
           <>{t("search.results_for")} <span className="font-medium text-foreground">&ldquo;{query}&rdquo;</span></>
@@ -106,7 +107,7 @@ function SearchContent() {
           ))}
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }
 

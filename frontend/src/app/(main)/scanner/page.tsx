@@ -7,7 +7,8 @@ import { downloadText, downloadJSON } from "@/lib/download";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
-import { PageHeader, Spinner } from "@/components/UI";
+import { Spinner } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -176,8 +177,7 @@ export default function ScannerPage() {
   };
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={<><Radar className="w-4 h-4" />{t("scanner.title")}</>} subtitle={t("scanner.subtitle")} />
+    <PageContainer title={<><Radar className="w-4 h-4" />{t("scanner.title")}</>} subtitle={t("scanner.subtitle")}>
 
       <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
         <div className="font-semibold">{t("scanner.honesty_title")}</div>
@@ -444,7 +444,7 @@ export default function ScannerPage() {
         </div>
         </Tabs>
       </Card>
-    </div>
+    </PageContainer>
   );
 }
 

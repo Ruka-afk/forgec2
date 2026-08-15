@@ -9,7 +9,7 @@ export function MdContent({ children, className, dangerouslySetInnerHTML }: { ch
       "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
       "[&>p]:my-2",
       "[&>h1]:mt-3 [&>h1]:mb-1.5 [&>h1]:font-semibold [&>h1]:text-foreground [&>h1]:leading-tight [&>h1]:text-lg",
-      "[&>h2]:mt-3 [&>h2]:mb-1.5 [&>h2]:font-semibold [&>h2]:text-foreground [&>h2]:leading-tight [&>h2]:text-[1.05rem]",
+      "[&>h2]:mt-3 [&>h2]:mb-1.5 [&>h2]:font-semibold [&>h2]:text-foreground [&>h2]:leading-tight [&>h2]:text-(--fs-prose)",
       "[&>h3]:mt-3 [&>h3]:mb-1.5 [&>h3]:font-semibold [&>h3]:text-foreground [&>h3]:leading-tight [&>h3]:text-base",
       "[&>ul]:my-2 [&>ul]:pl-5 [&>ul]:list-disc",
       "[&>ol]:my-2 [&>ol]:pl-5 [&>ol]:list-decimal",

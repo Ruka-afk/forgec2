@@ -4,9 +4,12 @@ import { useEffect } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { Banner } from "@/components/ui/banner";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { EmptyState, PageHeader, Spinner } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer } from "@/components/ui/page-container";
+import { Spinner } from "@/components/ui/spinner";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,8 +69,7 @@ export default function InfrastructurePage() {
   ];
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={<><Server className="w-4 h-4" />{t("infra.title")}</>} subtitle={t("infra.subtitle")} />
+    <PageContainer title={<><Server className="w-4 h-4" />{t("infra.title")}</>} subtitle={t("infra.subtitle")}>
 
       <DataState loading={loading} error={error} onRetry={() => { loadListeners(); if (activeSection === "redirectors") loadRedirectors(); }}>
       <Tabs value={activeSection} onValueChange={setActiveSection}>
@@ -109,7 +111,7 @@ export default function InfrastructurePage() {
 
           <Card className="overflow-hidden">
             <CardHeader className="px-6 py-4 border-b">
-              <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400"><Globe className="w-4 h-4" /></div>
+              <div className="w-8 h-8 bg-success/15 rounded-xl flex items-center justify-center text-success"><Globe className="w-4 h-4" /></div>
               <div><CardTitle>{t("infra.domain_params")}</CardTitle><CardDescription>{t("infra.domain_desc")}</CardDescription></div>
             </CardHeader>
             <CardContent className="p-4 sm:p-5 space-y-4">
@@ -148,15 +150,15 @@ export default function InfrastructurePage() {
 
           <Card className="overflow-hidden">
             <CardHeader className="px-6 py-4 border-b">
-              <div className="w-8 h-8 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400"><FileUp className="w-4 h-4" /></div>
+              <div className="w-8 h-8 bg-warning/15 rounded-xl flex items-center justify-center text-warning"><FileUp className="w-4 h-4" /></div>
               <div><CardTitle>{t("infra.generate_config")}</CardTitle><CardDescription>{t("infra.generate_desc")}</CardDescription></div>
             </CardHeader>
             <CardContent className="p-4 sm:p-5">
               <div className="flex flex-wrap gap-2 mb-4">
-                <Button onClick={() => generateConfig("nginx")} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                <Button onClick={() => generateConfig("nginx")} className="bg-success hover:bg-success text-success-foreground">
                   <Server className="w-4 h-4" /> Nginx
                 </Button>
-                <Button onClick={() => generateConfig("apache")} className="bg-amber-500 hover:bg-amber-600 text-white">
+                <Button onClick={() => generateConfig("apache")} className="bg-warning hover:bg-warning text-warning-foreground">
                   <Server className="w-4 h-4" /> Apache
                 </Button>
                 <Button onClick={() => generateConfig("haproxy")} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
@@ -177,7 +179,7 @@ export default function InfrastructurePage() {
                       </Button>
                     </div>
                   </div>
-                  <pre className="bg-card text-emerald-400 p-4 rounded-2xl text-xs overflow-auto max-h-[400px] whitespace-pre-wrap font-mono leading-relaxed select-all border border-border">{configOutput}</pre>
+                  <pre className="bg-card text-chart-1 p-4 rounded-2xl text-xs overflow-auto max-h-[400px] whitespace-pre-wrap font-mono leading-relaxed select-all border border-border">{configOutput}</pre>
                 </div>
               )}
             </CardContent>
@@ -208,7 +210,7 @@ export default function InfrastructurePage() {
                             <CardContent>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-4">
-                                  <div className={`w-3 h-3 rounded-full ${rd.status === "active" ? "bg-emerald-500 animate-pulse" : rd.status === "error" ? "bg-red-500" : "bg-muted-foreground"}`}></div>
+                                  <div className={`w-3 h-3 rounded-full ${rd.status === "active" ? "bg-success animate-pulse" : rd.status === "error" ? "bg-destructive" : "bg-muted-foreground"}`}></div>
                                   <div>
                                     <div className="text-sm font-medium text-foreground">{rd.name}</div>
                                     <div className="text-xs text-muted-foreground mt-0.5">
@@ -251,7 +253,7 @@ export default function InfrastructurePage() {
             <div>
               <Card className="overflow-hidden">
                 <CardHeader className="px-6 py-4 border-b">
-                  <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400"><Server className="w-4 h-4" /></div>
+                  <div className="w-8 h-8 bg-success/15 rounded-xl flex items-center justify-center text-success"><Server className="w-4 h-4" /></div>
                   <div><CardTitle>{editingRd ? t("infra.edit_redirector") : t("infra.new_redirector")}</CardTitle></div>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-5 space-y-4">
@@ -421,19 +423,16 @@ export default function InfrastructurePage() {
               {rdConfig && (
                 <div>
                   <Label className="text-xs">{t("infra.generated_config")} ({rdType.toUpperCase()})</Label>
-                  <pre className="bg-card text-emerald-400 p-4 rounded-2xl text-xs overflow-auto max-h-[300px] whitespace-pre-wrap font-mono leading-relaxed border border-border">{rdConfig}</pre>
+                  <pre className="bg-card text-chart-1 p-4 rounded-2xl text-xs overflow-auto max-h-[300px] whitespace-pre-wrap font-mono leading-relaxed border border-border">{rdConfig}</pre>
                 </div>
               )}
 
               {deployResult && (
-                <div className={`p-4 rounded-2xl text-sm ${deployResult.success ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400" : "bg-destructive/10 text-destructive"}`}>
-                  <div className="flex items-center gap-2 font-medium mb-1">
-                    {deployResult.success ? <CheckCircle className="w-4 h-4" /> : <CircleAlert className="w-4 h-4" />}
-                    {deployResult.message}
-                  </div>
-                  {deployResult.stdout && <pre className="text-xs mt-1 text-muted-foreground">{deployResult.stdout}</pre>}
-                  {deployResult.stderr && <pre className="text-xs mt-1 text-muted-foreground">{deployResult.stderr}</pre>}
-                </div>
+                <Banner tone={deployResult.success ? "success" : "destructive"} icon={deployResult.success ? <CheckCircle className="w-4 h-4" /> : <CircleAlert className="w-4 h-4" />} className="mb-4">
+                  <div className="font-medium">{deployResult.message}</div>
+                  {deployResult.stdout && <pre className="text-xs mt-1 text-muted-foreground whitespace-pre-wrap">{deployResult.stdout}</pre>}
+                  {deployResult.stderr && <pre className="text-xs mt-1 text-muted-foreground whitespace-pre-wrap">{deployResult.stderr}</pre>}
+                </Banner>
               )}
             </DialogContent>
           </Dialog>
@@ -442,7 +441,7 @@ export default function InfrastructurePage() {
         <TabsContent value="acme" className="mt-0">
         <Card className="overflow-hidden">
           <CardHeader className="px-6 py-4 border-b">
-            <div className="w-8 h-8 bg-cyan-100 dark:bg-cyan-900/30 rounded-xl flex items-center justify-center text-cyan-600 dark:text-cyan-400"><Award className="w-4 h-4" /></div>
+            <div className="w-8 h-8 bg-info/15 rounded-xl flex items-center justify-center text-info"><Award className="w-4 h-4" /></div>
             <div><CardTitle>{t("infra.acme_title")}</CardTitle><CardDescription>{t("infra.acme_desc")}</CardDescription></div>
           </CardHeader>
           <CardContent className="p-4 sm:p-5 space-y-4">
@@ -470,7 +469,7 @@ export default function InfrastructurePage() {
               </Button>
             </div>
             {certPath && keyPath && (
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl text-xs text-emerald-700 dark:text-emerald-400">
+              <div className="p-3 bg-success/15 rounded-xl text-xs text-success">
                 <CheckCircle className="w-4 h-4" />
                 <b>{t("infra.cert_success")}</b> {t("infra.cert_set_to")} {certPath}
               </div>
@@ -491,7 +490,7 @@ export default function InfrastructurePage() {
               <div className="flex gap-3">
                 {([
                   { value: "json", label: "JSON", icon: <Code className="w-4 h-4" />, active: "border-primary bg-primary/10 text-primary" },
-                  { value: "nginx", label: "Nginx", icon: <Server className="w-4 h-4" />, active: "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400" },
+                  { value: "nginx", label: "Nginx", icon: <Server className="w-4 h-4" />, active: "border-success bg-success/15 text-success" },
                   { value: "env", label: "ENV", icon: <Terminal className="w-4 h-4" />, active: "border-secondary bg-secondary/50 text-muted-foreground" },
                 ] as const).map((opt) => (
                   <Button key={opt.value} onClick={() => setExportFormat(opt.value)}
@@ -517,7 +516,7 @@ export default function InfrastructurePage() {
       </Tabs>
       {modal}
       </DataState>
-    </div>
+    </PageContainer>
   );
 }
 

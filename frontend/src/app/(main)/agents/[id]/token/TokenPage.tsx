@@ -12,7 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Spinner, PageHeader } from "@/components/UI";
+import { Spinner } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
 import { AlertCircle, BadgeInfo, Check, CircleDot, Info, Key, List, Pencil, Plus, PlusCircle, RotateCcw, RotateCw, Trash2, User, UserCheck, UserCog, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -218,20 +219,25 @@ export default function AgentTokenPage() {
       </Badge>
     );
   };  return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-
-      <PageHeader title={t("agents.token_title")} subtitle={t("agents.token_subtitle", { hostname: agentId.substring(0, 12) })} icon={<BadgeInfo className="w-4 h-4" />}>
-        <Button variant="outline" size="sm" onClick={handleWhoami} disabled={activeAction === "whoami"}>
-          {activeAction === "whoami" ? (
-            <><Spinner size="sm" /> {t("agents.token_checking")}</>
-          ) : (
-            <><UserCheck className="w-4 h-4" /> {t("agents.token_whoami")}</>
-          )}
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => { setLoading(true); Promise.all([loadTokens(), loadProcesses()]).finally(() => setLoading(false)); }}>
-          <RotateCw className="w-4 h-4" /> {t("common.refresh")}
-        </Button>
-      </PageHeader>
+    <PageContainer
+      title={t("agents.token_title")}
+      subtitle={t("agents.token_subtitle", { hostname: agentId.substring(0, 12) })}
+      icon={<BadgeInfo className="w-4 h-4" />}
+      actions={
+        <>
+          <Button variant="outline" size="sm" onClick={handleWhoami} disabled={activeAction === "whoami"}>
+            {activeAction === "whoami" ? (
+              <><Spinner size="sm" /> {t("agents.token_checking")}</>
+            ) : (
+              <><UserCheck className="w-4 h-4" /> {t("agents.token_whoami")}</>
+            )}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => { setLoading(true); Promise.all([loadTokens(), loadProcesses()]).finally(() => setLoading(false)); }}>
+            <RotateCw className="w-4 h-4" /> {t("common.refresh")}
+          </Button>
+        </>
+      }
+    >
 
       {whoamiResult && (
         <div className={`border rounded-xl px-4 py-3 text-sm flex items-center gap-2 ${
@@ -426,6 +432,6 @@ export default function AgentTokenPage() {
             </TableBody>
           </Table>
         </div>      </Card>
-    </div>
+    </PageContainer>
   );
 }

@@ -255,10 +255,21 @@ func serveFileSafe(c *gin.Context, absPath, baseDir, downloadName string) {
 		respondError(c, http.StatusNotFound, "file not found")
 		return
 	}
+	// Resolve symlinks and re-validate containment: a symlink living inside
+	// baseDir must not be used to serve a file outside it.
+	resolved, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		respondError(c, http.StatusNotFound, "file not found")
+		return
+	}
+	if err := validateFilePath(resolved, baseDir); err != nil {
+		respondError(c, http.StatusNotFound, "file not found")
+		return
+	}
 	if downloadName != "" {
-		c.FileAttachment(absPath, downloadName)
+		c.FileAttachment(resolved, downloadName)
 	} else {
-		c.File(absPath)
+		c.File(resolved)
 	}
 }
 

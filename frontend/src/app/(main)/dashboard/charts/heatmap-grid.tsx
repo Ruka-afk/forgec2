@@ -39,7 +39,7 @@ function HeatmapBody({ data, range }: { data: HeatmapPoint[]; range: string }) {
             {Array.from({ length: 12 }, (_, hi) => {
               const h1 = hi * 2, h2 = hi * 2 + 1;
               const count = (lookup[`${di}-${h1}`] || 0) + (lookup[`${di}-${h2}`] || 0);
-              const bg = count === 0 ? "bg-secondary" : count < 3 ? "bg-emerald-200 dark:bg-emerald-800" : count < 6 ? "bg-emerald-400 dark:bg-emerald-600" : "bg-emerald-600 dark:bg-emerald-400";
+              const bg = count === 0 ? "bg-secondary" : count < 3 ? "bg-success/30" : count < 6 ? "bg-success/60" : "bg-success";
               return <Tooltip key={di * 12 + hi}><TooltipTrigger><div className={`h-3 rounded-sm ${bg}`}></div></TooltipTrigger><TooltipContent>{t("dashboard.events_in_range", { day, start: h1, end: h2 + 1, count })}</TooltipContent></Tooltip>;
             })}
           </div>

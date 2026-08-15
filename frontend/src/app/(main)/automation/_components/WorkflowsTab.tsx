@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Play, Plus, Workflow, History } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import WorkflowEditorDialog from "./WorkflowEditorDialog";
@@ -153,7 +153,7 @@ export function WorkflowsTab() {
             <Card key={w.id} className="p-4">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${w.enabled ? "bg-emerald-500" : "bg-muted-foreground"}`}></span>
+                  <span className={`w-2 h-2 rounded-full ${w.enabled ? "bg-success" : "bg-muted-foreground"}`}></span>
                   <h3 className="text-sm font-semibold text-foreground m-0">{w.name}</h3>
                   <Badge variant="secondary">{scopeLabel(w.scope_type, t)}</Badge>
                 </div>
@@ -165,7 +165,7 @@ export function WorkflowsTab() {
                     <TooltipContent>{t("workflows.exec_history")}</TooltipContent>
                   </Tooltip>
                   <Tooltip>
-                    <TooltipTrigger render={<Button variant="outline" size="xs" onClick={() => handleExecute(w)} aria-label={t("workflows.execute_now")} className="border-emerald-400 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" />}>
+                    <TooltipTrigger render={<Button variant="outline" size="xs" onClick={() => handleExecute(w)} aria-label={t("workflows.execute_now")} className="border-success text-success hover:bg-success/15" />}>
                       <Play className="w-4 h-4" />
                     </TooltipTrigger>
                     <TooltipContent>{t("workflows.execute_now")}</TooltipContent>
@@ -193,18 +193,7 @@ export function WorkflowsTab() {
 
       <WorkflowEditorDialog open={showEditor} onOpenChange={setShowEditor} editWf={editWf} onSave={handleSave} />
 
-      <Dialog open={deleteId !== null} onOpenChange={open => { if (!open) setDeleteId(null); }}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{t("workflows.delete_title")}</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">{t("workflows.delete_msg")}</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>{t("workflows.cancel")}</Button>
-            <Button variant="destructive" onClick={handleDelete}>{t("workflows.delete")}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmModal open={deleteId !== null} title={t("workflows.delete_title")} message={t("workflows.delete_msg")} danger onConfirm={handleDelete} onCancel={() => setDeleteId(null)} />
 
       <ExecutionHistoryDialog workflowId={historyWfId} onClose={() => setHistoryWfId(null)} />
     </div>

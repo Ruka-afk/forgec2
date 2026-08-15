@@ -60,14 +60,12 @@ func pushShellOutput(shellID string, data []byte) {
 	if len(data) == 0 {
 		return
 	}
-	pendingMu.Lock()
-	pendingResults = append(pendingResults, TaskResult{
+	enqueueResult(TaskResult{
 		Type:     "shell_output",
 		Output:   base64.StdEncoding.EncodeToString(data),
 		Encoding: "base64",
 		Path:     shellID,
 	})
-	pendingMu.Unlock()
 }
 
 func (s *InteractiveShell) writeInput(data string) error {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useMemo } from "react";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { Network } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import type { TopoNode, TopoData } from "@/types/topology";

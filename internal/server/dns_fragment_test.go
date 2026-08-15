@@ -2,9 +2,11 @@ package server
 
 import (
 	"encoding/base32"
+	"encoding/base64"
+	"fmt"
 	"net"
-	"strings"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/miekg/dns"
@@ -130,5 +132,78 @@ func TestDNSFragmentRejectsMalformedMeta(t *testing.T) {
 	}
 	if w.msgs[0].Rcode != dns.RcodeFormatError {
 		t.Fatalf("malformed fragment should return FORMERR, got %d", w.msgs[0].Rcode)
+	}
+}
+
+// TestDNSAAAAResponseDecodes verifies AAAA (IPv6) DNS tunneling: the server
+// packs the base64 response into 16-byte AAAA rdata chunks and the agent-side
+// parser (parseDNSResponse) must reconstruct the payload. Before the fix the
+// agent decoded the IPv6 address string (e.g. "2001:db8::1") as base64, which
+// always failed.
+func TestDNSAAAAResponseDecodes(t *testing.T) {
+	dl := NewDNSBeaconListener("dns.evil.test", "127.0.0.1", 0, ":0")
+	defer dl.Stop()
+
+	respPayload := []byte(`{"seq":1,"reg_ok":true}`)
+	agentID := strings.Repeat("a", 32)
+	dl.SetHandler(func(id string, req []byte) []byte {
+		return respPayload
+	})
+
+	w := &dnsTestWriter{}
+	q := agentID + ".dns.dns.evil.test."
+	r := new(dns.Msg)
+	r.SetQuestion(q, dns.TypeAAAA)
+	dl.handleQuery(w, r)
+
+	if len(w.msgs) != 1 {
+		t.Fatalf("expected 1 response, got %d", len(w.msgs))
+	}
+	m := w.msgs[0]
+	if len(m.Answer) == 0 {
+		t.Fatal("expected AAAA answer records")
+	}
+
+	var combined strings.Builder
+	for _, rr := range m.Answer {
+		a, ok := rr.(*dns.AAAA)
+		if !ok {
+			t.Fatalf("expected AAAA record, got %T", rr)
+		}
+		combined.WriteString(string(a.AAAA))
+	}
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(combined.String()))
+	if err != nil {
+		t.Fatalf("base64 decode of AAAA payload failed: %v (raw=%q)", err, combined.String())
+	}
+	if !bytesEqual(decoded, respPayload) {
+		t.Fatalf("AAAA payload mismatch: got %q want %q", decoded, respPayload)
+	}
+}
+
+// TestDNSFragmentMapCardinalityCapped ensures a flood of distinct (spoofable)
+// agent-ID labels cannot grow the in-flight fragment map without bound. The
+// listener must evict the oldest incomplete assembly once at capacity.
+func TestDNSFragmentMapCardinalityCapped(t *testing.T) {
+	dl := &DNSBeaconListener{
+		frags: make(map[string]*dnsFragState),
+	}
+	enc := base32.StdEncoding.WithPadding(base32.NoPadding)
+	label := enc.EncodeToString([]byte("abcd"))
+
+	const flood = maxDNSFragments + 500
+	for i := 0; i < flood; i++ {
+		id := fmt.Sprintf("agent-%d", i)
+		// total=2 with only idx=0 → stays in the map as incomplete.
+		_, complete, ok := dl.collectFragment(id, "2_0", []string{label})
+		if !ok {
+			t.Fatalf("collectFragment rejected a valid fragment at i=%d", i)
+		}
+		if complete {
+			t.Fatalf("unexpected completion at i=%d", i)
+		}
+	}
+	if len(dl.frags) > maxDNSFragments {
+		t.Fatalf("fragment map exceeded cap: got %d, want <= %d", len(dl.frags), maxDNSFragments)
 	}
 }

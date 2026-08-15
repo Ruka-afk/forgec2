@@ -1,40 +1,64 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { normalizeListEnvelope } from "@/lib/envelope";
+import { firstArray, normalizeListEnvelope } from "@/lib/envelope";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { useWS } from "@/lib/wsContext";
 import { useI18n } from "@/lib/i18n";
 import type { CreateListenerForm, EditListenerForm, Listener } from "./types";
 import { emptyCreateForm, emptyEditForm } from "./types";
+import { indexListenerHealth, type ListenerHealth } from "./listener-health";
 
 export function useListenersData() {
   const { t } = useI18n();
   const { subscribe } = useWS();
-  const [listeners, setListeners] = useState<Listener[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [agentCountMap, setAgentCountMap] = useState<Record<string, number>>({});
   const [creating, setCreating] = useState(false);
-  const loadingRef = useRef(true);
-  loadingRef.current = loading;
 
-  const loadListeners = useCallback(async () => {
-    setError(null);
-    try {
+  const { data: listenersData, loading, error, setError, refresh: loadListeners } = useApiResource<Listener[]>({
+    fetcher: async () => {
       const data = await api.get(paths.listeners.list);
-      setListeners(normalizeListEnvelope(data, ["data", "listeners", "Listeners"]) as Listener[]);
-    } catch (e) {
-      setListeners([]);
-      const msg = e instanceof Error ? e.message : t("listeners.toast_load_failed");
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
+      void loadHealthRef.current();
+      return normalizeListEnvelope(data, ["data", "listeners", "Listeners"]) as Listener[];
+    },
+    retainOnError: false,
+    toastThrottleMs: 10_000,
+    errorMessage: t("listeners.toast_load_failed"),
+  });
+  const listeners = listenersData ?? [];
+
+  const { data: healthData, refresh: loadHealth } = useApiResource<ListenerHealth[]>({
+    fetcher: async (signal) => {
+      const data = await api.get(paths.circuitBreaker.detail, { signal });
+      return firstArray(data, ["listeners", "data"]) as ListenerHealth[];
+    },
+    pollMs: 15_000,
+    errorMessage: "",
+  });
+  const loadHealthRef = useRef(loadHealth);
+  loadHealthRef.current = loadHealth;
+
+  const healthByTarget = useMemo(
+    () => indexListenerHealth(healthData ?? []),
+    [healthData],
+  );
+
+  const resetHealth = useCallback(
+    async (listenerId: string) => {
+      if (!listenerId) return;
+      try {
+        await api.post(paths.circuitBreaker.reset(listenerId));
+        toast.success(t("listeners.reset_health_ok"));
+        await loadHealth();
+      } catch {
+        toast.error(t("listeners.reset_health_failed"));
+      }
+    },
+    [loadHealth, t],
+  );
 
   const createListener = useCallback(
     async (form: CreateListenerForm) => {
@@ -134,7 +158,6 @@ export function useListenersData() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void loadListeners();
     api
       .get(paths.agents.list("page=1&pageSize=500"), { signal: controller.signal })
       .then((d) => {
@@ -148,15 +171,13 @@ export function useListenersData() {
       })
       .catch(() => setAgentCountMap({}));
     return () => controller.abort();
-  }, [loadListeners]);
+  }, []);
 
   // Live registry updates: refresh when another operator changes a listener
-  // or when the WS reconnects (sync snapshot) — excludes the in-flight first
-  // load which the mount effect already handles.
+  // or when the WS reconnects (sync snapshot).
   useEffect(() => {
     const unsub = subscribe((msg) => {
       if (msg.type === "listener_update" || msg.type === "sync") {
-        if (loadingRef.current) return;
         loadListeners();
       }
     });
@@ -169,8 +190,10 @@ export function useListenersData() {
     error,
     setError,
     agentCountMap,
+    healthByTarget,
     creating,
     loadListeners,
+    resetHealth,
     createListener,
     updateListener,
     toggleListener,

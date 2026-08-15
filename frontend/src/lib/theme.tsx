@@ -1,8 +1,9 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
+import { DEFAULT_THEME, resolveStoredTheme, type Theme } from "./theme-defaults";
 
-export type Theme = "light" | "dark" | "system";
+export type { Theme };
 
 interface ThemeContextType {
   theme: Theme;
@@ -11,9 +12,9 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "system",
+  theme: DEFAULT_THEME,
   setTheme: () => {},
-  resolved: "light",
+  resolved: "dark",
 });
 
 function applyTheme(theme: Theme) {
@@ -25,12 +26,11 @@ function applyTheme(theme: Theme) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("system");
-  const [resolved, setResolved] = useState<"light" | "dark">("light");
+  const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME);
+  const [resolved, setResolved] = useState<"light" | "dark">("dark");
 
   useEffect(() => {
-    const saved = localStorage.getItem("forgec2_theme") as Theme | null;
-    const initial = saved && ["light", "dark", "system"].includes(saved) ? saved : "dark";
+    const initial = resolveStoredTheme(localStorage.getItem("forgec2_theme"));
     Promise.resolve().then(() => {
       setThemeState(initial);
       setResolved(applyTheme(initial));
@@ -38,7 +38,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => {
-      if ((localStorage.getItem("forgec2_theme") || "system") === "system") {
+      if (resolveStoredTheme(localStorage.getItem("forgec2_theme")) === "system") {
         setResolved(applyTheme("system"));
       }
     };

@@ -6,6 +6,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -48,14 +49,10 @@ func handleConfigPush(task Task, res *TaskResult) {
 	configOverrides.Lock()
 	defer configOverrides.Unlock()
 	if cfg.Sleep > 0 {
-		configOverrides.sleep = cfg.Sleep
-		configOverrides.hasSleep = true
-		Interval = cfg.Sleep
+		IntervalStr = strconv.Itoa(cfg.Sleep)
 	}
 	if cfg.Jitter > 0 {
-		configOverrides.jitter = cfg.Jitter
-		configOverrides.hasJitter = true
-		Jitter = cfg.Jitter
+		JitterStr = strconv.Itoa(cfg.Jitter)
 	}
 	if cfg.UserAgent != "" {
 		configOverrides.userAgent = cfg.UserAgent
@@ -82,6 +79,9 @@ func handleConfigPush(task Task, res *TaskResult) {
 	if cfg.WorkingTZ != "" {
 		workingTZ = cfg.WorkingTZ
 	}
+	// Re-derive the typed globals (Interval/Jitter/etc.) from the canonical
+	// string config so the overrides take effect and survive a later reparse.
+	reparseNetworkConfig()
 	res.Output = "config applied"
 }
 

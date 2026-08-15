@@ -29,6 +29,7 @@ func initBeaconTestServer(t *testing.T, database *gorm.DB) (*Server, *gin.Engine
 		db:                    database,
 		cfg:                   &config.Config{},
 		sessionManager:        sm,
+		regSecrets:            crypto.NewRegSecretStore(make([]byte, 32)),
 		beaconDedupCache:      make(map[string]time.Time),
 		eventManager:          NewEventManager(database),
 		socksEngine:           newSocksRelayEngine(),
@@ -54,7 +55,7 @@ func TestBeaconConcurrentCheckins(t *testing.T) {
 	numAgents := 5
 	for i := range numAgents {
 		agentID := fmt.Sprintf("11111111-2222-4333-8444-00000000000%d", i)
-		agent := newTCPTestAgent(t, agentID).withRegKey(v2TestMasterKey)
+		agent := v3TestAgent(t, s, agentID)
 
 		s.beaconDedupMu.Lock()
 		s.beaconDedupCache = make(map[string]time.Time)
@@ -79,7 +80,7 @@ func TestBeaconReconnection(t *testing.T) {
 	s, r := initBeaconTestServer(t, database)
 
 	agentUUID := "22222222-3333-4333-8444-555555555555"
-	agent := newTCPTestAgent(t, agentUUID).withRegKey(v2TestMasterKey)
+	agent := v3TestAgent(t, s, agentUUID)
 
 	clearDedup := func() {
 		s.beaconDedupMu.Lock()
@@ -177,8 +178,8 @@ func TestBeaconProtocolVersionRejection(t *testing.T) {
 		}
 	})
 
-	t.Run("v2 registration accepted", func(t *testing.T) {
-		agent := newTCPTestAgent(t, "44444444-5555-4333-8444-666666666666").withRegKey(v2TestMasterKey)
+	t.Run("v3 registration accepted", func(t *testing.T) {
+		agent := v3TestAgent(t, s, "44444444-5555-4333-8444-666666666666")
 		s.beaconDedupMu.Lock()
 		s.beaconDedupCache = make(map[string]time.Time)
 		s.beaconDedupMu.Unlock()

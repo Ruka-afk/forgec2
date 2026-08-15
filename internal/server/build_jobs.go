@@ -88,6 +88,19 @@ func (s *Server) cleanupBuildJobs() {
 				}
 			}
 			s.buildJobsMu.Unlock()
+
+			// Reap one-shot generated files (stager/one-liner outputs) that
+			// are not tracked as BuildJobs.
+			s.transientArtifactsMu.Lock()
+			for p, exp := range s.transientArtifacts {
+				if time.Now().After(exp) {
+					if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+						slog.Error("transient artifact cleanup failed", "path", p, "err", err)
+					}
+					delete(s.transientArtifacts, p)
+				}
+			}
+			s.transientArtifactsMu.Unlock()
 		case <-s.ctx.Done():
 			return
 		}
@@ -166,12 +179,13 @@ func (s *Server) buildJobSnapshots() []gin.H {
 	resp := make([]gin.H, 0, len(s.buildJobs))
 	for _, j := range s.buildJobs {
 		entry := gin.H{
-			"id":         j.ID,
-			"status":     j.Status,
-			"platform":   j.Platform,
-			"format":     j.Format,
-			"filename":   j.Filename,
-			"created_at": j.CreatedAt,
+			"id":          j.ID,
+			"status":      j.Status,
+			"platform":    j.Platform,
+			"format":      j.Format,
+			"filename":    j.Filename,
+			"listener_id": j.ListenerID,
+			"created_at":  j.CreatedAt,
 		}
 		if j.Error != "" {
 			entry["error"] = j.Error
@@ -244,8 +258,9 @@ func (s *Server) runBuildAndUpdateJob(job *BuildJob, buildFn func() (string, err
 // expensive and must not run unbounded goroutines per request. Jobs are
 // enqueued and executed by a small fixed worker pool in FIFO order.
 const (
-	maxQueuedBuilds = 32
-	buildWorkers    = 1
+	maxQueuedBuilds     = 32
+	buildWorkers        = 2
+	maxConcurrentBuilds = 2
 )
 
 // queuedBuild is a build job waiting for a worker slot.
@@ -277,14 +292,42 @@ func (s *Server) submitBuild(job *BuildJob, fn func() (string, error), platform,
 func (s *Server) ensureBuildQueue() {
 	s.buildQueueOnce.Do(func() {
 		s.buildQueue = make(chan *queuedBuild, maxQueuedBuilds)
+		s.buildSem = make(chan struct{}, maxConcurrentBuilds)
 		for i := 0; i < buildWorkers; i++ {
 			go func() {
 				for q := range s.buildQueue {
+					s.buildSem <- struct{}{}
 					s.runBuildAndUpdateJob(q.job, q.buildFn, q.platform, q.format, q.c2URL, q.listenerID, q.filename)
+					<-s.buildSem
 				}
 			}()
 		}
 	})
+}
+
+// withBuildSlot runs fn while holding a slot from the shared build semaphore,
+// bounding concurrent toolchain invocations across BOTH the async queue worker
+// and synchronous stager/one-liner/shellcode handlers.
+func (s *Server) withBuildSlot(fn func() (string, error)) (string, error) {
+	s.ensureBuildQueue()
+	s.buildSem <- struct{}{}
+	defer func() { <-s.buildSem }()
+	return fn()
+}
+
+// registerTransientArtifact marks a generated file for automatic cleanup after
+// one hour. Used for stager/one-liner outputs that are served once and are not
+// tracked as BuildJobs (which cleanupBuildJobs already reaps).
+func (s *Server) registerTransientArtifact(path string) {
+	if path == "" {
+		return
+	}
+	s.transientArtifactsMu.Lock()
+	if s.transientArtifacts == nil {
+		s.transientArtifacts = make(map[string]time.Time)
+	}
+	s.transientArtifacts[path] = time.Now().Add(time.Hour)
+	s.transientArtifactsMu.Unlock()
 }
 
 // extractAgentsDir returns the absolute path to the agents output directory.

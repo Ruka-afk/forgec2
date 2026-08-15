@@ -27,13 +27,6 @@ export const AgentSchema = z.object({
 });
 export type Agent = z.infer<typeof AgentSchema>;
 
-export const AgentListResponseSchema = z.object({
-  success: z.boolean(),
-  data: z.array(AgentSchema),
-  total: z.number().int(),
-});
-export type AgentListResponse = z.infer<typeof AgentListResponseSchema>;
-
 export const AgentDetailResponseSchema = z.object({
   success: z.boolean(),
   data: AgentSchema,
@@ -60,13 +53,6 @@ export const TaskSchema = z.object({
 });
 export type Task = z.infer<typeof TaskSchema>;
 
-export const TaskListResponseSchema = z.object({
-  success: z.boolean(),
-  data: z.array(TaskSchema),
-  total: z.number().int(),
-});
-export type TaskListResponse = z.infer<typeof TaskListResponseSchema>;
-
 // ── Dashboard Stats ──
 
 export const DashboardStatsSchema = z.object({
@@ -78,11 +64,6 @@ export const DashboardStatsSchema = z.object({
   total_listeners: z.number().int().optional(),
 });
 export type DashboardStats = z.infer<typeof DashboardStatsSchema>;
-
-export const DashboardStatsResponseSchema = z.object({
-  success: z.boolean(),
-  data: DashboardStatsSchema.optional(),
-});
 
 // ── Listener ──
 
@@ -98,21 +79,7 @@ export const ListenerSchema = z.object({
 });
 export type Listener = z.infer<typeof ListenerSchema>;
 
-export const ListenerListResponseSchema = z.object({
-  success: z.boolean(),
-  data: z.array(ListenerSchema),
-});
-
 // ── Generic API Response ──
-
-export const ApiErrorResponseSchema = z.object({
-  success: z.literal(false),
-  error: z.string(),
-});
-
-export const ApiSuccessResponseSchema = z.object({
-  success: z.literal(true),
-});
 
 export function parseResponse<T>(schema: z.ZodType<T>, data: unknown): T {
   const result = schema.safeParse(data);

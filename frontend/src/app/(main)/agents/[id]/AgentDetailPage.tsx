@@ -6,7 +6,8 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadText } from "@/lib/download";
-import { ConfirmModal, Spinner } from "@/components/UI";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useWS } from "@/lib/wsContext";
 import { timeAgo } from "@/lib/utils";
@@ -21,9 +22,6 @@ import EvasionSection from "./_components/EvasionSection";
 import {
   buildAgentCopyText,
   buildAgentMarkdown,
-  computeActivityBuckets,
-  computeHealthScore,
-  computeSparklinePoints,
   type AgentDetailModel,
   type AgentDetailResponse,
   type LogEntry,
@@ -35,6 +33,9 @@ import { useAgentQuickShell } from "./_hooks/useAgentQuickShell";
 import { useAgentProcessTree } from "./_hooks/useAgentProcessTree";
 import { useAgentNotes } from "./_hooks/useAgentNotes";
 import { useAgentDangerActions } from "./_hooks/useAgentDangerActions";
+import { credActionBlockReason, credActionEndpoint, hasMimikatzModule, parseModuleNames } from "../../credentials/_components/cred-quality";
+import { sessionActionQuality } from "./_components/session-quality";
+import { implantBlocksDest } from "../_components/implant-version";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,6 +45,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
+import { useInteractStore } from "@/lib/interact-store";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Bug, Check, ChevronDown, Circle, Eye, History, Pencil, Send, Tag, Terminal, X } from "lucide-react";
 
@@ -89,8 +91,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const [sleepSaving, setSleepSaving] = useState(false);
 
   const [credCount, setCredCount] = useState<number | null>(null);
-
-  // healthScore is computed via useMemo below
+  const [mimikatzReady, setMimikatzReady] = useState(false);
 
   const [lastResultExpanded, setLastResultExpanded] = useState(false);
   const { data, setData, loading, loadError, reload: loadDetail } = useAgentDetail<AgentDetailResponse>(id);
@@ -191,15 +192,13 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     return () => controller.abort();
   }, [id, t]);
 
-  const healthScore = useMemo(() => {
-    if (!data) return 0;
-    const agent = data.agent || {};
-    const tasks = data.tasks || [];
-    const s = agent.status || "offline";
-    const sr = data.success_rate ?? 0;
-    const ls = agent.last_seen || "";
-    return computeHealthScore(s, sr, ls, tasks);
-  }, [data]);
+  useEffect(() => {
+    const controller = new AbortController();
+    api.get(paths.modules.list, { signal: controller.signal })
+      .then((r) => setMimikatzReady(hasMimikatzModule(parseModuleNames(r))))
+      .catch(() => setMimikatzReady(false));
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     if (!data?.agent) return;
@@ -221,30 +220,6 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const completedTasks = data?.completed_tasks ?? 0;
   const pendingTasks = data?.pending_tasks ?? 0;
   const failedTasks = data?.failed_tasks ?? 0;
-  const successRate = data?.success_rate ?? 0;
-  const avgResponseTime = data?.avg_response_time || "N/A";
-
-  const typeBreakdown = useMemo(() => {
-    if (!data) return [];
-    return [
-      { label: "Shell", count: data.shell_tasks ?? 0, color: "bg-primary/100" },
-      { label: "Screenshot", count: data.screenshot_tasks ?? 0, color: "bg-cyan-500" },
-      { label: "Process", count: data.ps_tasks ?? 0, color: "bg-muted-foreground" },
-      { label: "Kill", count: data.kill_tasks ?? 0, color: "bg-red-500" },
-    ].filter((item) => item.count > 0);
-  }, [data]);
-
-  const otherTasks = totalTasks - (data?.shell_tasks ?? 0) - (data?.screenshot_tasks ?? 0) - (data?.ps_tasks ?? 0) - (data?.kill_tasks ?? 0);
-
-  const { activityBuckets, maxActivity } = useMemo(
-    () => (data ? computeActivityBuckets(tasks, Date.now()) : { activityBuckets: Array.from({ length: 24 }, () => 0), maxActivity: 1 }),
-    [tasks, data],
-  );
-
-  const sparklinePoints = useMemo(
-    () => (data ? computeSparklinePoints(tasks) : []),
-    [tasks, data],
-  );
 
   const lastResultSnippet = useMemo(() => {
     if (!data) return "";
@@ -252,11 +227,39 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     return lastCompletedTask ? (lastCompletedTask.result || "").substring(0, 500) : "";
   }, [tasks, data]);
 
-   const quickAction = async (action: string, label: string) => {
-     setActionLoading(action);
-      try {       await api.postJson(paths.agents.command(id), { type: action, command: "" }); toast.success(t("agents.detail_action_sent").replace("{label}", label)); }
-     catch (err) { console.error("quickAction failed:", err); toast.error(t("agents.detail_action_failed").replace("{label}", label)); } finally { setActionLoading(null); }
-   };
+  const quickAction = async (action: string, label: string) => {
+    if (credActionBlockReason(action, mimikatzReady) === "missing_module") {
+      toast.error(t("cred.missing_module"));
+      return;
+    }
+    if (implantBlocksDest(agent.version, sessionActionQuality(action))) {
+      toast.error(t("agents.version_unknown_dest"));
+      return;
+    }
+    setActionLoading(action);
+    try {
+      const suffix = credActionEndpoint(action);
+      const data = suffix
+        ? await api.post(paths.agents.cmd(id, suffix), {})
+        : await api.postJson(paths.agents.command(id), { type: action, command: "" });
+      const taskId = Number((data as { task_id?: number }).task_id);
+      const queued = Number.isFinite(taskId) && taskId > 0;
+      const kind = queued ? useInteractStore.getState().revealTask(id, taskId) : "offer";
+      toast.success(t("agents.detail_action_queued", { label }), {
+        action: kind === "offer" && queued
+          ? {
+              label: t("agents.dock_view_result"),
+              onClick: () => useInteractStore.getState().open(id, { tab: "tasks", expandedTaskId: taskId }),
+            }
+          : undefined,
+      });
+    } catch (err) {
+      console.error("quickAction failed:", err);
+      toast.error(t("agents.detail_action_failed").replace("{label}", label));
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const handleApplySleep = async () => {
     setSleepSaving(true);
@@ -277,7 +280,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
 
   const exportMarkdown = () => {
     if (!data) return;
-    downloadText(buildAgentMarkdown(data, healthScore), `agent-${id}.md`, "text/markdown");
+    downloadText(buildAgentMarkdown(data), `agent-${id}.md`, "text/markdown");
   };
 
   const copyAllInfo = async () => {
@@ -334,6 +337,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         actionLoading={actionLoading}
         onQuickAction={quickAction}
         credCount={credCount}
+        mimikatzReady={mimikatzReady}
         onKill={() => setConfirmKill(true)}
         onUninstall={() => setConfirmUninstall(true)}
         onMigrate={() => { setMigratePath(""); setConfirmMigrate(true); }}
@@ -344,9 +348,6 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
       <AgentStatsGrid
         agent={agent as Partial<AgentDetailExt>}
         data={data as AgentDetailData}
-        healthScore={healthScore}
-        activityBuckets={activityBuckets}
-        maxActivity={maxActivity}
         sleepValue={sleepValue}
         jitterValue={jitterValue}
         onSleepChange={setSleepValue}
@@ -384,11 +385,6 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         completedTasks={completedTasks}
         pendingTasks={pendingTasks}
         failedTasks={failedTasks}
-        successRate={successRate}
-        avgResponseTime={avgResponseTime}
-        typeBreakdown={typeBreakdown}
-        otherTasks={otherTasks}
-        sparklinePoints={sparklinePoints}
       />
 
       {lastResultSnippet && (
@@ -434,7 +430,10 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
       <Collapsible open={processExpanded} onOpenChange={(v) => { if (v) loadProcessList(); }}>
         <Card className="mb-4">
           <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground"><Terminal className="w-3.5 h-3.5" />{t("agents.detail_process_list")}</h3>
+            <div>
+              <h3 className="text-sm font-semibold text-foreground"><Terminal className="w-3.5 h-3.5" />{t("agents.detail_process_list")}</h3>
+              <p className="mt-0.5 text-(--fs-micro-sm) text-muted-foreground">{t("agents.detail_process_snapshot_hint")}</p>
+            </div>
             <CollapsibleTrigger>
               <Button variant="ghost" size="sm" className="text-xs h-auto p-0 text-primary hover:bg-transparent hover:underline">{processExpanded ? t("agents.detail_hide") : t("agents.detail_load")}</Button>
             </CollapsibleTrigger>
@@ -465,7 +464,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
           <div className="px-4 py-3 border-b border-border"><h3 className="text-sm font-semibold text-foreground"><History className="w-3.5 h-3.5" />{t("agents.detail_connection_log")}</h3></div>
           <div className="max-h-64 overflow-y-auto"><div className="divide-y divide-border">{logs.map((log, i) => (
             <div key={log.id || i} className="px-4 py-2 flex items-center justify-between">
-              <div className="flex items-center gap-2.5"><Circle className={`w-1.5 h-1.5 fill-current ${log.type === "online" ? "text-emerald-500" : log.type === "offline" ? "text-red-500" : "text-primary"}`} /><span className="text-xs text-foreground">{log.user || t("agents.detail_log_system")}</span>{log.message && <span className="text-xs text-muted-foreground/70">{log.message}</span>}</div>
+              <div className="flex items-center gap-2.5"><Circle className={`w-1.5 h-1.5 fill-current ${log.type === "online" ? "text-success" : log.type === "offline" ? "text-destructive" : "text-primary"}`} /><span className="text-xs text-foreground">{log.user || t("agents.detail_log_system")}</span>{log.message && <span className="text-xs text-muted-foreground/70">{log.message}</span>}</div>
               <span className="text-(--fs-micro-sm) text-muted-foreground/70 whitespace-nowrap">{(log.created_at) ? timeAgo(String(log.created_at), t) : ""}</span>
             </div>))}</div></div>
         </Card>

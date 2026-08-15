@@ -327,9 +327,11 @@ func parseDNSResponse(pkt []byte, qtype uint16) []byte {
 				pos += txtLen
 			}
 		} else if rtype == 28 { // AAAA (IPv6)
-			if rdlength == 16 && offset+16 <= len(pkt) {
-				ip := net.IP(pkt[offset : offset+16])
-				txts = append(txts, ip.String())
+			// AAAA tunneling packs the base64 payload into 16-byte rdata
+			// chunks (ASCII text), not a real IPv6 address. Append the raw
+			// bytes as a base64 chunk so the concatenated string decodes.
+			if rdlength > 0 && offset+int(rdlength) <= len(pkt) {
+				txts = append(txts, string(pkt[offset:offset+int(rdlength)]))
 			}
 		}
 		offset += int(rdlength)

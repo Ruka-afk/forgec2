@@ -5,7 +5,10 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { PageHeader, EmptyState, StatusBadge, PageSpinner } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-indicator";
+import { PageSpinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { DataError } from "@/components/ui/data-state";
 import { toast } from "sonner";
@@ -204,11 +207,11 @@ export default function AutomationPage() {
   };
 
   const events = [
-    { type: "agent.checkin", desc: t("auto.event_agent_online"), color: "bg-emerald-500" },
-    { type: "agent.disconnect", desc: t("auto.event_agent_offline"), color: "bg-red-500" },
-    { type: "task.complete", desc: t("auto.event_task_complete"), color: "bg-blue-500" },
-    { type: "task.fail", desc: t("auto.event_task_fail"), color: "bg-rose-500" },
-    { type: "credential.found", desc: t("auto.event_credential_found"), color: "bg-purple-500" },
+    { type: "agent.checkin", desc: t("auto.event_agent_online"), color: "bg-success" },
+    { type: "agent.disconnect", desc: t("auto.event_agent_offline"), color: "bg-destructive" },
+    { type: "task.complete", desc: t("auto.event_task_complete"), color: "bg-info" },
+    { type: "task.fail", desc: t("auto.event_task_fail"), color: "bg-chart-5" },
+    { type: "credential.found", desc: t("auto.event_credential_found"), color: "bg-chart-6" },
   ];
 
   if (loading)
@@ -218,10 +221,9 @@ export default function AutomationPage() {
 
   if (error && rules.length === 0 && webhooks.length === 0) {
     return (
-      <div className="max-w-(--content-width) mx-auto pb-12">
-        <PageHeader title={t("auto.title")} subtitle={t("auto.subtitle")} />
+      <PageContainer title={t("auto.title")} subtitle={t("auto.subtitle")}>
         <DataError message={error} onRetry={() => loadData()} />
-      </div>
+      </PageContainer>
     );
   }
 
@@ -234,8 +236,7 @@ export default function AutomationPage() {
   ];
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("auto.title")} subtitle={t("auto.subtitle")} />
+    <PageContainer title={t("auto.title")} subtitle={t("auto.subtitle")}>
 
       <Tabs value={tab} onValueChange={onTabChange}>
         <TabsList className="mb-4 overflow-x-auto flex gap-1 bg-transparent p-0 h-auto">
@@ -505,6 +506,6 @@ export default function AutomationPage() {
       />
 
       {modal}
-    </div>
+    </PageContainer>
   );
 }

@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { PageHeader, Spinner } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
+import { Spinner } from "@/components/ui/spinner";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useTaskResult } from "@/lib/hooks/useTaskResult";
 import { Card } from "@/components/ui/card";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -76,8 +78,7 @@ export default function ContainerPage() {
   };
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("container.title")} subtitle={t("container.subtitle")} />
+    <PageContainer title={t("container.title")} subtitle={t("container.subtitle")}>
 
       <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
         <div className="font-semibold">{t("container.experimental_title")}</div>
@@ -86,9 +87,7 @@ export default function ContainerPage() {
 
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-cyan-100 dark:bg-cyan-900/30 rounded-xl flex items-center justify-center">
-            <Box className="w-4 h-4" />
-          </div>
+          <IconBadge icon={Box} color="info" size="xl" />
           <div>
             <div className="text-sm font-semibold text-foreground">{t("container.target_agent")}</div>
             <div className="text-xs text-muted-foreground">{t("container.target_desc")}</div>
@@ -114,9 +113,7 @@ export default function ContainerPage() {
 
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-            <Cpu className="w-4 h-4" />
-          </div>
+          <IconBadge icon={Cpu} color="primary" size="xl" />
           <div>
             <div className="text-sm font-semibold text-foreground">{t("container.operations")}</div>
             <div className="text-xs text-muted-foreground">{t("container.operations_desc")}</div>
@@ -175,6 +172,6 @@ export default function ContainerPage() {
           )}
         </Card>
       )}
-    </div>
+    </PageContainer>
   );
 }

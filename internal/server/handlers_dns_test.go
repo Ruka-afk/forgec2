@@ -25,6 +25,7 @@ func initDNSBeaconServer(t *testing.T, database *gorm.DB) *Server {
 		db:                    database,
 		cfg:                   &config.Config{},
 		sessionManager:        sm,
+		regSecrets:            crypto.NewRegSecretStore(make([]byte, 32)),
 		beaconDedupCache:      make(map[string]time.Time),
 		eventManager:          NewEventManager(database),
 		socksEngine:           newSocksRelayEngine(),
@@ -71,7 +72,7 @@ func TestDNSBeaconV2RegisterAndEncrypted(t *testing.T) {
 	s.configMu.Unlock()
 	h := s.makeBeaconHandler()
 
-	agent := newTCPTestAgent(t, "aaaaaaaa-bbbb-4333-8444-cccccccccccc").withRegKey(masterKey)
+	agent := v3TestAgent(t, s, "aaaaaaaa-bbbb-4333-8444-cccccccccccc")
 
 	task := db.Task{AgentID: agent.uuid, Type: "shell", Command: "echo ok", Status: "pending"}
 	if err := database.Create(&task).Error; err != nil {

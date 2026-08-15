@@ -42,11 +42,11 @@ export function AIComposer({
           onKeyDown={onKeyDown}
         />
         {loading ? (
-          <Button variant="destructive" size="icon" onClick={onStop} className="shrink-0 rounded-xl" aria-label={t("ai.stop_generation")}>
+          <Button variant="destructive" size="icon" onClick={onStop} className="shrink-0" aria-label={t("ai.stop_generation")}>
             <Square className="w-4 h-4" />
           </Button>
         ) : (
-          <Button size="icon" onClick={onSend} className="shrink-0 rounded-xl" aria-label={t("ai.send_message")}>
+          <Button size="icon" onClick={onSend} className="shrink-0" aria-label={t("ai.send_message")}>
             <Send className="w-4 h-4" />
           </Button>
         )}

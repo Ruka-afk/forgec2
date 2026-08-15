@@ -19,7 +19,7 @@ func TestMalleableWrapsBeaconResponse(t *testing.T) {
 	s.cfg.Malleable.Append = "</body></html>"
 	s.configMu.Unlock()
 
-	agent := newTCPTestAgent(t, "11111111-2222-4333-8444-555555555555").withRegKey(s.cfg.Server.BeaconKey)
+	agent := v3TestAgent(t, s, "11111111-2222-4333-8444-555555555555")
 
 	w := v2Post(t, s, agent.registerFrame())
 	if w.Code != http.StatusOK {
@@ -79,7 +79,7 @@ func stripTestWrapper(body string) string {
 // the raw JSON reply byte-for-byte when the profile is disabled.
 func TestMalleableDisabledLeavesBodyUntouched(t *testing.T) {
 	s, _ := v2TestServer(t)
-	agent := newTCPTestAgent(t, "22222222-3333-4333-8444-666666666666").withRegKey(s.cfg.Server.BeaconKey)
+	agent := v3TestAgent(t, s, "22222222-3333-4333-8444-666666666666")
 
 	w := v2Post(t, s, agent.registerFrame())
 	if w.Code != http.StatusOK {

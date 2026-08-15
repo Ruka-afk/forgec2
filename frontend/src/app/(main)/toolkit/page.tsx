@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { StatusBadge, PageHeader } from "@/components/UI";
+import { StatusBadge } from "@/components/ui/status-indicator";
+import { PageContainer } from "@/components/ui/page-container";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -149,18 +150,17 @@ export default function ToolkitPage() {
   ];
 
   const colorMap: Record<string, string> = {
-    cyan: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30",
-    emerald: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-    blue: "bg-blue-500/10 text-blue-400 border-blue-500/30",
-    rose: "bg-rose-500/10 text-rose-400 border-rose-500/30",
-    amber: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-    purple: "bg-purple-500/10 text-purple-400 border-purple-500/30",
-    teal: "bg-teal-500/10 text-teal-400 border-teal-500/30",
+    cyan: "bg-chart-2/10 text-chart-2 border-chart-2/30",
+    emerald: "bg-success/10 text-chart-1 border-success/30",
+    blue: "bg-info/10 text-info border-info/30",
+    rose: "bg-chart-5/10 text-chart-5 border-chart-5/30",
+    amber: "bg-warning/10 text-warning border-warning/30",
+    purple: "bg-chart-6/purple text-chart-6 border-chart-6/purple",
+    teal: "bg-chart-2/10 text-chart-2 border-chart-2/30",
   };
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-      <PageHeader title={t("toolkit.title")} subtitle={t("toolkit.subtitle")}>
+    <PageContainer title={t("toolkit.title")} subtitle={t("toolkit.subtitle")} actions={<>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">{t("toolkit.target_agent")}</span>
           <Select value={selectedAgent} onValueChange={v => setSelectedAgent(v ?? "")}>
@@ -175,13 +175,13 @@ export default function ToolkitPage() {
             </SelectContent>
           </Select>
         </div>
-      </PageHeader>
+      </>}>
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
         <div className="xl:col-span-3 space-y-4">
           <Card className="p-4">
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-amber-400 text-sm font-bold">!</span>
+              <span className="text-warning text-sm font-bold">!</span>
               <span className="text-xs font-semibold text-muted-foreground">{t("toolkit.quick_actions")}</span>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -212,7 +212,7 @@ export default function ToolkitPage() {
                 <div className="px-5 pb-4 space-y-1">
                   {cat.commands.map((c) => (
                     <Button key={c.cmd} variant="ghost" onClick={() => runAction(c.cmd)} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl justify-start text-left border border-transparent hover:border-border transition-all">
-                      <span className={`text-xs font-mono font-medium w-28 shrink-0 ${colorMap[cat.color]?.split(" ")[1] || "text-blue-600 dark:text-blue-400"}`}>{c.cmd}</span>
+                      <span className={`text-xs font-mono font-medium w-28 shrink-0 ${colorMap[cat.color]?.split(" ")[1] || "text-info"}`}>{c.cmd}</span>
                       <span className="text-xs text-muted-foreground">{c.desc}</span>
                       <span className="ml-auto text-(--fs-micro-sm) text-muted-foreground">{t("toolkit.run")}</span>
                     </Button>
@@ -256,7 +256,7 @@ export default function ToolkitPage() {
           </Card>
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }
 

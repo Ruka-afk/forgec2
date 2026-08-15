@@ -10,8 +10,7 @@ interface OSPoint { name: string; value: number; color: string }
 function OSBody({ data }: { data: OSPoint[] }) {
   const { t } = useI18n();
   const total = data.reduce((s, d) => s + d.value, 0);
-  const colors: Record<string, string> = { Windows: "#3b82f6", Linux: "#f59e0b", macOS: "#8b5cf6", darwin: "#8b5cf6" };
-  const items = data.map((d) => ({ ...d, color: colors[d.name] || d.color || "#6b7280" }));
+  const items = data.map((d) => ({ ...d, color: OS_CHART_COLORS[d.name] || d.color || "#6b7280" }));
   return (
     <div className="flex items-center gap-4">
       <div className="relative w-20 h-20 shrink-0" aria-hidden="true">

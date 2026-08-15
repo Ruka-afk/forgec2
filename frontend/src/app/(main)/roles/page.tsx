@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { EmptyState, PageHeader, PageSpinner } from "@/components/UI";
+import { EmptyState, PageSpinner } from "@/components/UI";
+import { PageContainer } from "@/components/ui/page-container";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -113,12 +114,11 @@ export default function RolesPage() {
 
   return (
     <>
-      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-        <PageHeader title={<><ShieldUser className="w-4 h-4" />{t("roles.title")}</>} subtitle={t("roles.subtitle")}>
+      <PageContainer title={<><ShieldUser className="w-4 h-4" />{t("roles.title")}</>} subtitle={t("roles.subtitle")} actions={<>
           <Button onClick={() => setShowCreate(true)}>
             <Plus className="w-4 h-4" />{t("roles.new_role")}
           </Button>
-        </PageHeader>
+        </>}>
 
         <Dialog open={showCreate} onOpenChange={setShowCreate}>
           <DialogContent>
@@ -186,7 +186,7 @@ export default function RolesPage() {
             </Card>
           ))}
         </div>
-      </div>
+      </PageContainer>
       {modal}
     </>
   );
