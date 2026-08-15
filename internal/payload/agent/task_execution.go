@@ -175,7 +175,7 @@ func downloadBytes(urlStr string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Set("User-Agent", getActiveUserAgentFromConfig())
 
 	resp, err := client.Do(req)
 	if err != nil {

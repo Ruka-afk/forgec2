@@ -889,6 +889,11 @@ func sendP2PSMBBeacon(body []byte) []byte {
 	}
 	defer conn.Close()
 
+	// Optional mutual-auth handshake (E2) before sending the envelope.
+	if !p2pClientAuth(conn) {
+		return nil
+	}
+
 	if err := binary.Write(conn, binary.BigEndian, uint32(len(body))); err != nil {
 		return nil
 	}

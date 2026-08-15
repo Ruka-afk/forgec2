@@ -17,6 +17,9 @@ import (
 // reboot (MoveFileExW with MOVEFILE_DELAY_UNTIL_REBOOT). Returns an honest
 // status string describing what actually happened.
 func selfDelete() string {
+	// Scrub dumped credential material before we go.
+	cleanupCredDumpFiles()
+
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Sprintf("self_delete: get exe path failed: %v", err)

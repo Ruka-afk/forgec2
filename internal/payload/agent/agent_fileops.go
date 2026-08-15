@@ -213,7 +213,7 @@ func downloadFromURL(urlStr, destPath string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Set("User-Agent", getActiveUserAgentFromConfig())
 
 	resp, err := client.Do(req)
 	if err != nil {

@@ -43,7 +43,7 @@ func sendScreenFrame(data []byte) {
 			return
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("User-Agent", UserAgent)
+		httpReq.Header.Set("User-Agent", getActiveUserAgentFromConfig())
 		resp, err := client.Do(httpReq)
 		if err == nil {
 			io.Copy(io.Discard, resp.Body)

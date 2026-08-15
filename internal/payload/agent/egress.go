@@ -58,7 +58,7 @@ func runEgressDetection(c2Host string, c2Ports []int) *EgressReport {
 		if err != nil {
 			continue
 		}
-		req.Header.Set("User-Agent", UserAgent)
+		req.Header.Set("User-Agent", getActiveUserAgentFromConfig())
 		resp, err := client.Do(req)
 		if err == nil {
 			resp.Body.Close()
