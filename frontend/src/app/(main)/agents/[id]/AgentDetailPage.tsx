@@ -17,6 +17,7 @@ import { useI18n } from "@/lib/i18n";
 import { useInteractStore } from "@/lib/interact-store";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { Bug } from "lucide-react";
+import { Banner } from "@/components/ui/banner";
 import { AgentStatus, AgentDetail as AgentDetailExt, AgentTaskRecord } from "@/types/agent";
 import AgentHeader from "./_components/AgentHeader";
 import AgentStatsGrid from "./_components/AgentStatsGrid";
@@ -90,6 +91,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const [sleepValue, setSleepValue] = useState(0);
   const [jitterValue, setJitterValue] = useState(0);
   const [sleepSaving, setSleepSaving] = useState(false);
+  const sleepDirtyRef = useRef(false);
 
   const [credCount, setCredCount] = useState<number | null>(null);
   const [mimikatzReady, setMimikatzReady] = useState(false);
@@ -172,7 +174,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   }, []);
 
   useEffect(() => {
-    if (!data?.agent) return;
+    if (!data?.agent || sleepDirtyRef.current) return;
     setSleepValue(data.agent.current_interval ?? 0);
     setJitterValue(data.agent.current_jitter ?? 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -181,8 +183,9 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const agent = data?.agent || ({} as AgentDetailModel);
   const tasks: TaskEntry[] = useMemo(() => data?.tasks || [], [data?.tasks]);
   const rawTags = agent.tags || "";
-  const tagsList = rawTags ? rawTags.split(",").map((tag) => tag.trim()).filter(Boolean) : [];
+  const tagsList = useMemo(() => (rawTags ? rawTags.split(",").map((tag) => tag.trim()).filter(Boolean) : []), [rawTags]);
   const note = agent.note || "";
+  const handleStartEditNotes = useCallback(() => startEditNotes(rawTags, note), [startEditNotes, rawTags, note]);
   const childAgents: AgentDetailModel[] = data?.children || [];
   const logs: LogEntry[] = data?.logs || [];
   const totalTasks = data?.total_tasks ?? tasks.length;
@@ -232,6 +235,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     try {
       await api.postJson(paths.agents.setSleep(id), { interval: Number(sleepValue), jitter: Number(jitterValue) });
       toast.success(t("agents.sleep_updated").replace("{name}", agent?.hostname || ""));
+      sleepDirtyRef.current = false;
       loadDetail();
     } catch {
       toast.error(t("agents.sleep_failed"));
@@ -343,6 +347,11 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
 
   return (
     <div className="relative max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      {loadError && (
+        <Banner tone="destructive" className="mb-3" action={<Button variant="ghost" size="sm" onClick={() => loadDetail()}>{t("agents.detail_retry")}</Button>}>
+          {t("agents.detail_load_error_msg")}
+        </Banner>
+      )}
       <AgentStatusBar agent={agent as Partial<AgentDetailExt>} agentId={id} status={status} />
       <AgentHeader
         agent={agent as Partial<AgentDetailExt>}
@@ -402,8 +411,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             timeSinceLastSeen={data?.time_since_last_seen}
             sleepValue={sleepValue}
             jitterValue={jitterValue}
-            onSleepChange={setSleepValue}
-            onJitterChange={setJitterValue}
+            onSleepChange={(v) => { sleepDirtyRef.current = true; setSleepValue(v); }}
+            onJitterChange={(v) => { sleepDirtyRef.current = true; setJitterValue(v); }}
             onApplySleep={handleApplySleep}
             sleepSaving={sleepSaving}
             status={status}
@@ -446,7 +455,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             notes={editNotes}
             onNotesChange={setEditNotes}
             saving={savingNote}
-            onStartEdit={() => startEditNotes(rawTags, note)}
+            onStartEdit={handleStartEditNotes}
             onCancelEdit={cancelEditNotes}
             onSave={handleSaveNote}
             displayTags={tagsList}

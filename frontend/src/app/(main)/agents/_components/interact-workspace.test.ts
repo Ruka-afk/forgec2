@@ -1,47 +1,20 @@
 import { describe, expect, it } from "vitest";
-import type { Beacon } from "./types";
 import {
   clampDockHeight,
   DOCK_HEIGHT_DEFAULT,
   DOCK_HEIGHT_MAX,
   DOCK_HEIGHT_MIN,
   isEditableTarget,
-  nextSessionId,
   readInteractPrefs,
-  sessionIdsFromRows,
   tabFromDigit,
   writeInteractPrefs,
 } from "./interact-workspace";
-import type { FlatBeaconRow } from "./groupBeaconsByHost";
-
-const beacon = (id: string): Beacon => ({ id, hostname: id, status: "online" });
 
 describe("clampDockHeight", () => {
   it("clamps to the operator range", () => {
     expect(clampDockHeight(50)).toBe(DOCK_HEIGHT_MIN);
     expect(clampDockHeight(900)).toBe(DOCK_HEIGHT_MAX);
     expect(clampDockHeight(Number.NaN)).toBe(DOCK_HEIGHT_DEFAULT);
-  });
-});
-
-describe("sessionIdsFromRows", () => {
-  it("dedupes host primary with expanded children", () => {
-    const rows: FlatBeaconRow[] = [
-      { kind: "host", group: { key: "h:box", hostname: "box", os: "windows", ip: "1.1.1.1", status: "online", last_seen: "", sessions: [beacon("a"), beacon("b")] } },
-      { kind: "session", beacon: beacon("a"), child: true },
-      { kind: "session", beacon: beacon("b"), child: true },
-      { kind: "session", beacon: beacon("c"), child: false },
-    ];
-    expect(sessionIdsFromRows(rows)).toEqual(["a", "b", "c"]);
-  });
-});
-
-describe("nextSessionId", () => {
-  it("wraps around the visible session list", () => {
-    expect(nextSessionId(["a", "b", "c"], "c", 1)).toBe("a");
-    expect(nextSessionId(["a", "b", "c"], "a", -1)).toBe("c");
-    expect(nextSessionId(["a", "b"], null, 1)).toBe("a");
-    expect(nextSessionId([], "x", 1)).toBeNull();
   });
 });
 

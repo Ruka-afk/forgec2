@@ -53,24 +53,3 @@ export function groupBeaconsByHost(beacons: Beacon[]): HostGroup[] {
     };
   });
 }
-
-export type FlatBeaconRow =
-  | { kind: "host"; group: HostGroup }
-  | { kind: "session"; beacon: Beacon; child: boolean };
-
-export function flattenHostRows(groups: HostGroup[], expanded: ReadonlySet<string>): FlatBeaconRow[] {
-  const rows: FlatBeaconRow[] = [];
-  for (const group of groups) {
-    if (group.sessions.length === 1) {
-      rows.push({ kind: "session", beacon: group.sessions[0], child: false });
-      continue;
-    }
-    rows.push({ kind: "host", group });
-    if (expanded.has(group.key)) {
-      for (const beacon of group.sessions) {
-        rows.push({ kind: "session", beacon, child: true });
-      }
-    }
-  }
-  return rows;
-}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flattenHostRows, groupBeaconsByHost, hostKey } from "./groupBeaconsByHost";
+import { groupBeaconsByHost, hostKey } from "./groupBeaconsByHost";
 import type { Beacon } from "./types";
 
 function beacon(partial: Partial<Beacon>): Beacon {
@@ -32,22 +32,5 @@ describe("groupBeaconsByHost", () => {
     expect(groups).toHaveLength(1);
     expect(groups[0].sessions.map((s) => s.id)).toEqual(["2", "1"]);
     expect(groups[0].status).toBe("online");
-  });
-});
-
-describe("flattenHostRows", () => {
-  it("emits a plain session row when the host has one beacon", () => {
-    const groups = groupBeaconsByHost([beacon({ id: "1" })]);
-    const rows = flattenHostRows(groups, new Set());
-    expect(rows).toEqual([{ kind: "session", beacon: expect.objectContaining({ id: "1" }), child: false }]);
-  });
-
-  it("collapses multi-session hosts until expanded", () => {
-    const groups = groupBeaconsByHost([
-      beacon({ id: "1", hostname: "box" }),
-      beacon({ id: "2", hostname: "box" }),
-    ]);
-    expect(flattenHostRows(groups, new Set())).toHaveLength(1);
-    expect(flattenHostRows(groups, new Set([groups[0].key]))).toHaveLength(3);
   });
 });

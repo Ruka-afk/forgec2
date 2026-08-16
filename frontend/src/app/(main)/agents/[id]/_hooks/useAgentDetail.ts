@@ -26,6 +26,7 @@ export function useAgentDetail<T>(agentId: string) {
           { signal },
         );
         lastReloadRef.current = Date.now();
+        setLoadError(false);
         // Keep the previous snapshot's identity when nothing changed so
         // memoized children don't re-render on every 30s correction pass.
         setData((prev) =>
@@ -33,7 +34,9 @@ export function useAgentDetail<T>(agentId: string) {
         );
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
-          setData(null);
+          // Keep the previous snapshot on transient errors so a blip in the
+          // 30s correction pass doesn't blank the whole detail page; the
+          // first load failure (no data yet) still lands on the error view.
           setLoadError(true);
         }
       } finally {

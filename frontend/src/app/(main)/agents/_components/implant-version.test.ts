@@ -1,19 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { destNeedsKnownVersion, hostImplantVersions, implantBlocksDest, knownImplantVersion } from "./implant-version";
+import { destNeedsKnownVersion, implantBlocksDest, knownImplantVersion } from "./implant-version";
 
 describe("knownImplantVersion", () => {
   it("treats blank values as unknown", () => {
     expect(knownImplantVersion("2.4.1")).toBe("2.4.1");
     expect(knownImplantVersion("  ")).toBe("");
     expect(knownImplantVersion(undefined)).toBe("");
-  });
-});
-
-describe("hostImplantVersions", () => {
-  it("dedupes reported versions and drops blanks", () => {
-    expect(hostImplantVersions([{ version: "2.4.1" }, { version: "2.4.1" }, { version: "" }])).toBe("2.4.1");
-    expect(hostImplantVersions([{ version: "1.0" }, { version: "2.0" }])).toBe("1.0, 2.0");
-    expect(hostImplantVersions([{ version: "" }, {}])).toBe("");
   });
 });
 

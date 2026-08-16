@@ -115,31 +115,23 @@ export function useAgentModals() {
   const closeCmdModal = useCallback(() => dispatch({ type: "CLOSE_CMD_MODAL" }), []);
   const setCmdType = useCallback((payload: string) => dispatch({ type: "SET_CMD_TYPE", payload }), []);
   const setCmdText = useCallback((payload: string) => dispatch({ type: "SET_CMD_TEXT", payload }), []);
-  const openQuickSleep = useCallback(
-    (e: React.MouseEvent, agent: Beacon) => {
-      e.stopPropagation();
-      dispatch({
-        type: "OPEN_QUICK_SLEEP",
-        payload: {
-          id: agent.id || "",
-          hostname: agent.hostname || "",
-          interval: agent.current_interval || 30,
-          jitter: agent.current_jitter || 20,
-        },
-      });
-    },
-    [],
-  );
+  const openQuickSleep = useCallback((agent: Beacon) => {
+    dispatch({
+      type: "OPEN_QUICK_SLEEP",
+      payload: {
+        id: agent.id || "",
+        hostname: agent.hostname || "",
+        interval: agent.current_interval || 30,
+        jitter: agent.current_jitter || 20,
+      },
+    });
+  }, []);
   const closeQuickSleep = useCallback(() => dispatch({ type: "CLOSE_QUICK_SLEEP" }), []);
   const setSleepInterval = useCallback((payload: string) => dispatch({ type: "SET_SLEEP_INTERVAL", payload }), []);
   const setSleepJitter = useCallback((payload: string) => dispatch({ type: "SET_SLEEP_JITTER", payload }), []);
-  const openNotesEdit = useCallback(
-    (e: React.MouseEvent, agent: Beacon) => {
-      e.stopPropagation();
-      dispatch({ type: "OPEN_NOTES_EDIT", payload: { id: agent.id || "", text: agent.notes || "" } });
-    },
-    [],
-  );
+  const openNotesEdit = useCallback((agent: Beacon) => {
+    dispatch({ type: "OPEN_NOTES_EDIT", payload: { id: agent.id || "", text: agent.notes || "" } });
+  }, []);
   const closeNotesEdit = useCallback(() => dispatch({ type: "CLOSE_NOTES_EDIT" }), []);
   const setNotesText = useCallback((payload: string) => dispatch({ type: "SET_NOTES_TEXT", payload }), []);
   const setScreenshotConfirm = useCallback((payload: boolean) => dispatch({ type: "SET_SCREENSHOT_CONFIRM", payload }), []);

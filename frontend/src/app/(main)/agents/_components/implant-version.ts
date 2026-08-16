@@ -3,11 +3,6 @@ export function knownImplantVersion(version?: string | null): string {
   return (version || "").trim();
 }
 
-export function hostImplantVersions(sessions: Array<{ version?: string | null }>): string {
-  const uniq = [...new Set(sessions.map((s) => knownImplantVersion(s.version)).filter(Boolean))];
-  return uniq.join(", ");
-}
-
 /** Scripted / experimental dests are newer than a blank version can promise. */
 export function destNeedsKnownVersion(quality?: string | null): boolean {
   return quality === "scripted" || quality === "experimental";

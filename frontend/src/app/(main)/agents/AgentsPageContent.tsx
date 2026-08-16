@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useWS } from "@/lib/wsContext";
 import { downloadText } from "@/lib/download";
 import Link from "next/link";
@@ -21,6 +22,7 @@ import { BulkCommandModal } from "./_components/BulkCommandModal";
 import { QuickSleepModal } from "./_components/QuickSleepModal";
 import { NotesEditModal } from "./_components/NotesEditModal";
 import { BatchSleepModal } from "./_components/BatchSleepModal";
+import { AgentContextMenu } from "./_components/AgentContextMenu";
 import { useAgentFilters } from "./_components/useAgentFilters";
 import { useAgentSelection } from "./_components/useAgentSelection";
 import { useAgentData } from "./_components/useAgentData";
@@ -28,7 +30,10 @@ import { useAgentModals } from "./_components/useAgentModals";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import AgentDetailPage from "./[id]/AgentDetailPage";
 import type { Beacon, BulkResult } from "./_components/types";
+import type { AgentMenuAction, AgentMenuPoint } from "./_components/agent-menu-actions";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
+import { useInteractStore } from "@/lib/interact-store";
+import { toast } from "sonner";
 
 export type { Beacon };
 import { Checkbox } from "@/components/ui/checkbox";
@@ -40,6 +45,7 @@ import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, Download, Grip, Histor
 
 export default function AgentsPageContent() {
   const { t } = useI18n();
+  const router = useRouter();
   const { subscribe } = useWS();
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -56,13 +62,14 @@ export default function AgentsPageContent() {
   const {
     confirm, setConfirm, cmdModalOpen, cmdType, cmdText, setCmdType, setCmdText,
     closeCmdModal, openCmdModal,
-    quickSleepAgent, closeQuickSleep, sleepInterval, sleepJitter, setSleepInterval, setSleepJitter,
+    quickSleepAgent, closeQuickSleep, openQuickSleep, sleepInterval, sleepJitter, setSleepInterval, setSleepJitter,
     editingNotesId, closeNotesEdit, openNotesEdit, editNotesText, setNotesText,
     screenshotConfirmOpen, setScreenshotConfirm,
     batchSleepOpen, closeBatchSleep, openBatchSleep, batchSleepInterval, batchSleepJitter, setBatchSleepInterval, setBatchSleepJitter,
   } = useAgentModals();
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [menuPoint, setMenuPoint] = useState<AgentMenuPoint | null>(null);
   const handleCloseDetail = useCallback(() => setSelectedAgentId(null), []);
   const handleSelectAgent = useCallback((id: string) => setSelectedAgentId(id), []);
 
@@ -265,6 +272,76 @@ export default function AgentsPageContent() {
     }
     setConfirm(null);
   };
+
+  const uninstallAgent = async (id: string) => {
+    try {
+      await api.postJson(paths.agents.uninstall(id), {});
+      setActionMsg(t("agents.detail_uninstall_sent"));
+      loadBeacons();
+    } catch {
+      setActionMsg(t("agents.detail_uninstall_failed"));
+    }
+    setConfirm(null);
+  };
+
+  const handleMenuAction = useCallback((action: AgentMenuAction, point: AgentMenuPoint) => {
+    const id = point.beacon.id || "";
+    switch (action) {
+      case "interact":
+      case "socks":
+        useInteractStore.getState().open(id, { beacon: point.beacon });
+        break;
+      case "details":
+        setSelectedAgentId(id);
+        break;
+      case "screenshot":
+        api.post(paths.agents.screenshotTask(id))
+          .then((d) => {
+            const taskId = Number((d as { task_id?: number }).task_id);
+            const queued = Number.isFinite(taskId) && taskId > 0;
+            if (queued) useInteractStore.getState().revealTask(id, taskId);
+            toast.success(t("agents.detail_action_queued", { label: t("agents.screenshot") }));
+          })
+          .catch(() => toast.error(t("agents.screenshot_failed")));
+        break;
+      case "sleep":
+        openQuickSleep(point.beacon);
+        break;
+      case "notes":
+        openNotesEdit(point.beacon);
+        break;
+      case "files":
+        router.push(`/agents/${id}/files`);
+        break;
+      case "tokens":
+        router.push(`/agents/${id}/token`);
+        break;
+      case "screen":
+        router.push(`/agents/${id}/screen`);
+        break;
+      case "copy_id":
+        navigator.clipboard.writeText(id)
+          .then(() => toast.success(t("agents.detail_copied")))
+          .catch(() => toast.error(t("agents.detail_copy_failed")));
+        break;
+      case "kill":
+        setConfirm({ type: "kill", id, hostname: point.beacon.hostname || id });
+        break;
+      case "uninstall":
+        setConfirm({ type: "uninstall", id, hostname: point.beacon.hostname || id });
+        break;
+      case "delete":
+        setConfirm({ type: "delete", id, hostname: point.beacon.hostname || id });
+        break;
+    }
+    setMenuPoint(null);
+  }, [t, openQuickSleep, openNotesEdit, router, setConfirm]);
+
+  const handleQuickNav = useCallback((beacon: Beacon, view: "shell" | "files" | "screen") => {
+    const id = beacon.id || "";
+    if (!id) return;
+    router.push(`/agents/${id}/${view}`);
+  }, [router]);
 
   const bulkKill = async () => {
     const ids = Array.from(selected);
@@ -537,8 +614,9 @@ export default function AgentsPageContent() {
                 onToggleSelect={toggleSelect}
                 onInteract={handleSelectAgent}
                 onDetails={handleSelectAgent}
-                onMenu={() => {}}
-                onEditNotes={(b) => openNotesEdit({} as React.MouseEvent, b)}
+                onMenu={setMenuPoint}
+                onQuickNav={handleQuickNav}
+                onEditNotes={openNotesEdit}
                 taskCount={taskCountMap[beacon.id || ""] ?? 0}
                 lockUser={agentLocks[beacon.id || ""] || null}
                 visibleCols={visibleCols}
@@ -589,7 +667,7 @@ export default function AgentsPageContent() {
             taskCountMap={taskCountMap}
             onInteract={handleSelectAgent}
             onDetails={handleSelectAgent}
-            onMenu={() => {}}
+            onMenu={setMenuPoint}
           />
           <Pagination page={page} pageSize={50} total={total} onPageChange={setPage} />
         </>
@@ -613,6 +691,16 @@ export default function AgentsPageContent() {
         danger
         requireText={confirm?.hostname || ""}
         onConfirm={() => confirm?.id && deleteAgent(confirm.id)}
+        onCancel={() => setConfirm(null)}
+      />
+      <ConfirmModal
+        open={confirm?.type === "uninstall"}
+        title={t("agents.uninstall_agent")}
+        message={t("agents.uninstall_msg").replace("{name}", confirm?.hostname || confirm?.id || "")}
+        confirmText={t("agents.uninstall")}
+        danger
+        requireText={confirm?.hostname || ""}
+        onConfirm={() => confirm?.id && uninstallAgent(confirm.id)}
         onCancel={() => setConfirm(null)}
       />
       <ConfirmModal
@@ -699,9 +787,15 @@ export default function AgentsPageContent() {
 
       <Sheet open={!!selectedAgentId} onOpenChange={(open) => { if (!open) setSelectedAgentId(null); }}>
         <SheetContent side="right" className="w-full sm:w-[800px] lg:w-[1000px] sm:max-w-none p-0 overflow-auto" showCloseButton={false}>
-          {selectedAgentId && <AgentDetailPage agentId={selectedAgentId} onClose={handleCloseDetail} />}
+          {selectedAgentId && <AgentDetailPage key={selectedAgentId} agentId={selectedAgentId} onClose={handleCloseDetail} />}
         </SheetContent>
       </Sheet>
+
+      <AgentContextMenu
+        point={menuPoint}
+        onClose={() => setMenuPoint(null)}
+        onAction={(action) => { if (menuPoint) handleMenuAction(action, menuPoint); }}
+      />
     </PageContainer>
   );
 }

@@ -1,5 +1,3 @@
-import type { FlatBeaconRow } from "./groupBeaconsByHost";
-
 export const INTERACT_TABS = ["shell", "files", "tasks"] as const;
 export type InteractTab = (typeof INTERACT_TABS)[number];
 
@@ -19,23 +17,6 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   const tag = target.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
   return Boolean(target.closest(".xterm, [role='textbox']"));
-}
-
-export function sessionIdsFromRows(rows: FlatBeaconRow[]): string[] {
-  const ids: string[] = [];
-  for (const row of rows) {
-    const id = row.kind === "host" ? row.group.sessions[0]?.id : row.beacon.id;
-    if (id && !ids.includes(id)) ids.push(id);
-  }
-  return ids;
-}
-
-export function nextSessionId(ids: string[], current: string | null, delta: number): string | null {
-  if (ids.length === 0) return null;
-  const idx = current ? ids.indexOf(current) : -1;
-  if (idx < 0) return delta >= 0 ? ids[0] : ids[ids.length - 1];
-  const next = (idx + delta + ids.length) % ids.length;
-  return ids[next];
 }
 
 export interface InteractPrefs {

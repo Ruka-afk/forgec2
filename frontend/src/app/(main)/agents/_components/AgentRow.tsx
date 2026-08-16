@@ -19,15 +19,12 @@ import { copyToClipboard } from "./types";
 interface AgentRowProps {
   beacon: Beacon;
   isSelected: boolean;
-  isActive?: boolean;
-  isFocused?: boolean;
   onToggleSelect: (id: string, checked: boolean) => void;
   onInteract: (id: string) => void;
   onDetails: (id: string) => void;
   onMenu: (point: AgentMenuPoint) => void;
   onEditNotes?: (beacon: Beacon) => void;
   onQuickNav?: (beacon: Beacon, view: "shell" | "files" | "screen") => void;
-  child?: boolean;
   taskCount: number;
   lockUser: string | null;
   visibleCols: Record<string, boolean>;
@@ -36,15 +33,12 @@ interface AgentRowProps {
 export const AgentRow = memo(function AgentRow({
   beacon,
   isSelected,
-  isActive,
-  isFocused,
   onToggleSelect,
   onInteract,
   onDetails,
   onMenu,
   onEditNotes,
   onQuickNav,
-  child = false,
   taskCount,
   lockUser,
   visibleCols,
@@ -83,7 +77,7 @@ export const AgentRow = memo(function AgentRow({
           onInteract(id);
         }
       }}
-      className={`group cursor-default hover:bg-secondary/50 ${borderLeft} ${isActive ? "bg-primary/10" : ""} ${isFocused && !isActive ? "bg-secondary/70" : ""}`}
+      className={`group cursor-default hover:bg-secondary/50 ${borderLeft}`}
     >
       <TableCell className="py-1 px-2">
         <Checkbox aria-label={t("common.select_item")} name={`select-${id}`}
@@ -92,7 +86,7 @@ export const AgentRow = memo(function AgentRow({
           onClick={(e) => e.stopPropagation()}
         />
       </TableCell>
-      <TableCell className={`py-1 px-2 ${child ? "pl-7" : ""}`}>
+      <TableCell className="py-1 px-2">
         <div className="flex items-center gap-1 min-w-0">
           <div className="min-w-0">
             <Button
@@ -101,7 +95,7 @@ export const AgentRow = memo(function AgentRow({
               onClick={(e) => { e.stopPropagation(); onInteract(id); }}
               className="font-mono text-xs text-primary hover:underline text-left p-0 h-auto justify-start"
             >
-              {child ? (username !== "-" ? username : hostname) : hostname}
+              {hostname}
             </Button>
             <Button
               variant="ghost"
