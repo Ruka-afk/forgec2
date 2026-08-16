@@ -41,6 +41,7 @@ type binaryGenForm struct {
 	DomainFront     string `form:"domain_front"`
 	Obfuscate       string `form:"obfuscate"`
 	Evasion         string `form:"evasion"`
+	GhostMode       string `form:"ghost_mode"`
 	WorkingStart    string `form:"working_start"`
 	WorkingEnd      string `form:"working_end"`
 	WorkingTZ       string `form:"working_tz"`
@@ -204,6 +205,7 @@ func (s *Server) buildImplantConfig(form *binaryGenForm) (payload.ImplantConfig,
 		DomainFront:     form.DomainFront,
 		Obfuscate:       form.Obfuscate == "true" || form.Obfuscate == "1",
 		Evasion:         form.Evasion == "true" || form.Evasion == "1",
+		GhostMode:       form.GhostMode == "true" || form.GhostMode == "1",
 		WorkingStart:    form.WorkingStart,
 		WorkingEnd:      form.WorkingEnd,
 		WorkingTZ:       form.WorkingTZ,

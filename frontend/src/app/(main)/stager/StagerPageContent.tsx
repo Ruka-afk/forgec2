@@ -140,14 +140,14 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
     <PageContainer embedded={embedded} title={!embedded ? t("stager.title") : undefined} subtitle={!embedded ? t("stager.subtitle") : undefined}>
 
       {message && (
-        <div className="px-4 py-2 bg-primary/10 border border-primary/20 rounded-xl text-sm text-primary animate-fade-in">
+        <div className="px-4 py-2 bg-primary/10 border border-primary/20 rounded-lg text-sm text-primary animate-fade-in">
           {message}
           <Button variant="ghost" size="icon-sm" onClick={() => setMessage("")} className="ml-2 text-muted-foreground hover:text-foreground" aria-label={t("common.dismiss")}>&times;</Button>
         </div>
       )}
 
       {createdToken && (
-        <div className="p-4 bg-success/15 border border-success/30 rounded-xl space-y-2">
+        <div className="p-4 bg-success/15 border border-success/30 rounded-lg space-y-2">
           <div className="text-sm font-semibold text-success">{t("stager.token_created")}</div>
           <div className="text-xs space-y-1">
             <div><span className="font-medium">{t("stager.stager_url")}</span> <code className="text-primary bg-secondary/80 px-1 rounded">{createdToken.stager_url}</code></div>

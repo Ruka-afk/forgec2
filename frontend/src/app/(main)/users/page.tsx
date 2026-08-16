@@ -356,7 +356,7 @@ export default function UsersPage() {
                   {role === "admin" && (
                     <TableCell className="py-3 px-4 sm:py-3.5 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleToggle(uid)} disabled={actionLoading === uid + "_toggle"} className={`${isActive ? "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30" : "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"}`} title={isActive ? t("users.disable") : t("users.enable")} aria-label={isActive ? t("users.disable") : t("users.enable")}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => handleToggle(uid)} disabled={actionLoading === uid + "_toggle"} className={`${isActive ? "text-warning dark:text-warning hover:bg-amber-50 dark:hover:bg-warning/30" : "text-success dark:text-success hover:bg-emerald-50 dark:hover:bg-success/30"}`} title={isActive ? t("users.disable") : t("users.enable")} aria-label={isActive ? t("users.disable") : t("users.enable")}>
                           {isActive ? <Ban className="w-4 h-4" /> : <Check className="w-4 h-4" />}
                         </Button>
                         <Button variant="ghost" size="icon-sm" onClick={() => { setEditUser(u); setForm({ username: name, password: "", role: urole }); setShowEdit(true); }} className="text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/30" title={t("common.edit")} aria-label={t("common.edit")}>
@@ -368,7 +368,7 @@ export default function UsersPage() {
                         <Button variant="ghost" size="icon-sm" onClick={() => openSessions(u)} className="text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/30" title={t("users.sessions")} aria-label={t("users.sessions")}>
                           <Laptop className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleForceLogout(uid)} className="text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30" title={t("users.force_logout")} aria-label={t("users.force_logout")}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => handleForceLogout(uid)} className="text-warning dark:text-warning hover:bg-amber-50 dark:hover:bg-warning/30" title={t("users.force_logout")} aria-label={t("users.force_logout")}>
                           <LogOut className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="icon-sm" onClick={() => handleKick(uid)} className="text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30" title={t("users.kick_user")} aria-label={t("users.kick_user")}>
@@ -511,7 +511,7 @@ export default function UsersPage() {
             <ScrollArea className="max-h-80">
             <div className="space-y-2">
               {sessions.map((s) => (
-                <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border bg-card/60">
+                <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border bg-card/60">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="shrink-0 w-9 h-9 rounded-lg bg-secondary/70 flex items-center justify-center">
                       <Laptop className="w-4 h-4 text-muted-foreground" />

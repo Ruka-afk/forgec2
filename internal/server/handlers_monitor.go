@@ -570,7 +570,7 @@ func (s *Server) handleScreenMonitorPage(c *gin.Context) {
 		return
 	}
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":     "ForgeC2 - Screen Monitoring",
 		"Agent":     agent,

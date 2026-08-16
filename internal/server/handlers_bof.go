@@ -13,7 +13,7 @@ import (
 )
 
 func (s *Server) handleBOFPage(c *gin.Context) {
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 
 	var bofs []db.BOFFile
 	if err := s.db.Order("created_at desc").Limit(500).Find(&bofs).Error; err != nil {

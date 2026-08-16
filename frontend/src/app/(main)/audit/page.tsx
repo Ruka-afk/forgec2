@@ -171,7 +171,7 @@ export default function AuditPage() {
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("audit.total_records")}</div>
               <div className="mt-2 text-2xl font-bold">{total}</div>
             </div>
-            <div className="w-12 h-12 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center">
               <FileText className="w-4 h-4" />
             </div>
           </div>

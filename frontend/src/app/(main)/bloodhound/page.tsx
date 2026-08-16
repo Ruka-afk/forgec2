@@ -147,7 +147,7 @@ export default function BloodHoundPage() {
 
       <Card className="px-4 sm:px-5 mb-6 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${binaryStatus.uploaded ? "bg-success/15" : "bg-warning/15"}`}>
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${binaryStatus.uploaded ? "bg-success/15" : "bg-warning/15"}`}>
             {binaryStatus.uploaded ? <CheckCircle className="w-5 h-5 text-success" /> : <CircleAlert className="w-5 h-5 text-warning" />}
           </div>
           <div>
@@ -162,7 +162,7 @@ export default function BloodHoundPage() {
         <div className="flex items-center gap-3">
           <Label className="relative cursor-pointer">
             <Input aria-label={t("bloodhound.upload_exe")} name="input-0" type="file" accept=".exe" onChange={handleUpload} className="sr-only" />
-            <span className="inline-flex shrink-0 items-center justify-center rounded-xl bg-primary px-2.5 py-1.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/80 disabled:pointer-events-none disabled:opacity-50 gap-1.5 cursor-pointer">
+            <span className="inline-flex shrink-0 items-center justify-center rounded-lg bg-primary px-2.5 py-1.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/80 disabled:pointer-events-none disabled:opacity-50 gap-1.5 cursor-pointer">
               {uploading ? <Spinner size="xs" /> : <Upload className="w-4 h-4" />}
               <span>{uploading ? t("bloodhound.uploading") : t("bloodhound.upload_btn")}</span>
             </span>
@@ -228,7 +228,7 @@ export default function BloodHoundPage() {
       <Card className="px-0 mb-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-secondary rounded-xl flex items-center justify-center">
+            <div className="w-8 h-8 bg-secondary rounded-lg flex items-center justify-center">
               <Table2 className="w-4 h-4" />
             </div>
             <h2 className="text-sm font-semibold text-foreground">{t("bloodhound.collection_results")}</h2>
@@ -283,12 +283,12 @@ export default function BloodHoundPage() {
                       <TableCell className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <Button variant="ghost" size="icon-xs" onClick={() => handleDownload(id)}
-                            className="bg-success/15 hover:bg-success/25 text-success rounded-xl transition-colors"
+                            className="bg-success/15 hover:bg-success/25 text-success rounded-lg transition-colors"
                             aria-label={t("bloodhound.download_report")}>
                             <Download className="w-4 h-4" />
                           </Button>
                           <Button variant="ghost" size="icon-xs" onClick={() => handleDelete(id)}
-                            className="bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-xl transition-colors"
+                            className="bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg transition-colors"
                             aria-label={t("bloodhound.a11y_delete_report")}>
                             <Trash2 className="w-4 h-4" />
                           </Button>

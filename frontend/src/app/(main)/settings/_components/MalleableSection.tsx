@@ -21,7 +21,7 @@ export default function MalleableSection({
     <Card className="overflow-hidden">
       <div className="bg-chart-6/violet border-b border-chart-6/violet px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Shield className="w-4 h-4" /></div>
+          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Shield className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-foreground">{t("settings.malleable.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.malleable.subtitle")}</p></div>
         </div>
       </div>
@@ -56,7 +56,7 @@ export default function MalleableSection({
               <Textarea rows={2} aria-label={t("settings.malleable.append")} value={form.append} onChange={(e) => setForm({ ...form, append: e.target.value })} placeholder="--></body></html>"  />
             </div>
           </div>
-          <div className="p-3 bg-warning/10 rounded-xl border border-warning/20 text-xs text-warning-foreground">
+          <div className="p-3 bg-warning/10 rounded-lg border border-warning/20 text-xs text-warning-foreground">
             <AlertTriangle className="w-4 h-4" />
             {t("settings.malleable.warning")}
           </div>

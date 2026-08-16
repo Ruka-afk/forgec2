@@ -57,7 +57,11 @@ func utlsDialContext(ctx context.Context, network, addr string) (net.Conn, error
 	}
 
 	cfg := &utls.Config{
-		InsecureSkipVerify: SkipTLSVerify,
+		// When a certificate pin is configured it is the sole trust anchor, so
+		// skip the default chain/CN validation and let verifyPinnedCert enforce
+		// it. Without this, a self-signed (or privately-CA) pinned C2 cert fails
+		// chain validation before the pin is ever consulted, breaking pinning.
+		InsecureSkipVerify: SkipTLSVerify || len(pinnedCertSHA256) > 0,
 		ServerName:         serverName,
 	}
 	if mtlsCertLoaded {
@@ -76,6 +80,14 @@ func utlsDialContext(ctx context.Context, network, addr string) (net.Conn, error
 		return nil, err
 	}
 	return uconn, nil
+}
+
+// dialUTLSTCP dials a raw TCP connection and performs the utls TLS handshake,
+// mirroring utlsDialContext but for the length-prefixed TCP/tls:// transport
+// (which cannot use an http.Transport). It keeps the tls:// scheme on the
+// realistic-ClientHello utls stack instead of leaking the Go-stdlib JA3.
+func dialUTLSTCP(network, addr string) (net.Conn, error) {
+	return utlsDialContext(context.Background(), network, addr)
 }
 
 func newUTLSTransport() *http.Transport {
@@ -101,7 +113,11 @@ func (c *utlsCreds) ClientHandshake(ctx context.Context, authority string, rawCo
 		serverName = DomainFront
 	}
 	cfg := &utls.Config{
-		InsecureSkipVerify: SkipTLSVerify,
+		// When a certificate pin is configured it is the sole trust anchor, so
+		// skip the default chain/CN validation and let verifyPinnedCert enforce
+		// it. Without this, a self-signed (or privately-CA) pinned C2 cert fails
+		// chain validation before the pin is ever consulted, breaking pinning.
+		InsecureSkipVerify: SkipTLSVerify || len(pinnedCertSHA256) > 0,
 		ServerName:         serverName,
 	}
 	if mtlsCertLoaded {

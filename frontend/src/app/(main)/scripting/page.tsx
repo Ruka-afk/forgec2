@@ -66,7 +66,7 @@ export default function ScriptingPage() {
   const loadData = useCallback(async () => {
     try {
       const agentData = await api.get(paths.agents.list());
-      setAgents((agentData.agents || []) as Agent[]);
+      setAgents((agentData.agents || (Array.isArray(agentData) ? agentData : [])) as Agent[]);
     } catch {
       setAgents([]);
       toast.error(t("scripting.toast.load_failed"));

@@ -71,7 +71,7 @@ export default function SettingsPage() {
     totpEnablePassword, setTotpEnablePassword,
     totpDisablePassword, setTotpDisablePassword, totpDisableCode, setTotpDisableCode,
     handleGenerateTOTP, handleEnableTOTP, handleDisableTOTP,
-  } = useTOTP(t, saving, setSaving, activeSection);
+  } = useTOTP(t, setSaving, activeSection);
 
   const withSaveTimeout = useCallback(<T extends unknown[]>(fn: (...args: T) => Promise<void>) => {
     return async (...args: T) => {
@@ -234,7 +234,7 @@ export default function SettingsPage() {
               <TabsList className="flex-col bg-transparent p-0 gap-1 w-full h-auto">
                 {sections.map((s) => (
                   <TabsTrigger key={s.key} value={s.key}
-                    className="flex items-center gap-2 w-full justify-start px-3 py-2 text-xs rounded-xl transition-colors data-[selected]:bg-primary/10 data-[selected]:text-primary hover:bg-primary/5 text-muted-foreground">
+                    className="flex items-center gap-2 w-full justify-start px-3 py-2 text-xs rounded-lg transition-colors data-[selected]:bg-primary/10 data-[selected]:text-primary hover:bg-primary/5 text-muted-foreground">
                     {s.icon}{s.label}
                   </TabsTrigger>
                 ))}
@@ -246,7 +246,7 @@ export default function SettingsPage() {
             <TabsList className="lg:hidden mb-4 overflow-x-auto flex gap-2 pb-2 bg-transparent p-0 h-auto">
               {sections.map((s) => (
                 <TabsTrigger key={s.key} value={s.key}
-                  className="shrink-0 px-3 py-1.5 text-xs rounded-xl transition-colors data-[selected]:bg-primary/10 data-[selected]:text-primary bg-muted text-muted-foreground">
+                  className="shrink-0 px-3 py-1.5 text-xs rounded-lg transition-colors data-[selected]:bg-primary/10 data-[selected]:text-primary bg-muted text-muted-foreground">
                   {s.icon}{s.label}
                 </TabsTrigger>
               ))}

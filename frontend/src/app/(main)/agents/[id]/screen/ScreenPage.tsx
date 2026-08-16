@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { toast } from "sonner";
 import { Camera, Clock, Download, ImageIcon, Images, Maximize2, Monitor, Play, RotateCw, Square, TriangleAlert, X, Zap } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { safeImageSrc } from "@/lib/safeUrl";
 
 interface ScreenshotItem {
   id?: string;
@@ -59,11 +60,13 @@ interface ScreenshotItem {
       const p = pendingFrameRef.current;
       pendingFrameRef.current = null;
       if (!p) return;
+      // Skip identical frames before any setState so byte-identical polls
+      // (e.g. a static desktop at "ultra" quality) cause zero re-render.
+      if (p.data === lastFrameRef.current) return;
+      lastFrameRef.current = p.data;
       setLastUpdate(new Date().toLocaleTimeString());
       setStatus("waiting");
       setMonitoringStatus("connected");
-      if (p.data === lastFrameRef.current) return;
-      lastFrameRef.current = p.data;
       setScreenshot(p.data);
       if (p.width && p.height) setResolution({ width: p.width, height: p.height });
       setScreenshotGallery((prev) => [
@@ -234,26 +237,26 @@ interface ScreenshotItem {
             )}          </div>
           <div className="flex items-center gap-2 flex-wrap">
             {!monitoring ? (              <Button onClick={startMonitoring}
-                className="disabled:opacity-50 text-sm px-4 h-9 rounded-xl transition-colors flex items-center gap-1.5 font-medium shadow-sm">
+                className="disabled:opacity-50 text-sm px-4 h-9 rounded-lg transition-colors flex items-center gap-1.5 font-medium shadow-sm">
                 <Play className="w-4 h-4" />
                 {t("agents.screen_start")}
               </Button>
             ) : (
               <Button onClick={stopMonitoring}
-                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground text-sm px-4 h-9 rounded-xl transition-colors flex items-center gap-1.5 font-medium shadow-sm">
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground text-sm px-4 h-9 rounded-lg transition-colors flex items-center gap-1.5 font-medium shadow-sm">
                 <Square className="w-4 h-4" />                {t("agents.screen_stop")}
               </Button>
             )}
             <Button onClick={handleManualCapture} disabled={status === "capturing"}
-              className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-sm px-4 h-9 rounded-xl transition-colors flex items-center gap-1.5 font-medium shadow-sm">
+              className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-sm px-4 h-9 rounded-lg transition-colors flex items-center gap-1.5 font-medium shadow-sm">
               <Camera className="w-4 h-4" />
               {t("agents.screen_capture")}
             </Button>
             <Button onClick={handleWindowScreenshot} disabled={status === "capturing"}
-              className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-sm px-4 h-9 rounded-xl transition-colors flex items-center gap-1.5 font-medium shadow-sm">
+              className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-sm px-4 h-9 rounded-lg transition-colors flex items-center gap-1.5 font-medium shadow-sm">
               <Maximize2 className="w-4 h-4" />              {t("agents.screen_window_capture")}            </Button>
             <Button onClick={() => screenshot && handleDownloadScreenshot()} disabled={!screenshot}
-              className="bg-muted hover:bg-border disabled:opacity-50 disabled:cursor-not-allowed text-foreground text-sm px-4 h-9 rounded-xl transition-colors flex items-center gap-1.5 font-medium shadow-sm">
+              className="bg-muted hover:bg-border disabled:opacity-50 disabled:cursor-not-allowed text-foreground text-sm px-4 h-9 rounded-lg transition-colors flex items-center gap-1.5 font-medium shadow-sm">
               <Download className="w-4 h-4" />              {t("agents.screen_download")}
             </Button>          </div>
         </div>
@@ -294,7 +297,7 @@ interface ScreenshotItem {
               </div>              <div className="relative bg-background flex-1 flex items-center justify-center cursor-pointer overflow-hidden"
                 onClick={() => screenshot && openModal(screenshot)}>
                 {screenshot ? (
-                  <img src={screenshot} alt={t("agents.screenshot")} width={resolution?.width || undefined} height={resolution?.height || undefined} style={{ aspectRatio: resolution ? `${resolution.width} / ${resolution.height}` : undefined }} className="max-w-full max-h-full object-contain" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <img src={safeImageSrc(screenshot)} alt={t("agents.screenshot")} width={resolution?.width || undefined} height={resolution?.height || undefined} style={{ aspectRatio: resolution ? `${resolution.width} / ${resolution.height}` : undefined }} className="max-w-full max-h-full object-contain" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : (
                   <div className="text-center text-muted-foreground/70 py-20">
                     <EmptyState icon={Monitor} title={t("agents.screen_no_screenshots")} message={`${t("agents.screen_start")} / ${t("agents.screen_capture")}`} />
@@ -374,9 +377,9 @@ interface ScreenshotItem {
               {screenshotGallery.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 overflow-y-auto flex-1 max-h-64 lg:max-h-full">
                   {screenshotGallery.map((item) => (
-                    <div key={item.id} className="relative group cursor-pointer rounded-xl overflow-hidden border-2 border-transparent hover:border-primary transition-colors bg-muted"
+                    <div key={item.id} className="relative group cursor-pointer rounded-lg overflow-hidden border-2 border-transparent hover:border-primary transition-colors bg-muted"
                       onClick={() => openModal(item.data || "")}>
-                      <img src={item.data} alt={t("agents.screen_alt_thumb")} className="w-full h-auto aspect-video object-cover" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 text-(--fs-micro) text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                      <img src={safeImageSrc(item.data)} alt={t("agents.screen_alt_thumb")} className="w-full h-auto aspect-video object-cover" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 text-(--fs-micro) text-white opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                         {item.timestamp}
                       </div>
                       <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
@@ -417,7 +420,7 @@ interface ScreenshotItem {
                 <TooltipContent>{t("common.close")}</TooltipContent>
               </Tooltip>
             </div>
-            <img src={modalImage} alt={t("agents.screen_alt_full")} className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <img src={safeImageSrc(modalImage)} alt={t("agents.screen_alt_full")} className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </div>
         </DialogContent>
       </Dialog>

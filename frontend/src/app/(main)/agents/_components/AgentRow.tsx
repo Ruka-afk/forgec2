@@ -7,10 +7,11 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { timeAgo, formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import type { Beacon } from "./types";
+import { agentStatusBorderClass, osIcon, integrityTone } from "./types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { TableCell } from "@/components/ui/table";
-import { Apple, Check, Copy, Link as LinkIcon, Lock, Maximize2, Monitor, MoreHorizontal, Shield, StickyNote, Terminal, Unlock } from "lucide-react";
+import { Check, Copy, FolderOpen, Link as LinkIcon, Lock, Maximize2, Monitor, MoreHorizontal, Shield, StickyNote, Terminal, Unlock } from "lucide-react";
 import type { AgentMenuPoint } from "./agent-menu-actions";
 import { knownImplantVersion } from "./implant-version";
 import { copyToClipboard } from "./types";
@@ -25,6 +26,7 @@ interface AgentRowProps {
   onDetails: (id: string) => void;
   onMenu: (point: AgentMenuPoint) => void;
   onEditNotes?: (beacon: Beacon) => void;
+  onQuickNav?: (beacon: Beacon, view: "shell" | "files" | "screen") => void;
   child?: boolean;
   taskCount: number;
   lockUser: string | null;
@@ -41,6 +43,7 @@ export const AgentRow = memo(function AgentRow({
   onDetails,
   onMenu,
   onEditNotes,
+  onQuickNav,
   child = false,
   taskCount,
   lockUser,
@@ -62,10 +65,8 @@ export const AgentRow = memo(function AgentRow({
   const activeWindow = beacon.active_window || "";
   const version = knownImplantVersion(beacon.version);
 
-  const borderLeft = status === "online" ? "border-l-2 border-l-success" :
-    status === "stale" ? "border-l-2 border-l-warning" : "border-l-2 border-l-destructive";
-  const OsIcon = os.toLowerCase() === "windows" ? Monitor :
-    os.toLowerCase() === "linux" ? Terminal : Apple;
+  const borderLeft = agentStatusBorderClass(status);
+  const OsIcon = osIcon(os);
 
   return (
     <tr
@@ -144,12 +145,7 @@ export const AgentRow = memo(function AgentRow({
             {os}{arch ? ` ${arch}` : ""}
           </Badge>
           {integrity && (
-            <Badge variant={
-              integrity === "System" ? "destructive" :
-              integrity === "High" ? "success" :
-              integrity === "Medium" ? "warning" :
-              "secondary"
-            } className="text-(--fs-micro-sm) font-medium">{integrity}</Badge>
+            <Badge variant={integrityTone(integrity)} className="text-(--fs-micro-sm) font-medium">{integrity}</Badge>
           )}
           {elevated && <Badge variant="destructive" className="text-(--fs-micro-sm) font-bold" title={t("agents.elevated")}><Shield className="w-3 h-3" /></Badge>}
         </div>
@@ -232,7 +228,35 @@ export const AgentRow = memo(function AgentRow({
       </TableCell>
       )}
       <TableCell className="py-1 px-2 text-right">
-        <Tooltip>
+        <div className="flex items-center justify-end gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+            aria-label={t("agents.shell_title")}
+            onClick={(e) => { e.stopPropagation(); onQuickNav?.(beacon, "shell"); }}
+          >
+            <Terminal className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+            aria-label={t("agents.files_title")}
+            onClick={(e) => { e.stopPropagation(); onQuickNav?.(beacon, "files"); }}
+          >
+            <FolderOpen className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+            aria-label={t("agents.screen_title")}
+            onClick={(e) => { e.stopPropagation(); onQuickNav?.(beacon, "screen"); }}
+          >
+            <Monitor className="w-4 h-4" />
+          </Button>
+          <Tooltip>
           <TooltipTrigger render={
             <Button
               variant="ghost"
@@ -249,6 +273,7 @@ export const AgentRow = memo(function AgentRow({
           } />
           <TooltipContent side="top">{t("agents.context_menu")}</TooltipContent>
         </Tooltip>
+        </div>
       </TableCell>
     </tr>
   );

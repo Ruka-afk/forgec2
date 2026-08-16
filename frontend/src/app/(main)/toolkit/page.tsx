@@ -73,7 +73,7 @@ export default function ToolkitPage() {
         api.get(paths.agents.list()),
         api.get(paths.toolkit.results),
       ]);
-      setToolkitAgents((agentsData.agents || []) as ToolkitAgent[]);
+      setToolkitAgents((agentsData.agents || (Array.isArray(agentsData) ? agentsData : [])) as ToolkitAgent[]);
       setRecentTasks((tasksData.tasks || tasksData.results || tasksData.data || []) as RecentTask[]);
     } catch { toast.error(t("toolkit.toast.load_failed")); }
     setLoading(false);
@@ -186,7 +186,7 @@ export default function ToolkitPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               {quickActions.map((qa) => (
-                <Button key={qa.value} variant="outline" size="sm" onClick={() => runAction(qa.value)} className="rounded-xl text-xs hover:border-primary/30 hover:text-primary transition-all">
+                <Button key={qa.value} variant="outline" size="sm" onClick={() => runAction(qa.value)} className="rounded-lg text-xs hover:border-primary/30 hover:text-primary transition-all">
                   {qa.label}
                 </Button>
               ))}
@@ -195,14 +195,14 @@ export default function ToolkitPage() {
 
           {loading ? (
             <div className="space-y-4">
-              {[1,2,3].map(i => <Skeleton key={i} className="h-32 rounded-xl" />)}
+              {[1,2,3].map(i => <Skeleton key={i} className="h-32 rounded-lg" />)}
             </div>
           ) : (
             categories.map((cat) => (
               <Card key={cat.name} className="overflow-hidden">
                 <div className="flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-muted transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center border ${colorMap[cat.color]}`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${colorMap[cat.color]}`}>
                       <span className="text-xs font-bold">{cat.name[0]}</span>
                     </div>
                     <span className="font-semibold text-sm text-foreground">{cat.name}</span>
@@ -211,7 +211,7 @@ export default function ToolkitPage() {
                 </div>
                 <div className="px-5 pb-4 space-y-1">
                   {cat.commands.map((c) => (
-                    <Button key={c.cmd} variant="ghost" onClick={() => runAction(c.cmd)} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl justify-start text-left border border-transparent hover:border-border transition-all">
+                    <Button key={c.cmd} variant="ghost" onClick={() => runAction(c.cmd)} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg justify-start text-left border border-transparent hover:border-border transition-all">
                       <span className={`text-xs font-mono font-medium w-28 shrink-0 ${colorMap[cat.color]?.split(" ")[1] || "text-info"}`}>{c.cmd}</span>
                       <span className="text-xs text-muted-foreground">{c.desc}</span>
                       <span className="ml-auto text-(--fs-micro-sm) text-muted-foreground">{t("toolkit.run")}</span>

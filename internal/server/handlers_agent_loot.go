@@ -133,7 +133,7 @@ func (s *Server) handleLootPage(c *gin.Context) {
 		return
 	}
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":         "ForgeC2 - Loot",
 		"ActiveNav":     "loot",

@@ -132,7 +132,7 @@ type MisconfigInfo struct {
 
 // handlePrivescPage renders the privilege escalation page
 func (s *Server) handlePrivescPage(c *gin.Context) {
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 
 	// Get available agents
 	var agents []db.Implant

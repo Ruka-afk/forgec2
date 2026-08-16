@@ -31,10 +31,10 @@ export function AIMessageList({
   const { t } = useI18n();
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto space-y-4 mb-3 pr-1 scroll-smooth rounded-xl border border-border bg-card/50 p-3 sm:p-4">
+    <div className="flex-1 min-h-0 overflow-y-auto space-y-4 mb-3 pr-1 scroll-smooth rounded-lg border border-border bg-card/50 p-3 sm:p-4">
       {messages.length === 0 ? (
         <div className="flex gap-3">
-          <div className="w-8 h-8 bg-primary/10 dark:bg-primary/25 rounded-xl flex items-center justify-center shrink-0 mt-1">
+          <div className="w-8 h-8 bg-primary/10 dark:bg-primary/25 rounded-lg flex items-center justify-center shrink-0 mt-1">
             <Bot className="w-4 h-4" />
           </div>
           <Card className="px-4 py-3 max-w-[90%] border border-border">
@@ -54,7 +54,7 @@ export function AIMessageList({
           if (msg.thinking) {
             return (
               <div key={i} className="flex gap-3">
-                <div className="w-8 h-8 bg-primary/10 dark:bg-primary/25 rounded-xl flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 bg-primary/10 dark:bg-primary/25 rounded-lg flex items-center justify-center shrink-0">
                   <Bot className="w-4 h-4" />
                 </div>
                 <Card className="rounded-tl-md px-4 py-3">
@@ -73,7 +73,7 @@ export function AIMessageList({
           }
           return (
             <div key={i} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-1 ${msg.role === "user" ? "bg-secondary" : msg.role === "tool" ? "bg-warning/15" : "bg-primary/10 dark:bg-primary/25"}`}>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-1 ${msg.role === "user" ? "bg-secondary" : msg.role === "tool" ? "bg-warning/15" : "bg-primary/10 dark:bg-primary/25"}`}>
                 {msg.role === "user" ? <User className="w-4 h-4 text-muted-foreground" /> : msg.role === "tool" ? <Wrench className="w-4 h-4 text-warning" /> : <Bot className="w-4 h-4 text-primary" />}
               </div>
               <div className={`max-w-[80%] ${msg.role === "user" ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-md" : "bg-card text-card-foreground ring-1 ring-foreground/10 rounded-tl-md"} px-4 py-3`}>
@@ -125,7 +125,7 @@ export function AIMessageList({
       )}
       {loading && !messages.some((m) => m.thinking) && (
         <div className="flex gap-3">
-          <div className="w-8 h-8 bg-primary/10 dark:bg-primary/25 rounded-xl flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 bg-primary/10 dark:bg-primary/25 rounded-lg flex items-center justify-center shrink-0">
             <Bot className="w-4 h-4" />
           </div>
           <Card className="rounded-tl-md px-4 py-3">

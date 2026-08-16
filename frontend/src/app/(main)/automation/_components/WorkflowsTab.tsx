@@ -122,7 +122,7 @@ export function WorkflowsTab() {
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center text-primary"><Workflow className="w-4 h-4" /></div>
+          <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary"><Workflow className="w-4 h-4" /></div>
           <div>
             <h2 className="text-sm font-semibold text-foreground">{t("workflows.title")}</h2>
             <p className="text-xs text-muted-foreground">{t("workflows.subtitle")}</p>
@@ -143,7 +143,7 @@ export function WorkflowsTab() {
         loadingSkeleton={
           <div className="flex flex-col gap-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-24 w-full rounded-xl" />
+              <Skeleton key={i} className="h-24 w-full rounded-lg" />
             ))}
           </div>
         }

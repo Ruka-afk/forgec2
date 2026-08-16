@@ -127,7 +127,7 @@ export default function CloudPage() {
           <div>
             <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("cloud.target_agent")}</span>
             {agentsLoading ? (
-              <Skeleton className="h-10 rounded-xl" />
+              <Skeleton className="h-10 rounded-lg" />
             ) : (
             <Select value={selectedAgent} onValueChange={(v) => setSelectedAgent(v ?? "")}>
               <SelectTrigger className="w-full">

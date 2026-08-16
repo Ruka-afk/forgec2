@@ -6,14 +6,16 @@ import { useAppStore } from "@/lib/store";
 import { useShallow } from "zustand/shallow";
 import { useI18n } from "@/lib/i18n";
 import { timeAgo } from "@/lib/utils";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge, StatusIndicator } from "@/components/ui/status-indicator";
 import { StatTile } from "@/components/ui/stat-tile";
 import { DataError } from "@/components/ui/data-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Archive, Bug, Radio, ListChecks } from "lucide-react";
+import { Archive, Bug, Radio, ListChecks, Search, Terminal, Wand2 } from "lucide-react";
 import type { DashboardStats } from "@/types/agent";
 import { useOpsHomeData } from "./useOpsHomeData";
 import {
@@ -40,18 +42,32 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-border px-4 py-2.5">
-        <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-          {title}
-          {typeof count === "number" && (
-            <Badge variant={count > 0 ? "secondary" : "outline"} className="font-mono">{count}</Badge>
-          )}
-        </CardTitle>
-        <Link href={href} className="text-xs text-primary hover:underline">{linkLabel}</Link>
-      </CardHeader>
+    <SectionCard title={title} href={href} linkLabel={linkLabel} count={count}>
       {children}
-    </Card>
+    </SectionCard>
+  );
+}
+
+function QuickLaunch() {
+  const { t } = useI18n();
+  const actions = [
+    { href: "/generate", label: t("dashboard.quick_generate"), icon: <Wand2 className="w-5 h-5" /> },
+    { href: "/listeners", label: t("dashboard.quick_listeners"), icon: <Radio className="w-5 h-5" /> },
+    { href: "/agents", label: t("dashboard.quick_agents"), icon: <Terminal className="w-5 h-5" /> },
+    { href: "/search", label: t("dashboard.quick_search"), icon: <Search className="w-5 h-5" /> },
+  ];
+  return (
+    <SectionCard title={t("dashboard.quick_actions")}>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
+        {actions.map((a) => (
+          <Button key={a.href} variant="outline" render={<Link href={a.href} />}
+            className="h-auto flex-col gap-2 py-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary hover:bg-primary/5 hover:shadow-md">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary transition-transform group-hover:scale-105">{a.icon}</span>
+            <span className="text-sm font-medium text-foreground">{a.label}</span>
+          </Button>
+        ))}
+      </div>
+    </SectionCard>
   );
 }
 
@@ -71,7 +87,9 @@ export default memo(function OpsHome() {
     <div className="space-y-5">
       {error && <DataError message={error} onRetry={refresh} className="mb-2" />}
 
-      <DashboardStatTiles loading={loading} unhealthyCount={unhealthy.length} lootCount={lootItems.length} />
+      <DashboardStatTiles loading={loading} unhealthyCount={unhealthy.length} lootCount={lootItems.length} online={sessions.online.length} total={agents.length} />
+
+      <QuickLaunch />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Panel title={t("dashboard.sessions")} href="/agents" linkLabel={t("dashboard.view_all")} count={agents.length}>
@@ -213,43 +231,43 @@ export default memo(function OpsHome() {
   );
 });
 
-const DashboardStatTiles = memo(function DashboardStatTiles({ loading, unhealthyCount, lootCount }: {
+const DashboardStatTiles = memo(function DashboardStatTiles({ loading, unhealthyCount, lootCount, online, total }: {
   loading: boolean;
   unhealthyCount: number;
   lootCount: number;
+  online: number;
+  total: number;
 }) {
   const { t } = useI18n();
   const stats = useAppStore(useShallow((s) => s.stats));
   const s: Partial<DashboardStats> = stats ?? {};
-  const online = s.online_agents ?? 0;
-  const total = s.total_agents ?? 0;
   const pending = s.pending_tasks ?? 0;
   const failed = s.failed_tasks ?? 0;
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
       <Link href="/agents">
-        <Card className="rounded-xl p-4 hover:bg-secondary/40 transition-colors">
+        <Card className="surface-raised rounded-lg p-4 transition-all duration-200 hover:-translate-y-0.5 hover:ring-accent-glow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
           <StatTile label={t("dashboard.beacons")} value={loading && !stats ? "…" : `${online}/${total}`} sub={t("dashboard.online_suffix")} tone="success" />
         </Card>
       </Link>
       <Link href="/timeline?tab=tasks">
-        <Card className="rounded-xl p-4 hover:bg-secondary/40 transition-colors">
+        <Card className="surface-raised rounded-lg p-4 transition-all duration-200 hover:-translate-y-0.5 hover:ring-accent-glow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
           <StatTile label={t("dashboard.pending_tasks_label")} value={loading && !stats ? "…" : pending} tone={pending > 0 ? "warning" : undefined} />
         </Card>
       </Link>
       <Link href="/timeline?tab=tasks">
-        <Card className="rounded-xl p-4 hover:bg-secondary/40 transition-colors">
+        <Card className="surface-raised rounded-lg p-4 transition-all duration-200 hover:-translate-y-0.5 hover:ring-accent-glow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
           <StatTile label={t("dashboard.failed_tasks")} value={loading && !stats ? "…" : failed} tone={failed > 0 ? "destructive" : undefined} />
         </Card>
       </Link>
       <Link href="/listeners">
-        <Card className="rounded-xl p-4 hover:bg-secondary/40 transition-colors">
+        <Card className="surface-raised rounded-lg p-4 transition-all duration-200 hover:-translate-y-0.5 hover:ring-accent-glow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
           <StatTile label={t("dashboard.unhealthy_count")} value={loading ? "…" : unhealthyCount} tone={unhealthyCount > 0 ? "destructive" : "success"} />
         </Card>
       </Link>
       <Link href="/loot">
-        <Card className="rounded-xl p-4 hover:bg-secondary/40 transition-colors">
+        <Card className="surface-raised rounded-lg p-4 transition-all duration-200 hover:-translate-y-0.5 hover:ring-accent-glow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
           <StatTile label={t("dashboard.loot_inbox")} value={loading ? "…" : lootCount} sub={t("dashboard.loot_recent")} tone={lootCount > 0 ? "info" : undefined} />
         </Card>
       </Link>

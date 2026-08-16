@@ -48,11 +48,11 @@ function formatDuration(ms: number): string {
 
 export default function ActiveMissions({ className = "" }: { className?: string }) {
   const { t } = useI18n();
-  const [now, setNow] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30000);
-    return () => clearInterval(id);
+    const timer = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(timer);
   }, []);
 
   const { data, error, refresh: load } = useApiResource<{ missions: Mission[] }>({
@@ -123,7 +123,7 @@ export default function ActiveMissions({ className = "" }: { className?: string 
                 ) : null}
                 <Badge variant="secondary" className="font-mono">{m.type}</Badge>
                 <span className="text-(--fs-micro-sm) text-muted-foreground/70 whitespace-nowrap" title={m.created_by ? `${t("dashboard.missions_by")} ${m.created_by}` : undefined}>
-                  {formatDuration((now ?? 0) - new Date(m.created_at).getTime())}
+                  {formatDuration(now - new Date(m.created_at).getTime())}
                 </span>
               </div>
             </div>

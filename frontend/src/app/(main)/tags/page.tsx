@@ -124,7 +124,7 @@ export default function TagsPage() {
       }
     >
       {actionMsg && (
-        <div className="mb-3 px-4 py-2 bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/40 rounded-xl text-sm text-primary dark:text-primary flex items-center justify-between">
+        <div className="mb-3 px-4 py-2 bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/40 rounded-lg text-sm text-primary dark:text-primary flex items-center justify-between">
           <span>{actionMsg}</span>
           <Button variant="ghost" size="icon-sm" onClick={() => setActionMsg(null)} className="text-primary hover:text-primary" aria-label={t("common.dismiss")}><X className="w-4 h-4" /></Button>
         </div>

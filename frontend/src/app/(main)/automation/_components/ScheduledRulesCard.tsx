@@ -62,10 +62,10 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
     try {
       const [rules, a] = await Promise.all([
         api.get<{ data?: ScheduledRule[] }>(paths.automation.rules),
-        api.get<{ agents?: Agent[]; data?: Agent[] }>(paths.agents.list()),
+        api.get<{ agents?: Agent[]; data?: Agent[] } | Agent[]>(paths.agents.list()),
       ]);
       setTasks((rules.data || []).filter((r) => r.event_type === "schedule"));
-      setAgents((a.agents || a.data || []) as Agent[]);
+      setAgents(((Array.isArray(a) ? a : a.agents || a.data) || []) as Agent[]);
     } catch {
       toast.error(t("scheduler.load_failed"));
     } finally {
@@ -165,7 +165,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
   return (
     <Card id="scheduled" className="rounded-2xl overflow-hidden scroll-mt-20">
       <div className="px-4 py-3 border-b border-border flex items-center gap-3">
-        <div className="w-8 h-8 bg-warning/10 rounded-xl flex items-center justify-center text-warning"><CalendarClock className="w-4 h-4" /></div>
+        <div className="w-8 h-8 bg-warning/10 rounded-lg flex items-center justify-center text-warning"><CalendarClock className="w-4 h-4" /></div>
         <div>
           <h2 className="text-sm font-semibold text-foreground">{t("auto.scheduled_tasks")}</h2>
           <p className="text-xs text-muted-foreground">{t("auto.scheduled_tasks_desc")}</p>
@@ -262,7 +262,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
         ) : (
           <div className="space-y-2">
             {tasks.map(task => (
-              <div key={task.id} className="flex items-center gap-4 p-3 bg-secondary border border-border rounded-xl">
+              <div key={task.id} className="flex items-center gap-4 p-3 bg-secondary border border-border rounded-lg">
                 <Switch checked={task.enabled} onCheckedChange={() => handleToggle(task.id)} aria-label={task.enabled ? t("scheduler.a11y_disable") : t("scheduler.a11y_enable")} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">

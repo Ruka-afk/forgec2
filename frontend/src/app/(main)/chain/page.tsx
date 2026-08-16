@@ -246,7 +246,7 @@ export default function ChainPage() {
                           node.id === selectedAgent
                             ? "bg-primary/10 text-primary ring-2 ring-primary/60"
                             : node.parent_id === ""
-                            ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300"
+                            ? "bg-success/10 dark:bg-success/30 text-success dark:text-success"
                             : "bg-muted text-foreground"
                         }`}>
                           {info ? `${info.hostname} (${info.ip})` : node.id.substring(0, 12)}

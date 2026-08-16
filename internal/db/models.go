@@ -104,6 +104,7 @@ type TaskStats struct {
 // Implant represents a connected implant (agent)
 type Implant struct {
 	ID         string    `gorm:"primaryKey" json:"id"`
+	TenantID   uint      `gorm:"index" json:"tenant_id"` // multi-tenant isolation (0 = legacy/unscoped)
 	Hostname   string    `json:"hostname"`
 	Username   string    `json:"username"`
 	OS         string    `json:"os"`
@@ -193,9 +194,10 @@ type KillSwitch struct {
 
 // Task represents a command/task sent to an agent
 type Task struct {
-	ID      uint   `gorm:"primaryKey" json:"id"`
-	AgentID string `gorm:"index" json:"agent_id"`
-	Type    string `json:"type"`
+	ID       uint   `gorm:"primaryKey" json:"id"`
+	TenantID uint   `gorm:"index" json:"tenant_id"` // multi-tenant isolation (0 = legacy/unscoped)
+	AgentID  string `gorm:"index" json:"agent_id"`
+	Type     string `json:"type"`
 	Command string `json:"command"`
 	Shell   string `json:"shell"`
 	Path    string `json:"path,omitempty"`
@@ -206,6 +208,10 @@ type Task struct {
 	// push-upload tasks (hex); the agent verifies Data against them.
 	PrevMAC  string `json:"prev_mac,omitempty"`
 	MAC      string `json:"mac,omitempty"`
+	// TaskKey is the operator-issued per-task AES-256-GCM key (base64) used to
+	// seal this task's result independently of the session key (P2). Empty when
+	// the task uses the normal channel encryption.
+	TaskKey  string `gorm:"column:task_key" json:"task_key,omitempty"`
 	Status   string `gorm:"index" json:"status"`
 	Priority int    `gorm:"default:1" json:"priority"` // 0=low, 1=normal, 2=high, 3=urgent
 	Result   string `json:"result"`
@@ -506,6 +512,7 @@ type User struct {
 	Username            string    `gorm:"uniqueIndex;size:64" json:"username"`
 	PasswordHash        string    `json:"-"`
 	Role                string    `json:"role"` // "admin" or "user"
+	TenantID            uint      `gorm:"index" json:"tenant_id"` // multi-tenant isolation (0 = legacy/unscoped)
 	IsActive            bool      `json:"is_active"`
 	ForcePasswordChange bool      `gorm:"default:false" json:"force_password_change"`
 	LastLogin           time.Time `json:"last_login"`
@@ -516,6 +523,16 @@ type User struct {
 	TOTPSecret          string    `json:"-"` // TOTP secret for 2FA, empty means 2FA disabled
 	CreatedAt           time.Time `gorm:"index" json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
+}
+
+// Tenant is a self-contained operator organization. Every operator (User) and
+// the implants/tasks they own are scoped to a Tenant so that multiple
+// independent teams can share one ForgeC2 deployment without seeing each
+// other's assets (P2: multi-tenant isolation).
+type Tenant struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Name      string    `gorm:"uniqueIndex;size:128" json:"name"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // CredentialEntry stores a parsed credential harvested from an agent.
@@ -539,6 +556,7 @@ type CredentialEntry struct {
 }
 
 // TableName overrides
+func (Tenant) TableName() string          { return "tenants" }
 func (Implant) TableName() string         { return "implants" }
 func (Task) TableName() string            { return "tasks" }
 func (AuditLog) TableName() string        { return "audit_logs" }

@@ -23,6 +23,8 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 	silentTypes := []string{"screen_stream_start", "screen_stream_stop", "ls"}
 	query := s.db.Model(&db.Task{}).
 		Where("type NOT IN ?", silentTypes)
+	// Multi-tenant isolation: operators only see tasks in their tenant.
+	query = s.tenantScope(query, c)
 	if filterType != "" {
 		query = query.Where("type = ?", filterType)
 	}
@@ -75,7 +77,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 		totalPages++
 	}
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":          "ForgeC2 - Task History",
 		"ActiveNav":      "tasks",

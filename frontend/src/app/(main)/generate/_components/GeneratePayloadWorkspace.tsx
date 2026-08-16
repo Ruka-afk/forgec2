@@ -29,7 +29,7 @@ const FORMAT_KEY = "forgec2_gen_format";
 function SectionHeading({ icon, tint, title, desc, className }: { icon: ReactNode; tint: string; title: string; desc: string; className?: string }) {
   return (
     <div className={cn("flex items-center gap-x-3 mb-5", className)}>
-      <div className={cn("w-10 h-10 rounded-xl ring-1 ring-border/50 flex items-center justify-center", tint)}>{icon}</div>
+      <div className={cn("w-10 h-10 rounded-lg ring-1 ring-border/50 flex items-center justify-center", tint)}>{icon}</div>
       <div>
         <div className="text-sm font-semibold text-foreground">{title}</div>
         <div className="text-xs text-muted-foreground">{desc}</div>
@@ -146,7 +146,7 @@ export default function GeneratePayloadWorkspace() {
         onCreate={g.handleCreateListener}
       />
       {showBanner && (
-        <div className="mt-3 flex items-center gap-2 px-4 py-2 bg-warning/10 border border-warning/20 rounded-xl">
+        <div className="mt-3 flex items-center gap-2 px-4 py-2 bg-warning/10 border border-warning/20 rounded-lg">
           <Info className="w-4 h-4" />
           <span className="flex-1 text-xs text-warning-foreground">{t("generate.banner_text")} <a href="https://go.dev/dl/" target="_blank" className="underline hover:text-warning-foreground transition-colors">{t("generate.banner_download")}</a></span>
           <Tooltip>

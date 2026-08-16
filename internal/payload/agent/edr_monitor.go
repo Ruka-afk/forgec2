@@ -77,7 +77,13 @@ func scanForEDR() {
 					Detail:     "EDR process detected",
 					Timestamp:  now,
 				})
-				if getSleepMode() == SleepModeDefault || getSleepMode() == SleepModeInteractive {
+				// Sleeping slower under EDR is an evasion behavior: on a stock
+				// Windows box "defender detection" fires immediately (msmpeng),
+				// so only degrade the beacon cadence when the operator opted in
+				// to evasion/ghost features. Default builds keep their normal
+				// cadence and stay visible in beacon management.
+				if (evasionEnabled || ghostModeEnabled) &&
+					(getSleepMode() == SleepModeDefault || getSleepMode() == SleepModeInteractive) {
 					setSleepMode(SleepModeIdle)
 				}
 			}

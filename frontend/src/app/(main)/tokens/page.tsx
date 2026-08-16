@@ -145,7 +145,7 @@ export default function TokensPage() {
                 onClick={() => setIntegrityFilter(integrityFilter === level ? "" : level)}
                 aria-pressed={integrityFilter === level}
                 aria-label={level}
-                className="absolute inset-0 z-10 h-auto rounded-xl"
+                className="absolute inset-0 z-10 h-auto rounded-lg"
               />
               <div className="text-xs text-muted-foreground">{level}</div>
               <div className="text-lg font-bold">{count}</div>

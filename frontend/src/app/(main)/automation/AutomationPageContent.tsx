@@ -263,7 +263,7 @@ export default function AutomationPage() {
               </div>
               <div className="p-4 sm:p-5 space-y-3">
                 {events.map((e) => (
-                  <div key={e.type} className="flex items-center gap-3 p-3 bg-secondary border border-border rounded-xl">
+                  <div key={e.type} className="flex items-center gap-3 p-3 bg-secondary border border-border rounded-lg">
                     <span className={`w-2 h-2 ${e.color} rounded-full`}></span>
                     <span className="font-mono text-xs text-foreground">{e.type}</span>
                     <span className="text-muted-foreground">-</span>
@@ -275,7 +275,7 @@ export default function AutomationPage() {
 
             <Card className="rounded-2xl overflow-hidden flex-1 min-w-[300px]">
               <div className="px-4 py-3 border-b border-border flex items-center gap-3">
-                <div className="w-8 h-8 bg-success/10 rounded-xl flex items-center justify-center text-success"><Link className="w-4 h-4" /></div>
+                <div className="w-8 h-8 bg-success/10 rounded-lg flex items-center justify-center text-success"><Link className="w-4 h-4" /></div>
                 <div>
                   <h2 className="text-sm font-semibold text-foreground">{t("auto.task_chain_rules")}</h2>
                   <p className="text-xs text-muted-foreground">{t("auto.task_chain_desc")}</p>
@@ -302,7 +302,7 @@ export default function AutomationPage() {
                       const conditionsLen = r.conditions ? r.conditions.length : (r.Conditions ? r.Conditions.length : 0);
                       const actionsLen = r.actions ? r.actions.length : (r.Actions ? r.Actions.length : 0);
                       return (
-                        <div key={rid} className="flex items-center justify-between p-3 bg-secondary border border-border rounded-xl">
+                        <div key={rid} className="flex items-center justify-between p-3 bg-secondary border border-border rounded-lg">
                           <div className="flex items-center gap-3">
                             <StatusBadge status={enabled ? "online" : "offline"} />
                             <div>
@@ -343,7 +343,7 @@ export default function AutomationPage() {
         <TabsContent value="webhooks" className="mt-0">
           <Card className="rounded-2xl overflow-hidden">
             <div className="px-4 py-3 border-b border-border flex items-center gap-3">
-              <div className="w-8 h-8 bg-info/10 rounded-xl flex items-center justify-center text-info"><Globe className="w-4 h-4" /></div>
+              <div className="w-8 h-8 bg-info/10 rounded-lg flex items-center justify-center text-info"><Globe className="w-4 h-4" /></div>
               <div>
                 <h2 className="text-sm font-semibold text-foreground">{t("auto.webhooks")}</h2>
                 <p className="text-xs text-muted-foreground">{t("auto.webhooks_desc")}</p>
@@ -369,7 +369,7 @@ export default function AutomationPage() {
                     const eventType = w.event_type || "-";
                     const enabled = w.enabled !== undefined ? w.enabled : w.Enabled;
                     return (
-                      <div key={String(wid)} className="flex items-center justify-between p-3 bg-secondary border border-border rounded-xl">
+                      <div key={String(wid)} className="flex items-center justify-between p-3 bg-secondary border border-border rounded-lg">
                         <div className="flex items-center gap-3">
                           <StatusBadge status={enabled ? "online" : "offline"} />
                           <div>
@@ -415,7 +415,7 @@ export default function AutomationPage() {
             <Card className="rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-destructive/10 rounded-xl flex items-center justify-center text-destructive"><Bell className="w-4 h-4" /></div>
+                  <div className="w-8 h-8 bg-destructive/10 rounded-lg flex items-center justify-center text-destructive"><Bell className="w-4 h-4" /></div>
                   <div>
                     <h2 className="text-sm font-semibold text-foreground">{t("auto.alert_rules")}</h2>
                     <p className="text-xs text-muted-foreground">{t("auto.alert_rules_desc")}</p>
@@ -429,7 +429,7 @@ export default function AutomationPage() {
                 {alertRules.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-6">{t("auto.no_alert_rules")}</p>
                 ) : alertRules.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between p-3 bg-secondary border border-border rounded-xl">
+                  <div key={r.id} className="flex items-center justify-between p-3 bg-secondary border border-border rounded-lg">
                     <div>
                       <div className="text-sm font-medium text-foreground">{r.name}</div>
                       <div className="text-xs text-muted-foreground">{t(`auto.type_${r.type}`)} {r.threshold}s</div>
@@ -447,7 +447,7 @@ export default function AutomationPage() {
 
             <Card className="rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center gap-3">
-                <div className="w-8 h-8 bg-warning/10 rounded-xl flex items-center justify-center text-warning"><AlertTriangle className="w-4 h-4" /></div>
+                <div className="w-8 h-8 bg-warning/10 rounded-lg flex items-center justify-center text-warning"><AlertTriangle className="w-4 h-4" /></div>
                 <div>
                   <h2 className="text-sm font-semibold text-foreground">{t("auto.active_alerts")}</h2>
                   <p className="text-xs text-muted-foreground">{t("auto.active_alerts_desc")}</p>
@@ -457,7 +457,7 @@ export default function AutomationPage() {
                 {alerts.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-6">{t("auto.no_alerts")}</p>
                 ) : alerts.map((a) => (
-                  <div key={a.id} className="p-3 bg-secondary border border-border rounded-xl">
+                  <div key={a.id} className="p-3 bg-secondary border border-border rounded-lg">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-foreground truncate">{a.title || t("auto.alert")}</div>

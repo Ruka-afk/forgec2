@@ -23,8 +23,9 @@ const (
 )
 
 var (
-	errShortData    = errors.New("cipher data too short")
-	errNoSessionKey = errors.New("ECDH session not established")
+	errShortData      = errors.New("cipher data too short")
+	errNoSessionKey   = errors.New("ECDH session not established")
+	errNoIdentityKey  = errors.New("identity key not loaded")
 )
 
 // --- v2 key derivation (standard-library HKDF-SHA256, mirrors internal/crypto) ---
@@ -198,6 +199,32 @@ func (es *ecdhSession) establishFromServerKey(serverPubB64 string) error {
 	}
 	es.mu.Lock()
 	defer es.mu.Unlock()
+	sharedSecret, err := es.privateKey.ECDH(serverPub)
+	if err != nil {
+		return err
+	}
+	es.sessionKey = deriveAgentSessionKey(sharedSecret, agentUUID)
+	return nil
+}
+
+// establishRegisteredFromServerKey completes the ECDH handshake for the session
+// the server derived at registration time. The server establishes the
+// registration session from the agent's IDENTITY public key (carried on the
+// register frame), so the agent must derive its side with the matching identity
+// private key — the ephemeral session key would produce a different shared
+// secret and every encrypted beacon would fail AEAD on the server.
+func (es *ecdhSession) establishRegisteredFromServerKey(serverPubB64 string) error {
+	curve := ecdh.X25519()
+	serverPub, err := curve.NewPublicKey(decodeB64(serverPubB64))
+	if err != nil {
+		return err
+	}
+	es.mu.Lock()
+	defer es.mu.Unlock()
+	if identityPriv == nil {
+		return errNoIdentityKey
+	}
+	es.privateKey = identityPriv
 	sharedSecret, err := es.privateKey.ECDH(serverPub)
 	if err != nil {
 		return err

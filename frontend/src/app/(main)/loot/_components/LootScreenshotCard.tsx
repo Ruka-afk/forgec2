@@ -24,7 +24,7 @@ function LootScreenshotCardInner({
 }: LootScreenshotCardProps) {
   const { t } = useI18n();
   return (
-    <div className={`group relative rounded-xl overflow-hidden border-2 cursor-pointer bg-muted/50 ${isSelected ? "border-primary ring-2 ring-primary/25 dark:ring-primary/40" : "border-border"}`}>
+    <div className={`group relative rounded-lg overflow-hidden border-2 cursor-pointer bg-muted/50 ${isSelected ? "border-primary ring-2 ring-primary/25 dark:ring-primary/40" : "border-border"}`}>
       <Button
         type="button"
         variant="ghost"

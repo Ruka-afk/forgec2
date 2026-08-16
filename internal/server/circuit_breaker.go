@@ -47,6 +47,7 @@ type CircuitBreaker struct {
 	onBurned      func(targetID string) // callback to rotate agents
 	stopCh        chan struct{}
 	done          chan struct{} // closed when probeLoop exits
+	stopOnce      sync.Once
 }
 
 type TargetHealth struct {
@@ -106,10 +107,12 @@ func (cb *CircuitBreaker) Start() {
 }
 
 func (cb *CircuitBreaker) Stop() {
-	close(cb.stopCh)
-	if cb.done != nil {
-		<-cb.done
-	}
+	cb.stopOnce.Do(func() {
+		close(cb.stopCh)
+		if cb.done != nil {
+			<-cb.done
+		}
+	})
 }
 
 func (cb *CircuitBreaker) probeLoop() {

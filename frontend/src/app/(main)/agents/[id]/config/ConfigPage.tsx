@@ -161,7 +161,7 @@ export default function AgentConfigPage() {
   return (
     <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
       {hasPending && (
-        <div className="bg-warning/15 border border-warning/30 rounded-xl px-4 py-3 text-sm text-warning-foreground flex items-center gap-2">
+        <div className="bg-warning/15 border border-warning/30 rounded-lg px-4 py-3 text-sm text-warning-foreground flex items-center gap-2">
           <Clock className="w-4 h-4" />
           {t("agents.config_pending_push")}
         </div>
@@ -318,27 +318,27 @@ export default function AgentConfigPage() {
           <Info className="w-4 h-4" /> {t("agents.config_current_config")}
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="p-3 bg-card border border-border rounded-xl">
+          <div className="p-3 bg-card border border-border rounded-lg">
             <div className="text-xs text-muted-foreground mb-1">{t("agents.config_sleep_seconds")}</div>
             <div className="text-base font-mono font-semibold text-foreground">{effective.sleep}s</div>
           </div>
-          <div className="p-3 bg-card border border-border rounded-xl">
+          <div className="p-3 bg-card border border-border rounded-lg">
             <div className="text-xs text-muted-foreground mb-1">{t("agents.config_jitter_pct")}</div>
             <div className="text-base font-mono font-semibold text-foreground">{effective.jitter}%</div>
           </div>
-          <div className="p-3 bg-card border border-border rounded-xl">
+          <div className="p-3 bg-card border border-border rounded-lg">
             <div className="text-xs text-muted-foreground mb-1">{t("agents.config_user_agent")}</div>
             <div className="text-xs font-mono text-foreground break-all">{effective.user_agent}</div>
           </div>
-          <div className="p-3 bg-card border border-border rounded-xl">
+          <div className="p-3 bg-card border border-border rounded-lg">
             <div className="text-xs text-muted-foreground mb-1">{t("agents.config_beacon_uri")}</div>
             <div className="text-sm font-mono font-semibold text-foreground">{effective.beacon_uri}</div>
           </div>
-          <div className="p-3 bg-card border border-border rounded-xl">
+          <div className="p-3 bg-card border border-border rounded-lg">
             <div className="text-xs text-muted-foreground mb-1">{t("agents.config_http_method")}</div>
             <div className="text-sm font-mono font-semibold text-foreground">{effective.method}</div>
           </div>
-          <div className="p-3 bg-card border border-border rounded-xl">
+          <div className="p-3 bg-card border border-border rounded-lg">
             <div className="text-xs text-muted-foreground mb-1">{t("agents.config_custom_headers")}</div>
             {effective.headers && Object.keys(effective.headers).length > 0 ? (
               <div className="space-y-0.5">

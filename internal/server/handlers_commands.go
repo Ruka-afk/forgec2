@@ -83,7 +83,7 @@ func (s *Server) handleShellPage(c *gin.Context) {
 
 	agent.Status = s.agentStatus(agent).Status
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":            fmt.Sprintf("ForgeC2 - Shell %s", agent.Hostname),
 		"ActiveNav":        "agents",

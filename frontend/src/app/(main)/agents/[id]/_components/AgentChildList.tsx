@@ -34,7 +34,7 @@ export default function AgentChildList({ childAgents }: AgentChildListProps) {
             <Link
               key={cid}
               href={`/agents/${cid}`}
-              className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/50 hover:bg-muted transition-colors group"
+              className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50 hover:bg-muted transition-colors group"
             >
               <div className="w-8 h-8 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center shrink-0">
                 <OSIcon className="w-4 h-4 text-primary" aria-hidden="true" />

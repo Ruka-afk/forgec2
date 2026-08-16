@@ -42,7 +42,7 @@ func (s *Server) handleTokenPage(c *gin.Context) {
 		}
 	}
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":       "ForgeC2 - Token Management - " + agent.Hostname,
 		"Agent":       agent,
@@ -84,7 +84,7 @@ func (s *Server) handleGlobalTokensPage(c *gin.Context) {
 		agentMap[a.ID] = a
 	}
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":     "ForgeC2 - Token Collection",
 		"Tokens":    tokens,

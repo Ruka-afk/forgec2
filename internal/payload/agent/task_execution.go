@@ -187,5 +187,5 @@ func downloadBytes(urlStr string) ([]byte, error) {
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	return io.ReadAll(resp.Body)
+	return io.ReadAll(io.LimitReader(resp.Body, 16*1024*1024))
 }

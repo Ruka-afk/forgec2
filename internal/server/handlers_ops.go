@@ -96,7 +96,7 @@ func (s *Server) handleBuildLogs(c *gin.Context) {
 	}
 	prevPage := p.Page - 1
 	nextPage := p.Page + 1
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":          "ForgeC2 - Build Logs",
 		"ActiveNav":      "builds",

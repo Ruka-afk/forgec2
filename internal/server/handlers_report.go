@@ -15,7 +15,7 @@ import (
 
 // handleReportPage renders the report generator page
 func (s *Server) handleReportPage(c *gin.Context) {
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 
 	// Get summary data
 	var totalAgents int64

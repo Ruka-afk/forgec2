@@ -43,7 +43,7 @@ export default function BuildHistorySection({ refreshKey }: { refreshKey?: numbe
       <Collapsible open={expanded} onOpenChange={setExpanded}>
         <CollapsibleTrigger>
           <Button type="button" variant="ghost" className="flex items-center gap-x-3 mb-5 w-full text-left justify-start h-auto py-0">
-            <div className="w-10 h-10 bg-card ring-1 ring-border/50 rounded-xl flex items-center justify-center text-muted-foreground"><History className="w-4 h-4" /></div>
+            <div className="w-10 h-10 bg-card ring-1 ring-border/50 rounded-lg flex items-center justify-center text-muted-foreground"><History className="w-4 h-4" /></div>
             <div className="flex-1">
               <div className="text-sm font-semibold text-foreground">{t("builds.history_title")}</div>
               <div className="text-xs text-muted-foreground">{t("generate.history_recent", { count: builds.length })}</div>

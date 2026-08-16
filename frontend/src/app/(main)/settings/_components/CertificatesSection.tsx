@@ -130,7 +130,7 @@ export default function CertificatesSection({
     <Card className="overflow-hidden">
       <div className="bg-success/10 border-b border-success/20 px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Shield className="w-4 h-4" /></div>
+          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Shield className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-foreground">{t("settings.certificates.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.certificates.subtitle")}</p></div>
         </div>
       </div>
@@ -138,7 +138,7 @@ export default function CertificatesSection({
         {cert.subject ? (
           <>
             {cert.is_self_signed && (
-              <div className="mb-4 px-4 py-3 bg-warning/10 dark:bg-warning/20 border border-warning/20 dark:border-warning/40 rounded-xl text-sm text-warning flex items-center gap-2">
+              <div className="mb-4 px-4 py-3 bg-warning/10 dark:bg-warning/20 border border-warning/20 dark:border-warning/40 rounded-lg text-sm text-warning flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 {t("settings.certificates.self_signed_warning")}
               </div>
@@ -147,25 +147,25 @@ export default function CertificatesSection({
               <ErrorState message={t("settings.certificates.expiring_soon", { days: String(cert.expires_in) })} icon={AlertTriangle} className="mb-4" />
             )}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-              <div className="bg-muted rounded-xl p-4 border border-border">
+              <div className="bg-muted rounded-lg p-4 border border-border">
                 <div className="text-xs text-muted-foreground">{t("settings.certificates.subject")}</div>
                 <div className="font-semibold text-sm text-foreground mt-1">{cert.subject}</div>
               </div>
-              <div className="bg-muted rounded-xl p-4 border border-border">
+              <div className="bg-muted rounded-lg p-4 border border-border">
                 <div className="text-xs text-muted-foreground">{t("settings.certificates.issuer")}</div>
                 <div className="font-semibold text-sm text-foreground mt-1">{cert.issuer}</div>
               </div>
-              <div className="bg-muted rounded-xl p-4 border border-border">
+              <div className="bg-muted rounded-lg p-4 border border-border">
                 <div className="text-xs text-muted-foreground">{t("settings.certificates.expires_in")}</div>
                 <div className={`font-semibold text-sm mt-1 ${isExpiringSoon ? "text-destructive" : "text-foreground"}`}>
                   {typeof cert.expires_in === "number" ? <>{cert.expires_in} {t("settings.certificates.days")}</> : "-"}
                 </div>
               </div>
-              <div className="bg-muted rounded-xl p-4 border border-border">
+              <div className="bg-muted rounded-lg p-4 border border-border">
                 <div className="text-xs text-muted-foreground">{t("settings.certificates.dns_names")}</div>
                 <div className="font-semibold text-sm text-foreground mt-1">{cert.dns_names?.join(", ") || "-"}</div>
               </div>
-              <div className="bg-muted rounded-xl p-4 border border-border">
+              <div className="bg-muted rounded-lg p-4 border border-border">
                 <div className="text-xs text-muted-foreground">{t("settings.certificates.type")}</div>
                 <div className="font-semibold text-sm text-foreground mt-1 flex items-center gap-1.5">
                   {cert.is_self_signed ? <CheckCircle className="w-3.5 h-3.5 text-warning" /> : <CheckCircle className="w-3.5 h-3.5 text-success" />}

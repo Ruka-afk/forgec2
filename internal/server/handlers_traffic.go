@@ -86,7 +86,7 @@ func (s *Server) trafficMiddleware() gin.HandlerFunc {
 }
 
 func (s *Server) handleTrafficPage(c *gin.Context) {
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":     "ForgeC2 - Traffic Monitor",
 		"ActiveNav": "traffic",

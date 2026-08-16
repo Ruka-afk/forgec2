@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -26,7 +27,10 @@ func lateralPsexec(target, user, pass, cmd string) (string, error) {
 	}
 	// Run the command remotely via a scheduled task and capture its output to a
 	// file on the target, then read it back over the admin share.
-	script += fmt.Sprintf(`schtasks /s %s /create /tn %s /tr "cmd.exe /c %s > %s 2>&1" /sc once /st 00:00 /f`+"\r\n", target, schName, cmd, outLocal)
+	// Escape embedded double-quotes so a command containing " cannot break out
+	// of the schtasks /tr quoting context (defence in depth for operator input).
+	safeCmd := strings.ReplaceAll(cmd, `"`, `""`)
+	script += fmt.Sprintf(`schtasks /s %s /create /tn %s /tr "cmd.exe /c %s > %s 2>&1" /sc once /st 00:00 /f`+"\r\n", target, schName, safeCmd, outLocal)
 	script += fmt.Sprintf(`schtasks /s %s /run /tn %s`+"\r\n", target, schName)
 	script += fmt.Sprintf(`timeout /t 3 /nobreak >nul & type %s`+"\r\n", outRemote)
 	// Cleanup: remove the scheduled task and the output file so no artifact is

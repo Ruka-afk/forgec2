@@ -42,7 +42,7 @@ export default React.memo(function QuickPresets({ onApply }: QuickPresetsProps) 
   return (
     <div className="flex items-center gap-x-3 gap-y-4 flex-wrap">
       <div className="flex items-center gap-x-2.5 shrink-0">
-        <div className="w-9 h-9 bg-chart-2/10 text-info rounded-xl flex items-center justify-center"><Wand2 className="w-4 h-4" /></div>
+        <div className="w-9 h-9 bg-chart-2/10 text-info rounded-lg flex items-center justify-center"><Wand2 className="w-4 h-4" /></div>
         <div>
           <div className="text-sm font-semibold text-foreground">{t("generate.quick_presets")}</div>
           <div className="text-xs text-muted-foreground">{t("generate.quick_presets_desc")}</div>
@@ -55,7 +55,7 @@ export default React.memo(function QuickPresets({ onApply }: QuickPresetsProps) 
               type="button"
               variant="ghost"
               onClick={() => onApply(p.key)}
-              className="absolute inset-0 z-10 h-auto rounded-xl"
+              className="absolute inset-0 z-10 h-auto rounded-lg"
               aria-label={t(p.labelKey)}
             />
             <div className="flex items-center gap-2.5">

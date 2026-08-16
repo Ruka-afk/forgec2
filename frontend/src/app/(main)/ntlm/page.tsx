@@ -158,7 +158,7 @@ export default function NtlmPage() {
       <TabsContent value="coerce">
 <Card className="p-4 sm:p-5">
           <div className="flex items-center gap-x-3 mb-5">
-            <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-warning/10 dark:bg-warning/30 rounded-lg flex items-center justify-center">
               <Megaphone className="w-4 h-4" />
             </div>
             <div>
@@ -214,7 +214,7 @@ export default function NtlmPage() {
         <div className="space-y-6">
 <Card className="p-4 sm:p-5">
             <div className="flex items-center gap-x-3 mb-5">
-              <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center">
                 <ArrowLeftRight className="w-4 h-4" />
               </div>
               <div>
@@ -274,7 +274,7 @@ export default function NtlmPage() {
       <TabsContent value="status">
 <Card className="p-4 sm:p-5">
           <div className="flex items-center gap-x-3 mb-5">
-            <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-success/10 dark:bg-success/30 rounded-lg flex items-center justify-center">
               <BarChart2 className="w-4 h-4" />
             </div>
             <div>
@@ -284,7 +284,7 @@ export default function NtlmPage() {
           </div>
 
           <div className="mb-4 flex items-center gap-x-3">
-            <span className={`w-3 h-3 rounded-full ${relayStatus.running ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`}></span>
+            <span className={`w-3 h-3 rounded-full ${relayStatus.running ? "bg-success animate-pulse" : "bg-muted-foreground"}`}></span>
             <span className="text-sm font-medium text-foreground">
               {relayStatus.running ? `${relayStatus.count} ${t("ntlm.sessions_active")}` : t("ntlm.sessions_inactive")}
             </span>

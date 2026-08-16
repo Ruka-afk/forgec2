@@ -294,7 +294,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
             {PLATFORMS.map((p) => (
               <Button key={p} variant={filterPlatform === p ? "default" : "outline"} size="sm"
                 onClick={() => changePlatform(p)}
-                className="rounded-xl gap-1.5">
+                className="rounded-lg gap-1.5">
                 {platformIcon(p)}
                 {p === "all" ? t("builds.filter_all") : p.charAt(0).toUpperCase() + p.slice(1)}
               </Button>
@@ -314,7 +314,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
           </Select>
           {(filterStatus || filterPlatform !== "all") && (
             <Button variant="outline" size="sm" onClick={clearFilters}
-              className="rounded-xl">
+              className="rounded-lg">
               <X className="w-4 h-4" /> {t("builds.clear")}
             </Button>
           )}
@@ -339,7 +339,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
             {[1, 2, 3].map((i) => (
               <Card key={i} className="p-4 sm:p-5">
                 <div className="flex items-center gap-4">
-                  <Skeleton className="w-10 h-10 rounded-xl" />
+                  <Skeleton className="w-10 h-10 rounded-lg" />
                   <div className="flex-1 space-y-2">
                     <Skeleton className="h-3 w-40" />
                     <Skeleton className="h-2 w-60" />
@@ -368,7 +368,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
               <Card key={id} className="overflow-hidden">
                 <div className="p-4 sm:p-5">
                   <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${status === "success" ? "bg-success/10" : status === "failed" ? "bg-destructive/10" : status === "building" ? "bg-primary/10" : "bg-secondary"}`}>
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${status === "success" ? "bg-success/10" : status === "failed" ? "bg-destructive/10" : status === "building" ? "bg-primary/10" : "bg-secondary"}`}>
                       {isBuilding ? <Spinner size="xs" /> : info.icon}
                     </div>
                     <div className="flex-1 min-w-0">

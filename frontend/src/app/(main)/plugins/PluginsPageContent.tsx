@@ -240,7 +240,7 @@ export default function PluginsPage() {
           <Button variant="secondary" onClick={() => setShowImport(true)}>
             <FileDown className="w-4 h-4" /> {t("plugins.import")}
           </Button>
-          <div className="flex bg-secondary rounded-xl p-0.5">
+          <div className="flex bg-secondary rounded-lg p-0.5">
             <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon-sm" onClick={() => setViewMode("grid")} aria-label={t("plugins.grid_view")}>
               <LayoutGrid className="w-4 h-4" />
             </Button>
@@ -263,7 +263,7 @@ export default function PluginsPage() {
         {PLUGIN_CATEGORIES.map((cat) => {
           const count = cat.key === "" ? plugins.length : plugins.filter((p) => (p.category || "") === cat.key).length;
           return (
-            <Button key={cat.key} variant="outline" size="sm" onClick={() => handleCategoryChange(cat.key)} className={`rounded-xl transition-all ${category === cat.key ? "ring-2 ring-primary/50 border-primary/30 " + cat.color : "text-muted-foreground"}`}>
+            <Button key={cat.key} variant="outline" size="sm" onClick={() => handleCategoryChange(cat.key)} className={`rounded-lg transition-all ${category === cat.key ? "ring-2 ring-primary/50 border-primary/30 " + cat.color : "text-muted-foreground"}`}>
               {cat.icon}
               {t(cat.labelKey)}
               <Badge variant="secondary" className="text-(--fs-micro-sm)">{count}</Badge>
@@ -341,8 +341,8 @@ export default function PluginsPage() {
             {executeLoading ? <><Spinner className="mr-2" />{t("plugins.running")}</> : <><Play className="w-4 h-4" />{t("plugins.run_plugin")}</>}
           </Button>
           {executeResult && (
-            <div className="bg-card rounded-xl p-4 max-h-96 overflow-y-auto">
-              <pre className="text-xs font-mono text-emerald-300 whitespace-pre-wrap">{executeResult}</pre>
+            <div className="bg-card rounded-lg p-4 max-h-96 overflow-y-auto">
+              <pre className="text-xs font-mono text-success whitespace-pre-wrap">{executeResult}</pre>
             </div>
           )}
         </DialogContent>

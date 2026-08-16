@@ -163,13 +163,16 @@ func handleRunEgress(task Task, res *TaskResult) {
 
 // extractC2Host extracts the hostname from the current C2 URL
 func extractC2Host() string {
-	if len(C2URLs) == 0 {
+	urls := c2URLsSnapshot()
+	if len(urls) == 0 {
 		return "127.0.0.1"
 	}
-	if currentC2Idx < 0 || currentC2Idx >= len(C2URLs) {
-		currentC2Idx = 0
+	idx := currentC2Idx.Load()
+	if idx < 0 || idx >= int32(len(urls)) {
+		currentC2Idx.Store(0)
+		idx = 0
 	}
-	raw := C2URLs[currentC2Idx]
+	raw := urls[int(idx)]
 	prefixes := []string{"http://", "https://", "tcp://", "tls://", "ssh://", "dns://", "smb://"}
 	for _, p := range prefixes {
 		if strings.HasPrefix(raw, p) {

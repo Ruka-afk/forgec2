@@ -207,7 +207,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
         <div className="bg-success/10 border-b border-success/20 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><RotateCw className="w-4 h-4" /></div>
+              <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><RotateCw className="w-4 h-4" /></div>
               <div>
                 <h2 className="text-lg font-semibold text-foreground">{t("profiles.active_config")}</h2>
                 <p className="text-xs text-chart-1">{t("profiles.active_config_desc")}</p>
@@ -232,18 +232,18 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                <div className="bg-secondary rounded-xl p-3 border border-border">
+                <div className="bg-secondary rounded-lg p-3 border border-border">
                   <div className="text-xs text-muted-foreground mb-1">{t("profiles.malleable_enabled")}</div>
                   <div className="flex items-center gap-2">
                     <span className={"inline-block w-2 h-2 rounded-full " + (activeConfig.malleable_enabled ? "bg-success" : "bg-muted-foreground")}></span>
                     <span className="text-sm font-medium">{activeConfig.malleable_enabled ? "Enabled" : "Disabled"}</span>
                   </div>
                 </div>
-                <div className="bg-secondary rounded-xl p-3 border border-border">
+                <div className="bg-secondary rounded-lg p-3 border border-border">
                   <div className="text-xs text-muted-foreground mb-1">{t("profiles.profile_name_label")}</div>
                   <div className="text-sm font-medium font-mono">{activeConfig.malleable_profile || "N/A"}</div>
                 </div>
-                <div className="bg-secondary rounded-xl p-3 border border-border">
+                <div className="bg-secondary rounded-lg p-3 border border-border">
                   <div className="text-xs text-muted-foreground mb-1">{t("profiles.user_agent_label")}</div>
                   <Tooltip>
                     <TooltipTrigger>
@@ -252,21 +252,21 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                     <TooltipContent>{activeConfig.user_agent}</TooltipContent>
                   </Tooltip>
                 </div>
-                <div className="bg-secondary rounded-xl p-3 border border-border">
+                <div className="bg-secondary rounded-lg p-3 border border-border">
                   <div className="text-xs text-muted-foreground mb-1">{t("profiles.beacon_interval")}</div>
                   <div className="text-sm font-medium">{activeConfig.interval}s / {activeConfig.jitter}%</div>
                 </div>
-                <div className="bg-secondary rounded-xl p-3 border border-border">
+                <div className="bg-secondary rounded-lg p-3 border border-border">
                   <div className="text-xs text-muted-foreground mb-1">{t("profiles.status_code")}</div>
                   <div className="text-sm font-medium font-mono">{activeConfig.status_code}</div>
                 </div>
-                <div className="bg-secondary rounded-xl p-3 border border-border">
+                <div className="bg-secondary rounded-lg p-3 border border-border">
                   <div className="text-xs text-muted-foreground mb-1">{t("profiles.content_type")}</div>
                   <div className="text-sm font-medium font-mono">{activeConfig.content_type}</div>
                 </div>
               </div>
 
-              <div className="bg-secondary rounded-xl p-3 border border-border mb-4">
+              <div className="bg-secondary rounded-lg p-3 border border-border mb-4">
                 <div className="text-xs text-muted-foreground mb-2">Headers ({headerEntries.length})</div>
                 {headerEntries.length === 0 ? (
                   <span className="text-xs text-muted-foreground italic">{t("profiles.no_headers")}</span>
@@ -283,11 +283,11 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                <div className="bg-secondary rounded-xl p-3 border border-border">
+                <div className="bg-secondary rounded-lg p-3 border border-border">
                   <div className="text-xs text-muted-foreground mb-1">{t("profiles.prepend_content")}</div>
                   <div className="text-xs font-mono text-muted-foreground truncate">{activeConfig.prepend || t("profiles.empty_value")}</div>
                 </div>
-                <div className="bg-secondary rounded-xl p-3 border border-border">
+                <div className="bg-secondary rounded-lg p-3 border border-border">
                   <div className="text-xs text-muted-foreground mb-1">{t("profiles.append_content")}</div>
                   <div className="text-xs font-mono text-muted-foreground truncate">{activeConfig.append || t("profiles.empty_value")}</div>
                 </div>
@@ -300,7 +300,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                 </div>
               )}
 
-              <div className="p-3 bg-warning/15 rounded-xl border border-warning/30 text-xs text-warning mt-3">
+              <div className="p-3 bg-warning/15 rounded-lg border border-warning/30 text-xs text-warning mt-3">
                 <AlertTriangle className="w-4 h-4" />
                 {t("profiles.reload_warning")}
               </div>
@@ -324,7 +324,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
         <Card className="overflow-hidden">
           <div className="bg-chart-6/violet border-b border-chart-6/violet px-6 py-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Shield className="w-4 h-4" /></div>
+              <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Shield className="w-4 h-4" /></div>
               <div><h2 className="text-lg font-semibold text-foreground">{t("profiles.card_title")}</h2><p className="text-xs text-chart-6">{t("profiles.card_desc")}</p></div>
             </div>
           </div>
@@ -359,7 +359,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                   <Textarea aria-label={t("profiles.append_content")} name="textarea-5" rows={2} value={malleableForm.append} onChange={(e) => setMalleableForm({ ...malleableForm, append: e.target.value })} placeholder="--></body></html>" className="font-mono" />
                 </div>
               </div>
-              <div className="p-3 bg-warning/15 rounded-xl border border-warning/30 text-xs text-warning">
+              <div className="p-3 bg-warning/15 rounded-lg border border-warning/30 text-xs text-warning">
                 <AlertTriangle className="w-4 h-4" />
                 {t("profiles.camouflage_warning")}
               </div>
@@ -433,7 +433,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                           size="sm"
                           key={p.name}
                           onClick={() => selectProfile(realIdx)}
-                          className={"w-full text-left px-3 py-2.5 rounded-xl text-xs transition-colors " + (selectedIdx === realIdx ? "bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary border border-primary/30 dark:border-primary/40" : "hover:bg-secondary text-muted-foreground border border-transparent")}
+                          className={"w-full text-left px-3 py-2.5 rounded-lg text-xs transition-colors " + (selectedIdx === realIdx ? "bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary border border-primary/30 dark:border-primary/40" : "hover:bg-secondary text-muted-foreground border border-transparent")}
                         >
                           <div className="flex items-center gap-2">
                             <FileCode className={`w-4 h-4 ${selectedIdx === realIdx ? "text-primary" : "text-muted-foreground"}`} />
@@ -460,7 +460,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                   <div className="bg-primary/10 border-b border-primary/20 px-6 py-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><FileCode className="w-4 h-4" /></div>
+                        <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><FileCode className="w-4 h-4" /></div>
                         <div>
                           <h2 className="text-lg font-semibold text-foreground">Editing: {editing.name || "untitled"}</h2>
                           <p className="text-xs text-primary">{editing.description || "No description"}</p>
@@ -602,7 +602,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
               setLoadingAgents(true);
               try {
                 const d = await api.get(paths.agents.list("page=1&pageSize=500"));
-                const list = (d.agents || d.data || []) as Record<string, unknown>[];
+                const list = (d.agents || d.data || (Array.isArray(d) ? d : [])) as Record<string, unknown>[];
                 setPushAgents(list.map((a) => ({ id: String(a.id || ""), hostname: String(a.hostname || a.ip || ""), ip: String(a.ip || "") })));
               } catch { toast.error(t("profiles.toast.load_agents_failed")); }
               setLoadingAgents(false);
@@ -613,7 +613,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
               <p className="text-sm text-muted-foreground">{t("profiles.load_agents_hint")}</p>
             ) : (
               pushAgents.map(a => (
-                <Label key={a.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-secondary transition-colors cursor-pointer">
+                <Label key={a.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-secondary transition-colors cursor-pointer">
                   <Checkbox aria-label={t("profiles.select_agent", { hostname: a.hostname })} name="input-18" checked={pushSelected.includes(a.id)} onCheckedChange={() => {
                     setPushSelected(prev => prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id])
                   }} />

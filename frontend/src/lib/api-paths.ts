@@ -371,6 +371,8 @@ export const paths = {
   },
   tasks: {
     list: (query = "") => (query ? `/tasks?${query}` : "/tasks"),
+    /** Full single-task record (includes complete result) under REST /api/v1. */
+    one: (id: string | number) => `/api/v1/tasks/${id}`,
   },
   opsec: {
     history: "/opsec/history",

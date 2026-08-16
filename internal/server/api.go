@@ -142,10 +142,11 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 		return
 	}
 	var req struct {
-		AgentID string `json:"agent_id" binding:"required"`
-		Type    string `json:"type" binding:"required"`
-		Command string `json:"command"`
-		Shell   string `json:"shell"`
+		AgentID        string `json:"agent_id" binding:"required"`
+		Type           string `json:"type" binding:"required"`
+		Command        string `json:"command"`
+		Shell          string `json:"shell"`
+		EncryptResult  bool   `json:"encrypt_result"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid request")
@@ -161,6 +162,16 @@ func (s *Server) apiCreateTask(c *gin.Context) {
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "task creation failed")
 		return
+	}
+
+	// Per-task result encryption (P2): mint a per-task AES-256-GCM key, store it
+	// on the task row, and the agent will seal this task's result with it.
+	if req.EncryptResult {
+		if k, kerr := generateTaskKey(); kerr == nil {
+			if uerr := s.db.Model(&db.Task{}).Where("id = ?", task.ID).Update("task_key", k).Error; uerr == nil {
+				task.TaskKey = k
+			}
+		}
 	}
 
 	s.broadcastTaskUpdate(req.AgentID, *task)

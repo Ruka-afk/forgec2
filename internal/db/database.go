@@ -186,7 +186,7 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 
 	// Auto-migrate all models (creates any tables/columns still missing on
 	// fresh installs and after historical migrations)
-	if err := db.AutoMigrate(&Implant{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &ScanResult{}, &NetworkHost{}, &CommandTemplate{}, &BOFFile{}, &BOFLibrary{}, &ServerConfig{}, &WebhookConfig{}, &Plugin{}, &PluginReview{}, &PluginDependency{}, &PluginUpdateStatus{}, &RolePermission{}, &AutomationRule{}, &AlertRule{}, &Alert{}, &SystemMetric{}, &GeneratedReport{}, &Campaign{}, &CampaignAgent{}, &MeshPeer{}, &BloodHoundResult{}, &BloodHoundFile{}, &OpsecHistory{}, &OpsecRule{}, &CircuitBreakerConfig{}, &CircuitBreakerEvent{}, &CustomRole{}, &PhishingTemplate{}, &PhishingCampaign{}, &PhishingEvent{}, &AgentTag{}, &AgentTagAssignment{}, &AutoTagRule{}, &Notification{}, &AgentGroup{}, &AgentGroupAssignment{}, &Workflow{}, &WorkflowStep{}, &ExecutionLog{}, &ChatMessage{}, &StagerToken{}, &Redirector{}, &AgentLock{}, &CloudCred{}, &AIChatSession{}, &AIChatMessage{}, &ExtC2Channel{}, &AgentStatusEvent{}, &BackupCode{}, &UserSession{}, &PasswordHistory{}, &ApiKey{}, &Script{}, &RegSecret{}, &KillSwitch{}); err != nil {
+	if err := db.AutoMigrate(&Implant{}, &Task{}, &AuditLog{}, &Listener{}, &TokenEntry{}, &SocksSession{}, &CredentialEntry{}, &User{}, &BuildLog{}, &ScanResult{}, &NetworkHost{}, &CommandTemplate{}, &BOFFile{}, &BOFLibrary{}, &ServerConfig{}, &WebhookConfig{}, &Plugin{}, &PluginReview{}, &PluginDependency{}, &PluginUpdateStatus{}, &RolePermission{}, &AutomationRule{}, &AlertRule{}, &Alert{}, &SystemMetric{}, &GeneratedReport{}, &Campaign{}, &CampaignAgent{}, &MeshPeer{}, &BloodHoundResult{}, &BloodHoundFile{}, &OpsecHistory{}, &OpsecRule{}, &CircuitBreakerConfig{}, &CircuitBreakerEvent{}, &CustomRole{}, &PhishingTemplate{}, &PhishingCampaign{}, &PhishingEvent{}, &AgentTag{}, &AgentTagAssignment{}, &AutoTagRule{}, &Notification{}, &AgentGroup{}, &AgentGroupAssignment{}, &Workflow{}, &WorkflowStep{}, &ExecutionLog{}, &ChatMessage{}, &StagerToken{}, &Redirector{}, &AgentLock{}, &CloudCred{}, &AIChatSession{}, &AIChatMessage{}, &ExtC2Channel{}, &AgentStatusEvent{}, &BackupCode{}, &UserSession{}, &PasswordHistory{}, &ApiKey{}, &Script{}, 	&RegSecret{}, &KillSwitch{}, &Tenant{}); err != nil {
 		return nil, err
 	}
 
@@ -198,6 +198,13 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 
 	// Seed role permissions
 	seedRolePermissions(db)
+
+	// Multi-tenant bootstrap: ensure a default tenant exists and backfill any
+	// legacy (tenant_id = 0) rows so every asset is owned by a tenant. New
+	// tenants are created on operator registration.
+	if err := ensureDefaultTenant(db); err != nil {
+		return nil, fmt.Errorf("default tenant bootstrap failed: %w", err)
+	}
 
 	// Seed default admin user if none exist
 	var userCount int64
@@ -272,6 +279,30 @@ func seedRolePermissions(db *gorm.DB) {
 	}
 	slog.Info("Role permissions seeded", "roles", len(RolePermissionsMap))
 }
+
+// ensureDefaultTenant creates the singleton "default" tenant and backfills any
+// legacy (tenant_id = 0) rows so a fresh or upgraded deployment is fully
+// tenant-scoped. Returns the default tenant ID.
+func ensureDefaultTenant(db *gorm.DB) error {
+	var t Tenant
+	if err := db.Where("name = ?", "default").FirstOrCreate(&t, Tenant{Name: "default"}).Error; err != nil {
+		return err
+	}
+	backfill := func(model interface{}, idCol string) {
+		if err := db.Model(model).Where("tenant_id = ? OR tenant_id IS NULL", 0).Update("tenant_id", t.ID).Error; err != nil {
+			slog.Warn("Tenant backfill partial", "model", idCol, "err", err)
+		}
+	}
+	backfill(&User{}, "users")
+	backfill(&Implant{}, "implants")
+	backfill(&Task{}, "tasks")
+	slog.Info("Default tenant ensured", "tenant_id", t.ID)
+	return nil
+}
+
+// DefaultTenantName is the name of the bootstrap tenant all legacy assets are
+// assigned to.
+const DefaultTenantName = "default"
 
 // MigrateOldRoles migrates "operator"/"viewer"/"guest" to "user"
 func MigrateOldRoles(db *gorm.DB) {

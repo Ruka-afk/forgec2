@@ -21,13 +21,6 @@ const (
 	FormatMax // sentinel — number of supported formats
 )
 
-// formatNames maps format IDs to human-readable names
-var formatNames = map[byte]string{
-	FormatJSON:    "json",
-	FormatCBOR:    "cbor",
-	FormatMsgpack: "msgpack",
-}
-
 var (
 	lastFormat atomic.Uint32 // last-used format for rotation
 )
@@ -81,32 +74,7 @@ func Marshal(v any) ([]byte, error) {
 	return out, nil
 }
 
-// MarshalFormat encodes v using the specified format, prepending a format byte.
-func MarshalFormat(v any, fmtID byte) ([]byte, error) {
-	var encoded []byte
-	var err error
-
-	switch fmtID {
-	case FormatJSON:
-		encoded, err = json.Marshal(v)
-	case FormatCBOR:
-		encoded, err = cbor.Marshal(v)
-	case FormatMsgpack:
-		encoded, err = msgpack.Marshal(v)
-	default:
-		encoded, err = json.Marshal(v)
-		fmtID = FormatJSON
-	}
-	if err != nil {
-		return nil, err
-	}
-	out := make([]byte, 1, 1+len(encoded))
-	out[0] = fmtID
-	out = append(out, encoded...)
-	return out, nil
-}
-
-// Unmarshal decodes data as produced by Marshal/MarshalFormat.
+// Unmarshal decodes data as produced by Marshal.
 // If the first byte is a known format identifier (0x00-0x02), it decodes accordingly.
 // For backward compatibility, if the first byte is NOT a known format ID (e.g. plain JSON starting with '{'),
 // the entire data is treated as JSON.
@@ -134,14 +102,6 @@ func Unmarshal(data []byte, v any) error {
 	}
 	// Backward compatibility: treat as plain JSON
 	return decodeJSON(data, v)
-}
-
-// FormatName returns the human-readable name for a format byte.
-func FormatName(fmtID byte) string {
-	if name, ok := formatNames[fmtID]; ok {
-		return name
-	}
-	return fmt.Sprintf("unknown(0x%02x)", fmtID)
 }
 
 // decodeJSON decodes the first JSON value from data, ignoring any trailing

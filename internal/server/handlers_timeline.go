@@ -25,7 +25,7 @@ type TimelineEvent struct {
 
 // handleTimelinePage renders the action timeline page
 func (s *Server) handleTimelinePage(c *gin.Context) {
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 
 	// Get filter parameters
 	filterType := c.Query("type")

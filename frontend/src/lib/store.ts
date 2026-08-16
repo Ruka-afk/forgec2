@@ -46,7 +46,28 @@ interface AppState {
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
 
+  // Display density (comfortable | compact) — drives [data-density] on <html>
+  density: "comfortable" | "compact";
+  setDensity: (d: "comfortable" | "compact") => void;
+
+  // Focus mode — hides shell chrome for a full-viewport console
+  focusMode: boolean;
+  toggleFocusMode: () => void;
+  setFocusMode: (b: boolean) => void;
+
   fetchStats: () => Promise<void>;
+}
+
+const DENSITY_KEY = "forgec2_density";
+const FOCUS_KEY = "forgec2_focus_mode";
+
+function applyDensity(d: "comfortable" | "compact") {
+  if (typeof document === "undefined") return;
+  document.documentElement.setAttribute("data-density", d);
+}
+function applyFocus(on: boolean) {
+  if (typeof document === "undefined") return;
+  document.documentElement.setAttribute("data-focus", on ? "on" : "off");
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -61,6 +82,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   isMobile: false,
   mobileMenuOpen: false,
   commandPaletteOpen: false,
+
+  density:
+    typeof window !== "undefined" &&
+    (localStorage.getItem(DENSITY_KEY) === "compact" ||
+      localStorage.getItem(DENSITY_KEY) === "comfortable")
+      ? (localStorage.getItem(DENSITY_KEY) as "comfortable" | "compact")
+      : "comfortable",
+  focusMode:
+    typeof window !== "undefined" && localStorage.getItem(FOCUS_KEY) === "true",
 
   toggleSidebar: () => {
     const { isMobile, mobileMenuOpen, sidebarCollapsed } = get();
@@ -87,6 +117,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCurrentUserRole: (role) => set({ currentUserRole: role }),
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
 
+  setDensity: (d) => {
+    if (typeof window !== "undefined") localStorage.setItem(DENSITY_KEY, d);
+    applyDensity(d);
+    set({ density: d });
+  },
+  toggleFocusMode: () => {
+    const next = !get().focusMode;
+    if (typeof window !== "undefined") localStorage.setItem(FOCUS_KEY, String(next));
+    applyFocus(next);
+    set({ focusMode: next });
+  },
+  setFocusMode: (b) => {
+    if (typeof window !== "undefined") localStorage.setItem(FOCUS_KEY, String(b));
+    applyFocus(b);
+    set({ focusMode: b });
+  },
+
   fetchStats: async () => {
     if (statsInFlight) return statsInFlight;
     statsInFlight = (async () => {
@@ -103,6 +150,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     return statsInFlight;
   },
 }));
+
+// Apply persisted density/focus state to <html> on first client load.
+applyDensity(useAppStore.getState().density);
+applyFocus(useAppStore.getState().focusMode);
 
 // Wire WebSocket events to a debounced stats refresh. Idempotent — safe to
 // call from anywhere (Sidebar mounts it once).

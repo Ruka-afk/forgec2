@@ -20,7 +20,7 @@ type SearchResult struct {
 
 func (s *Server) handleSearchPage(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("q"))
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":        "ForgeC2 - Search",
 		"ActiveNav":    "search",

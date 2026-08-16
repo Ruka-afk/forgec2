@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Banner } from "@/components/ui/banner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -49,10 +50,9 @@ export default function EvasionSection({ agentId, online }: EvasionSectionProps)
       <div className="p-3">
         <p className="text-xs text-muted-foreground mb-3">{t("agents.evasion_desc")}</p>
         {confirmStep && (
-          <div className="mb-3 rounded-lg border border-destructive/50 bg-destructive/10 p-2 text-xs text-destructive flex items-center gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          <Banner tone="destructive" icon={<AlertTriangle className="w-3.5 h-3.5" />} className="mb-3 text-xs">
             {t("agents.evasion_confirm_msg").replace("{technique}", t(EVASION_TECHNIQUES.find(tech => tech.value === selectedTechnique)?.labelKey || ""))}
-          </div>
+          </Banner>
         )}
         <div className="flex gap-2">
           <Select value={selectedTechnique} onValueChange={(v) => { if (v !== null) { setSelectedTechnique(v); setConfirmStep(false); } }}>

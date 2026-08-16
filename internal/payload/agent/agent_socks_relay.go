@@ -110,7 +110,13 @@ func socksHandleData(connID uint64, data []byte) {
 		return
 	}
 	conn.tcpConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	conn.tcpConn.Write(data)
+	if _, err := conn.tcpConn.Write(data); err != nil {
+		// Write failed: mark the relay closed and drop the underlying
+		// connection so we don't silently lose data or leak the socket.
+		conn.closed = true
+		conn.tcpConn.Close()
+		return
+	}
 	conn.tcpConn.SetWriteDeadline(time.Time{})
 }
 
@@ -276,6 +282,11 @@ func socksEnqueueOut(connID uint64, action string, data []byte) {
 
 	if ok {
 		conn.mu.Lock()
+		// Bound the per-connection outbound queue so a faster local client cannot
+		// grow agent memory without limit while the C2 link is slow.
+		if len(conn.outbound) >= socksMaxConnOut {
+			conn.outbound = conn.outbound[1:]
+		}
 		conn.outbound = append(conn.outbound, frame)
 		conn.mu.Unlock()
 		return

@@ -46,7 +46,7 @@ export default function SecuritySection({
     <Card className="overflow-hidden">
       <div className="bg-secondary/60 border-b border-border px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Lock className="w-4 h-4" /></div>
+          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Lock className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-foreground">{t("settings.security.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.security.subtitle")}</p></div>
         </div>
       </div>
@@ -76,7 +76,7 @@ export default function SecuritySection({
 
         <div className="border-t border-border pt-6">
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="w-4 h-4" />{t("settings.security.jwt_secret")}</h3>
-          <div className="flex items-center gap-4 p-4 bg-warning/10 rounded-xl border border-warning/20">
+          <div className="flex items-center gap-4 p-4 bg-warning/10 rounded-lg border border-warning/20">
             <div className="flex-1">
               <div className="text-xs text-warning font-medium mb-1">{t("settings.security.current_key")}</div>
               <code className="text-sm font-mono text-warning-foreground break-all select-all">{data.jwt_masked ?? "????????"}</code>
@@ -91,13 +91,13 @@ export default function SecuritySection({
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Shield className="w-4 h-4" />{t("settings.security.two_factor")}</h3>
 
           {totpStatus === null ? (
-            <div className="flex items-center gap-3 p-4 bg-muted rounded-xl border border-border">
+            <div className="flex items-center gap-3 p-4 bg-muted rounded-lg border border-border">
               <Spinner size="sm" />
               <span className="text-sm text-muted-foreground">{t("settings.security.loading_totp")}</span>
             </div>
           ) : !totpStatus ? (
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-muted rounded-xl border border-border">
+              <div className="flex items-center justify-between p-4 bg-muted rounded-lg border border-border">
                 <div>
                   <div className="text-sm font-medium text-muted-foreground">{t("settings.security.two_factor_name")}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">{t("settings.security.two_factor_desc")}</div>
@@ -110,10 +110,10 @@ export default function SecuritySection({
                 </Button>
               ) : (
                 <div className="space-y-4">
-                  <div className="bg-primary/10 dark:bg-primary/20 border border-primary/30 dark:border-primary/40 rounded-xl p-4">
+                  <div className="bg-primary/10 dark:bg-primary/20 border border-primary/30 dark:border-primary/40 rounded-lg p-4">
                     <div className="text-xs font-medium text-primary mb-2">{t("settings.security.scan_qr")}</div>
                     <div className="flex items-center gap-4">
-                      <div className="w-32 h-32 bg-card rounded-xl border border-primary/30 dark:border-primary/40 flex items-center justify-center shrink-0">
+                      <div className="w-32 h-32 bg-card rounded-lg border border-primary/30 dark:border-primary/40 flex items-center justify-center shrink-0">
                         {totpQR ? <img src={totpQR} alt={t("settings.security.qr_alt")} className="max-w-full max-h-full p-2" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} /> : <QrCode className="w-4 h-4" />}
                       </div>
                       <div>
@@ -131,7 +131,7 @@ export default function SecuritySection({
                     <Input id="totp-code" type="text" aria-label={t("settings.security.verification_code")} placeholder="123 456" maxLength={8} value={totpCode} onChange={(e) => setTotpCode(e.target.value)} />
                   </div>
                   {totpBackupCodes && (
-                    <div className="bg-warning/10 border border-warning/20 rounded-xl p-3 text-xs text-warning-foreground">
+                    <div className="bg-warning/10 border border-warning/20 rounded-lg p-3 text-xs text-warning-foreground">
                       <AlertTriangle className="w-4 h-4" />
                       {t("settings.security.save_backup_codes")} <div className="mt-2 font-mono font-semibold whitespace-pre-wrap">{totpBackupCodes}</div>
                     </div>
@@ -144,7 +144,7 @@ export default function SecuritySection({
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="bg-success/15 border border-success/30 rounded-xl p-4">
+              <div className="bg-success/15 border border-success/30 rounded-lg p-4">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4" />
                   <span className="text-sm font-medium text-success">{t("settings.security.2fa_enabled")}</span>

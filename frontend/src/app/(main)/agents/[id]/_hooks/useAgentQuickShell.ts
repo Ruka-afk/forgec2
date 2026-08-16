@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { usePersistedState } from "@/lib/hooks/usePersistedState";
 
 interface ShellHistoryEntry {
   command: string;
@@ -11,12 +12,15 @@ interface ShellHistoryEntry {
   timestamp: string;
 }
 
-export function useAgentQuickShell(agentId: string, successMessage: string, errorMessage: string) {
+export function useAgentQuickShell(agentId: string, successMessage: string, errorMessage: string, persistKey?: string) {
   const [command, setCommand] = useState("");
   const [shell, setShell] = useState("cmd.exe");
   const [history, setHistory] = useState<ShellHistoryEntry[]>([]);
   const [sending, setSending] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = usePersistedState(
+    persistKey ?? `agents.detail.${agentId}.quick_shell`,
+    false,
+  );
   const mountedRef = useRef(true);
 
   useEffect(() => {

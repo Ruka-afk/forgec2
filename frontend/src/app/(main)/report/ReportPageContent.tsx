@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { API_BASE } from "@/lib/constants";
 import { useI18n } from "@/lib/i18n";
 import { PageContainer } from "@/components/ui/page-container";
-import { Spinner, PageSpinner } from "@/components/ui/spinner";
+import { Spinner } from "@/components/ui/spinner";
 import { StatCard } from "@/components/ui/animated-stat-card";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -126,7 +126,7 @@ export default function ReportPage() {
               <TabsList className="flex-col bg-transparent p-0 gap-1 w-full h-auto">
                 {SECTIONS.map((s) => (
                   <TabsTrigger key={s.key} value={s.key}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium transition-colors data-[selected]:bg-primary/10 data-[selected]:text-primary text-muted-foreground hover:bg-muted/50">
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-sm font-medium transition-colors data-[selected]:bg-primary/10 data-[selected]:text-primary text-muted-foreground hover:bg-muted/50">
                     {s.icon}
                     {s.label}
                   </TabsTrigger>
@@ -144,7 +144,7 @@ export default function ReportPage() {
                   <Label className="text-sm font-medium mb-3">{t("report.report_template")}</Label>
                   <RadioGroup value={template} onValueChange={setTemplate} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {TEMPLATES.map((tpl) => (
-                      <div key={tpl.value} className={`flex flex-col items-start p-4 rounded-xl cursor-pointer transition-colors ${template === tpl.value ? "border-2 border-primary bg-primary/10" : "border border-border hover:bg-muted/50"}`}>
+                      <div key={tpl.value} className={`flex flex-col items-start p-4 rounded-lg cursor-pointer transition-colors ${template === tpl.value ? "border-2 border-primary bg-primary/10" : "border border-border hover:bg-muted/50"}`}>
                         <div className="flex items-center space-x-2 mb-2">
                           <RadioGroupItem value={tpl.value} id={`tpl-${tpl.value}`} />
                           <Label htmlFor={`tpl-${tpl.value}`} className="text-sm font-medium text-foreground cursor-pointer">{tpl.label}</Label>
@@ -184,7 +184,7 @@ export default function ReportPage() {
                       {history.map((r, i) => {
                         const id = r.id || String(i);
                         return (
-                          <div key={id} className="flex items-center justify-between p-3 bg-muted rounded-xl hover:bg-secondary transition-colors">
+                          <div key={id} className="flex items-center justify-between p-3 bg-muted rounded-lg hover:bg-secondary transition-colors">
                             <div className="flex items-center gap-3">
                               <FileText className="w-4 h-4" />
                               <div>

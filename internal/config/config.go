@@ -39,8 +39,10 @@ type Config struct {
 		DNSAddr              string        `yaml:"dns_addr"`
 		GRPCEnabled          bool          `yaml:"grpc_enabled"`
 		GRPCAddr             string        `yaml:"grpc_addr"`
-		ICMPEnabled          bool          `yaml:"icmp_enabled"`
+		ICMPEnabled           bool          `yaml:"icmp_enabled"`
 		ICMPAddr             string        `yaml:"icmp_addr"`
+		UDPEnabled           bool          `yaml:"udp_enabled"`
+		UDPAddr              string        `yaml:"udp_addr"`
 		OfflineThreshold     int           `yaml:"offline_threshold"`      // seconds
 		SessionMaxAgeHours   int           `yaml:"session_max_age_hours"`  // JWT expiry
 		CleanupRetentionDays int           `yaml:"cleanup_retention_days"` // auto-purge cutoff
@@ -224,6 +226,8 @@ func DefaultConfig() *Config {
 	cfg.Server.DNSAddr = ":53"
 	cfg.Server.ICMPEnabled = false
 	cfg.Server.ICMPAddr = "0.0.0.0"
+	cfg.Server.UDPEnabled = false
+	cfg.Server.UDPAddr = ":8899"
 	cfg.Server.SSHEnabled = false
 	cfg.Server.SSHPort = 2222
 	cfg.Server.SSHAddr = ""

@@ -21,7 +21,7 @@ export function BuildResult({ busy, result }: { busy?: boolean; result?: ReactNo
   const { t } = useI18n();
   if (busy) {
     return (
-      <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5">
+      <div className="mt-3 flex items-center gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5">
         <Spinner size="sm" />
         <div className="flex-1 space-y-1">
           <div className="text-xs font-medium text-foreground">{t("generate.panel.compiling")}</div>

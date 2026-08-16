@@ -33,7 +33,7 @@ func (s *Server) aiConfigPublicView() gin.H {
 }
 
 func (s *Server) handleAIPage(c *gin.Context) {
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":        "ForgeC2 - AI Assistant",
 		"ActiveNav":    "ai",

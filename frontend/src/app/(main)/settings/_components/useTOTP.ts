@@ -17,7 +17,7 @@ export interface TOTPState {
   totpDisableCode: string;
 }
 
-export function useTOTP(t: (key: string) => string, saving: boolean, setSaving: (v: boolean) => void, activeSection: string) {
+export function useTOTP(t: (key: string) => string, setSaving: (v: boolean) => void, activeSection: string) {
   const [totpStatus, setTotpStatus] = useState<boolean | null>(null);
   const [totpSecret, setTotpSecret] = useState("");
   const [totpQR, setTotpQR] = useState("");

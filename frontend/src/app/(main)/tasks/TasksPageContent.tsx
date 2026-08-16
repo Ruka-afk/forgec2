@@ -543,12 +543,12 @@ function TaskDetailModal({ task, onClose, getAgentName, getStatusBadge, getTypeB
         <div className="overflow-y-auto flex-1">
           <div className="mb-4">
             <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">{t("tasks.detail_command")}</h3>
-            <code className="block bg-muted border border-border rounded-xl p-3 text-sm font-mono text-foreground">{task.command || "-"}</code>
+            <code className="block bg-muted border border-border rounded-lg p-3 text-sm font-mono text-foreground">{task.command || "-"}</code>
           </div>
           {task.result && (
             <div>
               <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">{t("tasks.detail_output")}</h3>
-              <pre className="bg-card text-success font-mono text-xs rounded-xl p-4 overflow-x-auto whitespace-pre-wrap break-all max-h-96">{task.result}</pre>
+              <pre className="bg-card text-success font-mono text-xs rounded-lg p-4 overflow-x-auto whitespace-pre-wrap break-all max-h-96">{task.result}</pre>
             </div>
           )}
           {task.error && (

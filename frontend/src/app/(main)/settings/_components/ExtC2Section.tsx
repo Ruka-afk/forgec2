@@ -83,10 +83,10 @@ export default function ExtC2Section() {
           <p className="text-xs text-muted-foreground">{t("settings.extc2Desc")}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={fetchChannels} className="rounded-xl">
+          <Button variant="outline" size="sm" onClick={fetchChannels} className="rounded-lg">
             <RefreshCw className="w-4 h-4" />
           </Button>
-          <Button size="sm" onClick={() => setShowForm(!showForm)} className="rounded-xl">
+          <Button size="sm" onClick={() => setShowForm(!showForm)} className="rounded-lg">
             + {t("settings.extc2.addChannel")}
           </Button>
         </div>
@@ -99,7 +99,7 @@ export default function ExtC2Section() {
       {modal}
 
       {channels.map(ch => (
-        <div key={ch.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
+        <div key={ch.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
           <div className="flex items-center gap-3">
             {ch.enabled ? <Wifi className="w-4 h-4 text-success" /> : <WifiOff className="w-4 h-4 text-muted-foreground" />}
             <div>
@@ -110,20 +110,20 @@ export default function ExtC2Section() {
               <p className="text-xs text-muted-foreground mt-0.5">{t("settings.extc2.created")} {formatTime(ch.created_at)}</p>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => handleDelete(ch.id)} className="rounded-xl text-destructive hover:text-destructive">
+          <Button variant="ghost" size="sm" onClick={() => handleDelete(ch.id)} className="rounded-lg text-destructive hover:text-destructive">
             <Trash2 className="w-4 h-4" />
           </Button>
         </div>
       ))}
 
       {showForm && (
-        <div className="space-y-3 p-4 rounded-xl border bg-muted/30">
+        <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
           <div className="flex gap-2">
             <Button
               variant={formType === "discord" ? "default" : "outline"}
               size="sm"
               onClick={() => setFormType("discord")}
-              className="rounded-xl"
+              className="rounded-lg"
             >
               Discord
             </Button>
@@ -131,7 +131,7 @@ export default function ExtC2Section() {
               variant={formType === "slack" ? "default" : "outline"}
               size="sm"
               onClick={() => setFormType("slack")}
-              className="rounded-xl"
+              className="rounded-lg"
             >
               Slack
             </Button>
@@ -158,10 +158,10 @@ export default function ExtC2Section() {
             />
           </div>
           <div className="flex gap-2">
-            <Button size="sm" onClick={handleSave} disabled={saving} className="rounded-xl">
+            <Button size="sm" onClick={handleSave} disabled={saving} className="rounded-lg">
               {saving ? t("settings.extc2.saving") : t("settings.extc2.save")}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setShowForm(false)} className="rounded-xl">
+            <Button size="sm" variant="outline" onClick={() => setShowForm(false)} className="rounded-lg">
               {t("settings.extc2.cancel")}
             </Button>
           </div>

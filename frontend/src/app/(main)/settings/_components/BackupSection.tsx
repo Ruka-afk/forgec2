@@ -100,7 +100,7 @@ export default function BackupSection() {
     <Card className="overflow-hidden">
       <div className="bg-warning/10 border-b border-warning/20 px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center">
+          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center">
             <Archive className="w-4 h-4 text-warning" />
           </div>
           <div>
@@ -137,7 +137,7 @@ export default function BackupSection() {
         ) : (
           <div className="space-y-2">
             {backups.map((b) => (
-              <div key={b.name} className="flex items-center justify-between bg-muted rounded-xl px-4 py-3 border border-border hover:border-primary/20 transition-colors">
+              <div key={b.name} className="flex items-center justify-between bg-muted rounded-lg px-4 py-3 border border-border hover:border-primary/20 transition-colors">
                 <div className="flex items-center gap-3 min-w-0">
                   <Archive className="w-4 h-4 text-muted-foreground shrink-0" />
                   <div className="min-w-0">

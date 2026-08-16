@@ -28,7 +28,6 @@ import { useAgentModals } from "./_components/useAgentModals";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import AgentDetailPage from "./[id]/AgentDetailPage";
 import type { Beacon, BulkResult } from "./_components/types";
-import { copyToClipboard } from "./_components/types";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
 
 export type { Beacon };
@@ -57,7 +56,7 @@ export default function AgentsPageContent() {
   const {
     confirm, setConfirm, cmdModalOpen, cmdType, cmdText, setCmdType, setCmdText,
     closeCmdModal, openCmdModal,
-    quickSleepAgent, closeQuickSleep, openQuickSleep, sleepInterval, sleepJitter, setSleepInterval, setSleepJitter,
+    quickSleepAgent, closeQuickSleep, sleepInterval, sleepJitter, setSleepInterval, setSleepJitter,
     editingNotesId, closeNotesEdit, openNotesEdit, editNotesText, setNotesText,
     screenshotConfirmOpen, setScreenshotConfirm,
     batchSleepOpen, closeBatchSleep, openBatchSleep, batchSleepInterval, batchSleepJitter, setBatchSleepInterval, setBatchSleepJitter,
@@ -71,7 +70,6 @@ export default function AgentsPageContent() {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [bulkResults, setBulkResults] = useState<BulkResult[]>([]);
-  const [copiedField, setCopiedField] = useState("");
 
   const {
     searchInput, setSearchInput, searchQuery,
@@ -100,17 +98,18 @@ export default function AgentsPageContent() {
     [sortedBeacons, agentVirtualized, agentVirtStart, agentVirtEnd],
   );
 
-  const loadBeacons = useCallback((opts?: { background?: boolean }) => {
+  const loadBeacons = useCallback(() => {
     loadBeaconsRaw(searchQuery, statusFilter, osFilter, page, 50, tagFilter, sortKey, sortDir);
   }, [loadBeaconsRaw, searchQuery, statusFilter, osFilter, page, tagFilter, sortKey, sortDir]);
 
   const loadBeaconsRef = useRef(loadBeacons);
   loadBeaconsRef.current = loadBeacons;
+  const onlineReloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { loadBeacons(); }, [loadBeacons]);
   useEffect(() => { loadLocks(); }, [loadLocks]);
 
-  useVisibleInterval(() => loadBeacons({ background: true }), autoRefresh ? 30000 : 0);
+  useVisibleInterval(() => loadBeacons(), autoRefresh ? 30000 : 0);
 
   useEffect(() => {
     if (!actionMsg) return;
@@ -132,7 +131,8 @@ export default function AgentsPageContent() {
   useEffect(() => {
     const unsub = subscribe((msg) => {
       if (msg.type === "agent_online" || msg.type === "agent_offline") {
-        loadBeaconsRef.current({ background: true });
+        if (onlineReloadTimer.current) clearTimeout(onlineReloadTimer.current);
+        onlineReloadTimer.current = setTimeout(() => loadBeaconsRef.current(), 500);
       } else if (msg.type === "agent_data_update" && msg.agent_id) {
         const aid = String(msg.agent_id);
         setBeacons((prev) => prev.map((b) =>
@@ -148,7 +148,10 @@ export default function AgentsPageContent() {
         });
       }
     });
-    return () => unsub();
+    return () => {
+      if (onlineReloadTimer.current) clearTimeout(onlineReloadTimer.current);
+      unsub();
+    };
     // loadBeaconsRef always points at latest loadBeacons — intentional stable subscribe
   }, [subscribe, setAgentLocks, setBeacons]);
 
@@ -165,18 +168,6 @@ export default function AgentsPageContent() {
       }
     },
     [toggleSort],
-  );
-
-  const handleRowConfirm = useCallback(
-    (type: "kill" | "delete" | "batch-delete" | "bulk-kill" | "bulk-uninstall", id: string, hostname: string) => {
-      setConfirm({ type, id, hostname });
-    },
-    [setConfirm],
-  );
-
-  const handleRowCopy = useCallback(
-    (field: string, value: string) => copyToClipboard(value, field, setCopiedField),
-    [],
   );
 
   const runBatch = async (payload: Record<string, unknown>) => {
@@ -296,15 +287,6 @@ export default function AgentsPageContent() {
     closeCmdModal();
   };
 
-  const sendScreenshot = useCallback(async (id: string) => {
-    try {
-      await api.post(paths.agents.screenshotTask(id));
-      setActionMsg(t("agents.screenshot_sent"));
-    } catch {
-      setActionMsg(t("agents.screenshot_failed"));
-    }
-  }, [t]);
-
   const submitQuickSleep = async () => {
     if (!quickSleepAgent) return;
     try {
@@ -362,7 +344,7 @@ export default function AgentsPageContent() {
         <Button
           variant="outline"
           onClick={() => { setBulkMode((p) => !p); if (!bulkMode) setSelected(new Set()); }}
-          className={`h-9 sm:h-10 px-3 rounded-xl gap-2 min-w-[2.75rem] min-h-[2.75rem] transition-all ${
+          className={`h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem] transition-all ${
             bulkMode
               ? "bg-primary text-primary-foreground border-primary hover:bg-primary/80"
               : "text-muted-foreground"
@@ -374,7 +356,7 @@ export default function AgentsPageContent() {
         <Button
           variant="outline"
           onClick={() => { setShowResults((p) => !p); if (!showResults) setBulkMode(true); }}
-          className={`h-9 sm:h-10 px-3 rounded-xl gap-2 min-w-[2.75rem] min-h-[2.75rem] transition-all ${
+          className={`h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem] transition-all ${
             showResults
               ? "bg-primary text-primary-foreground border-primary hover:bg-primary/80"
               : "text-muted-foreground"
@@ -387,7 +369,7 @@ export default function AgentsPageContent() {
         <Button
           variant="outline"
           onClick={exportCSV}
-          className="h-9 sm:h-10 px-3 rounded-xl gap-2 min-w-[2.75rem] min-h-[2.75rem]"
+          className="h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem]"
           title={t("agents.export_csv_title")}
         >
           <Download className="w-4 h-4" />
@@ -396,9 +378,9 @@ export default function AgentsPageContent() {
         <Button
           variant="outline"
           onClick={() => setAutoRefresh((p) => !p)}
-          className={`h-9 sm:h-10 px-3 rounded-xl gap-2 min-w-[2.75rem] min-h-[2.75rem] transition-all ${
+          className={`h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem] transition-all ${
             autoRefresh
-              ? "bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700"
+              ? "bg-success border-success text-white hover:bg-success/10"
               : "text-muted-foreground"
           }`}
           title={autoRefresh ? t("agents.auto_refresh_on") : t("agents.auto_refresh_off")}
@@ -409,7 +391,7 @@ export default function AgentsPageContent() {
         <Button
           variant="outline"
           onClick={() => setViewMode((p) => p === "table" ? "grid" : "table")}
-          className="h-9 sm:h-10 px-3 rounded-xl gap-2 min-w-[2.75rem] min-h-[2.75rem]"
+          className="h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem]"
           title={viewMode === "table" ? t("agents.switch_grid") : t("agents.switch_table")}
         >
           {viewMode === "table" ? <Grip className="w-4 h-4" /> : <ListOrdered className="w-4 h-4" />}
@@ -417,7 +399,7 @@ export default function AgentsPageContent() {
         <Button
           variant="outline"
           onClick={() => { setPage(1); loadBeacons(); }}
-          className="h-9 sm:h-10 px-3 rounded-xl gap-2 min-w-[2.75rem] min-h-[2.75rem]"
+          className="h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem]"
         >
           <RefreshCw className="w-4 h-4" />
           <span className="hidden sm:inline text-foreground text-sm">{t("agents.refresh")}</span>

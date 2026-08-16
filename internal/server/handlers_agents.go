@@ -57,7 +57,7 @@ func (s *Server) handleAgents(c *gin.Context) {
 		agents[i].Status = s.agentStatus(agents[i]).Status
 	}
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	totalPages := (int(total) + p.PageSize - 1) / p.PageSize
 	prevPage := p.Page - 1
 	nextPage := p.Page + 1
@@ -110,7 +110,9 @@ func agentSortOrder(sortKey, sortDir string) string {
 func (s *Server) handleAgentDetail(c *gin.Context) {
 	id := c.Param("id")
 	var agent db.Implant
-	if err := s.db.First(&agent, "id = ?", id).Error; err != nil {
+	q := s.db.Model(&db.Implant{})
+	q = s.tenantScope(q, c)
+	if err := q.First(&agent, "id = ?", id).Error; err != nil {
 		respondError(c, http.StatusNotFound, "agent not found")
 		return
 	}
@@ -211,10 +213,12 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 
 	// Fetch unlinked agents (for linking dropdown) - optimized
 	var unlinkedAgents []db.Implant
-	if err := s.db.Select("id", "hostname", "ip", "os").
-		Where("(parent_id = '' OR parent_id IS NULL) AND id != ?", id).Order("hostname asc").Limit(500).Find(&unlinkedAgents).Error; err != nil {
-		handleQueryError(c, err, "Failed to query unlinked agents")
-		return
+	if c.Query("include_unlinked") != "false" {
+		if err := s.db.Select("id", "hostname", "ip", "os").
+			Where("(parent_id = '' OR parent_id IS NULL) AND id != ?", id).Order("hostname asc").Limit(500).Find(&unlinkedAgents).Error; err != nil {
+			handleQueryError(c, err, "Failed to query unlinked agents")
+			return
+		}
 	}
 
 	data := gin.H{
@@ -237,10 +241,12 @@ func (s *Server) handleAgentDetail(c *gin.Context) {
 		"TimeSinceLastSeen": timeSince,
 		"AgentAge":          agentAgeStr,
 		"Children":          children,
-		"UnlinkedAgents":    unlinkedAgents,
+	}
+	if c.Query("include_unlinked") != "false" {
+		data["UnlinkedAgents"] = unlinkedAgents
 	}
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	for k, v := range stats {
 		data[k] = v
 	}
@@ -486,6 +492,8 @@ func implantHostKey(a db.Implant) string {
 
 func (s *Server) implantListQuery(c *gin.Context) *gorm.DB {
 	query := s.db.Model(&db.Implant{})
+	// Multi-tenant isolation: operators only see agents in their tenant.
+	query = s.tenantScope(query, c)
 	if search := c.Query("search"); search != "" {
 		like := "%" + escapeLike(search) + "%"
 		query = query.Where("(hostname LIKE ? ESCAPE '\\' OR username LIKE ? ESCAPE '\\' OR ip LIKE ? ESCAPE '\\')", like, like, like)
@@ -666,7 +674,9 @@ func (s *Server) writeAgentListJSON(c *gin.Context) {
 // handleListUnlinkedAgents returns agents without a parent for linking dropdown
 func (s *Server) handleListUnlinkedAgents(c *gin.Context) {
 	var agents []db.Implant
-	if err := s.db.Where("parent_id = '' OR parent_id IS NULL").Order("hostname asc").Limit(500).Find(&agents).Error; err != nil {
+	q := s.db.Model(&db.Implant{})
+	q = s.tenantScope(q, c)
+	if err := q.Where("parent_id = '' OR parent_id IS NULL").Order("hostname asc").Limit(500).Find(&agents).Error; err != nil {
 		handleQueryError(c, err, "Failed to list unlinked agents")
 		return
 	}

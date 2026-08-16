@@ -18,7 +18,7 @@ export default function DatabaseSection({
     <Card className="overflow-hidden">
       <div className="bg-chart-2/10 border-b border-chart-2/20 px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Database className="w-4 h-4" /></div>
+          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Database className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-foreground">{t("settings.database.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.database.subtitle")}</p></div>
         </div>
       </div>
@@ -32,7 +32,7 @@ export default function DatabaseSection({
             { label: t("settings.database.credentials"), value: data.total_credentials ?? 0 },
             { label: t("settings.database.audit_logs"), value: data.total_audits ?? 0 },
           ].map((stat) => (
-            <div key={stat.label} className="bg-muted rounded-xl p-4 border border-border">
+            <div key={stat.label} className="bg-muted rounded-lg p-4 border border-border">
               <div className="text-xs text-muted-foreground">{stat.label}</div>
               <div className="font-semibold text-sm text-foreground mt-1">{stat.value}</div>
             </div>

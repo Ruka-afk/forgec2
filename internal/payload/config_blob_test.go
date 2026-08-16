@@ -230,7 +230,7 @@ func TestWriteConfigInjectFile(t *testing.T) {
 	if err := writeConfigInjectFile(dir, "BASE64BLOB==", "ab:cd"); err != nil {
 		t.Fatalf("writeConfigInjectFile: %v", err)
 	}
-	data, err := os.ReadFile(filepath.Join(dir, "zz_config_inject.go"))
+	data, err := os.ReadFile(filepath.Join(dir, "aa_config_inject.go"))
 	if err != nil {
 		t.Fatalf("inject file not written: %v", err)
 	}
@@ -249,7 +249,7 @@ func TestWriteConfigInjectFile(t *testing.T) {
 	if err := writeConfigInjectFile(emptyDir, "", ""); err != nil {
 		t.Fatalf("writeConfigInjectFile(empty): %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(emptyDir, "zz_config_inject.go")); err == nil {
+	if _, err := os.Stat(filepath.Join(emptyDir, "aa_config_inject.go")); err == nil {
 		t.Errorf("empty secrets should not write an inject file")
 	}
 }

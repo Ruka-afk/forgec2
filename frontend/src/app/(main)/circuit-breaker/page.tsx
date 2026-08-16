@@ -232,7 +232,7 @@ export default function CircuitBreakerPage() {
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {listeners.filter(l => l.fail_reasons.length > 0).map(l => (
               l.fail_reasons.map((reason, idx) => (
-                <div key={`${l.target}-${idx}`} className="flex items-start gap-2 p-3 bg-muted border border-border rounded-xl">
+                <div key={`${l.target}-${idx}`} className="flex items-start gap-2 p-3 bg-muted border border-border rounded-lg">
                   <AlertCircle className="w-4 h-4" />
                   <div className="min-w-0">
                     <code className="text-xs font-semibold text-foreground">{l.target}</code>
@@ -254,7 +254,7 @@ export default function CircuitBreakerPage() {
           ) : (
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {events.map((e) => (
-                <div key={e.id} className="flex items-start gap-3 p-3 bg-muted border border-border rounded-xl">
+                <div key={e.id} className="flex items-start gap-3 p-3 bg-muted border border-border rounded-lg">
                   <ArrowLeftRight className="w-4 h-4" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 text-xs">

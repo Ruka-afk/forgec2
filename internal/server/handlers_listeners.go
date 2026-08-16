@@ -80,7 +80,7 @@ func (s *Server) handleListenerDetail(c *gin.Context) {
 		slog.Error("Failed to count active agents", "err", err)
 	}
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":        fmt.Sprintf("ForgeC2 - Listener %s", listener.Name),
 		"ActiveNav":    "listeners",
@@ -463,7 +463,7 @@ func (s *Server) handleListenersPage(c *gin.Context) {
 		slog.Error("Failed to count ICMP listeners", "err", err)
 	}
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":        "ForgeC2 - Listeners",
 		"ActiveNav":    "listeners",

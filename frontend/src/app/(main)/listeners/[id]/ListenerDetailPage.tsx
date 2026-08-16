@@ -136,7 +136,7 @@ export default function ListenerDetailPage() {
             </Card>
             <Card className="p-4 sm:p-5">
               <div className="text-xs text-muted-foreground">{t("listener.active_now")}</div>
-              <div className="text-4xl font-semibold mt-2 text-emerald-600">{stats.active}</div>
+              <div className="text-4xl font-semibold mt-2 text-success">{stats.active}</div>
             </Card>
             <Card className="p-4 sm:p-5">
               <div className="text-xs text-muted-foreground">{t("listener.lb_hint_title")}</div>

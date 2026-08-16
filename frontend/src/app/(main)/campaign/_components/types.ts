@@ -1,5 +1,4 @@
 import type { NormalizedAgent as Agent } from "@/types/agent";
-import { MITRE_PHASE_COLORS } from "@/lib/colors";
 
 export interface Campaign {
   id: string;
@@ -93,4 +92,3 @@ export const PHASE_ORDER = [
   "Impact",
 ];
 
-export const PHASE_PHASE_COLORS = MITRE_PHASE_COLORS;

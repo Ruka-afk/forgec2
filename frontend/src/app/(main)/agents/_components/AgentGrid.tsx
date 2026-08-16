@@ -6,18 +6,11 @@ import { AvatarFallback } from "@/components/ui/avatar";
 import { timeAgo, formatTime, enumLabel } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import type { Beacon, Tag } from "./types";
-import { avatarColor, formatUptime } from "./types";
+import { avatarColor, formatUptime, osIcon, agentStatusBorderClass, integrityTone } from "./types";
 import type { AgentMenuPoint } from "./agent-menu-actions";
 import { groupBeaconsByHost } from "./groupBeaconsByHost";
-import { Apple, Clock, Globe, Monitor, Terminal } from "lucide-react";
-
-function getOsIcon(os: string) {
-  switch (os.toLowerCase()) {
-    case "windows": return Monitor;
-    case "linux": return Terminal;
-    default: return Apple;
-  }
-}
+import { Clock, Globe } from "lucide-react";
+import { StatusDot } from "@/components/ui/status-dot";
 
 interface AgentGridProps {
   beacons: Beacon[];
@@ -42,9 +35,11 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
         const os = group.os || "";
         const status = group.status || "offline";
         const sessionN = group.sessions.length;
-        const OsIcon = getOsIcon(os);
-        const borderColor = status === "online" ? "border-l-success" :
-          status === "stale" ? "border-l-warning" : "border-l-destructive";
+        const OsIcon = osIcon(os);
+        const itone = integrityTone(beacon.integrity);
+        const integrityClass = itone === "destructive" ? "bg-destructive/10 text-destructive"
+          : itone === "success" ? "bg-success/15 text-success"
+          : "bg-warning/15 text-warning";
         return (
           <Card
             key={id}
@@ -58,7 +53,7 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
               onMenu({ x: e.clientX, y: e.clientY, beacon });
             }}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onInteract(id); } }}
-            className={`p-4 cursor-pointer hover:ring-2 hover:ring-primary/50 hover:shadow-md transition-all duration-200 border-l-4 ${borderColor} group ring-0 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 ${activeId === id ? "ring-2 ring-primary/50" : ""}`}
+            className={`p-4 cursor-pointer hover:ring-2 hover:ring-primary/50 hover:shadow-md transition-all duration-200 ${agentStatusBorderClass(status)} group ring-0 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 ${activeId === id ? "ring-2 ring-primary/50" : ""}`}
           >
             <div className="flex items-start justify-between mb-2">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -71,7 +66,7 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <span aria-hidden="true" className={`w-2 h-2 rounded-full ${status === "online" ? "bg-success animate-pulse" : status === "stale" ? "bg-warning" : "bg-destructive"}`} />
+                <StatusDot status={status} size="sm" pulse={status === "online"} />
                 <span className="text-(--fs-micro-sm) text-muted-foreground/70 capitalize">{enumLabel(t, "agents", `${status}_label`)}</span>
               </div>
             </div>
@@ -79,11 +74,7 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
               <div className="flex items-center gap-1.5">
                 <OsIcon className="w-3 h-3 text-muted-foreground/50" aria-hidden="true" />
                 <span>{os}{beacon.arch ? ` ${beacon.arch}` : ""}</span>
-                {beacon.integrity && <span className={`px-1 py-0.5 rounded text-(--fs-micro) font-semibold ${
-                  beacon.integrity === "System" ? "bg-destructive/10 text-destructive" :
-                  beacon.integrity === "High" ? "bg-success/15 text-success" :
-                  "bg-warning/15 text-warning"
-                }`}>{beacon.integrity}</span>}
+                {beacon.integrity && <span className={`px-1 py-0.5 rounded text-(--fs-micro) font-semibold ${integrityClass}`}>{beacon.integrity}</span>}
               </div>
               <div className="flex items-center gap-1.5">
                 <Globe className="w-3 h-3 text-muted-foreground/50" aria-hidden="true" />

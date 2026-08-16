@@ -21,6 +21,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const isMobile = useAppStore((s) => s.isMobile);
   const setIsMobile = useAppStore((s) => s.setIsMobile);
   const setMobileMenuOpen = useAppStore((s) => s.setMobileMenuOpen);
+  const focusMode = useAppStore((s) => s.focusMode);
 
   const sidebarWidth = useAppStore((s) => s.getSidebarWidth());
 
@@ -34,6 +35,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isMobile) useAppStore.setState({ sidebarCollapsed: true });
   }, [isMobile]);
+
+  // Focus mode shortcut: Cmd/Ctrl + "." toggles the full-viewport console.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === ".") {
+        e.preventDefault();
+        useAppStore.getState().toggleFocusMode();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -62,21 +75,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {t("a11y.skip_to_content")}
       </a>
 
-      <Sidebar />
+      {!focusMode && <Sidebar />}
 
       <div
         className="flex flex-col flex-1 min-w-0 min-h-0 transition-[margin] duration-200 ease-in-out"
-        style={{ marginLeft: isMobile ? 0 : sidebarWidth }}
+        style={{ marginLeft: focusMode || isMobile ? 0 : sidebarWidth }}
       >
         <TopBar onMenuToggle={handleMenuToggle} />
         <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto min-h-0 pt-14 scroll-smooth focus:outline-none">
           {/* Sticky breadcrumb dock — merges into the topbar chrome plane */}
-          <div className="sticky top-14 z-20 bg-background/85 backdrop-blur-xl border-b border-border/40">
-            <div className="mx-auto w-full max-w-screen-2xl px-5 sm:px-8 lg:px-10 py-2">
-              <Breadcrumb />
+          {!focusMode && (
+            <div className="sticky top-14 z-20 bg-background/85 backdrop-blur-xl border-b border-border/40">
+              <div className="mx-auto w-full max-w-screen-2xl px-5 sm:px-8 lg:px-10 py-2">
+                <Breadcrumb />
+              </div>
             </div>
-          </div>
-            <div className="mx-auto h-full w-full max-w-screen-2xl px-5 sm:px-8 lg:px-10 py-5 sm:py-7 lg:py-8">
+          )}
+            <div className={`mx-auto h-full w-full max-w-screen-2xl px-5 sm:px-8 lg:px-10 py-5 sm:py-7 lg:py-8 ${focusMode ? "pt-5" : ""}`}>
             <UpdateBanner />
             <AgentStatusBanner />
             {children}

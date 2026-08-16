@@ -140,7 +140,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
         </form>
         {importStatus && (
           <div
-            className={`mt-3 p-3 rounded-xl text-xs flex items-center gap-2 ${
+            className={`mt-3 p-3 rounded-lg text-xs flex items-center gap-2 ${
               importStatus.loading
                 ? "bg-primary/10 text-primary"
                 : importStatus.success
@@ -231,7 +231,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
               <Card key={itemId} className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${imported ? "bg-success/15 text-success" : "bg-primary/10 text-primary"}`}>
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${imported ? "bg-success/15 text-success" : "bg-primary/10 text-primary"}`}>
                       <Box className="w-4 h-4" />
                     </div>
                     <div>

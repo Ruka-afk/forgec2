@@ -7,17 +7,27 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadText } from "@/lib/download";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
-import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { useWS } from "@/lib/wsContext";
-import { timeAgo } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n";
+import { useInteractStore } from "@/lib/interact-store";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import { Bug } from "lucide-react";
 import { AgentStatus, AgentDetail as AgentDetailExt, AgentDetailData, AgentTaskRecord } from "@/types/agent";
 import AgentHeader from "./_components/AgentHeader";
 import AgentStatsGrid from "./_components/AgentStatsGrid";
 import AgentTaskList from "./_components/AgentTaskList";
 import AgentScreenshots from "./_components/AgentScreenshots";
 import AgentChildList from "./_components/AgentChildList";
-import AgentTaskOverview from "./_components/AgentTaskOverview";
+import AgentStatusBar from "./_components/AgentStatusBar";
+import QuickShellSection from "./_components/QuickShellSection";
+import NotesTagsSection from "./_components/NotesTagsSection";
+import ProcessSection from "./_components/ProcessSection";
+import ConnectionLogSection from "./_components/ConnectionLogSection";
 import EvasionSection from "./_components/EvasionSection";
 import {
   buildAgentCopyText,
@@ -33,21 +43,11 @@ import { useAgentQuickShell } from "./_hooks/useAgentQuickShell";
 import { useAgentProcessTree } from "./_hooks/useAgentProcessTree";
 import { useAgentNotes } from "./_hooks/useAgentNotes";
 import { useAgentDangerActions } from "./_hooks/useAgentDangerActions";
+import { useAgentTaskSync } from "./_hooks/useAgentTaskSync";
+import { usePersistedState } from "@/lib/hooks/usePersistedState";
 import { credActionBlockReason, credActionEndpoint, hasMimikatzModule, parseModuleNames } from "../../credentials/_components/cred-quality";
 import { sessionActionQuality } from "./_components/session-quality";
 import { implantBlocksDest } from "../_components/implant-version";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
-import { useI18n } from "@/lib/i18n";
-import { useInteractStore } from "@/lib/interact-store";
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
-import { Bug, Check, ChevronDown, Circle, Eye, History, Pencil, Send, Tag, Terminal, X } from "lucide-react";
 
 interface AgentDetailPageProps {
   agentId?: string;
@@ -72,7 +72,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const [expandedTask, setExpandedTask] = useState<number | null>(null);
   const [lbOpen, setLbOpen] = useState(false);
   const [lbIndex, setLbIndex] = useState(0);
-  const [childrenExpanded, setChildrenExpanded] = useState(false);
+  const [childrenExpanded, setChildrenExpanded] = usePersistedState(`agents.detail.${id}.children`, false);
   const [agentAge, setAgentAge] = useState("");
   const {
     command: shellCommand,
@@ -84,7 +84,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     expanded: shellExpanded,
     setExpanded: setShellExpanded,
     sendCommand: sendShellCommand,
-  } = useAgentQuickShell(id, t("agents.detail_command_sent"), t("agents.detail_command_send_failed"));
+  } = useAgentQuickShell(id, t("agents.detail_command_sent"), t("agents.detail_command_send_failed"), `agents.detail.${id}.quick_shell`);
 
   const [sleepValue, setSleepValue] = useState(0);
   const [jitterValue, setJitterValue] = useState(0);
@@ -93,13 +93,15 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const [credCount, setCredCount] = useState<number | null>(null);
   const [mimikatzReady, setMimikatzReady] = useState(false);
 
-  const [lastResultExpanded, setLastResultExpanded] = useState(false);
-  const { data, setData, loading, loadError, reload: loadDetail } = useAgentDetail<AgentDetailResponse>(id);
-  const { screenshots, reload: loadScreenshots } = useAgentScreenshots(id);
-  const { processList, loading: processLoading, expanded: processExpanded, load: loadProcessList } = useAgentProcessTree(
+  const { data, setData, loading, loadError, reload: loadDetail, reloadThrottled } = useAgentDetail<AgentDetailResponse>(id);
+  const status = (data?.agent?.status || "offline") as AgentStatus;
+  const { screenshots, newScreenshots } = useAgentScreenshots(id, status === "online");
+  useAgentTaskSync(id, status === "online", setData, reloadThrottled);
+  const { processList, loading: processLoading, expanded: processExpanded, setExpanded: setProcessExpanded, load: loadProcessList } = useAgentProcessTree(
     id,
     t("agents.detail_no_data"),
     t("agents.detail_process_load_failed"),
+    `agents.detail.${id}.process`,
   );
   const {
     editing: editingNote,
@@ -124,22 +126,6 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     migrateSuccess: t("agents.detail_migrate_sent"),
     migrateFailed: t("agents.detail_migrate_failed"),
   });
-
-  const { subscribe } = useWS();
-  useEffect(() => {
-    if (!id) return;
-    const unsub = subscribe((msg) => {
-      if (msg.type === "agent_online" || msg.type === "agent_offline") {
-        if (String(msg.agent_id) === id) loadDetail(true);
-      } else if (msg.type === "agent_data_update" && String(msg.agent_id) === id) {
-        setData((prev) => prev ? { ...prev, agent: { ...(prev.agent || {}), ...((msg.data || {}) as Partial<AgentDetailModel>) } } : prev);
-      } else if (msg.type === "task_update" && String(msg.agent_id) === id) {
-        loadDetail(true);
-        loadScreenshots();
-      }
-    });
-    return () => unsub();
-  }, [subscribe, id, loadDetail, loadScreenshots, setData]);
 
   useEffect(() => {
     if (!lbOpen) return;
@@ -166,7 +152,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     tick();
     const iv = setInterval(tick, 60000);
     return () => clearInterval(iv);
-  }, [data?.agent?.created_at, data?.agent]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.agent?.created_at]);
 
   useEffect(() => {
     const handleKeydown = (e: KeyboardEvent) => {
@@ -202,15 +189,13 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
 
   useEffect(() => {
     if (!data?.agent) return;
-    const interval = data.agent.current_interval ?? 0;
-    const jitter = data.agent.current_jitter ?? 0;
-    setSleepValue(interval);
-    setJitterValue(jitter);
-  }, [data?.agent]);
+    setSleepValue(data.agent.current_interval ?? 0);
+    setJitterValue(data.agent.current_jitter ?? 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.agent?.current_interval, data?.agent?.current_jitter]);
 
   const agent = data?.agent || ({} as AgentDetailModel);
   const tasks: TaskEntry[] = useMemo(() => data?.tasks || [], [data?.tasks]);
-  const status = (agent.status || "offline") as AgentStatus;
   const rawTags = agent.tags || "";
   const tagsList = rawTags ? rawTags.split(",").map((tag) => tag.trim()).filter(Boolean) : [];
   const note = agent.note || "";
@@ -220,12 +205,6 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const completedTasks = data?.completed_tasks ?? 0;
   const pendingTasks = data?.pending_tasks ?? 0;
   const failedTasks = data?.failed_tasks ?? 0;
-
-  const lastResultSnippet = useMemo(() => {
-    if (!data) return "";
-    const lastCompletedTask = tasks.find((task) => (task.status) === "completed" && (task.result));
-    return lastCompletedTask ? (lastCompletedTask.result || "").substring(0, 500) : "";
-  }, [tasks, data]);
 
   const quickAction = async (action: string, label: string) => {
     if (credActionBlockReason(action, mimikatzReady) === "missing_module") {
@@ -295,10 +274,11 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
 
   if (loading) {
     return (
-      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">        <div className="space-y-4">
+      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+        <div className="space-y-4">
           <Skeleton className="h-4 w-24" />
           <Card className="p-4 sm:p-5"><div className="flex items-center gap-4">
-            <Skeleton className="w-14 h-14 rounded-xl" />
+            <Skeleton className="w-14 h-14 rounded-lg" />
             <div className="space-y-2"><Skeleton className="h-5 w-40" /><Skeleton className="h-3 w-60" /></div>
           </div></Card>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[1,2,3,4].map((n) => (<Card key={n} className="p-4"><Skeleton className="h-3 w-16 mb-2" /><Skeleton className="h-4 w-24" /></Card>))}</div>
@@ -328,7 +308,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   }
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <div className="relative max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <AgentStatusBar agent={agent as Partial<AgentDetailExt>} agentId={id} status={status} />
       <AgentHeader
         agent={agent as Partial<AgentDetailExt>}
         agentId={id}
@@ -342,183 +323,117 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         onUninstall={() => setConfirmUninstall(true)}
         onMigrate={() => { setMigratePath(""); setConfirmMigrate(true); }}
         onClose={onClose}
+        onPopOut={() => useInteractStore.getState().open(id, { tab: "shell" })}
       />
 
-      <Collapsible open={childrenExpanded} onOpenChange={setChildrenExpanded}>
-      <AgentStatsGrid
-        agent={agent as Partial<AgentDetailExt>}
-        data={data as AgentDetailData}
-        sleepValue={sleepValue}
-        jitterValue={jitterValue}
-        onSleepChange={setSleepValue}
-        onJitterChange={setJitterValue}
-        onApplySleep={handleApplySleep}
-        sleepSaving={sleepSaving}
-        status={status}
-        childAgents={childAgents}
-        childrenExpanded={childrenExpanded}
-        onToggleChildren={() => setChildrenExpanded(!childrenExpanded)}
-        onExportJSON={exportJSON}
-        onExportMarkdown={exportMarkdown}
-        onCopyAllInfo={copyAllInfo}
-        killDate={agent?.kill_date}
-        onSetKillDate={() => {
-          const kd = agent?.kill_date;
-          if (kd) setKillDateValue(kd.substring(0, 10));
-          else {
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            setKillDateValue(tomorrow.toISOString().substring(0, 10));
-          }
-          setConfirmKillDate(true);
-        }}
-        onClearKillDate={() => setConfirmClearKillDate(true)}
-      />
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-5">
+        {/* ── Main column: live sections ── */}
+        <div className="min-w-0">
+          <AgentTaskList
+            tasks={tasks as AgentTaskRecord[]}
+            agentId={id}
+            expandedTaskId={expandedTask}
+            onToggleExpand={(taskId) => setExpandedTask(expandedTask === taskId ? null : taskId)}
+            totalTasks={totalTasks}
+            completedTasks={completedTasks}
+            pendingTasks={pendingTasks}
+            failedTasks={failedTasks}
+          />
 
-      <CollapsibleContent>
-        <AgentChildList childAgents={childAgents} />
-      </CollapsibleContent>
-      </Collapsible>
+          <AgentScreenshots
+            screenshots={screenshots}
+            newScreenshots={newScreenshots}
+            agentId={id}
+            lightboxIdx={lbOpen ? lbIndex : null}
+            onOpenLightbox={(idx) => { setLbIndex(idx); setLbOpen(true); }}
+            onCloseLightbox={() => setLbOpen(false)}
+            onPrevLightbox={() => setLbIndex((i) => Math.max(0, i - 1))}
+            onNextLightbox={() => setLbIndex((i) => Math.min(screenshots.length - 1, i + 1))}
+          />
 
-      <AgentTaskOverview
-        totalTasks={totalTasks}
-        completedTasks={completedTasks}
-        pendingTasks={pendingTasks}
-        failedTasks={failedTasks}
-      />
+          <ProcessSection
+            processList={processList}
+            loading={processLoading}
+            expanded={processExpanded}
+            onToggle={(open) => {
+              setProcessExpanded(open);
+              if (open && !processList && !processLoading) loadProcessList();
+            }}
+          />
 
-      {lastResultSnippet && (
-        <Collapsible open={lastResultExpanded} onOpenChange={setLastResultExpanded}>
-          <Card className="mb-5">
-            <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-foreground"><Eye className="w-3.5 h-3.5" />{t("agents.detail_last_result")}</h3>
-              <CollapsibleTrigger>
-                <Button variant="ghost" size="sm"
-                  className="text-xs h-auto p-0 text-primary hover:bg-transparent hover:underline">
-                  {lastResultExpanded ? t("agents.detail_collapse") : t("agents.detail_expand")}
-                </Button>
-              </CollapsibleTrigger>
-            </div>
-            <CollapsibleContent>
-              <div className="px-5 py-3">
-                <pre className="font-mono text-xs text-foreground whitespace-pre-wrap break-all">{lastResultSnippet}</pre>
-              </div>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-      )}
-
-      <AgentTaskList
-        tasks={tasks as AgentTaskRecord[]}
-        agentId={id}
-        expandedTaskId={expandedTask}
-        onToggleExpand={(taskId) => setExpandedTask(expandedTask === taskId ? null : taskId)}
-      />
-
-      <AgentScreenshots
-        screenshots={screenshots}
-        agentId={id}
-        lightboxIdx={lbOpen ? lbIndex : null}
-        onOpenLightbox={(idx) => { setLbIndex(idx); setLbOpen(true); }}
-        onCloseLightbox={() => setLbOpen(false)}
-        onPrevLightbox={() => setLbIndex((i) => Math.max(0, i - 1))}
-        onNextLightbox={() => setLbIndex((i) => Math.min(screenshots.length - 1, i + 1))}
-      />
-
-      <EvasionSection agentId={id} online={status === "online"} />
-
-      <Collapsible open={processExpanded} onOpenChange={(v) => { if (v) loadProcessList(); }}>
-        <Card className="mb-4">
-          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-foreground"><Terminal className="w-3.5 h-3.5" />{t("agents.detail_process_list")}</h3>
-              <p className="mt-0.5 text-(--fs-micro-sm) text-muted-foreground">{t("agents.detail_process_snapshot_hint")}</p>
-            </div>
-            <CollapsibleTrigger>
-              <Button variant="ghost" size="sm" className="text-xs h-auto p-0 text-primary hover:bg-transparent hover:underline">{processExpanded ? t("agents.detail_hide") : t("agents.detail_load")}</Button>
-            </CollapsibleTrigger>
-          </div>
-          <CollapsibleContent>
-            <div className="p-3">{processLoading ? (<div className="flex items-center justify-center py-6"><Spinner size="md" /></div>) : (<pre className="p-3 bg-muted rounded-xl font-mono text-xs text-foreground whitespace-pre-wrap break-all max-h-64 overflow-y-auto border border-border">{processList || t("agents.detail_no_data")}</pre>)}</div>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
-      <Card className="mb-4">
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground"><Tag className="w-3.5 h-3.5" />{t("agents.detail_notes_tags")}</h3>
-          {!editingNote ? (<Button variant="ghost" size="sm" onClick={() => startEditNotes(rawTags, note)} className="text-xs h-auto p-0 text-primary hover:bg-transparent gap-1.5"><Pencil className="w-4 h-4" /> {t("agents.detail_edit")}</Button>) : (
-            <div className="flex items-center gap-2"><Button size="sm" onClick={handleSaveNote} disabled={savingNote} className="text-xs h-7 gap-1.5">{savingNote ? <Spinner size="xs" color="white" /> : <Check className="w-4 h-4" />} {t("agents.detail_save")}</Button><Button variant="ghost" size="sm" onClick={cancelEditNotes} className="text-xs h-7 text-muted-foreground gap-1.5"><X className="w-4 h-4" /> {t("agents.detail_cancel")}</Button></div>)}
+          <EvasionSection agentId={id} online={status === "online"} />
         </div>
-        <div className="p-4">{editingNote ? (<div className="space-y-3">
-          <div><span className="block text-xs font-medium text-muted-foreground mb-1.5">{t("agents.detail_tags_hint")}</span><Input aria-label={t("agents.detail_tags")} name="agent-tags" type="text" value={editTags} onChange={(e) => setEditTags(e.target.value)} placeholder={t("agents.detail_tags_placeholder")} /></div>
-          <div><span className="block text-xs font-medium text-muted-foreground mb-1.5">{t("agents.detail_notes")}</span><Textarea aria-label={t("agents.detail_notes")} name="agent-notes" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={3} placeholder={t("agents.detail_notes_placeholder")} /></div>
-        </div>) : (<div className="space-y-3">
-          <div><div className="text-xs font-medium text-muted-foreground mb-2">{t("agents.detail_tags")}</div>{tagsList.length > 0 ? (<div className="flex flex-wrap gap-1.5">{tagsList.map((tag) => { return <Link key={tag} href={`/agents?tag=${encodeURIComponent(tag)}`}><Badge variant="outline" className="cursor-pointer hover:opacity-80 transition-opacity">{tag}</Badge></Link>; })}</div>) : <span className="text-xs text-muted-foreground/70">{t("agents.detail_no_tags")}</span>}</div>
-          <div><div className="text-xs font-medium text-muted-foreground mb-1">{t("agents.detail_notes")}</div>{note ? <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{note}</p> : <span className="text-xs text-muted-foreground/70">{t("agents.detail_no_notes")}</span>}</div>
-        </div>)}</div>
-      </Card>
 
-      {logs.length > 0 && (
-        <Card className="mb-4">
-          <div className="px-4 py-3 border-b border-border"><h3 className="text-sm font-semibold text-foreground"><History className="w-3.5 h-3.5" />{t("agents.detail_connection_log")}</h3></div>
-          <div className="max-h-64 overflow-y-auto"><div className="divide-y divide-border">{logs.map((log, i) => (
-            <div key={log.id || i} className="px-4 py-2 flex items-center justify-between">
-              <div className="flex items-center gap-2.5"><Circle className={`w-1.5 h-1.5 fill-current ${log.type === "online" ? "text-success" : log.type === "offline" ? "text-destructive" : "text-primary"}`} /><span className="text-xs text-foreground">{log.user || t("agents.detail_log_system")}</span>{log.message && <span className="text-xs text-muted-foreground/70">{log.message}</span>}</div>
-              <span className="text-(--fs-micro-sm) text-muted-foreground/70 whitespace-nowrap">{(log.created_at) ? timeAgo(String(log.created_at), t) : ""}</span>
-            </div>))}</div></div>
-        </Card>
-      )}
+        {/* ── Right rail: reference + quick controls ── */}
+        <div className="min-w-0 lg:sticky lg:top-[96px] lg:max-h-[calc(100vh-112px)] lg:overflow-y-auto lg:pr-0.5">
+          <AgentStatsGrid
+            agent={agent as Partial<AgentDetailExt>}
+            data={data as AgentDetailData}
+            sleepValue={sleepValue}
+            jitterValue={jitterValue}
+            onSleepChange={setSleepValue}
+            onJitterChange={setJitterValue}
+            onApplySleep={handleApplySleep}
+            sleepSaving={sleepSaving}
+            status={status}
+            childAgents={childAgents}
+            childrenExpanded={childrenExpanded}
+            onToggleChildren={() => setChildrenExpanded(!childrenExpanded)}
+            onExportJSON={exportJSON}
+            onExportMarkdown={exportMarkdown}
+            onCopyAllInfo={copyAllInfo}
+            killDate={agent?.kill_date}
+            onSetKillDate={() => {
+              const kd = agent?.kill_date;
+              if (kd) setKillDateValue(kd.substring(0, 10));
+              else {
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                setKillDateValue(tomorrow.toISOString().substring(0, 10));
+              }
+              setConfirmKillDate(true);
+            }}
+            onClearKillDate={() => setConfirmClearKillDate(true)}
+            rail
+          />
 
-      {status === "online" && (
-        <Collapsible open={shellExpanded} onOpenChange={setShellExpanded}>
-          <Card className="mb-4">
-            <CollapsibleTrigger className="w-full">
-              <div className="px-4 py-3 border-b border-border flex items-center justify-between cursor-pointer">
-                <h3 className="text-sm font-semibold text-foreground"><Terminal className="w-3.5 h-3.5" />{t("agents.detail_quick_shell")}</h3>
-                <ChevronDown className="w-2.5 h-2.5 text-muted-foreground/70" />
-              </div>
-            </CollapsibleTrigger>
+          <Collapsible open={childrenExpanded} onOpenChange={setChildrenExpanded}>
             <CollapsibleContent>
-              <div className="p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Select value={shellInterpreter} onValueChange={(v) => { if (v !== null) setShellInterpreter(v); }}>
-                    <SelectTrigger className="h-8 w-[160px] text-xs" aria-label={t("agents.detail_quick_shell")}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cmd.exe">cmd.exe</SelectItem>
-                      <SelectItem value="powershell.exe">powershell.exe</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input type="text" value={shellCommand} onChange={(e) => setShellCommand(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") sendShellCommand(); }}
-                    placeholder={t("agents.detail_enter_command")} aria-label={t("agents.detail_enter_command")}
-                    className="flex-1 h-8 font-mono text-xs" />
-                  <Button size="sm" onClick={sendShellCommand} disabled={shellSending || !shellCommand.trim()}
-                    className="h-8 px-4 text-xs gap-1.5 shrink-0">
-                    {shellSending ? <Spinner size="xs" color="white" /> : <Send className="w-4 h-4" />} {t("agents.detail_send")}
-                  </Button>
-                </div>
-                {shellHistory.length > 0 && (
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {shellHistory.map((entry, idx) => (
-                      <div key={entry.timestamp + idx} className="p-2.5 rounded-lg bg-muted/50 border border-border">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="secondary" className="text-(--fs-micro-sm) font-mono">{entry.shell}</Badge>
-                          <span className="text-xs font-mono text-foreground">{entry.command}</span>
-                          <span className="text-(--fs-micro-sm) text-muted-foreground/70 ml-auto">{timeAgo(entry.timestamp, t)}</span>
-                        </div>
-                        <pre className="font-mono text-(--fs-micro-sm) text-muted-foreground whitespace-pre-wrap break-all max-h-20 overflow-y-auto">{entry.result}</pre>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <AgentChildList childAgents={childAgents} />
             </CollapsibleContent>
-          </Card>
-        </Collapsible>
-      )}
+          </Collapsible>
+
+          {status === "online" && (
+            <QuickShellSection
+              expanded={shellExpanded}
+              onExpandedChange={setShellExpanded}
+              shellInterpreter={shellInterpreter}
+              onShellChange={setShellInterpreter}
+              command={shellCommand}
+              onCommandChange={setShellCommand}
+              history={shellHistory}
+              sending={shellSending}
+              onSend={sendShellCommand}
+            />
+          )}
+
+          <NotesTagsSection
+            editing={editingNote}
+            tags={editTags}
+            onTagsChange={setEditTags}
+            notes={editNotes}
+            onNotesChange={setEditNotes}
+            saving={savingNote}
+            onStartEdit={() => startEditNotes(rawTags, note)}
+            onCancelEdit={cancelEditNotes}
+            onSave={handleSaveNote}
+            displayTags={tagsList}
+            note={note}
+          />
+
+          <ConnectionLogSection logs={logs} />
+        </div>
+      </div>
 
       <ConfirmModal open={confirmKill} title={t("agents.kill_agent")} message={t("agents.kill_msg")} confirmText={t("agents.kill")} danger onConfirm={async () => { await runKillAgent(); setConfirmKill(false); }} onCancel={() => setConfirmKill(false)} />
       <ConfirmModal open={confirmUninstall} title={t("agents.uninstall_agent")} message={t("agents.uninstall_msg")} confirmText={t("agents.uninstall")} danger onConfirm={async () => { await runUninstallAgent(); setConfirmUninstall(false); }} onCancel={() => setConfirmUninstall(false)} />

@@ -91,7 +91,7 @@ func (s *Server) handleSettingsPage(c *gin.Context) {
 		}
 	}
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":            "ForgeC2 - Settings",
 		"ActiveNav":        "settings",
@@ -572,7 +572,7 @@ func (s *Server) handleDownloadConfig(c *gin.Context) {
 }
 
 func (s *Server) handleAuditLogPage(c *gin.Context) {
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	var users []db.User
 	if err := s.db.Model(&db.User{}).Select("username, role").Where("is_active = ?", true).Limit(100).Find(&users).Error; err != nil {
 		slog.Error("Settings: failed to query users for audit page", "err", err)

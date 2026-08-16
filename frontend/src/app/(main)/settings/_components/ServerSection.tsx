@@ -22,7 +22,7 @@ export default function ServerSection({
     <Card className="overflow-hidden">
       <div className="bg-primary/10 border-b border-primary/20 px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Server className="w-4 h-4" /></div>
+          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Server className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-foreground">{t("settings.server.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.server.subtitle")}</p></div>
         </div>
       </div>
@@ -52,7 +52,7 @@ export default function ServerSection({
             <div>
               <span className="block text-xs text-muted-foreground mb-1.5">{t("settings.server.tls")}</span>
               <div className="h-11 flex items-center">
-                <span className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-xl ${data.tls_enabled ? "bg-success/15 text-success" : "bg-secondary text-muted-foreground"}`}>
+                <span className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg ${data.tls_enabled ? "bg-success/15 text-success" : "bg-secondary text-muted-foreground"}`}>
                   {data.tls_enabled ? <Lock className="w-3 h-3 mr-1" /> : <Unlock className="w-3 h-3 mr-1" />}
                   {data.tls_enabled ? t("settings.server.enabled") : t("settings.server.disabled")}
                 </span>

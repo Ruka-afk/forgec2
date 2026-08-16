@@ -22,16 +22,17 @@ func TestApplyServerNetworkConfig(t *testing.T) {
 	// Preserve globals mutated by the apply path so other tests are unaffected.
 	defer func(
 		c2, ua, px, mp, ma, df, dnsDom, dnsSrv, bt, bu, proto string,
-		iv, jit int, stv bool, lid uint, cidx int, c2s []string,
+		iv, jit int, stv bool, lid uint, cidx int32, c2s []string,
 	) func() {
 		return func() {
 			C2URL, UserAgent, ProxyStr, MalleablePrepend, MalleableAppend = c2, ua, px, mp, ma
 			DomainFront, DNSDomain, DNSServer, BeaconTransport, C2URL, Protocol = df, dnsDom, dnsSrv, bt, c2, proto
-			Interval, Jitter, SkipTLSVerify, ListenerID, currentC2Idx, C2URLs = iv, jit, stv, lid, cidx, c2s
+			Interval, Jitter, SkipTLSVerify, ListenerID = iv, jit, stv, lid
+			c2URLsStore(c2s, cidx)
 		}
 	}(C2URL, UserAgent, ProxyStr, MalleablePrepend, MalleableAppend,
 		DomainFront, DNSDomain, DNSServer, BeaconTransport, C2URL, Protocol,
-		Interval, Jitter, SkipTLSVerify, ListenerID, currentC2Idx, C2URLs)()
+		Interval, Jitter, SkipTLSVerify, ListenerID, currentC2Idx.Load(), c2URLsSnapshot())()
 
 	nc := &protocol.NetworkConfig{
 		C2URL:            "https://delivered.example.com/http",
@@ -73,8 +74,8 @@ func TestApplyServerNetworkConfig(t *testing.T) {
 	if C2URL != nc.C2URL {
 		t.Errorf("C2URL = %q, want %q", C2URL, nc.C2URL)
 	}
-	if len(C2URLs) != 1 || C2URLs[0] != nc.C2URL {
-		t.Errorf("C2URLs = %v, want [%q]", C2URLs, nc.C2URL)
+	if urls := c2URLsSnapshot(); len(urls) != 1 || urls[0] != nc.C2URL {
+		t.Errorf("C2URLs = %v, want [%q]", urls, nc.C2URL)
 	}
 }
 

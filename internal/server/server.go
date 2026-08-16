@@ -71,8 +71,9 @@ type Server struct {
 	domainFrontStatus  map[string]*frontDomainState
 
 	// WebSocket hub
-	wsHub     *WebSocketHub
-	wsHubOnce sync.Once
+	wsHub        *WebSocketHub
+	wsHubOnce    sync.Once
+	shutdownOnce sync.Once
 
 	// Operator WebSocket sessions (real-time updates)
 	operatorSessions *operatorSessionTracker
@@ -217,9 +218,8 @@ type Server struct {
 	automationRulesMu sync.RWMutex
 	automationRulesAt time.Time
 
-	// Nav stats cache
-	navStatsCache   gin.H
-	navStatsCacheAt time.Time
+	// Nav stats cache (keyed by tenant id; 0 = legacy/unscoped operators)
+	navStatsCache   map[uint]navStatsEntry
 	navStatsCacheMu sync.RWMutex
 
 	// SIEM webhook for security event forwarding
@@ -602,7 +602,7 @@ func (s *Server) InitOptimizations(configPath string) {
 
 		// Invalidate nav stats cache
 		s.navStatsCacheMu.Lock()
-		s.navStatsCacheAt = time.Time{}
+		s.navStatsCache = nil
 		s.navStatsCacheMu.Unlock()
 
 		slog.Info("Config reload applied successfully")
@@ -1341,6 +1341,10 @@ func (s *Server) cleanOldFiles(dir string, cutoff time.Time) {
 }
 
 func (s *Server) Shutdown() {
+	s.shutdownOnce.Do(func() { s.shutdown() })
+}
+
+func (s *Server) shutdown() {
 	slog.Info("Shutting down server...")
 
 	// Stop accepting new connections
@@ -1585,6 +1589,16 @@ func (s *Server) Run() error {
 		go func() {
 			defer s.wg.Done()
 			s.startSMBListener()
+		}()
+	}
+
+	// Start UDP datagram transport listener if enabled (P2: low-overhead
+	// connectionless beacon channel that mirrors the raw TCP envelope framing).
+	if s.cfg.Server.UDPEnabled && s.cfg.Server.UDPAddr != "" {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.startUDPListener()
 		}()
 	}
 
@@ -2120,6 +2134,69 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 			return
 		}
 	}
+}
+
+// startUDPListener starts a connectionless UDP datagram transport for agents
+// using Protocol=udp. Each beacon is a single datagram carrying the same raw
+// v2 envelope as the TCP transport; the server replies with one datagram.
+// Payloads must fit within the link MTU (the agent caps sends at 16MiB but
+// real-world UDP is limited by Path MTU — large results should use a
+// connection-oriented transport).
+func (s *Server) startUDPListener() {
+	pc, err := net.ListenPacket("udp", s.cfg.Server.UDPAddr)
+	if err != nil {
+		slog.Error("Failed to start UDP listener", "addr", s.cfg.Server.UDPAddr, "err", err)
+		return
+	}
+	slog.Info("UDP transport layer listening", "addr", s.cfg.Server.UDPAddr)
+
+	buf := make([]byte, 16*1024*1024)
+	for {
+		select {
+		case <-s.ctx.Done():
+			pc.Close()
+			return
+		default:
+		}
+		n, addr, err := pc.ReadFrom(buf)
+		if err != nil {
+			select {
+			case <-s.ctx.Done():
+				return
+			default:
+			}
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				continue
+			}
+			slog.Error("UDP read error", "err", err)
+			continue
+		}
+		if n == 0 {
+			continue
+		}
+		data := make([]byte, n)
+		copy(data, buf[:n])
+		resp := s.handleUDPBeacon(data, addr)
+		if len(resp) == 0 {
+			continue
+		}
+		if _, err := pc.WriteTo(resp, addr); err != nil {
+			slog.Error("UDP write error", "remote", addr.String(), "err", err)
+		}
+	}
+}
+
+// handleUDPBeacon processes one UDP beacon datagram and returns the response
+// datagram bytes (or nil to send nothing). It reuses the shared raw-listener
+// beacon core so UDP behaves identically to TCP/ICMP at the envelope level.
+func (s *Server) handleUDPBeacon(data []byte, addr net.Addr) []byte {
+	resp := s.handleListenerBeacon("", data)
+	if len(resp) == 0 {
+		return nil
+	}
+	// Mirror the TCP transport's optional malleable cover (a no-op unless a
+	// malleable profile with prepend/append is configured).
+	return s.applyMalleableWrapping(resp)
 }
 
 // ActivityMiddleware updates user's LastActivity timestamp on each request (throttled to 60s)

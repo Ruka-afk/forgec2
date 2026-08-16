@@ -415,7 +415,7 @@ export default function AIPage() {
             >
               <Menu className="w-4 h-4" />
             </Button>
-            <PageHeader title={<><span className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 ring-1 ring-border/50"><Bot className="w-4 h-4" /></span>{t("nav.ai")}</>} />
+            <PageHeader title={<><span className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 ring-1 ring-border/50"><Bot className="w-4 h-4" /></span>{t("nav.ai")}</>} />
           </div>
           <div className="flex items-center gap-2 flex-wrap shrink-0">
             <Button variant="secondary" size="sm" onClick={() => setShowSettings(!showSettings)}>

@@ -1,104 +1,133 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 
-	"github.com/forgec2/forgec2/internal/db"
-	"github.com/forgec2/forgec2/internal/server/middleware"
-	"github.com/glebarez/sqlite"
-	"gorm.io/gorm"
+	_ "modernc.org/sqlite"
 )
 
 func main() {
-	dbPath := "data/db/forgec2.db"
+	db, err := sql.Open("sqlite", os.Args[1])
+	if err != nil {
+		fmt.Println("open:", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+	rows, err := db.Query(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`)
+	if err != nil {
+		fmt.Println("query tables:", err)
+		os.Exit(1)
+	}
+	var tables []string
+	for rows.Next() {
+		var t string
+		rows.Scan(&t)
+		tables = append(tables, t)
+	}
+	rows.Close()
+	fmt.Println("tables:", tables)
 
-	if len(os.Args) < 2 {
-		// No args: list users
-		listUsers(dbPath)
+	cols, err := db.Query(`PRAGMA table_info(listeners)`)
+	if err != nil {
+		fmt.Println("pragma:", err)
 		return
 	}
+	var names []string
+	for cols.Next() {
+		var cid int
+		var name, ctype string
+		var notnull int
+		var dflt sql.NullString
+		var pk int
+		cols.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk)
+		names = append(names, name)
+	}
+	cols.Close()
+	fmt.Println("listener cols:", names)
 
-	arg1 := os.Args[1]
-	if arg1 == "--help" || arg1 == "-h" {
-		fmt.Println("Usage:")
-		fmt.Println("  go run ./cmd/dbquery/                    - list all users")
-		fmt.Println("  go run ./cmd/dbquery/ <db_path>          - list users in specific DB")
-		fmt.Println("  go run ./cmd/dbquery/ <username> <pass>  - reset password")
+	rows2, err := db.Query(`SELECT * FROM listeners`)
+	if err != nil {
+		fmt.Println("query listeners:", err)
 		return
 	}
-
-	if len(os.Args) == 2 {
-		// One arg: could be dbPath or username without password
-		// If it ends with .db, treat as dbPath
-		if len(arg1) > 3 && arg1[len(arg1)-3:] == ".db" {
-			listUsers(arg1)
+	dest := make([]any, len(names))
+	ptrs := make([]any, len(names))
+	for i := range dest {
+		ptrs[i] = &dest[i]
+	}
+	for rows2.Next() {
+		if err := rows2.Scan(ptrs...); err != nil {
+			fmt.Println("scan:", err)
 			return
 		}
-		// Otherwise it's a username - show error
-		fmt.Fprintf(os.Stderr, "Missing password. Usage: go run ./cmd/dbquery/ <username> <new_password>\n")
-		os.Exit(1)
-	}
-
-	// Two or more args: username + password
-	username := os.Args[1]
-	newPassword := os.Args[2]
-
-	if len(newPassword) < 4 {
-		fmt.Fprintln(os.Stderr, "Password must be at least 4 characters")
-		os.Exit(1)
-	}
-
-	resetPassword(dbPath, username, newPassword)
-}
-
-func listUsers(dbPath string) {
-	database, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "DB open error: %v\n", err)
-		os.Exit(1)
-	}
-
-	var users []db.User
-	database.Find(&users)
-
-	if len(users) == 0 {
-		fmt.Println("No users in database!")
-		return
-	}
-
-	fmt.Printf("Users in %s:\n", dbPath)
-	for _, u := range users {
-		hashStatus := "SET"
-		if u.PasswordHash == "" {
-			hashStatus = "EMPTY (first password becomes the password)"
+		fmt.Println("---")
+		for i, n := range names {
+			fmt.Printf("  %s = %v\n", n, dest[i])
 		}
-		fmt.Printf("  ID=%d  Username=%-20s  Role=%-10s  Active=%v  Password=%s\n",
-			u.ID, u.Username, u.Role, u.IsActive, hashStatus)
 	}
-}
+	rows2.Close()
 
-func resetPassword(dbPath, username, newPassword string) {
-	database, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "DB open error: %v\n", err)
-		os.Exit(1)
+	dump := func(table, cols string) {
+		fmt.Printf("=== %s (%s) ===\n", table, cols)
+		rs, err := db.Query(`SELECT ` + cols + ` FROM ` + table)
+		if err != nil {
+			fmt.Println("  err:", err)
+			return
+		}
+		defer rs.Close()
+		cnt := 0
+		for rs.Next() {
+			var id int
+			var rest string
+			if err := rs.Scan(&id, &rest); err != nil {
+				fmt.Println("  scan:", err)
+				return
+			}
+			fmt.Printf("  %d: %s\n", id, rest)
+			cnt++
+		}
+		if cnt == 0 {
+			fmt.Println("  (empty)")
+		}
 	}
+	dump("users", "id, username")
+	dump("api_keys", "id, name")
+	dump("user_sessions", "id, user_id")
 
-	var user db.User
-	result := database.Where("username = ?", username).First(&user)
-	if result.Error != nil {
-		fmt.Fprintf(os.Stderr, "User '%s' not found in database\n", username)
-		os.Exit(1)
+	cols2, err := db.Query(`PRAGMA table_info(reg_secrets)`)
+	if err == nil {
+		var names2 []string
+		for cols2.Next() {
+			var cid int
+			var name, ctype string
+			var notnull int
+			var dflt sql.NullString
+			var pk int
+			cols2.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk)
+			names2 = append(names2, name)
+		}
+		cols2.Close()
+		fmt.Printf("reg_secrets cols: %v\n", names2)
+		rs, err := db.Query(`SELECT * FROM reg_secrets`)
+		if err == nil {
+			dest := make([]any, len(names2))
+			ptrs := make([]any, len(names2))
+			for i := range dest {
+				ptrs[i] = &dest[i]
+			}
+			for rs.Next() {
+				if err := rs.Scan(ptrs...); err != nil {
+					fmt.Println("  scan:", err)
+					break
+				}
+				for i, n := range names2 {
+					fmt.Printf("  %s = %v\n", n, dest[i])
+				}
+				fmt.Println("  ---")
+			}
+			rs.Close()
+		}
 	}
-
-	hash, err := middleware.HashPassword(newPassword)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Hash error: %v\n", err)
-		os.Exit(1)
-	}
-
-	database.Model(&user).Update("password_hash", hash)
-	fmt.Printf("Password for '%s' has been reset successfully!\n", username)
-	fmt.Printf("You can now log in with username='%s' and your new password.\n", username)
 }

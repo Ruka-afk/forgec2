@@ -46,6 +46,7 @@ export interface BinaryForm {
   persist: boolean;
   skip_tls: boolean;
   evasion: boolean;
+  ghost_mode: boolean;
   obfuscate: boolean;
   arch: string;
   domain_front: string;
@@ -164,7 +165,7 @@ export interface PayloadExtras {
 export type PayloadKey = keyof PayloadForms;
 
 export const DEFAULT_BINARY_FORM: BinaryForm = {
-  filename: "", persist: false, skip_tls: false, evasion: false, obfuscate: false,
+  filename: "", persist: false, skip_tls: false, evasion: false, ghost_mode: false, obfuscate: false,
   arch: "amd64", domain_front: "", p2p_mode: "", p2p_parent: "",
   p2p_listen_addr: "", dns_domain: "", dns_server: "",
   working_start: "", working_end: "", working_tz: "",

@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { TableCell } from "@/components/ui/table";
 import { timeAgo, formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
-import { Apple, ChevronDown, ChevronRight, Monitor, Terminal } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type { HostGroup } from "./groupBeaconsByHost";
 import { hostImplantVersions } from "./implant-version";
+import { agentStatusBorderClass, osIcon } from "./types";
 
 interface AgentHostRowProps {
   group: HostGroup;
@@ -38,10 +39,9 @@ export const AgentHostRow = memo(function AgentHostRow({
   const allSelected = selectedCount === n && n > 0;
   const users = [...new Set(group.sessions.map((s) => s.username).filter(Boolean))];
   const os = group.os || "";
-  const OsIcon = os.toLowerCase() === "windows" ? Monitor : os.toLowerCase() === "linux" ? Terminal : Apple;
+  const OsIcon = osIcon(os);
   const versions = hostImplantVersions(group.sessions);
-  const borderLeft = group.status === "online" ? "border-l-2 border-l-success" :
-    group.status === "stale" ? "border-l-2 border-l-warning" : "border-l-2 border-l-destructive";
+  const borderLeft = agentStatusBorderClass(group.status);
 
   return (
     <tr

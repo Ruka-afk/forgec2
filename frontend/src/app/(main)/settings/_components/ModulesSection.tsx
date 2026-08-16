@@ -155,7 +155,7 @@ export default function ModulesSection() {
     <Card className="overflow-hidden">
       <div className="bg-chart-6/violet border-b border-chart-6/violet px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center">
+          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center">
             <FileCode className="w-4 h-4 text-chart-6" />
           </div>
           <div>
@@ -169,7 +169,7 @@ export default function ModulesSection() {
         {(() => {
           const hasMimi = modules.some((m) => /invoke-mimikatz|mimikatz\.ps1/i.test(m.name));
           return (
-            <div className={`text-xs rounded-xl px-3 py-2 border ${hasMimi ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-warning-foreground"}`}>
+            <div className={`text-xs rounded-lg px-3 py-2 border ${hasMimi ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-warning-foreground"}`}>
               {hasMimi ? t("settings.modules.mimikatz_ready") : t("settings.modules.mimikatz_missing")}
             </div>
           );
@@ -217,7 +217,7 @@ export default function ModulesSection() {
         {modal}
 
         {modules.length > 0 && (
-          <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-3">
             <div className="flex items-center gap-2">
               <Rocket className="w-4 h-4 text-chart-6" />
               <h3 className="text-sm font-medium">{t("settings.modules.deploy_title")}</h3>

@@ -14,7 +14,7 @@ import { useI18n } from "@/lib/i18n";
 import { AdvancedSection, FieldLabel, PayloadCard } from "./PayloadCard";
 import { BuildResult, BuildStatusBadge } from "./BuildResult";
 
-const BTN_CLASS = "w-full h-10 rounded-xl font-medium flex items-center justify-center gap-x-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50";
+const BTN_CLASS = "w-full h-10 rounded-lg font-medium flex items-center justify-center gap-x-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50";
 
 // ─── BinaryPanel (exe / dll) ───────────────────────────────────
 
@@ -124,6 +124,13 @@ export const BinaryPanel = React.memo(function BinaryPanel({ variant, form, setF
         <Label htmlFor={`${id}-evasion`} className="text-sm text-muted-foreground">
           {t("generate.panel.edr_evasion")}
           <span className="block text-(--fs-micro-sm) text-muted-foreground font-normal">{t("generate.panel.edr_evasion_hint")}</span>
+        </Label>
+      </div>
+      <div className="flex items-start gap-x-2">
+        <Checkbox id={`${id}-ghost-mode`} aria-label={t("generate.panel.ghost_mode_aria")} checked={form.ghost_mode} onCheckedChange={(checked) => setForm({ ...form, ghost_mode: checked === true })} />
+        <Label htmlFor={`${id}-ghost-mode`} className="text-sm text-muted-foreground">
+          {t("generate.panel.ghost_mode")}
+          <span className="block text-(--fs-micro-sm) text-muted-foreground font-normal">{t("generate.panel.ghost_mode_hint")}</span>
         </Label>
       </div>
       {variant === "exe" && (

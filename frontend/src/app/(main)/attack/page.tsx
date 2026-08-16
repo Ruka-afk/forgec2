@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { MITRE_PHASE_COLORS } from "@/lib/colors";
+import { phaseColor } from "@/lib/chart-palette";
 import { PageSpinner } from "@/components/UI";
 import { PageContainer } from "@/components/ui/page-container";
 import { useAgentList } from "@/lib/hooks/useAgentList";
@@ -51,8 +51,6 @@ const KILL_CHAIN_PHASES = [
   "Discovery", "Lateral Movement", "Collection", "Command and Control",
   "Exfiltration", "Impact",
 ];
-
-const PHASE_COLORS = MITRE_PHASE_COLORS;
 
 const TACTIC_ORDER = [
   "Execution",
@@ -254,7 +252,7 @@ export default function AttackPage() {
                         key={tech.id}
                         className={`px-4 py-2.5 flex items-center justify-between transition-colors ${
                           covered
-                            ? "bg-emerald-50/30 dark:bg-emerald-900/10"
+                            ? "bg-success/10"
                             : "hover:bg-muted/30"
                         }`}
                       >
@@ -344,10 +342,10 @@ function PhaseCoverageCard() {
           const pct = found ? Math.round((found.campaigns_covered / maxCoverage) * 100) : 0;
           return (
             <div key={phase} className={`p-3 rounded-lg border text-center transition-colors ${
-              isCovered ? "border-emerald-500/30 bg-emerald-500/10" : "border-border bg-card"
+              isCovered ? "border-success/30 bg-success/10" : "border-border bg-card"
             }`}>
               <div className="w-6 h-6 rounded-full mx-auto mb-1.5 flex items-center justify-center"
-                style={{ background: PHASE_COLORS[phase] || "#6366f1" }}>
+                style={{ background: phaseColor(phase) || "#6366f1" }}>
                 {isCovered ? (
                   <Check className="w-4 h-4" />
                 ) : (
@@ -358,7 +356,7 @@ function PhaseCoverageCard() {
                 {phase.split(" ").slice(0, 2).join(" ")}
               </div>
               <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
-                <div className={`h-full rounded-full transition-all ${isCovered ? "bg-emerald-500" : "bg-muted-foreground"}`}
+                <div className={`h-full rounded-full transition-all ${isCovered ? "bg-success" : "bg-muted-foreground"}`}
                   style={{ width: `${pct}%` }} />
               </div>
               {found && (

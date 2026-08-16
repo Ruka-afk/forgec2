@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Badge } from "@/components/ui/badge";
 import { Clock, Compass, Expand, Keyboard, Maximize2, Mouse, Play, Square, TriangleAlert, Users, Wifi, Zap } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { safeImageSrc } from "@/lib/safeUrl";
 import { isExperimentalDesktop } from "../_components/session-quality";
 import { implantBlocksDest } from "../../_components/implant-version";
 
@@ -100,10 +101,10 @@ export default function RemoteDesktopPage() {
       const p = pendingFrameRef.current;
       pendingFrameRef.current = null;
       if (!p) return;
-      setLastUpdate(new Date().toLocaleTimeString());
-      setStatus("connected");
       if (p.data === lastFrameRef.current) return;
       lastFrameRef.current = p.data;
+      setLastUpdate(new Date().toLocaleTimeString());
+      setStatus("connected");
       setScreenData(p.data);
       if (p.width) setNativeWidth(p.width);
       if (p.height) setNativeHeight(p.height);
@@ -393,7 +394,7 @@ export default function RemoteDesktopPage() {
 
       <div className="flex-1 min-h-0 flex flex-col">
         <Card
-          className="overflow-hidden shadow-sm flex-1 flex flex-col min-h-0 rounded-xl"
+          className="overflow-hidden shadow-sm flex-1 flex flex-col min-h-0 rounded-lg"
         >
           <div className="bg-muted/50 px-4 py-2.5 flex items-center justify-between border-b border-border shrink-0">
             <div className="flex items-center gap-2">
@@ -454,7 +455,7 @@ export default function RemoteDesktopPage() {
               <>
                 <img
                   ref={imgRef}
-                  src={screenData}
+                  src={safeImageSrc(screenData)}
                   alt={t("agents.rdp_title")}
                   className="max-w-full max-h-full object-contain"
                   draggable={false}
@@ -523,7 +524,7 @@ export default function RemoteDesktopPage() {
 
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
           <Card className="px-4 py-3 flex flex-row items-center gap-3 rounded-2xl">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary shrink-0">
+            <div className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary shrink-0">
               <Mouse className="w-4 h-4" />
             </div>
             <div>
@@ -536,7 +537,7 @@ export default function RemoteDesktopPage() {
             </div>
           </Card>
           <Card className="px-4 py-3 flex flex-row items-center gap-3 rounded-2xl">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary shrink-0">
+            <div className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary shrink-0">
               <Keyboard className="w-4 h-4" />
             </div>
             <div>
@@ -549,7 +550,7 @@ export default function RemoteDesktopPage() {
             </div>
           </Card>
           <Card className="px-4 py-3 flex flex-row items-center gap-3 rounded-2xl">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary shrink-0">
+            <div className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary shrink-0">
               <Wifi className="w-4 h-4" />
             </div>
             <div>

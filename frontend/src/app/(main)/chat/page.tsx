@@ -108,7 +108,7 @@ export default function ChatPage() {
           {connected ? t("chat.connected") : t("chat.disconnected")}
         </Badge>
       </PageHeader>
-      <div className="flex flex-1 gap-0 rounded-xl border border-border overflow-hidden">
+      <div className="flex flex-1 gap-0 rounded-lg border border-border overflow-hidden">
         <div className="w-[200px] shrink-0 bg-card p-3 border-r border-border overflow-y-auto">
           <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2 m-0">{t("chat.channels")}</h4>
           {channels.map(c => (

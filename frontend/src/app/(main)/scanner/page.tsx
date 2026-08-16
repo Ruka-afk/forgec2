@@ -186,7 +186,7 @@ export default function ScannerPage() {
 
       <Card className="p-4 sm:p-5 mb-6 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-info/10 dark:bg-info/30 rounded-lg flex items-center justify-center">
             <Radar className="w-4 h-4" />
           </div>
           <div>
@@ -268,7 +268,7 @@ export default function ScannerPage() {
       {(data?.active_scans?.length ?? 0) > 0 && (
         <Card className="p-4 sm:p-5 mb-6 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
           <div className="flex items-center gap-x-3 mb-4">
-            <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-warning/10 rounded-lg flex items-center justify-center">
               <Spinner size="xs" />
             </div>
             <div>
@@ -285,7 +285,7 @@ export default function ScannerPage() {
               const type = scan.type || "";
               const agent = scan.agent || "";
               return (
-                <div key={scanId} className="bg-muted rounded-xl p-4">
+                <div key={scanId} className="bg-muted rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <Crosshair className="w-4 h-4" />
@@ -357,7 +357,7 @@ export default function ScannerPage() {
                   {data.results.map((r) => (
                     <TableRow key={`${r.ip}-${r.port}-${r.protocol}`}>
                       <TableCell className="font-mono text-muted-foreground">{r.ip ?? "-"}</TableCell>
-                      <TableCell className="font-mono font-medium text-blue-600 dark:text-blue-400">{r.port ?? "-"}</TableCell>
+                      <TableCell className="font-mono font-medium text-info dark:text-info">{r.port ?? "-"}</TableCell>
                       <TableCell className="text-muted-foreground">{r.protocol ?? "-"}</TableCell>
                       <TableCell><Badge variant={getStatusVariant(r.status ?? "open")}>{r.status ?? "open"}</Badge></TableCell>
                       <TableCell className="text-muted-foreground">{r.service ?? "-"}</TableCell>
@@ -382,7 +382,7 @@ export default function ScannerPage() {
                   const scanId = scan.id || String(i);
                   const progress = scan.progress ?? 0;
                   return (
-                    <div key={scanId} className="bg-muted rounded-xl p-4">
+                    <div key={scanId} className="bg-muted rounded-lg p-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium font-mono text-foreground">{scan.target}</span>
                         <span className="text-xs text-muted-foreground">{progress}%</span>
@@ -423,7 +423,7 @@ export default function ScannerPage() {
                       <TableCell className="font-mono text-muted-foreground truncate max-w-[200px]">{h.target}</TableCell>
                       <TableCell className="text-muted-foreground">{h.type}</TableCell>
                       <TableCell className="text-muted-foreground">{h.ports ?? 0}</TableCell>
-                      <TableCell className="font-medium text-blue-600 dark:text-blue-400">{h.results ?? 0}</TableCell>
+                      <TableCell className="font-medium text-info dark:text-info">{h.results ?? 0}</TableCell>
                       <TableCell>
                         <Badge variant={(h.status ?? "") === "completed" ? "success" : "warning"}>
                           {h.status}

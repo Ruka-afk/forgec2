@@ -19,7 +19,7 @@ export default function MaintenanceSection({
     <Card className="overflow-hidden">
       <div className="bg-warning/10 border-b border-warning/20 px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Wand2 className="w-4 h-4" /></div>
+          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Wand2 className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-foreground">{t("settings.maintenance.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.maintenance.subtitle")}</p></div>
         </div>
       </div>
@@ -28,7 +28,7 @@ export default function MaintenanceSection({
           { labelKey: "settings.maintenance.purge_tasks", descKey: "settings.maintenance.purge_tasks_desc", type: "tasks" },
           { labelKey: "settings.maintenance.purge_audit", descKey: "settings.maintenance.purge_audit_desc", type: "audit" },
         ].map((item) => (
-          <div key={item.type} className="p-4 bg-muted rounded-xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div key={item.type} className="p-4 bg-muted rounded-lg border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium text-muted-foreground">{t(item.labelKey)}</div>
               <div className="text-xs text-muted-foreground mt-0.5">{t(item.descKey)}</div>
@@ -44,18 +44,18 @@ export default function MaintenanceSection({
                   <SelectItem value="90">{t("settings.maintenance.days").replace("{n}", "90")}</SelectItem>
                 </SelectContent>
               </Select>
-              <Button onClick={() => onPurge(item.type)} disabled={saving} className="px-4 h-8 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-xl text-xs font-medium transition-colors disabled:opacity-50">
+              <Button onClick={() => onPurge(item.type)} disabled={saving} className="px-4 h-8 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
                 <Trash2 className="w-4 h-4" />{t("settings.maintenance.purge")}
               </Button>
             </div>
           </div>
         ))}
-        <div className="p-4 bg-muted rounded-xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="p-4 bg-muted rounded-lg border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="text-sm font-medium text-muted-foreground">{t("settings.maintenance.purge_screenshots")}</div>
             <div className="text-xs text-muted-foreground mt-0.5">{t("settings.maintenance.purge_screenshots_desc")}</div>
           </div>
-          <Button onClick={onPurgeScreenshots} disabled={saving} className="px-4 h-8 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-xl text-xs font-medium transition-colors disabled:opacity-50">
+          <Button onClick={onPurgeScreenshots} disabled={saving} className="px-4 h-8 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
             <Trash2 className="w-4 h-4" />{t("settings.maintenance.purge")}
           </Button>
         </div>

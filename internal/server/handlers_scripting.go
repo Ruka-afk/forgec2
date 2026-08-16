@@ -23,7 +23,7 @@ func (s *Server) loadScriptsFromDB() {
 }
 
 func (s *Server) handleScriptingPage(c *gin.Context) {
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":     "ForgeC2 - Scripting Console",
 		"ActiveNav": "scripting",

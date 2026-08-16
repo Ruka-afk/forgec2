@@ -256,6 +256,65 @@ func TestHandleAgentDetail(t *testing.T) {
 		}
 	})
 
+	t.Run("include_unlinked=false skips unlinked agents payload", func(t *testing.T) {
+		s := newAgentTestServer(t)
+		agent := db.Implant{ID: "agent-unlinked-skip", Hostname: "SKIP01", LastSeen: time.Now()}
+		other := db.Implant{ID: "agent-unlinked-other", Hostname: "OTHER01", LastSeen: time.Now()}
+		if err := s.db.Create(&agent).Error; err != nil {
+			t.Fatalf("seed agent: %v", err)
+		}
+		if err := s.db.Create(&other).Error; err != nil {
+			t.Fatalf("seed other agent: %v", err)
+		}
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/agents/agent-unlinked-skip?format=json&include_unlinked=false", nil)
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+		s.handleAgentDetail(c)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+		var resp map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+		}
+		if _, exists := resp["UnlinkedAgents"]; exists {
+			t.Fatalf("expected UnlinkedAgents to be omitted with include_unlinked=false; keys=%v", keys(resp))
+		}
+	})
+
+	t.Run("include_unlinked default keeps unlinked agents payload", func(t *testing.T) {
+		s := newAgentTestServer(t)
+		agent := db.Implant{ID: "agent-unlinked-keep", Hostname: "KEEP01", LastSeen: time.Now()}
+		other := db.Implant{ID: "agent-unlinked-other2", Hostname: "OTHER02", LastSeen: time.Now()}
+		if err := s.db.Create(&agent).Error; err != nil {
+			t.Fatalf("seed agent: %v", err)
+		}
+		if err := s.db.Create(&other).Error; err != nil {
+			t.Fatalf("seed other agent: %v", err)
+		}
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/agents/agent-unlinked-keep?format=json", nil)
+		c.Params = gin.Params{{Key: "id", Value: agent.ID}}
+		s.handleAgentDetail(c)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+		var resp map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+		}
+		unlinked, ok := resp["UnlinkedAgents"].([]any)
+		if !ok || len(unlinked) != 1 {
+			t.Fatalf("expected 1 unlinked agent with default include; got %v", resp["UnlinkedAgents"])
+		}
+	})
+
 	t.Run("uses all task history for stats", func(t *testing.T) {
 		s := newAgentTestServer(t)
 		agent := db.Implant{ID: "agent-stats", Hostname: "STATS01", LastSeen: time.Now()}

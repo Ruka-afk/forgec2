@@ -34,14 +34,14 @@ export function AgentBulkBar({
   return (
     <>
       {actionMsg && (
-        <div role="status" aria-live="polite" className="mb-3 px-4 py-2 bg-info/8 border border-info/20 rounded-xl text-sm text-info flex items-center justify-between animate-fade-in">
+        <div role="status" aria-live="polite" className="mb-3 px-4 py-2 bg-info/8 border border-info/20 rounded-lg text-sm text-info flex items-center justify-between animate-fade-in">
           <span>{actionMsg}</span>
           <Button variant="ghost" size="icon-xs" onClick={dismissActionMsg} aria-label={t("common.close")}><X className="w-4 h-4" /></Button>
         </div>
       )}
 
       {bulkMode && selected.size > 0 && (
-        <div className="mb-3 px-4 py-3 bg-sidebar border border-border rounded-xl flex flex-wrap items-center gap-2 shadow-sm">
+        <div className="mb-3 px-4 py-3 bg-sidebar border border-border rounded-lg flex flex-wrap items-center gap-2 shadow-sm">
           <span className="text-sm text-foreground font-medium mr-2">{t("agents.n_selected").replace("{n}", String(selected.size))}</span>
           <Button size="sm" onClick={onBulkShell} ><Terminal className="w-4 h-4" />{t("agents.execute_command")}</Button>
           <Button size="sm" onClick={onBulkKill} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"><Power className="w-4 h-4" />{t("agents.kill")}</Button>
@@ -51,7 +51,7 @@ export function AgentBulkBar({
       )}
 
       {!bulkMode && selected.size > 0 && (
-        <div className="mb-3 px-4 py-3 bg-sidebar border border-border rounded-xl flex flex-wrap items-center gap-2 shadow-sm">
+        <div className="mb-3 px-4 py-3 bg-sidebar border border-border rounded-lg flex flex-wrap items-center gap-2 shadow-sm">
           <span className="text-sm text-foreground font-medium mr-2">{t("agents.n_selected").replace("{n}", String(selected.size))}</span>
           <Button size="sm" onClick={onBulkShell} ><Terminal className="w-4 h-4" />{t("agents.shell")}</Button>
           <Button size="sm" variant="secondary" onClick={onBulkScreenshot}><Camera className="w-4 h-4" />{t("agents.screenshot")}</Button>
@@ -72,7 +72,7 @@ export function AgentBulkBar({
           ) : (
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {bulkResults.map((r, i) => (
-                <div key={r.id || i} className="flex items-center justify-between px-3 py-2 bg-muted rounded-xl text-xs">
+                <div key={r.id || i} className="flex items-center justify-between px-3 py-2 bg-muted rounded-lg text-xs">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-primary-foreground text-(--fs-micro-sm) font-bold shrink-0 ${
                       r.type === "kill" ? "bg-chart-4" :

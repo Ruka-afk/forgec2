@@ -341,7 +341,7 @@ export default function ListenersPageContent() {
                             text={`${scheme}://${host}:${port}`}
                             title={t("listeners.copy")}
                             size="icon-xs"
-                            className="w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-secondary hover:bg-secondary/80 rounded-xl flex items-center justify-center gap-x-1 text-muted-foreground"
+                            className="w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-secondary hover:bg-secondary/80 rounded-lg flex items-center justify-center gap-x-1 text-muted-foreground"
                           >
                             {(copied) => (
                               <>
@@ -350,15 +350,15 @@ export default function ListenersPageContent() {
                               </>
                             )}
                           </CopyButton>
-                         <Button variant="ghost" onClick={() => handleEdit(l)} className="w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-secondary/70 hover:bg-secondary text-foreground rounded-xl flex items-center justify-center gap-x-1">
+                         <Button variant="ghost" onClick={() => handleEdit(l)} className="w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-secondary/70 hover:bg-secondary text-foreground rounded-lg flex items-center justify-center gap-x-1">
                             <Pencil className="w-4 h-4" />
                             <span className="hidden sm:inline">{t("listeners.edit")}</span>
                          </Button>
-                         <Button variant="ghost" onClick={() => handleToggle(l)} className={`w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs ${enabled ? "bg-warning/15 text-warning hover:bg-warning/15" : "bg-success/15 text-success hover:bg-success/15"} rounded-xl flex items-center justify-center gap-x-1`}>
+                         <Button variant="ghost" onClick={() => handleToggle(l)} className={`w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs ${enabled ? "bg-warning/15 text-warning hover:bg-warning/15" : "bg-success/15 text-success hover:bg-success/15"} rounded-lg flex items-center justify-center gap-x-1`}>
                             <Power className="w-4 h-4" />
                                <span className="hidden sm:inline">{enabled ? t("listeners.stop") : t("listeners.start")}</span>
                          </Button>
-                          <Button variant="ghost" onClick={() => handleDelete(l)} className="w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-xl flex items-center justify-center gap-x-1">
+                          <Button variant="ghost" onClick={() => handleDelete(l)} className="w-9 h-9 sm:px-3 sm:py-1 sm:w-auto sm:h-auto text-xs bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg flex items-center justify-center gap-x-1">
                            <Trash2 className="w-4 h-4" />
                              <span className="hidden sm:inline">{t("listeners.delete")}</span>
                          </Button>

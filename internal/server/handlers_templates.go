@@ -10,7 +10,7 @@ import (
 
 // handleTemplatesPage renders the command templates page
 func (s *Server) handleTemplatesPage(c *gin.Context) {
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 
 	// Get all templates
 	var templates []db.CommandTemplate

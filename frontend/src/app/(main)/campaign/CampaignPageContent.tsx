@@ -6,6 +6,7 @@ import { paths } from "@/lib/api-paths";
 
 import { formatTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { phaseColor } from "@/lib/chart-palette";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
@@ -45,7 +46,6 @@ import {
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   PHASE_ORDER,
-  PHASE_PHASE_COLORS,
   type Campaign,
   type CampaignMITRE,
   type CampaignStats,
@@ -363,7 +363,7 @@ function CampaignDetailView({
                   (mitreData?.timeline || []).map((event, i) => (
                     <div key={i} className="mb-3 relative">
                       <div className="absolute -left-[calc(1.5rem+1px)] top-1 w-3 h-3 rounded-full border-2 border-card"
-                        style={{ background: PHASE_PHASE_COLORS[event.phase] || "#6366f1" }} />
+                        style={{ background: phaseColor(event.phase) || "#6366f1" }} />
                       <div className="text-sm font-medium">{event.phase}</div>
                       <div className="text-xs text-muted-foreground">{formatTime(event.first_seen)}</div>
                       <div className="text-xs text-muted-foreground">{event.task_count} {t("campaign.tasks")}</div>
@@ -410,7 +410,7 @@ function CampaignDetailView({
                 <div className="flex flex-wrap gap-1">
                   {templates.find((t) => t.name === selectedTemplate)?.steps?.map((step, i) => (
                     <Badge key={`${step.task_type}-${i}`} variant="secondary" className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs">
-                      <span className="w-2 h-2 rounded-full" style={{ background: PHASE_PHASE_COLORS[step.phase] || "gray" }} />
+                      <span className="w-2 h-2 rounded-full" style={{ background: phaseColor(step.phase) || "gray" }} />
                       {step.task_type}
                     </Badge>
                   )) ?? null}
@@ -429,7 +429,7 @@ function CampaignDetailView({
                 {stats.phase_timeline.map((event: PhaseEvent, i: number) => (
                   <div key={i} className="mb-4 relative">
                     <div className="absolute -left-[calc(1.5rem+1px)] top-1 w-3 h-3 rounded-full border-2 border-card"
-                      style={{ background: PHASE_PHASE_COLORS[event.phase] || "#6366f1" }} />
+                      style={{ background: phaseColor(event.phase) || "#6366f1" }} />
                     <div className="text-sm font-medium">{event.phase}</div>
                     <div className="text-xs text-muted-foreground">{formatTime(event.first_seen)}</div>
                     <div className="text-xs text-muted-foreground">{event.task_count} {t("campaign.tasks")}</div>

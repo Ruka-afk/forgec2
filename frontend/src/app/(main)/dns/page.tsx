@@ -114,8 +114,8 @@ export default function DNSPage() {
       {/* Status Card */}
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${status?.running ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-red-100 dark:bg-red-900/30'}`}>
-            {status?.running ? <Wifi className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> : <WifiOff className="w-4 h-4 text-red-600 dark:text-red-400" />}
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${status?.running ? 'bg-success/10 dark:bg-success/30' : 'bg-destructive/10 dark:bg-destructive/30'}`}>
+            {status?.running ? <Wifi className="w-4 h-4 text-success dark:text-success" /> : <WifiOff className="w-4 h-4 text-destructive dark:text-destructive" />}
           </div>
           <div>
             <div className="text-sm font-semibold text-foreground">{t("dns.status_title")}</div>
@@ -127,7 +127,7 @@ export default function DNSPage() {
             <CardContent className="p-0">
               <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.status_title")}</div>
               <div className="flex items-center gap-x-2">
-                <span className={`w-2 h-2 rounded-full ${status?.running ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+                <span className={`w-2 h-2 rounded-full ${status?.running ? 'bg-success animate-pulse' : 'bg-destructive'}`} />
                 <span className="text-sm font-semibold text-foreground">{status?.running ? t("common.online") : t("common.offline")}</span>
               </div>
             </CardContent>
@@ -159,7 +159,7 @@ export default function DNSPage() {
       {/* Configuration Card */}
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
             <Server className="w-4 h-4" />
           </div>
           <div>
@@ -225,8 +225,8 @@ export default function DNSPage() {
       {/* How It Works */}
       <Card className="p-4 sm:p-5">
         <div className="flex items-center gap-x-3 mb-4">
-          <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center">
-            <Globe className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          <div className="w-10 h-10 bg-warning/10 dark:bg-warning/30 rounded-lg flex items-center justify-center">
+            <Globe className="w-4 h-4 text-warning dark:text-warning" />
           </div>
           <div>
             <div className="text-sm font-semibold text-foreground">{t("dns.how_title")}</div>

@@ -13,7 +13,7 @@ import (
 
 // handleLateralPage renders the lateral movement page
 func (s *Server) handleLateralPage(c *gin.Context) {
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 
 	// Get available agents
 	var agents []db.Implant

@@ -3,6 +3,8 @@
 
 package main
 
+import "fmt"
+
 // runPowerShellStdin is only meaningful on Windows (powershell.exe). On other
 // platforms mimikatz is unreachable anyway, so the stub returns an error to
 // keep the symbol resolvable for the cross-platform caller in agent_creds.go.

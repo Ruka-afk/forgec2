@@ -2,6 +2,7 @@
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import Link from "next/link";
 import { Camera, ChevronLeft, ChevronRight, Maximize2, X } from "lucide-react";
@@ -9,6 +10,7 @@ import { useI18n } from "@/lib/i18n";
 
 export interface AgentScreenshotsProps {
   screenshots: string[];
+  newScreenshots?: string[];
   agentId: string;
   lightboxIdx: number | null;
   onOpenLightbox: (idx: number) => void;
@@ -18,13 +20,14 @@ export interface AgentScreenshotsProps {
 }
 
 export default function AgentScreenshots({
-  screenshots, agentId, lightboxIdx, onOpenLightbox,
+  screenshots, newScreenshots = [], agentId, lightboxIdx, onOpenLightbox,
   onCloseLightbox, onPrevLightbox, onNextLightbox,
 }: AgentScreenshotsProps) {
   const { t } = useI18n();
   if (screenshots.length === 0) return null;
 
   const lightboxOpen = lightboxIdx !== null;
+  const freshSet = new Set(newScreenshots);
 
   return (
     <>
@@ -37,8 +40,11 @@ export default function AgentScreenshots({
         <div className="p-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2">
             {screenshots.slice(0, 12).map((fn, i) => (
-              <Button key={fn} variant="ghost" onClick={() => onOpenLightbox(i)} className="group relative aspect-video rounded-xl border border-border/70 bg-muted/30 p-0 h-auto overflow-hidden shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+<Button key={fn} variant="ghost" onClick={() => onOpenLightbox(i)} className="group relative aspect-video rounded-lg border border-border/70 bg-muted/30 p-0 h-auto overflow-hidden shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
                 <img src={`/screenshots/${agentId}/${fn}`} alt={fn} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                {freshSet.has(fn) && (
+                  <span className="absolute top-1.5 left-1.5"><Badge className="px-1.5 py-0 text-(--fs-micro-sm)">{t("agents.screenshots_new")}</Badge></span>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/0 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm">

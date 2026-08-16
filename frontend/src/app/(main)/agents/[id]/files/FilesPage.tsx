@@ -22,6 +22,7 @@ import { useI18n } from "@/lib/i18n";
 import { formatSize, formatTimestamp, isImageFile, joinPath, parentPath, type FileEntry } from "./_components/types";
 import { transferPercent } from "./_components/file-task";
 import { useAgentFiles } from "./_components/useAgentFiles";
+import { safeImageSrc } from "@/lib/safeUrl";
 
 export default function FilesPage() {
   const { t } = useI18n();
@@ -137,7 +138,7 @@ export default function FilesPage() {
 
       <p className="mb-4 text-xs text-muted-foreground">{t("agents.files_channel_hint")}</p>
 
-      <div className="mb-4 rounded-xl border border-border bg-muted/40 p-4">
+      <div className="mb-4 rounded-lg border border-border bg-muted/40 p-4">
         <div className="mb-3 flex items-center gap-2">
           <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
           <Input
@@ -213,7 +214,7 @@ export default function FilesPage() {
             )}
           </div>
           {findResults.length > 0 && (
-            <div className="mt-3 max-h-48 overflow-y-auto rounded-xl border border-border bg-muted/50">
+            <div className="mt-3 max-h-48 overflow-y-auto rounded-lg border border-border bg-muted/50">
               {findResults.map((result) => (
                 <Button
                   key={result}
@@ -435,8 +436,8 @@ export default function FilesPage() {
           </DialogHeader>
           {previewIsImage ? (
             <div className="flex flex-1 items-center justify-center overflow-auto bg-muted/50 p-4">
-              <img
-                src={previewContent}
+                <img
+                src={safeImageSrc(previewContent)}
                 alt={selectedFile || t("agents.files_preview_btn")}
                 className="max-h-[70vh] max-w-full rounded-lg object-contain"
                 loading="lazy"
@@ -444,7 +445,7 @@ export default function FilesPage() {
               />
             </div>
           ) : (
-            <pre className="flex-1 overflow-auto whitespace-pre-wrap rounded-xl border border-border bg-muted/50 p-4 font-mono text-sm">
+            <pre className="flex-1 overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-muted/50 p-4 font-mono text-sm">
               {previewContent}
             </pre>
           )}

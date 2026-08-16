@@ -75,8 +75,8 @@ Commands:
 Examples:
   i18n-tool check --lang zh
   i18n-tool stats
-  i18n-tool export --lang ja --output ja.json
-  i18n-tool missing --lang ko
+  i18n-tool export --lang zh --output zh.json
+  i18n-tool missing --lang zh
 `)
 }
 

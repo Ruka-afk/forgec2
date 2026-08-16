@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -7,7 +8,7 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { Spinner } from "@/components/ui/spinner";
 import type { AgentDetail, AgentStatus } from "@/types/agent";
-import { Activity, Apple, Camera, Clipboard, Crown, Database, FolderOpen, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, RefreshCw, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
+import { Activity, Apple, Camera, Clipboard, Crown, Database, FolderOpen, Key, Keyboard, Link as LinkIcon, ListChecks, MapPin, Monitor, MoreHorizontal, PictureInPicture2, RefreshCw, Shield, Skull, SlidersHorizontal, Terminal, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -46,11 +47,12 @@ export interface AgentHeaderProps {
   onUninstall: () => void;
   onMigrate?: () => void;
   onClose?: () => void;
+  onPopOut?: () => void;
 }
 
-export default function AgentHeader({
+export default memo(function AgentHeader({
   agent, agentId, status,
-  actionLoading, onQuickAction, credCount, mimikatzReady = false, onKill, onUninstall, onMigrate,
+  actionLoading, onQuickAction, credCount, mimikatzReady = false, onKill, onUninstall, onMigrate, onPopOut,
 }: AgentHeaderProps) {
   const { t } = useI18n();
   const hostname = agent.hostname || "\u2014";
@@ -154,6 +156,9 @@ export default function AgentHeader({
               <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/shell`} />}><Terminal className="w-4 h-4" /> {t("agents.shell_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">S</kbd></Button>
               <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/files`} />}><FolderOpen className="w-4 h-4" /> {t("agents.files_title")} <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">F</kbd></Button>
               <Button variant="outline" size="sm" render={<Link href={`/agents/${agentId}/screen`} />}><Monitor className="w-4 h-4" /> {t("agents.screen_title")} <span className="text-(--fs-micro) opacity-70"><QualityMark quality="hardened" /></span> <kbd className="text-(--fs-micro-sm) opacity-50 ml-1">D</kbd></Button>
+              <Button variant="outline" size="sm" onClick={onPopOut} aria-label={t("agents.popout_console")}>
+                <PictureInPicture2 className="w-4 h-4" /> {t("agents.popout_console")}
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger render={<Button variant="secondary" size="sm" className="gap-1.5"><MoreHorizontal className="w-4 h-4" /> {t("agents.header_more")}</Button>} />
                 <DropdownMenuContent className="w-48">
@@ -199,7 +204,7 @@ export default function AgentHeader({
                 variant="ghost"
                 disabled={disabled}
                 onClick={() => onQuickAction(item.action, item.label)}
-                className={`group relative overflow-hidden rounded-xl border border-border/70 bg-card/90 p-3.5 flex flex-col items-center gap-2.5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-primary/20 ${disabled ? "opacity-40" : ""}`}
+                className={`group relative overflow-hidden rounded-lg border border-border/70 bg-card/90 p-3.5 flex flex-col items-center gap-2.5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-primary/20 ${disabled ? "opacity-40" : ""}`}
               />
             }>
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary transition-transform group-hover:scale-105">
@@ -230,4 +235,4 @@ export default function AgentHeader({
       </div>
     </>
   );
-}
+})

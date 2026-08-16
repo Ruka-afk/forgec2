@@ -168,7 +168,7 @@ export default function ContainerPage() {
             </div>
           )}
           {taskPoll.result && (
-            <pre className="text-xs bg-muted/50 p-3 rounded-xl whitespace-pre-wrap max-h-96 overflow-auto font-mono">{taskPoll.result}</pre>
+            <pre className="text-xs bg-muted/50 p-3 rounded-lg whitespace-pre-wrap max-h-96 overflow-auto font-mono">{taskPoll.result}</pre>
           )}
         </Card>
       )}

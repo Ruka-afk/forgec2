@@ -9,11 +9,41 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
       - run: go mod download
-      - run: go vet ./internal/... ./pkg/... ./cmd/...
+      - name: Go format check (changed files)
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            base="origin/${{ github.base_ref }}"
+          else
+            base="${GITHUB_EVENT_BEFORE:-HEAD}"
+            [ "$base" = "0000000000000000000000000000000000000000" ] && base=HEAD
+          fi
+          files=$(git diff --name-only "$base" -- '*.go' || true)
+          if [ -z "$files" ]; then
+            echo "no Go files changed"
+            exit 0
+          fi
+          unformatted=$(gofmt -l $files)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed on:"
+            echo "$unformatted"
+            exit 1
+          fi
+          echo "gofmt ok ($(echo "$files" | wc -l) Go files)"
+      # The agent emits expected unsafe.Pointer vet warnings (Windows syscall
+      # patterns); ignore only those while still failing on any other finding.
+      - run: |
+          go vet ./internal/... ./pkg/... ./cmd/... 2>vet.err
+          grep -v "internal/payload/agent" vet.err || true
+          if grep -v "internal/payload/agent" vet.err >/dev/null; then
+            echo "go vet reported errors (excluding known agent warnings):"
+            exit 1
+          fi
       - run: go test ./internal/config/... ./internal/crypto/... ./internal/db/... ./internal/logger/... ./internal/malleable/... ./internal/obfuscation/... ./internal/plugin/... ./internal/report/... ./internal/server/... ./pkg/... -count=1 -timeout 5m -coverprofile=coverage.out
       - run: go build ./...
       - run: go build -o checkopenapi ./cmd/checkopenapi

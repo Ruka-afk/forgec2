@@ -256,5 +256,9 @@ func init() {
 		"bronze_bit":        handleBronzeBit,
 		"adminsdholder":     handleAdminSDHolder,
 		"dcsync_machine":    handleDCSyncMachine,
+
+		// Audio / Webcam Collection (P2)
+		"webcam": handleWebcam,
+		"mic":    handleMic,
 	}
 }

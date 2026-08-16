@@ -22,6 +22,7 @@ import { ConnectionDot } from "@/components/ui/connection-dot";
 import {
   Menu, Search, X, Moon, Sun, Monitor, Bell, BellOff,
   Settings, Shield, LogOut, ChevronDown, AlertTriangle,
+  Maximize2, Minimize2,
 } from "lucide-react";
 
 interface Notification {
@@ -381,12 +382,14 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
   const { t } = useI18n();
   const { connected, reconnectFailed, reconnect } = useWebSocket();
   const storeSidebarWidth = useAppStore((s) => s.getSidebarWidth());
+  const focusMode = useAppStore((s) => s.focusMode);
+  const toggleFocusMode = useAppStore((s) => s.toggleFocusMode);
 
   return (
     <>
     <header
       className="h-14 bg-card/80 backdrop-blur-xl border-b border-border/60 shadow-sm flex items-center justify-between px-3 fixed top-0 right-0 z-30 transition-[left] duration-200 ease-in-out"
-      style={{ left: storeSidebarWidth }}
+      style={{ left: focusMode ? 0 : storeSidebarWidth }}
     >
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <Button onClick={onMenuToggle}
@@ -410,6 +413,12 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
           </Tooltip>
         </div>
 
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon" onClick={toggleFocusMode} aria-label={focusMode ? t("topbar.focus_mode_exit") : t("topbar.focus_mode")} />}>
+            {focusMode ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+          </TooltipTrigger>
+          <TooltipContent>{focusMode ? t("topbar.focus_mode_exit") : t("topbar.focus_mode")}</TooltipContent>
+        </Tooltip>
         <ShortcutsHelpButton />
         <ThemeSelector />
         <LanguageSelector />
@@ -420,7 +429,7 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
     {reconnectFailed && (
       <div
         className="fixed top-14 right-0 z-20 flex items-center gap-2 px-4 py-2 bg-destructive/10 border-b border-destructive/30 text-destructive text-sm"
-        style={{ left: storeSidebarWidth }}
+        style={{ left: focusMode ? 0 : storeSidebarWidth }}
       >
         <AlertTriangle className="w-4 h-4 shrink-0" />
         <span>{t("topbar.ws_disconnected_banner")}</span>

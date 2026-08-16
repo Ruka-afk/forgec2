@@ -20,7 +20,7 @@ func (s *Server) handleUsersPage(c *gin.Context) {
 		slog.Error("Failed to list users", "err", err)
 	}
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":           "ForgeC2 - User Management",
 		"ActiveNav":       "settings",

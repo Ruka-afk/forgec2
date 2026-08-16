@@ -68,7 +68,10 @@ export function useAgentData(t: (key: string) => string) {
       if (q.tag_id) p.set("tag_id", q.tag_id);
       p.set("sort_key", q.sort_key);
       p.set("sort_dir", q.sort_dir);
-      const d = await api.get(paths.agents.list(p.toString()), { signal });
+      const d = await api.get<{ agents?: Beacon[]; total?: number | string }>(
+        paths.agents.list(p.toString()),
+        { signal, unwrap: false },
+      );
       const list = (d.agents || []) as Beacon[];
       const countMap: Record<string, number> = {};
       for (const b of list) {

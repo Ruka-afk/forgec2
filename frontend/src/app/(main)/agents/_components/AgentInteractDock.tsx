@@ -88,14 +88,11 @@ export function AgentInteractDock({
   }, [id]);
 
   useEffect(() => {
-    void loadTasks();
+    if (!revealId) return;
+    // Reveal is handled incrementally by the WS applyTaskEvent handler below;
+    // a full reload here was redundant (and re-rendered the whole dock).
     setExpandedId(revealId);
     setDiffOpen(false);
-  }, [loadTasks, revealId]);
-
-  useEffect(() => {
-    if (!revealId) return;
-    setExpandedId(revealId);
     onTabChange("tasks");
   }, [revealId, onTabChange]);
 

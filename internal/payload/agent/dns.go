@@ -204,7 +204,7 @@ func sendDNSDoH(dohURL, qname string) []byte {
 		return nil
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 16*1024*1024))
 	if err != nil {
 		return nil
 	}
@@ -307,7 +307,7 @@ func buildDNSQuery(name string, qtype uint16) []byte {
 	// Header (12 bytes)
 	hdr := make([]byte, 12)
 	// ID (random)
-	binary.BigEndian.PutUint16(hdr[0:2], uint16(time.Now().UnixNano()&0xFFFF))
+	binary.BigEndian.PutUint16(hdr[0:2], uint16(rng.Uint32()))
 	// Flags: standard query, recursion desired
 	binary.BigEndian.PutUint16(hdr[2:4], 0x0100)
 	// QDCOUNT = 1

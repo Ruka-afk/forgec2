@@ -223,7 +223,7 @@ function LootPage() {
         loadingSkeleton={
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4">
             {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="rounded-xl h-24" />
+              <Skeleton key={i} className="rounded-lg h-24" />
             ))}
           </div>
         }
@@ -305,7 +305,7 @@ function LootPage() {
                   const full = k.result || k.error;
                   const preview = full.split("\n").find(l => l.trim()) || "";
                   return (
-                    <AccordionItem key={k.id} value={k.id} className="border border-border rounded-xl overflow-hidden mb-3">
+                    <AccordionItem key={k.id} value={k.id} className="border border-border rounded-lg overflow-hidden mb-3">
                       <AccordionHeader className="bg-muted/50">
                         <AccordionTrigger className="px-4 py-2 hover:bg-muted/80 flex-1">
                           <div className="flex items-center gap-x-3 w-full min-w-0">
@@ -461,10 +461,10 @@ function LootPage() {
                 <ChevronRight aria-hidden="true" className="w-4 h-4" />
               </Button>
             )}
-            <div className="text-center text-xs text-white/80 bg-black/60 rounded-xl px-3 py-1.5 mb-2">
+            <div className="text-center text-xs text-white/80 bg-black/60 rounded-lg px-3 py-1.5 mb-2">
               {lbIndex + 1} / {lbScreenshots.length} · {lbCurrent.filename} · {formatTime(lbCurrent.created_at)}
             </div>
-            <img src={safeImageSrc(lbUrl)} alt={lbCurrent.filename} className="max-w-[95vw] max-h-[90vh] object-contain rounded-xl shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <img src={safeImageSrc(lbUrl)} alt={lbCurrent.filename} className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           </DialogContent>
         </Dialog>
       )}

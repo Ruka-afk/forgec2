@@ -312,6 +312,7 @@ export function usePayloadGenerator() {
     persist: form.persist ? "true" : "",
     skip_tls_verify: form.skip_tls ? "true" : "",
     evasion: form.evasion ? "true" : "",
+    ghost_mode: form.ghost_mode ? "true" : "",
     obfuscate: form.obfuscate ? "true" : "",
     filename: form.filename,
     architecture: form.arch,
@@ -577,7 +578,7 @@ export function usePayloadGenerator() {
 
   // Quick presets
   const applyPreset = useCallback((preset: "opsec" | "evasion" | "blend") => {
-    const resetBinary = (f: BinaryForm) => ({ ...f, persist: false, skip_tls: false, evasion: false, obfuscate: false });
+    const resetBinary = (f: BinaryForm) => ({ ...f, persist: false, skip_tls: false, evasion: false, ghost_mode: false, obfuscate: false });
     const maxBinary = (f: BinaryForm) => ({ ...f, persist: true, skip_tls: false, evasion: true, obfuscate: true });
     switch (preset) {
       case "opsec":

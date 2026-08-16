@@ -103,6 +103,7 @@ type udpRelayConn struct {
 
 const (
 	socksOrphanMaxOut = 128             // max orphan control frames to prevent memory leak
+	socksMaxConnOut   = 4096            // max queued frames per SOCKS connection before oldest is dropped
 	SocksReadTimeout  = 5 * time.Minute // read timeout on target connections
 )
 

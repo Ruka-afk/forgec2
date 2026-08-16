@@ -297,7 +297,7 @@ export default function OpsecPage() {
                 key={tt.id}
                 onClick={() => handleRunTest(tt.id)}
                 variant={tt.danger ? "destructive" : "secondary"}
-                className="rounded-xl"
+                className="rounded-lg"
               >
                 {tt.icon}
                 {tt.label}
@@ -331,15 +331,15 @@ export default function OpsecPage() {
             {t("opsec.rekey_title")}
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-            <div className="p-3 bg-muted border border-border rounded-xl">
+            <div className="p-3 bg-muted border border-border rounded-lg">
               <p className="text-xs text-muted-foreground">{t("opsec.rekey_active_sessions")}</p>
               <p className="text-lg font-semibold text-foreground mt-1">{rekeyStats.active_sessions}</p>
             </div>
-            <div className="p-3 bg-muted border border-border rounded-xl">
+            <div className="p-3 bg-muted border border-border rounded-lg">
               <p className="text-xs text-muted-foreground">{t("opsec.rekey_total")}</p>
               <p className="text-lg font-semibold text-foreground mt-1">{rekeyStats.total_rekeys}</p>
             </div>
-            <div className="p-3 bg-muted border border-border rounded-xl">
+            <div className="p-3 bg-muted border border-border rounded-lg">
               <p className="text-xs text-muted-foreground">{t("opsec.rekey_agents")}</p>
               <p className="text-lg font-semibold text-foreground mt-1">{rekeyStats.rekeys_by_agent?.length ?? 0}</p>
             </div>
@@ -347,7 +347,7 @@ export default function OpsecPage() {
           {rekeyStats.rekeys_by_agent && rekeyStats.rekeys_by_agent.length > 0 ? (
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {rekeyStats.rekeys_by_agent.map((entry) => (
-                <div key={entry.agent_id} className="flex items-center justify-between gap-3 p-3 bg-muted border border-border rounded-xl text-xs">
+                <div key={entry.agent_id} className="flex items-center justify-between gap-3 p-3 bg-muted border border-border rounded-lg text-xs">
                   <div className="min-w-0">
                     <code className="font-semibold text-foreground break-all">{entry.agent_id}</code>
                     <p className="text-muted-foreground mt-0.5">
@@ -375,7 +375,7 @@ export default function OpsecPage() {
           ) : (
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {history.map((h) => (
-                <div key={h.id} className="flex items-start gap-3 p-3 bg-muted border border-border rounded-xl">
+                <div key={h.id} className="flex items-start gap-3 p-3 bg-muted border border-border rounded-lg">
                   <span className={cn("w-2 h-2 mt-1 rounded-full shrink-0", h.allowed ? "bg-success" : "bg-destructive")}></span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 text-xs">

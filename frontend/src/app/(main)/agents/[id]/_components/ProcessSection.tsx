@@ -1,0 +1,47 @@
+"use client";
+
+import { memo } from "react";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { SectionCard } from "@/components/ui/section-card";
+import { useI18n } from "@/lib/i18n";
+import { Terminal } from "lucide-react";
+
+export interface ProcessSectionProps {
+  processList: string | null;
+  loading: boolean;
+  expanded: boolean;
+  /** Collapse/expand toggle from the card header. */
+  onToggle: (open: boolean) => void;
+}
+
+export default memo(function ProcessSection({ processList, loading, expanded, onToggle }: ProcessSectionProps) {
+  const { t } = useI18n();
+
+  return (
+    <SectionCard
+      className="mb-4"
+      title={t("agents.detail_process_list")}
+      icon={<Terminal className="w-3.5 h-3.5" />}
+      description={t("agents.detail_process_snapshot_hint")}
+      collapsible
+      defaultOpen={expanded}
+      onOpenChange={onToggle}
+      action={
+        <Button variant="ghost" size="sm" className="text-xs h-auto p-0 text-primary hover:bg-transparent hover:underline">
+          {expanded ? t("agents.detail_hide") : t("agents.detail_load")}
+        </Button>
+      }
+    >
+      <div className="p-3">
+        {loading ? (
+          <div className="flex items-center justify-center py-6"><Spinner size="md" /></div>
+        ) : (
+          <pre className="p-3 bg-muted rounded-lg font-mono text-xs text-foreground whitespace-pre-wrap break-all max-h-64 overflow-y-auto border border-border">
+            {processList || t("agents.detail_no_data")}
+          </pre>
+        )}
+      </div>
+    </SectionCard>
+  );
+});

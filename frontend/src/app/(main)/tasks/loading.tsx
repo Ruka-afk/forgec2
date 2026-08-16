@@ -14,7 +14,7 @@ export default function Loading() {
           <Skeleton className="h-9 w-20" />
         </div>
       </div>
-      <Skeleton className="h-10 w-full rounded-xl" />
+      <Skeleton className="h-10 w-full rounded-lg" />
       <Card>
         <CardContent className="p-4 sm:p-5">
           <div className="space-y-3">

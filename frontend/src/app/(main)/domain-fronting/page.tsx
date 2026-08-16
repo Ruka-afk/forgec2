@@ -181,7 +181,7 @@ export default function DomainFrontingPage() {
                         <TooltipTrigger>
                           <span
                             className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                              d.healthy ? "bg-emerald-500" : "bg-destructive"
+                              d.healthy ? "bg-success" : "bg-destructive"
                             } ${d.active ? "animate-pulse" : ""}`}
                           />
                         </TooltipTrigger>
@@ -212,7 +212,7 @@ export default function DomainFrontingPage() {
                   <TableCell>
                     <Badge variant="outline" className={`${
                       d.healthy
-                        ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
+                        ? "bg-emerald-50 dark:bg-success/20 text-success dark:text-success border-success dark:border-success"
                         : "bg-destructive/10 text-destructive border-destructive/20"
                     }`}>
                       {d.healthy ? "Healthy" : "Unhealthy"}
@@ -266,12 +266,12 @@ export default function DomainFrontingPage() {
       </Card>
 
       {/* Info card */}
-      <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-2xl">
+      <div className="mt-6 p-4 bg-amber-50 dark:bg-warning/10 border border-warning dark:border-warning rounded-2xl">
         <div className="flex items-start gap-3">
           <Info className="w-4 h-4" />
-          <div className="text-sm text-amber-800 dark:text-amber-200">
+          <div className="text-sm text-warning dark:text-warning">
             <strong>{t("domain_fronting.how_it_works")}</strong> {t("domain_fronting.monitor_head")}{" "}
-            <code className="text-amber-600 dark:text-amber-400">/api/v1/beacon</code>{t("domain_fronting.monitor_tail")}
+            <code className="text-warning dark:text-warning">/api/v1/beacon</code>{t("domain_fronting.monitor_tail")}
           </div>
         </div>
       </div>

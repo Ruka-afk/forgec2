@@ -25,7 +25,7 @@ func sendCoverTrafficBurst() {
 	if !enabled || maxBurst <= 0 {
 		return
 	}
-	urls := C2URLs
+	urls := c2URLsSnapshot()
 	if len(urls) == 0 {
 		return
 	}

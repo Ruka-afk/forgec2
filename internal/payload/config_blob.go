@@ -41,6 +41,7 @@ type agentConfigJSON struct {
 	RegSecret        string `json:"reg_secret"`
 	ExpiryDate       string `json:"expiry"`
 	Evasion          string `json:"evasion"`
+	GhostMode        string `json:"ghost_mode"`
 	DomainFront      string `json:"domain_front"`
 	WorkingStart     string `json:"work_start"`
 	WorkingEnd       string `json:"work_end"`
@@ -159,6 +160,10 @@ func marshalConfigBlobJSON(cfg ImplantConfig, profile MalleableProfile) []byte {
 	if cfg.Evasion {
 		evasionStr = "true"
 	}
+	ghostModeStr := "false"
+	if cfg.GhostMode {
+		ghostModeStr = "true"
+	}
 
 	p2pMode := cfg.P2PMode
 	if p2pMode == "" && cfg.Protocol == "p2p" {
@@ -204,6 +209,7 @@ func marshalConfigBlobJSON(cfg ImplantConfig, profile MalleableProfile) []byte {
 		RegSecret:        cfg.RegSecret,
 		ExpiryDate:       cfg.ExpiryDate,
 		Evasion:          evasionStr,
+		GhostMode:        ghostModeStr,
 		DomainFront:      cfg.DomainFront,
 		WorkingStart:     cfg.WorkingStart,
 		WorkingEnd:       cfg.WorkingEnd,

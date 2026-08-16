@@ -36,7 +36,7 @@ export default function OneLinerPanel({
       badge={<BuildStatusBadge busy={busy} result={result === "success" ? "OK" : result} />}
       footer={
         <>
-          <Button type="button" onClick={onGenerate} disabled={busy || !canGenerate} title={!canGenerate ? t("generate.toast.select_listener") : undefined} className="w-full h-10 rounded-xl font-medium flex items-center justify-center gap-x-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50">
+          <Button type="button" onClick={onGenerate} disabled={busy || !canGenerate} title={!canGenerate ? t("generate.toast.select_listener") : undefined} className="w-full h-10 rounded-lg font-medium flex items-center justify-center gap-x-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50">
             {busy ? <><Spinner size="xs" /> {t("generate.panel.generating")}</> : <><Zap className="w-4 h-4" /> {t("generate.oneliner_generate")}</>}
           </Button>
           <BuildResult busy={busy} result={result === "success" ? null : result} />
@@ -114,7 +114,7 @@ export default function OneLinerPanel({
           </div>
           <div className="space-y-2">
             {onelinerData.types.map((item: OneLinerType, idx: number) => (
-              <div key={idx} className="rounded-xl border border-border p-3 transition-colors hover:border-chart-5/40 dark:hover:border-chart-5/40">
+              <div key={idx} className="rounded-lg border border-border p-3 transition-colors hover:border-chart-5/40 dark:hover:border-chart-5/40">
                 <div className="mb-1.5 flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-chart-5/10 text-(--fs-micro-sm) font-semibold text-chart-5">{idx + 1}</span>
@@ -123,7 +123,7 @@ export default function OneLinerPanel({
                   </div>
                   <CopyButton text={item.command} label={t("generate.oneliner_copy")} size="xs" />
                 </div>
-                <code className="block rounded-xl bg-muted p-2 font-mono text-(--fs-xs-sm) leading-relaxed whitespace-pre-wrap break-all text-foreground select-all">{item.command}</code>
+                <code className="block rounded-lg bg-muted p-2 font-mono text-(--fs-xs-sm) leading-relaxed whitespace-pre-wrap break-all text-foreground select-all">{item.command}</code>
               </div>
             ))}
           </div>

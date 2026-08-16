@@ -44,7 +44,7 @@ export function ReviewsModal({ plugin, reviews, open, onOpenChange, onPost }: { 
         <div className="space-y-3">
           {reviews.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">{t("plugins.no_reviews")}</p>}
           {reviews.map((r) => (
-            <div key={r.id} className="bg-muted rounded-xl p-3">
+            <div key={r.id} className="bg-muted rounded-lg p-3">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-medium text-muted-foreground">{r.user || t("plugins.anonymous")}</span>
                 <div className="flex items-center gap-0.5">
@@ -103,7 +103,7 @@ export function PluginCard({ plugin, actionState, onInstall, onUninstall, onDele
           </div>
         </div>
         {updateAvail && (
-          <Button size="xs" onClick={(e) => { e.stopPropagation(); onUpdate(); }} className="shrink-0 px-2 py-0.5 bg-warning/15 text-warning text-(--fs-micro-sm) font-medium rounded-xl hover:bg-warning/15 transition-colors" title={t("plugins.update_available")}>
+          <Button size="xs" onClick={(e) => { e.stopPropagation(); onUpdate(); }} className="shrink-0 px-2 py-0.5 bg-warning/15 text-warning text-(--fs-micro-sm) font-medium rounded-lg hover:bg-warning/15 transition-colors" title={t("plugins.update_available")}>
             <ArrowUp className="w-4 h-4" />{t("plugins.update")}
           </Button>
         )}
@@ -317,7 +317,7 @@ export function PluginDetailModal({ plugin, open, onOpenChange }: {
           {readme && (
             <div>
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t("plugins.readme")}</h3>
-              <div className="bg-muted border border-border rounded-xl p-4 text-xs text-muted-foreground whitespace-pre-wrap max-h-60 overflow-y-auto">{readme}</div>
+              <div className="bg-muted border border-border rounded-lg p-4 text-xs text-muted-foreground whitespace-pre-wrap max-h-60 overflow-y-auto">{readme}</div>
             </div>
           )}
         </div>

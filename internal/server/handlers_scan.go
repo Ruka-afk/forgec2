@@ -14,7 +14,7 @@ import (
 
 // handleScannerPage renders the network scanner page
 func (s *Server) handleScannerPage(c *gin.Context) {
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":     "ForgeC2 - Network Scanner",
 		"ActiveNav": "scanner",

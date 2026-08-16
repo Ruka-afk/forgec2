@@ -327,7 +327,7 @@ export default function LateralPageContent() {
           <div className="flex gap-1 overflow-x-auto pb-1">
             {methods.map((m) => (
               <Button key={m.key} onClick={() => setActiveMethod(m.key)} variant="outline"
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                   activeMethod === m.key
                     ? "bg-primary/10 text-primary border-primary/30 dark:bg-primary/20  dark:border-primary/40"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted dark:hover:text-muted-foreground border-transparent"

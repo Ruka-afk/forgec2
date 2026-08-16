@@ -174,6 +174,12 @@ func (bs *BeaconScheduler) computeAdaptiveInterval() int {
 	envMin := p.MinBeaconInterval
 	envMax := 300 // Cap adaptive growth
 
+	// The env-detector floor only applies when the operator opted in to
+	// evasion/ghost features. Default builds beacon at the configured interval.
+	if !evasionEnabled && !ghostModeEnabled {
+		envMin = 0
+	}
+
 	switch bs.mode {
 	case ScheduleAdaptive:
 		// Start fast, slow down if no tasks
@@ -275,17 +281,23 @@ func getBeaconScheduler() *BeaconScheduler {
 	beaconSchedOnce.Do(func() {
 		beaconSched = NewBeaconScheduler()
 
-		// Configure based on environment
-		p := getEnvDetector().Profile()
-		if p.OfficeHoursOnly {
-			beaconSched.SetMode(ScheduleOfficeHrs)
-			beaconSched.ConfigureOfficeHours(8, 18, []time.Weekday{
-				time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday,
-			})
-		} else if p.ClassLabel == "sandbox" {
-			beaconSched.SetMode(ScheduleStealth)
-		} else {
-			beaconSched.SetMode(ScheduleAdaptive)
+		// Configure based on environment. Env-driven slowdown (office-hours
+		// windows, sandbox stealth cadence, adaptive backoff) is an evasion
+		// behavior: only apply it when the operator opted in to evasion/ghost
+		// features. Default builds keep their configured interval and stay
+		// visible in beacon management.
+		if evasionEnabled || ghostModeEnabled {
+			p := getEnvDetector().Profile()
+			if p.OfficeHoursOnly {
+				beaconSched.SetMode(ScheduleOfficeHrs)
+				beaconSched.ConfigureOfficeHours(8, 18, []time.Weekday{
+					time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday,
+				})
+			} else if p.ClassLabel == "sandbox" {
+				beaconSched.SetMode(ScheduleStealth)
+			} else {
+				beaconSched.SetMode(ScheduleAdaptive)
+			}
 		}
 
 		// Auto-trigger: user activity

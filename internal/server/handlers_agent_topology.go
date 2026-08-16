@@ -18,7 +18,7 @@ func (s *Server) handlePivoting(c *gin.Context) {
 		slog.Error("Failed to query recent agents for topology", "err", err)
 	}
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":     "ForgeC2 - Tunnels & Proxies (Pivoting)",
 		"ActiveNav": "pivoting",
@@ -33,7 +33,7 @@ func (s *Server) handlePivoting(c *gin.Context) {
 
 // handleTopologyPage renders the network topology visualization
 func (s *Server) handleTopologyPage(c *gin.Context) {
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":     "ForgeC2 - Network Topology",
 		"ActiveNav": "topology",

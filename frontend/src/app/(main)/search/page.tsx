@@ -89,10 +89,10 @@ function SearchContent() {
               href={safeHref(r.url) ?? "#"}
               className={cn(
                 "w-full text-left p-4 flex items-center gap-4 transition-colors h-auto justify-start",
-                "rounded-xl border border-transparent hover:border-primary/30 hover:bg-muted/50 dark:hover:bg-muted/30",
+                "rounded-lg border border-transparent hover:border-primary/30 hover:bg-muted/50 dark:hover:bg-muted/30",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
               )}>
-              <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0", typeColors[r.type] || "bg-muted/50 text-muted-foreground")}>
+              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold shrink-0", typeColors[r.type] || "bg-muted/50 text-muted-foreground")}>
                 {r.icon}
               </div>
               <div className="flex-1 min-w-0">

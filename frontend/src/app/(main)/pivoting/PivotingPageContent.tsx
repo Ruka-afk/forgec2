@@ -110,7 +110,7 @@ export default function PivotingPageContent() {
       </>}>
 
       {throughAgent && (
-        <div className="bg-info/8 border border-info/20 rounded-xl px-4 py-2.5 flex items-center gap-2 animate-fade-in">
+        <div className="bg-info/8 border border-info/20 rounded-lg px-4 py-2.5 flex items-center gap-2 animate-fade-in">
           <Route className="w-4 h-4 text-info" />
           <span className="text-sm text-info">
             Traffic routing via agent: <strong>{throughAgent.substring(0, 12)}</strong>
@@ -154,7 +154,7 @@ export default function PivotingPageContent() {
               <EmptyState icon={Radio} title={t("pivoting.empty_relay_title")} message={t("pivoting.empty_relay_message")} />
             ) : (
               <div className="space-y-3">                {sessions.map((s, i) => (
-                  <div key={s.id || i} className={`border rounded-xl p-4 transition-colors ${s.active ? "border-success/30 bg-success/10/50 dark:border-success/40 dark:bg-success/20" : "border-border opacity-60"}`}>
+                  <div key={s.id || i} className={`border rounded-lg p-4 transition-colors ${s.active ? "border-success/30 bg-success/10/50 dark:border-success/40 dark:bg-success/20" : "border-border opacity-60"}`}>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-x-3">
                         <span className={`w-2.5 h-2.5 rounded-full ${s.active ? "bg-success animate-pulse" : "bg-muted-foreground"}`}></span>
@@ -232,7 +232,7 @@ export default function PivotingPageContent() {
                 {starting ? <><Spinner size="xs" /> {t("pivoting.starting")}</> : <><Play className="w-4 h-4" /> {t("pivoting.start")} {relayProtocol.toUpperCase()} Relay</>}
               </Button>
             </div>
-            <div className="mt-3 p-3 bg-muted rounded-xl text-xs text-muted-foreground flex items-start gap-1.5">
+            <div className="mt-3 p-3 bg-muted rounded-lg text-xs text-muted-foreground flex items-start gap-1.5">
               <Info className="w-4 h-4" />
               <span>{t("pivoting.proxy_hint")}</span>
             </div>          </Card>
@@ -329,7 +329,7 @@ export default function PivotingPageContent() {
             ) : (
               <div className="space-y-3">
                 {rportForwards.map(rf => (
-                  <div key={rf.id} className={`rounded-xl p-4 transition-colors border ${rf.active ? "border-info/30 bg-info/10 dark:border-info/40 dark:bg-info/20" : "border-border opacity-60"}`}>
+                  <div key={rf.id} className={`rounded-lg p-4 transition-colors border ${rf.active ? "border-info/30 bg-info/10 dark:border-info/40 dark:bg-info/20" : "border-border opacity-60"}`}>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-x-3">                        <span className={`w-2.5 h-2.5 rounded-full ${rf.active ? "bg-info animate-pulse" : "bg-muted-foreground"}`}></span>
                         <div>                          <div className="text-sm font-medium text-foreground flex items-center gap-2">                            <span className="font-mono">{rf.remote_host}:{rf.remote_port}</span>
@@ -407,7 +407,7 @@ export default function PivotingPageContent() {
                 <RotateCw className="w-4 h-4" /> {t("pivoting.refresh_status")}
               </Button>
             </div>
-            <div className="mt-3 p-3 bg-primary/10 rounded-xl text-xs text-primary flex items-start gap-1.5">
+            <div className="mt-3 p-3 bg-primary/10 rounded-lg text-xs text-primary flex items-start gap-1.5">
               <Info className="w-4 h-4" />
               <span>Connect to localhost:{rportLocalPort} to reach {rportRemoteHost || "[target]"}:{rportRemotePort} via the agent. The agent establishes the outbound connection.</span>
             </div>

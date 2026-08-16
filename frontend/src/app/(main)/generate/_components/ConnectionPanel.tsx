@@ -191,7 +191,7 @@ export default function ConnectionPanel({
             {showExperimental ? t("generate.hide_experimental") : t("generate.show_experimental")}
           </Button>
           {CONDITIONAL_TRANSPORTS.includes(transport) && (
-            <div className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+            <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
               <div className="font-semibold mb-0.5">{t("generate.transport_security_title")}</div>
               <div>
                 {transport === "grpc" && t("generate.transport_note_grpc")}

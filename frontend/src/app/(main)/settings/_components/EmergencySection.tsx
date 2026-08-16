@@ -54,7 +54,7 @@ export default function EmergencySection() {
     <Card className="overflow-hidden">
       <div className="bg-destructive/10 border-b border-destructive/20 px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center">
+          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center">
             <AlertTriangle className={`w-4 h-4 ${armed ? "text-destructive" : ""}`} />
           </div>
           <div>
@@ -64,7 +64,7 @@ export default function EmergencySection() {
         </div>
       </div>
       <div className="p-4 sm:p-5 space-y-4">
-        <div className="flex items-center justify-between p-4 bg-muted rounded-xl border border-border">
+        <div className="flex items-center justify-between p-4 bg-muted rounded-lg border border-border">
           <div>
             <div className="text-sm font-medium text-muted-foreground">{t("settings.emergency.status_label")}</div>
             <div className="text-xs text-muted-foreground mt-0.5">
@@ -88,7 +88,7 @@ export default function EmergencySection() {
           </div>
         </div>
 
-        <div className="p-4 bg-muted rounded-xl border border-border space-y-3">
+        <div className="p-4 bg-muted rounded-lg border border-border space-y-3">
           <Input
             type="password"
             placeholder={t("settings.emergency.password_placeholder")}

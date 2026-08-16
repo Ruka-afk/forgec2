@@ -86,7 +86,7 @@ export default function InfrastructurePage() {
         <TabsContent value="config" className="mt-0">
           <Card className="overflow-hidden">
             <CardHeader className="px-6 py-4 border-b">
-              <div className="w-8 h-8 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center text-primary"><Plug className="w-4 h-4" /></div>
+              <div className="w-8 h-8 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center text-primary"><Plug className="w-4 h-4" /></div>
               <div><CardTitle>{t("infra.select")} Listener</CardTitle><CardDescription>{t("infra.select_listener_hint")}</CardDescription></div>
             </CardHeader>
             <CardContent className="p-4 sm:p-5">
@@ -111,7 +111,7 @@ export default function InfrastructurePage() {
 
           <Card className="overflow-hidden">
             <CardHeader className="px-6 py-4 border-b">
-              <div className="w-8 h-8 bg-success/15 rounded-xl flex items-center justify-center text-success"><Globe className="w-4 h-4" /></div>
+              <div className="w-8 h-8 bg-success/15 rounded-lg flex items-center justify-center text-success"><Globe className="w-4 h-4" /></div>
               <div><CardTitle>{t("infra.domain_params")}</CardTitle><CardDescription>{t("infra.domain_desc")}</CardDescription></div>
             </CardHeader>
             <CardContent className="p-4 sm:p-5 space-y-4">
@@ -150,7 +150,7 @@ export default function InfrastructurePage() {
 
           <Card className="overflow-hidden">
             <CardHeader className="px-6 py-4 border-b">
-              <div className="w-8 h-8 bg-warning/15 rounded-xl flex items-center justify-center text-warning"><FileUp className="w-4 h-4" /></div>
+              <div className="w-8 h-8 bg-warning/15 rounded-lg flex items-center justify-center text-warning"><FileUp className="w-4 h-4" /></div>
               <div><CardTitle>{t("infra.generate_config")}</CardTitle><CardDescription>{t("infra.generate_desc")}</CardDescription></div>
             </CardHeader>
             <CardContent className="p-4 sm:p-5">
@@ -191,7 +191,7 @@ export default function InfrastructurePage() {
             <div className="lg:col-span-2">
               <Card className="overflow-hidden">
                 <CardHeader className="px-6 py-4 border-b">
-                  <div className="w-8 h-8 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center text-primary"><Share2 className="w-4 h-4" /></div>
+                  <div className="w-8 h-8 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center text-primary"><Share2 className="w-4 h-4" /></div>
                   <div><CardTitle>{t("infra.redirectors")}</CardTitle><CardDescription>{t("infra.redirectors_desc")}</CardDescription></div>
                   <Button onClick={() => { setEditingRd(null); setRdName(""); setRdHost(""); setRdType("nginx"); setRdSSHUser("root"); setRdSSHPort(22); setRdSSHKey(""); setRdSSHPassword(""); setRdConfig(""); }} className="ml-auto">
                     <Plus className="w-4 h-4" /> {t("infra.add_redirector")}
@@ -253,7 +253,7 @@ export default function InfrastructurePage() {
             <div>
               <Card className="overflow-hidden">
                 <CardHeader className="px-6 py-4 border-b">
-                  <div className="w-8 h-8 bg-success/15 rounded-xl flex items-center justify-center text-success"><Server className="w-4 h-4" /></div>
+                  <div className="w-8 h-8 bg-success/15 rounded-lg flex items-center justify-center text-success"><Server className="w-4 h-4" /></div>
                   <div><CardTitle>{editingRd ? t("infra.edit_redirector") : t("infra.new_redirector")}</CardTitle></div>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-5 space-y-4">
@@ -441,7 +441,7 @@ export default function InfrastructurePage() {
         <TabsContent value="acme" className="mt-0">
         <Card className="overflow-hidden">
           <CardHeader className="px-6 py-4 border-b">
-            <div className="w-8 h-8 bg-info/15 rounded-xl flex items-center justify-center text-info"><Award className="w-4 h-4" /></div>
+            <div className="w-8 h-8 bg-info/15 rounded-lg flex items-center justify-center text-info"><Award className="w-4 h-4" /></div>
             <div><CardTitle>{t("infra.acme_title")}</CardTitle><CardDescription>{t("infra.acme_desc")}</CardDescription></div>
           </CardHeader>
           <CardContent className="p-4 sm:p-5 space-y-4">
@@ -469,7 +469,7 @@ export default function InfrastructurePage() {
               </Button>
             </div>
             {certPath && keyPath && (
-              <div className="p-3 bg-success/15 rounded-xl text-xs text-success">
+              <div className="p-3 bg-success/15 rounded-lg text-xs text-success">
                 <CheckCircle className="w-4 h-4" />
                 <b>{t("infra.cert_success")}</b> {t("infra.cert_set_to")} {certPath}
               </div>
@@ -481,7 +481,7 @@ export default function InfrastructurePage() {
       <TabsContent value="export" className="mt-0">
         <Card className="overflow-hidden">
           <CardHeader className="px-6 py-4 border-b">
-            <div className="w-8 h-8 bg-primary/10 rounded-xl flex items-center justify-center text-primary"><FileUp className="w-4 h-4" /></div>
+            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary"><FileUp className="w-4 h-4" /></div>
             <div><CardTitle>{t("infra.c2_profile_export")}</CardTitle><CardDescription>{t("infra.c2_profile_export_desc")}</CardDescription></div>
           </CardHeader>
           <CardContent className="p-4 sm:p-5 space-y-4">

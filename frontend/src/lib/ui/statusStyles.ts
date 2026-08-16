@@ -11,7 +11,7 @@
 
 export type Tone = "success" | "warning" | "info" | "destructive" | "muted" | "primary";
 
-export interface ToneStyle {
+interface ToneStyle {
   dot: string;
   bg: string;
   text: string;
@@ -58,7 +58,7 @@ export const toneStyles: Record<Tone, ToneStyle> = {
 };
 
 /** Maps every status string to a semantic tone. */
-export const statusTones: Record<string, Tone> = {
+const statusTones: Record<string, Tone> = {
   online: "success",
   connected: "success",
   active: "success",
@@ -105,7 +105,7 @@ export type Hue =
   | "rose"
   | "violet";
 
-export interface HueStyle {
+interface HueStyle {
   text: string;
   bg: string;
   glow: string;
@@ -127,7 +127,7 @@ export const hueStyles: Record<Hue, HueStyle> = {
 };
 
 /** Legacy hue names kept as aliases for compatibility. */
-export const hueAliases: Record<string, Hue> = {
+const hueAliases: Record<string, Hue> = {
   red: "destructive",
   blue: "info",
   purple: "violet",

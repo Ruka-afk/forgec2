@@ -42,10 +42,16 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		&db.AIChatSession{}, &db.AIChatMessage{}, &db.ExtC2Channel{},
 		&db.UserSession{}, &db.BackupCode{}, &db.OpsecRule{},
 		&db.PasswordHistory{}, &db.ApiKey{}, &db.Script{},
-		&db.RegSecret{}, &db.KillSwitch{},
+		&db.RegSecret{}, &db.KillSwitch{}, &db.Tenant{}, &db.AgentStatusEvent{},
 	)
 	if err != nil {
 		t.Fatalf("migrate: %v", err)
+	}
+	// Bootstrap the "default" tenant like production (ensureDefaultTenant at
+	// server boot) so defaultTenantID() resolves for tenant-scoping assertions.
+	var def db.Tenant
+	if err := database.Where("name = ?", db.DefaultTenantName).FirstOrCreate(&def, db.Tenant{Name: db.DefaultTenantName}).Error; err != nil {
+		t.Fatalf("bootstrap default tenant: %v", err)
 	}
 	return database
 }

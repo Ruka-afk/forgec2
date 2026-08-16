@@ -52,8 +52,8 @@ interface PrivescFinding {
 function severityBadge(severity: string) {
   switch (severity) {
     case "critical": return "bg-destructive/10 text-destructive border-destructive/30";
-    case "high": return "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30";
-    case "medium": return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30";
+    case "high": return "bg-warning/10 text-warning dark:text-warning border-warning/30";
+    case "medium": return "bg-warning/10 text-warning dark:text-warning border-warning/30";
     case "low": return "bg-primary/10 text-primary border-primary/30";
     default: return "bg-secondary/50 text-muted-foreground border-border";
   }
@@ -62,8 +62,8 @@ function severityBadge(severity: string) {
 function severityIcon(severity: string): React.ReactNode {
   switch (severity) {
     case "critical": return <CircleAlert className="w-4 h-4 text-destructive" />;
-    case "high": return <TriangleAlert className="w-4 h-4 text-orange-500" />;
-    case "medium": return <CircleAlert className="w-4 h-4 text-amber-500" />;
+    case "high": return <TriangleAlert className="w-4 h-4 text-warning" />;
+    case "medium": return <CircleAlert className="w-4 h-4 text-warning" />;
     case "low": return <Info className="w-4 h-4 text-primary" />;
     default: return <CircleQuestionMark className="w-4 h-4 text-muted-foreground" />;
   }
@@ -188,7 +188,7 @@ export default function PrivescPage() {
         </div>
       </>}>
 
-      <Card className="p-3 mb-4 border-amber-500/40 bg-amber-500/10 text-sm text-amber-800 dark:text-amber-200">
+      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning dark:text-warning">
         <div className="font-semibold">{t("privesc.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("privesc.honesty_desc")}</div>
       </Card>
@@ -204,11 +204,11 @@ export default function PrivescPage() {
         </Card>
         <Card className="p-4">
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("privesc.stat_high")}</div>
-          <div className="text-2xl font-bold mt-1 text-orange-600 dark:text-orange-400">{highCount}</div>
+          <div className="text-2xl font-bold mt-1 text-warning dark:text-warning">{highCount}</div>
         </Card>
         <Card className="p-4">
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("privesc.stat_medium")}</div>
-          <div className="text-2xl font-bold mt-1 text-amber-700 dark:text-amber-400">{mediumCount}</div>
+          <div className="text-2xl font-bold mt-1 text-warning dark:text-warning">{mediumCount}</div>
         </Card>
         <Card className="p-4">
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("privesc.stat_low")}</div>
@@ -218,7 +218,7 @@ export default function PrivescPage() {
 
       <Card className="px-6 py-6 mb-6">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center">
             <ShieldAlert className="w-4 h-4" />
           </div>
           <div>
@@ -253,7 +253,7 @@ export default function PrivescPage() {
             <span className="block text-sm font-semibold mb-3">{t("privesc.check_type_label")}</span>
             <RadioGroup value={checkType} onValueChange={setCheckType} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {CHECK_TYPES.map((ct) => (
-                <div key={ct.value} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${checkType === ct.value ? "border-2 border-primary bg-primary/10" : "border border-border hover:bg-muted/50"}`}>
+                <div key={ct.value} className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${checkType === ct.value ? "border-2 border-primary bg-primary/10" : "border border-border hover:bg-muted/50"}`}>
                   <RadioGroupItem value={ct.value} id={`ct-${ct.value}`} />
                   <Label htmlFor={`ct-${ct.value}`} className="min-w-0 cursor-pointer">
                     <div className="text-sm font-medium">{ct.icon} {ct.label}</div>
@@ -317,7 +317,7 @@ export default function PrivescPage() {
                             )}
                             {f.exploit_command && (
                               <div className="flex items-center gap-2">
-                                <code className="text-xs font-mono bg-card text-emerald-400 px-3 py-1.5 rounded-lg flex-1 overflow-x-auto">{f.exploit_command}</code>
+                                <code className="text-xs font-mono bg-card text-success px-3 py-1.5 rounded-lg flex-1 overflow-x-auto">{f.exploit_command}</code>
                                 <Button variant="destructive" size="sm" onClick={() => handleExecuteExploit(f)} className="shrink-0">
                                   <Zap className="w-4 h-4" /> {t("privesc.execute")}
                                 </Button>

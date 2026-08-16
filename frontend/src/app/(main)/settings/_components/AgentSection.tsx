@@ -20,7 +20,7 @@ export default function AgentSection({
     <Card className="overflow-hidden">
       <div className="bg-success/10 border-b border-success/20 px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-xl flex items-center justify-center"><Bot className="w-4 h-4" /></div>
+          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Bot className="w-4 h-4" /></div>
           <div><h2 className="text-lg font-semibold text-foreground">{t("settings.agent.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.agent.subtitle")}</p></div>
         </div>
       </div>

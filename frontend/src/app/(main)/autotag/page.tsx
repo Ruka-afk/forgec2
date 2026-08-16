@@ -160,7 +160,7 @@ export default function AutoTagPage() {
         </Button>
       </>}>
       {message && (
-        <div className="mb-4 px-4 py-2 rounded-xl bg-info/8 text-info text-sm border border-info/20 flex items-center justify-between animate-fade-in">
+        <div className="mb-4 px-4 py-2 rounded-lg bg-info/8 text-info text-sm border border-info/20 flex items-center justify-between animate-fade-in">
           <span>{message}</span>
           <Button variant="ghost" size="icon-sm" onClick={() => setMessage("")} aria-label={t("common.dismiss")}>
             <X className="w-4 h-4" />

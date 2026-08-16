@@ -112,11 +112,11 @@ export default function NotificationsSection() {
       {loading ? (
         <div className="p-5 animate-pulse space-y-3">
           <div className="h-4 bg-muted rounded w-1/3" />
-          <div className="h-20 bg-muted rounded-xl" />
+          <div className="h-20 bg-muted rounded-lg" />
         </div>
       ) : (<>
       <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border flex items-center gap-3">
-        <div className="w-8 h-8 bg-info/15 rounded-xl flex items-center justify-center text-info"><Bell className="w-4 h-4" /></div>
+        <div className="w-8 h-8 bg-info/15 rounded-lg flex items-center justify-center text-info"><Bell className="w-4 h-4" /></div>
         <div>
           <h2 className="text-sm font-semibold">{t("settings.notifications.title")}</h2>
           <p className="text-(--fs-xs-sm) text-muted-foreground">{t("settings.notifications.subtitle")}</p>
@@ -131,7 +131,7 @@ export default function NotificationsSection() {
         )}
 
         {targets.map((target, i) => (
-          <div key={`${target.type}-${i}`} className="p-4 bg-muted rounded-xl space-y-3 border border-border">
+          <div key={`${target.type}-${i}`} className="p-4 bg-muted rounded-lg space-y-3 border border-border">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Select value={target.type} onValueChange={(v) => update(i, "type", v)}>
@@ -147,7 +147,7 @@ export default function NotificationsSection() {
                 </Select>
                 <span className="text-(--fs-micro-sm) text-muted-foreground font-mono">{target.type}</span>
               </div>
-              <Button onClick={() => removeTarget(i)} className="text-xs px-2 py-1 bg-destructive/10 text-destructive rounded-xl hover:bg-destructive/20" aria-label={t("settings.notifications.remove")}><Trash2 className="w-4 h-4" /></Button>
+              <Button onClick={() => removeTarget(i)} className="text-xs px-2 py-1 bg-destructive/10 text-destructive rounded-lg hover:bg-destructive/20" aria-label={t("settings.notifications.remove")}><Trash2 className="w-4 h-4" /></Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -222,7 +222,7 @@ export default function NotificationsSection() {
               <Button
                 onClick={() => handleTest(i)}
                 disabled={testingIdx === i}
-                className="text-xs px-3 py-1.5 rounded-xl bg-info/15 hover:bg-info/20 text-info dark:bg-info/20 dark:hover:bg-info/40 dark:text-info flex items-center gap-1.5"
+                className="text-xs px-3 py-1.5 rounded-lg bg-info/15 hover:bg-info/20 text-info dark:bg-info/20 dark:hover:bg-info/40 dark:text-info flex items-center gap-1.5"
               >
                 {testingIdx === i ? <Spinner size="xs" /> : <FlaskConical className="w-4 h-4" />}
                 {testingIdx === i ? t("settings.notifications.sending") : t("settings.notifications.test")}
@@ -232,11 +232,11 @@ export default function NotificationsSection() {
         ))}
 
         <div className="flex items-center justify-between pt-2">
-          <Button onClick={addTarget} className="px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5">
+          <Button onClick={addTarget} className="px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5">
             <Plus className="w-4 h-4" /> {t("settings.notifications.add_target")}
           </Button>
           {targets.length > 0 && (
-            <Button onClick={handleSave} disabled={saving} className="px-4 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5">
+            <Button onClick={handleSave} disabled={saving} className="px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5">
               {saving ? <Spinner size="xs" /> : <Save className="w-4 h-4" />}
               {saving ? t("settings.notifications.saving") : t("settings.notifications.save_all")}
             </Button>

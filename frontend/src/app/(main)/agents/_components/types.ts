@@ -1,4 +1,5 @@
 import type { AgentStatus } from "@/types/agent";
+import { Monitor, Terminal, Apple, Laptop, type LucideIcon } from "lucide-react";
 
 export interface TaskStats {
   pending: number;
@@ -85,4 +86,47 @@ export function formatUptime(dateStr: string, t?: (key: string, params?: Record<
   if (d > 0) return t?.("format.uptime.days", { n: d, h, m }) ?? `${d}d ${h}h`;
   if (h > 0) return t?.("format.uptime.hours", { n: h, m }) ?? `${h}h ${m}m`;
   return t?.("format.uptime.minutes", { n: m }) ?? `${m}m`;
+}
+
+/** Left status accent for agent table/grid rows. Single source of truth so
+ *  AgentRow and AgentGrid render the same status border. Handles both the
+ *  beacon status vocabulary (active/idle/lost) and host-group vocabulary
+ *  (online/stale/lost). */
+export function agentStatusBorderClass(status?: string): string {
+  switch ((status || "").toLowerCase()) {
+    case "active":
+    case "online":
+      return "border-l-2 border-l-success";
+    case "idle":
+    case "stale":
+      return "border-l-2 border-l-warning";
+    case "lost":
+    case "offline":
+      return "border-l-2 border-l-destructive";
+    default:
+      return "border-l-2 border-l-border";
+  }
+}
+
+/** Maps an OS string to its Lucide icon component. */
+export function osIcon(os?: string): LucideIcon {
+  const o = (os || "").toLowerCase();
+  if (o.includes("win")) return Monitor;
+  if (o.includes("linux")) return Terminal;
+  if (o.includes("mac") || o.includes("darwin")) return Apple;
+  return Laptop;
+}
+
+/** Badge variant for agent integrity level. */
+export function integrityTone(integrity?: string): "default" | "secondary" | "destructive" | "outline" | "warning" | "success" {
+  switch ((integrity || "").toLowerCase()) {
+    case "high":
+      return "destructive";
+    case "medium":
+      return "warning";
+    case "low":
+      return "secondary";
+    default:
+      return "outline";
+  }
 }

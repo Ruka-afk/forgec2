@@ -91,6 +91,12 @@ interface RequestOptions {
   timeout?: number;
   signal?: AbortSignal;
   headers?: Record<string, string>;
+  /**
+   * Skip unwrapBody: return the raw JSON envelope ({success, total, ...})
+   * instead of the unwrapped `data` payload. Needed when the caller must see
+   * pagination metadata (e.g. total) alongside the list.
+   */
+  unwrap?: boolean;
 }
 
 async function request<T>(path: string, options: RequestOptions & { body?: unknown; raw?: boolean } = {}): Promise<T> {
@@ -164,7 +170,7 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
       }
 
       const respBody = await res.json();
-      return unwrapBody<T>(respBody);
+      return options.unwrap === false ? (respBody as T) : unwrapBody<T>(respBody);
     } catch (e) {
       if (process.env.NODE_ENV === "development") console.error("api request failed", path, e);
       if (attempt >= retries) throw e;
@@ -191,8 +197,8 @@ function parseFilenameFromDisposition(cd: string | null): string {
 }
 
 export const api = {
-  get<T = Record<string, unknown>>(path: string, opts?: { retries?: number; signal?: AbortSignal }): Promise<T> {
-    return request<T>(path, { method: "GET", retries: opts?.retries ?? 0, signal: opts?.signal });
+  get<T = Record<string, unknown>>(path: string, opts?: { retries?: number; signal?: AbortSignal; unwrap?: boolean }): Promise<T> {
+    return request<T>(path, { method: "GET", retries: opts?.retries ?? 0, signal: opts?.signal, unwrap: opts?.unwrap });
   },
 
   post<T = Record<string, unknown>>(path: string, data?: Record<string, string>, opts?: { signal?: AbortSignal }): Promise<T> {
@@ -440,12 +446,5 @@ export async function runTask(
     onStatus: opts.onStatus,
   });
 }
-
-// ── Type-safe API wrappers ──
-// Uses Zod schemas from ./api-schemas to validate API responses at runtime.
-// Import and use these instead of raw api.get/post when you want type safety.
-
-import { parseResponse, AgentSchema, TaskSchema } from "./api-schemas";
-import type { Agent, Task as TaskType } from "./api-schemas";
 
 

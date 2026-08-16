@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { safeImageSrc } from "@/lib/safeUrl";
 import { screenshotDataUrl } from "./dock-shot";
 
 export function AgentDockShot({ agentId, refreshKey }: { agentId: string; refreshKey: number }) {
@@ -28,8 +29,8 @@ export function AgentDockShot({ agentId, refreshKey }: { agentId: string; refres
 
   return (
     <div className="border-b border-border bg-muted/30 px-2 py-1">
-      <img
-        src={src}
+        <img
+        src={safeImageSrc(src) ?? ""}
         alt={t("agents.dock_shot_alt")}
         className="max-h-28 max-w-full rounded object-contain"
       />

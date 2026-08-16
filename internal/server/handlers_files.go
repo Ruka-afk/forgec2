@@ -24,7 +24,7 @@ func (s *Server) handleFileBrowserPage(c *gin.Context) {
 		return
 	}
 
-	stats := s.getNavStats()
+	stats := s.getNavStats(c)
 	data := gin.H{
 		"Title":     "ForgeC2 - File Browser",
 		"Agent":     agent,

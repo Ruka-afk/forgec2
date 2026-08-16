@@ -98,8 +98,8 @@ export default function ChromeC2Page() {
 
   const statusBadge = (status: string) => {
     const variant = status === "online" ? "success" : status === "stale" ? "warning" : "destructive";
-    const dot = status === "online" ? "bg-emerald-500"
-      : status === "stale" ? "bg-amber-500"
+    const dot = status === "online" ? "bg-success"
+      : status === "stale" ? "bg-warning"
       : "bg-destructive";
     return (
       <Badge variant={variant} className="gap-1.5">
@@ -119,7 +119,7 @@ export default function ChromeC2Page() {
           </Button>
         </a>
       </>}>
-      <Card className="p-3 border-amber-500/40 bg-amber-500/10 text-sm text-amber-800 dark:text-amber-200">
+      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning dark:text-warning">
         <div className="font-semibold">{t("chrome.experimental_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("chrome.experimental_desc")}</div>
       </Card>
