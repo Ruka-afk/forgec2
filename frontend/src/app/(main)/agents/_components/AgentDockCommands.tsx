@@ -46,6 +46,15 @@ export function AgentDockCommands({ agentId, intervalHint, jitterHint, onQueued 
     return () => { cancelled = true; };
   }, [agentId]);
 
+  // Reset per-agent params when switching sessions (hints arrive together
+  // with the new beacon on the same render as the id change).
+  useEffect(() => {
+    setSleepRaw(`${intervalHint && intervalHint > 0 ? intervalHint : 60},${jitterHint && jitterHint >= 0 ? jitterHint : 10}`);
+    setSocksPort("1080");
+    setBusy(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentId]);
+
   const run = async (kind: DockCommandKind) => {
     if (!agentId || busy) return;
     let sleep: { interval: number; jitter: number } | undefined;

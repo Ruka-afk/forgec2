@@ -12,9 +12,13 @@ interface ShellHistoryEntry {
   timestamp: string;
 }
 
-export function useAgentQuickShell(agentId: string, successMessage: string, errorMessage: string, persistKey?: string) {
+export function defaultShellForOS(os: string | undefined): string {
+  return os && !/^win/i.test(os) ? "/bin/sh" : "cmd.exe";
+}
+
+export function useAgentQuickShell(agentId: string, os: string | undefined, successMessage: string, errorMessage: string, persistKey?: string) {
   const [command, setCommand] = useState("");
-  const [shell, setShell] = useState("cmd.exe");
+  const [shell, setShell] = useState(() => defaultShellForOS(os));
   const [history, setHistory] = useState<ShellHistoryEntry[]>([]);
   const [sending, setSending] = useState(false);
   const [expanded, setExpanded] = usePersistedState(
@@ -22,10 +26,23 @@ export function useAgentQuickShell(agentId: string, successMessage: string, erro
     false,
   );
   const mountedRef = useRef(true);
+  const shellTouchedRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
+  }, []);
+
+  // Keep the interpreter defaulted to the agent's OS until the operator
+  // explicitly picks one (detail loads async, so os may arrive late).
+  useEffect(() => {
+    if (shellTouchedRef.current) return;
+    setShell(defaultShellForOS(os));
+  }, [os]);
+
+  const changeShell = useCallback((v: string) => {
+    shellTouchedRef.current = true;
+    setShell(v);
   }, []);
 
   const sendCommand = useCallback(async () => {
@@ -49,7 +66,7 @@ export function useAgentQuickShell(agentId: string, successMessage: string, erro
     command,
     setCommand,
     shell,
-    setShell,
+    setShell: changeShell,
     history,
     sending,
     expanded,

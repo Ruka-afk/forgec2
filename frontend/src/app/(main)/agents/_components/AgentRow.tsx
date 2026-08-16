@@ -86,6 +86,7 @@ export const AgentRow = memo(function AgentRow({
           onClick={(e) => e.stopPropagation()}
         />
       </TableCell>
+      {visibleCols.hostname && (
       <TableCell className="py-1 px-2">
         <div className="flex items-center gap-1 min-w-0">
           <div className="min-w-0">
@@ -128,6 +129,7 @@ export const AgentRow = memo(function AgentRow({
           </div>
         </div>
       </TableCell>
+      )}
       {visibleCols.username && (
       <TableCell className="py-1 px-2 text-muted-foreground text-xs font-mono">{username}</TableCell>
       )}

@@ -217,6 +217,12 @@ paths:
           schema:
             type: string
           description: Filter by operating system
+        - name: linked
+          in: query
+          schema:
+            type: string
+            enum: [direct, chained]
+          description: Filter by P2P linkage (direct = no parent, chained = has parent)
         - name: page
           in: query
           schema:

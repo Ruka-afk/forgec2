@@ -33,6 +33,7 @@ import EvasionSection from "./_components/EvasionSection";
 import {
   buildAgentCopyText,
   buildAgentMarkdown,
+  toLocalDateInput,
   type AgentDetailModel,
   type AgentDetailResponse,
   type LogEntry,
@@ -76,6 +77,12 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const lbOpenRef = useRef(false);
   lbOpenRef.current = lbOpen;
   const [childrenExpanded, setChildrenExpanded] = usePersistedState(`agents.detail.${id}.children`, false);
+
+  const { data, setData, loading, loadError, reload: loadDetail, reloadThrottled } = useAgentDetail<AgentDetailResponse>(id);
+  const status = (data?.agent?.status || "offline") as AgentStatus;
+  const { screenshots, newScreenshots } = useAgentScreenshots(id, status === "online");
+  useAgentTaskSync(id, status === "online", setData, reloadThrottled);
+
   const {
     command: shellCommand,
     setCommand: setShellCommand,
@@ -86,7 +93,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     expanded: shellExpanded,
     setExpanded: setShellExpanded,
     sendCommand: sendShellCommand,
-  } = useAgentQuickShell(id, t("agents.detail_command_sent"), t("agents.detail_command_send_failed"), `agents.detail.${id}.quick_shell`);
+  } = useAgentQuickShell(id, data?.agent?.os, t("agents.detail_command_sent"), t("agents.detail_command_send_failed"), `agents.detail.${id}.quick_shell`);
 
   const [sleepValue, setSleepValue] = useState(0);
   const [jitterValue, setJitterValue] = useState(0);
@@ -96,11 +103,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const [credCount, setCredCount] = useState<number | null>(null);
   const [mimikatzReady, setMimikatzReady] = useState(false);
 
-  const { data, setData, loading, loadError, reload: loadDetail, reloadThrottled } = useAgentDetail<AgentDetailResponse>(id);
-  const status = (data?.agent?.status || "offline") as AgentStatus;
-  const { screenshots, newScreenshots } = useAgentScreenshots(id, status === "online");
-  useAgentTaskSync(id, status === "online", setData, reloadThrottled);
-  const { processList, loading: processLoading, expanded: processExpanded, setExpanded: setProcessExpanded, load: loadProcessList } = useAgentProcessTree(
+  const { processList, loading: processLoading, loadFailed, expanded: processExpanded, setExpanded: setProcessExpanded, load: loadProcessList } = useAgentProcessTree(
     id,
     t("agents.detail_no_data"),
     t("agents.detail_process_load_failed"),
@@ -283,11 +286,13 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
 
   const handleSetKillDate = useCallback(() => {
     const kd = agent?.kill_date;
-    if (kd) setKillDateValue(kd.substring(0, 10));
-    else {
+    if (kd) {
+      const d = new Date(kd);
+      setKillDateValue(Number.isNaN(d.getTime()) ? kd.substring(0, 10) : toLocalDateInput(d));
+    } else {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      setKillDateValue(tomorrow.toISOString().substring(0, 10));
+      setKillDateValue(toLocalDateInput(tomorrow));
     }
     setConfirmKillDate(true);
   }, [agent?.kill_date]);
@@ -297,9 +302,9 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const handleToggleProcess = useCallback(
     (open: boolean) => {
       setProcessExpanded(open);
-      if (open && !processList && !processLoading) loadProcessList();
+      if (open && !processLoading) loadProcessList();
     },
-    [processList, processLoading, loadProcessList, setProcessExpanded],
+    [processLoading, loadProcessList, setProcessExpanded],
   );
 
   const handleKill = useCallback(() => setConfirmKill(true), []);
@@ -309,6 +314,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     setConfirmMigrate(true);
   }, []);
   const handlePopOut = useCallback(() => useInteractStore.getState().open(id, { tab: "shell" }), [id]);
+  const handleSleepChange = useCallback((v: number) => { sleepDirtyRef.current = true; setSleepValue(v); }, []);
+  const handleJitterChange = useCallback((v: number) => { sleepDirtyRef.current = true; setJitterValue(v); }, []);
 
   if (loading) {
     return (
@@ -364,7 +371,6 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         onKill={handleKill}
         onUninstall={handleUninstall}
         onMigrate={handleMigrate}
-        onClose={onClose}
         onPopOut={handlePopOut}
       />
 
@@ -396,6 +402,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
           <ProcessSection
             processList={processList}
             loading={processLoading}
+            loadFailed={loadFailed}
             expanded={processExpanded}
             onToggle={handleToggleProcess}
           />
@@ -411,8 +418,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             timeSinceLastSeen={data?.time_since_last_seen}
             sleepValue={sleepValue}
             jitterValue={jitterValue}
-            onSleepChange={(v) => { sleepDirtyRef.current = true; setSleepValue(v); }}
-            onJitterChange={(v) => { sleepDirtyRef.current = true; setJitterValue(v); }}
+            onSleepChange={handleSleepChange}
+            onJitterChange={handleJitterChange}
             onApplySleep={handleApplySleep}
             sleepSaving={sleepSaving}
             status={status}
@@ -445,6 +452,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
               history={shellHistory}
               sending={shellSending}
               onSend={sendShellCommand}
+              os={agent.os}
             />
           )}
 

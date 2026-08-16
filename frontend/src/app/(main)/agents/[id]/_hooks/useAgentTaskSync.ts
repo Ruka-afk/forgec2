@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useWS } from "@/lib/wsContext";
+import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import type { AgentDetailResponse, TaskEntry } from "../_components/agent-detail-utils";
 
 interface TaskUpdateFrame {
@@ -55,12 +56,9 @@ export function useAgentTaskSync(
   }, [agentId, subscribe, setData, reloadThrottled]);
 
   // Periodic correction: incremental merges can drift from server truth
-  // (cancel/rerun/queueing outside this session), so re-sync on a timer.
-  useEffect(() => {
-    if (!agentId || !online) return;
-    const iv = setInterval(() => reloadThrottled(), CORRECTION_INTERVAL_MS);
-    return () => clearInterval(iv);
-  }, [agentId, online, reloadThrottled]);
+  // (cancel/rerun/queueing outside this session), so re-sync on a timer —
+  // paused while the tab is hidden (catch-up tick on return).
+  useVisibleInterval(() => reloadThrottled(), online ? CORRECTION_INTERVAL_MS : 0);
 }
 
 /** Pure merge of one task_update frame into a detail snapshot. */

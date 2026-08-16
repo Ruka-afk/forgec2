@@ -28,6 +28,7 @@ export interface BeaconQueryParams {
   page: number;
   pageSize: number;
   tag_id: string;
+  linked: string;
   sort_key: string;
   sort_dir: string;
 }
@@ -45,6 +46,7 @@ const DEFAULT_QUERY: BeaconQueryParams = {
   page: 1,
   pageSize: 20,
   tag_id: "",
+  linked: "",
   sort_key: "last_seen",
   sort_dir: "desc",
 };
@@ -66,6 +68,7 @@ export function useAgentData(t: (key: string) => string) {
       if (q.status) p.set("status", q.status);
       if (q.os) p.set("os", q.os);
       if (q.tag_id) p.set("tag_id", q.tag_id);
+      if (q.linked) p.set("linked", q.linked);
       p.set("sort_key", q.sort_key);
       p.set("sort_dir", q.sort_dir);
       const d = await api.get<{ agents?: Beacon[]; total?: number | string }>(
@@ -92,8 +95,8 @@ export function useAgentData(t: (key: string) => string) {
   const taskCountMap = useMemo(() => data?.countMap ?? {}, [data]);
 
   const loadBeacons = useCallback(
-    (search = "", status = "", os = "", page = 1, pageSize = 20, tag_id = "", sort_key = "last_seen", sort_dir = "desc") => {
-      queryRef.current = { search, status, os, page, pageSize, tag_id, sort_key, sort_dir };
+    (search = "", status = "", os = "", page = 1, pageSize = 20, tag_id = "", linked = "", sort_key = "last_seen", sort_dir = "desc") => {
+      queryRef.current = { search, status, os, page, pageSize, tag_id, linked, sort_key, sort_dir };
       void refreshList();
     },
     [refreshList],

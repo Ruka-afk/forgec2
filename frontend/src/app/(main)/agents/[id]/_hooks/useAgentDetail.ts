@@ -12,13 +12,14 @@ export function useAgentDetail<T>(agentId: string) {
   const [loadError, setLoadError] = useState(false);
   const lastReloadRef = useRef(0);
   const pendingReloadRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasDataRef = useRef(false);
 
   const reload = useCallback(
     async (background = false, signal?: AbortSignal) => {
       if (!agentId) return;
       if (!background) {
-        setLoading(true);
         setLoadError(false);
+        if (!hasDataRef.current) setLoading(true);
       }
       try {
         const response = await api.get<T>(
@@ -27,6 +28,7 @@ export function useAgentDetail<T>(agentId: string) {
         );
         lastReloadRef.current = Date.now();
         setLoadError(false);
+        hasDataRef.current = true;
         // Keep the previous snapshot's identity when nothing changed so
         // memoized children don't re-render on every 30s correction pass.
         setData((prev) =>
@@ -37,7 +39,7 @@ export function useAgentDetail<T>(agentId: string) {
           // Keep the previous snapshot on transient errors so a blip in the
           // 30s correction pass doesn't blank the whole detail page; the
           // first load failure (no data yet) still lands on the error view.
-          setLoadError(true);
+          if (!hasDataRef.current) setLoadError(true);
         }
       } finally {
         setLoading(false);

@@ -122,7 +122,7 @@ export default memo(function AgentStatsGrid({
         <InfoRow label={t("agents.stats_sleep")} value={interval ? `${interval}s` : "\u2014"} />
         <InfoRow label={t("agents.stats_jitter")} value={jitter ? `${jitter}%` : "\u2014"} />
         <InfoRow label={t("agents.stats_uptime")} value={uptimeLabel} />
-        <InfoRow label={t("agents.stats_last_seen")} value={lastSeen ? timeAgo(lastSeen) : "\u2014"} title={lastSeen ? formatTime(lastSeen) : undefined} />
+        <InfoRow label={t("agents.stats_last_seen")} value={lastSeen ? timeAgo(lastSeen, t) : "\u2014"} title={lastSeen ? formatTime(lastSeen) : undefined} />
         <InfoRow label={t("agents.stats_idle")} value={timeSinceLastSeen || "\u2014"} />
         <div className="pt-2 mt-2 border-t border-border">
           <div className="text-(--fs-micro-sm) text-muted-foreground/70 mb-1.5">{t("agents.stats_quick_adjust")}</div>
@@ -140,7 +140,7 @@ export default memo(function AgentStatsGrid({
         {activeWindow ? (<div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground/70 shrink-0">{t("agents.stats_window")}</span><span className="text-xs text-foreground font-medium truncate max-w-[120px]" title={activeWindow}>{activeWindow}</span></div>) : <InfoRow label={t("agents.stats_window")} value="\u2014" />}
         {parentID && <InfoRow label={t("agents.stats_parent")} value={parentID.substring(0, 8) + "..."} />}
         {peerCount > 0 && <InfoRow label={t("agents.stats_peers")} value={String(peerCount)} />}
-        {childAgents.length > 0 ? (<Collapsible open={childrenExpanded} onOpenChange={onToggleChildren}><div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground/70 shrink-0">{t("agents.stats_children")}</span><CollapsibleTrigger><Button variant="ghost" size="xs" className="text-primary font-medium hover:underline">{childAgents.length} {t("agents.agents_count", { count: childAgents.length })} <ChevronDown className="w-2 h-2 ml-0.5" /></Button></CollapsibleTrigger></div></Collapsible>) : (!parentID && peerCount === 0 ? <InfoRow label={t("agents.stats_type")} value="Direct" /> : null)}
+        {childAgents.length > 0 ? (<Collapsible open={childrenExpanded} onOpenChange={onToggleChildren}><div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground/70 shrink-0">{t("agents.stats_children")}</span><CollapsibleTrigger><Button variant="ghost" size="xs" className="text-primary font-medium hover:underline">{childAgents.length} {t("agents.agents_count", { count: childAgents.length })} <ChevronDown className="w-2 h-2 ml-0.5" /></Button></CollapsibleTrigger></div></Collapsible>) : (!parentID && peerCount === 0 ? <InfoRow label={t("agents.stats_type")} value={t("agents.direct_c2")} /> : null)}
         <InfoRow label={t("agents.stats_created")} value={createdAt ? formatTime(createdAt) : "\u2014"} />
         <div className="pt-2 mt-2 border-t border-border">
           <div className="flex items-center justify-between gap-2">

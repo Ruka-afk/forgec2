@@ -45,7 +45,6 @@ export interface AgentHeaderProps {
   onKill: () => void;
   onUninstall: () => void;
   onMigrate?: () => void;
-  onClose?: () => void;
   onPopOut?: () => void;
 }
 

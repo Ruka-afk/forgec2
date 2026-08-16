@@ -1,6 +1,14 @@
 import type { AgentStatus } from "@/types/agent";
 import { Apple, Monitor, Terminal } from "lucide-react";
 
+/** Format a Date as a local-timezone `<input type="date">` value (YYYY-MM-DD). */
+export function toLocalDateInput(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export interface AgentDetailModel {
   ID?: string; id?: string;
   Hostname?: string; hostname?: string;

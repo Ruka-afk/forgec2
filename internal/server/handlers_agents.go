@@ -511,6 +511,12 @@ func (s *Server) implantListQuery(c *gin.Context) *gorm.DB {
 	if osFilter := c.Query("os"); osFilter != "" {
 		query = query.Where("LOWER(os) LIKE ? ESCAPE '\\'", "%"+escapeLike(osFilter)+"%")
 	}
+	switch c.Query("linked") {
+	case "direct":
+		query = query.Where("(parent_id = '' OR parent_id IS NULL)")
+	case "chained":
+		query = query.Where("parent_id != '' AND parent_id IS NOT NULL")
+	}
 	if tagID := c.Query("tag_id"); tagID != "" {
 		query = query.Joins("JOIN agent_tag_assignments ON agent_tag_assignments.implant_id = implants.id").
 			Where("agent_tag_assignments.agent_tag_id = ?", tagID)

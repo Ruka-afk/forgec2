@@ -22,6 +22,7 @@ export function useAgentScreenshots(agentId: string, online: boolean) {
   const [screenshots, setScreenshots] = useState<string[]>([]);
   const [newScreenshots, setNewScreenshots] = useState<string[]>([]);
   const knownRef = useRef<Set<string>>(new Set());
+  const initializedRef = useRef(false);
   const lastListRef = useRef("");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { subscribe } = useWS();
@@ -34,10 +35,18 @@ export function useAgentScreenshots(agentId: string, online: boolean) {
         { signal },
       );
       const list = response.screenshots || [];
-      const fresh = list.filter((fn) => !knownRef.current.has(fn));
-      if (fresh.length > 0) {
-        fresh.forEach((fn) => knownRef.current.add(fn));
-        setNewScreenshots(fresh);
+      if (!initializedRef.current) {
+        // First load: treat everything as known so the UI doesn't badge
+        // the whole gallery as "new" on the initial visit.
+        initializedRef.current = true;
+        list.forEach((fn) => knownRef.current.add(fn));
+        setNewScreenshots([]);
+      } else {
+        const fresh = list.filter((fn) => !knownRef.current.has(fn));
+        if (fresh.length > 0) {
+          fresh.forEach((fn) => knownRef.current.add(fn));
+          setNewScreenshots(fresh);
+        }
       }
       const joined = list.join("\n");
       if (joined !== lastListRef.current) {
@@ -45,9 +54,10 @@ export function useAgentScreenshots(agentId: string, online: boolean) {
         setScreenshots(list);
       }
     } catch (error) {
+      // Keep the previous list on transient errors; the next successful
+      // reload (WS event, retry) replaces it.
       if ((error as Error).name !== "AbortError") {
-        lastListRef.current = "";
-        setScreenshots([]);
+        setNewScreenshots([]);
       }
     }
   }, [agentId]);

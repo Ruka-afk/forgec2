@@ -38,6 +38,7 @@ import { toast } from "sonner";
 export type { Beacon };
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useI18n } from "@/lib/i18n";
 import { ArrowDown, ArrowLeftRight, ArrowUp, ArrowUpDown, Download, Grip, History, ListChecks, ListOrdered, Pause, Play, Plus, Radio, RefreshCw } from "lucide-react";
 
@@ -77,6 +78,7 @@ export default function AgentsPageContent() {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [bulkResults, setBulkResults] = useState<BulkResult[]>([]);
+  const [exporting, setExporting] = useState(false);
 
   const {
     searchInput, setSearchInput, searchQuery,
@@ -89,7 +91,28 @@ export default function AgentsPageContent() {
   } = useAgentFilters(beacons);
   const { selected, setSelected, toggleSelect, toggleSelectAll } = useAgentSelection(beacons);
 
+  // Keep the bulk selection honest: prune ids that left the current list
+  // (page change, filter applied, agent deleted) so the bulk bar never
+  // claims invisible rows.
+  const visibleIds = useMemo(() => new Set(sortedBeacons.map((b) => b.id || "").filter(Boolean)), [sortedBeacons]);
+  useEffect(() => {
+    setSelected((prev) => {
+      let pruned = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (visibleIds.has(id)) next.add(id);
+        else pruned = true;
+      }
+      return pruned ? next : prev;
+    });
+  }, [visibleIds, setSelected]);
+
   const AGENT_ROW_H = 56;
+  // Hardcoded 56px was ~40% taller than the real rows (py-1 + content), so
+  // spacer rows drifted from actual layout while scrolling. Measure the
+  // first rendered row instead.
+  const [rowHeight, setRowHeight] = useState(AGENT_ROW_H);
+  const rowHeightRef = useRef(AGENT_ROW_H);
   const {
     scrollRef: agentScrollRef,
     onScroll: onAgentScroll,
@@ -98,16 +121,50 @@ export default function AgentsPageContent() {
     end: agentVirtEnd,
     offsetTop: agentOffsetTop,
     totalHeight: agentTotalHeight,
-  } = useVirtualWindow({ count: sortedBeacons.length, rowHeight: AGENT_ROW_H, threshold: 25 });
+  } = useVirtualWindow({ count: sortedBeacons.length, rowHeight, threshold: 25 });
+
+  useEffect(() => {
+    if (!agentVirtualized) return;
+    const el = agentScrollRef.current;
+    if (!el) return;
+    const probe = () => {
+      const tr = el.querySelector<HTMLElement>("tbody tr[data-agent-id]");
+      if (tr && tr.offsetHeight > 0 && Math.abs(tr.offsetHeight - rowHeightRef.current) > 1) {
+        rowHeightRef.current = tr.offsetHeight;
+        setRowHeight(tr.offsetHeight);
+      }
+    };
+    probe();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(probe);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [agentVirtualized, agentScrollRef]);
 
   const visibleBeacons = useMemo(
     () => (agentVirtualized ? sortedBeacons.slice(agentVirtStart, agentVirtEnd) : sortedBeacons),
     [sortedBeacons, agentVirtualized, agentVirtStart, agentVirtEnd],
   );
 
+  useEffect(() => {
+    if (loading) return;
+    const visibleIds = new Set(visibleBeacons.map((b) => b.id).filter(Boolean) as string[]);
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      let next: Set<string> | null = null;
+      prev.forEach((id) => {
+        if (!visibleIds.has(id) && (!next || !next.has(id))) {
+          next ??= new Set(prev);
+          next.delete(id);
+        }
+      });
+      return next ?? prev;
+    });
+  }, [visibleBeacons, loading, setSelected]);
+
   const loadBeacons = useCallback(() => {
-    loadBeaconsRaw(searchQuery, statusFilter, osFilter, page, 50, tagFilter, sortKey, sortDir);
-  }, [loadBeaconsRaw, searchQuery, statusFilter, osFilter, page, tagFilter, sortKey, sortDir]);
+    loadBeaconsRaw(searchQuery, statusFilter, osFilter, page, 50, tagFilter, linkedFilter, sortKey, sortDir);
+  }, [loadBeaconsRaw, searchQuery, statusFilter, osFilter, page, tagFilter, linkedFilter, sortKey, sortDir]);
 
   const loadBeaconsRef = useRef(loadBeacons);
   loadBeaconsRef.current = loadBeacons;
@@ -384,14 +441,45 @@ export default function AgentsPageContent() {
     } catch { setActionMsg(t("agents.notes_failed")); }
   };
 
-  const exportCSV = () => {
-    const headers = ["Hostname", "User", "OS", "IP", "Status", "Last Seen", "Version", "Active Window", "Notes"];
-    const rows = sortedBeacons.map((b) => [
-      b.hostname || "", b.username || "", b.os || "", b.ip || "",
-      b.status || "", b.last_seen || "", b.version || "", b.active_window || "", b.notes || "",
-    ]);
-    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
-    downloadText(csv, `agents-${new Date().toISOString().slice(0, 10)}.csv`, "text/csv");
+  const exportCSV = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      // Export respects the active filters but spans ALL pages, not just
+      // the current 50-row slice.
+      const all: Beacon[] = [];
+      const PAGE = 100;
+      for (let p = 1; p <= 1000; p++) {
+        const q = new URLSearchParams({ page: String(p), page_size: String(PAGE), group: "host" });
+        if (searchQuery) q.set("search", searchQuery);
+        if (statusFilter) q.set("status", statusFilter);
+        if (osFilter) q.set("os", osFilter);
+        if (tagFilter) q.set("tag_id", tagFilter);
+        if (linkedFilter) q.set("linked", linkedFilter);
+        q.set("sort_key", sortKey);
+        q.set("sort_dir", sortDir);
+        const d = await api.get<{ agents?: Beacon[]; total?: number | string }>(paths.agents.list(q.toString()), { unwrap: false });
+        const pageList = (d.agents || []) as Beacon[];
+        all.push(...pageList);
+        if (pageList.length < PAGE) break;
+      }
+      if (all.length === 0) {
+        toast.info(t("agents.no_beacons"));
+        return;
+      }
+      const headers = ["Hostname", "User", "OS", "IP", "Status", "Last Seen", "Version", "Active Window", "Notes"];
+      const rows = all.map((b) => [
+        b.hostname || "", b.username || "", b.os || "", b.ip || "",
+        b.status || "", b.last_seen || "", b.version || "", b.active_window || "", b.notes || "",
+      ]);
+      const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
+      downloadText(csv, `agents-${new Date().toISOString().slice(0, 10)}.csv`, "text/csv");
+      toast.success(t("agents.export_done").replace("{count}", String(all.length)));
+    } catch {
+      toast.error(t("agents.export_failed"));
+    } finally {
+      setExporting(false);
+    }
   };
 
   const counts = useMemo(() => {
@@ -411,6 +499,8 @@ export default function AgentsPageContent() {
   const { onlineCount, staleCount, offlineCount, windowsCount, linuxCount, darwinCount } = counts;
 
   const emptyColSpan = Object.values(visibleCols).filter(Boolean).length + 2;
+  const allVisibleSelected = beacons.length > 0 && beacons.every((b) => b.id && selected.has(b.id));
+  const someVisibleSelected = selected.size > 0 && !allVisibleSelected;
 
   return (
     <PageContainer
@@ -446,6 +536,7 @@ export default function AgentsPageContent() {
         <Button
           variant="outline"
           onClick={exportCSV}
+          disabled={exporting}
           className="h-9 sm:h-10 px-3 rounded-lg gap-2 min-w-[2.75rem] min-h-[2.75rem]"
           title={t("agents.export_csv_title")}
         >
@@ -546,13 +637,16 @@ export default function AgentsPageContent() {
             <TableRow className="text-xs text-muted-foreground font-semibold uppercase tracking-wider hover:bg-transparent">
               <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5 w-10">
                 <Checkbox aria-label={t("agents.select_all")} name="input-4"
-                  checked={beacons.length > 0 && beacons.every((b) => b.id && selected.has(b.id))}
-                  onCheckedChange={(v) => toggleSelectAll(v === true)}
+                  checked={allVisibleSelected || someVisibleSelected}
+                  indeterminate={someVisibleSelected && !allVisibleSelected}
+                  onCheckedChange={(v) => toggleSelectAll(v !== false)}
                 />
               </TableHead>
+              {visibleCols.hostname && (
               <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "hostname" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("hostname")} onKeyDown={handleSortKeyDown("hostname")}>
                 {t("agents.col_hostname")} {sortIcon("hostname")}
               </TableHead>
+              )}
               {visibleCols.username && (
               <TableHead className="text-left py-3 px-3 sm:py-3.5 sm:px-4 cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "username" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("username")} onKeyDown={handleSortKeyDown("username")}>
                 {t("agents.col_user")} {sortIcon("username")}
@@ -622,29 +716,25 @@ export default function AgentsPageContent() {
                 visibleCols={visibleCols}
               />
             ))}
-            {!loading && agentVirtualized && agentTotalHeight - agentOffsetTop - visibleBeacons.length * AGENT_ROW_H > 0 && (
+            {!loading && agentVirtualized && agentTotalHeight - agentOffsetTop - visibleBeacons.length * rowHeight > 0 && (
               <TableRow aria-hidden className="hover:bg-transparent">
-                <TableCell colSpan={emptyColSpan} style={{ height: agentTotalHeight - agentOffsetTop - visibleBeacons.length * AGENT_ROW_H, padding: 0, border: 0 }} />
+                <TableCell colSpan={emptyColSpan} style={{ height: agentTotalHeight - agentOffsetTop - visibleBeacons.length * rowHeight, padding: 0, border: 0 }} />
               </TableRow>
             )}
             {!loading && beacons.length === 0 && (
               <TableRow>
-                <TableCell colSpan={emptyColSpan} className="py-16 sm:py-20">
-                  <div className="text-center">
-                    <Radio className="w-4 h-4" />
-                    <h3 className="text-base sm:text-lg font-semibold text-muted-foreground mb-2">{t("agents.no_beacons")}</h3>
-                    <p className="text-muted-foreground mb-4 text-sm">
-                      {statusFilter || osFilter
-                        ? t("agents.no_beacons_filtered")
-                        : t("agents.no_beacons_hint")}
-                    </p>
-                    {!statusFilter && !osFilter && (
+                <TableCell colSpan={emptyColSpan} className="py-10">
+                  <EmptyState
+                    icon={Radio}
+                    title={t("agents.no_beacons")}
+                    message={statusFilter || osFilter ? t("agents.no_beacons_filtered") : t("agents.no_beacons_hint")}
+                    action={!statusFilter && !osFilter ? (
                       <Button render={<Link href="/generate" />}>
                         <Plus className="w-4 h-4" />
                         <span>{t("agents.generate_implant")}</span>
                       </Button>
-                    )}
-                  </div>
+                    ) : undefined}
+                  />
                 </TableCell>
               </TableRow>
             )}
@@ -659,7 +749,39 @@ export default function AgentsPageContent() {
       </Card>
       )}
 
-      {viewMode === "grid" && !loading && (
+      {viewMode === "grid" && loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 p-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Card key={`gskel-${i}`} className="p-4 space-y-3">
+              <div className="flex items-center gap-2.5">
+                <Skeleton className="w-10 h-10 rounded-xl" />
+                <div className="space-y-1.5 flex-1"><Skeleton className="h-4 w-24" /><Skeleton className="h-3 w-16" /></div>
+              </div>
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-2/3" />
+              <Skeleton className="h-3 w-1/2" />
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {viewMode === "grid" && !loading && beacons.length === 0 && (
+        <Card className="sm:rounded-2xl overflow-hidden">
+          <EmptyState
+            icon={Radio}
+            title={t("agents.no_beacons")}
+            message={statusFilter || osFilter ? t("agents.no_beacons_filtered") : t("agents.no_beacons_hint")}
+            action={!statusFilter && !osFilter ? (
+              <Button render={<Link href="/generate" />}>
+                <Plus className="w-4 h-4" />
+                <span>{t("agents.generate_implant")}</span>
+              </Button>
+            ) : undefined}
+          />
+        </Card>
+      )}
+
+      {viewMode === "grid" && !loading && beacons.length > 0 && (
         <>
           <AgentGrid
             beacons={sortedBeacons}

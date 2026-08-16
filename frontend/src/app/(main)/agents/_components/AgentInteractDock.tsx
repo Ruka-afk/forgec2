@@ -87,6 +87,13 @@ export function AgentInteractDock({
     }
   }, [id]);
 
+  // Load the task list as soon as the dock mounts (or the agent changes);
+  // WS only pushes events after that, so without this an idle agent would
+  // show an empty list until something new happens.
+  useEffect(() => {
+    void loadTasks(true);
+  }, [loadTasks]);
+
   useEffect(() => {
     if (!revealId) return;
     // Reveal is handled incrementally by the WS applyTaskEvent handler below;
@@ -103,12 +110,14 @@ export function AgentInteractDock({
       setTasks((prev) => applyTaskEvent(prev, msg));
       if (shouldRefreshDockShot(msg)) setShotKey((n) => n + 1);
       if (shouldRevealTaskResult(msg)) {
+        // Completion reveals the result in place — highlight the task but
+        // don't steal focus from the tab the operator is actually using
+        // (tab switching is reserved for freshly-queued pending tasks).
         const tid = taskEventId(msg);
         if (tid) setExpandedId(tid);
-        onTabChange("tasks");
       }
     });
-  }, [id, subscribe, onTabChange]);
+  }, [id, subscribe]);
 
   useEffect(() => {
     if (!id || connected) return;

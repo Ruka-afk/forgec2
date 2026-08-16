@@ -168,6 +168,63 @@ func TestHandleListAgentsGroupByHost(t *testing.T) {
 	}
 }
 
+func TestAgentListLinkedFilter(t *testing.T) {
+	s := newAgentTestServer(t)
+	seed := []db.Implant{
+		{ID: "direct1", Hostname: "SOLO", IP: "10.0.0.1", LastSeen: time.Now()},
+		{ID: "direct2", Hostname: "STANDALONE", IP: "10.0.0.2", LastSeen: time.Now()},
+		{ID: "child1", Hostname: "CHILD", IP: "10.0.0.3", ParentID: "parent1", LastSeen: time.Now()},
+	}
+	for _, a := range seed {
+		if err := s.db.Create(&a).Error; err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+
+	list := func(q string) []string {
+		t.Helper()
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request, _ = http.NewRequest(http.MethodGet, "/api/agents?"+q, nil)
+		s.handleListAgents(c)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+		}
+		var resp struct {
+			Agents []struct {
+				ID string `json:"id"`
+			} `json:"agents"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("json: %v", err)
+		}
+		ids := make([]string, 0, len(resp.Agents))
+		for _, a := range resp.Agents {
+			ids = append(ids, a.ID)
+		}
+		return ids
+	}
+
+	got := list("linked=direct&page=1&page_size=10")
+	if len(got) != 2 || !slicesContains(got, "direct1") || !slicesContains(got, "direct2") || slicesContains(got, "child1") {
+		t.Fatalf("linked=direct should return unparented agents only, got %v", got)
+	}
+
+	got = list("linked=chained&page=1&page_size=10")
+	if len(got) != 1 || got[0] != "child1" {
+		t.Fatalf("linked=chained should return parented agents only, got %v", got)
+	}
+}
+
+func slicesContains(ids []string, want string) bool {
+	for _, id := range ids {
+		if id == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestAgentListEnvelopeShared(t *testing.T) {
 	s := newAgentTestServer(t)
 	if err := s.db.Create(&db.Implant{ID: "a1", Hostname: "H", IP: "10.0.0.1", LastSeen: time.Now()}).Error; err != nil {

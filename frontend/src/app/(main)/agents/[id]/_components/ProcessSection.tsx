@@ -10,12 +10,13 @@ import { Terminal } from "lucide-react";
 export interface ProcessSectionProps {
   processList: string | null;
   loading: boolean;
+  loadFailed: boolean;
   expanded: boolean;
   /** Collapse/expand toggle from the card header. */
   onToggle: (open: boolean) => void;
 }
 
-export default memo(function ProcessSection({ processList, loading, expanded, onToggle }: ProcessSectionProps) {
+export default memo(function ProcessSection({ processList, loading, loadFailed, expanded, onToggle }: ProcessSectionProps) {
   const { t } = useI18n();
 
   return (
@@ -28,8 +29,8 @@ export default memo(function ProcessSection({ processList, loading, expanded, on
       defaultOpen={expanded}
       onOpenChange={onToggle}
       action={
-        <Button variant="ghost" size="sm" className="text-xs h-auto p-0 text-primary hover:bg-transparent hover:underline">
-          {expanded ? t("agents.detail_hide") : t("agents.detail_load")}
+        <Button variant="ghost" size="sm" className="text-xs h-auto p-0 text-primary hover:bg-transparent hover:underline" onClick={() => onToggle(!expanded)}>
+          {loadFailed ? t("agents.detail_retry") : (expanded ? t("agents.detail_hide") : t("agents.detail_load"))}
         </Button>
       }
     >

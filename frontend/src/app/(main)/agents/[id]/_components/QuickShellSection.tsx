@@ -28,6 +28,7 @@ export interface QuickShellSectionProps {
   history: QuickShellEntry[];
   sending: boolean;
   onSend: () => void;
+  os?: string;
 }
 
 export default memo(function QuickShellSection({
@@ -40,8 +41,10 @@ export default memo(function QuickShellSection({
   history,
   sending,
   onSend,
+  os,
 }: QuickShellSectionProps) {
   const { t } = useI18n();
+  const isWindows = !os || /^win/i.test(os);
 
   return (
     <SectionCard
@@ -59,8 +62,17 @@ export default memo(function QuickShellSection({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="cmd.exe">cmd.exe</SelectItem>
-              <SelectItem value="powershell.exe">powershell.exe</SelectItem>
+              {isWindows ? (
+                <>
+                  <SelectItem value="cmd.exe">cmd.exe</SelectItem>
+                  <SelectItem value="powershell.exe">powershell.exe</SelectItem>
+                </>
+              ) : (
+                <>
+                  <SelectItem value="/bin/sh">/bin/sh</SelectItem>
+                  <SelectItem value="/bin/bash">/bin/bash</SelectItem>
+                </>
+              )}
             </SelectContent>
           </Select>
           <Input

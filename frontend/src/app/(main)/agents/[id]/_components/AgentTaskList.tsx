@@ -274,7 +274,7 @@ export default memo(function AgentTaskList({
                       <Tooltip>
                         <TooltipTrigger>
                           <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-1 text-(--fs-micro-sm) text-muted-foreground/70 whitespace-nowrap">
-                            {(task.created_at) ? timeAgo(String(task.created_at)) : ""}
+                            {(task.created_at) ? timeAgo(String(task.created_at), t) : ""}
                           </span>
                         </TooltipTrigger>
                         <TooltipContent>{String(task.created_at || "")}</TooltipContent>
@@ -296,6 +296,9 @@ export default memo(function AgentTaskList({
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-muted-foreground/70">{t("agents.tasklist_label_result")}</span>
                             <div className="flex items-center gap-1">
+                              {resultText.length > MAX_RESULT_CHARS && (
+                                <span className="text-(--fs-micro-sm) text-muted-foreground/70">{t("agents.tasklist_result_truncated")}</span>
+                              )}
                               <Button variant="ghost" size="xs" onClick={copyResult} className="text-(--fs-micro-sm) text-muted-foreground hover:text-foreground gap-1">
                                 <Copy className="w-3 h-3" /> {t("agents.tasklist_copy_result")}
                               </Button>

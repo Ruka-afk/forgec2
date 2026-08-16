@@ -69,11 +69,13 @@ export const useInteractStore = create<InteractState>((set, get) => ({
 
   open: (id, opts) => {
     const prev = get();
+    const sameAgent = prev.agentId === id;
     set({
       agentId: id,
       tab: opts?.tab ?? prev.tab,
-      beacon: opts?.beacon ?? { ...(prev.beacon || {}), id },
-      expandedTaskId: opts?.expandedTaskId ?? (prev.agentId === id ? prev.expandedTaskId : null),
+      // Never leak the previous agent's identity into the new session.
+      beacon: opts?.beacon ?? (sameAgent ? prev.beacon : { id }),
+      expandedTaskId: opts?.expandedTaskId ?? (sameAgent ? prev.expandedTaskId : null),
     });
     persist();
   },

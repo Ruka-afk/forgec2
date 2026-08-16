@@ -92,7 +92,10 @@ export function AgentContextMenu({ point, onClose, onAction }: AgentContextMenuP
 
   if (!point || typeof document === "undefined") return null;
 
-  const pos = clampMenuPoint(point.x, point.y);
+  // The menu is taller than the 360px the clamp helper used to assume, so
+  // clamp against the rendered height (falls back to 360 pre-mount).
+  const menuHeight = containerRef.current?.offsetHeight;
+  const pos = clampMenuPoint(point.x, point.y, 220, menuHeight || 360);
   const run = (action: AgentMenuAction) => {
     onAction(action);
     onCloseRef.current();
@@ -103,7 +106,7 @@ export function AgentContextMenu({ point, onClose, onAction }: AgentContextMenuP
       ref={containerRef}
       role="menu"
       aria-label={t("agents.context_menu")}
-      className="fixed z-50 min-w-52 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+      className="fixed z-50 min-w-52 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 max-h-[calc(100vh-16px)] overflow-y-auto"
       style={{ left: pos.x, top: pos.y }}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}

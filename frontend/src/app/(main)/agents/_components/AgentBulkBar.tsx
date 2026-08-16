@@ -2,6 +2,7 @@
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Banner } from "@/components/ui/banner";
 import { useI18n } from "@/lib/i18n";
 import { enumLabel } from "@/lib/utils";
 import type { BulkResult } from "./types";
@@ -34,10 +35,9 @@ export function AgentBulkBar({
   return (
     <>
       {actionMsg && (
-        <div role="status" aria-live="polite" className="mb-3 px-4 py-2 bg-info/8 border border-info/20 rounded-lg text-sm text-info flex items-center justify-between animate-fade-in">
-          <span>{actionMsg}</span>
-          <Button variant="ghost" size="icon-xs" onClick={dismissActionMsg} aria-label={t("common.close")}><X className="w-4 h-4" /></Button>
-        </div>
+        <Banner tone="info" className="mb-3" action={<Button variant="ghost" size="icon-xs" onClick={dismissActionMsg} aria-label={t("common.close")}><X className="w-4 h-4" /></Button>}>
+          {actionMsg}
+        </Banner>
       )}
 
       {bulkMode && selected.size > 0 && (
@@ -87,12 +87,12 @@ export function AgentBulkBar({
                     <div className="min-w-0">
                       <span className="font-medium text-foreground">{enumLabel(t, "command.type", r.type)}</span>
                       {r.command && <span className="ml-1.5 text-muted-foreground/70">{r.command}</span>}
-                      <span className="ml-2 text-muted-foreground/70">{r.agent_ids?.length || 0} agent{(r.agent_ids?.length || 0) !== 1 ? "s" : ""}</span>
+                      <span className="ml-2 text-muted-foreground/70">{t("agents.n_agents").replace("{n}", String(r.agent_ids?.length || 0))}</span>
                     </div>
                   </div>
                   <span className="text-muted-foreground/70 shrink-0">
-                    {r.task_count ?? 0} task{(r.task_count ?? 0) !== 1 ? "s" : ""}
-                    {r.failed?.length ? <span className="ml-1 text-destructive">({r.failed.length} failed)</span> : null}
+                    {t("agents.n_tasks").replace("{n}", String(r.task_count ?? 0))}
+                    {r.failed?.length ? <span className="ml-1 text-destructive">({t("agents.n_failed").replace("{n}", String(r.failed.length))})</span> : null}
                   </span>
                 </div>
               ))}

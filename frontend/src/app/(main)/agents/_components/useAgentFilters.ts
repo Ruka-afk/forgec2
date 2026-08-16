@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import type { Beacon } from "./types";
 
@@ -25,9 +25,9 @@ export function useAgentFilters(beacons: Beacon[]) {
   });
   const [colMenuOpen, setColMenuOpen] = useState(false);
 
-  useEffect(() => { if (searchInput) setPage(1); }, [searchInput]);
+  useEffect(() => { setPage(1); }, [searchInput]);
 
-  useEffect(() => { if (tagFilter) setPage(1); }, [tagFilter]);
+  useEffect(() => { setPage(1); }, [tagFilter]);
 
   useEffect(() => { setPage(1); }, [sortKey, sortDir]);
 
@@ -36,19 +36,9 @@ export function useAgentFilters(beacons: Beacon[]) {
     else { setSortKey(key); setSortDir("asc"); }
   }, [sortKey]);
 
-  const filteredBeacons = useMemo(() => {
-    if (!linkedFilter) return beacons;
-    return beacons.filter((b) => {
-      const pid = b.parent_id || "";
-      if (linkedFilter === "direct") return !pid;
-      if (linkedFilter === "chained") return !!pid;
-      return true;
-    });
-  }, [beacons, linkedFilter]);
-
-  // Sorting is performed server-side across all pages; the current page's
-  // rows arrive already ordered, so no client-side re-sort is applied.
-  const sortedBeacons = filteredBeacons;
+  // The linked (direct/chained) filter is applied server-side alongside
+  // search/status/os so pagination stays correct across pages.
+  const sortedBeacons = beacons;
 
   return {
     searchInput, setSearchInput,
@@ -63,7 +53,6 @@ export function useAgentFilters(beacons: Beacon[]) {
     viewMode, setViewMode,
     visibleCols, setVisibleCols,
     colMenuOpen, setColMenuOpen,
-    filteredBeacons,
     sortedBeacons,
   };
 }

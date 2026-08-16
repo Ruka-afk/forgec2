@@ -15,8 +15,10 @@ const EN_FILE = path.join(I18N_DIR, "en.ts");
 const ZH_FILE = path.join(I18N_DIR, "zh.ts");
 
 const KEY_RE = /"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)":/g;
-const USE_DOUBLE = /t\(\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"\s*[),]/g;
-const USE_TICK = /t\(\s*`([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)`\s*[),]/g;
+// Also matches optional calls t?.("key") — those bypassed the checker and
+// silently rendered raw keys in the UI (time.ago.* etc.).
+const USE_DOUBLE = /\bt\?*\.?\(\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"\s*[),]/g;
+const USE_TICK = /\bt\?*\.?\(\s*`([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)`\s*[),]/g;
 // Keys referenced indirectly as data (labelKey/descKey/…: "x.y") are used
 // but would otherwise look dead. Fold them into the used set.
 const USE_KEYFIELD = /(?:labelKey|descKey|titleKey|subtitleKey|valueKey|inputLabel|btnKey)\s*[:=]\s*"([A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+)"/g;
