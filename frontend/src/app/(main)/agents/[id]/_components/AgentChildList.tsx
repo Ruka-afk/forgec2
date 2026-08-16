@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-indicator";
@@ -11,7 +12,7 @@ interface AgentChildListProps {
   childAgents: AgentDetailModel[];
 }
 
-export default function AgentChildList({ childAgents }: AgentChildListProps) {
+export default memo(function AgentChildList({ childAgents }: AgentChildListProps) {
   const { t } = useI18n();
   if (childAgents.length === 0) return null;
 
@@ -54,4 +55,4 @@ export default function AgentChildList({ childAgents }: AgentChildListProps) {
       </div>
     </Card>
   );
-}
+})

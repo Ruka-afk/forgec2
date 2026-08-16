@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Banner } from "@/components/ui/banner";
@@ -17,7 +17,7 @@ interface EvasionSectionProps {
   online: boolean;
 }
 
-export default function EvasionSection({ agentId, online }: EvasionSectionProps) {
+export default memo(function EvasionSection({ agentId, online }: EvasionSectionProps) {
   const { t } = useI18n();
   const [selectedTechnique, setSelectedTechnique] = useState("");
   const [sending, setSending] = useState(false);
@@ -83,4 +83,4 @@ export default function EvasionSection({ agentId, online }: EvasionSectionProps)
       </div>
     </Card>
   );
-}
+})

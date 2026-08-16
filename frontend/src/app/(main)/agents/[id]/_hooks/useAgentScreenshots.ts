@@ -22,6 +22,7 @@ export function useAgentScreenshots(agentId: string, online: boolean) {
   const [screenshots, setScreenshots] = useState<string[]>([]);
   const [newScreenshots, setNewScreenshots] = useState<string[]>([]);
   const knownRef = useRef<Set<string>>(new Set());
+  const lastListRef = useRef("");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { subscribe } = useWS();
 
@@ -38,9 +39,14 @@ export function useAgentScreenshots(agentId: string, online: boolean) {
         fresh.forEach((fn) => knownRef.current.add(fn));
         setNewScreenshots(fresh);
       }
-      setScreenshots(list);
+      const joined = list.join("\n");
+      if (joined !== lastListRef.current) {
+        lastListRef.current = joined;
+        setScreenshots(list);
+      }
     } catch (error) {
       if ((error as Error).name !== "AbortError") {
+        lastListRef.current = "";
         setScreenshots([]);
       }
     }

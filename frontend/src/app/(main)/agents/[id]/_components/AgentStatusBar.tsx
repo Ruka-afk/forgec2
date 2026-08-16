@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-indicator";
@@ -20,7 +20,7 @@ export interface AgentStatusBarProps {
  * view. Sticks below the app topbar + breadcrumb dock (top-14 + dock).
  * Shares the page scroll container, so it aligns with the content column.
  */
-export default function AgentStatusBar({ agent, agentId, status }: AgentStatusBarProps) {
+export default memo(function AgentStatusBar({ agent, agentId, status }: AgentStatusBarProps) {
   const { t } = useI18n();
   const [visible, setVisible] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -80,4 +80,4 @@ export default function AgentStatusBar({ agent, agentId, status }: AgentStatusBa
       )}
     </>
   );
-}
+})

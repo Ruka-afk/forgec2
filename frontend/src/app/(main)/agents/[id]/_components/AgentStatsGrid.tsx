@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Spinner } from "@/components/ui/spinner";
 import { timeAgo, formatTime } from "@/lib/utils";
-import type { AgentDetail, AgentDetailData, AgentStatus } from "@/types/agent";
+import type { AgentDetail, AgentStatus } from "@/types/agent";
 import { Calendar, Check, ChevronDown, Clipboard, Cpu, FileCode, FileText, Radio, X } from "lucide-react";
 import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useI18n } from "@/lib/i18n";
@@ -50,7 +50,8 @@ function InfoRow({ label, value, mono, title, copyValue, copyLabel, isSelect }: 
 
 export interface AgentStatsGridProps {
   agent: Partial<AgentDetail>;
-  data: AgentDetailData;
+  uptime?: string;
+  timeSinceLastSeen?: string;
   sleepValue: number;
   jitterValue: number;
   onSleepChange: (v: number) => void;
@@ -72,7 +73,7 @@ export interface AgentStatsGridProps {
 }
 
 export default memo(function AgentStatsGrid({
-  agent, data,
+  agent, uptime, timeSinceLastSeen,
   sleepValue, jitterValue, onSleepChange, onJitterChange,
   onApplySleep,   sleepSaving, status, childAgents, childrenExpanded,
   onToggleChildren, onExportJSON, onExportMarkdown, onCopyAllInfo,
@@ -91,7 +92,7 @@ export default memo(function AgentStatsGrid({
   const city = agent.city || "";
   const interval = agent.current_interval ?? 0;
   const jitter = agent.current_jitter ?? 0;
-  const uptime = data.uptime || "\u2014";
+  const uptimeLabel = uptime || "\u2014";
   const lastSeen = agent.last_seen || "";
   const activeWindow = agent.active_window || "";
   const parentID = agent.parent_id || "";
@@ -120,9 +121,9 @@ export default memo(function AgentStatsGrid({
         <div className="space-y-2.5">
         <InfoRow label={t("agents.stats_sleep")} value={interval ? `${interval}s` : "\u2014"} />
         <InfoRow label={t("agents.stats_jitter")} value={jitter ? `${jitter}%` : "\u2014"} />
-        <InfoRow label={t("agents.stats_uptime")} value={uptime} />
+        <InfoRow label={t("agents.stats_uptime")} value={uptimeLabel} />
         <InfoRow label={t("agents.stats_last_seen")} value={lastSeen ? timeAgo(lastSeen) : "\u2014"} title={lastSeen ? formatTime(lastSeen) : undefined} />
-        <InfoRow label={t("agents.stats_idle")} value={data.time_since_last_seen || "\u2014"} />
+        <InfoRow label={t("agents.stats_idle")} value={timeSinceLastSeen || "\u2014"} />
         <div className="pt-2 mt-2 border-t border-border">
           <div className="text-(--fs-micro-sm) text-muted-foreground/70 mb-1.5">{t("agents.stats_quick_adjust")}</div>
           <div className="flex items-center gap-1.5">

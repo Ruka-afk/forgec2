@@ -26,7 +26,11 @@ export function useAgentDetail<T>(agentId: string) {
           { signal },
         );
         lastReloadRef.current = Date.now();
-        setData(response);
+        // Keep the previous snapshot's identity when nothing changed so
+        // memoized children don't re-render on every 30s correction pass.
+        setData((prev) =>
+          prev && typeof prev === "object" && JSON.stringify(prev) === JSON.stringify(response) ? prev : response,
+        );
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
           setData(null);

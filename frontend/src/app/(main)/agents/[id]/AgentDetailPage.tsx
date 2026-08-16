@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef, memo } from "react";
+import { useCallback, useEffect, useState, useMemo, useRef, memo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
@@ -17,7 +17,7 @@ import { useI18n } from "@/lib/i18n";
 import { useInteractStore } from "@/lib/interact-store";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { Bug } from "lucide-react";
-import { AgentStatus, AgentDetail as AgentDetailExt, AgentDetailData, AgentTaskRecord } from "@/types/agent";
+import { AgentStatus, AgentDetail as AgentDetailExt, AgentTaskRecord } from "@/types/agent";
 import AgentHeader from "./_components/AgentHeader";
 import AgentStatsGrid from "./_components/AgentStatsGrid";
 import AgentTaskList from "./_components/AgentTaskList";
@@ -72,8 +72,9 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const [expandedTask, setExpandedTask] = useState<number | null>(null);
   const [lbOpen, setLbOpen] = useState(false);
   const [lbIndex, setLbIndex] = useState(0);
+  const lbOpenRef = useRef(false);
+  lbOpenRef.current = lbOpen;
   const [childrenExpanded, setChildrenExpanded] = usePersistedState(`agents.detail.${id}.children`, false);
-  const [agentAge, setAgentAge] = useState("");
   const {
     command: shellCommand,
     setCommand: setShellCommand,
@@ -136,30 +137,13 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [lbOpen, screenshots]);
-
-  useEffect(() => {
-    if (!data?.agent) return;
-    const created = data.agent.created_at;
-    if (!created) return;
-    const tick = () => {
-      const ms = Date.now() - new Date(created).getTime();
-      const d = Math.floor(ms / 86400000);
-      const h = Math.floor((ms % 86400000) / 3600000);
-      const m = Math.floor((ms % 3600000) / 60000);
-      setAgentAge(d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`);
-    };
-    tick();
-    const iv = setInterval(tick, 60000);
-    return () => clearInterval(iv);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.agent?.created_at]);
+  }, [lbOpen, screenshots.length]);
 
   useEffect(() => {
     const handleKeydown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (lbOpen) return;
+      if (lbOpenRef.current) return;
       if (onCloseRef.current && e.key === "Escape") { onCloseRef.current(); return; }
       if (e.key === "s") router.push(`/agents/${id}/shell`);
       else if (e.key === "f") router.push(`/agents/${id}/files`);
@@ -168,7 +152,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     };
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
-  }, [router, id, lbOpen]);
+  }, [router, id]);
 
   useEffect(() => {
     if (!id) return;
@@ -206,41 +190,44 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const pendingTasks = data?.pending_tasks ?? 0;
   const failedTasks = data?.failed_tasks ?? 0;
 
-  const quickAction = async (action: string, label: string) => {
-    if (credActionBlockReason(action, mimikatzReady) === "missing_module") {
-      toast.error(t("cred.missing_module"));
-      return;
-    }
-    if (implantBlocksDest(agent.version, sessionActionQuality(action))) {
-      toast.error(t("agents.version_unknown_dest"));
-      return;
-    }
-    setActionLoading(action);
-    try {
-      const suffix = credActionEndpoint(action);
-      const data = suffix
-        ? await api.post(paths.agents.cmd(id, suffix), {})
-        : await api.postJson(paths.agents.command(id), { type: action, command: "" });
-      const taskId = Number((data as { task_id?: number }).task_id);
-      const queued = Number.isFinite(taskId) && taskId > 0;
-      const kind = queued ? useInteractStore.getState().revealTask(id, taskId) : "offer";
-      toast.success(t("agents.detail_action_queued", { label }), {
-        action: kind === "offer" && queued
-          ? {
-              label: t("agents.dock_view_result"),
-              onClick: () => useInteractStore.getState().open(id, { tab: "tasks", expandedTaskId: taskId }),
-            }
-          : undefined,
-      });
-    } catch (err) {
-      console.error("quickAction failed:", err);
-      toast.error(t("agents.detail_action_failed").replace("{label}", label));
-    } finally {
-      setActionLoading(null);
-    }
-  };
+  const quickAction = useCallback(
+    async (action: string, label: string) => {
+      if (credActionBlockReason(action, mimikatzReady) === "missing_module") {
+        toast.error(t("cred.missing_module"));
+        return;
+      }
+      if (implantBlocksDest(agent.version, sessionActionQuality(action))) {
+        toast.error(t("agents.version_unknown_dest"));
+        return;
+      }
+      setActionLoading(action);
+      try {
+        const suffix = credActionEndpoint(action);
+        const data = suffix
+          ? await api.post(paths.agents.cmd(id, suffix), {})
+          : await api.postJson(paths.agents.command(id), { type: action, command: "" });
+        const taskId = Number((data as { task_id?: number }).task_id);
+        const queued = Number.isFinite(taskId) && taskId > 0;
+        const kind = queued ? useInteractStore.getState().revealTask(id, taskId) : "offer";
+        toast.success(t("agents.detail_action_queued", { label }), {
+          action: kind === "offer" && queued
+            ? {
+                label: t("agents.dock_view_result"),
+                onClick: () => useInteractStore.getState().open(id, { tab: "tasks", expandedTaskId: taskId }),
+              }
+            : undefined,
+        });
+      } catch (err) {
+        console.error("quickAction failed:", err);
+        toast.error(t("agents.detail_action_failed").replace("{label}", label));
+      } finally {
+        setActionLoading(null);
+      }
+    },
+    [id, t, mimikatzReady, agent.version],
+  );
 
-  const handleApplySleep = async () => {
+  const handleApplySleep = useCallback(async () => {
     setSleepSaving(true);
     try {
       await api.postJson(paths.agents.setSleep(id), { interval: Number(sleepValue), jitter: Number(jitterValue) });
@@ -250,19 +237,19 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
       toast.error(t("agents.sleep_failed"));
     }
     setSleepSaving(false);
-  };
+  }, [id, t, sleepValue, jitterValue, loadDetail, agent?.hostname]);
 
-  const exportJSON = () => {
+  const exportJSON = useCallback(() => {
     if (!data) return;
     downloadText(JSON.stringify(data, null, 2), `agent-${id}.json`, "application/json");
-  };
+  }, [data, id]);
 
-  const exportMarkdown = () => {
+  const exportMarkdown = useCallback(() => {
     if (!data) return;
     downloadText(buildAgentMarkdown(data), `agent-${id}.md`, "text/markdown");
-  };
+  }, [data, id]);
 
-  const copyAllInfo = async () => {
+  const copyAllInfo = useCallback(async () => {
     if (!data) return;
     try {
       await navigator.clipboard.writeText(buildAgentCopyText(data));
@@ -270,7 +257,54 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
     } catch {
       toast.error(t("agents.detail_copy_failed"));
     }
-  };
+  }, [data, t]);
+
+  const onToggleExpand = useCallback((taskId: number) => {
+    setExpandedTask((cur) => (cur === taskId ? null : taskId));
+  }, []);
+
+  const onOpenLightbox = useCallback((idx: number) => {
+    setLbIndex(idx);
+    setLbOpen(true);
+  }, []);
+
+  const onCloseLightbox = useCallback(() => setLbOpen(false), []);
+  const onPrevLightbox = useCallback(() => setLbIndex((i) => Math.max(0, i - 1)), []);
+  const onNextLightbox = useCallback(
+    () => setLbIndex((i) => Math.min(screenshots.length - 1, i + 1)),
+    [screenshots.length],
+  );
+
+  const handleToggleChildren = useCallback(() => setChildrenExpanded((v) => !v), [setChildrenExpanded]);
+
+  const handleSetKillDate = useCallback(() => {
+    const kd = agent?.kill_date;
+    if (kd) setKillDateValue(kd.substring(0, 10));
+    else {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setKillDateValue(tomorrow.toISOString().substring(0, 10));
+    }
+    setConfirmKillDate(true);
+  }, [agent?.kill_date]);
+
+  const handleClearKillDate = useCallback(() => setConfirmClearKillDate(true), []);
+
+  const handleToggleProcess = useCallback(
+    (open: boolean) => {
+      setProcessExpanded(open);
+      if (open && !processList && !processLoading) loadProcessList();
+    },
+    [processList, processLoading, loadProcessList, setProcessExpanded],
+  );
+
+  const handleKill = useCallback(() => setConfirmKill(true), []);
+  const handleUninstall = useCallback(() => setConfirmUninstall(true), []);
+  const handleMigrate = useCallback(() => {
+    setMigratePath("");
+    setConfirmMigrate(true);
+  }, []);
+  const handlePopOut = useCallback(() => useInteractStore.getState().open(id, { tab: "shell" }), [id]);
 
   if (loading) {
     return (
@@ -313,17 +347,16 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
       <AgentHeader
         agent={agent as Partial<AgentDetailExt>}
         agentId={id}
-        agentAge={agentAge}
         status={status}
         actionLoading={actionLoading}
         onQuickAction={quickAction}
         credCount={credCount}
         mimikatzReady={mimikatzReady}
-        onKill={() => setConfirmKill(true)}
-        onUninstall={() => setConfirmUninstall(true)}
-        onMigrate={() => { setMigratePath(""); setConfirmMigrate(true); }}
+        onKill={handleKill}
+        onUninstall={handleUninstall}
+        onMigrate={handleMigrate}
         onClose={onClose}
-        onPopOut={() => useInteractStore.getState().open(id, { tab: "shell" })}
+        onPopOut={handlePopOut}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-5">
@@ -333,7 +366,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             tasks={tasks as AgentTaskRecord[]}
             agentId={id}
             expandedTaskId={expandedTask}
-            onToggleExpand={(taskId) => setExpandedTask(expandedTask === taskId ? null : taskId)}
+            onToggleExpand={onToggleExpand}
             totalTasks={totalTasks}
             completedTasks={completedTasks}
             pendingTasks={pendingTasks}
@@ -345,20 +378,17 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             newScreenshots={newScreenshots}
             agentId={id}
             lightboxIdx={lbOpen ? lbIndex : null}
-            onOpenLightbox={(idx) => { setLbIndex(idx); setLbOpen(true); }}
-            onCloseLightbox={() => setLbOpen(false)}
-            onPrevLightbox={() => setLbIndex((i) => Math.max(0, i - 1))}
-            onNextLightbox={() => setLbIndex((i) => Math.min(screenshots.length - 1, i + 1))}
+            onOpenLightbox={onOpenLightbox}
+            onCloseLightbox={onCloseLightbox}
+            onPrevLightbox={onPrevLightbox}
+            onNextLightbox={onNextLightbox}
           />
 
           <ProcessSection
             processList={processList}
             loading={processLoading}
             expanded={processExpanded}
-            onToggle={(open) => {
-              setProcessExpanded(open);
-              if (open && !processList && !processLoading) loadProcessList();
-            }}
+            onToggle={handleToggleProcess}
           />
 
           <EvasionSection agentId={id} online={status === "online"} />
@@ -368,7 +398,8 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
         <div className="min-w-0 lg:sticky lg:top-[96px] lg:max-h-[calc(100vh-112px)] lg:overflow-y-auto lg:pr-0.5">
           <AgentStatsGrid
             agent={agent as Partial<AgentDetailExt>}
-            data={data as AgentDetailData}
+            uptime={data?.uptime}
+            timeSinceLastSeen={data?.time_since_last_seen}
             sleepValue={sleepValue}
             jitterValue={jitterValue}
             onSleepChange={setSleepValue}
@@ -378,22 +409,13 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             status={status}
             childAgents={childAgents}
             childrenExpanded={childrenExpanded}
-            onToggleChildren={() => setChildrenExpanded(!childrenExpanded)}
+            onToggleChildren={handleToggleChildren}
             onExportJSON={exportJSON}
             onExportMarkdown={exportMarkdown}
             onCopyAllInfo={copyAllInfo}
             killDate={agent?.kill_date}
-            onSetKillDate={() => {
-              const kd = agent?.kill_date;
-              if (kd) setKillDateValue(kd.substring(0, 10));
-              else {
-                const tomorrow = new Date();
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                setKillDateValue(tomorrow.toISOString().substring(0, 10));
-              }
-              setConfirmKillDate(true);
-            }}
-            onClearKillDate={() => setConfirmClearKillDate(true)}
+            onSetKillDate={handleSetKillDate}
+            onClearKillDate={handleClearKillDate}
             rail
           />
 

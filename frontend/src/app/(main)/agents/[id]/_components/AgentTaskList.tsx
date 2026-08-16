@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/status-indicator";
@@ -98,7 +98,7 @@ function StatCell({ icon, label, value, tone }: { icon: React.ReactNode; label: 
   );
 }
 
-export default function AgentTaskList({
+export default memo(function AgentTaskList({
   tasks, agentId, expandedTaskId, onToggleExpand,
   totalTasks, completedTasks, pendingTasks, failedTasks,
 }: AgentTaskListProps) {
@@ -336,4 +336,4 @@ export default function AgentTaskList({
       )}
     </Card>
   );
-}
+})

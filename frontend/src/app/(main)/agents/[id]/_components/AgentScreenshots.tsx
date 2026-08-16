@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +20,7 @@ export interface AgentScreenshotsProps {
   onNextLightbox: () => void;
 }
 
-export default function AgentScreenshots({
+export default memo(function AgentScreenshots({
   screenshots, newScreenshots = [], agentId, lightboxIdx, onOpenLightbox,
   onCloseLightbox, onPrevLightbox, onNextLightbox,
 }: AgentScreenshotsProps) {
@@ -71,7 +72,7 @@ export default function AgentScreenshots({
             </div>
           </DialogContent>
         </Dialog>
-      )}
+)}
     </>
   );
-}
+})

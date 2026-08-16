@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -37,7 +37,6 @@ function getOSIcon(os: string): React.ReactNode {
 export interface AgentHeaderProps {
   agent: Partial<AgentDetail>;
   agentId: string;
-  agentAge: string;
   status: AgentStatus;
   actionLoading: string | null;
   onQuickAction: (action: string, label: string) => void;
@@ -68,18 +67,21 @@ export default memo(function AgentHeader({
   const city = agent.city || "";
   const version = knownImplantVersion(agent.version);
 
-  const quickActions = [
-    { action: "screenshot", label: t("agents.header_screenshot"), icon: <Camera className="w-5 h-5" /> },
-    { action: "ps", label: t("agents.header_processes"), icon: <ListChecks className="w-5 h-5" /> },
-    { action: "hashdump", label: t("agents.header_hashdump"), icon: <Database className="w-5 h-5" />, quality: "scripted" as const },
-    { action: "creds_dump", label: t("agents.header_creds_dump"), icon: <Database className="w-5 h-5" />, badge: credCount, quality: "scripted" as const },
-    { action: "mimikatz", label: t("agents.header_mimikatz"), icon: <Key className="w-5 h-5" />, quality: "scripted" as const, needsModule: true },
-    { action: "clipboard_get", label: t("agents.header_clipboard"), icon: <Clipboard className="w-5 h-5" /> },
-    { action: "privesc_check", label: t("agents.header_privesc"), icon: <Shield className="w-5 h-5" /> },
-    { action: "keylogger_start", label: t("agents.header_key_start"), icon: <Terminal className="w-5 h-5" /> },
-    { action: "keylogger_stop", label: t("agents.header_key_stop"), icon: <Keyboard className="w-5 h-5" /> },
-    { action: "keylogger_dump", label: t("agents.header_key_dump"), icon: <Database className="w-5 h-5" /> },
-  ];
+  const quickActions = useMemo(
+    () => [
+      { action: "screenshot", label: t("agents.header_screenshot"), icon: <Camera className="w-5 h-5" /> },
+      { action: "ps", label: t("agents.header_processes"), icon: <ListChecks className="w-5 h-5" /> },
+      { action: "hashdump", label: t("agents.header_hashdump"), icon: <Database className="w-5 h-5" />, quality: "scripted" as const },
+      { action: "creds_dump", label: t("agents.header_creds_dump"), icon: <Database className="w-5 h-5" />, badge: credCount, quality: "scripted" as const },
+      { action: "mimikatz", label: t("agents.header_mimikatz"), icon: <Key className="w-5 h-5" />, quality: "scripted" as const, needsModule: true },
+      { action: "clipboard_get", label: t("agents.header_clipboard"), icon: <Clipboard className="w-5 h-5" /> },
+      { action: "privesc_check", label: t("agents.header_privesc"), icon: <Shield className="w-5 h-5" /> },
+      { action: "keylogger_start", label: t("agents.header_key_start"), icon: <Terminal className="w-5 h-5" /> },
+      { action: "keylogger_stop", label: t("agents.header_key_stop"), icon: <Keyboard className="w-5 h-5" /> },
+      { action: "keylogger_dump", label: t("agents.header_key_dump"), icon: <Database className="w-5 h-5" /> },
+    ],
+    [t, credCount],
+  );
 
   return (
     <>
