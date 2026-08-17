@@ -363,7 +363,7 @@ function CampaignDetailView({
                   (mitreData?.timeline || []).map((event, i) => (
                     <div key={i} className="mb-3 relative">
                       <div className="absolute -left-[calc(1.5rem+1px)] top-1 w-3 h-3 rounded-full border-2 border-card"
-                        style={{ background: phaseColor(event.phase) || "#6366f1" }} />
+                        style={{ background: phaseColor(event.phase) }} />
                       <div className="text-sm font-medium">{event.phase}</div>
                       <div className="text-xs text-muted-foreground">{formatTime(event.first_seen)}</div>
                       <div className="text-xs text-muted-foreground">{event.task_count} {t("campaign.tasks")}</div>
@@ -429,7 +429,7 @@ function CampaignDetailView({
                 {stats.phase_timeline.map((event: PhaseEvent, i: number) => (
                   <div key={i} className="mb-4 relative">
                     <div className="absolute -left-[calc(1.5rem+1px)] top-1 w-3 h-3 rounded-full border-2 border-card"
-                      style={{ background: phaseColor(event.phase) || "#6366f1" }} />
+                      style={{ background: phaseColor(event.phase) }} />
                     <div className="text-sm font-medium">{event.phase}</div>
                     <div className="text-xs text-muted-foreground">{formatTime(event.first_seen)}</div>
                     <div className="text-xs text-muted-foreground">{event.task_count} {t("campaign.tasks")}</div>

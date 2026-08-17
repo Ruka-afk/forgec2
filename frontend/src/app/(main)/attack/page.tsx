@@ -66,27 +66,27 @@ const TACTIC_ORDER = [
 ];
 
 const TACTIC_BORDER_COLORS: Record<string, string> = {
-  "Execution": "border-rose-500/30",
-  "Persistence": "border-blue-500/30",
-  "Privilege Escalation": "border-orange-500/30",
-  "Defense Evasion": "border-violet-500/30",
-  "Credential Access": "border-yellow-500/30",
-  "Discovery": "border-cyan-500/30",
-  "Collection": "border-pink-500/30",
-  "Lateral Movement": "border-emerald-500/30",
-  "Command and Control": "border-red-500/30",
+  "Execution": "border-chart-5/30",
+  "Persistence": "border-info/30",
+  "Privilege Escalation": "border-chart-4/30",
+  "Defense Evasion": "border-chart-6/30",
+  "Credential Access": "border-warning/30",
+  "Discovery": "border-chart-2/30",
+  "Collection": "border-chart-3/30",
+  "Lateral Movement": "border-chart-1/30",
+  "Command and Control": "border-destructive/30",
 };
 
 const TACTIC_HEADER_COLORS: Record<string, string> = {
-  "Execution": "bg-rose-500",
-  "Persistence": "bg-blue-500",
-  "Privilege Escalation": "bg-orange-500",
-  "Defense Evasion": "bg-violet-500",
-  "Credential Access": "bg-yellow-500",
-  "Discovery": "bg-cyan-500",
-  "Collection": "bg-pink-500",
-  "Lateral Movement": "bg-emerald-500",
-  "Command and Control": "bg-red-500",
+  "Execution": "bg-chart-5",
+  "Persistence": "bg-info",
+  "Privilege Escalation": "bg-chart-4",
+  "Defense Evasion": "bg-chart-6",
+  "Credential Access": "bg-warning",
+  "Discovery": "bg-chart-2",
+  "Collection": "bg-chart-3",
+  "Lateral Movement": "bg-chart-1",
+  "Command and Control": "bg-destructive",
 };
 
 export default function AttackPage() {
@@ -341,7 +341,7 @@ function PhaseCoverageCard() {
               isCovered ? "border-success/30 bg-success/10" : "border-border bg-card"
             }`}>
               <div className="w-6 h-6 rounded-full mx-auto mb-1.5 flex items-center justify-center"
-                style={{ background: phaseColor(phase) || "#6366f1" }}>
+                style={{ background: phaseColor(phase) }}>
                 {isCovered ? (
                   <Check className="w-4 h-4" />
                 ) : (

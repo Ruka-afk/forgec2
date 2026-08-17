@@ -358,22 +358,22 @@ export default function UsersPage() {
                   {userRole === "admin" && (
                     <TableCell className="py-3 px-4 sm:py-3.5 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleToggle(uid)} disabled={actionLoading === uid + "_toggle"} className={`${isActive ? "text-warning dark:text-warning hover:bg-amber-50 dark:hover:bg-warning/30" : "text-success dark:text-success hover:bg-emerald-50 dark:hover:bg-success/30"}`} title={isActive ? t("users.disable") : t("users.enable")} aria-label={isActive ? t("users.disable") : t("users.enable")}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => handleToggle(uid)} disabled={actionLoading === uid + "_toggle"} className={`${isActive ? "text-warning hover:bg-warning/10" : "text-success hover:bg-success/10"}`} title={isActive ? t("users.disable") : t("users.enable")} aria-label={isActive ? t("users.disable") : t("users.enable")}>
                           {isActive ? <Ban className="w-4 h-4" /> : <Check className="w-4 h-4" />}
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => { setEditUser(u); setForm({ username: name, password: "", role: urole }); setShowEdit(true); }} className="text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/30" title={t("common.edit")} aria-label={t("common.edit")}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => { setEditUser(u); setForm({ username: name, password: "", role: urole }); setShowEdit(true); }} className="text-info hover:bg-info/10" title={t("common.edit")} aria-label={t("common.edit")}>
                           <Pencil className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="icon-sm" onClick={() => { setPasswordUserId(uid); setNewPassword(""); setShowPasswordModal(true); }} className="text-primary hover:bg-primary/10" title={t("users.set_password")} aria-label={t("users.set_password")}>
                           <Key className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => openSessions(u)} className="text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/30" title={t("users.sessions")} aria-label={t("users.sessions")}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => openSessions(u)} className="text-info hover:bg-info/10" title={t("users.sessions")} aria-label={t("users.sessions")}>
                           <Laptop className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleForceLogout(uid)} className="text-warning dark:text-warning hover:bg-amber-50 dark:hover:bg-warning/30" title={t("users.force_logout")} aria-label={t("users.force_logout")}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => handleForceLogout(uid)} className="text-warning hover:bg-warning/10" title={t("users.force_logout")} aria-label={t("users.force_logout")}>
                           <LogOut className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleKick(uid)} className="text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30" title={t("users.kick_user")} aria-label={t("users.kick_user")}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => handleKick(uid)} className="text-destructive hover:bg-destructive/10" title={t("users.kick_user")} aria-label={t("users.kick_user")}>
                           <LogOut className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(uid, name)} disabled={actionLoading === uid + "_delete"} className="text-destructive hover:bg-destructive/10" title={t("common.delete")} aria-label={t("common.delete")}>
@@ -529,7 +529,7 @@ export default function UsersPage() {
                       </div>
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => handleRevokeSession(s.id)} disabled={revokeLoading !== null} className="text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 shrink-0">
+                  <Button variant="ghost" size="sm" onClick={() => handleRevokeSession(s.id)} disabled={revokeLoading !== null} className="text-destructive hover:bg-destructive/10 shrink-0">
                     <LogOut className="w-4 h-4" /> {t("users.revoke_session")}
                   </Button>
                 </div>

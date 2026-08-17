@@ -322,7 +322,7 @@ export default function PluginsPage() {
             <CardContent className="p-4 sm:p-5 text-center">
               <CloudUpload className="w-4 h-4" />
               <p className="text-sm text-muted-foreground mb-3">{t("plugins.upload_desc")}</p>
-              <input aria-label={t("plugins.upload_file")} name="input-6" type="file" accept=".json,.zip" onChange={(e) => setImportFile(e.target.files?.[0] || null)} className="text-sm text-muted-foreground file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 dark:file:bg-indigo-900/30 file:text-primary dark:file:text-indigo-400 hover:file:bg-primary/10" />
+              <input aria-label={t("plugins.upload_file")} name="input-6" type="file" accept=".json,.zip" onChange={(e) => setImportFile(e.target.files?.[0] || null)} className="text-sm text-muted-foreground file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/15" />
               {importFile && <p className="text-xs text-muted-foreground mt-2">{importFile.name}</p>}
             </CardContent>
           </Card>

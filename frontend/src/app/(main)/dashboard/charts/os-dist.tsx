@@ -10,7 +10,7 @@ interface OSPoint { name: string; value: number; color: string }
 function OSBody({ data }: { data: OSPoint[] }) {
   const { t } = useI18n();
   const total = data.reduce((s, d) => s + d.value, 0);
-  const items = data.map((d) => ({ ...d, color: osColor(d.name) || d.color || "#6b7280" }));
+  const items = data.map((d) => ({ ...d, color: osColor(d.name) }));
   return (
     <div className="flex items-center gap-4">
       <div className="relative w-20 h-20 shrink-0" aria-hidden="true">
@@ -37,6 +37,6 @@ export default withChartData<OSPoint[]>(
   paths.dashboard.osDistribution,
   (raw) => {
     const r = (raw as { data: Record<string, number> }).data || raw || {};
-    return Object.entries(r as Record<string, number>).map(([k, v]) => ({ name: k, value: Number(v) || 0, color: osColor(k) || "#6b7280" })).sort((a, b) => b.value - a.value);
+    return Object.entries(r as Record<string, number>).map(([k, v]) => ({ name: k, value: Number(v) || 0, color: osColor(k) })).sort((a, b) => b.value - a.value);
   },
 );
