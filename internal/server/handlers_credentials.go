@@ -419,6 +419,15 @@ func checkExportRateLimit(ip string) bool {
 		return false
 	}
 	exportRateMap[ip] = append(valid, now)
+	// Amortized cleanup: prune IPs whose entries are all expired so the
+	// map cannot grow unbounded with abandoned addresses.
+	if len(exportRateMap) > 1024 && len(exportRateMap)%64 == 0 {
+		for k, ts := range exportRateMap {
+			if len(ts) == 0 || !ts[len(ts)-1].After(cutoff) {
+				delete(exportRateMap, k)
+			}
+		}
+	}
 	return true
 }
 
@@ -527,7 +536,7 @@ func (s *Server) handleGetCredential(c *gin.Context) {
 	cred.Notes = decryptCredNotes(cred.Notes)
 	s.LogAuditRecord(c, "credential_view", "credential", cred.AgentID,
 		"viewed credential id="+c.Param("cred_id")+" (domain="+cred.Domain+", user="+cred.Username+")", true, nil)
-	c.JSON(http.StatusOK, cred)
+	respondSuccess(c, cred)
 }
 
 func (s *Server) handleDeleteCredential(c *gin.Context) {

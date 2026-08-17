@@ -1316,6 +1316,9 @@ func (s *Server) cleanupGhostAgents() {
 func (s *Server) cleanOldFiles(dir string, cutoff time.Time) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			slog.Warn("Failed to read cleanup directory", "dir", dir, "err", err)
+		}
 		return
 	}
 	for _, e := range entries {

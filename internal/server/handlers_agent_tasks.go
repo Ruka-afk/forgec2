@@ -45,7 +45,7 @@ func (s *Server) handleTaskHistory(c *gin.Context) {
 	}
 
 	var tasks []db.Task
-	if err := query.Preload("Agent").
+	if err := query.
 		Order("created_at desc").Offset(p.Offset).Limit(p.PageSize).Find(&tasks).Error; err != nil {
 		handleQueryError(c, err, "Failed to query tasks")
 		return

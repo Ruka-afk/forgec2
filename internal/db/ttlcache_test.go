@@ -7,7 +7,7 @@ import (
 )
 
 func TestTTLCache_GetSet(t *testing.T) {
-	c := NewTTLCache(10, time.Minute)
+	c := NewTTLCache[any](10, time.Minute)
 
 	// Get on empty cache
 	if _, ok := c.Get("key1"); ok {
@@ -28,7 +28,7 @@ func TestTTLCache_GetSet(t *testing.T) {
 }
 
 func TestTTLCache_Expiration(t *testing.T) {
-	c := NewTTLCache(10, 50*time.Millisecond)
+	c := NewTTLCache[any](10, 50*time.Millisecond)
 
 	c.Set("expire", "soon")
 	if _, ok := c.Get("expire"); !ok {
@@ -43,7 +43,7 @@ func TestTTLCache_Expiration(t *testing.T) {
 }
 
 func TestTTLCache_Eviction(t *testing.T) {
-	c := NewTTLCache(3, time.Minute)
+	c := NewTTLCache[any](3, time.Minute)
 
 	c.Set("a", 1)
 	time.Sleep(time.Millisecond) // ensure different timestamps
@@ -67,7 +67,7 @@ func TestTTLCache_Eviction(t *testing.T) {
 }
 
 func TestTTLCache_Delete(t *testing.T) {
-	c := NewTTLCache(10, time.Minute)
+	c := NewTTLCache[any](10, time.Minute)
 	c.Set("x", 10)
 	c.Delete("x")
 	if _, ok := c.Get("x"); ok {
@@ -76,7 +76,7 @@ func TestTTLCache_Delete(t *testing.T) {
 }
 
 func TestTTLCache_InvalidateByPrefix(t *testing.T) {
-	c := NewTTLCache(10, time.Minute)
+	c := NewTTLCache[any](10, time.Minute)
 	c.Set("users:1", "alice")
 	c.Set("users:2", "bob")
 	c.Set("agents:1", "implant1")
@@ -95,7 +95,7 @@ func TestTTLCache_InvalidateByPrefix(t *testing.T) {
 }
 
 func TestTTLCache_Clear(t *testing.T) {
-	c := NewTTLCache(10, time.Minute)
+	c := NewTTLCache[any](10, time.Minute)
 	c.Set("a", 1)
 	c.Set("b", 2)
 	c.Clear()
@@ -105,7 +105,7 @@ func TestTTLCache_Clear(t *testing.T) {
 }
 
 func TestTTLCache_Len(t *testing.T) {
-	c := NewTTLCache(10, time.Minute)
+	c := NewTTLCache[any](10, time.Minute)
 	if c.Len() != 0 {
 		t.Fatal("expected 0")
 	}
@@ -117,7 +117,7 @@ func TestTTLCache_Len(t *testing.T) {
 }
 
 func TestTTLCache_ConcurrentAccess(t *testing.T) {
-	c := NewTTLCache(100, time.Minute)
+	c := NewTTLCache[any](100, time.Minute)
 	var wg sync.WaitGroup
 
 	// Concurrent writers

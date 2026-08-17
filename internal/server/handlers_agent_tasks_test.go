@@ -76,16 +76,18 @@ func TestHandleGetAgentTasks_WithData(t *testing.T) {
 		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
 	}
 	var resp struct {
-		Tasks []db.Task `json:"tasks"`
+		Data struct {
+			Tasks []db.Task `json:"tasks"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
 	}
-	if len(resp.Tasks) != 1 {
-		t.Fatalf("expected 1 task, got %d", len(resp.Tasks))
+	if len(resp.Data.Tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(resp.Data.Tasks))
 	}
-	if resp.Tasks[0].Command != "whoami" {
-		t.Fatalf("expected command 'whoami', got %q", resp.Tasks[0].Command)
+	if resp.Data.Tasks[0].Command != "whoami" {
+		t.Fatalf("expected command 'whoami', got %q", resp.Data.Tasks[0].Command)
 	}
 }
 

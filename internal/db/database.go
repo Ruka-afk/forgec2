@@ -98,7 +98,7 @@ func generateRandomPassword(length int) (string, error) {
 
 // queryCache is a bounded TTL cache replacing the old unbounded sync.Map.
 // Max 1000 entries, 5-minute expiry.
-var queryCache = NewTTLCache(1000, 5*time.Minute)
+var queryCache = NewTTLCache[any](1000, 5*time.Minute)
 
 func GetFromCache(key string) (interface{}, bool) {
 	return queryCache.Get(key)

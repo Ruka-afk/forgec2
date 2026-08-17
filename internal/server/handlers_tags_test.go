@@ -53,16 +53,16 @@ func TestHandleBatchAgentTags_ReturnsTags(t *testing.T) {
 		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
 	}
 	var resp struct {
-		Tags map[string][]struct {
+		Data map[string][]struct {
 			ID    string `json:"id"`
 			Name  string `json:"name"`
 			Color string `json:"color"`
-		} `json:"tags"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
 	}
-	agentTags := resp.Tags[agent.ID]
+	agentTags := resp.Data[agent.ID]
 	if len(agentTags) != 1 || agentTags[0].ID != tag.ID || agentTags[0].Name != "test-tag" {
 		t.Fatalf("expected tag %s on agent, got %+v", tag.ID, agentTags)
 	}
@@ -83,13 +83,15 @@ func TestHandleAgentTags_ReturnsTags(t *testing.T) {
 		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
 	}
 	var resp struct {
-		Tags []db.AgentTag `json:"tags"`
+		Data struct {
+			Tags []db.AgentTag `json:"tags"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
 	}
-	if len(resp.Tags) != 1 || resp.Tags[0].ID != tag.ID {
-		t.Fatalf("expected tag %s on agent, got %+v", tag.ID, resp.Tags)
+	if len(resp.Data.Tags) != 1 || resp.Data.Tags[0].ID != tag.ID {
+		t.Fatalf("expected tag %s on agent, got %+v", tag.ID, resp.Data.Tags)
 	}
 }
 

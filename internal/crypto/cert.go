@@ -1,8 +1,9 @@
 package crypto
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -20,8 +21,9 @@ func GenerateSelfSignedCert(certPath, keyPath string) error {
 		return nil // already exist
 	}
 
-	// Generate private key
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	// Generate private key (ECDSA P-256: faster, smaller, equivalent security
+	// to RSA 3072+; also avoids RSA-specific KeyEncipherment usage).
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return err
 	}
@@ -40,7 +42,7 @@ func GenerateSelfSignedCert(certPath, keyPath string) error {
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(365 * 24 * time.Hour), // 1 year
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("0.0.0.0")},
@@ -74,8 +76,11 @@ func GenerateSelfSignedCert(certPath, keyPath string) error {
 		return err
 	}
 	defer keyOut.Close()
-	privBytes := x509.MarshalPKCS1PrivateKey(priv)
-	if err := pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: privBytes}); err != nil {
+	privBytes, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		return err
+	}
+	if err := pem.Encode(keyOut, &pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes}); err != nil {
 		return err
 	}
 

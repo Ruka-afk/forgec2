@@ -98,7 +98,7 @@ func (s *Server) apiListTasks(c *gin.Context) {
 		return
 	}
 	var tasks []db.Task
-	query := s.db.Order("created_at desc").Preload("Agent")
+	query := s.db.Order("created_at desc")
 
 	if agentID := c.Query("agent_id"); agentID != "" {
 		query = query.Where("agent_id = ?", agentID)
@@ -130,7 +130,7 @@ func (s *Server) apiGetTask(c *gin.Context) {
 	}
 	id := c.Param("id")
 	var task db.Task
-	if err := s.db.Preload("Agent").First(&task, id).Error; err != nil {
+	if err := s.db.First(&task, id).Error; err != nil {
 		respondError(c, http.StatusNotFound, "task not found")
 		return
 	}

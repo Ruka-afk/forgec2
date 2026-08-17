@@ -678,7 +678,7 @@ func (s *Server) handleListUnlinkedAgents(c *gin.Context) {
 		handleQueryError(c, err, "Failed to list unlinked agents")
 		return
 	}
-	c.JSON(http.StatusOK, agents)
+	respondSuccess(c, agents)
 }
 
 // handleToggleAgentTrust toggles the trusted status of an agent.

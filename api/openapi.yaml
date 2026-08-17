@@ -9494,9 +9494,9 @@ components:
           type: integer
         online_agents:
           type: integer
-        stale_agents:
+        stale_count:
           type: integer
-        offline_agents:
+        offline_count:
           type: integer
         total_tasks:
           type: integer
@@ -9625,7 +9625,7 @@ components:
           type: string
         status:
           type: string
-          enum: [pending, running, completed, failed]
+          enum: [pending, running, completed, failed, cancelled, pending_approval]
         result:
           type: string
         error:
@@ -9641,12 +9641,24 @@ components:
           format: int64
         created_by:
           type: string
+        claimed_by:
+          type: string
+        claimed_at:
+          type: string
+          format: date-time
+        approved_by:
+          type: string
+        approved_at:
+          type: string
+          format: date-time
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+        tenant_id:
+          type: string
 
     Listener:
       type: object
@@ -9953,7 +9965,6 @@ components:
         command:
           type: string
         params:
-          type: string
           type: string
 
     Webhook:

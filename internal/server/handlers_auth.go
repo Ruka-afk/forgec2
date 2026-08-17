@@ -54,7 +54,7 @@ func (s *Server) renderLoginPage(c *gin.Context, data gin.H) {
 	s.renderPageOrJSON(c, data)
 }
 
-func (s *Server) renderLoginError(c *gin.Context, errMsg, lastUsername string, rememberMe bool) {
+func (s *Server) renderLoginError(c *gin.Context, errMsg string) {
 	respondError(c, http.StatusUnauthorized, errMsg)
 }
 
@@ -73,24 +73,24 @@ func (s *Server) handleLogin(c *gin.Context) {
 	// the failures that triggered the lockout were already audited, and writing one
 	// per subsequent attempt lets an attacker flood the audit log during a lockout.
 	if locked, retryAfter := s.checkLoginLockout(clientIP); locked {
-		s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
+		s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter))
 		return
 	}
 
 	if locked, retryAfter := s.checkAccountLockout(username); locked {
-		s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter), username, rememberMe)
+		s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter))
 		return
 	}
 
 	if username == "" || password == "" {
-		s.renderLoginError(c, "Username and password required", username, rememberMe)
+		s.renderLoginError(c, "Username and password required")
 		return
 	}
 
 	if middleware.RequireTLSForAuth && !middleware.IsSecureConnection(c) {
 		slog.Warn("Login blocked: RequireTLSForAuth=true but connection is not TLS",
 			"username", username, "ip", c.ClientIP())
-		s.renderLoginError(c, "Login requires a secure (HTTPS) connection", username, rememberMe)
+		s.renderLoginError(c, "Login requires a secure (HTTPS) connection")
 		return
 	}
 
@@ -104,10 +104,10 @@ func (s *Server) handleLogin(c *gin.Context) {
 		slog.Warn("Login failed: invalid credentials", "ip", c.ClientIP())
 		s.LogAuditRecord(c, "login_failed", "auth", username, "User not found", false, nil)
 		if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
-			s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
+			s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter))
 			return
 		}
-		s.renderLoginError(c, "Invalid username or password", username, false)
+		s.renderLoginError(c, "Invalid username or password")
 		return
 	}
 
@@ -118,18 +118,18 @@ func (s *Server) handleLogin(c *gin.Context) {
 		}
 		slog.Warn("Login failed: invalid credentials", "ip", c.ClientIP())
 		s.LogAuditRecord(c, "login_failed", "auth", username, "Account disabled", false, nil)
-		s.renderLoginError(c, "Invalid username or password", username, false)
+		s.renderLoginError(c, "Invalid username or password")
 		return
 	}
 
 	if user.PasswordHash == "" {
 		if err := s.validatePasswordComplexity(password); err != nil {
-			s.renderLoginError(c, err.Error(), username, rememberMe)
+			s.renderLoginError(c, err.Error())
 			return
 		}
 		hash, err := middleware.HashPassword(password)
 		if err != nil {
-			s.renderLoginError(c, "Failed to set password", username, rememberMe)
+			s.renderLoginError(c, "Failed to set password")
 			return
 		}
 		if err := s.db.Model(&user).Updates(map[string]interface{}{
@@ -148,14 +148,14 @@ func (s *Server) handleLogin(c *gin.Context) {
 			slog.Error("Failed to increment login attempts", "user_id", user.ID, "err", err)
 		}
 		if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
-			s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
+			s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter))
 			return
 		}
 		if locked, retryAfter := s.recordAccountLoginFailure(username, clientIP); locked {
-			s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter), username, rememberMe)
+			s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter))
 			return
 		}
-		s.renderLoginError(c, "Invalid username or password", username, rememberMe)
+		s.renderLoginError(c, "Invalid username or password")
 		return
 	} else {
 		if err := s.db.Model(&user).Updates(map[string]interface{}{
@@ -177,21 +177,21 @@ func (s *Server) handleLogin(c *gin.Context) {
 			decryptedSecret, err := decryptSecret(user.TOTPSecret, totpKey)
 			if err != nil {
 				slog.Error("Failed to decrypt TOTP secret", "username", username, "err", err)
-				s.renderLoginError(c, "2FA configuration error", username, rememberMe)
+				s.renderLoginError(c, "2FA configuration error")
 				return
 			}
 			if !totp.VerifyCode(decryptedSecret, totpCode) {
 				slog.Warn("Login failed: invalid 2FA code", "username", username, "ip", c.ClientIP())
 				s.LogAuditRecord(c, "login_failed", "auth", username, "Invalid 2FA code", false, nil)
 				if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
-					s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
+					s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter))
 					return
 				}
 				if locked, retryAfter := s.recordAccountLoginFailure(username, clientIP); locked {
-					s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter), username, rememberMe)
+					s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter))
 					return
 				}
-				s.renderLoginError(c, "Invalid username or password", username, rememberMe)
+				s.renderLoginError(c, "Invalid username or password")
 				return
 			}
 		} else if backupCode != "" {
@@ -200,10 +200,10 @@ func (s *Server) handleLogin(c *gin.Context) {
 				slog.Warn("Login failed: no unused backup codes", "username", username, "ip", c.ClientIP())
 				s.LogAuditRecord(c, "login_failed", "auth", username, "No unused backup codes", false, nil)
 				if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
-					s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
+					s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter))
 					return
 				}
-				s.renderLoginError(c, "Invalid username or password", username, rememberMe)
+				s.renderLoginError(c, "Invalid username or password")
 				return
 			}
 			matched := false
@@ -214,13 +214,13 @@ func (s *Server) handleLogin(c *gin.Context) {
 						Updates(map[string]interface{}{"used": true, "used_at": time.Now()})
 					if result.Error != nil {
 						slog.Error("Failed to mark backup code as used", "code_id", bc.ID, "err", result.Error)
-						s.renderLoginError(c, "Authentication error", username, rememberMe)
+						s.renderLoginError(c, "Authentication error")
 						return
 					}
 					if result.RowsAffected == 0 {
 						slog.Warn("Backup code already used (race condition)", "code_id", bc.ID, "username", username)
 						s.recordLoginFailure(clientIP, username)
-						s.renderLoginError(c, "Invalid username or password", username, rememberMe)
+						s.renderLoginError(c, "Invalid username or password")
 						return
 					}
 					matched = true
@@ -231,27 +231,27 @@ func (s *Server) handleLogin(c *gin.Context) {
 				slog.Warn("Login failed: invalid backup code", "username", username, "ip", c.ClientIP())
 				s.LogAuditRecord(c, "login_failed", "auth", username, "Invalid backup code", false, nil)
 				if locked, retryAfter := s.recordLoginFailure(clientIP, username); locked {
-					s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter), username, rememberMe)
+					s.renderLoginError(c, fmt.Sprintf("Too many login attempts. Try again in %d seconds.", retryAfter))
 					return
 				}
 				if locked, retryAfter := s.recordAccountLoginFailure(username, clientIP); locked {
-					s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter), username, rememberMe)
+					s.renderLoginError(c, fmt.Sprintf("Account temporarily locked. Try again in %d seconds.", retryAfter))
 					return
 				}
-				s.renderLoginError(c, "Invalid username or password", username, rememberMe)
+				s.renderLoginError(c, "Invalid username or password")
 				return
 			}
 			slog.Info("Login via backup code", "username", username, "ip", c.ClientIP())
 			s.LogAuditRecord(c, "login_backup_code", "auth", username, "Login via backup code", true, nil)
 		} else {
-			s.renderLoginError(c, "Two-factor authentication required", username, rememberMe)
+			s.renderLoginError(c, "Two-factor authentication required")
 			return
 		}
 	}
 
 	token, err := middleware.GenerateToken(user, rememberMe, sessionMaxAgeHours)
 	if err != nil {
-		s.renderLoginError(c, "Token generation error", username, rememberMe)
+		s.renderLoginError(c, "Token generation error")
 		return
 	}
 

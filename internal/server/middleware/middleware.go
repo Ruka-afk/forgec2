@@ -97,9 +97,18 @@ func (rl *RateLimiter) Limit() gin.HandlerFunc {
 
 		if !exists {
 			if len(rl.visitors) >= rl.maxVisitors {
-				for k := range rl.visitors {
-					delete(rl.visitors, k)
-					break
+				// Evict the oldest visitor (by timestamp) rather than a
+				// random one so active IPs are not displaced.
+				var oldestIP string
+				var oldestT time.Time
+				for k, v := range rl.visitors {
+					if oldestIP == "" || v.timestamp.Before(oldestT) {
+						oldestIP = k
+						oldestT = v.timestamp
+					}
+				}
+				if oldestIP != "" {
+					delete(rl.visitors, oldestIP)
 				}
 			}
 			rl.visitors[ip] = &visitor{timestamp: now, count: 1}

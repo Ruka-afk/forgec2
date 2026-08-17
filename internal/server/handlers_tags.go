@@ -43,7 +43,7 @@ func (s *Server) handleAPITagList(c *gin.Context) {
 	if err := s.db.Order("name asc").Find(&tags).Error; err != nil {
 		slog.Error("Failed to list tags", "err", err)
 	}
-	respond(c, gin.H{"tags": tags})
+	respondSuccess(c, tags)
 }
 
 func (s *Server) handleAPITagCreate(c *gin.Context) {
@@ -154,7 +154,7 @@ func (s *Server) handleAgentTags(c *gin.Context) {
 		Find(&tags).Error; err != nil {
 		slog.Error("Failed to load agent tags", "agent_id", id, "err", err)
 	}
-	respond(c, gin.H{"tags": tags})
+	respondSuccess(c, gin.H{"tags": tags})
 }
 
 // handleBatchAgentTags returns tags for multiple agents in a single request,
@@ -192,5 +192,5 @@ func (s *Server) handleBatchAgentTags(c *gin.Context) {
 		})
 	}
 
-	respond(c, gin.H{"tags": tagsByAgent})
+	respondSuccess(c, tagsByAgent)
 }

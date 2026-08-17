@@ -115,16 +115,39 @@ func (r *apiKeyRateLimiter) recordFailure(ip string) {
 	entry, ok := r.entries[ip]
 	if !ok {
 		if len(r.entries) >= 10000 {
-			for k := range r.entries {
-				delete(r.entries, k)
-				break
-			}
+			r.evictLocked()
 		}
 		entry = &apiKeyLimitEntry{windowStart: time.Now()}
 		r.entries[ip] = entry
 	}
 	entry.attempts++
 	entry.windowStart = time.Now()
+}
+
+// evictLocked frees space in the entries map at capacity: first drops entries
+// past the lockout window, then evicts the oldest entry (by windowStart)
+// instead of a random one so active IPs are not displaced.
+func (r *apiKeyRateLimiter) evictLocked() {
+	now := time.Now()
+	for k, e := range r.entries {
+		if now.Sub(e.windowStart) > time.Duration(apiKeyLockoutSec)*time.Second {
+			delete(r.entries, k)
+		}
+	}
+	if len(r.entries) < 10000 {
+		return
+	}
+	var oldestK string
+	var oldestT time.Time
+	for k, e := range r.entries {
+		if oldestK == "" || e.windowStart.Before(oldestT) {
+			oldestK = k
+			oldestT = e.windowStart
+		}
+	}
+	if oldestK != "" {
+		delete(r.entries, oldestK)
+	}
 }
 
 var globalAPIKeyLimiter = &apiKeyRateLimiter{
@@ -288,6 +311,11 @@ func authFail(c *gin.Context, logMsg string, args ...any) {
 	c.Abort()
 }
 
+// clearSessionCookie removes the forgec2_session cookie (used on auth failures).
+func clearSessionCookie(c *gin.Context) {
+	SetCookieWithSameSite(c, "forgec2_session", "", -1, "/", CookieSecure, true, http.SameSiteLaxMode)
+}
+
 // AuthRequired middleware for web UI - validates JWT + DB user active
 func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 	type cacheEntry struct {
@@ -306,7 +334,7 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 				return
 			}
 			h := sha256.Sum256([]byte(apiKey))
-			hash := fmt.Sprintf("%x", h)
+			hash := hex.EncodeToString(h[:])
 			var ak db.ApiKey
 			if database.Where("key_hash = ? AND active = ?", hash, true).First(&ak).Error == nil {
 				if ak.ExpiresAt.IsZero() || time.Now().Before(ak.ExpiresAt) {
@@ -347,14 +375,14 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 			return jwtSecret.Load().([]byte), nil
 		})
 		if err != nil || !token.Valid {
-			SetCookieWithSameSite(c, "forgec2_session", "", -1, "/", CookieSecure, true, http.SameSiteLaxMode)
+			clearSessionCookie(c)
 			authFail(c, "Auth failed: invalid token", "path", c.Request.URL.Path, "ip", c.ClientIP(), "err", err)
 			return
 		}
 
 		claims, ok := token.Claims.(*Claims)
 		if !ok {
-			SetCookieWithSameSite(c, "forgec2_session", "", -1, "/", CookieSecure, true, http.SameSiteLaxMode)
+			clearSessionCookie(c)
 			authFail(c, "Auth failed: invalid claims", "path", c.Request.URL.Path)
 			return
 		}
@@ -368,19 +396,29 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 			user = entry.user
 		} else {
 			if database.Where("id = ? AND is_active = ?", claims.UserID, true).First(&user).Error != nil {
-				SetCookieWithSameSite(c, "forgec2_session", "", -1, "/", CookieSecure, true, http.SameSiteLaxMode)
+				clearSessionCookie(c)
 				authFail(c, "Auth failed: user not found or inactive", "user_id", claims.UserID, "username", claims.Username)
 				return
 			}
 			cacheMu.Lock()
 			userCache[claims.UserID] = cacheEntry{user: user, expiresAt: time.Now().Add(userCacheTTL)}
+			// Amortized sweep: drop expired entries once the cache grows
+			// past a threshold so it cannot grow unbounded over long uptimes.
+			if len(userCache) > 2048 {
+				now := time.Now()
+				for id, e := range userCache {
+					if now.After(e.expiresAt) {
+						delete(userCache, id)
+					}
+				}
+			}
 			cacheMu.Unlock()
 		}
 
 		// Force-logout check: if user's ForceLogoutAt > token IssuedAt, session was invalidated
 		if !user.ForceLogoutAt.IsZero() && claims.IssuedAt != nil {
 			if user.ForceLogoutAt.After(claims.IssuedAt.Time) {
-				SetCookieWithSameSite(c, "forgec2_session", "", -1, "/", CookieSecure, true, http.SameSiteLaxMode)
+				clearSessionCookie(c)
 				if wantsJSONAuth(c) {
 					respondError(c, http.StatusUnauthorized, "session_expired")
 				} else {
@@ -393,7 +431,7 @@ func AuthRequired(database *gorm.DB) gin.HandlerFunc {
 
 		// Per-session revocation check
 		if isSessionRevoked(database, tokenStr) {
-			SetCookieWithSameSite(c, "forgec2_session", "", -1, "/", CookieSecure, true, http.SameSiteLaxMode)
+			clearSessionCookie(c)
 			if wantsJSONAuth(c) {
 				respondError(c, http.StatusUnauthorized, "session_revoked")
 			} else {
@@ -575,7 +613,7 @@ func ParseToken(tokenStr string) (*Claims, error) {
 
 func TokenHash(token string) string {
 	h := sha256.Sum256([]byte(token))
-	return fmt.Sprintf("%x", h)
+	return hex.EncodeToString(h[:])
 }
 
 func isSessionRevoked(database *gorm.DB, tokenStr string) bool {

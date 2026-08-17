@@ -182,11 +182,11 @@ func (s *Server) handleGetAgentTasks(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"tasks":    tasks,
-		"total":    total,
-		"page":     p.Page,
-		"pageSize": p.PageSize,
+	respondSuccess(c, gin.H{
+		"tasks":     tasks,
+		"total":     total,
+		"page":      p.Page,
+		"page_size": p.PageSize,
 	})
 }
 
@@ -199,7 +199,7 @@ func (s *Server) handleGetTaskStatus(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	respondSuccess(c, gin.H{
 		"id":         task.ID,
 		"status":     task.Status,
 		"result":     task.Result,
@@ -269,7 +269,7 @@ func (s *Server) handleBatchTaskStatus(c *gin.Context) {
 			Error:  t.Error,
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"tasks": results, "total": len(results)})
+	respondSuccess(c, gin.H{"tasks": results, "total": len(results)})
 }
 
 func (s *Server) handleRequestPS(c *gin.Context) {

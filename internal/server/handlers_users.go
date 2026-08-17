@@ -236,42 +236,26 @@ func (s *Server) handleDeleteUser(c *gin.Context) {
 	}
 
 	// Use transaction to clean up associated data
-	tx := s.db.Begin()
-	if err := tx.Error; err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to start transaction")
-		return
-	}
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// Clean up associated data
+		if err := tx.Where("user_id = ?", user.ID).Delete(&db.UserSession{}).Error; err != nil {
+			slog.Error("Failed to clean up user sessions", "user_id", user.ID, "err", err)
+			return err
+		}
+		if err := tx.Where("user_id = ?", user.ID).Delete(&db.BackupCode{}).Error; err != nil {
+			slog.Error("Failed to clean up backup codes", "user_id", user.ID, "err", err)
+			return err
+		}
+		if err := tx.Where("user_id = ?", user.ID).Delete(&db.ApiKey{}).Error; err != nil {
+			slog.Error("Failed to clean up API keys", "user_id", user.ID, "err", err)
+			return err
+		}
 
-	// Clean up associated data
-	if err := tx.Where("user_id = ?", user.ID).Delete(&db.UserSession{}).Error; err != nil {
-		tx.Rollback()
-		slog.Error("Failed to clean up user sessions", "user_id", user.ID, "err", err)
-		respondError(c, http.StatusInternalServerError, "Failed to clean up user sessions")
-		return
-	}
-	if err := tx.Where("user_id = ?", user.ID).Delete(&db.BackupCode{}).Error; err != nil {
-		tx.Rollback()
-		slog.Error("Failed to clean up backup codes", "user_id", user.ID, "err", err)
-		respondError(c, http.StatusInternalServerError, "Failed to clean up backup codes")
-		return
-	}
-	if err := tx.Where("user_id = ?", user.ID).Delete(&db.ApiKey{}).Error; err != nil {
-		tx.Rollback()
-		slog.Error("Failed to clean up API keys", "user_id", user.ID, "err", err)
-		respondError(c, http.StatusInternalServerError, "Failed to clean up API keys")
-		return
-	}
-
-	// Delete the user
-	if err := tx.Delete(&user).Error; err != nil {
-		tx.Rollback()
+		// Delete the user
+		return tx.Delete(&user).Error
+	})
+	if err != nil {
 		respondError(c, http.StatusInternalServerError, "Failed to delete user")
-		return
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		tx.Rollback()
-		respondError(c, http.StatusInternalServerError, "Failed to commit transaction")
 		return
 	}
 

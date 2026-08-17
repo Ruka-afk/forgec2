@@ -352,6 +352,17 @@ func (s *Server) buildResyncResponse(agentID string, seq uint64) ([]byte, bool) 
 }
 
 // decodeBeaconEnvelope parses and authenticates a v2 transport envelope.
+// effectiveMaxPayload returns MaxDecryptedPayloadSize or the 10MB default.
+func (s *Server) effectiveMaxPayload() int {
+	s.configMu.RLock()
+	maxPayload := s.cfg.Crypto.MaxDecryptedPayloadSize
+	s.configMu.RUnlock()
+	if maxPayload <= 0 {
+		maxPayload = 10 * 1024 * 1024 // default 10MB
+	}
+	return maxPayload
+}
+
 // Returns the envelope, the inner (decrypted) request when applicable, and the
 // frame kind. Protocol v1/plaintext frames are rejected outright.
 func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req beaconRequest, kind beaconFrameKind) {
@@ -362,12 +373,7 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 	// fully base64-decoded and run through AES-GCM before the post-decrypt
 	// size guard fires — an anonymous actor can no longer drive GB/min of
 	// decrypt work per IP.
-	s.configMu.RLock()
-	maxPayload := s.cfg.Crypto.MaxDecryptedPayloadSize
-	s.configMu.RUnlock()
-	if maxPayload <= 0 {
-		maxPayload = 10 * 1024 * 1024 // default 10MB
-	}
+	maxPayload := s.effectiveMaxPayload()
 	rawLimit := (maxPayload+2)/3*4 + 64*1024
 	if len(raw) > rawLimit {
 		slog.Warn("Beacon body exceeds raw limit", "size", len(raw), "max", rawLimit)
@@ -413,12 +419,7 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 			return beaconEnvelope{}, beaconRequest{}, frameRejected
 		}
 
-		s.configMu.RLock()
-		maxPayload := s.cfg.Crypto.MaxDecryptedPayloadSize
-		s.configMu.RUnlock()
-		if maxPayload <= 0 {
-			maxPayload = 10 * 1024 * 1024 // default 10MB
-		}
+		maxPayload := s.effectiveMaxPayload()
 		if len(plaintext) > maxPayload {
 			slog.Warn("Beacon decrypted payload too large", "agent_id", envelope.UUID, "size", len(plaintext), "max", maxPayload)
 			return beaconEnvelope{}, beaconRequest{}, frameRejected
