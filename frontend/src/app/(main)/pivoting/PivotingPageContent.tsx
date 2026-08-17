@@ -16,7 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ArrowDown, ArrowLeftRight, ArrowRight, ArrowUp, Check, Info, Network, Play, PlusCircle, Radio, RotateCw, Route, Square, X } from "lucide-react";
-import { formatBytes, formatCreated, formatUptime } from "./_components/types";
+import { formatCreated, formatUptime } from "./_components/types";
+import { formatBytes } from "@/lib/utils";
 import { usePivotingData } from "./_components/usePivotingData";
 import { api } from "@/lib/api";
 import { toast } from "sonner";

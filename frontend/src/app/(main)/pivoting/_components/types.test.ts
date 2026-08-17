@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { formatBytes, formatUptime } from "./types";
+import { formatUptime } from "./types";
+import { formatBytes } from "@/lib/utils";
 
 describe("pivoting format helpers", () => {
   it("formatBytes", () => {

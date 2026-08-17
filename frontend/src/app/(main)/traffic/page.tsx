@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useApiResource } from "@/lib/hooks/useApiResource";
-import { formatTime } from "@/lib/utils";
+import { formatTime, formatBytes } from "@/lib/utils";
 import { PageContainer } from "@/components/ui/page-container";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { DataState } from "@/components/ui/data-state";
@@ -87,14 +87,6 @@ export default function TrafficPage() {
   const beacons = entries.filter(e => { const p = e.protocol || ""; return p.toLowerCase().includes("beacon"); }).length;
   const errors = entries.filter(e => { const s = e.status_code ?? 0; return s >= 400; }).length;
   const dataTransferred = entries.reduce((acc, e) => acc + (e.size ?? 0), 0);
-
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return (bytes / Math.pow(k, i)).toFixed(1) + " " + sizes[i];
-  };
 
   const getMethodStyle = (method: string) => {
     const m = method.toUpperCase();

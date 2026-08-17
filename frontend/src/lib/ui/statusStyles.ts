@@ -140,7 +140,7 @@ export function resolveHue(color: string): Hue {
 }
 
 /** Task-type → accent hue, used by task lists and chips. */
-export const taskTypeHues: Record<string, Hue> = {
+const taskTypeHues: Record<string, Hue> = {
   shell: "primary",
   screenshot: "info",
   ps: "muted",

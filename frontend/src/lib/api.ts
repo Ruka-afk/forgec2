@@ -258,7 +258,7 @@ export const api = {
 
 export { buildUrl };
 
-export type TaskStatusBase = {
+type TaskStatusBase = {
   id: number;
   result?: string;
   error?: string;
@@ -268,9 +268,9 @@ export type TaskStatusBase = {
   created?: string;
 };
 
-export type TaskRunning = TaskStatusBase & { status: "running" | "pending" };
-export type TaskCompleted = TaskStatusBase & { status: "completed"; result: string };
-export type TaskFailed = TaskStatusBase & { status: "failed"; error: string };
+type TaskRunning = TaskStatusBase & { status: "running" | "pending" };
+type TaskCompleted = TaskStatusBase & { status: "completed"; result: string };
+type TaskFailed = TaskStatusBase & { status: "failed"; error: string };
 export type TaskStatus = TaskRunning | TaskCompleted | TaskFailed;
 
 export interface PollTaskHandle {
@@ -397,7 +397,7 @@ import type { AgentStatus } from "@/types/agent";
 
 const VALID_STATUSES: readonly string[] = ["online", "stale", "offline"];
 
-export async function getAgentStatus(agentId: string): Promise<AgentStatus | "unknown"> {
+async function getAgentStatus(agentId: string): Promise<AgentStatus | "unknown"> {
   const data = await api.get<{
     Agent?: { status?: string };
     status?: string;

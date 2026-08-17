@@ -26,7 +26,7 @@ function toNormalized(r: Record<string, unknown>): NormalizedAgent {
   };
 }
 
-export interface FetchAgentListResult {
+interface FetchAgentListResult {
   agents: NormalizedAgent[];
   error: string | null;
 }

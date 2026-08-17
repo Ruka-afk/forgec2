@@ -22,7 +22,7 @@ export function downloadBase64(b64: string, filename: string, mime = "applicatio
   downloadBlob(new Blob([bytes], { type: mime }), filename);
 }
 
-export function parseFilename(header: string | null, fallback: string): string {
+function parseFilename(header: string | null, fallback: string): string {
   if (!header) return fallback;
   const m = header.match(/filename=([^;]+)/);
   return m ? m[1].trim().replace(/^"|"$/g, "") : fallback;

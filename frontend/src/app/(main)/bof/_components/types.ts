@@ -1,5 +1,7 @@
 "use client";
 
+import { toneForStatus, toneStyles } from "@/lib/ui/statusStyles";
+
 export interface BOFFile {
   ID?: string;
   id?: string;
@@ -94,18 +96,7 @@ export const quickBOFLibrary: QuickBOF[] = [
   { name: "tcp-scan", desc: "Internal TCP port scanner", arch: "x64", args: "10.0.0.1 80-443" },
 ];
 
-export const formatBytes = (bytes: number | string | undefined) => {
-  if (!bytes) return "0 B";
-  const b = Number(bytes);
-  if (b < 1024) return `${b} B`;
-  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
-  return `${(b / 1048576).toFixed(1)} MB`;
-};
-
 export const getStatusColor = (status: string) => {
-  const s = status?.toLowerCase() ?? "";
-  if (s === "success" || s === "completed") return "bg-success/15 text-success";
-  if (s === "failed") return "bg-destructive/15 text-destructive";
-  if (s === "running") return "bg-info/15 text-info";
-  return "bg-warning/15 text-warning dark:bg-warning/20 dark:text-warning";
+  const { bg, text } = toneStyles[toneForStatus((status || "").toLowerCase())];
+  return `${bg} ${text}`;
 };

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { BOFLibraryItem } from "./types";
-import { formatBytes } from "./types";
+import { formatBytes } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
 import { IconBadge } from "@/components/ui/icon-badge";

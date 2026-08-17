@@ -12,6 +12,11 @@ export function formatTime(iso?: string | null): string {
   return d.toLocaleString()
 }
 
+/** Local wall-clock time for "last update" indicators. */
+export function nowTime(): string {
+  return new Date().toLocaleTimeString()
+}
+
 export function formatSize(bytes: number | undefined | null): string {
   if (!bytes) return "-"
   const units = ["B", "KB", "MB", "GB"]
@@ -22,6 +27,18 @@ export function formatSize(bytes: number | undefined | null): string {
     i++
   }
   return `${size.toFixed(i > 0 ? 1 : 0)} ${units[i]}`
+}
+
+/** Format a byte count (numbers or numeric strings). null/undefined/"" -> "-",
+ *  0 -> "0 B". Sizes at the B level stay integral. */
+export function formatBytes(bytes: number | string | null | undefined): string {
+  if (bytes === null || bytes === undefined || bytes === "") return "-"
+  const b = Number(bytes)
+  if (isNaN(b) || b === 0) return "0 B"
+  const k = 1024
+  const units = ["B", "KB", "MB", "GB", "TB"]
+  const i = Math.min(Math.floor(Math.log(b) / Math.log(k)), units.length - 1)
+  return `${(b / Math.pow(k, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
 }
 
 export function timeAgo(

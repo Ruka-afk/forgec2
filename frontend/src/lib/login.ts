@@ -1,6 +1,6 @@
 /** Pure login helpers — unit-tested without React. */
 
-export interface LoginErrorBody {
+interface LoginErrorBody {
   error?: string;
   message?: string;
   require_totp?: boolean;

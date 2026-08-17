@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { Camera, Clock, Download, ImageIcon, Images, Maximize2, Monitor, Play, RotateCw, Square, TriangleAlert, X, Zap } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { safeImageSrc } from "@/lib/safeUrl";
+import { nowTime } from "@/lib/utils";
 
 interface ScreenshotItem {
   id?: string;
@@ -65,13 +66,13 @@ interface ScreenshotItem {
       // (e.g. a static desktop at "ultra" quality) cause zero re-render.
       if (p.data === lastFrameRef.current) return;
       lastFrameRef.current = p.data;
-      setLastUpdate(new Date().toLocaleTimeString());
+      setLastUpdate(nowTime());
       setStatus("waiting");
       setMonitoringStatus("connected");
       setScreenshot(p.data);
       if (p.width && p.height) setResolution({ width: p.width, height: p.height });
       setScreenshotGallery((prev) => [
-        { id: String(++galleryIdRef.current), data: p.data, timestamp: new Date().toLocaleTimeString(), width: p.width, height: p.height, window_name: p.windowName },
+        { id: String(++galleryIdRef.current), data: p.data, timestamp: nowTime(), width: p.width, height: p.height, window_name: p.windowName },
         ...prev,
       ].slice(0, GALLERY_CAP));
     });

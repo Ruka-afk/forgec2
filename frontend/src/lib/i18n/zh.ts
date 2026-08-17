@@ -2088,7 +2088,7 @@ export const zh: Record<string, string> = {
     "nav.beacons": "Beacon 管理",
     "nav.bloodhound": "BloodHound",
     "nav.bof": "BOF 库",
-    "nav.builds": "构建历史",
+
     "nav.campaign": "战役管理",
     "nav.chain": "链式攻击",
     "nav.chat": "操作员聊天",
@@ -2109,25 +2109,25 @@ export const zh: Record<string, string> = {
     "nav.lateral": "横向移动",
     "nav.listeners": "监听器管理",
     "nav.loot": "战利品",
-    "nav.notifications": "通知记录",
+
     "nav.ntlm": "NTLM",
     "nav.opsec": "OPSEC 守卫",
-    "nav.packer": "打包器",
+
     "nav.phishing": "钓鱼攻击",
     "nav.pivoting": "横向穿透",
     "nav.plugins": "插件",
     "nav.privesc": "权限提升",
-    "nav.profiles": "通信模板",
+
     "nav.report": "报告生成",
     "nav.roles": "角色管理",
     "nav.scanner": "网络扫描",
     "nav.scripting": "脚本控制台",
     "nav.search": "全局搜索",
     "nav.settings": "系统设置",
-    "nav.stager": "分期传输",
+
     "nav.tags": "标签管理",
-    "nav.tasks": "任务记录",
-    "nav.timeline": "时间线",
+
+
     "nav.token_store": "令牌仓库",
     "nav.toolkit": "渗透工具包",
     "nav.topology": "网络拓扑",
@@ -2875,8 +2875,8 @@ export const zh: Record<string, string> = {
     "settings.about.memory_alloc": "当前内存分配",
     "settings.about.openapi_yaml": "OpenAPI YAML",
     "settings.about.platform": "平台",
-    "settings.about.runtime_details": "运行时与环境详情",
-    "settings.about.system_information": "系统信息",
+
+
     "settings.about.total_alloc": "累计内存分配",
     "settings.about.uptime": "运行时长",
     "settings.about.version": "版本",
@@ -2984,7 +2984,7 @@ export const zh: Record<string, string> = {
     "settings.extc2.channelId": "Channel ID",
     "settings.extc2.created": "已添加",
     "settings.extc2.delete_confirm": "移除该通道？",
-    "settings.extc2.delete_title": "移除通道",
+
     "settings.extc2.noChannels": "未配置外部 C2 通道",
     "settings.extc2.save": "保存",
     "settings.extc2.saving": "正在保存…",
@@ -3019,7 +3019,7 @@ export const zh: Record<string, string> = {
     "settings.malleable.warning": "更改将立即应用到当前激活的配置",
     "settings.modules.delete_confirm": "删除模块 \\\\\\\\\\\\\\\"{name}\\\\\\\\\\\\\\\"？",
     "settings.modules.delete_failed": "删除失败",
-    "settings.modules.delete_title": "删除模块",
+
     "settings.modules.deleted": "模块已删除",
     "settings.modules.deploy": "部署",
     "settings.modules.deploy_agent": "Agent",
@@ -3481,7 +3481,7 @@ export const zh: Record<string, string> = {
     "topbar.audit_log": "审计日志",
     "topbar.logout": "退出登录",
     "topbar.mark_all_read": "全部已读",
-    "topbar.my_profile": "我的资料",
+
     "topbar.no_notifications": "暂无通知",
     "topbar.notif.agent_offline": "{name} 已离线",
     "topbar.notif.agent_online": "{name} 已上线",

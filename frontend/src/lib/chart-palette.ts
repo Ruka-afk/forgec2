@@ -6,7 +6,7 @@
  * `--chart-1..6` CSS variables so every categorical color tracks the theme.
  */
 
-export const MITRE_PHASE_ORDER = [
+const MITRE_PHASE_ORDER = [
   "Reconnaissance",
   "Resource Development",
   "Initial Access",

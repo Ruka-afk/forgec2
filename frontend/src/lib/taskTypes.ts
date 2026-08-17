@@ -1,4 +1,4 @@
-export interface TaskTypeParam {
+interface TaskTypeParam {
   name: string;
   type: string;
   required: boolean;

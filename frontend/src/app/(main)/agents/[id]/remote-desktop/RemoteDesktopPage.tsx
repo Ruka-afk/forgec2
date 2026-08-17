@@ -18,6 +18,7 @@ import { Clock, Compass, Expand, Keyboard, Maximize2, Mouse, Play, Square, Trian
 import { IconBadge } from "@/components/ui/icon-badge";
 import { useI18n } from "@/lib/i18n";
 import { safeImageSrc } from "@/lib/safeUrl";
+import { nowTime } from "@/lib/utils";
 import { isExperimentalDesktop } from "../_components/session-quality";
 import { implantBlocksDest } from "../../_components/implant-version";
 
@@ -107,7 +108,7 @@ export default function RemoteDesktopPage() {
       if (!p) return;
       if (p.data === lastFrameRef.current) return;
       lastFrameRef.current = p.data;
-      setLastUpdate(new Date().toLocaleTimeString());
+      setLastUpdate(nowTime());
       setStatus("connected");
       setScreenData(p.data);
       if (p.width) setNativeWidth(p.width);

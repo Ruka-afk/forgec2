@@ -83,3 +83,9 @@ plugins/**/*.db
 __pycache__/
 
 deploy-manifest.json
+
+# Frontend dev artifacts
+frontend/*.log
+frontend/*.err
+frontend/*.tsbuildinfo
+frontend/.next-build-output.txt

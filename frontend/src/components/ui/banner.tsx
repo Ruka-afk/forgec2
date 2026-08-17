@@ -3,7 +3,7 @@
 import { memo, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-export type BannerTone = "warning" | "destructive" | "info" | "success" | "muted";
+type BannerTone = "warning" | "destructive" | "info" | "success" | "muted";
 
 const BANNER_SURFACE: Record<BannerTone, string> = {
   warning: "border-warning/40 bg-warning/10 dark:bg-warning/20 text-warning",

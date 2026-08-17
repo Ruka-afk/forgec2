@@ -87,4 +87,4 @@ function AvatarFallback({
   );
 }
 
-export { AvatarRoot, AvatarFallback, type AvatarSize, type AvatarShape };
+export { AvatarFallback };

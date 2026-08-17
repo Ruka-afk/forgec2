@@ -34,14 +34,6 @@ export interface RPortForwardStatus {
   error?: string;
 }
 
-export function formatBytes(bytes: number): string {
-  if (!bytes || bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return (bytes / Math.pow(k, i)).toFixed(1) + " " + sizes[i];
-}
-
 export function formatCreated(d: string): string {
   if (!d) return "-";
   return formatTime(d);

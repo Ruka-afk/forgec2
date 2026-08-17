@@ -33,7 +33,8 @@ import { LootScreenshotCard } from "./_components/LootScreenshotCard";
 import KeylogContent from "./_components/KeylogContent";
 import { useLootData } from "./_components/useLootData";
 import { lootDeleteId, type LootTab } from "./_components/types";
-import { canDownloadLootExfil, formatLootBytes, isLootUrlFetch, lootExfilBytes, lootExfilFilename } from "./_components/loot-exfil";
+import { canDownloadLootExfil, isLootUrlFetch, lootExfilBytes, lootExfilFilename } from "./_components/loot-exfil";
+import { formatBytes } from "@/lib/utils";
 import type { DownloadTask } from "@/types/loot";
 
 function LootPage() {
@@ -398,7 +399,7 @@ function LootPage() {
                       <TableCell className="font-mono text-xs text-muted-foreground max-w-[280px] truncate" title={d.command}>
                         {filename || d.command || "—"}
                       </TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{formatLootBytes(lootExfilBytes(d.result))}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{formatBytes(lootExfilBytes(d.result))}</TableCell>
                       <TableCell><StatusBadge status={d.status} /></TableCell>
                       <TableCell className="text-right">
                         {canDl ? (

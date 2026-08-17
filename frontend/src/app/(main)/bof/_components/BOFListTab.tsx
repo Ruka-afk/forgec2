@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { BOFFile } from "./types";
-import { formatBytes } from "./types";
+import { formatBytes } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

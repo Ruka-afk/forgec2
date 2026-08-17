@@ -6,7 +6,7 @@ import { paths } from "./api-paths";
 import { onWSMessage } from "./wsContext";
 import type { DashboardStats } from "@/types/agent";
 
-export interface OnlineUser {
+interface OnlineUser {
   username: string;
   connected_at: string;
 }

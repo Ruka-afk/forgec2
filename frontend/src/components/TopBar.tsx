@@ -8,6 +8,7 @@ import { useTheme, type Theme } from "@/lib/theme";
 import { useAppStore } from "@/lib/store";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { nowTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { ShortcutsHelpButton } from "@/components/ShortcutsHelp";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -196,7 +197,7 @@ function NotificationDropdown() {
   const pushNotification = useCallback((type: Notification["type"], message: string) => {
     const id = notifSeq++;
     setNotifications((prev) => [
-      { id, type, message, time: new Date().toLocaleTimeString(), read: false },
+      { id, type, message, time: nowTime(), read: false },
       ...prev.slice(0, 49),
     ]);
   }, []);

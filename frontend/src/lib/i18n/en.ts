@@ -2088,7 +2088,7 @@ export const en: Record<string, string> = {
     "nav.beacons": "Beacons",
     "nav.bloodhound": "BloodHound",
     "nav.bof": "BOF Library",
-    "nav.builds": "Build History",
+
     "nav.campaign": "Campaign",
     "nav.chain": "Chain",
     "nav.chat": "Operator Chat",
@@ -2109,25 +2109,25 @@ export const en: Record<string, string> = {
     "nav.lateral": "Lateral Movement",
     "nav.listeners": "Listeners",
     "nav.loot": "Loot",
-    "nav.notifications": "Notifications",
+
     "nav.ntlm": "NTLM",
     "nav.opsec": "OPSEC Guard",
-    "nav.packer": "Payload Bundler",
+
     "nav.phishing": "Phishing",
     "nav.pivoting": "Pivoting",
     "nav.plugins": "Plugins",
     "nav.privesc": "PrivEsc",
-    "nav.profiles": "Profiles",
+
     "nav.report": "Report",
     "nav.roles": "Roles",
     "nav.scanner": "Network Scanner",
     "nav.scripting": "Script Console",
     "nav.search": "Search",
     "nav.settings": "Settings",
-    "nav.stager": "Staging Protocol",
+
     "nav.tags": "Tags",
-    "nav.tasks": "Tasks",
-    "nav.timeline": "Timeline",
+
+
     "nav.token_store": "Token Store",
     "nav.toolkit": "Exploit Toolkit",
     "nav.topology": "Network Map",
@@ -2875,8 +2875,8 @@ export const en: Record<string, string> = {
     "settings.about.memory_alloc": "Memory Alloc",
     "settings.about.openapi_yaml": "OpenAPI YAML",
     "settings.about.platform": "Platform",
-    "settings.about.runtime_details": "Runtime and environment details",
-    "settings.about.system_information": "System Information",
+
+
     "settings.about.total_alloc": "Total Alloc",
     "settings.about.uptime": "Uptime",
     "settings.about.version": "Version",
@@ -2984,7 +2984,7 @@ export const en: Record<string, string> = {
     "settings.extc2.channelId": "Channel ID",
     "settings.extc2.created": "Added",
     "settings.extc2.delete_confirm": "Remove this channel?",
-    "settings.extc2.delete_title": "Remove Channel",
+
     "settings.extc2.noChannels": "No external C2 channels configured",
     "settings.extc2.save": "Save",
     "settings.extc2.saving": "Saving...",
@@ -3019,7 +3019,7 @@ export const en: Record<string, string> = {
     "settings.malleable.warning": "Changes apply to the active profile immediately",
     "settings.modules.delete_confirm": "Delete module \\\\\\\\\\\\\\\"{name}\\\\\\\\\\\\\\\"?",
     "settings.modules.delete_failed": "Delete failed",
-    "settings.modules.delete_title": "Delete Module",
+
     "settings.modules.deleted": "Module deleted",
     "settings.modules.deploy": "Deploy",
     "settings.modules.deploy_agent": "Agent",
@@ -3481,7 +3481,7 @@ export const en: Record<string, string> = {
     "topbar.audit_log": "Audit Log",
     "topbar.logout": "Logout",
     "topbar.mark_all_read": "Mark all as read",
-    "topbar.my_profile": "My Profile",
+
     "topbar.no_notifications": "No notifications",
     "topbar.notif.agent_offline": "{name} went offline",
     "topbar.notif.agent_online": "{name} came online",

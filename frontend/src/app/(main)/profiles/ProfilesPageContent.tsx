@@ -6,6 +6,7 @@ import { useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadJSON } from "@/lib/download";
+import { nowTime } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
@@ -64,7 +65,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
         toast.error((data.error as string) || t("profiles.toast.reload_failed"));
         return;
       }
-      setLastReload(new Date().toLocaleTimeString());
+      setLastReload(nowTime());
       toast.success(t("profiles.toast.hot_reload_ok"));
       await loadActiveConfig();
       await loadMalleableSettings();

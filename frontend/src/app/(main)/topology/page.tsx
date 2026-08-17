@@ -7,6 +7,7 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { exportElementPng } from "@/lib/chartExport";
+import { nowTime } from "@/lib/utils";
 import { PageContainer } from "@/components/ui/page-container";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -244,7 +245,7 @@ export default function TopologyPage() {
   }, [loadTopology]);
   useVisibleInterval(loadTopology, 10000);
 
-  useEffect(() => { setNow(new Date().toLocaleTimeString()); }, []);
+  useEffect(() => { setNow(nowTime()); }, []);
 
   const graphContainerRef = useRef<HTMLDivElement>(null);
 
