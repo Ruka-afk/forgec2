@@ -1,5 +1,6 @@
 import { SettingsData } from "./types";
 import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Badge } from "@/components/ui/badge";
 import { Crown, User } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -16,12 +17,7 @@ export default function ProfileSection({ data }: { data: SettingsData }) {
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-primary/10 border-b border-primary/20 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><User className="w-4 h-4" /></div>
-          <div><h2 className="text-lg font-semibold text-foreground">{t("settings.profile.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.profile.subtitle")}</p></div>
-        </div>
-      </div>
+      <CardHeaderRow icon={User} tone="primary" title={t("settings.profile.title")} description={t("settings.profile.subtitle")} />
       <div className="p-4 sm:p-5">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 bg-primary/10 text-primary ring-1 ring-border/50 rounded-lg flex items-center justify-center text-2xl font-bold">

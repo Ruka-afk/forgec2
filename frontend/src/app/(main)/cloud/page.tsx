@@ -191,10 +191,10 @@ export default function CloudPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted">
-                <TableHead className="text-xs uppercase tracking-wider font-semibold">{t("cloud.col_provider")}</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider font-semibold">{t("cloud.col_access_key")}</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider font-semibold">{t("cloud.col_secret_key")}</TableHead>
-                <TableHead className="text-xs uppercase tracking-wider font-semibold">{t("cloud.col_actions")}</TableHead>
+                <TableHead>{t("cloud.col_provider")}</TableHead>
+                <TableHead>{t("cloud.col_access_key")}</TableHead>
+                <TableHead>{t("cloud.col_secret_key")}</TableHead>
+                <TableHead>{t("cloud.col_actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

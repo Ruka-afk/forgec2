@@ -12,11 +12,11 @@ import { useConfirm } from "@/lib/hooks/useConfirm";
 import { formatTime } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { Pagination } from "@/components/ui/pagination";
 import { Spinner } from "@/components/ui/spinner";
 import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
-import { IconBadge } from "@/components/ui/icon-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -147,9 +147,7 @@ export default function BloodHoundPage() {
 
       <Card className="px-4 sm:px-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${binaryStatus.uploaded ? "bg-success/15" : "bg-warning/15"}`}>
-            {binaryStatus.uploaded ? <CheckCircle className="w-5 h-5 text-success" /> : <CircleAlert className="w-5 h-5 text-warning" />}
-          </div>
+          <IconBadge icon={binaryStatus.uploaded ? CheckCircle : CircleAlert} color={binaryStatus.uploaded ? "success" : "warning"} size="lg" />
           <div>
             <div className="text-sm font-semibold text-foreground">{t("bloodhound.sharp_hound_status")}</div>
             <div className="text-xs text-muted-foreground">
@@ -243,7 +241,7 @@ export default function BloodHoundPage() {
           {results.length > 0 ? (
             <Table>
               <TableHeader>
-                <TableRow className="border-b border-border bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                <TableRow>
                   <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">ID</TableHead>
                   <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">{t("bloodhound.col_agent")}</TableHead>
                   <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5">{t("bloodhound.col_method")}</TableHead>

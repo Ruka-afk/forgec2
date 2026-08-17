@@ -8,6 +8,7 @@ import { useI18n } from "@/lib/i18n";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -115,13 +116,7 @@ export default function NotificationsSection() {
           <div className="h-20 bg-muted rounded-lg" />
         </div>
       ) : (<>
-      <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border flex items-center gap-3">
-        <div className="w-8 h-8 bg-info/15 rounded-lg flex items-center justify-center text-info"><Bell className="w-4 h-4" /></div>
-        <div>
-          <h2 className="text-sm font-semibold">{t("settings.notifications.title")}</h2>
-          <p className="text-(--fs-xs-sm) text-muted-foreground">{t("settings.notifications.subtitle")}</p>
-        </div>
-      </div>
+      <CardHeaderRow icon={Bell} tone="info" accent={false} title={t("settings.notifications.title")} description={t("settings.notifications.subtitle")} />
 
       <div className="p-4 sm:p-5 space-y-4">
         {targets.length === 0 && (

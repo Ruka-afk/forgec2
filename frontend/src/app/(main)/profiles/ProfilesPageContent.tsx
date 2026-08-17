@@ -1,5 +1,6 @@
 "use client";
 import { PageContainer } from "@/components/ui/page-container";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 
 import { useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
@@ -204,25 +205,16 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
 
       {/* Active Config Hot-Reload Card */}
       <Card className="overflow-hidden mb-6">
-        <div className="bg-success/10 border-b border-success/20 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><RotateCw className="w-4 h-4" /></div>
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">{t("profiles.active_config")}</h2>
-                <p className="text-xs text-chart-1">{t("profiles.active_config_desc")}</p>
-              </div>
-            </div>
-            <Button
-              onClick={handleReloadConfig}
-              disabled={reloading}
-              className="px-5 bg-secondary/60 hover:bg-secondary/80 text-foreground text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
-            >
-              {reloading ? <Spinner size="xs" /> : <RotateCw className="w-4 h-4" />}
-              {reloading ? t("profiles.reloading") : t("profiles.reload_config")}
-            </Button>
-          </div>
-        </div>
+        <CardHeaderRow icon={RotateCw} tone="success" title={t("profiles.active_config")} description={t("profiles.active_config_desc")} action={
+          <Button
+            onClick={handleReloadConfig}
+            disabled={reloading}
+            className="px-5 bg-secondary/60 hover:bg-secondary/80 text-foreground text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            {reloading ? <Spinner size="xs" /> : <RotateCw className="w-4 h-4" />}
+            {reloading ? t("profiles.reloading") : t("profiles.reload_config")}
+          </Button>
+        } />
         <CardContent className="p-5">
           {loadingActiveConfig ? (
             <div className="flex items-center justify-center py-6">
@@ -322,12 +314,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
 
       <TabsContent value="server">
         <Card className="overflow-hidden">
-          <div className="bg-chart-6/violet border-b border-chart-6/violet px-6 py-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Shield className="w-4 h-4" /></div>
-              <div><h2 className="text-lg font-semibold text-foreground">{t("profiles.card_title")}</h2><p className="text-xs text-chart-6">{t("profiles.card_desc")}</p></div>
-            </div>
-          </div>
+          <CardHeaderRow icon={Shield} tone="violet" title={t("profiles.card_title")} description={t("profiles.card_desc")} />
           <CardContent className="p-4 sm:p-5">
             <form onSubmit={handleSaveMalleable} className="space-y-4">
               <div className="flex items-center gap-3">
@@ -457,31 +444,22 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
             ) : (
               <div className="space-y-5">
                 <Card className="overflow-hidden">
-                  <div className="bg-primary/10 border-b border-primary/20 px-6 py-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><FileCode className="w-4 h-4" /></div>
-                        <div>
-                          <h2 className="text-lg font-semibold text-foreground">Editing: {editing.name || "untitled"}</h2>
-                          <p className="text-xs text-primary">{editing.description || "No description"}</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button onClick={handleSaveProfile}                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
-                          <Download className="w-4 h-4" />Save (Export JSON)
-                        </Button>
-                        <Button onClick={handleDuplicateProfile} variant="secondary"                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
-                          <Copy className="w-4 h-4" />Duplicate
-                        </Button>
-                        <Button onClick={handleDeleteProfile} className="h-9 px-4 bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs font-medium transition-colors flex items-center gap-1.5">
-                          <Trash2 className="w-4 h-4" />Delete
-                        </Button>
-                        <Button onClick={() => setShowPushModal(true)}                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
-                          <Send className="w-4 h-4" />Push to Agent
+                  <CardHeaderRow icon={FileCode} tone="primary" title={`Editing: ${editing.name || "untitled"}`} description={editing.description || "No description"} action={
+                    <div className="flex gap-2">
+                      <Button onClick={handleSaveProfile}                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
+                        <Download className="w-4 h-4" />Save (Export JSON)
+                      </Button>
+                      <Button onClick={handleDuplicateProfile} variant="secondary"                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
+                        <Copy className="w-4 h-4" />Duplicate
+                      </Button>
+                      <Button onClick={handleDeleteProfile} className="h-9 px-4 bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs font-medium transition-colors flex items-center gap-1.5">
+                        <Trash2 className="w-4 h-4" />Delete
+                      </Button>
+                      <Button onClick={() => setShowPushModal(true)}                         className="h-9 px-4 text-xs font-medium transition-colors flex items-center gap-1.5">
+                        <Send className="w-4 h-4" />Push to Agent
                         </Button>
                       </div>
-                    </div>
-                  </div>
+                      } />
 <CardContent className="p-4 sm:p-5">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                       <div className="space-y-4">

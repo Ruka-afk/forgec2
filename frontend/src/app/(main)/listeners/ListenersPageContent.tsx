@@ -271,7 +271,7 @@ export default function ListenersPageContent() {
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
         <Table>
-          <TableHeader className="bg-muted border-b border-border">
+          <TableHeader>
             <TableRow>
               <TableHead className="text-left py-3 px-4 sm:py-4 sm:px-6 font-medium text-muted-foreground min-w-[120px]">{t("listeners.col_name")}</TableHead>
               <TableHead className="max-sm:hidden text-left py-3 px-3 sm:py-4 sm:px-4 font-medium text-muted-foreground min-w-[80px]">{t("listeners.col_type")}</TableHead>

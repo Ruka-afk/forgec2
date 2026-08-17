@@ -9,6 +9,8 @@ import { useI18n } from "@/lib/i18n";
 import { formatTime } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
+import { StatTile } from "@/components/ui/stat-tile";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -195,32 +197,25 @@ export default function PrivescPage() {
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <Card className="p-4">
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("privesc.stat_total_checks")}</div>
-          <div className="text-2xl font-bold mt-1 text-primary">{totalChecks}</div>
+          <StatTile label={t("privesc.stat_total_checks")} value={totalChecks} tone="primary" />
         </Card>
         <Card className="p-4">
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("privesc.stat_critical")}</div>
-          <div className="text-2xl font-bold mt-1 text-destructive">{criticalCount}</div>
+          <StatTile label={t("privesc.stat_critical")} value={criticalCount} tone="destructive" />
         </Card>
         <Card className="p-4">
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("privesc.stat_high")}</div>
-          <div className="text-2xl font-bold mt-1 text-warning dark:text-warning">{highCount}</div>
+          <StatTile label={t("privesc.stat_high")} value={highCount} tone="warning" />
         </Card>
         <Card className="p-4">
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("privesc.stat_medium")}</div>
-          <div className="text-2xl font-bold mt-1 text-warning dark:text-warning">{mediumCount}</div>
+          <StatTile label={t("privesc.stat_medium")} value={mediumCount} tone="warning" />
         </Card>
         <Card className="p-4">
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("privesc.stat_low")}</div>
-          <div className="text-2xl font-bold mt-1 text-primary">{lowCount}</div>
+          <StatTile label={t("privesc.stat_low")} value={lowCount} tone="primary" />
         </Card>
       </div>
 
       <Card className="px-6 py-6">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center">
-            <ShieldAlert className="w-4 h-4" />
-          </div>
+          <IconBadge icon={ShieldAlert} color="primary" size="lg" />
           <div>
             <div className="text-sm font-semibold">{t("privesc.new_task")}</div>
             <div className="text-xs text-muted-foreground">{t("privesc.new_task_desc")}</div>
@@ -349,7 +344,7 @@ export default function PrivescPage() {
           </div>
         ) : (
           <Table>
-            <TableHeader className="bg-muted">
+            <TableHeader>
               <TableRow>
                 <TableHead className="text-xs">{t("privesc.col_time")}</TableHead>
                 <TableHead className="text-xs">{t("privesc.col_agent")}</TableHead>

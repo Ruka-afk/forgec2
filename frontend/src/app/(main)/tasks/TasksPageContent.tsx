@@ -346,7 +346,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
             className={virtualized ? "overflow-auto max-h-[min(70vh,720px)]" : "overflow-x-auto"}
           >
           <Table>
-            <TableHeader className="bg-muted/50 sticky top-0 z-10">
+            <TableHeader className="sticky top-0 z-10">
               <TableRow>
                 <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal min-w-[140px] cursor-pointer select-none" tabIndex={0} role="columnheader" aria-sort={sortKey === "created_at" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} onClick={() => toggleSort("created_at")} onKeyDown={handleSortKeyDown("created_at")}>
                   {t("tasks.col_time")} {sortIcon("created_at")}

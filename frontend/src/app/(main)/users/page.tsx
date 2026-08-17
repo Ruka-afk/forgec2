@@ -9,6 +9,7 @@ import { FieldError } from "@/components/ui/field-error";
 import { StatCard } from "@/components/ui/animated-stat-card";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { PageContainer } from "@/components/ui/page-container";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
@@ -321,7 +322,7 @@ export default function UsersPage() {
         <div className="overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted border-b border-border text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+            <TableRow>
               <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_username")}</TableHead>
               <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_role")}</TableHead>
               <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_active")}</TableHead>
@@ -516,9 +517,7 @@ export default function UsersPage() {
               {sessions.map((s) => (
                 <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border bg-card/60">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="shrink-0 w-9 h-9 rounded-lg bg-secondary/70 flex items-center justify-center">
-                      <Laptop className="w-4 h-4 text-muted-foreground" />
-                    </div>
+                    <IconBadge icon={Laptop} color="muted" size="md" />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium text-foreground font-mono">{s.ip || "-"}</span>

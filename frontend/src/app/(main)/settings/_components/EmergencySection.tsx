@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
@@ -52,17 +53,7 @@ export default function EmergencySection() {
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-destructive/10 border-b border-destructive/20 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center">
-            <AlertTriangle className={`w-4 h-4 ${armed ? "text-destructive" : ""}`} />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">{t("settings.emergency.title")}</h2>
-            <p className="text-xs text-muted-foreground">{t("settings.emergency.subtitle")}</p>
-          </div>
-        </div>
-      </div>
+      <CardHeaderRow icon={AlertTriangle} tone="destructive" title={t("settings.emergency.title")} description={t("settings.emergency.subtitle")} />
       <div className="p-4 sm:p-5 space-y-4">
         <div className="flex items-center justify-between p-4 bg-muted rounded-lg border border-border">
           <div>

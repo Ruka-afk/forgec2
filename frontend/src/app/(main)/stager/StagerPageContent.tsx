@@ -283,7 +283,7 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="text-xs uppercase tracking-wider text-muted-foreground font-semibold border-b border-border">
+                  <TableRow>
                     <TableHead className="text-left py-3 px-4 sm:py-3.5">{t("stager.col_id")}</TableHead>
                     <TableHead className="text-left py-3 px-4 sm:py-3.5">{t("stager.col_os")}</TableHead>
                     <TableHead className="text-left py-3 px-4 sm:py-3.5">{t("stager.col_arch")}</TableHead>

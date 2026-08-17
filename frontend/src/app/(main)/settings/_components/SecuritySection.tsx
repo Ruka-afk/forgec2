@@ -3,6 +3,7 @@ import { SettingsData, PasswordForm } from "./types";
 import { Spinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,12 +45,7 @@ export default function SecuritySection({
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-secondary/60 border-b border-border px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Lock className="w-4 h-4" /></div>
-          <div><h2 className="text-lg font-semibold text-foreground">{t("settings.security.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.security.subtitle")}</p></div>
-        </div>
-      </div>
+      <CardHeaderRow icon={Lock} tone="muted" title={t("settings.security.title")} description={t("settings.security.subtitle")} />
       <div className="p-4 sm:p-5 space-y-6">
         <div>
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="w-4 h-4" />{t("settings.security.change_password")}</h3>

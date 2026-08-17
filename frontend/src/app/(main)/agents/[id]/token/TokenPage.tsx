@@ -326,7 +326,7 @@ export default function AgentTokenPage() {
         </div>
         <div className="overflow-x-auto">
           <Table className="w-full text-sm">
-            <TableHeader className="bg-muted/50 border-b border-border">
+            <TableHeader>
               <TableRow className="text-xs text-muted-foreground">
                 <TableHead className="text-left px-5 py-3 font-normal">{t("agents.token_username")}</TableHead>
                 <TableHead className="text-left px-4 py-3 font-normal">{t("agents.token_integrity")}</TableHead>
@@ -355,7 +355,7 @@ export default function AgentTokenPage() {
                 const noteText = tok.note || tokenNotes[tid] || "";
                 const isEditingNote = noteTargetId === tid;
                 return (
-                  <TableRow key={tid} className={`hover:bg-muted/50 transition-colors ${active ? "bg-amber-50/30 dark:bg-warning/10" : ""}`}>
+                  <TableRow key={tid} className={`hover:bg-muted/50 transition-colors ${active ? "bg-warning/10" : ""}`}>
                     <TableCell className="px-5 py-3">
                       <span className="font-semibold text-foreground text-sm">{domain ? `${domain}\\${username}` : username || "Unknown"}</span>
                     </TableCell>

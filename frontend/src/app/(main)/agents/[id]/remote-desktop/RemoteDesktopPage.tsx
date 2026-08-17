@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Clock, Compass, Expand, Keyboard, Maximize2, Mouse, Play, Square, TriangleAlert, Users, Wifi, Zap } from "lucide-react";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { useI18n } from "@/lib/i18n";
 import { safeImageSrc } from "@/lib/safeUrl";
 import { isExperimentalDesktop } from "../_components/session-quality";
@@ -539,9 +540,7 @@ export default function RemoteDesktopPage() {
 
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
           <Card className="px-4 py-3 flex flex-row items-center gap-3 rounded-2xl">
-            <div className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary shrink-0">
-              <Mouse className="w-4 h-4" />
-            </div>
+            <IconBadge icon={Mouse} color="primary" size="md" />
             <div>
               <div className="text-(--fs-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
                 {t("agents.rdp_mouse")}
@@ -552,9 +551,7 @@ export default function RemoteDesktopPage() {
             </div>
           </Card>
           <Card className="px-4 py-3 flex flex-row items-center gap-3 rounded-2xl">
-            <div className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary shrink-0">
-              <Keyboard className="w-4 h-4" />
-            </div>
+            <IconBadge icon={Keyboard} color="primary" size="md" />
             <div>
               <div className="text-(--fs-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
                 {t("agents.rdp_keyboard")}
@@ -565,9 +562,7 @@ export default function RemoteDesktopPage() {
             </div>
           </Card>
           <Card className="px-4 py-3 flex flex-row items-center gap-3 rounded-2xl">
-            <div className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary shrink-0">
-              <Wifi className="w-4 h-4" />
-            </div>
+            <IconBadge icon={Wifi} color="primary" size="md" />
             <div>
               <div className="text-(--fs-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
                 {t("agents.rdp_connection")}

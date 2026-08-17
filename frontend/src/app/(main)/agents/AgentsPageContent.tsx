@@ -630,8 +630,8 @@ export default function AgentsPageContent() {
           className={agentVirtualized ? "overflow-auto max-h-[min(70vh,720px)]" : "overflow-auto"}
         >
         <Table className="text-sm min-w-[850px]">
-          <TableHeader className="border-b border-border bg-muted sticky top-0 z-10">
-            <TableRow className="text-xs text-muted-foreground font-semibold uppercase tracking-wider hover:bg-transparent">
+          <TableHeader className="sticky top-0 z-10">
+            <TableRow>
               <TableHead className="text-left py-3 px-4 sm:py-3.5 sm:px-5 w-10">
                 <Checkbox aria-label={t("agents.select_all")} name="input-4"
                   checked={allVisibleSelected || someVisibleSelected}

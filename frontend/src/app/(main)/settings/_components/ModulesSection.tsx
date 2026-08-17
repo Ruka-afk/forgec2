@@ -6,6 +6,7 @@ import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -153,17 +154,7 @@ export default function ModulesSection() {
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-chart-6/violet border-b border-chart-6/violet px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center">
-            <FileCode className="w-4 h-4 text-chart-6" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">{t("settings.modules.title")}</h2>
-            <p className="text-xs text-chart-6">{t("settings.modules.subtitle")}</p>
-          </div>
-        </div>
-      </div>
+      <CardHeaderRow icon={FileCode} tone="violet" title={t("settings.modules.title")} description={t("settings.modules.subtitle")} />
       <div className="p-4 sm:p-5 space-y-4">
         <p className="text-xs text-muted-foreground">{hint || t("settings.modules.hint")}</p>
         {(() => {

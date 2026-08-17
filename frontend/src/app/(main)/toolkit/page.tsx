@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { PageContainer } from "@/components/ui/page-container";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -234,10 +235,7 @@ export default function ToolkitPage() {
             </Card>
           )}
           <Card className="overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
-              <span className="text-sm font-semibold text-muted-foreground">{t("toolkit.recent_results")}</span>
-              <Badge variant="secondary" className="text-(--fs-micro-sm) px-1.5 py-0.5">{recentTasks.length}</Badge>
-            </div>
+            <CardHeaderRow accent={false} title={t("toolkit.recent_results")} action={<Badge variant="secondary" className="text-(--fs-micro-sm) px-1.5 py-0.5">{recentTasks.length}</Badge>} />
             <div className="max-h-[600px] overflow-y-auto">
               {recentTasks.length === 0 ? (
                 <div className="p-4 sm:p-5 text-center text-muted-foreground text-xs">{t("toolkit.no_results")}</div>

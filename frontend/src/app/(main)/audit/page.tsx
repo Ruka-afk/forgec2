@@ -17,6 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { DataState } from "@/components/ui/data-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download, FileText, Filter, Terminal } from "lucide-react";
+import { StatTile } from "@/components/ui/stat-tile";
+import { IconBadge } from "@/components/ui/icon-badge";
 import type { AuditLog } from "@/types/audit";
 import { useInteractStore } from "@/lib/interact-store";
 import { auditSessionId, normalizeAuditLogs } from "./_components/audit-log";
@@ -167,13 +169,8 @@ export default function AuditPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5">
         <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("audit.total_records")}</div>
-              <div className="mt-2 text-2xl font-bold">{total}</div>
-            </div>
-            <div className="w-12 h-12 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center">
-              <FileText className="w-4 h-4" />
-            </div>
+            <StatTile label={t("audit.total_records")} value={total} />
+            <IconBadge icon={FileText} color="primary" size="xl" />
           </div>
         </Card>
       </div>

@@ -2861,6 +2861,8 @@ export const zh: Record<string, string> = {
     "session.toast_minute": "会话将在 1 分钟内过期。点击「延长会话」以保持登录。",
     "session.toast_minutes": "会话将在 {minutes} 分钟内过期。点击「延长会话」以保持登录。",
     "settings.about": "关于",
+    "settings.about.subtitle": "运行时与环境详情",
+    "settings.about.title": "关于",
     "settings.about.api_docs": "API 文档",
     "settings.about.authorized_only": "仅限授权的红队操作使用",
     "settings.about.check_updates": "检查更新",

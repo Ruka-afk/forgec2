@@ -143,7 +143,7 @@ export default function CampaignPageContent() {
         <Card className="p-0 overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+              <TableRow>
                 <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_name")}</TableHead>
                 <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_status")}</TableHead>
                 <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_agents")}</TableHead>
@@ -446,7 +446,7 @@ function CampaignDetailView({
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                  <TableRow>
                     <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_hostname")}</TableHead>
                     <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">{t("campaign.col_user")}</TableHead>
                     <TableHead className="py-3 px-4 sm:py-3.5 sm:px-5">IP</TableHead>

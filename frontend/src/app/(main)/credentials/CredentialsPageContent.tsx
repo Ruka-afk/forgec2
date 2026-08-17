@@ -11,6 +11,7 @@ import { useForm } from "@/lib/hooks/useForm";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { FieldError } from "@/components/ui/field-error";
 import { PageContainer } from "@/components/ui/page-container";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Pagination } from "@/components/ui/pagination";
 import { DataState } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
@@ -418,17 +419,7 @@ export default function CredentialsPage() {
       )}
 
       <Card className="overflow-hidden">
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <div className="font-semibold text-foreground flex items-center gap-x-2">
-            <Lock className="w-4 h-4" />
-            <span>{t("cred.vault_title")}</span>
-            {filteredEntries.length > 0 && (
-              <Badge variant="outline" className="font-mono">
-                {filteredEntries.length}
-              </Badge>
-            )}
-          </div>
-        </div>
+        <CardHeaderRow accent={false} icon={Lock} tone="primary" title={t("cred.vault_title")} action={filteredEntries.length > 0 ? <Badge variant="outline" className="font-mono">{filteredEntries.length}</Badge> : undefined} />
 
         <DataState
           loading={loading}
@@ -448,7 +439,7 @@ export default function CredentialsPage() {
         >
           <div className="overflow-x-auto">
             <Table className="w-full text-sm">
-              <TableHeader className="bg-muted/50 border-b border-border">
+              <TableHeader>
                 <TableRow className="text-xs text-muted-foreground">
                   <TableHead className="text-left py-3 px-2 font-normal">
                     <Checkbox

@@ -1,5 +1,6 @@
 import { SettingsData } from "./types";
 import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { API_BASE } from "@/lib/constants";
 import { BookOpen, Cpu, Download, RotateCw } from "lucide-react";
@@ -15,12 +16,7 @@ export default function AboutSection({
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-secondary/60 border-b border-border px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Cpu className="w-4 h-4" /></div>
-          <div><h2 className="text-lg font-semibold text-foreground">{t("settings.about.system_information")}</h2><p className="text-xs text-muted-foreground">{t("settings.about.runtime_details")}</p></div>
-        </div>
-      </div>
+      <CardHeaderRow icon={Cpu} tone="muted" title={t("settings.about.title")} description={t("settings.about.subtitle")} />
       <div className="p-4 sm:p-5">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           {[

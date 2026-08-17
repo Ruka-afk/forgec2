@@ -8,6 +8,7 @@ import { Banner } from "@/components/ui/banner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
+import { StatTile } from "@/components/ui/stat-tile";
 import { PageSpinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { formatTime, cn } from "@/lib/utils";
@@ -332,16 +333,13 @@ export default function OpsecPage() {
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
             <div className="p-3 bg-muted border border-border rounded-lg">
-              <p className="text-xs text-muted-foreground">{t("opsec.rekey_active_sessions")}</p>
-              <p className="text-lg font-semibold text-foreground mt-1">{rekeyStats.active_sessions}</p>
+              <StatTile label={t("opsec.rekey_active_sessions")} value={rekeyStats.active_sessions} />
             </div>
             <div className="p-3 bg-muted border border-border rounded-lg">
-              <p className="text-xs text-muted-foreground">{t("opsec.rekey_total")}</p>
-              <p className="text-lg font-semibold text-foreground mt-1">{rekeyStats.total_rekeys}</p>
+              <StatTile label={t("opsec.rekey_total")} value={rekeyStats.total_rekeys} />
             </div>
             <div className="p-3 bg-muted border border-border rounded-lg">
-              <p className="text-xs text-muted-foreground">{t("opsec.rekey_agents")}</p>
-              <p className="text-lg font-semibold text-foreground mt-1">{rekeyStats.rekeys_by_agent?.length ?? 0}</p>
+              <StatTile label={t("opsec.rekey_agents")} value={rekeyStats.rekeys_by_agent?.length ?? 0} />
             </div>
           </div>
           {rekeyStats.rekeys_by_agent && rekeyStats.rekeys_by_agent.length > 0 ? (

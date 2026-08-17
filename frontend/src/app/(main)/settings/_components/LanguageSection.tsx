@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Info, Languages } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -12,12 +13,7 @@ export default function LanguageSection({ language, onSetLanguage }: { language:
   const { t } = useI18n();
   return (
     <Card className="overflow-hidden">
-      <div className="bg-info/10 border-b border-info/20 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Languages className="w-4 h-4" /></div>
-          <div><h2 className="text-lg font-semibold text-foreground">{t("settings.language.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.language.subtitle")}</p></div>
-        </div>
-      </div>
+      <CardHeaderRow icon={Languages} tone="info" title={t("settings.language.title")} description={t("settings.language.subtitle")} />
       <div className="p-4 sm:p-5">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {SUPPORTED_LANGS.map((lang) => (

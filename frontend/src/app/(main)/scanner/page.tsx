@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { Spinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -185,9 +186,7 @@ export default function ScannerPage() {
 
       <Card className="p-4 sm:p-5 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-info/10 dark:bg-info/30 rounded-lg flex items-center justify-center">
-            <Radar className="w-4 h-4" />
-          </div>
+          <IconBadge icon={Radar} color="info" size="lg" />
           <div>
             <div className="text-sm font-semibold text-foreground">{t("scanner.new_task")}</div>
             <div className="text-xs text-muted-foreground">{t("scanner.new_task_desc")}</div>
@@ -267,7 +266,7 @@ export default function ScannerPage() {
       {(data?.active_scans?.length ?? 0) > 0 && (
         <Card className="p-4 sm:p-5 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
           <div className="flex items-center gap-x-3 mb-4">
-            <div className="w-10 h-10 bg-warning/10 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-warning/10 ring-1 ring-warning/10 flex items-center justify-center shrink-0">
               <Spinner size="xs" />
             </div>
             <div>

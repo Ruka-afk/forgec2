@@ -1,5 +1,6 @@
 import { PurgeDays } from "./types";
 import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Wand2, Trash2 } from "lucide-react";
@@ -17,12 +18,7 @@ export default function MaintenanceSection({
   const { t } = useI18n();
   return (
     <Card className="overflow-hidden">
-      <div className="bg-warning/10 border-b border-warning/20 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Wand2 className="w-4 h-4" /></div>
-          <div><h2 className="text-lg font-semibold text-foreground">{t("settings.maintenance.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.maintenance.subtitle")}</p></div>
-        </div>
-      </div>
+      <CardHeaderRow icon={Wand2} tone="warning" title={t("settings.maintenance.title")} description={t("settings.maintenance.subtitle")} />
       <div className="p-4 sm:p-5 space-y-4">
         {[
           { labelKey: "settings.maintenance.purge_tasks", descKey: "settings.maintenance.purge_tasks_desc", type: "tasks" },

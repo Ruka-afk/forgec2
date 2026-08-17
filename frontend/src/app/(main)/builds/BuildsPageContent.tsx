@@ -368,7 +368,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
               <Card key={id} className="overflow-hidden">
                 <div className="p-4 sm:p-5">
                   <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${status === "success" ? "bg-success/10" : status === "failed" ? "bg-destructive/10" : status === "building" ? "bg-primary/10" : "bg-secondary"}`}>
+                    <div className={`w-10 h-10 rounded-xl ring-1 ring-border/50 flex items-center justify-center ${status === "success" ? "bg-success/10" : status === "failed" ? "bg-destructive/10" : status === "building" ? "bg-primary/10" : "bg-secondary"}`}>
                       {isBuilding ? <Spinner size="xs" /> : info.icon}
                     </div>
                     <div className="flex-1 min-w-0">

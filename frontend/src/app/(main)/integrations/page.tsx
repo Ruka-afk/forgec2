@@ -184,7 +184,7 @@ export default function IntegrationsPage() {
             ) : (
               integrations.map((intg, i) => (
                 <Card key={intg.id ?? `ro-${i}`} className="p-3.5 flex items-center gap-3">
-                  <div className="w-10 h-10 flex items-center justify-center rounded-lg bg-secondary text-lg text-primary">{getIcon(intg.type)}</div>
+                  <div className="w-10 h-10 flex items-center justify-center rounded-xl bg-secondary ring-1 ring-border/50 text-primary">{getIcon(intg.type)}</div>
                   <div className="flex-1 flex flex-col min-w-0">
                     <span className="text-sm font-semibold text-foreground">{intg.name}</span>
                     <span className="text-(--fs-xs-sm) uppercase text-muted-foreground">{intg.type}</span>

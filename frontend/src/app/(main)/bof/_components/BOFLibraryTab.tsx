@@ -103,7 +103,7 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
         {libraryItems.length > 0 ? (
           <Table>
             <TableHeader>
-              <TableRow className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <TableRow>
                 <TableHead className="px-5 py-3">{t("bof.col_name")}</TableHead>
                 <TableHead className="px-5 py-3">{t("bof.col_description")}</TableHead>
                 <TableHead className="px-5 py-3">{t("bof.col_arch")}</TableHead>

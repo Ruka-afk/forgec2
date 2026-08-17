@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { SettingsData } from "./types";
 import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { ErrorState } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -128,12 +129,7 @@ export default function CertificatesSection({
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-success/10 border-b border-success/20 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Shield className="w-4 h-4" /></div>
-          <div><h2 className="text-lg font-semibold text-foreground">{t("settings.certificates.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.certificates.subtitle")}</p></div>
-        </div>
-      </div>
+      <CardHeaderRow icon={Shield} tone="success" title={t("settings.certificates.title")} description={t("settings.certificates.subtitle")} />
       <div className="p-4 sm:p-5">
         {cert.subject ? (
           <>

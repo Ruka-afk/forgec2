@@ -1,5 +1,6 @@
 import { AgentForm } from "./types";
 import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,12 +19,7 @@ export default function AgentSection({
   const { t } = useI18n();
   return (
     <Card className="overflow-hidden">
-      <div className="bg-success/10 border-b border-success/20 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Bot className="w-4 h-4" /></div>
-          <div><h2 className="text-lg font-semibold text-foreground">{t("settings.agent.title")}</h2><p className="text-xs text-muted-foreground">{t("settings.agent.subtitle")}</p></div>
-        </div>
-      </div>
+      <CardHeaderRow icon={Bot} tone="success" title={t("settings.agent.title")} description={t("settings.agent.subtitle")} />
       <div className="p-4 sm:p-5">
         <form onSubmit={onSave} className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

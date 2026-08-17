@@ -211,7 +211,7 @@ export default function PhishingPageContent() {
             <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                <TableRow>
                   <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_name")}</TableHead>
                   <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_subject")}</TableHead>
                   <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_from")}</TableHead>
@@ -321,7 +321,7 @@ export default function PhishingPageContent() {
             <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                <TableRow>
                   <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_name")}</TableHead>
                   <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_status")}</TableHead>
                   <TableHead className="text-right px-4 py-3 sm:py-3.5">{t("common.total")}</TableHead>
@@ -429,7 +429,7 @@ export default function PhishingPageContent() {
             <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">
+                <TableRow>
                   <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("users.label_username")}</TableHead>
                   <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_password")}</TableHead>
                   <TableHead className="text-left px-4 py-3 sm:py-3.5">{t("phishing.col_type")}</TableHead>

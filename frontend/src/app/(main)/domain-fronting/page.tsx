@@ -9,6 +9,7 @@ import { DataSpinner } from "@/components/ui/data-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FieldError } from "@/components/ui/field-error";
 import { PageContainer } from "@/components/ui/page-container";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { toast } from "sonner";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -154,10 +155,7 @@ export default function DomainFrontingPage() {
 
       {/* Domain list */}
       <Card className="overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <h2 className="font-semibold text-foreground">{t("domain_fronting.front_domains")}</h2>
-          <span className="text-xs text-muted-foreground">{domains.length} domains</span>
-        </div>
+        <CardHeaderRow accent={false} title={t("domain_fronting.front_domains")} action={<span className="text-xs text-muted-foreground">{domains.length} domains</span>} />
 
         {loading ? (
           <div className="p-4 sm:p-5">
@@ -214,7 +212,7 @@ export default function DomainFrontingPage() {
                   <TableCell>
                     <Badge variant="outline" className={`${
                       d.healthy
-                        ? "bg-emerald-50 dark:bg-success/20 text-success dark:text-success border-success dark:border-success"
+                        ? "bg-success/15 dark:bg-success/20 text-success dark:text-success border-success dark:border-success"
                         : "bg-destructive/10 text-destructive border-destructive/20"
                     }`}>
                       {d.healthy ? "Healthy" : "Unhealthy"}
@@ -268,7 +266,7 @@ export default function DomainFrontingPage() {
       </Card>
 
       {/* Info card */}
-      <div className="mt-6 p-4 bg-amber-50 dark:bg-warning/10 border border-warning dark:border-warning rounded-xl">
+      <div className="mt-6 p-4 bg-warning/10 border border-warning/30 rounded-xl">
         <div className="flex items-start gap-3">
           <Info className="w-4 h-4" />
           <div className="text-sm text-warning dark:text-warning">

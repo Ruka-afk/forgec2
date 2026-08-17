@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { NormalizedAgent as Agent } from "@/types/agent";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -164,23 +165,15 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
 
   return (
     <Card id="scheduled" className="rounded-2xl overflow-hidden scroll-mt-20">
-      <div className="px-4 py-3 border-b border-border flex items-center gap-3">
-        <div className="w-8 h-8 bg-warning/10 rounded-lg flex items-center justify-center text-warning"><CalendarClock className="w-4 h-4" /></div>
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">{t("auto.scheduled_tasks")}</h2>
-          <p className="text-xs text-muted-foreground">{t("auto.scheduled_tasks_desc")}</p>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          {showForm && (
-            <Button variant="outline" size="sm" onClick={() => { setShowForm(false); resetForm(); }}>
-              <X className="w-4 h-4" /> {t("common.cancel")}
-            </Button>
-          )}
-          <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }} className="gap-2">
-            <Plus className="w-4 h-4" /> {t("scheduler.new_schedule")}
+      <CardHeaderRow accent={false} icon={CalendarClock} tone="warning" title={t("auto.scheduled_tasks")} description={t("auto.scheduled_tasks_desc")} action={<>        {showForm && (
+          <Button variant="outline" size="sm" onClick={() => { setShowForm(false); resetForm(); }}>
+            <X className="w-4 h-4" /> {t("common.cancel")}
           </Button>
-        </div>
-      </div>
+        )}
+        <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }} className="gap-2">
+          <Plus className="w-4 h-4" /> {t("scheduler.new_schedule")}
+        </Button>
+      </>} />
 
       <div className="p-4 sm:p-5">
         {showForm && (

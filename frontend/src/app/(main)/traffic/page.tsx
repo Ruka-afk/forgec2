@@ -6,6 +6,7 @@ import { paths } from "@/lib/api-paths";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { formatTime } from "@/lib/utils";
 import { PageContainer } from "@/components/ui/page-container";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { DataState } from "@/components/ui/data-state";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
@@ -146,15 +147,7 @@ export default function TrafficPage() {
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="bg-muted border-b border-border px-6 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-x-3">
-              <Network className="w-4 h-4" />
-              <span className="text-sm font-medium text-muted-foreground">{t("traffic.beacon_comm")}</span>
-            </div>
-            <span className="text-xs text-muted-foreground">{t("traffic.showing")} {filteredEntries.length} / {loading ? "..." : entries.length} {t("traffic.records")}</span>
-          </div>
-        </div>
+<CardHeaderRow accent={false} icon={Network} title={t("traffic.beacon_comm")} action={<span className="text-xs text-muted-foreground">{t("traffic.showing")} {filteredEntries.length} / {loading ? "..." : entries.length} {t("traffic.records")}</span>} />
 
         <DataState
           loading={loading}

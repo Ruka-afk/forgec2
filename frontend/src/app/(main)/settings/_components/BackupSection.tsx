@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -98,17 +99,7 @@ export default function BackupSection() {
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-warning/10 border-b border-warning/20 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center">
-            <Archive className="w-4 h-4 text-warning" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">{t("settings.backup.title")}</h2>
-            <p className="text-xs text-warning-foreground">{t("settings.backup.subtitle")}</p>
-          </div>
-        </div>
-      </div>
+      <CardHeaderRow icon={Archive} tone="warning" title={t("settings.backup.title")} description={t("settings.backup.subtitle")} />
 
       <div className="p-4 sm:p-5 space-y-5">
         <div className="flex flex-wrap gap-3">

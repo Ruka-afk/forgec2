@@ -6,6 +6,7 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PageContainer } from "@/components/ui/page-container";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { PageSpinner } from "@/components/ui/spinner";
@@ -254,13 +255,7 @@ export default function AutomationPage() {
         <TabsContent value="rules" className="mt-0">
           <div className="flex gap-4 flex-wrap">
             <Card className="rounded-2xl overflow-hidden flex-1 min-w-0">
-              <div className="px-4 py-3 border-b border-border flex items-center gap-3">
-                <div className="w-8 h-8 bg-warning/10 text-warning"><Zap className="w-4 h-4" /></div>
-                <div>
-                  <h2 className="text-sm font-semibold text-foreground">{t("auto.event_listeners")}</h2>
-                  <p className="text-xs text-muted-foreground">{t("auto.event_listeners_desc")}</p>
-                </div>
-              </div>
+              <CardHeaderRow accent={false} icon={Zap} tone="warning" title={t("auto.event_listeners")} description={t("auto.event_listeners_desc")} />
               <div className="p-4 sm:p-5 space-y-3">
                 {events.map((e) => (
                   <div key={e.type} className="flex items-center gap-3 p-3 bg-secondary border border-border rounded-lg">
@@ -274,13 +269,7 @@ export default function AutomationPage() {
             </Card>
 
             <Card className="rounded-2xl overflow-hidden flex-1 min-w-0">
-              <div className="px-4 py-3 border-b border-border flex items-center gap-3">
-                <div className="w-8 h-8 bg-success/10 rounded-lg flex items-center justify-center text-success"><Link className="w-4 h-4" /></div>
-                <div>
-                  <h2 className="text-sm font-semibold text-foreground">{t("auto.task_chain_rules")}</h2>
-                  <p className="text-xs text-muted-foreground">{t("auto.task_chain_desc")}</p>
-                </div>
-              </div>
+              <CardHeaderRow accent={false} icon={Link} tone="success" title={t("auto.task_chain_rules")} description={t("auto.task_chain_desc")} />
               <div className="p-4 sm:p-5">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-xs text-muted-foreground">{t("auto.rules_count", { count: eventRules.length })}</span>
@@ -342,13 +331,7 @@ export default function AutomationPage() {
 
         <TabsContent value="webhooks" className="mt-0">
           <Card className="rounded-2xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-border flex items-center gap-3">
-              <div className="w-8 h-8 bg-info/10 rounded-lg flex items-center justify-center text-info"><Globe className="w-4 h-4" /></div>
-              <div>
-                <h2 className="text-sm font-semibold text-foreground">{t("auto.webhooks")}</h2>
-                <p className="text-xs text-muted-foreground">{t("auto.webhooks_desc")}</p>
-              </div>
-            </div>
+            <CardHeaderRow accent={false} icon={Globe} tone="info" title={t("auto.webhooks")} description={t("auto.webhooks_desc")} />
             <div className="p-4 sm:p-5">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs text-muted-foreground">{t("auto.webhooks_count", { count: webhooks.length })}</span>
@@ -413,18 +396,11 @@ export default function AutomationPage() {
         <TabsContent value="alerts" className="mt-0">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="rounded-2xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-destructive/10 rounded-lg flex items-center justify-center text-destructive"><Bell className="w-4 h-4" /></div>
-                  <div>
-                    <h2 className="text-sm font-semibold text-foreground">{t("auto.alert_rules")}</h2>
-                    <p className="text-xs text-muted-foreground">{t("auto.alert_rules_desc")}</p>
-                  </div>
-                </div>
+              <CardHeaderRow accent={false} icon={Bell} tone="destructive" title={t("auto.alert_rules")} description={t("auto.alert_rules_desc")} action={
                 <Button onClick={() => setShowAlertRuleModal(true)} size="sm">
                   <Plus className="w-4 h-4" />{t("auto.new")}
                 </Button>
-              </div>
+              } />
               <div className="p-4 sm:p-5 space-y-2">
                 {alertRules.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-6">{t("auto.no_alert_rules")}</p>
@@ -446,13 +422,7 @@ export default function AutomationPage() {
             </Card>
 
             <Card className="rounded-2xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-border flex items-center gap-3">
-                <div className="w-8 h-8 bg-warning/10 rounded-lg flex items-center justify-center text-warning"><AlertTriangle className="w-4 h-4" /></div>
-                <div>
-                  <h2 className="text-sm font-semibold text-foreground">{t("auto.active_alerts")}</h2>
-                  <p className="text-xs text-muted-foreground">{t("auto.active_alerts_desc")}</p>
-                </div>
-              </div>
+              <CardHeaderRow accent={false} icon={AlertTriangle} tone="warning" title={t("auto.active_alerts")} description={t("auto.active_alerts_desc")} />
               <div className="p-4 sm:p-5 space-y-2 max-h-80 overflow-y-auto">
                 {alerts.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-6">{t("auto.no_alerts")}</p>

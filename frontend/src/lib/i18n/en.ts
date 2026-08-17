@@ -2861,6 +2861,8 @@ export const en: Record<string, string> = {
     "session.toast_minute": "Session expires in 1 minute. Click \\\\\\\\\\\\\\\"Extend Session\\\\\\\\\\\\\\\" to stay logged in.",
     "session.toast_minutes": "Session expires in {minutes} minutes. Click \\\\\\\\\\\\\\\"Extend Session\\\\\\\\\\\\\\\" to stay logged in.",
     "settings.about": "About",
+    "settings.about.subtitle": "Runtime and environment details",
+    "settings.about.title": "About",
     "settings.about.api_docs": "API Docs",
     "settings.about.authorized_only": "For authorized red team operations only",
     "settings.about.check_updates": "Check for Updates",

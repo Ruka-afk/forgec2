@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { ErrorState } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -16,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowLeftRight, BarChart2, Database, Megaphone, Play, RefreshCw, Square, Zap } from "lucide-react";
+import { ArrowLeftRight, BarChart2, Database, Megaphone, Play, RefreshCw, Square, TowerControl, Zap } from "lucide-react";
 
 import type { Agent } from "@/types/agent";
 
@@ -159,9 +160,7 @@ export default function NtlmPage() {
       <TabsContent value="coerce">
 <Card className="p-4 sm:p-5">
           <div className="flex items-center gap-x-3 mb-5">
-            <div className="w-10 h-10 bg-warning/10 dark:bg-warning/30 rounded-lg flex items-center justify-center">
-              <Megaphone className="w-4 h-4" />
-            </div>
+            <IconBadge icon={Megaphone} color="warning" size="lg" />
             <div>
               <div className="text-sm font-semibold text-foreground">{t("ntlm.coerce_title")}</div>
               <div className="text-xs text-muted-foreground">{t("ntlm.coerce_desc")}</div>
@@ -215,9 +214,7 @@ export default function NtlmPage() {
         <div className="space-y-6">
 <Card className="p-4 sm:p-5">
             <div className="flex items-center gap-x-3 mb-5">
-              <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center">
-                <ArrowLeftRight className="w-4 h-4" />
-              </div>
+<IconBadge icon={TowerControl} color="primary" size="lg" />
               <div>
                 <div className="text-sm font-semibold text-foreground">{t("ntlm.relay_title")}</div>
                 <div className="text-xs text-muted-foreground">{t("ntlm.relay_desc")}</div>
@@ -275,9 +272,7 @@ export default function NtlmPage() {
       <TabsContent value="status">
 <Card className="p-4 sm:p-5">
           <div className="flex items-center gap-x-3 mb-5">
-            <div className="w-10 h-10 bg-success/10 dark:bg-success/30 rounded-lg flex items-center justify-center">
-              <BarChart2 className="w-4 h-4" />
-            </div>
+            <IconBadge icon={BarChart2} color="success" size="lg" />
             <div>
               <div className="text-sm font-semibold text-foreground">{t("ntlm.relay_sessions")}</div>
               <div className="text-xs text-muted-foreground">{t("ntlm.relay_sessions_desc")}</div>

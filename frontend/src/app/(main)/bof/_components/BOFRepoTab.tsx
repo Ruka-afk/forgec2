@@ -231,9 +231,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
               <Card key={itemId} className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${imported ? "bg-success/15 text-success" : "bg-primary/10 text-primary"}`}>
-                      <Box className="w-4 h-4" />
-                    </div>
+<IconBadge icon={Box} color={imported ? "success" : "primary"} size="lg" />
                     <div>
                       <div className="text-sm font-semibold text-foreground font-mono">{item.name || t("bof.unnamed")}</div>
                       <div className="text-xs text-muted-foreground">

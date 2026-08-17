@@ -1,6 +1,7 @@
 "use client";
 
 import { Card } from "@/components/ui/card";
+import { CardHeaderRow } from "@/components/ui/card-header-row";
 import { Button } from "@/components/ui/button";
 import { Monitor, Info, Moon, Palette, Sun, Rows3, Rows2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -22,15 +23,7 @@ export default function ThemeSection({ theme, onApplyTheme }: { theme: string; o
 
   return (
     <Card className="overflow-hidden">
-      <div className="bg-primary/10 border-b border-primary/20 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-secondary/50 rounded-lg flex items-center justify-center"><Palette className="w-4 h-4" /></div>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">{t("settings.theme_title")}</h2>
-            <p className="text-xs text-chart-6">{t("settings.theme_subtitle")}</p>
-          </div>
-        </div>
-      </div>
+      <CardHeaderRow icon={Palette} tone="primary" title={t("settings.theme_title")} description={t("settings.theme_subtitle")} />
       <div className="p-4 sm:p-5">
         <div className="mb-6">
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">

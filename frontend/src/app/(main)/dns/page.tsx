@@ -7,6 +7,7 @@ import { useI18n } from "@/lib/i18n";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { Spinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -114,9 +115,7 @@ export default function DNSPage() {
       {/* Status Card */}
       <Card className="p-4 sm:p-5">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${status?.running ? 'bg-success/10 dark:bg-success/30' : 'bg-destructive/10 dark:bg-destructive/30'}`}>
-            {status?.running ? <Wifi className="w-4 h-4 text-success dark:text-success" /> : <WifiOff className="w-4 h-4 text-destructive dark:text-destructive" />}
-          </div>
+          <IconBadge icon={status?.running ? Wifi : WifiOff} color={status?.running ? "success" : "destructive"} size="lg" />
           <div>
             <div className="text-sm font-semibold text-foreground">{t("dns.status_title")}</div>
             <div className="text-xs text-muted-foreground">{t("dns.status_desc")}</div>
@@ -159,9 +158,7 @@ export default function DNSPage() {
       {/* Configuration Card */}
       <Card className="p-4 sm:p-5">
         <div className="flex items-center gap-x-3 mb-5">
-          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-            <Server className="w-4 h-4" />
-          </div>
+          <IconBadge icon={Server} color="primary" size="lg" />
           <div>
             <div className="text-sm font-semibold text-foreground">{t("dns.config_title")}</div>
             <div className="text-xs text-muted-foreground">{t("dns.config_desc")}</div>
@@ -225,9 +222,7 @@ export default function DNSPage() {
       {/* How It Works */}
       <Card className="p-4 sm:p-5">
         <div className="flex items-center gap-x-3 mb-4">
-          <div className="w-10 h-10 bg-warning/10 dark:bg-warning/30 rounded-lg flex items-center justify-center">
-            <Globe className="w-4 h-4 text-warning dark:text-warning" />
-          </div>
+          <IconBadge icon={Globe} color="warning" size="lg" />
           <div>
             <div className="text-sm font-semibold text-foreground">{t("dns.how_title")}</div>
             <div className="text-xs text-muted-foreground">{t("dns.how_desc")}</div>
