@@ -69,7 +69,7 @@ export default function InfrastructurePage() {
   ];
 
   return (
-    <PageContainer title={<><Server className="w-4 h-4" />{t("infra.title")}</>} subtitle={t("infra.subtitle")}>
+    <PageContainer title={t("infra.title")} icon={<Server className="w-4 h-4" />} subtitle={t("infra.subtitle")}>
 
       <DataState loading={loading} error={error} onRetry={() => { loadListeners(); if (activeSection === "redirectors") loadRedirectors(); }}>
       <Tabs value={activeSection} onValueChange={setActiveSection}>

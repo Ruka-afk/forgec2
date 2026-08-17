@@ -142,7 +142,7 @@ export default function ScriptingPage() {
   ];
 
   if (loading) {
-    return <PageSpinner />;
+    return <PageContainer title={t("scripting.title")} subtitle={t("scripting.subtitle")}><PageSpinner /></PageContainer>;
   }
 
   return (
@@ -248,7 +248,7 @@ export default function ScriptingPage() {
 
             <div className="lg:col-span-3">
               <Card className="overflow-hidden">
-                <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border flex items-center justify-between">
+                <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-3">
                     <Input id="script-name" placeholder={t("scripting.script_name_ph")} value={scriptName} onChange={e => setScriptName(e.target.value)}
                       className="bg-transparent border-none text-sm font-semibold focus:outline-none w-48 h-auto p-0" />

@@ -96,7 +96,7 @@ export default function TokensPage() {
 
   return (
     <PageContainer
-      title={<><BadgeInfo className="w-4 h-4" />{t("tokens.title")}</>}
+      title={t("tokens.title")} icon={<BadgeInfo className="w-4 h-4" />}
       subtitle={`${t("tokens.subtitle")} ${filtered.length} ${t("tokens.count")}`}
       actions={
         <Button onClick={() => refresh()} className="gap-2">

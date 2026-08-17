@@ -177,14 +177,13 @@ export default function ScannerPage() {
   };
 
   return (
-    <PageContainer title={<><Radar className="w-4 h-4" />{t("scanner.title")}</>} subtitle={t("scanner.subtitle")}>
-
-      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+    <PageContainer title={t("scanner.title")} icon={<Radar className="w-4 h-4" />} subtitle={t("scanner.subtitle")} contentClassName="space-y-6">
+      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
         <div className="font-semibold">{t("scanner.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("scanner.honesty_desc")}</div>
       </Card>
 
-      <Card className="p-4 sm:p-5 mb-6 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+      <Card className="p-4 sm:p-5 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
           <div className="w-10 h-10 bg-info/10 dark:bg-info/30 rounded-lg flex items-center justify-center">
             <Radar className="w-4 h-4" />
@@ -266,7 +265,7 @@ export default function ScannerPage() {
       </Card>
 
       {(data?.active_scans?.length ?? 0) > 0 && (
-        <Card className="p-4 sm:p-5 mb-6 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+        <Card className="p-4 sm:p-5 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
           <div className="flex items-center gap-x-3 mb-4">
             <div className="w-10 h-10 bg-warning/10 rounded-lg flex items-center justify-center">
               <Spinner size="xs" />

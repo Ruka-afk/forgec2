@@ -253,7 +253,7 @@ export default function AutomationPage() {
 
         <TabsContent value="rules" className="mt-0">
           <div className="flex gap-4 flex-wrap">
-            <Card className="rounded-2xl overflow-hidden flex-1 min-w-[300px]">
+            <Card className="rounded-2xl overflow-hidden flex-1 min-w-0">
               <div className="px-4 py-3 border-b border-border flex items-center gap-3">
                 <div className="w-8 h-8 bg-warning/10 text-warning"><Zap className="w-4 h-4" /></div>
                 <div>
@@ -273,7 +273,7 @@ export default function AutomationPage() {
               </div>
             </Card>
 
-            <Card className="rounded-2xl overflow-hidden flex-1 min-w-[300px]">
+            <Card className="rounded-2xl overflow-hidden flex-1 min-w-0">
               <div className="px-4 py-3 border-b border-border flex items-center gap-3">
                 <div className="w-8 h-8 bg-success/10 rounded-lg flex items-center justify-center text-success"><Link className="w-4 h-4" /></div>
                 <div>

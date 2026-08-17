@@ -103,7 +103,7 @@ export default function PivotingPageContent() {
   const stoppedSessions = useMemo(() => sessions.filter(s => !s.active), [sessions]);
 
   return (
-    <PageContainer title={<><Route className="w-4 h-4" />{t("pivoting.title")}</>} subtitle={t("pivoting.subtitle")} contentClassName="space-y-6" actions={<>
+    <PageContainer title={t("pivoting.title")} icon={<Route className="w-4 h-4" />} subtitle={t("pivoting.subtitle")} contentClassName="space-y-6" actions={<>
         <Button variant="outline" onClick={loadData}>
           <RotateCw className="w-4 h-4" /> Refresh
         </Button>

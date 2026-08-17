@@ -112,7 +112,7 @@ export default function DomainFrontingPage() {
   };
 
   return (
-    <PageContainer title={<><Cloud className="w-4 h-4" />{t("domain_fronting.title")}</>} subtitle={t("domain_fronting.subtitle")} actions={<>
+    <PageContainer title={t("domain_fronting.title")} icon={<Cloud className="w-4 h-4" />} subtitle={t("domain_fronting.subtitle")} contentClassName="space-y-6" actions={<>
         <Button onClick={handleCheck} disabled={checking || loading} size="sm">
           <HeartPulse className={`w-4 h-4 ${checking ? "animate-pulse" : ""}`} />
           {checking ? "Checking..." : "Health Check"}
@@ -123,7 +123,7 @@ export default function DomainFrontingPage() {
       </>}>
 
       {/* Auto-failover toggle */}
-      <Card className="p-4 sm:p-5 mb-6 flex items-center justify-between">
+      <Card className="p-4 sm:p-5 flex items-center justify-between">
         <div>
           <div className="font-medium text-foreground">{t("domain_fronting.auto_failover")}</div>
           <div className="text-sm text-muted-foreground mt-0.5">
@@ -134,7 +134,7 @@ export default function DomainFrontingPage() {
       </Card>
 
       {/* Active domain indicator */}
-      <Card className="p-4 sm:p-5 mb-6">
+      <Card className="p-4 sm:p-5">
         <div className="text-sm text-muted-foreground mb-1">{t("domain_fronting.current_active_domain")}</div>
         <div className="flex items-center gap-3">
           {domains.filter((d) => d.active).length > 0 ? (
@@ -153,7 +153,7 @@ export default function DomainFrontingPage() {
       </Card>
 
       {/* Domain list */}
-      <Card className="overflow-hidden mb-6">
+      <Card className="overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center justify-between">
           <h2 className="font-semibold text-foreground">{t("domain_fronting.front_domains")}</h2>
           <span className="text-xs text-muted-foreground">{domains.length} domains</span>
@@ -268,7 +268,7 @@ export default function DomainFrontingPage() {
       </Card>
 
       {/* Info card */}
-      <div className="mt-6 p-4 bg-amber-50 dark:bg-warning/10 border border-warning dark:border-warning rounded-2xl">
+      <div className="mt-6 p-4 bg-amber-50 dark:bg-warning/10 border border-warning dark:border-warning rounded-xl">
         <div className="flex items-start gap-3">
           <Info className="w-4 h-4" />
           <div className="text-sm text-warning dark:text-warning">

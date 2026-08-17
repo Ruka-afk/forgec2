@@ -286,6 +286,7 @@ export default function CredentialsPage() {
       <PageContainer
         title={t("cred.title")}
         subtitle={t("cred.subtitle")}
+        contentClassName="space-y-6"
         actions={
           <>
             {filteredEntries.length > 0 && (
@@ -310,14 +311,14 @@ export default function CredentialsPage() {
         }
       >
 
-      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
         <div className="font-semibold">{t("cred.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("cred.honesty_desc")}</div>
       </Card>
 
       <CredHarvestCard />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5">
         <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
           <StatTile labelBelow label={t("cred.stat_total")} value={stats.total} />
         </Card>
@@ -339,7 +340,7 @@ export default function CredentialsPage() {
         </Card>
       </div>
 
-      <Card className="p-4 sm:p-5 mb-6">
+      <Card className="p-4 sm:p-5">
         <div className="flex flex-wrap items-center gap-3">
           <SearchInput
             value={searchQuery}
@@ -396,7 +397,7 @@ export default function CredentialsPage() {
       </Card>
 
       {data?.AllTags && data.AllTags.length > 0 && (
-        <Card className="p-4 sm:p-5 mb-6">
+        <Card className="p-4 sm:p-5">
           <div className="font-medium text-sm text-foreground flex items-center gap-2 mb-3">
             <Tag className="w-4 h-4" />
             <span>{t("cred.tags")}</span>
@@ -416,7 +417,7 @@ export default function CredentialsPage() {
         </Card>
       )}
 
-      <Card className="overflow-hidden mb-8">
+      <Card className="overflow-hidden">
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
           <div className="font-semibold text-foreground flex items-center gap-x-2">
             <Lock className="w-4 h-4" />

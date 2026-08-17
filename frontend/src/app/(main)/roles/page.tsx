@@ -111,11 +111,11 @@ export default function RolesPage() {
     return perms.includes(perm) ? perms.filter(p => p !== perm) : [...perms, perm];
   };
 
-  if (loading) return <PageContainer title={<><ShieldUser className="w-4 h-4" />{t("roles.title")}</>} subtitle={t("roles.subtitle")}><PageSpinner /></PageContainer>;
+  if (loading) return <PageContainer title={t("roles.title")} icon={<ShieldUser className="w-4 h-4" />} subtitle={t("roles.subtitle")}><PageSpinner /></PageContainer>;
 
   return (
     <>
-      <PageContainer title={<><ShieldUser className="w-4 h-4" />{t("roles.title")}</>} subtitle={t("roles.subtitle")} actions={<>
+      <PageContainer title={t("roles.title")} icon={<ShieldUser className="w-4 h-4" />} subtitle={t("roles.subtitle")} actions={<>
           <Button onClick={() => setShowCreate(true)}>
             <Plus className="w-4 h-4" />{t("roles.new_role")}
           </Button>

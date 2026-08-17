@@ -298,23 +298,23 @@ export default function LateralPageContent() {
   };
 
   if (loading)
-    return <PageSpinner />;
+    return <PageContainer title={t("lateral.title")} subtitle={`SMB/WinRM/WMI/PsExec ${t("lateral.subtitle_exec")} / Pass-the-Hash`}><PageSpinner /></PageContainer>;
 
   return (
-    <PageContainer title={t("lateral.title")} subtitle={`SMB/WinRM/WMI/PsExec ${t("lateral.subtitle_exec")} / Pass-the-Hash`}>
+    <PageContainer title={t("lateral.title")} subtitle={`SMB/WinRM/WMI/PsExec ${t("lateral.subtitle_exec")} / Pass-the-Hash`} contentClassName="space-y-6">
 
-      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
         <div className="font-semibold">{t("lateral.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("lateral.honesty_desc")}</div>
       </Card>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard label={t("lateral.online_implant")} value={stats.online_agents || 0} color="success" icon={<Bot className="w-4 h-4" />} sub={t("lateral.pivot_available")} />
         <StatCard label={t("lateral.available_creds")} value={stats.total_creds || 0} color="warning" icon={<Key className="w-4 h-4" />} sub={t("lateral.cred_vault")} />
         <StatCard label={t("lateral.history_tasks")} value={stats.total_tasks || 0} color="primary" icon={<Network className="w-4 h-4" />} sub={t("lateral.lateral_records")} />
       </div>
 
-      <Card className=" mb-6 px-4">
+      <Card className=" px-4">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={GitBranch} color="primary" size="xl" className="dark:bg-primary/15" />
           <div>

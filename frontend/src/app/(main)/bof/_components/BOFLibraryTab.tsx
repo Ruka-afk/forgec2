@@ -76,21 +76,21 @@ export default function BOFLibraryTab({ libraryItems, loading, agents, onUploadL
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <Card className="p-4 flex items-center gap-3">
+        <Card className="p-4 sm:p-5 flex items-center gap-3">
           <IconBadge icon={Layers} color="primary" size="xl" className="dark:bg-primary/15" />
           <div>
             <div className="text-xl font-bold text-foreground">{libraryItems.length}</div>
             <div className="text-xs text-muted-foreground">{t("bof.library_bofs")}</div>
           </div>
         </Card>
-        <Card className="p-4 flex items-center gap-3">
+        <Card className="p-4 sm:p-5 flex items-center gap-3">
           <IconBadge icon={Cpu} color="success" size="xl" />
           <div>
             <div className="text-xl font-bold text-foreground">{libraryItems.filter((i) => i.arch === "x64").length}</div>
             <div className="text-xs text-muted-foreground">{t("bof.stat_x64")}</div>
           </div>
         </Card>
-        <Card className="p-4 flex items-center gap-3">
+        <Card className="p-4 sm:p-5 flex items-center gap-3">
           <IconBadge icon={User} color="primary" size="xl" />
           <div>
             <div className="text-xl font-bold text-foreground">{new Set(libraryItems.map((i) => i.author).filter(Boolean)).size}</div>

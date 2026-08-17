@@ -108,14 +108,13 @@ export default function CloudPage() {
   const getHostname = (a: Agent) => a.hostname || "";
   const getIP = (a: Agent) => a.ip || "";
   return (
-    <PageContainer title={t("cloud.title")} subtitle={t("cloud.subtitle")}>
-
-      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+    <PageContainer title={t("cloud.title")} subtitle={t("cloud.subtitle")} contentClassName="space-y-6">
+      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
         <div className="font-semibold">{t("cloud.experimental_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("cloud.experimental_desc")}</div>
       </Card>
 
-      <Card className="p-4 sm:p-5 mb-6">
+      <Card className="p-4 sm:p-5">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={Cloud} color="info" size="xl" />
           <div>
@@ -166,7 +165,7 @@ export default function CloudPage() {
         </div>
       </Card>
 
-      <Card className="p-4 sm:p-5 mb-6">
+      <Card className="p-4 sm:p-5">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={List} color="primary" size="xl" className="dark:bg-primary/20" />
           <div>

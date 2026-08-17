@@ -78,14 +78,13 @@ export default function ContainerPage() {
   };
 
   return (
-    <PageContainer title={t("container.title")} subtitle={t("container.subtitle")}>
-
-      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+    <PageContainer title={t("container.title")} subtitle={t("container.subtitle")} contentClassName="space-y-6">
+      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
         <div className="font-semibold">{t("container.experimental_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("container.experimental_desc")}</div>
       </Card>
 
-      <Card className="p-4 sm:p-5 mb-6">
+      <Card className="p-4 sm:p-5">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={Box} color="info" size="xl" />
           <div>
@@ -111,7 +110,7 @@ export default function ContainerPage() {
         </div>
       </Card>
 
-      <Card className="p-4 sm:p-5 mb-6">
+      <Card className="p-4 sm:p-5">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={Cpu} color="primary" size="xl" />
           <div>

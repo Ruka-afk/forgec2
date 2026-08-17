@@ -116,9 +116,9 @@ export default function NtlmPage() {
   ];
 
   return (
-    <PageContainer title={<><Zap className="w-4 h-4" />{t("ntlm.title")}</>} subtitle={t("ntlm.subtitle")}>
+    <PageContainer title={t("ntlm.title")} icon={<Zap className="w-4 h-4" />} subtitle={t("ntlm.subtitle")} contentClassName="space-y-6">
 
-      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
         <div className="font-semibold">{t("ntlm.experimental_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("ntlm.experimental_desc")}</div>
       </Card>
@@ -129,7 +129,7 @@ export default function NtlmPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>
-        <TabsList className="mb-6">
+        <TabsList>
           {tabs.map((tab) => (
             <TabsTrigger key={tab.key} value={tab.key} className="gap-2">
               {tab.icon}
@@ -139,7 +139,7 @@ export default function NtlmPage() {
         </TabsList>
 
       {/* Agent selector (common) */}
-      <Card className="p-4 sm:p-5 mb-6">
+      <Card className="p-4 sm:p-5">
         <Label className="text-xs mb-1.5">{t("ntlm.target_agent")}</Label>
         <Select value={selectedAgent || "none"} onValueChange={(v) => setSelectedAgent(v === "none" ? "" : v ?? "")}>
           <SelectTrigger className="max-w-md">
@@ -168,7 +168,7 @@ export default function NtlmPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
             <div>
               <Label className="text-xs mb-1.5">{t("ntlm.coerce_technique")}</Label>
               <Select value={coerceType} onValueChange={(v) => { if (v) setCoerceType(v); }}>
@@ -224,7 +224,7 @@ export default function NtlmPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
               <div>
                 <Label className="text-xs mb-1.5">{t("ntlm.relay_target")}</Label>
                 <Input

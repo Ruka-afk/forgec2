@@ -163,7 +163,7 @@ export default function AgentTrafficPage() {
           <EmptyState icon={Activity} title={t("agents.traffic_no_data")} />
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5 mb-6">
               <Card className="rounded-2xl">
                 <CardContent className="p-4">
                   <div className="text-xs text-muted-foreground mb-1">{t("agents.traffic_samples")}</div>

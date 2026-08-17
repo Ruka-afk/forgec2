@@ -76,15 +76,17 @@ export default function ListenerDetailPage() {
   useEffect(() => { loadDetail(); }, [loadDetail]);
 
   if (loading) {
-    return <PageSpinner />;
+    return <PageContainer><PageSpinner /></PageContainer>;
   }
 
   if (!listener) {
     return (
-      <div className="text-center py-20 text-muted-foreground">
-        <Plug className="w-4 h-4" />
-        <p>{t("listeners.not_found")}</p>
-      </div>
+      <PageContainer>
+        <div className="text-center py-20 text-muted-foreground">
+          <Plug className="w-4 h-4 mx-auto" />
+          <p className="mt-2">{t("listeners.not_found")}</p>
+        </div>
+      </PageContainer>
     );
   }
 

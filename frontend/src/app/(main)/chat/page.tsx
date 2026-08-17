@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Menu } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 interface ChatMsg {
@@ -28,11 +30,24 @@ interface ChannelInfo {
   last_time: string;
 }
 
+function ChannelRow({ channel, active, onSelect }: { channel: ChannelInfo; active: boolean; onSelect: () => void }) {
+  return (
+    <div key={channel.channel} role="button" tabIndex={0}
+      className={`flex justify-between px-2.5 py-2 rounded-lg text-xs cursor-pointer transition-colors ${active ? "bg-primary text-primary-foreground" : "hover:bg-secondary text-muted-foreground"}`}
+      onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(); } }}>
+      <span># {channel.channel}</span>
+      <span className="text-(--fs-xs-sm) text-muted-foreground">{channel.message_count}</span>
+    </div>
+  );
+}
+
 export default function ChatPage() {
   const { t } = useI18n();
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [channels, setChannels] = useState<ChannelInfo[]>([{ channel: "general", message_count: 0, last_message: "", last_time: "" }]);
   const [currentChannel, setCurrentChannel] = useState("general");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,20 +124,27 @@ export default function ChatPage() {
         </Badge>
       </PageHeader>
       <div className="flex flex-1 gap-0 rounded-lg border border-border overflow-hidden">
-        <div className="w-[200px] shrink-0 bg-card p-3 border-r border-border overflow-y-auto">
+        <aside className="hidden md:flex w-[200px] shrink-0 flex-col bg-card p-3 border-r border-border overflow-y-auto">
           <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2 m-0">{t("chat.channels")}</h4>
           {channels.map(c => (
-            <div key={c.channel} role="button" tabIndex={0}
-              className={`flex justify-between px-2.5 py-2 rounded-lg text-xs cursor-pointer transition-colors ${c.channel === currentChannel ? "bg-primary text-primary-foreground" : "hover:bg-secondary text-muted-foreground"}`}
-              onClick={() => setCurrentChannel(c.channel)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrentChannel(c.channel); } }}>
-              <span># {c.channel}</span>
-              <span className="text-(--fs-xs-sm) text-muted-foreground">{c.message_count}</span>
-            </div>
+            <ChannelRow key={c.channel} channel={c} active={c.channel === currentChannel} onSelect={() => setCurrentChannel(c.channel)} />
           ))}
-        </div>
+        </aside>
+
+        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+          <SheetContent side="left" className="w-64 p-3">
+            <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2 m-0">{t("chat.channels")}</h4>
+            {channels.map(c => (
+              <ChannelRow key={c.channel} channel={c} active={c.channel === currentChannel} onSelect={() => { setCurrentChannel(c.channel); setSidebarOpen(false); }} />
+            ))}
+          </SheetContent>
+        </Sheet>
+
         <div className="flex-1 flex flex-col">
-          <div className="px-4 py-2.5 border-b border-border bg-card">
+          <div className="px-4 py-2.5 border-b border-border bg-card flex items-center gap-2">
+            <Button variant="ghost" size="icon-sm" onClick={() => setSidebarOpen(true)} className="md:hidden shrink-0" aria-label={t("chat.toggle_channels")}>
+              <Menu className="w-4 h-4" />
+            </Button>
             <h3 className="text-sm font-semibold text-foreground m-0"># {currentChannel}</h3>
           </div>
           <DataState

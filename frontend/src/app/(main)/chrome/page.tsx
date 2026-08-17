@@ -111,7 +111,7 @@ export default function ChromeC2Page() {
   };
 
   return (
-      <PageContainer title={<span><Globe className="w-4 h-4 text-primary mr-2 inline" />{t("chrome.title")}</span>} subtitle={`${agents.length} extension agent${agents.length !== 1 ? "s" : ""} ${t("chrome.connected")}`} actions={<>
+      <PageContainer title={t("chrome.title")} icon={<Globe className="w-4 h-4 text-primary" />} subtitle={`${agents.length} extension agent${agents.length !== 1 ? "s" : ""} ${t("chrome.connected")}`} actions={<>
         <a
           href="/forgec2-chrome-c2.zip"
         >

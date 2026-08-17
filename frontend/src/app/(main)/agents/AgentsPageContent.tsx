@@ -623,7 +623,7 @@ export default function AgentsPageContent() {
       />
 
       {viewMode === "table" && (
-      <Card className="sm:rounded-2xl overflow-hidden">
+      <Card className="overflow-hidden">
         <div
           ref={agentScrollRef}
           onScroll={onAgentScroll}
@@ -763,7 +763,7 @@ export default function AgentsPageContent() {
       )}
 
       {viewMode === "grid" && !loading && beacons.length === 0 && (
-        <Card className="sm:rounded-2xl overflow-hidden">
+        <Card className="overflow-hidden">
           <EmptyState
             icon={Radio}
             title={t("agents.no_beacons")}

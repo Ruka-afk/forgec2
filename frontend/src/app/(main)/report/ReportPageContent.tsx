@@ -97,8 +97,9 @@ export default function ReportPage() {
 
   return (
     <PageContainer
-      title={<><FileText className="w-4 h-4" />{t("report.title")}</>}
+      title={t("report.title")} icon={<FileText className="w-4 h-4" />}
       subtitle={t("report.subtitle")}
+      contentClassName="space-y-6"
       actions={
         <>
           <Button onClick={handleExportPDF} variant="destructive" className="gap-x-2">
@@ -112,7 +113,7 @@ export default function ReportPage() {
       }
     >
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5">
         <StatCard color="indigo" label={t("report.stat_agents_total")} value={stats.total_agents || 0} sub={`${stats.online_agents || 0} ${t("report.online")}`} subColor="text-success" />
         <StatCard color="emerald" label={t("report.stat_task_exec")} value={stats.total_tasks || 0} sub={`${stats.success_tasks || 0} ${t("report.success")} / ${stats.failed_tasks || 0} ${t("report.failed")}`} subColor="text-muted-foreground" />
         <StatCard color="amber" label={t("report.stat_creds")} value={stats.total_creds || 0} sub={t("report.collected")} subColor="text-muted-foreground" />
@@ -122,7 +123,7 @@ export default function ReportPage() {
       <Tabs value={activeSection} onValueChange={setActiveSection}>
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
           <div className="lg:col-span-1">
-            <Card className="p-2">
+            <Card className="p-2 sticky lg:top-[96px]">
               <TabsList className="flex-col bg-transparent p-0 gap-1 w-full h-auto">
                 {SECTIONS.map((s) => (
                   <TabsTrigger key={s.key} value={s.key}

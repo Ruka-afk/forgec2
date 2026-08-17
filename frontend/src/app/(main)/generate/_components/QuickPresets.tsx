@@ -50,7 +50,7 @@ export default React.memo(function QuickPresets({ onApply }: QuickPresetsProps) 
       </div>
       <div className="flex flex-1 flex-wrap gap-3 min-w-0">
         {PRESETS.map((p) => (
-          <Card key={p.key} className="relative flex-1 min-w-[180px] p-3.5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+          <Card key={p.key} className="relative flex-1 min-w-[180px] p-4 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
             <Button
               type="button"
               variant="ghost"

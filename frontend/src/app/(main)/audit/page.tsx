@@ -157,14 +157,14 @@ export default function AuditPage() {
   };
 
   return (
-    <PageContainer title={t("audit.title")} subtitle={t("audit.subtitle")} actions={<>
+    <PageContainer title={t("audit.title")} subtitle={t("audit.subtitle")} contentClassName="space-y-6" actions={<>
         <Button onClick={handleExport}>
           <Download className="w-4 h-4" />
           <span>{t("audit.export")} CSV</span>
         </Button>
       </>}>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5">
         <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between">
             <div>
@@ -178,7 +178,7 @@ export default function AuditPage() {
         </Card>
       </div>
 
-      <Card className="p-4 mb-4">
+      <Card className="p-4 sm:p-5">
         <div className="flex flex-wrap items-center gap-3">
           <Select value={actionFilter || "all"} onValueChange={(v) => setActionFilter(v === "all" || !v ? "" : v)}>
             <SelectTrigger className="w-[180px]">

@@ -219,7 +219,7 @@ export default function OpsecPage() {
             <TableBody>
               {rules.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-16 text-muted-foreground">
+                <TableCell colSpan={5} className="text-center py-16 text-muted-foreground">
                   <EmptyState icon={ShieldCheck} title={t("opsec.empty")} message={t("opsec.empty_desc")} />
                 </TableCell>
               </TableRow>

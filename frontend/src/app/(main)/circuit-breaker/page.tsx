@@ -134,7 +134,7 @@ export default function CircuitBreakerPage() {
           <div className="text-xs text-muted-foreground mt-0.5">{t("cb.honesty_desc")}</div>
         </Card>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5">
           <StatCard label={t("cb.closed")} value={healthyCount} color="emerald" icon={<ShieldCheck className="w-4 h-4" />} sub={t("cb.closed_desc")} />
           <StatCard label={t("cb.half_open")} value={unstableCount} color="amber" icon={<AlertTriangle className="w-4 h-4" />} sub={t("cb.half_open_desc")} />
           <StatCard label={t("cb.open")} value={burnedCount} color="destructive" icon={<Radio className="w-4 h-4" />} sub={t("cb.open_desc")} />

@@ -250,9 +250,9 @@ export default function UsersPage() {
   };
 
   return (
-    <PageContainer title={<><Users className="w-4 h-4" />{t("users.title")}</>} subtitle={t("users.subtitle")} actions={<>
-        <div className="flex items-center gap-2">
-          <SearchInput value={search} onChange={setSearch} placeholder={t("users.search_placeholder")} className="w-48" label={t("common.search")} />
+    <PageContainer title={t("users.title")} icon={<Users className="w-4 h-4" />} subtitle={t("users.subtitle")} actions={<>
+        <div className="flex items-center gap-2 flex-wrap">
+          <SearchInput value={search} onChange={setSearch} placeholder={t("users.search_placeholder")} className="w-40 sm:w-48" label={t("common.search")} />
           {role === "admin" && (
             <Button onClick={() => setShowAdd(true)}>
               <Plus className="w-4 h-4" /> {t("users.add_user")}

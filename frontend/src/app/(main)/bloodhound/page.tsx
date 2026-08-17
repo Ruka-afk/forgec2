@@ -143,9 +143,9 @@ export default function BloodHoundPage() {
   const paginatedResults = results.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
-    <PageContainer title={t("bloodhound.title")} subtitle={t("bloodhound.subtitle")}>
+    <PageContainer title={t("bloodhound.title")} subtitle={t("bloodhound.subtitle")} contentClassName="space-y-6">
 
-      <Card className="px-4 sm:px-5 mb-6 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+      <Card className="px-4 sm:px-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${binaryStatus.uploaded ? "bg-success/15" : "bg-warning/15"}`}>
             {binaryStatus.uploaded ? <CheckCircle className="w-5 h-5 text-success" /> : <CircleAlert className="w-5 h-5 text-warning" />}
@@ -175,7 +175,7 @@ export default function BloodHoundPage() {
         </div>
       </Card>
 
-      <Card className="px-4 sm:px-5 mb-6 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+      <Card className="px-4 sm:px-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={PawPrint} color="primary" size="xl" />
           <div>
@@ -183,7 +183,7 @@ export default function BloodHoundPage() {
             <div className="text-xs text-muted-foreground">{t("bloodhound.new_collection_desc")}</div>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <div>
             <span className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("bloodhound.target_agent")}</span>
             <Select value={selectedAgent || "placeholder"} onValueChange={(v) => setSelectedAgent(v === "placeholder" || v === null ? "" : v)}>

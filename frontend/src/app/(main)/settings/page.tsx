@@ -229,7 +229,7 @@ export default function SettingsPage() {
       <Tabs value={activeSection} onValueChange={setActiveSection}>
         <div className="flex flex-col lg:flex-row gap-4">
           <div className="w-48 shrink-0 hidden lg:block">
-            <div className="sticky top-6 space-y-1">
+            <div className="sticky lg:top-[96px] space-y-1">
               <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground px-3 mb-2 font-semibold">{t("settings.sidebar_header")}</div>
               <TabsList className="flex-col bg-transparent p-0 gap-1 w-full h-auto">
                 {sections.map((s) => (

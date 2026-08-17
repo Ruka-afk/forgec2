@@ -1123,6 +1123,7 @@ export const en: Record<string, string> = {
     "chat.sending": "Sending...",
     "chat.subtitle": "Real-time messaging between operators",
     "chat.title": "Operator Chat",
+    "chat.toggle_channels": "Toggle channels",
     "chrome.agents": "Agents",
     "chrome.cmd_ph": "e.g. get, set, remove, clear, URL, JSON query...",
     "chrome.connected": "connected",

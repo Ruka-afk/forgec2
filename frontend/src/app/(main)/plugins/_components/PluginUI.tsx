@@ -191,7 +191,7 @@ export function PluginListItem({ plugin, actionState, onInstall, onUninstall, on
   const catInfo = PLUGIN_CATEGORIES.find((c) => c.key === cat);
 
   return (
-    <Card className="p-4 hover:shadow-lg dark:hover:shadow-black/30 transition-all">
+    <Card className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-all">
       <div className="flex items-center gap-4">
 <IconBadge icon={Puzzle} color="primary" size="xl" className="dark:bg-primary/20" />
         <div className="flex-1 min-w-0">

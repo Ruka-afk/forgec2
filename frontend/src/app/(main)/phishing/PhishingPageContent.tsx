@@ -191,7 +191,7 @@ export default function PhishingPageContent() {
     loadCampaigns();
   };
 
-  if (loading) return <PageSpinner />;
+  if (loading) return <PageContainer title={t("phishing.title")} subtitle={t("phishing.subtitle")}><PageSpinner /></PageContainer>;
 
   // ── Templates Tab ──────────────────────────────────────────────────────
 

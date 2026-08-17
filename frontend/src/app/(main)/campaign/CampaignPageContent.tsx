@@ -99,13 +99,13 @@ export default function CampaignPageContent() {
 
   return (
     <>
-      <PageContainer title={t("campaign.title")} subtitle={t("campaign.subtitle")} actions={<>
+      <PageContainer title={t("campaign.title")} subtitle={t("campaign.subtitle")} contentClassName="space-y-6" actions={<>
         <Button onClick={() => setShowCreate(true)}>
           <Plus className="w-4 h-4" />{t("campaign.new")}
         </Button>
       </>}>
 
-      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
         <div className="font-semibold">{t("campaign.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("campaign.honesty_desc")}</div>
       </Card>

@@ -1123,6 +1123,7 @@ export const zh: Record<string, string> = {
     "chat.sending": "发送中...",
     "chat.subtitle": "操作员之间的实时消息",
     "chat.title": "操作员聊天",
+    "chat.toggle_channels": "切换频道",
     "chrome.agents": "Agent",
     "chrome.cmd_ph": "例如：get、set、remove、clear、URL、JSON 查询...",
     "chrome.connected": "已连接",

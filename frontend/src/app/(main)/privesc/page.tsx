@@ -177,7 +177,7 @@ export default function PrivescPage() {
   const lowCount = findings.filter((f) => f.severity === "low").length;
 
   return (
-    <PageContainer title={<><TrendingUp className="w-4 h-4" />{t("privesc.title")}</>} subtitle={t("privesc.subtitle")} actions={<>
+    <PageContainer title={t("privesc.title")} icon={<TrendingUp className="w-4 h-4" />} subtitle={t("privesc.subtitle")} contentClassName="space-y-6" actions={<>
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" onClick={handleExportJSON}>
             <FileCode className="w-4 h-4" /> JSON
@@ -188,12 +188,12 @@ export default function PrivescPage() {
         </div>
       </>}>
 
-      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning dark:text-warning">
+      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning dark:text-warning">
         <div className="font-semibold">{t("privesc.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("privesc.honesty_desc")}</div>
       </Card>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <Card className="p-4">
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("privesc.stat_total_checks")}</div>
           <div className="text-2xl font-bold mt-1 text-primary">{totalChecks}</div>
@@ -216,7 +216,7 @@ export default function PrivescPage() {
         </Card>
       </div>
 
-      <Card className="px-6 py-6 mb-6">
+      <Card className="px-6 py-6">
         <div className="flex items-center gap-x-3 mb-5">
           <div className="w-10 h-10 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center">
             <ShieldAlert className="w-4 h-4" />
@@ -272,7 +272,7 @@ export default function PrivescPage() {
         </div>
       </Card>
 
-      <Card className="mb-6 overflow-hidden p-0">
+      <Card className="overflow-hidden p-0">
         <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-border flex items-center justify-between flex-wrap gap-3">
           <h2 className="text-lg font-semibold">{t("privesc.findings_title")} <span className="text-sm font-normal text-muted-foreground ml-2">{findings.length} </span></h2>
           <div className="flex items-center gap-2">

@@ -67,7 +67,7 @@ export default function BOFPage() {
   return (
     <PageContainer title={t("bof.title")} subtitle={t("bof.subtitle")}>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5 mb-6">
         <StatCard label={t("bof.stat_uploaded")} value={files.length} color="primary" icon={<Box className="w-4 h-4" />} iconSide="left" />
         <StatCard label={t("bof.stat_executions")} value={executions.length} color="success" icon={<Check className="w-4 h-4" />} iconSide="left" />
         <StatCard

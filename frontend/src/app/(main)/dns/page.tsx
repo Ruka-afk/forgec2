@@ -94,8 +94,8 @@ export default function DNSPage() {
 
   return (
     <PageContainer
-      title={<><Globe className="w-4 h-4" />{t("dns.title")}</>}
-      subtitle={t("dns.subtitle")}
+      title={t("dns.title")} icon={<Globe className="w-4 h-4" />}
+      subtitle={t("dns.subtitle")} contentClassName="space-y-6"
       actions={
         status?.running ? (
           <Button variant="destructive" size="sm" onClick={handleStop} disabled={actionLoading}>
@@ -112,7 +112,7 @@ export default function DNSPage() {
     >
 
       {/* Status Card */}
-      <Card className="p-4 sm:p-5 mb-6">
+      <Card className="p-4 sm:p-5">
         <div className="flex items-center gap-x-3 mb-5">
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${status?.running ? 'bg-success/10 dark:bg-success/30' : 'bg-destructive/10 dark:bg-destructive/30'}`}>
             {status?.running ? <Wifi className="w-4 h-4 text-success dark:text-success" /> : <WifiOff className="w-4 h-4 text-destructive dark:text-destructive" />}
@@ -122,7 +122,7 @@ export default function DNSPage() {
             <div className="text-xs text-muted-foreground">{t("dns.status_desc")}</div>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Card className="p-3">
             <CardContent className="p-0">
               <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.status_title")}</div>
@@ -157,7 +157,7 @@ export default function DNSPage() {
       </Card>
 
       {/* Configuration Card */}
-      <Card className="p-4 sm:p-5 mb-6">
+      <Card className="p-4 sm:p-5">
         <div className="flex items-center gap-x-3 mb-5">
           <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
             <Server className="w-4 h-4" />
@@ -167,7 +167,7 @@ export default function DNSPage() {
             <div className="text-xs text-muted-foreground">{t("dns.config_desc")}</div>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div>
             <label htmlFor="dns-domain" className="block text-xs font-semibold text-muted-foreground mb-1.5">{t("dns.field_domain")}</label>
             <Input

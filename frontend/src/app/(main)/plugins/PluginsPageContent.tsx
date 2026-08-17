@@ -230,7 +230,7 @@ export default function PluginsPage() {
   };
 
   return (
-    <PageContainer title={<><Puzzle className="w-4 h-4" />{t("plugins.title")}</>} subtitle={t("plugins.subtitle", { count: String(plugins.length) })} actions={<>
+    <PageContainer title={t("plugins.title")} icon={<Puzzle className="w-4 h-4" />} subtitle={t("plugins.subtitle", { count: String(plugins.length) })} actions={<>
         <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" size="lg" onClick={handleUpdateCheck}>
             <CheckCircle className="w-4 h-4" /> {t("plugins.check_updates")}

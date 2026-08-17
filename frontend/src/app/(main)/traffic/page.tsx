@@ -106,7 +106,7 @@ export default function TrafficPage() {
   };
 
   return (
-    <PageContainer title={t("traffic.title")} subtitle={`${t("traffic.request_log")} · C2 Beacon ${t("traffic.comm_record")}`} actions={<>
+    <PageContainer title={t("traffic.title")} subtitle={`${t("traffic.request_log")} · C2 Beacon ${t("traffic.comm_record")}`} contentClassName="space-y-6" actions={<>
         <div className="flex items-center gap-2 flex-wrap">
           <Label className="flex items-center gap-x-2 text-sm text-muted-foreground cursor-pointer">
             <Checkbox checked={autoRefresh} onCheckedChange={setAutoRefresh} />
@@ -136,7 +136,7 @@ export default function TrafficPage() {
         </div>
       </>}>
 
-      <Card className="p-4 mb-4">
+      <Card className="p-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-5">
           <StatTile centered label={t("traffic.total_requests")} value={totalRequests} tone="primary" />
           <StatTile centered label={t("traffic.beacons")} value={beacons} tone="violet" />

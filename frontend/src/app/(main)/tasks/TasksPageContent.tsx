@@ -323,7 +323,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
         </div>
       </Card>
 
-      <Card className="sm:rounded-2xl">
+      <Card>
         <DataState
           loading={loading}
           error={error}

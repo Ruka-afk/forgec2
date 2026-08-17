@@ -143,7 +143,7 @@ export default function AttackPage() {
   }
 
   return (
-    <PageContainer title={t("attack.title")} subtitle={t("attack.subtitle")} actions={<>
+    <PageContainer title={t("attack.title")} subtitle={t("attack.subtitle")} contentClassName="space-y-6" actions={<>
         <Select value={selectedAgent || "all"} onValueChange={(v) => setSelectedAgent(v === "all" ? "" : v ?? "")}>
           <SelectTrigger className="max-w-[250px]">
             <SelectValue placeholder={t("attack.all_agents")} />
@@ -161,13 +161,13 @@ export default function AttackPage() {
         </Select>
       </>}>
 
-      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
         <div className="font-semibold">{t("attack.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("attack.honesty_desc")}</div>
       </Card>
 
       {/* Summary Card */}
-      <Card className="p-4 sm:p-5 mb-6">
+      <Card className="p-4 sm:p-5">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -324,7 +324,7 @@ function PhaseCoverageCard() {
   const maxCoverage = Math.max(...phases.map((p) => p.campaigns_covered), 1);
 
   return (
-    <Card className="p-4 sm:p-5 mb-6">
+    <Card className="p-4 sm:p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-lg font-semibold text-foreground">
