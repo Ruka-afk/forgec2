@@ -410,7 +410,7 @@ function CampaignDetailView({
                 <div className="flex flex-wrap gap-1">
                   {templates.find((t) => t.name === selectedTemplate)?.steps?.map((step, i) => (
                     <Badge key={`${step.task_type}-${i}`} variant="secondary" className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs">
-                      <span className="w-2 h-2 rounded-full" style={{ background: phaseColor(step.phase) || "gray" }} />
+                      <span className="w-2 h-2 rounded-full" style={{ background: phaseColor(step.phase) }} />
                       {step.task_type}
                     </Badge>
                   )) ?? null}

@@ -164,26 +164,26 @@ export default function AgentTrafficPage() {
         ) : (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5 mb-6">
-              <Card className="rounded-2xl">
+              <Card>
                 <CardContent className="p-4">
                   <div className="text-xs text-muted-foreground mb-1">{t("agents.traffic_samples")}</div>
                   <div className="text-2xl font-bold text-foreground">{report.sample_count}</div>
                 </CardContent>
               </Card>
-              <Card className="rounded-2xl">
+              <Card>
                 <CardContent className="p-4">
                   <div className="text-xs text-muted-foreground mb-1">{t("agents.traffic_baseline_interval")}</div>
                   <div className="text-2xl font-bold text-foreground">{report.baseline_interval || "—"}s</div>
                   <div className="text-xs text-muted-foreground mt-1">{t("agents.traffic_mean", { value: report.mean_interval ? report.mean_interval.toFixed(1) : "—" })}</div>
                 </CardContent>
               </Card>
-              <Card className="rounded-2xl">
+              <Card>
                 <CardContent className="p-4">
                   <div className="text-xs text-muted-foreground mb-1">{t("agents.traffic_baseline_jitter")}</div>
                   <div className="text-2xl font-bold text-foreground">{report.baseline_jitter || "—"}%</div>
                 </CardContent>
               </Card>
-              <Card className="rounded-2xl">
+              <Card>
                 <CardContent className="p-4">
                   <div className="text-xs text-muted-foreground mb-1">{t("agents.traffic_baseline_packet")}</div>
                   <div className="text-2xl font-bold text-foreground">{report.mean_packet_size ? Math.round(report.mean_packet_size).toLocaleString() : "—"}b</div>
@@ -193,7 +193,7 @@ export default function AgentTrafficPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-              <Card className="rounded-2xl">
+              <Card>
                 <CardContent className="p-4">
                   <div className="text-xs text-muted-foreground mb-2">{t("agents.traffic_timing_regularity")}</div>
                   <div className="flex items-center gap-2">
@@ -205,7 +205,7 @@ export default function AgentTrafficPage() {
                   <div className="text-xs text-muted-foreground mt-1">{t("agents.traffic_stddev", { value: report.stddev_interval ? report.stddev_interval.toFixed(2) : "—" })}</div>
                 </CardContent>
               </Card>
-              <Card className="rounded-2xl">
+              <Card>
                 <CardContent className="p-4">
                   <div className="text-xs text-muted-foreground mb-2">{t("agents.traffic_current_suggestion")}</div>
                   {report.suggestion ? (

@@ -10,6 +10,7 @@ import { exportElementPng } from "@/lib/chartExport";
 import { nowTime } from "@/lib/utils";
 import { PageContainer } from "@/components/ui/page-container";
 import { Card } from "@/components/ui/card";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -128,14 +129,14 @@ function TopologySidebar({
         <div className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-success shadow-lg shadow-success/50"></span>
+              <StatusDot tone="success" size="md" className="shadow-lg shadow-success/50" />
               <span className="text-xs text-muted-foreground">{t("topology.legend_online")}</span>
             </div>
             <span className="text-xs font-mono text-muted-foreground">{onlineCount}</span>
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-muted-foreground"></span>
+              <StatusDot tone="muted" size="md" />
               <span className="text-xs text-muted-foreground">{t("topology.legend_offline")}</span>
             </div>
             <span className="text-xs font-mono text-muted-foreground">{offlineCount}</span>
@@ -306,15 +307,15 @@ export default function TopologyPage() {
   return (
     <PageContainer title={t("topology.title")} subtitle={useMeshSource ? t("topology.p2p_view") : t("topology.c2_view")} actions={<>
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg">
-          <span className="w-2 h-2 rounded-full bg-success animate-pulse"></span>
+          <StatusDot tone="success" size="sm" pulse />
           <span className="text-xs font-medium text-muted-foreground">{onlineCount} {t("topology.online")}</span>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg">
-          <span className="w-2 h-2 rounded-full bg-muted-foreground"></span>
+          <StatusDot tone="muted" size="sm" />
           <span className="text-xs font-medium text-muted-foreground">{offlineCount} {t("topology.offline")}</span>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg">
-          <span className="w-2 h-2 rounded-full bg-primary/100"></span>
+          <StatusDot tone="primary" size="sm" />
           <span className="text-xs font-medium text-muted-foreground">{listenerCount} {t("topology.listeners")}</span>
         </div>
         {useMeshSource && (

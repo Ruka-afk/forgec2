@@ -97,7 +97,7 @@ export default function SessionTimeoutWarning() {
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm">
       <div
-        className={`rounded-2xl border p-4 shadow-lg backdrop-blur-sm ${
+        className={`rounded-xl border p-4 shadow-lg backdrop-blur-sm ${
           urgent
             ? "border-destructive/40 bg-destructive/10"
             : "border-warning/40 bg-warning/10"

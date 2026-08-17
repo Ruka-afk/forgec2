@@ -14,6 +14,7 @@ import { PageSpinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { formatTime, cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -315,7 +316,7 @@ export default function OpsecPage() {
                 <div className="space-y-1">
                   {testResult.results.map((r) => (
                     <div key={r.rule_name} className="flex items-center gap-2 text-xs">
-                      <span className={cn("w-2 h-2 rounded-full", r.allowed ? "bg-success" : "bg-destructive")}></span>
+                       <StatusDot tone={r.allowed ? "success" : "destructive"} size="sm" />
                       <code className="text-muted-foreground">{r.rule_name}</code>
                       <span className="opacity-60">- {r.message}</span>
                     </div>
@@ -374,7 +375,7 @@ export default function OpsecPage() {
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {history.map((h) => (
                 <div key={h.id} className="flex items-start gap-3 p-3 bg-muted border border-border rounded-lg">
-                  <span className={cn("w-2 h-2 mt-1 rounded-full shrink-0", h.allowed ? "bg-success" : "bg-destructive")}></span>
+                  <StatusDot tone={h.allowed ? "success" : "destructive"} size="sm" className="mt-1 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 text-xs">
                       <code className="font-semibold text-foreground">{h.rule_name}</code>

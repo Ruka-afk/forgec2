@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Play, Plus, Workflow, History } from "lucide-react";
@@ -142,7 +143,7 @@ export function WorkflowsTab() {
             <Card key={w.id} className="p-4">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${w.enabled ? "bg-success" : "bg-muted-foreground"}`}></span>
+                   <StatusDot tone={w.enabled ? "success" : "muted"} size="sm" />
                   <h3 className="text-sm font-semibold text-foreground m-0">{w.name}</h3>
                   <Badge variant="secondary">{scopeLabel(w.scope_type, t)}</Badge>
                 </div>

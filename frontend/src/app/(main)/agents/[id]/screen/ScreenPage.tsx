@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { PageContainer } from "@/components/ui/page-container";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
@@ -318,7 +319,7 @@ interface ScreenshotItem {
             <Card className="p-4 shrink-0">
               <div className="text-xs text-muted-foreground mb-3 font-semibold uppercase tracking-wider flex items-center justify-between">
                 <span>{t("agents.screen_controls")}</span>
-                 <span className={`flex items-center gap-1.5 text-(--fs-micro-sm) font-normal ${monitoring ? "text-success" : "text-muted-foreground/70"}`}>                  <span className={`w-1.5 h-1.5 rounded-full ${monitoring ? "bg-success animate-pulse" : "bg-muted-foreground"}`}></span>                  {monitoring ? t("screen.live") : t("screen.off")}
+                 <span className={`flex items-center gap-1.5 text-(--fs-micro-sm) font-normal ${monitoring ? "text-success" : "text-muted-foreground/70"}`}>                  <StatusDot tone={monitoring ? "success" : "muted"} size="xs" pulse={monitoring} />                  {monitoring ? t("screen.live") : t("screen.off")}
                 </span>
               </div>
               <div className="space-y-3">

@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -238,7 +239,7 @@ export default function ReportPage() {
                         <TableCell className="text-xs">{a.last_seen || "-"}</TableCell>
                         <TableCell>
                           <Badge variant={a.status === "online" ? "success" : "secondary"} className="gap-1">
-                            <span className={`w-1.5 h-1.5 rounded-full ${a.status === "online" ? "bg-success" : "bg-muted-foreground"}`}></span>
+                            <StatusDot tone={a.status === "online" ? "success" : "muted"} size="xs" />
                             {a.status || "unknown"}
                           </Badge>
                         </TableCell>
@@ -344,7 +345,7 @@ export default function ReportPage() {
                         <TableCell><Badge variant="secondary" className="font-mono">{l.protocol || "-"}</Badge></TableCell>
                         <TableCell>
                           <span className={`inline-flex items-center gap-1 text-xs font-medium ${l.status === "active" ? "text-success" : "text-muted-foreground"}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${l.status === "active" ? "bg-success" : "bg-muted-foreground"}`}></span>
+                            <StatusDot tone={l.status === "active" ? "success" : "muted"} size="xs" />
                             {l.status || "-"}
                           </span>
                         </TableCell>

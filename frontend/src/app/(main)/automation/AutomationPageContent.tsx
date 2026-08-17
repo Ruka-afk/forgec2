@@ -254,7 +254,7 @@ export default function AutomationPage() {
 
         <TabsContent value="rules" className="mt-0">
           <div className="flex gap-4 flex-wrap">
-            <Card className="rounded-2xl overflow-hidden flex-1 min-w-0">
+            <Card className="overflow-hidden flex-1 min-w-0">
               <CardHeaderRow accent={false} icon={Zap} tone="warning" title={t("auto.event_listeners")} description={t("auto.event_listeners_desc")} />
               <div className="p-4 sm:p-5 space-y-3">
                 {events.map((e) => (
@@ -268,7 +268,7 @@ export default function AutomationPage() {
               </div>
             </Card>
 
-            <Card className="rounded-2xl overflow-hidden flex-1 min-w-0">
+            <Card className="overflow-hidden flex-1 min-w-0">
               <CardHeaderRow accent={false} icon={Link} tone="success" title={t("auto.task_chain_rules")} description={t("auto.task_chain_desc")} />
               <div className="p-4 sm:p-5">
                 <div className="flex items-center justify-between mb-4">
@@ -322,7 +322,7 @@ export default function AutomationPage() {
         </TabsContent>
 
         <TabsContent value="workflows" className="mt-0">
-          <Card className="rounded-2xl overflow-hidden">
+          <Card className="overflow-hidden">
             <div className="p-4 sm:p-5">
               <WorkflowsTab />
             </div>
@@ -330,7 +330,7 @@ export default function AutomationPage() {
         </TabsContent>
 
         <TabsContent value="webhooks" className="mt-0">
-          <Card className="rounded-2xl overflow-hidden">
+          <Card className="overflow-hidden">
             <CardHeaderRow accent={false} icon={Globe} tone="info" title={t("auto.webhooks")} description={t("auto.webhooks_desc")} />
             <div className="p-4 sm:p-5">
               <div className="flex items-center justify-between mb-4">
@@ -395,7 +395,7 @@ export default function AutomationPage() {
 
         <TabsContent value="alerts" className="mt-0">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className="rounded-2xl overflow-hidden">
+            <Card className="overflow-hidden">
               <CardHeaderRow accent={false} icon={Bell} tone="destructive" title={t("auto.alert_rules")} description={t("auto.alert_rules_desc")} action={
                 <Button onClick={() => setShowAlertRuleModal(true)} size="sm">
                   <Plus className="w-4 h-4" />{t("auto.new")}
@@ -421,7 +421,7 @@ export default function AutomationPage() {
               </div>
             </Card>
 
-            <Card className="rounded-2xl overflow-hidden">
+            <Card className="overflow-hidden">
               <CardHeaderRow accent={false} icon={AlertTriangle} tone="warning" title={t("auto.active_alerts")} description={t("auto.active_alerts_desc")} />
               <div className="p-4 sm:p-5 space-y-2 max-h-80 overflow-y-auto">
                 {alerts.length === 0 ? (

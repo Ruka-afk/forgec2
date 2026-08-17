@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Award, CheckCircle, CircleAlert, Code, Copy, Download, FileUp, FileDown, Globe, Info, Mail, Pencil, Plug, Plus, Rocket, Save, Server, Share2, ShieldCheck, Terminal, Trash2, WandSparkles } from "lucide-react";
@@ -179,7 +180,7 @@ export default function InfrastructurePage() {
                       </Button>
                     </div>
                   </div>
-                  <pre className="bg-card text-chart-1 p-4 rounded-2xl text-xs overflow-auto max-h-[400px] whitespace-pre-wrap font-mono leading-relaxed select-all border border-border">{configOutput}</pre>
+                   <pre className="bg-card text-chart-1 p-4 rounded-xl text-xs overflow-auto max-h-[400px] whitespace-pre-wrap font-mono leading-relaxed select-all border border-border">{configOutput}</pre>
                 </div>
               )}
             </CardContent>
@@ -210,7 +211,7 @@ export default function InfrastructurePage() {
                             <CardContent>
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-4">
-                                  <div className={`w-3 h-3 rounded-full ${rd.status === "active" ? "bg-success animate-pulse" : rd.status === "error" ? "bg-destructive" : "bg-muted-foreground"}`}></div>
+                                   <StatusDot tone={rd.status === "active" ? "success" : rd.status === "error" ? "destructive" : "muted"} size="md" pulse={rd.status === "active"} />
                                   <div>
                                     <div className="text-sm font-medium text-foreground">{rd.name}</div>
                                     <div className="text-xs text-muted-foreground mt-0.5">
@@ -423,7 +424,7 @@ export default function InfrastructurePage() {
               {rdConfig && (
                 <div>
                   <Label className="text-xs">{t("infra.generated_config")} ({rdType.toUpperCase()})</Label>
-                  <pre className="bg-card text-chart-1 p-4 rounded-2xl text-xs overflow-auto max-h-[300px] whitespace-pre-wrap font-mono leading-relaxed border border-border">{rdConfig}</pre>
+                   <pre className="bg-card text-chart-1 p-4 rounded-xl text-xs overflow-auto max-h-[300px] whitespace-pre-wrap font-mono leading-relaxed border border-border">{rdConfig}</pre>
                 </div>
               )}
 

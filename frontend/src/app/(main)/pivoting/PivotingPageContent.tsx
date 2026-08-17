@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -133,7 +134,7 @@ export default function PivotingPageContent() {
               <tab.Icon className="w-4 h-4" />
               <span>{tab.label}</span>
               {tab.key === "relay" && activeSessions.length > 0 && (
-                <span className="w-2 h-2 bg-success rounded-full animate-pulse"></span>
+                <StatusDot tone="success" size="sm" pulse />
               )}
             </TabsTrigger>
           ))}
@@ -158,7 +159,7 @@ export default function PivotingPageContent() {
                   <div key={s.id || i} className={`border rounded-lg p-4 transition-colors ${s.active ? "border-success/30 bg-success/10/50 dark:border-success/40 dark:bg-success/20" : "border-border opacity-60"}`}>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-x-3">
-                        <span className={`w-2.5 h-2.5 rounded-full ${s.active ? "bg-success animate-pulse" : "bg-muted-foreground"}`}></span>
+                         <StatusDot tone={s.active ? "success" : "muted"} size="md" pulse={s.active} />
                         <div>
                           <div className="font-medium text-sm text-foreground">{s.agent_id.substring(0, 12)}... {s.hostname && <span className="text-muted-foreground font-normal">({s.hostname})</span>}</div>
                           <div className="text-xs text-muted-foreground">Port {s.listen_port} {s.active ? "Running" : "Stopped"}  {formatCreated(s.created_at)}</div>
@@ -295,7 +296,7 @@ export default function PivotingPageContent() {
               {t("pivoting.direct_socks_desc")}
             </p>
             {agents.length > 0 ? (              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {agents.map(a => (                  <Card key={a.id} className="rounded-2xl hover:border-warning/40 dark:hover:border-warning hover:shadow-sm transition-all">
+                {agents.map(a => (                  <Card key={a.id} className="hover:border-warning/40 dark:hover:border-warning hover:shadow-sm transition-all">
                     <CardContent className="p-4">
                       <div className="flex justify-between items-center mb-1">
                         <div className="font-medium text-foreground">{a.hostname}</div>
@@ -332,7 +333,7 @@ export default function PivotingPageContent() {
                 {rportForwards.map(rf => (
                   <div key={rf.id} className={`rounded-lg p-4 transition-colors border ${rf.active ? "border-info/30 bg-info/10 dark:border-info/40 dark:bg-info/20" : "border-border opacity-60"}`}>
                     <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-x-3">                        <span className={`w-2.5 h-2.5 rounded-full ${rf.active ? "bg-info animate-pulse" : "bg-muted-foreground"}`}></span>
+                      <div className="flex items-center gap-x-3">                        <StatusDot tone={rf.active ? "info" : "muted"} size="md" pulse={rf.active} />
                         <div>                          <div className="text-sm font-medium text-foreground flex items-center gap-2">                            <span className="font-mono">{rf.remote_host}:{rf.remote_port}</span>
                             <ArrowRight className="w-4 h-4" />
                             <span className="font-mono">localhost:{rf.local_port}</span>

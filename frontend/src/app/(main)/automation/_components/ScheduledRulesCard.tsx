@@ -159,7 +159,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
   }
 
   return (
-    <Card id="scheduled" className="rounded-2xl overflow-hidden scroll-mt-20">
+    <Card id="scheduled" className="overflow-hidden scroll-mt-20">
       <CardHeaderRow accent={false} icon={CalendarClock} tone="warning" title={t("auto.scheduled_tasks")} description={t("auto.scheduled_tasks_desc")} action={<>        {showForm && (
           <Button variant="outline" size="sm" onClick={() => { setShowForm(false); resetForm(); }}>
             <X className="w-4 h-4" /> {t("common.cancel")}

@@ -51,7 +51,7 @@ interface UserSession {
 function getRoleBadge(role: string) {
   if (role === "admin")
     return { icon: <Crown className="w-2.5 h-2.5" />, key: "users.role_admin", cls: "bg-primary/10 text-primary dark:bg-primary/25 dark:text-primary" };
-  return { icon: <UserIcon className="w-2.5 h-2.5" />, key: "users.role_user", cls: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" };
+  return { icon: <UserIcon className="w-2.5 h-2.5" />, key: "users.role_user", cls: "bg-info/10 text-info" };
 }
 
 export default function UsersPage() {
@@ -283,9 +283,9 @@ export default function UsersPage() {
         <Card className="p-4">
           <div className="flex items-center gap-2 mb-2">
             <UserIcon className="w-4 h-4" />
-            <span className="text-sm font-semibold text-sky-800 dark:text-sky-300">{t("users.role_user")}</span>
+            <span className="text-sm font-semibold text-info">{t("users.role_user")}</span>
           </div>
-          <ul className="text-xs text-sky-700 dark:text-sky-400 space-y-1">
+          <ul className="text-xs text-muted-foreground space-y-1">
             <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.user_desc_1")}</li>
             <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.user_desc_2")}</li>
             <li className="flex items-start gap-1.5"><Check className="w-4 h-4" />{t("users.user_desc_3")}</li>

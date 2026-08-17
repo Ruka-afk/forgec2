@@ -14,6 +14,7 @@ import { DataError } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -228,7 +229,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                 <div className="bg-secondary rounded-lg p-3 border border-border">
                   <div className="text-xs text-muted-foreground mb-1">{t("profiles.malleable_enabled")}</div>
                   <div className="flex items-center gap-2">
-                    <span className={"inline-block w-2 h-2 rounded-full " + (activeConfig.malleable_enabled ? "bg-success" : "bg-muted-foreground")}></span>
+                     <StatusDot tone={activeConfig.malleable_enabled ? "success" : "muted"} size="sm" />
                     <span className="text-sm font-medium">{activeConfig.malleable_enabled ? "Enabled" : "Disabled"}</span>
                   </div>
                 </div>

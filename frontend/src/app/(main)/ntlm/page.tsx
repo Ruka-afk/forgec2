@@ -13,6 +13,7 @@ import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -275,7 +276,7 @@ export default function NtlmPage() {
           </div>
 
           <div className="mb-4 flex items-center gap-x-3">
-            <span className={`w-3 h-3 rounded-full ${relayStatus.running ? "bg-success animate-pulse" : "bg-muted-foreground"}`}></span>
+            <StatusDot tone={relayStatus.running ? "success" : "muted"} size="md" pulse={relayStatus.running} />
             <span className="text-sm font-medium text-foreground">
               {relayStatus.running ? `${relayStatus.count} ${t("ntlm.sessions_active")}` : t("ntlm.sessions_inactive")}
             </span>

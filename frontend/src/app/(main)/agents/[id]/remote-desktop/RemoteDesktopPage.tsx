@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/card";
 import { PageContainer } from "@/components/ui/page-container";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Clock, Compass, Expand, Keyboard, Maximize2, Mouse, Play, Square, TriangleAlert, Users, Wifi, Zap } from "lucide-react";
@@ -540,7 +541,7 @@ export default function RemoteDesktopPage() {
         </Card>
 
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
-          <Card className="px-4 py-3 flex flex-row items-center gap-3 rounded-2xl">
+          <Card className="px-4 py-3 flex flex-row items-center gap-3">
             <IconBadge icon={Mouse} color="primary" size="md" />
             <div>
               <div className="text-(--fs-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
@@ -551,7 +552,7 @@ export default function RemoteDesktopPage() {
               </div>
             </div>
           </Card>
-          <Card className="px-4 py-3 flex flex-row items-center gap-3 rounded-2xl">
+          <Card className="px-4 py-3 flex flex-row items-center gap-3">
             <IconBadge icon={Keyboard} color="primary" size="md" />
             <div>
               <div className="text-(--fs-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
@@ -562,7 +563,7 @@ export default function RemoteDesktopPage() {
               </div>
             </div>
           </Card>
-          <Card className="px-4 py-3 flex flex-row items-center gap-3 rounded-2xl">
+          <Card className="px-4 py-3 flex flex-row items-center gap-3">
             <IconBadge icon={Wifi} color="primary" size="md" />
             <div>
               <div className="text-(--fs-xs-sm) text-muted-foreground uppercase tracking-wider font-semibold">
@@ -572,9 +573,7 @@ export default function RemoteDesktopPage() {
                 <span
                    className={`inline-flex items-center gap-1 ${monitoring ? "text-success" : "text-muted-foreground/70"}`}
                 >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${monitoring ? "bg-success animate-pulse" : "bg-muted-foreground/50"}`}
-                  ></span>
+                  <StatusDot tone={monitoring ? "success" : "muted"} size="xs" pulse={monitoring} />
                   {monitoring ? t("agents.rdp_session_active") : t("agents.rdp_disconnected")}
                 </span>
               </div>

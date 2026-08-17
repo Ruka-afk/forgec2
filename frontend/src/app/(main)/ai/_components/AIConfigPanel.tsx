@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { StatusDot } from "@/components/ui/status-dot";
 import { X } from "lucide-react";
 
 interface AIConfigPanelProps {
@@ -48,7 +49,7 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-2 cursor-pointer">
-            <span className="w-2 h-2 rounded-full bg-success" />
+            <StatusDot tone="success" size="sm" />
             <span className="text-sm text-muted-foreground">{t("ai.enable_ai")}</span>
           </span>
         </div>

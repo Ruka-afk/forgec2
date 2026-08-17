@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Check, CheckCircle, CircleAlert, Info, Trash2, XCircle } from "lucide-react";
 import { formatTime } from "@/lib/utils";
+import { StatusDot } from "@/components/ui/status-dot";
 
 interface NotificationItem {
   id: number;
@@ -66,7 +67,7 @@ function NotificationRowInner({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
           <span className="font-medium text-sm">{n.title || n.type}</span>
-          {!n.read && <span className="w-2 h-2 rounded-full bg-primary shrink-0"></span>}
+          {!n.read && <StatusDot tone="primary" size="sm" className="shrink-0" />}
         </div>
         <p className="text-sm text-muted-foreground truncate">{n.message}</p>
         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">

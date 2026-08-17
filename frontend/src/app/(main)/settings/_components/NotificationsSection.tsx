@@ -109,7 +109,7 @@ export default function NotificationsSection() {
   const removeTarget = (idx: number) => setTargets((prev) => prev.filter((_, i) => i !== idx));
 
   return (
-    <Card className="rounded-2xl overflow-hidden">
+    <Card className="overflow-hidden">
       {loading ? (
         <div className="p-5 animate-pulse space-y-3">
           <div className="h-4 bg-muted rounded w-1/3" />

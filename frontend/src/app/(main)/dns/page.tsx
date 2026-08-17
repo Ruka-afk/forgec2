@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { StatusDot } from "@/components/ui/status-dot";
 import { toast } from "sonner";
 import { Globe, Play, Square, Activity, Server, Wifi, WifiOff } from "lucide-react";
 
@@ -122,7 +123,7 @@ export default function DNSPage() {
             <CardContent className="p-0">
               <div className="text-(--fs-micro-sm) uppercase tracking-wider text-muted-foreground/70 mb-1">{t("dns.status_title")}</div>
               <div className="flex items-center gap-x-2">
-                <span className={`w-2 h-2 rounded-full ${status?.running ? 'bg-success animate-pulse' : 'bg-destructive'}`} />
+                <StatusDot tone={status?.running ? "success" : "destructive"} size="sm" pulse={!!status?.running} />
                 <span className="text-sm font-semibold text-foreground">{status?.running ? t("common.online") : t("common.offline")}</span>
               </div>
             </CardContent>
