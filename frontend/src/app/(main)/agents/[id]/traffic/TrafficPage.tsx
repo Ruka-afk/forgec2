@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageContainer } from "@/components/ui/page-container";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -112,12 +113,12 @@ export default function AgentTrafficPage() {
   };
 
   if (loading) {
-    return <PageSpinner />;
+    return <PageContainer><PageSpinner /></PageContainer>;
   }
 
   if (loadError) {
     return (
-      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
+      <PageContainer className="space-y-6">
         <Card className="p-4 sm:p-5">
           <ErrorState
             title={t("agents.traffic_load_failed")}
@@ -126,12 +127,12 @@ export default function AgentTrafficPage() {
             className="mx-auto max-w-md"
           />
         </Card>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
+    <PageContainer className="space-y-6">
       <Card className="p-4 sm:p-5">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-foreground">{t("agents.traffic_title")}</h2>
@@ -270,6 +271,6 @@ export default function AgentTrafficPage() {
       </Card>
 
 
-    </div>
+    </PageContainer>
   );
 }

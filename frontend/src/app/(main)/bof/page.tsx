@@ -57,9 +57,11 @@ export default function BOFPage() {
 
   if (loading)
     return (
-      <div className="text-muted-foreground py-8 text-center">
-        <Spinner />
-      </div>
+      <PageContainer title={t("bof.title")} subtitle={t("bof.subtitle")}>
+        <div className="flex items-center justify-center py-16">
+          <Spinner />
+        </div>
+      </PageContainer>
     );
 
   return (

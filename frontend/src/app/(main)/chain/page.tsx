@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 
-import { PageSpinner } from "@/components/UI";
+import { PageSpinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { Card } from "@/components/ui/card";

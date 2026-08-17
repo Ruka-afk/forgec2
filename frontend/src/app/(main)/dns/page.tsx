@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

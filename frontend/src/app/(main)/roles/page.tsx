@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { EmptyState, PageSpinner } from "@/components/UI";
+import { PageSpinner } from "@/components/ui/spinner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { toast } from "sonner";
@@ -110,7 +111,7 @@ export default function RolesPage() {
     return perms.includes(perm) ? perms.filter(p => p !== perm) : [...perms, perm];
   };
 
-  if (loading) return <PageSpinner />;
+  if (loading) return <PageContainer title={<><ShieldUser className="w-4 h-4" />{t("roles.title")}</>} subtitle={t("roles.subtitle")}><PageSpinner /></PageContainer>;
 
   return (
     <>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { EmptyState, Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { ErrorState } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";

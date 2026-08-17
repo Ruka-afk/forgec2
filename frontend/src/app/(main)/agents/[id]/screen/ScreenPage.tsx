@@ -8,6 +8,7 @@ import { paths } from "@/lib/api-paths";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
+import { PageContainer } from "@/components/ui/page-container";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -222,7 +223,7 @@ interface ScreenshotItem {
   const indicator = statusIndicator();
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <PageContainer>
       <div className="flex flex-col h-[calc(100vh-4rem)]">        <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
@@ -424,6 +425,6 @@ interface ScreenshotItem {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageContainer>
   );
 }

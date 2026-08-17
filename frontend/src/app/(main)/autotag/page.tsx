@@ -4,7 +4,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { EmptyState } from "@/components/UI";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

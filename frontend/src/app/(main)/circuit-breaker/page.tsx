@@ -112,7 +112,7 @@ export default function CircuitBreakerPage() {
   const burnedCount = listeners.filter(l => l.status === "burned").length;
   const unstableCount = listeners.filter(l => l.status === "unstable").length;
 
-  if (loading) return <PageSpinner />;
+  if (loading) return <PageContainer title={t("cb.title")} subtitle={t("cb.subtitle")}><PageSpinner /></PageContainer>;
 
   return (
     <>

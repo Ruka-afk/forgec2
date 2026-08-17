@@ -7,7 +7,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
-import { PageSpinner } from "@/components/UI";
+import { PageSpinner } from "@/components/ui/spinner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

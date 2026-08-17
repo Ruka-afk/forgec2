@@ -62,7 +62,7 @@ function SearchContent() {
   }, [query, doSearch]);
 
   return (
-    <PageContainer title={t("search.title")}>
+    <>
       <p className="text-sm text-muted-foreground mb-6">
         {query ? (
           <>{t("search.results_for")} <span className="font-medium text-foreground">&ldquo;{query}&rdquo;</span></>
@@ -107,23 +107,22 @@ function SearchContent() {
           ))}
         </div>
       )}
-    </PageContainer>
+    </>
   );
 }
 
 export default function SearchPage() {
   const { t } = useI18n();
   return (
-    <Suspense fallback={
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
-          <div className="text-xl font-semibold tracking-tight text-foreground leading-tight mb-1">{t("search.title")}</div>
+    <PageContainer title={t("search.title")}>
+      <Suspense fallback={
         <div className="flex items-center gap-3 p-4 text-muted-foreground">
           <Spinner />
           <span className="text-sm">{t("common.loading")}</span>
         </div>
-      </div>
-    }>
-      <SearchContent />
-    </Suspense>
+      }>
+        <SearchContent />
+      </Suspense>
+    </PageContainer>
   );
 }

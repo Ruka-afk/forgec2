@@ -7,7 +7,7 @@ import { downloadText, downloadJSON } from "@/lib/download";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

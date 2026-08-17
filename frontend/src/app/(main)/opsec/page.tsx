@@ -185,7 +185,7 @@ export default function OpsecPage() {
     setShowRuleModal(true);
   };
 
-  if (loading) return <PageSpinner />;
+  if (loading) return <PageContainer title={t("opsec.title")} subtitle={t("opsec.subtitle")}><PageSpinner /></PageContainer>;
 
   return (
     <>

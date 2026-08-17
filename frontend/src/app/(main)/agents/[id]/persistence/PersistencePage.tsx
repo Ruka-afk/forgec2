@@ -11,6 +11,7 @@ import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Spinner, PageSpinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { PageContainer } from "@/components/ui/page-container";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CalendarCheck, Cog, Boxes, FolderOpen, Puzzle, Server, Settings } from "lucide-react";
@@ -146,12 +147,12 @@ export default function AgentPersistencePage() {
   const hostname = agent?.hostname || t("agents.unknown");
 
   if (loading) {
-    return <PageSpinner />;
+    return <PageContainer><PageSpinner /></PageContainer>;
   }
 
   if (!agent) {
     return (
-      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageContainer>
         <div className="text-center py-20">
           <Bug className="w-4 h-4" aria-hidden="true" />
           <h2 className="text-xl font-semibold text-foreground mb-2">{t("agents.persistence_not_found_title")}</h2>
@@ -160,12 +161,12 @@ export default function AgentPersistencePage() {
               {t("agents.persistence_back_to_agents")}
           </Button>
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <PageContainer>
       <Card className="p-4 sm:p-5 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -299,6 +300,6 @@ export default function AgentPersistencePage() {
         </Card>
       </div>
       {confirmDialog.modal}
-    </div>
+    </PageContainer>
   );
 }

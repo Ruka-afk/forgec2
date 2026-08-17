@@ -10,6 +10,7 @@ import { useI18n } from "@/lib/i18n";
 import { Spinner, PageSpinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { PageContainer } from "@/components/ui/page-container";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -155,11 +156,11 @@ export default function AgentConfigPage() {
   };
 
   if (loading) {
-    return <PageSpinner />;
+    return <PageContainer><PageSpinner /></PageContainer>;
   }
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
+    <PageContainer className="space-y-6">
       {hasPending && (
         <div className="bg-warning/15 border border-warning/30 rounded-lg px-4 py-3 text-sm text-warning-foreground flex items-center gap-2">
           <Clock className="w-4 h-4" />
@@ -354,6 +355,6 @@ export default function AgentConfigPage() {
           </div>
         </div>
       </Card>
-    </div>
+    </PageContainer>
   );
 }

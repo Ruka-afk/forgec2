@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageContainer } from "@/components/ui/page-container";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { useInteractStore } from "@/lib/interact-store";
@@ -323,7 +324,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
 
   if (loading) {
     return (
-      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageContainer>
         <div className="space-y-4">
           <Skeleton className="h-4 w-24" />
           <Card className="p-4 sm:p-5"><div className="flex items-center gap-4">
@@ -332,13 +333,13 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
           </div></Card>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[1,2,3,4].map((n) => (<Card key={n} className="p-4"><Skeleton className="h-3 w-16 mb-2" /><Skeleton className="h-4 w-24" /></Card>))}</div>
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   if (!data) {
     return (
-      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+      <PageContainer>
         <div className="text-center py-20">
           <Bug className="w-4 h-4" />
           <h2 className="text-xl font-semibold tracking-tight text-foreground leading-tight mb-2">{loadError ? t("agents.detail_load_failed") : t("agents.detail_not_found")}</h2>
@@ -352,12 +353,12 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             )}
           </div>
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="relative max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <PageContainer className="relative">
       {loadError && (
         <Banner tone="destructive" className="mb-3" action={<Button variant="ghost" size="sm" onClick={() => loadDetail()}>{t("agents.detail_retry")}</Button>}>
           {t("agents.detail_load_error_msg")}
@@ -520,6 +521,6 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
           </DialogContent>
         </Dialog>
       )}
-    </div>
+    </PageContainer>
   );
 })

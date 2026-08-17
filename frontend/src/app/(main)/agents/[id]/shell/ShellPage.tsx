@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { ChevronRight } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+import { PageContainer } from "@/components/ui/page-container";
 const ShellTerminal = dynamic(() => import("@/components/ShellTerminal"), {
   ssr: false,
   loading: () => <div className="flex items-center justify-center h-96"><Spinner /></div>,
@@ -49,7 +50,7 @@ export default function AgentShellPage() {
   };
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up">
+    <PageContainer>
       <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
         <Link href="/agents" className="hover:text-foreground transition-colors">{t("agents.header_agents")}</Link>
         <ChevronRight className="w-4 h-4" />
@@ -82,6 +83,6 @@ export default function AgentShellPage() {
         )}
       </div>
       {agentId && <ShellTerminal agentId={agentId} osType={osType} />}
-    </div>
+    </PageContainer>
   );
 }

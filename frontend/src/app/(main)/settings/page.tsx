@@ -201,7 +201,7 @@ export default function SettingsPage() {
     } catch { toast.error(t("settings.toast.update_failed")); }
   };
 
-  if (loading) return <PageSpinner />;
+  if (loading) return <PageContainer title={t("settings.title")} subtitle={t("settings.subtitle")}><PageSpinner /></PageContainer>;
 
   const sections = [
     { key: "profile", label: t("settings.profile"), icon: <User className="w-4 h-4" /> },

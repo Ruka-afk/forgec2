@@ -7,7 +7,7 @@ import { downloadText, downloadJSON } from "@/lib/download";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { useI18n } from "@/lib/i18n";
 import { formatTime } from "@/lib/utils";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { toast } from "sonner";

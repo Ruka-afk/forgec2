@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { PageContainer } from "@/components/ui/page-container";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -333,7 +334,7 @@ export default function RemoteDesktopPage() {
   const indicator = statusConfig[status];
 
   return (
-    <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 animate-fade-slide-up space-y-4">
+    <PageContainer className="space-y-4">
       <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground flex items-start gap-2">
         <TriangleAlert className="w-4 h-4 mt-0.5 shrink-0" />
         <div>
@@ -586,7 +587,7 @@ export default function RemoteDesktopPage() {
         </div>
       </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }
 

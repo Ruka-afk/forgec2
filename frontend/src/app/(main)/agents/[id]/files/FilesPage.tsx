@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { PageContainer } from "@/components/ui/page-container";
 import { Progress } from "@/components/ui/progress";
 import { useI18n } from "@/lib/i18n";
 import { formatSize, formatTimestamp, isImageFile, joinPath, parentPath, type FileEntry } from "./_components/types";
@@ -107,7 +108,7 @@ export default function FilesPage() {
   const pathParts = currentPath.split(/[\\/]/).filter(Boolean);
 
   return (
-    <div className="mx-auto max-w-(--content-width) animate-fade-slide-up pb-12 md:pb-0">
+    <PageContainer>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <h1 className="flex items-center gap-2 text-2xl font-bold">
@@ -452,6 +453,6 @@ export default function FilesPage() {
         </DialogContent>
       </Dialog>
       {modal}
-    </div>
+    </PageContainer>
   );
 }
