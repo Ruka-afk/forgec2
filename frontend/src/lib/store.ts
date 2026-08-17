@@ -32,7 +32,6 @@ interface AppState {
   toggleSidebar: () => void;
   setMobileMenuOpen: (open: boolean) => void;
   setIsMobile: (mobile: boolean) => void;
-  getSidebarWidth: () => number;
 
   // Online users
   onlineUsers: OnlineUser[];
@@ -106,12 +105,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setIsMobile: (mobile: boolean) =>
     set({ isMobile: mobile, mobileMenuOpen: mobile ? false : get().mobileMenuOpen }),
 
-  getSidebarWidth: () => {
-    const state = get();
-    if (state.isMobile && !state.mobileMenuOpen) return 0;
-    return state.sidebarCollapsed ? 64 : 192;
-  },
-
   setOnlineUsers: (users) => set({ onlineUsers: users }),
   setCurrentUsername: (name) => set({ currentUsername: name }),
   setCurrentUserRole: (role) => set({ currentUserRole: role }),
@@ -154,6 +147,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 // Apply persisted density/focus state to <html> on first client load.
 applyDensity(useAppStore.getState().density);
 applyFocus(useAppStore.getState().focusMode);
+
+// Wire WebSocket events to a debounced stats refresh. Idempotent — safe to
+// call from anywhere (Sidebar mounts it once).
+// Derived selector: width the sidebar occupies when rendered (0 on mobile
+// when the drawer is closed). Referenced by AppLayout/TopBar via useAppStore.
+export function selectSidebarWidth(state: AppState): number {
+  if (state.isMobile && !state.mobileMenuOpen) return 0;
+  return state.sidebarCollapsed ? 64 : 192;
+}
 
 // Wire WebSocket events to a debounced stats refresh. Idempotent — safe to
 // call from anywhere (Sidebar mounts it once).

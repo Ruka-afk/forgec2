@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useWebSocket } from "@/lib/useWebSocket";
 import { useI18n } from "@/lib/i18n";
 import { useTheme, type Theme } from "@/lib/theme";
-import { useAppStore } from "@/lib/store";
+import { useAppStore, selectSidebarWidth } from "@/lib/store";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { nowTime } from "@/lib/utils";
@@ -382,7 +382,7 @@ function UserDropdown() {
 export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) {
   const { t } = useI18n();
   const { connected, reconnectFailed, reconnect } = useWebSocket();
-  const storeSidebarWidth = useAppStore((s) => s.getSidebarWidth());
+  const storeSidebarWidth = useAppStore(selectSidebarWidth);
   const focusMode = useAppStore((s) => s.focusMode);
   const toggleFocusMode = useAppStore((s) => s.toggleFocusMode);
 

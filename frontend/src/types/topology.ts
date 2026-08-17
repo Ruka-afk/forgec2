@@ -15,6 +15,4 @@ export interface TopoEdge {
 export interface TopoData {
   nodes?: TopoNode[];
   edges?: TopoEdge[];
-  Nodes?: TopoNode[];
-  Edges?: TopoEdge[];
 }

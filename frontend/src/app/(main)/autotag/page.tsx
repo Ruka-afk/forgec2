@@ -73,9 +73,9 @@ export default function AutoTagPage() {
     fetcher: async () => {
       const [r, t] = await Promise.all([
         api.get<{ rules: AutoTagRule[] }>(paths.autotag.rules),
-        api.get<{ tags: AgentTag[] }>(paths.tags.list),
+        api.get<{ tags: AgentTag[] } | AgentTag[]>(paths.tags.list),
       ]);
-      return { rules: r.rules || [], tags: t.tags || [] };
+      return { rules: r.rules || [], tags: Array.isArray(t) ? t : t.tags || [] };
     },
     toastThrottleMs: 0,
     errorMessage: t("autotag.load_failed"),

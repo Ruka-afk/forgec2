@@ -1,4 +1,4 @@
-import type { AgentStatus } from "@/types/agent";
+import type { AgentBase, AgentStatus } from "@/types/agent";
 import { Monitor, Terminal, Apple, Laptop, type LucideIcon } from "lucide-react";
 
 export interface TaskStats {
@@ -8,31 +8,12 @@ export interface TaskStats {
   failed: number;
 }
 
-export interface Beacon {
-  id?: string;
-  hostname?: string;
-  username?: string;
-  ip?: string;
-  os?: string;
-  arch?: string;
+export type Beacon = Partial<AgentBase> & {
   status?: AgentStatus;
-  last_seen?: string;
-  integrity?: string;
-  elevated?: boolean;
-  notes?: string;
-  active_window?: string;
-  version?: string;
-  parent_id?: string;
-  public_ip?: string;
-  domain?: string;
-  country?: string;
-  current_interval?: number;
-  current_jitter?: number;
-  pid?: number;
-  process_name?: string;
-  created_at?: string;
   taskStats?: TaskStats;
-}
+  kill_date?: string;
+  parent_agent_id?: string;
+};
 
 export interface BulkResult {
   id: number;

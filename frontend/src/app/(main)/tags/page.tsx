@@ -42,7 +42,7 @@ export default function TagsPage() {
   const { data, loading, error, refresh: loadTags } = useApiResource<Tag[]>({
     fetcher: async () => {
       const data = await fetchTags();
-      return (data.tags || []) as Tag[];
+      return (Array.isArray(data) ? data : data.tags || []) as Tag[];
     },
     toastThrottleMs: 10_000,
     errorMessage: t("tags.toast.load_failed"),

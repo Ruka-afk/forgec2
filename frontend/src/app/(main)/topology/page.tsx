@@ -296,7 +296,7 @@ export default function TopologyPage() {
 
   const nodes = useMeshSource
     ? (meshData?.nodes || [])
-    : (data?.nodes || data?.Nodes || []);
+    : (data?.nodes || []);
   const onlineCount = nodes.filter((n) => n.group === "agent-online").length;
   const offlineCount = nodes.filter((n) => n.group === "agent-offline").length;
   const listenerCount = nodes.filter((n) => n.group === "listener").length;

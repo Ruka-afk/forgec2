@@ -132,7 +132,7 @@ export function useAgentData(t: (key: string) => string) {
   const { data: cachedAllTags } = useCachedData<AgentTag[]>("tags:list", {
     fetcher: async () => {
       const d = await api.get(paths.tags.list);
-      return (d.tags || []) as AgentTag[];
+      return (Array.isArray(d) ? d : d.tags || []) as AgentTag[];
     },
     ttlMs: 60_000,
     onError: () => toast.error(t("agents.tags_load_failed")),

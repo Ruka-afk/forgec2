@@ -398,13 +398,8 @@ import type { AgentStatus } from "@/types/agent";
 const VALID_STATUSES: readonly string[] = ["online", "stale", "offline"];
 
 async function getAgentStatus(agentId: string): Promise<AgentStatus | "unknown"> {
-  const data = await api.get<{
-    Agent?: { status?: string };
-    status?: string;
-    data?: { status?: string };
-  }>(paths.agents.one(agentId));
-  const agent = data.data || data;
-  const raw = agent?.status || data.status || "unknown";
+  const data = await api.get<{ Agent?: { status?: string } }>(paths.agents.one(agentId));
+  const raw = data.Agent?.status || "unknown";
   return (VALID_STATUSES.includes(raw) ? raw : "unknown") as AgentStatus | "unknown";
 }
 

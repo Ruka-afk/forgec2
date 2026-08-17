@@ -11,7 +11,7 @@ import CommandPalette from "@/components/CommandPalette";
 import GlobalInteractDock from "@/components/GlobalInteractDock";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { usePathname } from "next/navigation";
-import { useAppStore } from "@/lib/store";
+import { useAppStore, selectSidebarWidth } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
 import { getPageTitleKey } from "@/lib/navigation";
 
@@ -23,7 +23,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const setMobileMenuOpen = useAppStore((s) => s.setMobileMenuOpen);
   const focusMode = useAppStore((s) => s.focusMode);
 
-  const sidebarWidth = useAppStore((s) => s.getSidebarWidth());
+  const sidebarWidth = useAppStore(selectSidebarWidth);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1024);
