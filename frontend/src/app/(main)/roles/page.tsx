@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { PageSpinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,8 +56,6 @@ const PERM_GROUPS: Record<string, string[]> = {
 
 export default function RolesPage() {
   const { t } = useI18n();
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [loading, setLoading] = useState(true);
   const [editRole, setEditRole] = useState<Role | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
@@ -64,18 +63,15 @@ export default function RolesPage() {
   const { confirm, modal } = useConfirm();
   const [newPerms, setNewPerms] = useState<string[]>([]);
 
-  const loadRoles = useCallback(async () => {
-    try {
-      const data = await api.get<{success: boolean; data?: Role[]}>(paths.roles.list);
-      if (data.success) setRoles(data.data || []);
-    } catch {
-      toast.error(t("roles.load_failed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => { loadRoles(); }, [loadRoles]);
+  const { data, loading, refresh: loadRoles } = useApiResource<{ success: boolean; data?: Role[] }>({
+    fetcher: async () => {
+      const data = await api.get<{ success: boolean; data?: Role[] }>(paths.roles.list);
+      return data;
+    },
+    toastThrottleMs: 10_000,
+    errorMessage: t("roles.load_failed"),
+  });
+  const roles = data?.data ?? [];
 
   const handleCreate = async () => {
     if (!newName.trim()) return;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { PageContainer } from "@/components/ui/page-container";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
@@ -11,6 +11,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -38,9 +39,6 @@ interface RecentTask {
 
 export default function ToolkitPage() {
   const { t } = useI18n();
-  const [toolkitAgents, setToolkitAgents] = useState<ToolkitAgent[]>([]);
-  const [recentTasks, setRecentTasks] = useState<RecentTask[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [agentInfo, setAgentInfo] = useState<Record<string, unknown> | null>(null);
   const runAction = async (action: string, param = "") => {
@@ -61,26 +59,33 @@ export default function ToolkitPage() {
     }
   };
 
+  const loadData = () => {
+    void refresh();
+  };
+
+  const { data, loading, refresh } = useApiResource<{ toolkitAgents: ToolkitAgent[]; recentTasks: RecentTask[] }>({
+    fetcher: async () => {
+      const [agentsData, tasksData] = await Promise.all([
+        api.get(paths.agents.list()),
+        api.get(paths.toolkit.results),
+      ]);
+      return {
+        toolkitAgents: (agentsData.agents || (Array.isArray(agentsData) ? agentsData : [])) as ToolkitAgent[],
+        recentTasks: (tasksData.tasks || tasksData.results || tasksData.data || []) as RecentTask[],
+      };
+    },
+    toastThrottleMs: 0,
+    errorMessage: t("toolkit.toast.load_failed"),
+  });
+  const toolkitAgents = data?.toolkitAgents ?? [];
+  const recentTasks = data?.recentTasks ?? [];
+
   useEffect(() => {
     if (!selectedAgent) { setAgentInfo(null); return; }
     api.get<{ agent?: Record<string, unknown> }>(`/toolkit/agents/${selectedAgent}/info`)
       .then((d) => setAgentInfo(d.agent || null))
       .catch(() => setAgentInfo(null));
   }, [selectedAgent]);
-
-  const loadData = useCallback(async () => {
-    try {
-      const [agentsData, tasksData] = await Promise.all([
-        api.get(paths.agents.list()),
-        api.get(paths.toolkit.results),
-      ]);
-      setToolkitAgents((agentsData.agents || (Array.isArray(agentsData) ? agentsData : [])) as ToolkitAgent[]);
-      setRecentTasks((tasksData.tasks || tasksData.results || tasksData.data || []) as RecentTask[]);
-    } catch { toast.error(t("toolkit.toast.load_failed")); }
-    setLoading(false);
-  }, [t]);
-
-  useEffect(() => { loadData(); }, [loadData]);
 
   const quickActions = [
     { label: "whoami", value: "whoami" },

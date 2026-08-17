@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FieldError } from "@/components/ui/field-error";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { Button } from "@/components/ui/button";
 import { NormalizedAgent as Agent } from "@/types/agent";
 import { formatTime } from "@/lib/utils";
@@ -42,9 +43,6 @@ interface ScheduledRule {
 
 export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
   const { t } = useI18n();
-  const [tasks, setTasks] = useState<ScheduledRule[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -58,25 +56,22 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
   const [saving, setSaving] = useState(false);
   const [formErrors, setFormErrors] = useState<{ name?: string; agentId?: string; schedule?: string; command?: string }>({});
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
+  const { data, loading, refresh: fetchData } = useApiResource<{ tasks: ScheduledRule[]; agents: Agent[] }>({
+    fetcher: async () => {
       const [rules, a] = await Promise.all([
         api.get<{ data?: ScheduledRule[] }>(paths.automation.rules),
         api.get<{ agents?: Agent[]; data?: Agent[] } | Agent[]>(paths.agents.list()),
       ]);
-      setTasks((rules.data || []).filter((r) => r.event_type === "schedule"));
-      setAgents(((Array.isArray(a) ? a : a.agents || a.data) || []) as Agent[]);
-    } catch {
-      toast.error(t("scheduler.load_failed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => {
-    Promise.resolve().then(() => fetchData());
-  }, [fetchData]);
+      return {
+        tasks: (rules.data || []).filter((r) => r.event_type === "schedule"),
+        agents: ((Array.isArray(a) ? a : a.agents || a.data) || []) as Agent[],
+      };
+    },
+    toastThrottleMs: 0,
+    errorMessage: t("scheduler.load_failed"),
+  });
+  const tasks = data?.tasks ?? [];
+  const agents = data?.agents ?? [];
 
   useEffect(() => {
     fetchTaskTypes().then(setTaskTypes);

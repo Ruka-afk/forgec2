@@ -1,7 +1,8 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FieldError } from "@/components/ui/field-error";
 import { PageContainer } from "@/components/ui/page-container";
@@ -31,11 +32,8 @@ interface Integration {
 
 export default function IntegrationsPage() {
   const { t } = useI18n();
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testResult, setTestResult] = useState("");
-  const [loadError, setLoadError] = useState("");
 
   const [formType, setFormType] = useState("slack");
   const [formName, setFormName] = useState("");
@@ -49,21 +47,15 @@ export default function IntegrationsPage() {
   const [formFrom, setFormFrom] = useState("");
   const [formErrors, setFormErrors] = useState<{ name?: string; url?: string; smtp?: string }>({});
 
-  const fetchIntegrations = useCallback(async () => {
-    setLoading(true);
-    setLoadError("");
-    try {
+  const { data, loading, error, refresh: fetchIntegrations } = useApiResource<{ integrations?: Integration[] }>({
+    fetcher: async () => {
       const data = await api.get<{ integrations?: Integration[] }>("/integrations");
-      setIntegrations(data.integrations || []);
-    } catch {
-      setIntegrations([]);
-      setLoadError(t("integrations.load_failed"));
-      toast.error(t("integrations.load_failed"));
-    }
-    setLoading(false);
-  }, [t]);
-
-  useEffect(() => { fetchIntegrations(); }, [fetchIntegrations]);
+      return data;
+    },
+    toastThrottleMs: 10_000,
+    errorMessage: t("integrations.load_failed"),
+  });
+  const integrations = data?.integrations ?? [];
 
   function resetForm() {
     setFormName("");
@@ -173,8 +165,8 @@ export default function IntegrationsPage() {
         </div>
       ) : (
         <>
-          {loadError && (
-            <ErrorState message={loadError} className="mb-4" />
+          {error && (
+            <ErrorState message={error} className="mb-4" />
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 mb-6">
             {integrations.length === 0 ? (

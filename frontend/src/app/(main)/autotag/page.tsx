@@ -1,9 +1,10 @@
 "use client";
 import { PageContainer } from "@/components/ui/page-container";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Card } from "@/components/ui/card";
@@ -56,9 +57,6 @@ const OPS = ["contains", "equals", "starts_with", "regex", "not_equals"];
 
 export default function AutoTagPage() {
   const { t } = useI18n();
-  const [rules, setRules] = useState<AutoTagRule[]>([]);
-  const [tags, setTags] = useState<AgentTag[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -71,20 +69,20 @@ export default function AutoTagPage() {
   const { confirm, modal } = useConfirm();
   const [message, setMessage] = useState("");
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
+  const { data, loading, refresh: fetchData } = useApiResource<{ rules: AutoTagRule[]; tags: AgentTag[] }>({
+    fetcher: async () => {
       const [r, t] = await Promise.all([
         api.get<{ rules: AutoTagRule[] }>(paths.autotag.rules),
         api.get<{ tags: AgentTag[] }>(paths.tags.list),
       ]);
-      setRules(r.rules || []);
-      setTags(t.tags || []);
-    } catch { setMessage(t("autotag.load_failed")); }
-    finally { setLoading(false); }
-  }, [t]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
+      return { rules: r.rules || [], tags: t.tags || [] };
+    },
+    toastThrottleMs: 0,
+    errorMessage: t("autotag.load_failed"),
+    onError: () => setMessage(t("autotag.load_failed")),
+  });
+  const rules = data?.rules ?? [];
+  const tags = data?.tags ?? [];
 
   function resetForm() {
     conditionKeyCounter++;

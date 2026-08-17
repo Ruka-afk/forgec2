@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { PageSpinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 import { useAgentList } from "@/lib/hooks/useAgentList";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,21 +39,20 @@ export default function ChainPage() {
   const { t } = useI18n();
 
   const { agents } = useAgentList();
-  const [graph, setGraph] = useState<ChainNode[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>("");
   const [chain, setChain] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
-  const fetchGraph = useCallback(async () => {
-    try {
+  const { data: graphData, loading: graphLoading, refresh } = useApiResource<{ nodes: ChainNode[] }>({
+    fetcher: async () => {
       const data = await api.get<{ nodes: ChainNode[] }>("/chain/graph");
-      setGraph(data.nodes || []);
-    } catch {
-      toast.error(t("chain.load_failed"));
-    }
-  }, [t]);
+      return data;
+    },
+    toastThrottleMs: 10_000,
+    errorMessage: t("chain.load_failed"),
+  });
+  const graph = graphData?.nodes || [];
 
   const loadChain = useCallback(async (agentId: string) => {
     if (!agentId) {
@@ -67,10 +67,6 @@ export default function ChainPage() {
       toast.error(t("chain.load_proxy_failed"));
     }
   }, [t]);
-
-  useEffect(() => {
-    fetchGraph().finally(() => setLoading(false));
-  }, [fetchGraph]);
 
   useEffect(() => {
     if (selectedAgent) {
@@ -93,7 +89,7 @@ export default function ChainPage() {
       setActionMsg(t("chain.parent_set", { id: parentId }));
       setShowModal(false);
       loadChain(selectedAgent);
-      fetchGraph();
+      refresh();
     } catch {
       setActionMsg(t("chain.set_failed"));
     }
@@ -105,7 +101,7 @@ export default function ChainPage() {
       await api.postJson(`/agents/${selectedAgent}/chain/clear`, {});
       setActionMsg(t("chain.cleared"));
       loadChain(selectedAgent);
-      fetchGraph();
+      refresh();
     } catch {
       setActionMsg(t("chain.clear_failed"));
     }
@@ -114,7 +110,7 @@ export default function ChainPage() {
   const selectedInfo = getAgentInfo(selectedAgent);
   const availableParents = agents.filter((a) => a.id !== selectedAgent);
 
-  if (loading) {
+  if (graphLoading) {
     return <PageContainer title={t("chain.multi_hop")} subtitle={t("chain.subtitle")}><PageSpinner /></PageContainer>;
   }
 

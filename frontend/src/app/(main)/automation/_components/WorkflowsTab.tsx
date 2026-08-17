@@ -1,9 +1,10 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -48,31 +49,19 @@ const scopeLabel = (s: string, t: (k: string) => string) => s === "all" ? t("wor
 
 export function WorkflowsTab() {
   const { t } = useI18n();
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error, refresh: fetchWorkflows } = useApiResource<{ workflows: Workflow[] }>({
+    fetcher: async () => {
+      const data = await api.get(paths.workflows.list);
+      return { workflows: normalizeListEnvelope(data, ["workflows", "data"]) as Workflow[] };
+    },
+    toastThrottleMs: 0,
+    errorMessage: t("workflows.toast.load_failed"),
+  });
+  const workflows = data?.workflows ?? [];
   const [showEditor, setShowEditor] = useState(false);
   const [editWf, setEditWf] = useState<Workflow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [historyWfId, setHistoryWfId] = useState<string | null>(null);
-
-  const fetchWorkflows = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.get(paths.workflows.list);
-      setWorkflows(normalizeListEnvelope(data, ["workflows", "data"]) as Workflow[]);
-    } catch (e) {
-      setWorkflows([]);
-      const msg = e instanceof Error ? e.message : t("workflows.toast.load_failed");
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => { void fetchWorkflows(); }, [fetchWorkflows]);
 
   function openCreate() {
     setEditWf(null);

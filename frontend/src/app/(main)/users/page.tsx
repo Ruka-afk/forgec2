@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { firstField, normalizeListEnvelope } from "@/lib/envelope";
@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/ui/status-indicator";
 import { PageContainer } from "@/components/ui/page-container";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -54,18 +55,13 @@ function getRoleBadge(role: string) {
 }
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ username: "", password: "", role: "user" });
   const [formErrors, setFormErrors] = useState<{ username?: string; password?: string }>({});
   const [passwordError, setPasswordError] = useState("");
-  const [role, setUserRole] = useState("admin");
-  const [customRoles, setCustomRoles] = useState<string[]>([]);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordUserId, setPasswordUserId] = useState<string>("");
   const [newPassword, setNewPassword] = useState("");
@@ -78,30 +74,32 @@ export default function UsersPage() {
   const [revokeLoading, setRevokeLoading] = useState<string | null>(null);
   const { t } = useI18n();
 
-  const loadUsers = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const { data, loading, error, refresh } = useApiResource<{ users: User[]; customRoles: string[]; userRole: string }>({
+    fetcher: async () => {
       const data = await api.get(paths.users.list);
-      setUsers(normalizeListEnvelope(data, ["users", "Users", "data"]) as User[]);
-      const role = firstField<string>(data, ["user_role", "UserRole", "CurrentUserRole"]);
-      if (role) setUserRole(String(role));
-    } catch (e) {
-      setUsers([]);
-      const msg = e instanceof Error ? e.message : t("users.toast.load_failed");
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
+      let customRoles: string[] = [];
+      try {
+        const d = await api.get<{ success?: boolean; data?: unknown }>(paths.roles.list);
+        if (d.success) customRoles = ((d.data as unknown[]) || []).map((r: unknown) => (r as { name: string }).name as string);
+      } catch {
+        toast.error(t("users.toast.load_roles_failed"));
+      }
+      return {
+        users: normalizeListEnvelope(data, ["users", "Users", "data"]) as User[],
+        customRoles,
+        userRole: String(firstField<string>(data, ["user_role", "UserRole", "CurrentUserRole"]) ?? "admin"),
+      };
+    },
+    toastThrottleMs: 0,
+    errorMessage: t("users.toast.load_failed"),
+  });
+  const users = data?.users ?? [];
+  const customRoles = data?.customRoles ?? [];
+  const userRole = data?.userRole ?? "admin";
 
-  useEffect(() => {
-    void loadUsers();
-    api.get(paths.roles.list)
-      .then((d: Record<string, unknown>) => { if (d.success) setCustomRoles(((d.data as unknown[]) || []).map((r: unknown) => (r as { name: string }).name as string)); })
-      .catch(() => toast.error(t("users.toast.load_roles_failed")));
-  }, [loadUsers, t]);
+  const loadUsers = () => {
+    void refresh();
+  };
 
   const filtered = users.filter((u) => {
     const name = (u.username || "").toLowerCase();
@@ -203,7 +201,7 @@ export default function UsersPage() {
     } catch { toast.error(t("users.toast.kick_failed")); }
   };
 
-  const loadSessions = useCallback(async (user: User) => {
+  const loadSessions = async (user: User) => {
     const uid = user.id;
     if (!uid) return;
     setSessionsLoading(true);
@@ -217,7 +215,7 @@ export default function UsersPage() {
     } finally {
       setSessionsLoading(false);
     }
-  }, [t]);
+  };
 
   const openSessions = (user: User) => {
     setSessionsUser(user);
@@ -254,7 +252,7 @@ export default function UsersPage() {
     <PageContainer title={t("users.title")} icon={<Users className="w-4 h-4" />} subtitle={t("users.subtitle")} actions={<>
         <div className="flex items-center gap-2 flex-wrap">
           <SearchInput value={search} onChange={setSearch} placeholder={t("users.search_placeholder")} className="w-40 sm:w-48" label={t("common.search")} />
-          {role === "admin" && (
+          {userRole === "admin" && (
             <Button onClick={() => setShowAdd(true)}>
               <Plus className="w-4 h-4" /> {t("users.add_user")}
             </Button>
@@ -328,7 +326,7 @@ export default function UsersPage() {
               <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_active")}</TableHead>
               <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_last_activity")}</TableHead>
               <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_created_at")}</TableHead>
-              {role === "admin" && <TableHead className="py-3 px-4 sm:py-3.5 font-semibold text-center">{t("users.col_actions")}</TableHead>}
+              {userRole === "admin" && <TableHead className="py-3 px-4 sm:py-3.5 font-semibold text-center">{t("users.col_actions")}</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -357,7 +355,7 @@ export default function UsersPage() {
                   <TableCell className="py-3 px-4 sm:py-3.5 font-mono text-xs text-muted-foreground">
                     {formatTime(u.created_at)}
                   </TableCell>
-                  {role === "admin" && (
+                  {userRole === "admin" && (
                     <TableCell className="py-3 px-4 sm:py-3.5 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <Button variant="ghost" size="icon-sm" onClick={() => handleToggle(uid)} disabled={actionLoading === uid + "_toggle"} className={`${isActive ? "text-warning dark:text-warning hover:bg-amber-50 dark:hover:bg-warning/30" : "text-success dark:text-success hover:bg-emerald-50 dark:hover:bg-success/30"}`} title={isActive ? t("users.disable") : t("users.enable")} aria-label={isActive ? t("users.disable") : t("users.enable")}>
@@ -389,7 +387,7 @@ export default function UsersPage() {
             })}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={role === "admin" ? 6 : 5} className="py-20 text-center text-muted-foreground">
+                <TableCell colSpan={userRole === "admin" ? 6 : 5} className="py-20 text-center text-muted-foreground">
                   <EmptyState icon={UserIcon} title={t("users.empty_title")} message={t("users.empty_message")} />
                 </TableCell>
               </TableRow>

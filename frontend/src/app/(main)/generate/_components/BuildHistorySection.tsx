@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { formatTime } from "@/lib/utils";
-import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,17 +24,19 @@ const FORMAT_ICONS: Record<string, React.ReactNode> = {
 
 export default function BuildHistorySection({ refreshKey }: { refreshKey?: number }) {
   const { t } = useI18n();
-  const [builds, setBuilds] = useState<BuildHistoryEntry[]>([]);
-  const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
-  useEffect(() => {
-    api.get<{ builds?: BuildHistoryEntry[]; Logs?: BuildHistoryEntry[]; logs?: BuildHistoryEntry[] }>(
-      paths.builds.list("pageSize=20"),
-    )
-      .then((d) => setBuilds(d.builds || d.logs || d.Logs || []))
-      .catch(() => { toast.error(t("generate.toast.build_history_load_failed")); })
-      .finally(() => setLoading(false));
-  }, [refreshKey, t]);
+  const { data, loading, refresh } = useApiResource<{ builds: BuildHistoryEntry[] }>({
+    fetcher: async () => {
+      const d = await api.get<{ builds?: BuildHistoryEntry[]; Logs?: BuildHistoryEntry[]; logs?: BuildHistoryEntry[] }>(
+        paths.builds.list("pageSize=20"),
+      );
+      return { builds: d.builds || d.logs || d.Logs || [] };
+    },
+    toastThrottleMs: 0,
+    errorMessage: t("generate.toast.build_history_load_failed"),
+  });
+  useEffect(() => { if (refreshKey) void refresh(); }, [refreshKey, refresh]);
+  const builds = data?.builds ?? [];
 
   if (loading) return null;
 

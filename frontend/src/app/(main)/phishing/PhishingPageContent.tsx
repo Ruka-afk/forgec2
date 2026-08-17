@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageSpinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,10 +70,6 @@ type Tab = "templates" | "campaigns" | "captures";
 
 export default function PhishingPageContent() {
   const { t } = useI18n();
-  const [templates, setTemplates] = useState<PhishingTemplate[]>([]);
-  const [campaigns, setCampaigns] = useState<PhishingCampaign[]>([]);
-  const [captures, setCaptures] = useState<CaptureEntry[]>([]);
-  const [loading, setLoading] = useState(true);
   const { confirm, modal } = useConfirm();
 
   // Template form
@@ -90,42 +87,31 @@ export default function PhishingPageContent() {
     { key: "captures", label: t("phishing.tab_captures"), icon: <Key className="w-4 h-4" /> },
   ];
 
-  const loadTemplates = useCallback(async () => {
-    try {
-      const d = await api.get(paths.phishing.templates);
-      setTemplates((d.data as PhishingTemplate[]) || []);
-    } catch {
-      setTemplates([]);
-      toast.error(t("phishing.toast.load_failed"));
-    }
-  }, [t]);
+  const { data, loading, refresh: loadAll } = useApiResource<{
+    templates: PhishingTemplate[];
+    campaigns: PhishingCampaign[];
+    captures: CaptureEntry[];
+  }>({
+    fetcher: async () => {
+      const [t, c, cap] = await Promise.all([
+        api.get(paths.phishing.templates),
+        api.get(paths.phishing.campaigns),
+        api.get(paths.phishing.captures),
+      ]);
+      return {
+        templates: (t.data as PhishingTemplate[]) || [],
+        campaigns: (c.data as PhishingCampaign[]) || [],
+        captures: (cap.data as CaptureEntry[]) || [],
+      };
+    },
+    toastThrottleMs: 10_000,
+    errorMessage: t("phishing.toast.load_failed"),
+  });
+  const templates = data?.templates ?? [];
+  const campaigns = data?.campaigns ?? [];
+  const captures = data?.captures ?? [];
 
-  const loadCampaigns = useCallback(async () => {
-    try {
-      const d = await api.get(paths.phishing.campaigns);
-      setCampaigns((d.data as PhishingCampaign[]) || []);
-    } catch {
-      setCampaigns([]);
-      toast.error(t("phishing.toast.load_failed"));
-    }
-  }, [t]);
-
-  const loadCaptures = useCallback(async () => {
-    try {
-      const d = await api.get(paths.phishing.captures);
-      setCaptures((d.data as CaptureEntry[]) || []);
-    } catch {
-      setCaptures([]);
-      toast.error(t("phishing.toast.load_failed"));
-    }
-  }, [t]);
-
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([loadTemplates(), loadCampaigns(), loadCaptures()]).finally(() => setLoading(false));
-  }, [loadTemplates, loadCampaigns, loadCaptures]);
-
-  // ── Template CRUD ──────────────────────────────────────────────────────
+  // 鈹€鈹€ Template CRUD 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
   const handleSaveTpl = async () => {
     try {
@@ -137,7 +123,7 @@ export default function PhishingPageContent() {
       setShowTplForm(false);
       setEditTplId(null);
       setTplForm({ name: "", subject: "", body: "", from_name: "", from_email: "", type: "html" });
-      loadTemplates();
+      loadAll();
     } catch { toast.error(t("phishing.toast.save_template_failed")); }
   };
 
@@ -150,17 +136,17 @@ export default function PhishingPageContent() {
   const handleDeleteTpl = async (id: number) => {
     if (!(await confirm({ message: t("phishing.delete_template") }))) return;
     await api.del(paths.phishing.template(id));
-    loadTemplates();
+    loadAll();
   };
 
-  // ── Campaign CRUD ──────────────────────────────────────────────────────
+  // 鈹€鈹€ Campaign CRUD 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
   const handleSaveCamp = async () => {
     try {
       await api.postJson(paths.phishing.campaigns, campForm);
       setShowCampForm(false);
       setCampForm({ name: "", template_id: 0, target_list: "", smtp_host: "", smtp_port: 587, smtp_user: "", smtp_pass: "" });
-      loadCampaigns();
+      loadAll();
     } catch { toast.error(t("phishing.toast.save_campaign_failed")); }
   };
 
@@ -172,7 +158,7 @@ export default function PhishingPageContent() {
       );
       if (res.message) toast.success(res.message);
       else toast.success(t("phishing.toast.launched", { count: res.queued ?? 0 }));
-      loadCampaigns();
+      loadAll();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t("phishing.toast.launch_failed"));
     }
@@ -181,19 +167,19 @@ export default function PhishingPageContent() {
   const handleStop = async (id: number) => {
     try {
       await api.post(paths.phishing.campaignStop(id));
-      loadCampaigns();
+      loadAll();
     } catch { toast.error(t("phishing.toast.save_campaign_failed")); }
   };
 
   const handleDeleteCamp = async (id: number) => {
     if (!(await confirm({ message: t("phishing.delete_campaign") }))) return;
     await api.del(paths.phishing.campaign(id));
-    loadCampaigns();
+    loadAll();
   };
 
   if (loading) return <PageContainer title={t("phishing.title")} subtitle={t("phishing.subtitle")}><PageSpinner /></PageContainer>;
 
-  // ── Templates Tab ──────────────────────────────────────────────────────
+  // 鈹€鈹€ Templates Tab 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
   function renderTemplates() {
     return (
@@ -299,7 +285,7 @@ export default function PhishingPageContent() {
     );
   }
 
-  // ── Campaigns Tab ──────────────────────────────────────────────────────
+  // 鈹€鈹€ Campaigns Tab 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
   function renderCampaigns() {
     const statusBadge = (s: string) => {
@@ -412,7 +398,7 @@ export default function PhishingPageContent() {
     );
   }
 
-  // ── Captures Tab ───────────────────────────────────────────────────────
+  // 鈹€鈹€ Captures Tab 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
   function renderCaptures() {
     const typeBadge = (t: string) => {

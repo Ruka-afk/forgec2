@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
-import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { Spinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 import { IconBadge } from "@/components/ui/icon-badge";
@@ -25,34 +25,30 @@ interface DNSStatus {
 
 export default function DNSPage() {
   const { t } = useI18n();
-  const [status, setStatus] = useState<DNSStatus | null>(null);
-  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [domain, setDomain] = useState("");
   const [addr, setAddr] = useState(":53");
   const [server, setServer] = useState("8.8.8.8:53");
   const [txtPrefix, setTxtPrefix] = useState(".dns");
 
-  const fetchStatus = useCallback(async (seedFields = false, silent = false) => {
-    try {
+  const { data: status, loading, refresh: fetchStatus } = useApiResource<DNSStatus>({
+    fetcher: async () => {
       const data = await api.get<DNSStatus>(paths.dns.status);
-      setStatus(data);
-      if (seedFields) {
-        if (data.domain) setDomain(data.domain);
-        if (data.addr) setAddr(data.addr);
-      }
-    } catch {
-      if (!silent) toast.error(t("dns.toast.load_failed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
+      return data;
+    },
+    pollMs: 5_000,
+    toastThrottleMs: 0,
+    errorMessage: t("dns.toast.load_failed"),
+  });
 
+  const seededRef = useRef(false);
   useEffect(() => {
-    fetchStatus(true);
-  }, [fetchStatus]);
-
-  useVisibleInterval(() => fetchStatus(false, true), 5000);
+    if (status && !seededRef.current) {
+      seededRef.current = true;
+      if (status.domain) setDomain(status.domain);
+      if (status.addr) setAddr(status.addr);
+    }
+  }, [status]);
 
   const handleStart = async () => {
     setActionLoading(true);

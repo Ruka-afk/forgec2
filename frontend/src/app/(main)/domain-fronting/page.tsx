@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { DataSpinner } from "@/components/ui/data-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FieldError } from "@/components/ui/field-error";
@@ -33,38 +34,29 @@ const HOSTNAME_RE = /^(?!.*\/)(?!.*:)[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:
 
 export default function DomainFrontingPage() {
   const { t } = useI18n();
-  const [domains, setDomains] = useState<FrontDomain[]>([]);
-  const [autoFailover, setAutoFailover] = useState(true);
-  const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [newDomain, setNewDomain] = useState("");
   const [domainError, setDomainError] = useState("");
   const [saving, setSaving] = useState(false);
   const { confirm, modal } = useConfirm();
 
-
-
-  const fetchStatus = useCallback(async () => {
-    try {
+  const { data, loading, refresh: fetchStatus } = useApiResource<{ domains: FrontDomain[]; auto_failover?: boolean }>({
+    fetcher: async () => {
       const data = await api.postJson(paths.domainFront.list, {});
-      setDomains((data.domains as FrontDomain[]) || []);
-      setAutoFailover((data.auto_failover ?? true) as boolean);
-    } catch {
-      setDomains([]);
-      toast.error(t("domain_fronting.toast.fetch_status_failed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => { fetchStatus(); }, [fetchStatus]);
+      return data as { domains: FrontDomain[]; auto_failover?: boolean };
+    },
+    toastThrottleMs: 10_000,
+    errorMessage: t("domain_fronting.toast.fetch_status_failed"),
+  });
+  const domains = data?.domains ?? [];
+  const autoFailover = data?.auto_failover ?? true;
 
   const handleCheck = async () => {
     setChecking(true);
     try {
-      const data = await api.postJson(paths.domainFront.check, {});
-      setDomains((data.domains as FrontDomain[]) || []);
+      await api.postJson(paths.domainFront.check, {});
       toast.success(t("domain_fronting.toast.health_check_ok"));
+      fetchStatus();
     } catch {
       toast.error(t("domain_fronting.toast.health_check_failed"));
     } finally {
@@ -75,10 +67,9 @@ export default function DomainFrontingPage() {
   const saveConfig = async (cfgDomains: string[], cfgAuto: boolean) => {
     setSaving(true);
     try {
-      const data = await api.postJson(paths.domainFront.config, { domains: cfgDomains, auto_failover: cfgAuto });
-      setDomains((data.domains as FrontDomain[]) || []);
-      setAutoFailover(cfgAuto);
+      await api.postJson(paths.domainFront.config, { domains: cfgDomains, auto_failover: cfgAuto });
       toast.success(t("domain_fronting.toast.config_saved"));
+      fetchStatus();
     } catch {
       toast.error(t("domain_fronting.toast.config_save_failed"));
     } finally {

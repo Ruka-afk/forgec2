@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,6 @@ type TabType = "coerce" | "relay" | "status";
 
 export default function NtlmPage() {
   const { t } = useI18n();
-  const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [target, setTarget] = useState("");
   const [listenAddr, setListenAddr] = useState("0.0.0.0:8080");
@@ -34,33 +34,28 @@ export default function NtlmPage() {
   const [relayTarget, setRelayTarget] = useState("");
   const [relayFlags, setRelayFlags] = useState("");
   const [loading, setLoading] = useState(false);
-  const [agentsError, setAgentsError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("coerce");
-  const [relayStatus, setRelayStatus] = useState<{ active: Record<string, unknown>[]; count: number; running: boolean }>({ active: [], count: 0, running: false });
 
-  const loadAgents = useCallback(async () => {
-    setAgentsError(null);
-    try {
+  const { data: agentsData, error: agentsError, setError: setAgentsError } = useApiResource<{ agents?: Agent[] }>({
+    fetcher: async () => {
       const data = await api.get(paths.agents.list());
-      setAgents((data.agents || data || []) as Agent[]);
-    } catch {
-      setAgentsError(t("ntlm.toast.load_agents_failed"));
-      toast.error(t("ntlm.toast.load_agents_failed"));
-    }
-  }, [t]);
+      return data as { agents?: Agent[] };
+    },
+    toastThrottleMs: 10_000,
+    errorMessage: t("ntlm.toast.load_agents_failed"),
+  });
+  const agents = (agentsData?.agents || agentsData || []) as Agent[];
 
-  useEffect(() => { loadAgents(); }, [loadAgents]);
-
-  const loadRelayStatus = useCallback(async () => {
-    try {
+  const { data: relayData, refresh: loadRelayStatus } = useApiResource<{ active: Record<string, unknown>[]; count: number; running: boolean }>({
+    fetcher: async () => {
       const data = await api.get<{ active: Record<string, unknown>[]; count: number; running: boolean }>("/ntlm/relay_status");
-      setRelayStatus(data);
-    } catch { toast.error(t("ntlm.toast.relay_status_failed")); }
-  }, [t]);
-
-  useEffect(() => {
-    if (activeTab === "status") loadRelayStatus();
-  }, [activeTab, loadRelayStatus]);
+      return data;
+    },
+    enabled: activeTab === "status",
+    toastThrottleMs: 10_000,
+    errorMessage: t("ntlm.toast.relay_status_failed"),
+  });
+  const relayStatus = relayData ?? { active: [], count: 0, running: false };
 
   const getAgentId = (a: Agent) => a.id || "";
   const getHostname = (a: Agent) => a.hostname || "";

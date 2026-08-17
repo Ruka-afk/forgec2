@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageSpinner, Spinner } from "@/components/ui/spinner";
@@ -52,10 +53,6 @@ const defaultTemplates: ScriptTemplate[] = [
 
 export default function ScriptingPage() {
   const { t } = useI18n();
-  const [loading, setLoading] = useState(true);
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [savedScripts, setSavedScripts] = useState<SavedScript[]>([]);
-  const [runHistory, setRunHistory] = useState<RunHistory[]>([]);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [scriptName, setScriptName] = useState("");
   const [scriptCode, setScriptCode] = useState("-- Lua Script Example\nforgec2.log('Starting batch operation')\n\nlocal agents = forgec2.get_agents()\nforgec2.log('Agents: ' .. tostring(#agents))\n\nforgec2.set_output('Script execution complete')");
@@ -63,31 +60,28 @@ export default function ScriptingPage() {
   const [running, setRunning] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
 
-  const loadData = useCallback(async () => {
-    try {
-      const agentData = await api.get(paths.agents.list());
-      setAgents((agentData.agents || (Array.isArray(agentData) ? agentData : [])) as Agent[]);
-    } catch {
-      setAgents([]);
-      toast.error(t("scripting.toast.load_failed"));
-    }
-    try {
-      const scriptData = await api.get(paths.scripts.list);
-      setSavedScripts((scriptData.scripts || scriptData.data || []) as SavedScript[]);
-    } catch {
-      setSavedScripts([]);
-      toast.error(t("scripting.toast.load_failed"));
-    }
-    try {
-      const historyData = await api.get(paths.scripts.history);
-      setRunHistory((historyData.history || []) as RunHistory[]);
-    } catch {
-      setRunHistory([]);
-    }
-    setLoading(false);
-  }, [t]);
-
-  useEffect(() => { loadData(); }, [loadData]);
+  const { data, loading, refresh: loadData } = useApiResource<{ agents: Agent[]; savedScripts: SavedScript[]; runHistory: RunHistory[] }>({
+    fetcher: async () => {
+      let failed = 0;
+      const [agentData, scriptData, historyData] = await Promise.all([
+        api.get(paths.agents.list()).catch(() => { failed++; return { agents: [] }; }),
+        api.get(paths.scripts.list).catch(() => { failed++; return { scripts: [] as SavedScript[] }; }),
+        api.get(paths.scripts.history).catch(() => { return { history: [] }; }),
+      ]);
+      if (failed > 0) toast.error(t("scripting.toast.load_failed"));
+      const scriptRes = scriptData as { scripts?: SavedScript[]; data?: SavedScript[] };
+      return {
+        agents: (agentData.agents || (Array.isArray(agentData) ? agentData : [])) as Agent[],
+        savedScripts: (scriptRes.scripts || scriptRes.data || []) as SavedScript[],
+        runHistory: (historyData.history || []) as RunHistory[],
+      };
+    },
+    toastThrottleMs: 0,
+    errorMessage: t("scripting.toast.load_failed"),
+  });
+  const agents = data?.agents ?? [];
+  const savedScripts = data?.savedScripts ?? [];
+  const runHistory = data?.runHistory ?? [];
 
   const handleSaveScript = async () => {
     if (!scriptName.trim() || !scriptCode.trim()) return;

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { Banner } from "@/components/ui/banner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -66,10 +67,6 @@ interface RekeyStats {
 
 export default function OpsecPage() {
   const { t } = useI18n();
-  const [rules, setRules] = useState<OpsecRule[]>([]);
-  const [history, setHistory] = useState<OpsecHistoryItem[]>([]);
-  const [rekeyStats, setRekeyStats] = useState<RekeyStats>({ active_sessions: 0, total_rekeys: 0 });
-  const [loading, setLoading] = useState(true);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [editingRule, setEditingRule] = useState<OpsecRule | null>(null);
@@ -114,24 +111,27 @@ export default function OpsecPage() {
     { id: "portscan", label: "Portscan", icon: <Network className="w-4 h-4" />, danger: false },
   ];
 
-  useEffect(() => {
-    let failed = 0;
-    Promise.all([
-      api.get<{ rules: OpsecRule[] }>(paths.opsec.rulesApi).catch(() => { failed++; return { rules: [] as OpsecRule[] }; }),
-      api.get(paths.opsec.history).catch(() => { failed++; return { history: [] }; }),
-      api.get<RekeyStats>(paths.opsec.rekey).catch(() => { failed++; return { active_sessions: 0, total_rekeys: 0 } as RekeyStats; }),
-    ]).then(([rulesData, histData, rekeyData]) => {
-      setRules(rulesData.rules || []);
-      setHistory((histData.history || []) as OpsecHistoryItem[]);
-      setRekeyStats(rekeyData || { active_sessions: 0, total_rekeys: 0 });
+  const { data, loading, refresh: loadData } = useApiResource<{ rules: OpsecRule[]; history: OpsecHistoryItem[]; rekey: RekeyStats }>({
+    fetcher: async () => {
+      let failed = 0;
+      const [rulesData, histData, rekeyData] = await Promise.all([
+        api.get<{ rules: OpsecRule[] }>(paths.opsec.rulesApi).catch(() => { failed++; return { rules: [] as OpsecRule[] }; }),
+        api.get(paths.opsec.history).catch(() => { failed++; return { history: [] }; }),
+        api.get<RekeyStats>(paths.opsec.rekey).catch(() => { failed++; return { active_sessions: 0, total_rekeys: 0 } as RekeyStats; }),
+      ]);
       if (failed > 0) toast.error(t("opsec.toast.load_failed"));
-    }).catch(() => {
-      setRules([]);
-      setHistory([]);
-      setRekeyStats({ active_sessions: 0, total_rekeys: 0 });
-      toast.error(t("opsec.toast.load_failed"));
-    }).finally(() => setLoading(false));
-  }, [t]);
+      return {
+        rules: rulesData.rules || [],
+        history: (histData.history || []) as OpsecHistoryItem[],
+        rekey: rekeyData || { active_sessions: 0, total_rekeys: 0 },
+      };
+    },
+    toastThrottleMs: 0,
+    errorMessage: t("opsec.toast.load_failed"),
+  });
+  const rules = data?.rules ?? [];
+  const history = data?.history ?? [];
+  const rekeyStats = data?.rekey ?? { active_sessions: 0, total_rekeys: 0 };
 
   const handleRunTest = async (taskType: string) => {
     try {
@@ -159,7 +159,7 @@ export default function OpsecPage() {
       setEditingRule(null);
       setRuleForm({ name: "", description: "", risk_level: 1, default_action: 1, enabled: true });
       toast.success(t("opsec.save_rule"));
-      api.get<{ rules: OpsecRule[] }>(paths.opsec.rules).then(d => setRules(d.rules || []));
+      loadData();
     } catch {
       toast.error(t("opsec.toast.save_failed"));
     }
@@ -170,7 +170,7 @@ export default function OpsecPage() {
     try {
       await api.del(paths.opsec.rule(name));
       toast.success(t("opsec.toast.deleted"));
-    api.get<{ rules: OpsecRule[] }>(paths.opsec.rulesApi).then(d => setRules(d.rules || []));
+      loadData();
     } catch { toast.error(t("opsec.toast.delete_failed")); }
   };
 

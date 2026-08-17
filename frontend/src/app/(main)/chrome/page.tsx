@@ -1,13 +1,12 @@
 "use client";
 import { PageContainer } from "@/components/ui/page-container";
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { Banner } from "@/components/ui/banner";
-import { toast } from "sonner";
-import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { DataState } from "@/components/ui/data-state";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -33,9 +32,6 @@ interface ChromeAgent {
 
 export default function ChromeC2Page() {
   const { t } = useI18n();
-  const [agents, setAgents] = useState<ChromeAgent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   // Experimental: tasks target the Chrome extension agent only, not the standard Go implant.
   const [selectedAgent, setSelectedAgent] = useState("");
   const [taskType, setTaskType] = useState("chrome_exec");
@@ -59,23 +55,16 @@ export default function ChromeC2Page() {
     { value: "chrome_idle", label: t("chrome.task_idle") },
   ];
 
-  const fetchAgents = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const { data, loading, error, refresh: fetchAgents } = useApiResource<{ agents: ChromeAgent[] }>({
+    fetcher: async () => {
       const data = await api.get<{ agents: ChromeAgent[] }>(paths.chrome.agents);
-      setAgents(data.agents || []);
-    } catch {
-      setAgents([]);
-      setError(t("chrome.toast.load_failed"));
-      toast.error(t("chrome.toast.load_failed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => { fetchAgents(); }, [fetchAgents]);
-  useVisibleInterval(fetchAgents, 15000);
+      return data;
+    },
+    pollMs: 15_000,
+    toastThrottleMs: 10_000,
+    errorMessage: t("chrome.toast.load_failed"),
+  });
+  const agents = data?.agents ?? [];
 
   async function sendTask() {
     if (!selectedAgent) { setMsg(t("chrome.select_agent")); return; }

@@ -7,6 +7,7 @@ import { phaseColor } from "@/lib/chart-palette";
 import { PageSpinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 import { useAgentList } from "@/lib/hooks/useAgentList";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -304,20 +305,15 @@ export default function AttackPage() {
 
 function PhaseCoverageCard() {
   const { t } = useI18n();
-  const [phases, setPhases] = useState<PhaseCoverage[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    (async () => {
-      try {
-        const json = await api.get(paths.mitre.phases, { signal: controller.signal });
-        if (json.success) setPhases(((json.data || []) as PhaseCoverage[]));
-      } catch { toast.error(t("attack.load_phases_failed")); }
-      setLoading(false);
-    })();
-    return () => controller.abort();
-  }, [t]);
+  const { data: resp, loading } = useApiResource<{ success?: boolean; data?: PhaseCoverage[] }>({
+    fetcher: async () => {
+      const json = await api.get(paths.mitre.phases);
+      return json;
+    },
+    toastThrottleMs: 10_000,
+    errorMessage: t("attack.load_phases_failed"),
+  });
+  const phases = resp?.data ?? [];
 
   if (loading || phases.length === 0) return null;
 

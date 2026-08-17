@@ -1,11 +1,12 @@
 "use client";
 import { PageContainer } from "@/components/ui/page-container";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { downloadBase64 } from "@/lib/download";
 import { Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/lib/i18n";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,7 +15,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { toast } from "sonner";
 import { Box, CheckCircle, Download, Hammer, Wrench, X } from "lucide-react";
 
 interface ArtifactTemplate {
@@ -40,8 +40,6 @@ interface PackerInfo {
 
 export default function PackerPageContent({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
-  const [templates, setTemplates] = useState<ArtifactTemplate[]>([]);
-  const [packerInfo, setPackerInfo] = useState<PackerInfo | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [outputType, setOutputType] = useState("exe");
   const [shellcodeB64, setShellcodeB64] = useState("");
@@ -73,16 +71,19 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    const ac = new AbortController();
-    api.get<{ templates: ArtifactTemplate[] }>("/packer/templates", { signal: ac.signal })
-      .then(d => { if (d.templates) setTemplates(d.templates); })
-      .catch(() => { if (!ac.signal.aborted) toast.error(t("packer.toast.load_failed")); });
-    api.get<PackerInfo>("/packer/info", { signal: ac.signal })
-      .then(d => setPackerInfo(d))
-      .catch(() => { if (!ac.signal.aborted) toast.error(t("packer.toast.load_failed")); });
-    return () => ac.abort();
-  }, [t]);
+  const { data } = useApiResource<{ templates: ArtifactTemplate[]; info: PackerInfo }>({
+    fetcher: async () => {
+      const [templates, info] = await Promise.all([
+        api.get<{ templates: ArtifactTemplate[] }>("/packer/templates"),
+        api.get<PackerInfo>("/packer/info"),
+      ]);
+      return { templates: templates.templates || [], info };
+    },
+    toastThrottleMs: 10_000,
+    errorMessage: t("packer.toast.load_failed"),
+  });
+  const templates = data?.templates ?? [];
+  const packerInfo = data?.info ?? null;
 
   function handleTemplateSelect(name: string) {
     setSelectedTemplate(name);

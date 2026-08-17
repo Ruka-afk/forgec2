@@ -1,10 +1,11 @@
 "use client";
 import { PageContainer } from "@/components/ui/page-container";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { downloadText } from "@/lib/download";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
@@ -13,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
-import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,9 +46,6 @@ interface Listener {
 export default function StagerPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
 
-  const [tokens, setTokens] = useState<StagerToken[]>([]);
-  const [listeners, setListeners] = useState<Listener[]>([]);
-  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
   const [listenerId, setListenerId] = useState("");
@@ -65,30 +62,24 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
   const { confirm, modal } = useConfirm();
   const [createdToken, setCreatedToken] = useState<{ token: string; stager_url: string; stage2_size: number; expires_at: string } | null>(null);
 
-  const fetchTokens = useCallback(async () => {
-    try {
+  const { data, loading, refresh: loadData } = useApiResource<{ tokens: StagerToken[]; listeners: Listener[] }>({
+    fetcher: async () => {
       const res = await api.get<{ success: boolean; data: StagerToken[] }>("/stager/tokens");
-      if (res.success) setTokens(res.data);
-    } catch { toast.error(t("stager.toast.create_failed")); }
-  }, [t]);
-
-  const fetchListeners = useCallback(async () => {
-    try {
-      const res = await api.get<unknown>(paths.listeners.list);
-      const list = Array.isArray(res) ? (res as Listener[]) : ((res as Record<string, unknown>)?.data as Listener[] || (res as Record<string, unknown>)?.listeners as Listener[] || []);
-      setListeners(list);
-    } catch { toast.error(t("stager.toast.create_failed")); }
-  }, [t]);
+      const lres = await api.get<unknown>(paths.listeners.list);
+      const list = Array.isArray(lres) ? (lres as Listener[]) : (((lres as Record<string, unknown>)?.data as Listener[]) || ((lres as Record<string, unknown>)?.listeners as Listener[]) || []);
+      return { tokens: res.success ? res.data : [], listeners: list };
+    },
+    toastThrottleMs: 10_000,
+    errorMessage: t("stager.toast.create_failed"),
+  });
+  const tokens = data?.tokens ?? [];
+  const listeners = data?.listeners ?? [];
 
   useEffect(() => {
     if (!message) return;
     const t = setTimeout(() => setMessage(""), 5000);
     return () => clearTimeout(t);
   }, [message]);
-
-  useEffect(() => {
-    Promise.all([fetchTokens(), fetchListeners()]).finally(() => setLoading(false));
-  }, [fetchTokens, fetchListeners]);
 
   async function handleRegister() {
     if (!listenerId) { setMessage(t("stager.field_listener")); return; }
@@ -110,7 +101,7 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
       if (res.success) {
         setCreatedToken(res);
         setMessage(t("stager.toast.created"));
-        fetchTokens();
+        loadData();
       }
     } catch (e: unknown) {
       setMessage(e instanceof Error ? e.message : t("stager.toast.create_failed"));
@@ -124,7 +115,7 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
     try {
       await api.del(paths.stager.one(id));
       setMessage(t("stager.toast.deleted"));
-      fetchTokens();
+      loadData();
     } catch { setMessage(t("stager.toast.delete_failed")); }
   }
 

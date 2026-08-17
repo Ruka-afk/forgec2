@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { toast } from "sonner";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageSpinner, Spinner } from "@/components/ui/spinner";
@@ -88,18 +89,18 @@ const methods = [
 ];
 
 export default function LateralPageContent() {
-  const [stats, setStats] = useState<LateralStats>({});
-  const [loading, setLoading] = useState(true);
   const [activeMethod, setActiveMethod] = useState("smb");
   const [form, setForm] = useState<FormData>(defaultForm);
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [credentials, setCredentials] = useState<Credential[]>([]);
-  const [history, setHistory] = useState<MovementHistory[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const { t } = useI18n();
 
-  const loadData = useCallback(async () => {
-    try {
+  const { data, loading, refresh: loadData } = useApiResource<{
+    stats: LateralStats;
+    agents: Agent[];
+    credentials: Credential[];
+    history: MovementHistory[];
+  }>({
+    fetcher: async () => {
       let failed = 0;
       const [data, agentData, credData, histData] = await Promise.all([
         api.get(paths.lateral.historyAll).catch(() => { failed++; return { lateral: [] }; }),
@@ -107,16 +108,21 @@ export default function LateralPageContent() {
         api.get(paths.credentials.list()).catch(() => { failed++; return { vault_entries: [] }; }),
         api.get(paths.tasks.list("type=lateral&pageSize=50")).catch(() => { failed++; return { tasks: [] }; }),
       ]);
-      setStats(data as LateralStats);
-      setAgents((agentData.agents || []) as Agent[]);
-      setCredentials((credData.vault_entries || []) as Credential[]);
-      setHistory((histData.tasks || []) as MovementHistory[]);
       if (failed > 0) toast.error(t("lateral.toast.load_failed"));
-    } catch { toast.error(t("lateral.toast.load_failed")); }
-    setLoading(false);
-  }, [t]);
-
-  useEffect(() => { loadData(); }, [loadData]);
+      return {
+        stats: data as LateralStats,
+        agents: (agentData.agents || []) as Agent[],
+        credentials: (credData.vault_entries || []) as Credential[],
+        history: (histData.tasks || []) as MovementHistory[],
+      };
+    },
+    toastThrottleMs: 0,
+    errorMessage: t("lateral.toast.load_failed"),
+  });
+  const stats = data?.stats ?? {};
+  const agents = data?.agents ?? [];
+  const credentials = data?.credentials ?? [];
+  const history = data?.history ?? [];
 
   const updateForm = (key: keyof FormData, value: string) => {
     setForm(prev => ({ ...prev, [key]: value }));

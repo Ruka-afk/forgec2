@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { useApiResource } from "@/lib/hooks/useApiResource";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageSpinner } from "@/components/ui/spinner";
@@ -51,37 +51,46 @@ interface BreakerEvent {
 
 export default function CircuitBreakerPage() {
   const { t } = useI18n();
-  const [listeners, setListeners] = useState<ListenerDetail[]>([]);
   const [config, setConfig] = useState<BreakerConfig>({
     failure_threshold: 3,
     cooldown_seconds: 300,
     half_open_max_reqs: 3,
     health_check_seconds: 60,
   });
-  const [events, setEvents] = useState<BreakerEvent[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [configForm, setConfigForm] = useState<BreakerConfig>(config);
 
-  const loadData = useCallback(() => {
-    let failed = 0;
-    Promise.all([
-      api.get<{ listeners?: ListenerDetail[] }>(paths.circuitBreaker.detail).catch(() => { failed++; return { listeners: [] as ListenerDetail[] }; }),
-      api.get<{ failure_threshold?: number; cooldown_seconds?: number; half_open_max_reqs?: number; health_check_seconds?: number }>(paths.circuitBreaker.config).catch((): Partial<BreakerConfig> => { failed++; return {}; }),
-      api.get<{ events?: BreakerEvent[] }>(paths.circuitBreaker.events).catch(() => { failed++; return { events: [] as BreakerEvent[] }; }),
-    ]).then(([detData, cfgData, evtData]) => {
-      setListeners((detData.listeners || []) as ListenerDetail[]);
-      if ((cfgData as Record<string, unknown>).failure_threshold !== undefined) {
-        setConfig(cfgData as BreakerConfig);
-        setConfigForm(cfgData as BreakerConfig);
-      }
-      setEvents((evtData.events || []) as BreakerEvent[]);
-      if (failed > 0) toast.error(t("cb.load_failed"));
-    }).catch(() => toast.error(t("cb.load_failed"))).finally(() => setLoading(false));
-  }, [t]);
+  const { data, loading, refresh } = useApiResource<{
+    listeners: ListenerDetail[];
+    config?: Partial<BreakerConfig>;
+    events: BreakerEvent[];
+  }>({
+    fetcher: async () => {
+      const [detData, cfgData, evtData] = await Promise.all([
+        api.get<{ listeners?: ListenerDetail[] }>(paths.circuitBreaker.detail),
+        api.get<{ failure_threshold?: number; cooldown_seconds?: number; half_open_max_reqs?: number; health_check_seconds?: number }>(paths.circuitBreaker.config),
+        api.get<{ events?: BreakerEvent[] }>(paths.circuitBreaker.events),
+      ]);
+      return {
+        listeners: (detData.listeners || []) as ListenerDetail[],
+        config: cfgData as Partial<BreakerConfig>,
+        events: (evtData.events || []) as BreakerEvent[],
+      };
+    },
+    pollMs: 15_000,
+    toastThrottleMs: 10_000,
+    errorMessage: t("cb.load_failed"),
+  });
+  const listeners = data?.listeners ?? [];
+  const events = data?.events ?? [];
 
-  useEffect(() => { loadData(); }, [loadData]);
-  useVisibleInterval(loadData, 15000);
+  useEffect(() => {
+    const cfg = data?.config;
+    if (cfg?.failure_threshold !== undefined) {
+      setConfig(cfg as BreakerConfig);
+      setConfigForm(cfg as BreakerConfig);
+    }
+  }, [data]);
 
   const handleSaveConfig = async () => {
     try {
@@ -96,7 +105,7 @@ export default function CircuitBreakerPage() {
     try {
       await api.post(paths.circuitBreaker.reset(listenerId));
       toast.success(t("cb.listener_reset", { id: listenerId }));
-      loadData();
+      refresh();
     } catch { toast.error(t("cb.reset_failed")); }
   };
 
@@ -104,7 +113,7 @@ export default function CircuitBreakerPage() {
     try {
       await api.postJson(paths.circuitBreaker.toggle(listenerId), { state });
       toast.success(t("cb.listener_toggled", { id: listenerId, state }));
-      loadData();
+      refresh();
     } catch { toast.error(t("cb.toggle_failed")); }
   };
 
