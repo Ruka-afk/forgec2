@@ -184,7 +184,7 @@ export default function ScannerPage() {
         <div className="text-xs text-muted-foreground mt-0.5">{t("scanner.honesty_desc")}</div>
       </Card>
 
-      <Card className="p-4 sm:p-5 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+      <Card className="p-(--card-spacing) gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={Radar} color="info" size="lg" />
           <div>
@@ -264,7 +264,7 @@ export default function ScannerPage() {
       </Card>
 
       {(data?.active_scans?.length ?? 0) > 0 && (
-        <Card className="p-4 sm:p-5 gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+        <Card className="p-(--card-spacing) gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
           <div className="flex items-center gap-x-3 mb-4">
             <div className="w-10 h-10 rounded-xl bg-warning/10 ring-1 ring-warning/10 flex items-center justify-center shrink-0">
               <Spinner size="xs" />

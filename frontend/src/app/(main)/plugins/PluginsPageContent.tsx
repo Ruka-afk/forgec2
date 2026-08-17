@@ -252,7 +252,7 @@ export default function PluginsPage() {
         </div>
       </>}>
 
-      <Card className="p-4 sm:p-5 mb-4">
+      <Card className="p-(--card-spacing) mb-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <SearchInput value={search} onChange={handleSearchChange} placeholder={t("plugins.search_ph")} className="max-w-md" label={t("common.search")} />
@@ -319,7 +319,7 @@ export default function PluginsPage() {
             <DialogTitle>{t("plugins.import_title")}</DialogTitle>
           </DialogHeader>
           <Card className="border-2 border-dashed hover:border-primary transition-colors">
-            <CardContent className="p-4 sm:p-5 text-center">
+            <CardContent className="p-(--card-spacing) text-center">
               <CloudUpload className="w-4 h-4" />
               <p className="text-sm text-muted-foreground mb-3">{t("plugins.upload_desc")}</p>
               <input aria-label={t("plugins.upload_file")} name="input-6" type="file" accept=".json,.zip" onChange={(e) => setImportFile(e.target.files?.[0] || null)} className="text-sm text-muted-foreground file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/10 file:text-primary hover:file:bg-primary/15" />

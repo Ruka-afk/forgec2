@@ -167,7 +167,7 @@ export default function AgentPersistencePage() {
 
   return (
     <PageContainer>
-      <Card className="p-4 sm:p-5 mb-6">
+      <Card className="p-(--card-spacing) mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-lg bg-primary/15 flex items-center justify-center">
@@ -198,7 +198,7 @@ export default function AgentPersistencePage() {
       </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <Card className="p-4 sm:p-5">
+        <Card className="p-(--card-spacing)">
           <div className="flex items-center gap-2 mb-4">
             <Plug className="w-4 h-4" aria-hidden="true" />
             <h3 className="text-sm font-semibold text-foreground">{t("agents.persistence_install")}</h3>
@@ -234,7 +234,7 @@ export default function AgentPersistencePage() {
           </div>
         </Card>
 
-        <Card className="p-4 sm:p-5">
+        <Card className="p-(--card-spacing)">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <ListChecks className="w-4 h-4" aria-hidden="true" />

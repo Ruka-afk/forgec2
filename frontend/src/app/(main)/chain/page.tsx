@@ -118,7 +118,7 @@ export default function ChainPage() {
     <PageContainer title={t("chain.multi_hop")} icon={<Link className="w-4 h-4" />} subtitle={t("chain.subtitle")}>
 
       {/* Agent Selector */}
-      <Card className="p-4 sm:p-5 mb-6">
+      <Card className="p-(--card-spacing) mb-6">
         <Label className="text-xs font-medium text-muted-foreground mb-2 block">{t("chain.select_agent")}</Label>
         <Select value={selectedAgent} onValueChange={(v) => setSelectedAgent(v ?? "")}>
           <SelectTrigger className="w-full">
@@ -138,7 +138,7 @@ export default function ChainPage() {
       {selectedAgent && (
         <>
           {/* Current Configuration */}
-          <Card className="p-4 sm:p-5 mb-6">
+          <Card className="p-(--card-spacing) mb-6">
             <h3 className="text-sm font-semibold text-foreground mb-3">{t("chain.current_chain")}</h3>
             {chain.length > 0 ? (
               <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -229,7 +229,7 @@ export default function ChainPage() {
 
           {/* Chain Visualization - Full Topology */}
           {graph.length > 0 && (
-            <Card className="p-4 sm:p-5 mb-6">
+            <Card className="p-(--card-spacing) mb-6">
               <h3 className="text-sm font-semibold text-foreground mb-3">{t("chain.topology_view")}</h3>
               <div className="space-y-2">
                 {graph

@@ -219,12 +219,12 @@ export default function ListenersPageContent() {
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Card className="p-4 sm:p-5"><StatTile label={t("listeners.total")} value={loading ? "..." : total} /></Card>
-        <Card className="p-4 sm:p-5"><StatTile label={t("listeners.running")} value={loading ? "..." : enabledCount} tone="success" /></Card>
-        <Card className="p-4 sm:p-5"><StatTile label={t("listeners.burned")} value={loading ? "..." : burnedCount} tone={burnedCount > 0 ? "destructive" : undefined} /></Card>
-        <Card className="p-4 sm:p-5"><StatTile label={t("listeners.http")} value={loading ? "..." : httpCount} /></Card>
-        <Card className="p-4 sm:p-5"><StatTile label={t("listeners.tcp")} value={loading ? "..." : tcpCount} /></Card>
-        <Card className="p-4 sm:p-5"><StatTile label={t("listeners.dns")} value={loading ? "..." : dnsCount} tone="primary" /></Card>
+        <Card className="p-(--card-spacing)"><StatTile label={t("listeners.total")} value={loading ? "..." : total} /></Card>
+        <Card className="p-(--card-spacing)"><StatTile label={t("listeners.running")} value={loading ? "..." : enabledCount} tone="success" /></Card>
+        <Card className="p-(--card-spacing)"><StatTile label={t("listeners.burned")} value={loading ? "..." : burnedCount} tone={burnedCount > 0 ? "destructive" : undefined} /></Card>
+        <Card className="p-(--card-spacing)"><StatTile label={t("listeners.http")} value={loading ? "..." : httpCount} /></Card>
+        <Card className="p-(--card-spacing)"><StatTile label={t("listeners.tcp")} value={loading ? "..." : tcpCount} /></Card>
+        <Card className="p-(--card-spacing)"><StatTile label={t("listeners.dns")} value={loading ? "..." : dnsCount} tone="primary" /></Card>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">

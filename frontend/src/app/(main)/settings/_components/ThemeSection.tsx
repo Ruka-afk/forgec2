@@ -24,7 +24,7 @@ export default function ThemeSection({ theme, onApplyTheme }: { theme: string; o
   return (
     <Card className="overflow-hidden">
       <CardHeaderRow icon={Palette} tone="primary" title={t("settings.theme_title")} description={t("settings.theme_subtitle")} />
-      <div className="p-4 sm:p-5">
+      <div className="p-(--card-spacing)">
         <div className="mb-6">
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
             <Moon className="w-4 h-4 text-muted-foreground" />

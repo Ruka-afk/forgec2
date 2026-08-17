@@ -110,7 +110,7 @@ export default function DNSPage() {
     >
 
       {/* Status Card */}
-      <Card className="p-4 sm:p-5">
+      <Card className="p-(--card-spacing)">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={status?.running ? Wifi : WifiOff} color={status?.running ? "success" : "destructive"} size="lg" />
           <div>
@@ -153,7 +153,7 @@ export default function DNSPage() {
       </Card>
 
       {/* Configuration Card */}
-      <Card className="p-4 sm:p-5">
+      <Card className="p-(--card-spacing)">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={Server} color="primary" size="lg" />
           <div>
@@ -217,7 +217,7 @@ export default function DNSPage() {
       </Card>
 
       {/* How It Works */}
-      <Card className="p-4 sm:p-5">
+      <Card className="p-(--card-spacing)">
         <div className="flex items-center gap-x-3 mb-4">
           <IconBadge icon={Globe} color="warning" size="lg" />
           <div>

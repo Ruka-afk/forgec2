@@ -167,7 +167,7 @@ export default function AuditPage() {
       </>}>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5">
-        <Card className="p-4 sm:p-5">
+        <Card className="p-(--card-spacing)">
           <div className="flex items-center justify-between">
             <StatTile label={t("audit.total_records")} value={total} />
             <IconBadge icon={FileText} color="primary" size="xl" />
@@ -175,7 +175,7 @@ export default function AuditPage() {
         </Card>
       </div>
 
-      <Card className="p-4 sm:p-5">
+      <Card className="p-(--card-spacing)">
         <div className="flex flex-wrap items-center gap-3">
           <Select value={actionFilter || "all"} onValueChange={(v) => setActionFilter(v === "all" || !v ? "" : v)}>
             <SelectTrigger className="w-[180px]">

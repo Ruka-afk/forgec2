@@ -115,7 +115,7 @@ export default function BOFPage() {
           {quickBOFLibrary.map((bof) => {
             const isUploaded = files.some((f) => (f.name || "").toLowerCase() === bof.name.toLowerCase());
             return (
-              <Card key={bof.name} className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+              <Card key={bof.name} className="p-(--card-spacing) hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-medium text-foreground font-mono">{bof.name}</div>
                   <Badge variant={isUploaded ? "default" : "secondary"} className="text-(--fs-micro-sm)">

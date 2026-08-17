@@ -114,7 +114,7 @@ export default function CloudPage() {
         <div className="text-xs text-muted-foreground mt-0.5">{t("cloud.experimental_desc")}</div>
       </Card>
 
-      <Card className="p-4 sm:p-5">
+      <Card className="p-(--card-spacing)">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={Cloud} color="info" size="xl" />
           <div>
@@ -165,7 +165,7 @@ export default function CloudPage() {
         </div>
       </Card>
 
-      <Card className="p-4 sm:p-5">
+      <Card className="p-(--card-spacing)">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={List} color="primary" size="xl" className="dark:bg-primary/20" />
           <div>

@@ -84,7 +84,7 @@ export default function ContainerPage() {
         <div className="text-xs text-muted-foreground mt-0.5">{t("container.experimental_desc")}</div>
       </Card>
 
-      <Card className="p-4 sm:p-5">
+      <Card className="p-(--card-spacing)">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={Box} color="info" size="xl" />
           <div>
@@ -110,7 +110,7 @@ export default function ContainerPage() {
         </div>
       </Card>
 
-      <Card className="p-4 sm:p-5">
+      <Card className="p-(--card-spacing)">
         <div className="flex items-center gap-x-3 mb-5">
           <IconBadge icon={Cpu} color="primary" size="xl" />
           <div>
@@ -151,7 +151,7 @@ export default function ContainerPage() {
       </Card>
 
       {(dispatchMsg || taskPoll.status !== "idle") && (
-        <Card className="p-4 sm:p-5">
+        <Card className="p-(--card-spacing)">
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm font-semibold text-foreground">{t("container.result")}</div>
             {taskPoll.status !== "idle" && (

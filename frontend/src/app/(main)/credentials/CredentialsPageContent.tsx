@@ -320,16 +320,16 @@ export default function CredentialsPage() {
       <CredHarvestCard />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5">
-        <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
+        <Card className="p-(--card-spacing) transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
           <StatTile labelBelow label={t("cred.stat_total")} value={stats.total} />
         </Card>
-        <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
+        <Card className="p-(--card-spacing) transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
           <StatTile labelBelow label={t("cred.stat_confirmed")} value={stats.confirmed} tone="primary" />
         </Card>
-        <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
+        <Card className="p-(--card-spacing) transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
           <StatTile labelBelow label={t("cred.stat_unconfirmed")} value={stats.unconfirmed} tone="warning" />
         </Card>
-        <Card className="p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
+        <Card className="p-(--card-spacing) transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30">
           <div className="flex flex-wrap gap-1 mt-1">
             {stats.byType.map(s => s.count > 0 && (
               <Badge key={s.type} variant={TYPE_BADGE_VARIANT[s.type] || "outline"}>
@@ -341,7 +341,7 @@ export default function CredentialsPage() {
         </Card>
       </div>
 
-      <Card className="p-4 sm:p-5">
+      <Card className="p-(--card-spacing)">
         <div className="flex flex-wrap items-center gap-3">
           <SearchInput
             value={searchQuery}
@@ -398,7 +398,7 @@ export default function CredentialsPage() {
       </Card>
 
       {data?.AllTags && data.AllTags.length > 0 && (
-        <Card className="p-4 sm:p-5">
+        <Card className="p-(--card-spacing)">
           <div className="font-medium text-sm text-foreground flex items-center gap-2 mb-3">
             <Tag className="w-4 h-4" />
             <span>{t("cred.tags")}</span>
@@ -429,7 +429,7 @@ export default function CredentialsPage() {
           emptyTitle={t("cred.empty")}
           onRetry={reload}
           loadingSkeleton={
-            <div className="p-4 sm:p-5 text-center text-muted-foreground">
+            <div className="p-(--card-spacing) text-center text-muted-foreground">
               <div className="flex flex-col items-center gap-2">
                 <Skeleton className="h-8 w-8 rounded-full" />
                 <Skeleton className="h-4 w-20" />

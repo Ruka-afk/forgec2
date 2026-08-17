@@ -86,7 +86,7 @@ export default memo(function AgentHeader({
     <>
       <Card className="mb-4 overflow-hidden border-border/70 bg-card/90 shadow-sm">
         <div className="h-1 w-full bg-gradient-to-r from-primary via-chart-2 to-chart-1" />
-        <div className="p-4 sm:p-5">
+        <div className="p-(--card-spacing)">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex min-w-0 flex-1 items-start gap-4">
               <div

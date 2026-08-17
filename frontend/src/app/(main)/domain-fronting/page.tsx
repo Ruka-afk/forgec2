@@ -115,7 +115,7 @@ export default function DomainFrontingPage() {
       </>}>
 
       {/* Auto-failover toggle */}
-      <Card className="p-4 sm:p-5 flex items-center justify-between">
+      <Card className="p-(--card-spacing) flex items-center justify-between">
         <div>
           <div className="font-medium text-foreground">{t("domain_fronting.auto_failover")}</div>
           <div className="text-sm text-muted-foreground mt-0.5">
@@ -126,7 +126,7 @@ export default function DomainFrontingPage() {
       </Card>
 
       {/* Active domain indicator */}
-      <Card className="p-4 sm:p-5">
+      <Card className="p-(--card-spacing)">
         <div className="text-sm text-muted-foreground mb-1">{t("domain_fronting.current_active_domain")}</div>
         <div className="flex items-center gap-3">
           {domains.filter((d) => d.active).length > 0 ? (
@@ -149,7 +149,7 @@ export default function DomainFrontingPage() {
         <CardHeaderRow accent={false} title={t("domain_fronting.front_domains")} action={<span className="text-xs text-muted-foreground">{domains.length} domains</span>} />
 
         {loading ? (
-          <div className="p-4 sm:p-5">
+          <div className="p-(--card-spacing)">
             <DataSpinner message="Loading..." />
           </div>
         ) : domains.length === 0 ? (

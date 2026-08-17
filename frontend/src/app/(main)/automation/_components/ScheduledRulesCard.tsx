@@ -170,7 +170,7 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
         </Button>
       </>} />
 
-      <div className="p-4 sm:p-5">
+      <div className="p-(--card-spacing)">
         {showForm && (
           <Card className="mb-4 border-border/60">
             <div className="p-4">

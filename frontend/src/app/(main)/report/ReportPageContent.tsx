@@ -139,7 +139,7 @@ export default function ReportPage() {
 
           <div className="lg:col-span-3">
           <TabsContent value="overview" className="mt-0">
-            <Card className="p-4 sm:p-5">
+            <Card className="p-(--card-spacing)">
               <h2 className="text-lg font-semibold text-foreground mb-6">{t("report.settings")}</h2>
               <div className="space-y-6">
                 <div>

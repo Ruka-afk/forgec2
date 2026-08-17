@@ -14,7 +14,7 @@ import { useI18n } from "@/lib/i18n";
 import { AdvancedSection, FieldLabel, PayloadCard } from "./PayloadCard";
 import { BuildResult, BuildStatusBadge } from "./BuildResult";
 
-const BTN_CLASS = "w-full h-10 rounded-lg font-medium flex items-center justify-center gap-x-2 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50";
+const BTN_CLASS = "w-full h-10 rounded-lg font-medium flex items-center justify-center gap-x-2 accent-gradient text-primary-foreground shadow-md shadow-primary/25 hover:shadow-lg hover:shadow-primary/35 hover:brightness-110 active:scale-[0.98] disabled:opacity-50";
 
 // ─── BinaryPanel (exe / dll) ───────────────────────────────────
 

@@ -18,7 +18,7 @@ export default function ProfileSection({ data }: { data: SettingsData }) {
   return (
     <Card className="overflow-hidden">
       <CardHeaderRow icon={User} tone="primary" title={t("settings.profile.title")} description={t("settings.profile.subtitle")} />
-      <div className="p-4 sm:p-5">
+      <div className="p-(--card-spacing)">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 bg-primary/10 text-primary ring-1 ring-border/50 rounded-lg flex items-center justify-center text-2xl font-bold">
             <User className="w-4 h-4" />

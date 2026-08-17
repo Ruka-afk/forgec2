@@ -101,7 +101,7 @@ export default function BackupSection() {
     <Card className="overflow-hidden">
       <CardHeaderRow icon={Archive} tone="warning" title={t("settings.backup.title")} description={t("settings.backup.subtitle")} />
 
-      <div className="p-4 sm:p-5 space-y-5">
+      <div className="p-(--card-spacing) space-y-5">
         <div className="flex flex-wrap gap-3">
           <Button onClick={handleCreateBackup} size="lg" disabled={creating} className="px-4 bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors disabled:opacity-50">
             {creating ? <Spinner size="xs" /> : <Archive className="w-4 h-4" />}

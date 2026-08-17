@@ -241,7 +241,7 @@ function LootPage() {
         </TabsList>
 
       <TabsContent value="screenshots">
-        <Card className="p-4 sm:p-5">
+        <Card className="p-(--card-spacing)">
           <div className="flex items-center justify-between mb-4">
             <div className="font-semibold flex items-center gap-x-2">
               <Images aria-hidden="true" className="w-4 h-4" />
@@ -287,7 +287,7 @@ function LootPage() {
       </TabsContent>
 
       <TabsContent value="keylogs">
-        <Card className="p-4 sm:p-5">
+        <Card className="p-(--card-spacing)">
           <div className="flex items-center justify-between mb-4 gap-2">
             <div className="font-semibold flex items-center gap-x-2">
               <Keyboard aria-hidden="true" className="w-4 h-4" />
@@ -351,7 +351,7 @@ function LootPage() {
       </TabsContent>
 
       <TabsContent value="downloads">
-        <Card className="p-4 sm:p-5">
+        <Card className="p-(--card-spacing)">
           <div className="flex items-center justify-between mb-4">
             <div className="font-semibold flex items-center gap-x-2">
               <Download aria-hidden="true" className="w-4 h-4" />

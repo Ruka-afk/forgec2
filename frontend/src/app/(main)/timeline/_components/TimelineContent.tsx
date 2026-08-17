@@ -74,7 +74,7 @@ export default function TimelineContent({
         </div>
       </Card>
 
-      <Card className="p-4 sm:p-5 max-h-[65vh] overflow-y-auto">
+      <Card className="p-(--card-spacing) max-h-[65vh] overflow-y-auto">
         {loading ? (
           <div className="space-y-6 pl-12">
             {Array.from({ length: 5 }).map((_, i) => (

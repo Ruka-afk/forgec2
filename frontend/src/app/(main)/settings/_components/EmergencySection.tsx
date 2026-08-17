@@ -54,7 +54,7 @@ export default function EmergencySection() {
   return (
     <Card className="overflow-hidden">
       <CardHeaderRow icon={AlertTriangle} tone="destructive" title={t("settings.emergency.title")} description={t("settings.emergency.subtitle")} />
-      <div className="p-4 sm:p-5 space-y-4">
+      <div className="p-(--card-spacing) space-y-4">
         <div className="flex items-center justify-between p-4 bg-muted rounded-lg border border-border">
           <div>
             <div className="text-sm font-medium text-muted-foreground">{t("settings.emergency.status_label")}</div>

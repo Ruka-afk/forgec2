@@ -18,7 +18,7 @@ export default function DatabaseSection({
   return (
     <Card className="overflow-hidden">
       <CardHeaderRow icon={Database} tone="cyan" title={t("settings.database.title")} description={t("settings.database.subtitle")} />
-      <div className="p-4 sm:p-5">
+      <div className="p-(--card-spacing)">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
           {[
             { label: t("settings.database.size"), value: data.database_size ? (data.database_size / 1024 / 1024).toFixed(1) + " MB" : "-" },

@@ -135,7 +135,7 @@ export default function TagsPage() {
       <DataState loading={loading} error={error} onRetry={loadTags} empty={!loading && !error && tags.length === 0} emptyIcon={Tag} emptyTitle={t("tags.empty")} emptyMessage={t("tags.empty_desc")} emptyAction={<Button onClick={openCreate} className="inline-flex items-center gap-2 px-4 py-2.5 min-w-[2.75rem] min-h-[2.75rem]"><Plus className="w-4 h-4" /><span>{t("tags.create")}</span></Button>} loadingSkeleton={
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Card key={"skel-" + i} className="p-4 sm:p-5">
+            <Card key={"skel-" + i} className="p-(--card-spacing)">
               <div className="flex items-center gap-3 mb-3">
                 <Skeleton className="w-8 h-8 rounded-full" />
                 <Skeleton className="h-5 w-24" />
@@ -147,7 +147,7 @@ export default function TagsPage() {
       }>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {tags.map((tag) => (
-            <Card key={tag.id} className="p-4 sm:p-5 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30 transition-all cursor-pointer">
+            <Card key={tag.id} className="p-(--card-spacing) hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-black/30 transition-all cursor-pointer">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <div

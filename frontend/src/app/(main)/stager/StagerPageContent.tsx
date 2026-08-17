@@ -165,7 +165,7 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-1 p-4 sm:p-5 space-y-3">
+        <Card className="lg:col-span-1 p-(--card-spacing) space-y-3">
           <div className="text-sm font-semibold text-foreground">{t("stager.register_token")}</div>
 
           <div>
@@ -261,7 +261,7 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
           </Button>
         </Card>
 
-        <Card className="lg:col-span-2 p-4 sm:p-5">
+        <Card className="lg:col-span-2 p-(--card-spacing)">
           <div className="text-sm font-semibold text-foreground mb-3">
             {t("stager.tokens_count", { count: tokens.length })}
           </div>

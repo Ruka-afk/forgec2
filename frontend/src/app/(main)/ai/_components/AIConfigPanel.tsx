@@ -39,7 +39,7 @@ export function AIConfigPanel(props: AIConfigPanelProps) {
   } = props;
 
   return (
-    <Card className="shrink-0 mb-3 p-4 sm:p-5">
+    <Card className="shrink-0 mb-3 p-(--card-spacing)">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-foreground">{t("ai.config_title")}</h2>
         <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("ai.close_settings")}>

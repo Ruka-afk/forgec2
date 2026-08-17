@@ -76,7 +76,7 @@ export default function ExtC2Section() {
   };
 
   return (
-    <Card className="p-4 sm:p-5 space-y-4">
+    <Card className="p-(--card-spacing) space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-semibold text-sm">{t("settings.extc2")}</h3>

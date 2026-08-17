@@ -46,7 +46,7 @@ export default function SecuritySection({
   return (
     <Card className="overflow-hidden">
       <CardHeaderRow icon={Lock} tone="muted" title={t("settings.security.title")} description={t("settings.security.subtitle")} />
-      <div className="p-4 sm:p-5 space-y-6">
+      <div className="p-(--card-spacing) space-y-6">
         <div>
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2"><Key className="w-4 h-4" />{t("settings.security.change_password")}</h3>
           <form onSubmit={onChangePassword} className="max-w-md space-y-4">

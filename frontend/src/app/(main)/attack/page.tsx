@@ -168,7 +168,7 @@ export default function AttackPage() {
       </Card>
 
       {/* Summary Card */}
-      <Card className="p-4 sm:p-5">
+      <Card className="p-(--card-spacing)">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
@@ -320,7 +320,7 @@ function PhaseCoverageCard() {
   const maxCoverage = Math.max(...phases.map((p) => p.campaigns_covered), 1);
 
   return (
-    <Card className="p-4 sm:p-5">
+    <Card className="p-(--card-spacing)">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-lg font-semibold text-foreground">

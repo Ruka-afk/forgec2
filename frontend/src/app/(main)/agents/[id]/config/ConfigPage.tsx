@@ -168,7 +168,7 @@ export default function AgentConfigPage() {
         </div>
       )}
 
-      <Card className="p-4 sm:p-5 bg-primary/[0.04]">
+      <Card className="p-(--card-spacing) bg-primary/[0.04]">
         <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
           <SlidersHorizontal className="w-4 h-4" /> {t("agents.config_hot_config")}
         </h3>
@@ -314,7 +314,7 @@ export default function AgentConfigPage() {
         </div>
       </Card>
 
-      <Card className="p-4 sm:p-5">
+      <Card className="p-(--card-spacing)">
         <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
           <Info className="w-4 h-4" /> {t("agents.config_current_config")}
         </h3>

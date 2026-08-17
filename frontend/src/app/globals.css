@@ -201,8 +201,6 @@
 @layer utilities {
   /* Layered surfaces for depth without heavy shadows */
   .surface-raised { background: var(--surface-2); box-shadow: var(--elevation-2); }
-  .surface-sunken { background: var(--surface-1); }
-  .surface-inset { background: var(--surface-1); box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.25); }
 
   /* Primary action gradient + glow ring for "command-center" emphasis */
   .accent-gradient {
@@ -223,9 +221,6 @@
     background-image: linear-gradient(to right, color-mix(in oklch, var(--primary) 14%, transparent), transparent 70%);
     border-left: 2px solid var(--primary);
   }
-
-  /* Hairline divider that reads on both themes */
-  .hairline { border-color: color-mix(in oklch, var(--border) 70%, transparent); }
 }
 
 /* ── Base ── */
@@ -302,38 +297,6 @@ body {
   }
   .animate-orb-float {
     animation: orbFloat 8s ease-in-out infinite;
-  }
-}
-
-/* ══════════════════════════════════════════
-   SURFACE TEXTURES (v2)
-   ══════════════════════════════════════════ */
-
-@layer utilities {
-  /* subtle blueprint grid */
-  .bg-grid {
-    background-image:
-      linear-gradient(to right, color-mix(in oklch, var(--border) 55%, transparent) 1px, transparent 1px),
-      linear-gradient(to bottom, color-mix(in oklch, var(--border) 55%, transparent) 1px, transparent 1px);
-    background-size: 40px 40px;
-  }
-  .bg-grid-lg {
-    background-image:
-      linear-gradient(to right, color-mix(in oklch, var(--border) 45%, transparent) 1px, transparent 1px),
-      linear-gradient(to bottom, color-mix(in oklch, var(--border) 45%, transparent) 1px, transparent 1px);
-    background-size: 64px 64px;
-  }
-  /* fine film-grain noise */
-  .bg-noise {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-  }
-  /* terminal-style scanline (subtle) */
-  .bg-scanlines {
-    background-image: repeating-linear-gradient(
-      to bottom,
-      transparent 0 2px,
-      color-mix(in oklch, var(--foreground) 3%, transparent) 2px 3px
-    );
   }
 }
 

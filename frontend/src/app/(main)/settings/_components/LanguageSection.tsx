@@ -14,7 +14,7 @@ export default function LanguageSection({ language, onSetLanguage }: { language:
   return (
     <Card className="overflow-hidden">
       <CardHeaderRow icon={Languages} tone="info" title={t("settings.language.title")} description={t("settings.language.subtitle")} />
-      <div className="p-4 sm:p-5">
+      <div className="p-(--card-spacing)">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {SUPPORTED_LANGS.map((lang) => (
             <Button key={lang.code} onClick={() => onSetLanguage(lang.code)} variant="ghost"

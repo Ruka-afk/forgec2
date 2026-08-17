@@ -19,7 +19,7 @@ export default function MaintenanceSection({
   return (
     <Card className="overflow-hidden">
       <CardHeaderRow icon={Wand2} tone="warning" title={t("settings.maintenance.title")} description={t("settings.maintenance.subtitle")} />
-      <div className="p-4 sm:p-5 space-y-4">
+      <div className="p-(--card-spacing) space-y-4">
         {[
           { labelKey: "settings.maintenance.purge_tasks", descKey: "settings.maintenance.purge_tasks_desc", type: "tasks" },
           { labelKey: "settings.maintenance.purge_audit", descKey: "settings.maintenance.purge_audit_desc", type: "audit" },

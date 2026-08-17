@@ -16,7 +16,7 @@ export default function Loading() {
       </div>
       <Skeleton className="h-10 w-full rounded-lg" />
       <Card>
-        <CardContent className="p-4 sm:p-5">
+        <CardContent className="p-(--card-spacing)">
           <div className="space-y-3">
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-5/6" />

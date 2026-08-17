@@ -20,7 +20,7 @@ export default function AgentSection({
   return (
     <Card className="overflow-hidden">
       <CardHeaderRow icon={Bot} tone="success" title={t("settings.agent.title")} description={t("settings.agent.subtitle")} />
-      <div className="p-4 sm:p-5">
+      <div className="p-(--card-spacing)">
         <form onSubmit={onSave} className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>

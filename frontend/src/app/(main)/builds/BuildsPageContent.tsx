@@ -259,7 +259,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
       </div>
 
       {versionDist.length > 0 && (
-        <Card className="p-4 sm:p-5 mb-4">
+        <Card className="p-(--card-spacing) mb-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-semibold text-foreground flex items-center gap-2">
               <Cpu className="w-4 h-4" /> {t("builds.version_dist")}
@@ -286,7 +286,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
         </Card>
       )}
 
-      <Card className="p-4 sm:p-5 mb-4">
+      <Card className="p-(--card-spacing) mb-4">
         <div className="flex flex-wrap items-center gap-3">
           <Filter className="w-4 h-4" />
           <span className="text-sm font-semibold text-muted-foreground">{t("builds.platform")}</span>
@@ -337,7 +337,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
         loadingSkeleton={
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <Card key={i} className="p-4 sm:p-5">
+              <Card key={i} className="p-(--card-spacing)">
                 <div className="flex items-center gap-4">
                   <Skeleton className="w-10 h-10 rounded-lg" />
                   <div className="flex-1 space-y-2">
@@ -366,7 +366,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
 
             return (
               <Card key={id} className="overflow-hidden">
-                <div className="p-4 sm:p-5">
+                <div className="p-(--card-spacing)">
                   <div className="flex items-center gap-4">
                     <div className={`w-10 h-10 rounded-xl ring-1 ring-border/50 flex items-center justify-center ${status === "success" ? "bg-success/10" : status === "failed" ? "bg-destructive/10" : status === "building" ? "bg-primary/10" : "bg-secondary"}`}>
                       {isBuilding ? <Spinner size="xs" /> : info.icon}

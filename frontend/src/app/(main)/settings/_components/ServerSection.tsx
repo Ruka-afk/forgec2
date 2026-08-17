@@ -22,7 +22,7 @@ export default function ServerSection({
   return (
     <Card className="overflow-hidden">
       <CardHeaderRow icon={Server} tone="primary" title={t("settings.server.title")} description={t("settings.server.subtitle")} />
-      <div className="p-4 sm:p-5">
+      <div className="p-(--card-spacing)">
         <form onSubmit={onSave} className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>

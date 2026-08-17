@@ -118,7 +118,7 @@ export default function NotificationsSection() {
       ) : (<>
       <CardHeaderRow icon={Bell} tone="info" accent={false} title={t("settings.notifications.title")} description={t("settings.notifications.subtitle")} />
 
-      <div className="p-4 sm:p-5 space-y-4">
+      <div className="p-(--card-spacing) space-y-4">
         {targets.length === 0 && (
           <div className="text-center text-xs text-muted-foreground py-6">
             <EmptyState icon={Bell} title={t("settings.notifications.empty_title")} message={t("settings.notifications.empty_message")} />

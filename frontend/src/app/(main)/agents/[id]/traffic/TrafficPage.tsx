@@ -119,7 +119,7 @@ export default function AgentTrafficPage() {
   if (loadError) {
     return (
       <PageContainer className="space-y-6">
-        <Card className="p-4 sm:p-5">
+        <Card className="p-(--card-spacing)">
           <ErrorState
             title={t("agents.traffic_load_failed")}
             message={t("agents.traffic_load_failed_hint")}
@@ -133,7 +133,7 @@ export default function AgentTrafficPage() {
 
   return (
     <PageContainer className="space-y-6">
-      <Card className="p-4 sm:p-5">
+      <Card className="p-(--card-spacing)">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-foreground">{t("agents.traffic_title")}</h2>
           <div className="flex items-center gap-3">

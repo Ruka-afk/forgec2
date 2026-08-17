@@ -258,7 +258,7 @@ export default function OpsecPage() {
           </CardContent>
         </Card>
 
-        <Card className="p-4 sm:p-5">
+        <Card className="p-(--card-spacing)">
           <h2 className="text-sm font-semibold text-foreground mb-4">{t("opsec.quick_test")}</h2>
           <p className="text-xs text-muted-foreground mb-4">{t("opsec.test_desc")}</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -327,7 +327,7 @@ export default function OpsecPage() {
           )}
         </Card>
 
-        <Card className="p-4 sm:p-5">
+        <Card className="p-(--card-spacing)">
           <h2 className="text-sm font-semibold text-foreground mb-4">
             <RefreshCw className="w-4 h-4" />
             {t("opsec.rekey_title")}
@@ -364,7 +364,7 @@ export default function OpsecPage() {
           )}
         </Card>
 
-        <Card className="p-4 sm:p-5">
+        <Card className="p-(--card-spacing)">
           <h2 className="text-sm font-semibold text-foreground mb-4">
             <History className="w-4 h-4" />
             {t("opsec.history")}

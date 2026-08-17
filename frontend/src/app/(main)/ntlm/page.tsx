@@ -136,7 +136,7 @@ export default function NtlmPage() {
         </TabsList>
 
       {/* Agent selector (common) */}
-      <Card className="p-4 sm:p-5">
+      <Card className="p-(--card-spacing)">
         <Label className="text-xs mb-1.5">{t("ntlm.target_agent")}</Label>
         <Select value={selectedAgent || "none"} onValueChange={(v) => setSelectedAgent(v === "none" ? "" : v ?? "")}>
           <SelectTrigger className="max-w-md">
@@ -154,7 +154,7 @@ export default function NtlmPage() {
 
       {/* Coercion Tab */}
       <TabsContent value="coerce">
-<Card className="p-4 sm:p-5">
+<Card className="p-(--card-spacing)">
           <div className="flex items-center gap-x-3 mb-5">
             <IconBadge icon={Megaphone} color="warning" size="lg" />
             <div>
@@ -208,7 +208,7 @@ export default function NtlmPage() {
       {/* Relay Tab */}
       <TabsContent value="relay">
         <div className="space-y-6">
-<Card className="p-4 sm:p-5">
+<Card className="p-(--card-spacing)">
             <div className="flex items-center gap-x-3 mb-5">
 <IconBadge icon={TowerControl} color="primary" size="lg" />
               <div>
@@ -266,7 +266,7 @@ export default function NtlmPage() {
 
       {/* Status Tab */}
       <TabsContent value="status">
-<Card className="p-4 sm:p-5">
+<Card className="p-(--card-spacing)">
           <div className="flex items-center gap-x-3 mb-5">
             <IconBadge icon={BarChart2} color="success" size="lg" />
             <div>

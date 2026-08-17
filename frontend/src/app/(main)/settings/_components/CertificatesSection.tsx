@@ -130,7 +130,7 @@ export default function CertificatesSection({
   return (
     <Card className="overflow-hidden">
       <CardHeaderRow icon={Shield} tone="success" title={t("settings.certificates.title")} description={t("settings.certificates.subtitle")} />
-      <div className="p-4 sm:p-5">
+      <div className="p-(--card-spacing)">
         {cert.subject ? (
           <>
             {cert.is_self_signed && (

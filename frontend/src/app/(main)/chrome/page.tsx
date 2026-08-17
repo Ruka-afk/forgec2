@@ -157,7 +157,7 @@ export default function ChromeC2Page() {
 
           {/* Task Dispatch */}
           <div>
-            <Card className=" p-4 sm:p-5">
+            <Card className=" p-(--card-spacing)">
               <h3 className="text-sm font-semibold text-foreground mb-4">
                 <Send className="w-4 h-4" />{t("chrome.dispatch")}
               </h3>

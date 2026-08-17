@@ -101,7 +101,7 @@ export default function AnalyticsView({
         </CardHeader>
         <div className="divide-y divide-border">
           {recent.length === 0 ? (
-            <div className="p-4 sm:p-5 text-center text-muted-foreground text-sm">
+            <div className="p-(--card-spacing) text-center text-muted-foreground text-sm">
               <EmptyState icon={Inbox} title={t("dashboard.no_tasks")} />
             </div>
           ) : recent.slice(0, 10).map((task, i) => (

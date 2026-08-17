@@ -155,7 +155,7 @@ export default function ModulesSection() {
   return (
     <Card className="overflow-hidden">
       <CardHeaderRow icon={FileCode} tone="violet" title={t("settings.modules.title")} description={t("settings.modules.subtitle")} />
-      <div className="p-4 sm:p-5 space-y-4">
+      <div className="p-(--card-spacing) space-y-4">
         <p className="text-xs text-muted-foreground">{hint || t("settings.modules.hint")}</p>
         {(() => {
           const hasMimi = modules.some((m) => /invoke-mimikatz|mimikatz\.ps1/i.test(m.name));

@@ -327,7 +327,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
       <PageContainer>
         <div className="space-y-4">
           <Skeleton className="h-4 w-24" />
-          <Card className="p-4 sm:p-5"><div className="flex items-center gap-4">
+          <Card className="p-(--card-spacing)"><div className="flex items-center gap-4">
             <Skeleton className="w-14 h-14 rounded-lg" />
             <div className="space-y-2"><Skeleton className="h-5 w-40" /><Skeleton className="h-3 w-60" /></div>
           </div></Card>

@@ -256,7 +256,7 @@ export default function AutomationPage() {
           <div className="flex gap-4 flex-wrap">
             <Card className="overflow-hidden flex-1 min-w-0">
               <CardHeaderRow accent={false} icon={Zap} tone="warning" title={t("auto.event_listeners")} description={t("auto.event_listeners_desc")} />
-              <div className="p-4 sm:p-5 space-y-3">
+              <div className="p-(--card-spacing) space-y-3">
                 {events.map((e) => (
                   <div key={e.type} className="flex items-center gap-3 p-3 bg-secondary border border-border rounded-lg">
                     <span className={`w-2 h-2 ${e.color} rounded-full`}></span>
@@ -270,7 +270,7 @@ export default function AutomationPage() {
 
             <Card className="overflow-hidden flex-1 min-w-0">
               <CardHeaderRow accent={false} icon={Link} tone="success" title={t("auto.task_chain_rules")} description={t("auto.task_chain_desc")} />
-              <div className="p-4 sm:p-5">
+              <div className="p-(--card-spacing)">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-xs text-muted-foreground">{t("auto.rules_count", { count: eventRules.length })}</span>
                   <Button onClick={() => setShowRuleModal(true)} size="sm">
@@ -323,7 +323,7 @@ export default function AutomationPage() {
 
         <TabsContent value="workflows" className="mt-0">
           <Card className="overflow-hidden">
-            <div className="p-4 sm:p-5">
+            <div className="p-(--card-spacing)">
               <WorkflowsTab />
             </div>
           </Card>
@@ -332,7 +332,7 @@ export default function AutomationPage() {
         <TabsContent value="webhooks" className="mt-0">
           <Card className="overflow-hidden">
             <CardHeaderRow accent={false} icon={Globe} tone="info" title={t("auto.webhooks")} description={t("auto.webhooks_desc")} />
-            <div className="p-4 sm:p-5">
+            <div className="p-(--card-spacing)">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs text-muted-foreground">{t("auto.webhooks_count", { count: webhooks.length })}</span>
                 <Button onClick={() => setShowWebhookModal(true)} size="sm">
@@ -401,7 +401,7 @@ export default function AutomationPage() {
                   <Plus className="w-4 h-4" />{t("auto.new")}
                 </Button>
               } />
-              <div className="p-4 sm:p-5 space-y-2">
+              <div className="p-(--card-spacing) space-y-2">
                 {alertRules.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-6">{t("auto.no_alert_rules")}</p>
                 ) : alertRules.map((r) => (
@@ -423,7 +423,7 @@ export default function AutomationPage() {
 
             <Card className="overflow-hidden">
               <CardHeaderRow accent={false} icon={AlertTriangle} tone="warning" title={t("auto.active_alerts")} description={t("auto.active_alerts_desc")} />
-              <div className="p-4 sm:p-5 space-y-2 max-h-80 overflow-y-auto">
+              <div className="p-(--card-spacing) space-y-2 max-h-80 overflow-y-auto">
                 {alerts.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-6">{t("auto.no_alerts")}</p>
                 ) : alerts.map((a) => (

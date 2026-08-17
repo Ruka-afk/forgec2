@@ -142,7 +142,7 @@ export default function PivotingPageContent() {
 
       <TabsContent value="relay">
         <>
-          <Card className="p-4 sm:p-5">
+          <Card className="p-(--card-spacing)">
             <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">
               <Radio className="w-4 h-4" />
               <span>{t("pivoting.sessions_active")}</span>
@@ -197,7 +197,7 @@ export default function PivotingPageContent() {
               </div>            )}
           </Card>
 
-          <Card className="p-4 sm:p-5">
+          <Card className="p-(--card-spacing)">
             <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">
               <PlusCircle className="w-4 h-4" /> Start New SOCKS Relay
             </div>
@@ -242,7 +242,7 @@ export default function PivotingPageContent() {
       </TabsContent>
 
       <TabsContent value="local">
-        <>          <Card className="p-4 sm:p-5">
+        <>          <Card className="p-(--card-spacing)">
             <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">
               <Network className="w-4 h-4" />
               <span>{t("pivoting.local_proxy")}</span>
@@ -289,7 +289,7 @@ export default function PivotingPageContent() {
                 {t("pivoting.reset")}
               </Button>
             </div>
-          </Card>          <Card className="p-4 sm:p-5">
+          </Card>          <Card className="p-(--card-spacing)">
             <div className="font-semibold text-foreground flex items-center gap-x-2 mb-3">
               <Network className="w-4 h-4" /> {t("pivoting.direct_socks")}            </div>
             <p className="text-sm text-muted-foreground mb-4">
@@ -321,7 +321,7 @@ export default function PivotingPageContent() {
 
       <TabsContent value="rport">
         <>
-          <Card className="p-4 sm:p-5">
+          <Card className="p-(--card-spacing)">
             <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">              <ArrowLeftRight className="w-4 h-4" />
               <span>{t("pivoting.active_reverse_forwards")}</span>
               <Badge variant="secondary">{rportForwards.filter(r => r.active).length} {t("pivoting.active")}</Badge>
@@ -368,7 +368,7 @@ export default function PivotingPageContent() {
               </div>            )}
           </Card>
 
-          <Card className="p-4 sm:p-5">
+          <Card className="p-(--card-spacing)">
             <div className="font-semibold text-foreground flex items-center gap-x-2 mb-4">              <PlusCircle className="w-4 h-4" /> New Reverse Port Forward
             </div>            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>                <Label className="text-xs font-medium mb-1 block">{t("pivoting.agent")}</Label>

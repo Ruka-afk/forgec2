@@ -152,7 +152,7 @@ export default function NotificationsPage({ embedded = false }: { embedded?: boo
         </div>
       )}
 
-      <Card className="p-4 sm:p-5 mb-4">
+      <Card className="p-(--card-spacing) mb-4">
         <div className="flex flex-wrap gap-3">
           <Select value={typeFilter || "all"} onValueChange={(v) => { setTypeFilter(v === "all" ? "" : v ?? ""); setPage(1); }}>
             <SelectTrigger className="w-full sm:w-48" aria-label={t("notifications.a11y_filter_type")}><SelectValue placeholder={t("notifications.all_types")} /></SelectTrigger>

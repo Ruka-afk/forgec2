@@ -132,14 +132,14 @@ export default function GroupsPage() {
         emptyMessage={t("groups.empty_desc")}
         emptyAction={<Button onClick={openCreate}>{t("groups.create")}</Button>}
         loadingSkeleton={
-          <Card className="p-4 sm:p-5 space-y-2">
+          <Card className="p-(--card-spacing) space-y-2">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </Card>
         }
       >
-        <Card className="p-4 sm:p-5">
+        <Card className="p-(--card-spacing)">
           {rootGroups.map(g => renderGroup(g))}
         </Card>
       </DataState>

@@ -226,7 +226,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
       )}
 
       <TabsContent value="artifact">
-        <Card className="p-4 sm:p-5 space-y-5">
+        <Card className="p-(--card-spacing) space-y-5">
 
           {templates.length > 0 && (
             <div>
@@ -357,7 +357,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
       </TabsContent>
 
       <TabsContent value="bundle">
-        <Card className="p-4 sm:p-5 space-y-5">
+        <Card className="p-(--card-spacing) space-y-5">
           <div>
             <Label className="text-xs mb-1.5">{t("packer.payload_exe")}</Label>
             <Input type="file" accept=".exe,.dll" onChange={handleFileSelect} aria-label={t("packer.upload_dll")} />

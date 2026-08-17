@@ -106,7 +106,7 @@ export default function TokensPage() {
     >
 
       <Card className="mb-4">
-        <CardContent className="p-4 sm:p-5">
+        <CardContent className="p-(--card-spacing)">
           <div className="flex flex-col sm:flex-row gap-3">
             <Select value={integrityFilter || "all"} onValueChange={(v) => setIntegrityFilter(v === "all" ? "" : v ?? "")}>
               <SelectTrigger className="w-full sm:w-48" aria-label={t("tokens.integrity_filter")}>

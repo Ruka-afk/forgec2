@@ -92,9 +92,9 @@ export default function ActiveMissions({ className = "" }: { className?: string 
         <Badge variant={active.length > 0 ? "success" : "secondary"}>{active.length}</Badge>
       </CardHeader>
       {error ? (
-        <div className="p-4 sm:p-5 text-center text-muted-foreground text-sm">{error}</div>
+        <div className="p-(--card-spacing) text-center text-muted-foreground text-sm">{error}</div>
       ) : active.length === 0 ? (
-        <div className="p-4 sm:p-5">
+        <div className="p-(--card-spacing)">
           <EmptyState icon={Target} title={t("dashboard.missions_empty")} />
         </div>
       ) : (

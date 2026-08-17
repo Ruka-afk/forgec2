@@ -243,7 +243,7 @@ export default function ToolkitPage() {
             <CardHeaderRow accent={false} title={t("toolkit.recent_results")} action={<Badge variant="secondary" className="text-(--fs-micro-sm) px-1.5 py-0.5">{recentTasks.length}</Badge>} />
             <div className="max-h-[600px] overflow-y-auto">
               {recentTasks.length === 0 ? (
-                <div className="p-4 sm:p-5 text-center text-muted-foreground text-xs">{t("toolkit.no_results")}</div>
+                <div className="p-(--card-spacing) text-center text-muted-foreground text-xs">{t("toolkit.no_results")}</div>
               ) : (
                 recentTasks.map((t, i) => (
                   <div key={i} className="px-4 py-3 border-b border-border last:border-0 hover:bg-muted transition-colors">

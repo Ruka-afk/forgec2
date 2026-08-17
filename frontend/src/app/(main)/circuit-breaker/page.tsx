@@ -236,7 +236,7 @@ export default function CircuitBreakerPage() {
 
         {/* Fail Reasons */}
         {listeners.some(l => l.fail_reasons.length > 0) && (
-          <Card className="p-4 sm:p-5">
+          <Card className="p-(--card-spacing)">
             <h3 className="text-sm font-semibold text-foreground mb-3">{t("cb.recent_failures")}</h3>
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {listeners.filter(l => l.fail_reasons.length > 0).map(l => (
@@ -253,7 +253,7 @@ export default function CircuitBreakerPage() {
           </Card>
         )}
 
-        <Card className="p-4 sm:p-5">
+        <Card className="p-(--card-spacing)">
           <h3 className="text-sm font-semibold text-foreground mb-3">
             <History className="w-4 h-4" />
             {t("cb.state_history")}

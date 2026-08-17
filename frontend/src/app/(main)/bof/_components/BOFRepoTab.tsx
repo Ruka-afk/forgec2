@@ -87,21 +87,21 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
   return (
     <div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <Card className="p-4 sm:p-5 flex items-center gap-3">
+        <Card className="p-(--card-spacing) flex items-center gap-3">
           <IconBadge icon={Layers} color="primary" size="xl" />
           <div>
             <div className="text-xl font-bold text-foreground">{repoItems.length}</div>
             <div className="text-xs text-muted-foreground">{t("bof.community_bofs")}</div>
           </div>
         </Card>
-        <Card className="p-4 sm:p-5 flex items-center gap-3">
+        <Card className="p-(--card-spacing) flex items-center gap-3">
           <IconBadge icon={Download} color="success" size="xl" />
           <div>
             <div className="text-xl font-bold text-foreground">{repoItems.filter((i) => i.imported).length}</div>
             <div className="text-xs text-muted-foreground">{t("bof.stat_imported")}</div>
           </div>
         </Card>
-        <Card className="p-4 sm:p-5 flex items-center gap-3">
+        <Card className="p-(--card-spacing) flex items-center gap-3">
           <IconBadge icon={Star} color="warning" size="xl" />
           <div>
             <div className="text-xl font-bold text-foreground">{repoItems.filter((i) => (i.rating ?? 0) >= 4).length}</div>
@@ -110,7 +110,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
         </Card>
       </div>
 
-      <Card className="p-4 sm:p-5 mb-6">
+      <Card className="p-(--card-spacing) mb-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-8 h-8 bg-primary/10 dark:bg-primary/15 rounded-lg flex items-center justify-center text-primary">
             <Link className="w-4 h-4" />
@@ -228,7 +228,7 @@ export default function BOFRepoTab({ repoItems, loading, onImport, onImportUrl, 
             const itemId = item.id || String(i);
             const imported = item.imported;
             return (
-              <Card key={itemId} className="p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
+              <Card key={itemId} className="p-(--card-spacing) hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
 <IconBadge icon={Box} color={imported ? "success" : "primary"} size="lg" />

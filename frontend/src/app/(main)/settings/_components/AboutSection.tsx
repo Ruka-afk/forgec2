@@ -17,7 +17,7 @@ export default function AboutSection({
   return (
     <Card className="overflow-hidden">
       <CardHeaderRow icon={Cpu} tone="muted" title={t("settings.about.title")} description={t("settings.about.subtitle")} />
-      <div className="p-4 sm:p-5">
+      <div className="p-(--card-spacing)">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           {[
             { label: t("settings.about.version"), value: `v${data.server_version ?? "2.0.0"}` },

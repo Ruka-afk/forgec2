@@ -317,7 +317,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
       <TabsContent value="server">
         <Card className="overflow-hidden">
           <CardHeaderRow icon={Shield} tone="violet" title={t("profiles.card_title")} description={t("profiles.card_desc")} />
-          <CardContent className="p-4 sm:p-5">
+          <CardContent className="p-(--card-spacing)">
             <form onSubmit={handleSaveMalleable} className="space-y-4">
               <div className="flex items-center gap-3">
                 <Switch checked={malleableForm.enabled} onCheckedChange={(v) => setMalleableForm({ ...malleableForm, enabled: v })} />
@@ -394,7 +394,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                   </div>
                 </div>
               </div>
-              <CardContent className="p-4 sm:p-5">
+              <CardContent className="p-(--card-spacing)">
                 <div className="relative mb-3">
                   <Search className="w-4 h-4" />
                   <Input aria-label={t("profiles.filter_ph")} name="filter-by-name-6"
@@ -462,7 +462,7 @@ export default function ProfilesPage({ embedded = false }: { embedded?: boolean 
                         </Button>
                       </div>
                       } />
-<CardContent className="p-4 sm:p-5">
+<CardContent className="p-(--card-spacing)">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                       <div className="space-y-4">
                         <div>

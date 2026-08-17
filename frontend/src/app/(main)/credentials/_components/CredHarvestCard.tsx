@@ -86,7 +86,7 @@ export function CredHarvestCard() {
   };
 
   return (
-    <Card className="p-4 sm:p-5 mb-6">
+    <Card className="p-(--card-spacing) mb-6">
       <div className="mb-3">
         <div className="text-sm font-semibold">{t("cred.harvest_title")}</div>
         <p className="text-xs text-muted-foreground mt-0.5">{t("cred.harvest_hint")}</p>

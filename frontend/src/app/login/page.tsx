@@ -224,9 +224,10 @@ function LoginForm() {
 
             <Button
               type="submit"
+              variant="gradient"
               size="lg"
               disabled={isSubmitting}
-              className="w-full font-semibold transition-all duration-200 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 active:scale-[0.98]"
+              className="w-full font-semibold"
             >
               {isSubmitting ? (
                 <span className="flex items-center justify-center gap-2">

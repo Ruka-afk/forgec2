@@ -31,7 +31,7 @@ export function PayloadCard({
   className?: string;
 }) {
   return (
-    <Card className={cn("flex flex-col p-4 sm:p-5 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow", className)}>
+    <Card className={cn("flex flex-col p-(--card-spacing) hover:shadow-lg dark:hover:shadow-black/30 transition-shadow", className)}>
       <div className="mb-4 flex items-start justify-between gap-3 border-b border-border pb-4">
         <div className="flex min-w-0 items-center gap-x-3">
           <div className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-lg ring-1 ring-border/50", tint)}>

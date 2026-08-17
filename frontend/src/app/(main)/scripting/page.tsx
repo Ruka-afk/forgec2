@@ -149,7 +149,7 @@ export default function ScriptingPage() {
       </>}>
 
       {showTemplates && (
-        <Card className="mb-6 p-4 sm:p-5">
+        <Card className="mb-6 p-(--card-spacing)">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4" />

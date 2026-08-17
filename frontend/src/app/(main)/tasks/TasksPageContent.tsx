@@ -279,7 +279,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
         </div>
       )}
 
-      <Card className="p-4 sm:p-5 mb-4">
+      <Card className="p-(--card-spacing) mb-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <Select value={statusFilter || "all"} onValueChange={(val) => { setStatusFilter(val === "all" ? "" : val ?? ""); setPage(1); }}>
             <SelectTrigger aria-label={t("tasks.status_filter")}>

@@ -202,7 +202,7 @@ export default function IntegrationsPage() {
             )}
           </div>
 
-          <Card className="p-4 sm:p-5 mb-6">
+          <Card className="p-(--card-spacing) mb-6">
             <h3 className="text-sm font-semibold text-foreground m-0">{t("integrations.save_title")}</h3>
             <p className="text-xs text-muted-foreground mt-1 mb-3">{t("integrations.save_desc")}</p>
             <div className="space-y-2">
@@ -247,7 +247,7 @@ export default function IntegrationsPage() {
             </div>
           </Card>
 
-          <Card className="p-4 sm:p-5">
+          <Card className="p-(--card-spacing)">
             <h3 className="text-sm font-semibold text-foreground m-0">{t("integrations.test_title")}</h3>
             <p className="text-xs text-muted-foreground mt-1 mb-0">{t("integrations.test_desc")}</p>
             <div className="mt-3 flex items-center gap-3">

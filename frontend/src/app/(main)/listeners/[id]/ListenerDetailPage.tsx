@@ -115,7 +115,7 @@ export default function ListenerDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-1">
-          <Card className="p-4 sm:p-5">
+          <Card className="p-(--card-spacing)">
             <h3 className="font-semibold mb-4 text-foreground">{t("listener.info_title")}</h3>
             <div className="space-y-3 text-sm">
               <div><span className="text-muted-foreground">{t("listener.scheme")}</span> <span className="text-foreground">{scheme}</span></div>
@@ -132,15 +132,15 @@ export default function ListenerDetailPage() {
 
         <div className="lg:col-span-2">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="p-4 sm:p-5">
+            <Card className="p-(--card-spacing)">
               <div className="text-xs text-muted-foreground">{t("listener.agent_total")}</div>
               <div className="text-4xl font-semibold mt-2 text-foreground">{stats.total}</div>
             </Card>
-            <Card className="p-4 sm:p-5">
+            <Card className="p-(--card-spacing)">
               <div className="text-xs text-muted-foreground">{t("listener.active_now")}</div>
               <div className="text-4xl font-semibold mt-2 text-success">{stats.active}</div>
             </Card>
-            <Card className="p-4 sm:p-5">
+            <Card className="p-(--card-spacing)">
               <div className="text-xs text-muted-foreground">{t("listener.lb_hint_title")}</div>
               <div className="text-sm mt-2 text-muted-foreground">{t("listener.lb_hint")}</div>
             </Card>
