@@ -8334,10 +8334,11 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean }
-                  tasks:
+                  data:
                     type: array
                     items:
                       $ref: '#/components/schemas/Task'
+                  total: { type: integer }
         '401':
           $ref: '#/components/responses/Unauthorized'
     post:
@@ -8873,7 +8874,13 @@ paths:
         - SessionCookie: []
       responses:
         '200':
-          description: OK
+          description: OS distribution
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DashboardOSDistributionItem'
   /api/dashboard/task-status:
     get:
       tags: [Agents]
@@ -8883,7 +8890,13 @@ paths:
         - SessionCookie: []
       responses:
         '200':
-          description: OK
+          description: Task status distribution
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DashboardTaskStatusItem'
   /api/dashboard/listener-traffic:
     get:
       tags: [Agents]
@@ -8893,7 +8906,11 @@ paths:
         - SessionCookie: []
       responses:
         '200':
-          description: OK
+          description: Listener traffic series
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardTrafficData'
   /api/dashboard/activity-heatmap:
     get:
       tags: [Agents]
@@ -8903,7 +8920,13 @@ paths:
         - SessionCookie: []
       responses:
         '200':
-          description: OK
+          description: Activity heatmap buckets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DashboardHeatmapItem'
   /api/dashboard/agent-geo:
     get:
       tags: [Agents]
@@ -8913,7 +8936,13 @@ paths:
         - SessionCookie: []
       responses:
         '200':
-          description: OK
+          description: Agent geo distribution
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DashboardAgentGeoItem'
   /api/dashboard/task-gantt:
     get:
       tags: [Agents]
@@ -8923,7 +8952,13 @@ paths:
         - SessionCookie: []
       responses:
         '200':
-          description: OK
+          description: Task gantt items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DashboardTaskGanttItem'
   /api/dashboard/credential-types:
     get:
       tags: [Credentials]
@@ -8933,7 +8968,13 @@ paths:
         - SessionCookie: []
       responses:
         '200':
-          description: OK
+          description: Credential type distribution
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DashboardCredentialTypeItem'
   /api/dashboard/attack-path:
     get:
       tags: [Agents]
@@ -8943,7 +8984,11 @@ paths:
         - SessionCookie: []
       responses:
         '200':
-          description: OK
+          description: Attack path graph
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardAttackPathData'
   /api/bof/repos:
     get:
       tags: [BOF]
@@ -10207,6 +10252,82 @@ components:
           format: date-time
         note:
           type: string
+
+    DashboardHeatmapItem:
+      type: object
+      properties:
+        day: { type: integer }
+        hour: { type: integer }
+        count: { type: integer }
+    DashboardOSDistributionItem:
+      type: object
+      properties:
+        name: { type: string }
+        count: { type: integer }
+    DashboardTaskStatusItem:
+      type: object
+      properties:
+        name: { type: string }
+        count: { type: integer }
+        color: { type: string }
+    DashboardTrafficData:
+      type: object
+      properties:
+        labels:
+          type: array
+          items: { type: string }
+        bytes_in:
+          type: array
+          items: { type: integer }
+        bytes_out:
+          type: array
+          items: { type: integer }
+    DashboardAgentGeoItem:
+      type: object
+      properties:
+        country: { type: string }
+        count: { type: integer }
+        lat: { type: number }
+        lng: { type: number }
+    DashboardTaskGanttItem:
+      type: object
+      properties:
+        agent: { type: string }
+        task: { type: string }
+        start: { type: integer }
+        duration: { type: integer }
+        status: { type: string }
+        color: { type: string }
+    DashboardCredentialTypeItem:
+      type: object
+      properties:
+        name: { type: string }
+        count: { type: integer }
+        color: { type: string }
+    DashboardAttackPathNode:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        type: { type: string }
+        x: { type: integer }
+        y: { type: integer }
+    DashboardAttackPathEdge:
+      type: object
+      properties:
+        from: { type: string }
+        to: { type: string }
+        label: { type: string }
+        type: { type: string }
+    DashboardAttackPathData:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardAttackPathNode' }
+        edges:
+          type: array
+          items: { $ref: '#/components/schemas/DashboardAttackPathEdge' }
 
   responses:
     BadRequest:

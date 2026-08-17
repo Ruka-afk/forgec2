@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -17,17 +18,24 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const (
+	offlineHookSemSize = 8
+	offlineHookTimeout = 30 * time.Second
+)
+
 type MonitorCollector struct {
 	server         *Server
 	mu             sync.Mutex
 	lastMetrics    db.SystemMetric
 	metricsHistory []db.SystemMetric
+	hookSem        chan struct{}
 }
 
 func NewMonitorCollector(s *Server) *MonitorCollector {
 	return &MonitorCollector{
 		server:         s,
 		metricsHistory: make([]db.SystemMetric, 0, 60),
+		hookSem:        make(chan struct{}, offlineHookSemSize),
 	}
 }
 
@@ -171,23 +179,31 @@ func (m *MonitorCollector) checkAgentAlerts() {
 			m.server.broadcastAgentOffline(agent)
 			m.server.recordAgentStatusEvent(agent.ID, "offline")
 			if m.server.pluginManager != nil {
-				go func(a db.Implant) {
-					defer func() {
-						if r := recover(); r != nil {
-							slog.Error("Plugin hook panicked (agent offline)", "agent", a.ID, "recover", r)
-						}
-					}()
-					m.server.pluginManager.ExecuteHook(m.server.ctx, plugin.Event{
-						Type:      plugin.EventAgentDisconnect,
-						Timestamp: time.Now(),
-						AgentID:   a.ID,
-						Payload: map[string]interface{}{
-							"hostname":            a.Hostname,
-							"ip":                  a.IP,
-							"offline_for_seconds": now.Sub(a.LastSeen).Seconds(),
-						},
-					})
-				}(agent)
+				select {
+				case m.hookSem <- struct{}{}:
+					go func(a db.Implant) {
+						defer func() {
+							<-m.hookSem
+							if r := recover(); r != nil {
+								slog.Error("Plugin hook panicked (agent offline)", "agent", a.ID, "recover", r)
+							}
+						}()
+						ctx, cancel := context.WithTimeout(context.Background(), offlineHookTimeout)
+						defer cancel()
+						m.server.pluginManager.ExecuteHook(ctx, plugin.Event{
+							Type:      plugin.EventAgentDisconnect,
+							Timestamp: time.Now(),
+							AgentID:   a.ID,
+							Payload: map[string]interface{}{
+								"hostname":            a.Hostname,
+								"ip":                  a.IP,
+								"offline_for_seconds": now.Sub(a.LastSeen).Seconds(),
+							},
+						})
+					}(agent)
+				default:
+					slog.Warn("Monitor: offline hook backlog full, skipping agent", "agent", agent.ID)
+				}
 			}
 		case offlineFor > m.server.offlineThreshold() && agent.Status == "online":
 			staleIDs = append(staleIDs, agent.ID)
@@ -206,10 +222,14 @@ func (m *MonitorCollector) checkAgentAlerts() {
 		}
 	}
 	if len(staleIDs) > 0 {
-		m.server.db.Model(&db.Implant{}).Where("id IN ?", staleIDs).Update("status", "stale")
+		if err := m.server.db.Model(&db.Implant{}).Where("id IN ?", staleIDs).Update("status", "stale").Error; err != nil {
+			slog.Error("Monitor: failed to flip agents to stale", "count", len(staleIDs), "err", err)
+		}
 	}
 	if len(offlineIDs) > 0 {
-		m.server.db.Model(&db.Implant{}).Where("id IN ?", offlineIDs).Update("status", "offline")
+		if err := m.server.db.Model(&db.Implant{}).Where("id IN ?", offlineIDs).Update("status", "offline").Error; err != nil {
+			slog.Error("Monitor: failed to flip agents to offline", "count", len(offlineIDs), "err", err)
+		}
 	}
 }
 
@@ -223,7 +243,7 @@ func (m *MonitorCollector) triggerAlert(rule *db.AlertRule, source, sourceName, 
 
 	detailsJSON, ok := marshalJSONSafe(details)
 	if !ok {
-		slog.Error("Failed to marshal alert details")
+		slog.Error("Failed to marshal alert details", "rule", rule.ID, "source", source)
 		return
 	}
 

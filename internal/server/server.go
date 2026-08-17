@@ -354,8 +354,8 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		httpClientLong: &http.Client{
 			Timeout: HTTPClientLongTimeout,
 			Transport: &http.Transport{
-				MaxIdleConns:        10,
-				MaxIdleConnsPerHost: 3,
+				MaxIdleConns:        HTTPClientMaxIdleConns,
+				MaxIdleConnsPerHost: HTTPClientMaxIdlePerHost,
 				IdleConnTimeout:     HTTPIdleConnTimeout,
 				TLSClientConfig: &tls.Config{
 					MinVersion: tls.VersionTLS12,
@@ -386,7 +386,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 
 				s.pwdChangeTimesMu.Lock()
 				for k, t := range s.pwdChangeTimes {
-					if now.Sub(t) > 10*time.Minute {
+					if now.Sub(t) > PwdChangeCleanupInterval {
 						delete(s.pwdChangeTimes, k)
 					}
 				}
@@ -994,7 +994,7 @@ func (s *Server) suppressAgentStatusEvent(agentID string) bool {
 	defer s.agentStatusCooldownMu.Unlock()
 	last, ok := s.agentStatusCooldown[agentID]
 	now := time.Now()
-	if ok && now.Sub(last) < 60*time.Second {
+	if ok && now.Sub(last) < AgentStatusCooldown {
 		return false
 	}
 	s.agentStatusCooldown[agentID] = now
@@ -1008,7 +1008,9 @@ func (s *Server) handleWSBeaconDisconnect(agentID string) {
 		return
 	}
 	if agent.Status != "offline" {
-		s.db.Model(&agent).Update("status", "stale")
+		if err := s.db.Model(&agent).Update("status", "stale").Error; err != nil {
+			slog.Error("Failed to mark agent stale", "agent_id", agentID, "error", err)
+		}
 		s.recordAgentStatusEvent(agentID, "stale")
 		if s.suppressAgentStatusEvent(agentID) {
 			s.broadcastAgentOffline(agent)
@@ -1533,7 +1535,9 @@ func (s *Server) Run() error {
 		if strings.HasPrefix(targetID, redirectorTargetPrefix) {
 			slog.Warn("Circuit breaker triggered: redirector BURNED", "target_id", targetID)
 			rdID := strings.TrimPrefix(targetID, redirectorTargetPrefix)
-			s.db.Model(&db.Redirector{}).Where("id = ?", rdID).Update("status", "down")
+			if err := s.db.Model(&db.Redirector{}).Where("id = ?", rdID).Update("status", "down").Error; err != nil {
+				slog.Error("Failed to mark redirector down after burn", "redirector_id", rdID, "error", err)
+			}
 			s.broadcastOperatorEvent(map[string]interface{}{
 				"type":          "redirector_update",
 				"action":        "burned",

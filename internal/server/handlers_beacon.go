@@ -24,6 +24,7 @@ import (
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/malleable"
 	"github.com/forgec2/forgec2/internal/plugin"
+	"github.com/forgec2/forgec2/internal/util"
 	"github.com/forgec2/forgec2/pkg/encoding"
 	"github.com/forgec2/forgec2/pkg/protocol"
 	"github.com/gin-gonic/gin"
@@ -288,7 +289,7 @@ func (s *Server) startSeqLockoutCleanup(ctx context.Context) {
 				slog.Error("seqLockout cleanup recovered from panic", "err", r)
 			}
 		}()
-		ticker := time.NewTicker(10 * time.Minute)
+		ticker := time.NewTicker(SeqLockoutCleanupInterval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -377,7 +378,7 @@ func (s *Server) decodeBeaconEnvelope(raw []byte) (envelope beaconEnvelope, req 
 		return beaconEnvelope{}, beaconRequest{}, frameRejected
 	}
 	if envelope.UUID == "" {
-		envelope.UUID = uuid.New().String()
+		envelope.UUID = util.NewString()
 	}
 	if !isValidAgentID(envelope.UUID) {
 		slog.Warn("Beacon rejected: invalid agent ID", "agent_id", envelope.UUID)
@@ -2480,7 +2481,9 @@ func (s *Server) executeTaskCallback(task db.Task, agentID string) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		s.db.Model(&task).Update("callback_sent", true)
+		if err := s.db.Model(&task).Update("callback_sent", true).Error; err != nil {
+			slog.Error("Failed to mark callback as sent", "task_id", task.ID, "error", err)
+		}
 		slog.Info("Task callback delivered", "task_id", task.ID, "url", task.CallbackURL, "status", resp.StatusCode)
 	} else {
 		slog.Warn("Task callback returned non-2xx", "task_id", task.ID, "url", task.CallbackURL, "status", resp.StatusCode)

@@ -243,7 +243,7 @@ func (s *Server) handleTokenDrop(c *gin.Context) {
 
 	result := s.db.Where("id = ? AND agent_id = ?", tokenID, id).Delete(&db.TokenEntry{})
 	if result.Error != nil {
-		respondError(c, http.StatusInternalServerError, result.Error.Error())
+		respondError(c, http.StatusInternalServerError, sanitizeError(result.Error, "delete token"))
 		return
 	}
 	if result.RowsAffected == 0 {
@@ -395,7 +395,7 @@ func (s *Server) handleTokenNoteUpdate(c *gin.Context) {
 
 	result := s.db.Model(&db.TokenEntry{}).Where("id = ? AND agent_id = ?", tokenID, id).Update("notes", notes)
 	if result.Error != nil {
-		respondError(c, http.StatusInternalServerError, result.Error.Error())
+		respondError(c, http.StatusInternalServerError, sanitizeError(result.Error, "update token notes"))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})

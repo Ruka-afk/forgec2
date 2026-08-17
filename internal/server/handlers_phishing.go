@@ -382,12 +382,14 @@ func (s *Server) handleAPILaunchPhishingCampaign(c *gin.Context) {
 
 func (s *Server) runPhishingCampaign(campID uint, tpl db.PhishingTemplate, targets []string, smtpHost string, smtpPort int, smtpUser, smtpPass, from string, isHTML bool, baseURL string) {
 	sent := 0
-	for _, email := range targets {
-		// stop if campaign was stopped
-		var camp db.PhishingCampaign
-		if err := s.db.First(&camp, campID).Error; err != nil || camp.Status != "running" {
-			slog.Info("Phishing campaign stopped mid-send", "campaign", campID, "sent", sent)
-			return
+	for i, email := range targets {
+		// stop if campaign was stopped (re-check periodically to avoid a query per recipient)
+		if i == 0 || i%50 == 0 {
+			var camp db.PhishingCampaign
+			if err := s.db.First(&camp, campID).Error; err != nil || camp.Status != "running" {
+				slog.Info("Phishing campaign stopped mid-send", "campaign", campID, "sent", sent)
+				return
+			}
 		}
 
 		token := phishingToken()

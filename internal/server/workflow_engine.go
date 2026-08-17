@@ -143,7 +143,9 @@ func (we *WorkflowEngine) executeStep(wf db.Workflow, step db.WorkflowStep, agen
 		finish("failed", err.Error(), "", "")
 		return 0, "", false
 	}
-	we.server.db.Model(&task).Update("created_by", "workflow")
+	if err := we.server.db.Model(&task).Update("created_by", "workflow").Error; err != nil {
+		slog.Error("Workflow: failed to mark task created_by", "task", task.ID, "err", err)
+	}
 	stepLog.TaskID = task.ID
 	if err := we.server.db.Save(&stepLog).Error; err != nil {
 		slog.Error("Workflow: failed to update step log with task", "step", step.StepOrder, "err", err)
@@ -163,7 +165,9 @@ func (we *WorkflowEngine) executeStep(wf db.Workflow, step db.WorkflowStep, agen
 		}
 		var t db.Task
 		if we.server.db.First(&t, task.ID).Error == nil && t.Status == "pending" {
-			we.server.db.Model(&t).Update("status", "failed").Update("error", "workflow timeout")
+			if err := we.server.db.Model(&t).Update("status", "failed").Update("error", "workflow timeout").Error; err != nil {
+				slog.Error("Workflow: failed to time out task", "task", t.ID, "err", err)
+			}
 			stepResults[step.ID] = ""
 		}
 	} else {

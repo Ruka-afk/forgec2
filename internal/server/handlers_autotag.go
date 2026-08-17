@@ -9,7 +9,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+	"github.com/forgec2/forgec2/internal/util"
 )
 
 // handleAutoTagRules lists all auto-tag rules.
@@ -36,7 +36,7 @@ func (s *Server) handleAutoTagCreate(c *gin.Context) {
 	}
 	// Conditions arrive as a JSON array; ShouldBindJSON already stored it as text.
 	if rule.ID == "" {
-		rule.ID = uuid.NewString()
+		rule.ID = util.NewString()
 	}
 	if err := s.db.Create(&rule).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create rule")
@@ -139,6 +139,7 @@ func (s *Server) handleAutoTagApply(c *gin.Context) {
 				continue
 			}
 			if err := s.db.Create(&db.AgentTagAssignment{AgentTagID: r.TagID, ImplantID: a.ID}).Error; err != nil {
+				slog.Error("Auto-tag: failed to create assignment", "rule", r.ID, "tag", r.TagID, "agent", a.ID, "err", err)
 				continue
 			}
 			existingSet[key] = true
@@ -191,7 +192,7 @@ func matchOne(field, op, value string, a db.Implant) bool {
 	case "process_name":
 		actual = a.ProcessName
 	case "domain":
-		actual = a.Tags
+		actual = a.Domain
 	default:
 		actual = ""
 	}
