@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -622,15 +621,8 @@ type agentListItem struct {
 }
 
 func parseAgentListPage(c *gin.Context) (page, pageSize int) {
-	page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ = strconv.Atoi(c.DefaultQuery("page_size", c.DefaultQuery("pageSize", "0")))
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > MaxPageSize {
-		pageSize = DefaultPageSize
-	}
-	return page, pageSize
+	p := parsePagination(c, DefaultPageSize, MaxPageSize)
+	return p.Page, p.PageSize
 }
 
 // writeAgentListJSON is the single operator list contract for GET /api/agents

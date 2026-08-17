@@ -158,7 +158,7 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 		// parameters are left untouched.
 		sqliteDSN := fallbackPath
 		if !strings.Contains(sqliteDSN, "?") {
-			sqliteDSN += "?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+			sqliteDSN += fmt.Sprintf("?_pragma=foreign_keys(1)&_pragma=busy_timeout(%d)", SQLiteBusyTimeoutMS)
 		}
 		db, err = gorm.Open(glebarez.Open(sqliteDSN), gormConfig)
 		if err != nil {
@@ -166,10 +166,10 @@ func InitDBWithDriver(driver, dsn, fallbackPath string, logLevel slog.Level, dbM
 		}
 		isSQLite = true
 		if sqlDB, err := db.DB(); err == nil {
-			sqlDB.SetMaxOpenConns(10)
-			sqlDB.SetMaxIdleConns(5)
-			sqlDB.SetConnMaxLifetime(5 * time.Minute)
-			sqlDB.SetConnMaxIdleTime(2 * time.Minute)
+			sqlDB.SetMaxOpenConns(SQLiteMaxOpenConns)
+			sqlDB.SetMaxIdleConns(SQLiteMaxIdleConns)
+			sqlDB.SetConnMaxLifetime(SQLiteConnMaxLifetime)
+			sqlDB.SetConnMaxIdleTime(SQLiteConnMaxIdleTime)
 		} else {
 			slog.Warn("Failed to configure DB connection pool", "err", err)
 		}

@@ -74,6 +74,15 @@ const (
 	HTTPWriteTimeout = 60 * time.Second
 	HTTPIdleTimeout  = 120 * time.Second
 
+	// ─── HTTP Client / Background Cleanup / Misc ───
+	HTTPClientMaxIdleConns    = 10
+	HTTPClientMaxIdlePerHost  = 3
+	PwdChangeCleanupInterval  = 10 * time.Minute
+	SeqLockoutCleanupInterval = 10 * time.Minute
+	SocksStatsFlushEvery      = 100
+	AgentStatusCooldown       = 60 * time.Second
+	ExtC2WriteTimeout         = 10 * time.Second
+
 	WSReadDeadline      = 60 * time.Second
 	WSPingInterval      = 30 * time.Second
 	WSWriteDeadline     = 10 * time.Second

@@ -13,7 +13,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/server/middleware"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+	"github.com/forgec2/forgec2/internal/util"
 	"github.com/gorilla/websocket"
 )
 
@@ -146,7 +146,7 @@ func (s *Server) handleWebSocketBeacon(c *gin.Context) {
 	// Allow agent to pass its persistent UUID via query parameter
 	agentID := c.Query("agent_id")
 	if agentID == "" {
-		agentID = uuid.New().String()
+		agentID = util.NewString()
 	} else if !isValidAgentID(agentID) {
 		c.AbortWithStatus(http.StatusBadRequest)
 		return

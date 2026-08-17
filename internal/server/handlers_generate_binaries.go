@@ -10,7 +10,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+	"github.com/forgec2/forgec2/internal/util"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -113,7 +113,7 @@ func (s *Server) parseBinaryForm(c *gin.Context) (*binaryGenForm, bool) {
 	// Sanitize first to block path traversal and header-injection characters.
 	if form.Filename != "" {
 		form.Filename = sanitizeFilename(form.Filename)
-		shortID := strings.Replace(uuid.New().String()[:8], "-", "", -1)
+		shortID := strings.Replace(util.NewString()[:8], "-", "", -1)
 		form.Filename = fmt.Sprintf("%s_%s", shortID, form.Filename)
 	}
 

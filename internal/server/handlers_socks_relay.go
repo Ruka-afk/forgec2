@@ -325,7 +325,7 @@ func (e *socksRelayEngine) handleOperatorConn(s *Server, sess *socksRelaySession
 			// Accumulate stats, flush to DB every 100 packets
 			bytesAccum += int64(n)
 			pktCount++
-			if pktCount >= 100 {
+			if pktCount >= SocksStatsFlushEvery {
 				s.db.Model(&db.SocksSession{}).Where("id = ?", sess.dbID).
 					UpdateColumn("bytes_in", gorm.Expr("bytes_in + ?", bytesAccum))
 				bytesAccum = 0

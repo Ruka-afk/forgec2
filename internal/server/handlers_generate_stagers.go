@@ -11,7 +11,7 @@ import (
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+	"github.com/forgec2/forgec2/internal/util"
 )
 
 type stagerGenerateForm struct {
@@ -44,7 +44,7 @@ func (s *Server) bindStagerForm(c *gin.Context) (*stagerGenerateForm, error) {
 	// Sanitize filename to block path traversal and build collisions.
 	if form.Filename != "" {
 		form.Filename = sanitizeFilename(form.Filename)
-		shortID := strings.Replace(uuid.New().String()[:8], "-", "", -1)
+		shortID := strings.Replace(util.NewString()[:8], "-", "", -1)
 		form.Filename = fmt.Sprintf("%s_%s", shortID, form.Filename)
 	}
 

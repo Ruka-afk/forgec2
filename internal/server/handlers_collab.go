@@ -7,7 +7,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+	"github.com/forgec2/forgec2/internal/util"
 )
 
 // handleCollabAgents returns the list of agents along with their current
@@ -59,7 +59,7 @@ func (s *Server) handleCollabLock(c *gin.Context) {
 		}
 	} else {
 		if err := s.db.Create(&db.AgentLock{
-			ID:       uuid.New().String(),
+			ID:       util.NewString(),
 			AgentID:  id,
 			LockedBy: username,
 			LockedAt: time.Now(),

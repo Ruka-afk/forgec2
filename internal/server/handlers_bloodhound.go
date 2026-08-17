@@ -11,7 +11,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+	"github.com/forgec2/forgec2/internal/util"
 )
 
 const bloodHoundDir = "data/bloodhound"
@@ -120,7 +120,7 @@ func (s *Server) handleBloodHoundUpload(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "File operation"))
 		return
 	}
-	stored := filepath.Join(bloodHoundDir, uuid.New().String()+".zip")
+	stored := filepath.Join(bloodHoundDir, util.NewString()+".zip")
 	if err := os.WriteFile(stored, data, 0o600); err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "File operation"))
 		return
@@ -162,7 +162,7 @@ func (s *Server) handleBloodHoundResult(c *gin.Context) {
 	}
 
 	if file, err := c.FormFile("file"); err == nil {
-		stored := filepath.Join(bloodHoundDir, uuid.New().String()+".zip")
+		stored := filepath.Join(bloodHoundDir, util.NewString()+".zip")
 		if saveErr := c.SaveUploadedFile(file, stored); saveErr == nil {
 			result.FilePath = stored
 		}

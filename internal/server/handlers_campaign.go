@@ -8,7 +8,7 @@ import (
 
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+	"github.com/forgec2/forgec2/internal/util"
 )
 
 // handleCampaignsList returns all campaign-wizard campaigns.
@@ -63,7 +63,7 @@ func (s *Server) handleCampaignCreate(c *gin.Context) {
 	}
 
 	campaign := db.Campaign{
-		ID:          uuid.NewString(),
+		ID:          util.NewString(),
 		Name:        req.Name,
 		Description: req.Description,
 		Status:      "active",

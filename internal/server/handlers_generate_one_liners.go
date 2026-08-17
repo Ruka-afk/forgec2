@@ -9,7 +9,7 @@ import (
 	"github.com/forgec2/forgec2/internal/obfuscation"
 	"github.com/forgec2/forgec2/internal/payload"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+	"github.com/forgec2/forgec2/internal/util"
 )
 
 func (s *Server) handleGeneratePS1(c *gin.Context) {
@@ -267,7 +267,7 @@ func (s *Server) handleGenerateOneLiner(c *gin.Context) {
 		return
 	}
 
-	payloadID := uuid.New().String()
+	payloadID := util.NewString()
 	payloadSubDir := filepath.Join(payloadsDir, payloadID)
 	if err := os.MkdirAll(payloadSubDir, 0750); err != nil {
 		s.logBuild(format, "oneliner", form.C2URL, form.ListenerID, filename, "failed", "build error", "")

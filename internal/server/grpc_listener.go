@@ -11,7 +11,7 @@ import (
 	"runtime/debug"
 
 	"github.com/forgec2/forgec2/pkg/c2pb"
-	"github.com/google/uuid"
+	"github.com/forgec2/forgec2/internal/util"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -120,7 +120,7 @@ func (s *grpcBeaconServer) Beacon(stream c2pb.C2Service_BeaconServer) error {
 		if err := json.Unmarshal(env.Payload, &header); err == nil {
 			agentID = header.UUID
 		} else {
-			agentID = "unknown-" + uuid.New().String()
+			agentID = "unknown-" + util.NewString()
 		}
 
 		respPayload := s.handler(agentID, env.Payload)

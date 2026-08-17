@@ -185,7 +185,7 @@ func (ch *extC2WSChannel) SendJSON(v interface{}) error {
 	if ch.Conn == nil {
 		return fmt.Errorf("connection closed")
 	}
-	ch.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	ch.Conn.SetWriteDeadline(time.Now().Add(ExtC2WriteTimeout))
 	return ch.Conn.WriteJSON(v)
 }
 

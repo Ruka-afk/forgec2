@@ -356,10 +356,10 @@ func (s *Server) performHotUpdate(latest string) error {
 		scriptPath = filepath.Join(filepath.Dir(exePath), ".restart.bat")
 		script := fmt.Sprintf(`@echo off
 timeout /t 3 /nobreak >nul
-copy /Y "%s" "%s" >nul
-del "%s"
-start "" "%s"
-`, tmpPath, exePath, tmpPath, exePath)
+copy /Y %s %s >nul
+del %s
+start "" %s
+`, quoteCmd(tmpPath), quoteCmd(exePath), quoteCmd(tmpPath), quoteCmd(exePath))
 		if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
 			os.Remove(tmpPath)
 			return fmt.Errorf("create restart script: %w", err)
@@ -370,10 +370,10 @@ start "" "%s"
 		scriptPath = filepath.Join(filepath.Dir(exePath), ".restart.sh")
 		script := fmt.Sprintf(`#!/bin/sh
 sleep 3
-mv -f "%s" "%s"
-rm -f "%s"
-exec "%s" "$@"
-`, tmpPath, exePath, tmpPath, exePath)
+mv -f %s %s
+rm -f %s
+exec %s "$@"
+`, quoteSh(tmpPath), quoteSh(exePath), quoteSh(tmpPath), quoteSh(exePath))
 		if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
 			os.Remove(tmpPath)
 			return fmt.Errorf("create restart script: %w", err)
@@ -381,7 +381,6 @@ exec "%s" "$@"
 		args = []string{"/bin/sh", scriptPath}
 	}
 
-	// Broadcast update notification
 	payload := map[string]interface{}{
 		"type":    "server_restarting",
 		"message": "Server is hot-reloading and restarting...",
@@ -408,6 +407,16 @@ exec "%s" "$@"
 	s.ctxCancel()
 	s.wg.Wait()
 	return nil
+}
+
+// quoteCmd wraps a path in double quotes with cmd.exe escaping (`"` -> `""`).
+func quoteCmd(p string) string {
+	return `"` + strings.ReplaceAll(p, `"`, `""`) + `"`
+}
+
+// quoteSh wraps a path in single quotes with POSIX escaping (`'` -> `'\''`).
+func quoteSh(p string) string {
+	return "'" + strings.ReplaceAll(p, `'`, `'\''`) + "'"
 }
 
 // fetchReleaseAssets gets the asset list for a given tag
