@@ -119,8 +119,8 @@ export default memo(function AgentStatsGrid({
       <Card className="p-4 gap-0 overflow-hidden">
         <div className="text-(--fs-micro-sm) font-semibold uppercase tracking-wider text-muted-foreground/70 mb-3"><Radio className="w-3.5 h-3.5" />{t("agents.stats_beacon")}</div>
         <div className="space-y-2.5">
-        <InfoRow label={t("agents.stats_sleep")} value={interval ? `${interval}s` : "\u2014"} />
-        <InfoRow label={t("agents.stats_jitter")} value={jitter ? `${jitter}%` : "\u2014"} />
+        <InfoRow label={t("agents.stats_sleep")} value={interval > 0 ? `${interval}s` : "0s"} />
+        <InfoRow label={t("agents.stats_jitter")} value={jitter >= 0 ? `${jitter}%` : "\u2014"} />
         <InfoRow label={t("agents.stats_uptime")} value={uptimeLabel} />
         <InfoRow label={t("agents.stats_last_seen")} value={lastSeen ? timeAgo(lastSeen, t) : "\u2014"} title={lastSeen ? formatTime(lastSeen) : undefined} />
         <InfoRow label={t("agents.stats_idle")} value={timeSinceLastSeen || "\u2014"} />

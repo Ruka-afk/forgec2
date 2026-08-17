@@ -91,4 +91,23 @@ describe("applyTaskUpdate", () => {
     expect(next.failed_tasks).toBe(0);
     expect(next.pending_tasks).toBe(1);
   });
+
+  it("does not re-prepend a task already accounted for (seen set)", () => {
+    const prev = snapshot([
+      { id: 11, type: "screenshot", status: "pending" },
+    ], { total_tasks: 3, pending_tasks: 1 });
+    const seen = new Set([11]);
+    const next = applyTaskUpdate(prev, {
+      type: "task_update",
+      agent_id: "a1",
+      task_id: 11,
+      task_type: "screenshot",
+      status: "pending",
+      command: "",
+    }, seen);
+    expect(next).toBe(prev);
+    expect(next.tasks?.length).toBe(1);
+    expect(next.total_tasks).toBe(3);
+    expect(next.pending_tasks).toBe(1);
+  });
 });

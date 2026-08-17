@@ -14,18 +14,37 @@ export function ConfirmModal({ open, title, message, confirmText, cancelText, da
   cancelText?: string;
   danger?: boolean;
   requireText?: string;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   onCancel: () => void;
 }) {
   const { t } = useI18n();
   const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
   const resolvedConfirm = confirmText || t("common.confirm");
   const resolvedCancel = cancelText || t("common.cancel");
   const matched = !requireText || typed.trim() === requireText;
 
   useEffect(() => {
-    if (open) setTyped("");
+    if (open) {
+      setTyped("");
+      setBusy(false);
+    }
   }, [open]);
+
+  const handleConfirm = () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = onConfirm();
+      if (result instanceof Promise) {
+        result.catch(() => {}).finally(() => setBusy(false));
+      } else {
+        setBusy(false);
+      }
+    } catch {
+      setBusy(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
@@ -49,8 +68,8 @@ export function ConfirmModal({ open, title, message, confirmText, cancelText, da
           </div>
         )}
         <DialogFooter>
-          <Button variant="ghost" onClick={onCancel}>{resolvedCancel}</Button>
-          <Button variant={danger ? "destructive" : "default"} disabled={!matched} onClick={onConfirm}>{resolvedConfirm}</Button>
+          <Button variant="ghost" onClick={onCancel} disabled={busy}>{resolvedCancel}</Button>
+          <Button variant={danger ? "destructive" : "default"} disabled={!matched || busy} onClick={handleConfirm}>{resolvedConfirm}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

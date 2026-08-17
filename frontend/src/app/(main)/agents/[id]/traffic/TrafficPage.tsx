@@ -8,6 +8,7 @@ import { useI18n } from "@/lib/i18n";
 
 import { Spinner, PageSpinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,7 @@ export default function AgentTrafficPage() {
   const id = params?.id as string;
   const [report, setReport] = useState<BaselineReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [adapting, setAdapting] = useState(false);
 
   const [autoAdapt, setAutoAdapt] = useState(false);
@@ -64,10 +66,12 @@ export default function AgentTrafficPage() {
     try {
       const data = await api.get(paths.agents.trafficProfile(id));
       setReport((data.data as BaselineReport) || null);
+      setLoadError(false);
       if (data.data) {
         setAutoAdapt((data.data as BaselineReport).auto_adapt);
       }
     } catch {
+      setLoadError(true);
       toast.error(t("agents.traffic_load_failed"));
     } finally {
       setLoading(false);
@@ -84,7 +88,7 @@ export default function AgentTrafficPage() {
       if (data.success) {
         toast.success(t("agents.traffic_adapt_queued").replace("{message}", String(data.message || "")));
       } else {
-        toast.error(t("agents.traffic_adapt_error").replace("{error}", String(data.error || "unknown")));
+        toast.error(t("agents.traffic_adapt_error").replace("{error}", String(data.error || t("agents.unknown"))));
       }
     } catch {
       toast.error(t("agents.traffic_adapt_failed"));
@@ -109,6 +113,21 @@ export default function AgentTrafficPage() {
 
   if (loading) {
     return <PageSpinner />;
+  }
+
+  if (loadError) {
+    return (
+      <div className="max-w-(--content-width) mx-auto pb-12 md:pb-0 space-y-6 animate-fade-slide-up">
+        <Card className="p-4 sm:p-5">
+          <ErrorState
+            title={t("agents.traffic_load_failed")}
+            message={t("agents.traffic_load_failed_hint")}
+            action={<Button variant="outline" size="sm" onClick={() => { setLoading(true); setLoadError(false); loadReport(); }}>{t("agents.detail_retry")}</Button>}
+            className="mx-auto max-w-md"
+          />
+        </Card>
+      </div>
+    );
   }
 
   return (

@@ -13,6 +13,7 @@ export function useAgentDetail<T>(agentId: string) {
   const lastReloadRef = useRef(0);
   const pendingReloadRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasDataRef = useRef(false);
+  const lastSnapshotRef = useRef<string | null>(null);
 
   const reload = useCallback(
     async (background = false, signal?: AbortSignal) => {
@@ -31,9 +32,14 @@ export function useAgentDetail<T>(agentId: string) {
         hasDataRef.current = true;
         // Keep the previous snapshot's identity when nothing changed so
         // memoized children don't re-render on every 30s correction pass.
-        setData((prev) =>
-          prev && typeof prev === "object" && JSON.stringify(prev) === JSON.stringify(response) ? prev : response,
-        );
+        // Stringify once per reload (cached) instead of comparing two full
+        // serializations on every pass.
+        setData((prev) => {
+          const snap = JSON.stringify(response);
+          if (prev && lastSnapshotRef.current === snap) return prev;
+          lastSnapshotRef.current = snap;
+          return response;
+        });
       } catch (error) {
         if ((error as Error).name !== "AbortError") {
           // Keep the previous snapshot on transient errors so a blip in the
@@ -71,6 +77,11 @@ export function useAgentDetail<T>(agentId: string) {
   );
 
   useEffect(() => {
+    hasDataRef.current = false;
+    lastSnapshotRef.current = null;
+    setData(null);
+    setLoading(true);
+    setLoadError(false);
     const controller = new AbortController();
     reload(false, controller.signal);
     return () => {

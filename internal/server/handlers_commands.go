@@ -552,6 +552,10 @@ func (s *Server) handleSetSleep(c *gin.Context) {
 			Jitter   int `json:"jitter"`
 		}
 		if err := c.ShouldBindJSON(&req); err == nil {
+			if req.Interval < 1 || req.Interval > 86400 || req.Jitter < 0 || req.Jitter > 100 {
+				respondError(c, http.StatusBadRequest, "invalid sleep range: interval 1-86400 seconds, jitter 0-100 percent")
+				return
+			}
 			sleep = fmt.Sprintf("%d,%d", req.Interval, req.Jitter)
 		}
 	}

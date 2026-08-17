@@ -75,24 +75,24 @@ export function AgentBulkBar({
                 <div key={r.id || i} className="flex items-center justify-between px-3 py-2 bg-muted rounded-lg text-xs">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-primary-foreground text-(--fs-micro-sm) font-bold shrink-0 ${
-                      r.type === "kill" ? "bg-chart-4" :
-                      r.type === "uninstall" ? "bg-destructive" :
+                      r.task_type === "kill" ? "bg-chart-4" :
+                      r.task_type === "uninstall" ? "bg-destructive" :
                       "bg-primary/100"
                     }`}>
-                      {r.type === "kill" ? <Power className="w-3 h-3" /> :
-                        r.type === "uninstall" ? <Trash2 className="w-3 h-3" /> :
-                        r.type === "screenshot" ? <Camera className="w-3 h-3" /> :
+                      {r.task_type === "kill" ? <Power className="w-3 h-3" /> :
+                        r.task_type === "uninstall" ? <Trash2 className="w-3 h-3" /> :
+                        r.task_type === "screenshot" ? <Camera className="w-3 h-3" /> :
                         <Terminal className="w-3 h-3" />}
                     </span>
                     <div className="min-w-0">
-                      <span className="font-medium text-foreground">{enumLabel(t, "command.type", r.type)}</span>
+                      <span className="font-medium text-foreground">{enumLabel(t, "command.type", r.task_type)}</span>
                       {r.command && <span className="ml-1.5 text-muted-foreground/70">{r.command}</span>}
-                      <span className="ml-2 text-muted-foreground/70">{t("agents.n_agents").replace("{n}", String(r.agent_ids?.length || 0))}</span>
+                      {r.operator && <span className="ml-2 text-muted-foreground/70">{r.operator}</span>}
                     </div>
                   </div>
                   <span className="text-muted-foreground/70 shrink-0">
-                    {t("agents.n_tasks").replace("{n}", String(r.task_count ?? 0))}
-                    {r.failed?.length ? <span className="ml-1 text-destructive">({t("agents.n_failed").replace("{n}", String(r.failed.length))})</span> : null}
+                    {t("agents.n_tasks").replace("{n}", String(r.tasks_created ?? 0))}
+                    {r.failed > 0 && <span className="ml-1 text-destructive">({t("agents.n_failed").replace("{n}", String(r.failed))})</span>}
                   </span>
                 </div>
               ))}

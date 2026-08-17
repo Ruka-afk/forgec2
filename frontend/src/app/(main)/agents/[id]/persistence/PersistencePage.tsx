@@ -143,7 +143,7 @@ export default function AgentPersistencePage() {
 
   const agentStatus = agent?.status || "offline";
   const statusColor = agentStatus === "online" ? "bg-success" : agentStatus === "stale" ? "bg-warning" : "bg-destructive";
-  const hostname = agent?.hostname || "unknown";
+  const hostname = agent?.hostname || t("agents.unknown");
 
   if (loading) {
     return <PageSpinner />;

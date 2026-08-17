@@ -35,13 +35,14 @@ export interface Beacon {
 }
 
 export interface BulkResult {
-  id: string;
-  type: string;
+  id: number;
+  timestamp: string;
   command: string;
-  agent_ids: string[];
-  task_count: number;
-  failed: string[];
-  created_at: string;
+  task_type: string;
+  tasks_created: number;
+  skipped_locked: number;
+  failed: number;
+  operator: string;
 }
 
 export interface Tag {

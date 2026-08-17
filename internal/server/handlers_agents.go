@@ -838,7 +838,7 @@ func (s *Server) handleSetKillDate(c *gin.Context) {
 		return
 	}
 
-	kt, err := time.Parse("2006-01-02", req.KillDate)
+	kt, err := time.ParseInLocation("2006-01-02", req.KillDate, time.Local)
 	if err != nil {
 		respondError(c, http.StatusBadRequest, "invalid date format, expected YYYY-MM-DD")
 		return

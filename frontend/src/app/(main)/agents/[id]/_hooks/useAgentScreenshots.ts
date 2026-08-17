@@ -10,6 +10,7 @@ interface AgentScreenshotsResponse {
 }
 
 const SNAPSHOT_DEBOUNCE_MS = 500;
+const NEW_BADGE_TTL_MS = 30000;
 
 /**
  * Screenshot list for the agent detail page. Refetches only when something
@@ -25,7 +26,20 @@ export function useAgentScreenshots(agentId: string, online: boolean) {
   const initializedRef = useRef(false);
   const lastListRef = useRef("");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const badgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { subscribe } = useWS();
+
+  // Reset per-agent gallery state when navigating between agents so the
+  // previous implant's screenshots and NEW badges never leak over.
+  useEffect(() => {
+    knownRef.current = new Set();
+    initializedRef.current = false;
+    lastListRef.current = "";
+    if (badgeTimerRef.current) clearTimeout(badgeTimerRef.current);
+    badgeTimerRef.current = null;
+    setScreenshots([]);
+    setNewScreenshots([]);
+  }, [agentId]);
 
   const reload = useCallback(async (signal?: AbortSignal) => {
     if (!agentId) return;
@@ -46,6 +60,8 @@ export function useAgentScreenshots(agentId: string, online: boolean) {
         if (fresh.length > 0) {
           fresh.forEach((fn) => knownRef.current.add(fn));
           setNewScreenshots(fresh);
+          if (badgeTimerRef.current) clearTimeout(badgeTimerRef.current);
+          badgeTimerRef.current = setTimeout(() => setNewScreenshots([]), NEW_BADGE_TTL_MS);
         }
       }
       const joined = list.join("\n");
@@ -94,6 +110,7 @@ export function useAgentScreenshots(agentId: string, online: boolean) {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (badgeTimerRef.current) clearTimeout(badgeTimerRef.current);
     };
   }, []);
 

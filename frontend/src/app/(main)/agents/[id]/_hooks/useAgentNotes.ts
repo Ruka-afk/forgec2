@@ -17,6 +17,15 @@ export function useAgentNotes(agentId: string, reloadDetail: () => Promise<void>
     return () => { mountedRef.current = false; };
   }, []);
 
+  // Abandon in-progress edits when switching agents so unsaved drafts
+  // never get written to the wrong implant.
+  useEffect(() => {
+    setEditing(false);
+    setTags("");
+    setNotes("");
+    setSaving(false);
+  }, [agentId]);
+
   const startEditing = useCallback((currentTags: string, currentNotes: string) => {
     setTags(currentTags);
     setNotes(currentNotes);

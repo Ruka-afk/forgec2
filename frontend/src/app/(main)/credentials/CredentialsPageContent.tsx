@@ -705,7 +705,7 @@ export default function CredentialsPage() {
         danger
         confirmText={t("common.delete")}
         onCancel={() => setShowDeleteConfirm(null)}
-        onConfirm={() => showDeleteConfirm && handleDelete(showDeleteConfirm)}
+        onConfirm={() => { if (showDeleteConfirm) void handleDelete(showDeleteConfirm); }}
       />
     </PageContainer>
     </>

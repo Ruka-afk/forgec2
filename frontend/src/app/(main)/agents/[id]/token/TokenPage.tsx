@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Spinner } from "@/components/UI";
+import { Spinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 import { AlertCircle, BadgeInfo, Check, CircleDot, Info, Key, List, Pencil, Plus, PlusCircle, RotateCcw, RotateCw, Trash2, User, UserCheck, UserCog, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -164,7 +164,7 @@ export default function AgentTokenPage() {
       const d = data as Record<string, unknown>;
       const user = String(d.user || d.username || d.name || JSON.stringify(data));
       setWhoamiResult(user);
-      toast(`Identity: ${d.user || d.username || "unknown"}`);
+      toast(`Identity: ${d.user || d.username || t("agents.unknown")}`);
     } catch (err) {
       setWhoamiResult(`Error: ${err}`);
       toast.error(t("agents.token_whoami_failed"));    } finally {      setActiveAction(null);    }
@@ -271,7 +271,7 @@ export default function AgentTokenPage() {
               </Select>
             </div>
             <Button type="submit" disabled={!stealPid || activeAction === "steal"} className="w-full" variant="default">
-              {activeAction === "steal" ? <><Spinner size="sm" />Stealing...</> : <><User className="w-4 h-4" />{t("agents.token_steal")}</>}
+              {activeAction === "steal" ? <><Spinner size="sm" />{t("agents.token_stealing")}</> : <><User className="w-4 h-4" />{t("agents.token_steal")}</>}
             </Button>
           </form>
         </Card>
@@ -292,7 +292,7 @@ export default function AgentTokenPage() {
               <Input id="make-pass" type="password" value={makePass} onChange={(e) => setMakePass(e.target.value)} placeholder={t("agents.token_password")} />
             </div>
             <Button type="submit" disabled={!makeUser || activeAction === "make"} className="w-full" variant="default">
-              {activeAction === "make" ? <><Spinner size="sm" />Creating...</> : <><Plus className="w-4 h-4" />{t("agents.token_make")}</>}
+              {activeAction === "make" ? <><Spinner size="sm" />{t("agents.token_creating")}</> : <><Plus className="w-4 h-4" />{t("agents.token_make")}</>}
             </Button>
           </form>
         </Card>        <Card className="p-5">

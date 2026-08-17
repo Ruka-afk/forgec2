@@ -864,10 +864,14 @@ func (s *Server) registerCampaignRoutes(auth *gin.RouterGroup) {
 		rolesWrite.DELETE("/api/roles/:id", s.handleRolesDelete)
 	}
 
+	collabRead := auth.Group("/")
+	collabRead.Use(middleware.RequirePermission(db.PermAgentsRead))
+	{
+		collabRead.GET("/collab/agents", s.handleCollabAgents)
+	}
 	collabWrite := auth.Group("/")
 	collabWrite.Use(middleware.RequirePermission(db.PermAgentsWrite))
 	{
-		collabWrite.GET("/collab/agents", s.handleCollabAgents)
 		collabWrite.POST("/collab/agents/:id/lock", s.handleCollabLock)
 		collabWrite.POST("/collab/agents/:id/unlock", s.handleCollabUnlock)
 		collabWrite.POST("/collab/tasks/:taskId/claim", s.handleCollabClaimTask)

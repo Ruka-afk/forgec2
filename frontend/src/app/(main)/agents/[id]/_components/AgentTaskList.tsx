@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/status-indicator";
@@ -74,7 +74,16 @@ function useFullTaskResults() {
     }
   }, []);
 
-  return { results, load };
+  const invalidate = useCallback((taskId: number) => {
+    setResults((prev) => {
+      if (!(taskId in prev)) return prev;
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+  }, []);
+
+  return { results, load, invalidate };
 }
 
 export interface AgentTaskListProps {
@@ -107,7 +116,25 @@ export default memo(function AgentTaskList({
   const [query, setQuery] = useState("");
   const [oldestFirst, setOldestFirst] = useState(false);
   const [showAll, setShowAll] = useState(false);
-  const { results, load } = useFullTaskResults();
+  const { results, load, invalidate } = useFullTaskResults();
+
+  // WS chunk updates evolve task.result over time; drop the stale full-result
+  // cache when the preview changes so the expanded view never shows an old
+  // snapshot, and re-fetch if that task is currently expanded.
+  const lastResultRef = useRef<Map<number, string>>(new Map());
+  useEffect(() => {
+    for (const task of tasks) {
+      const id = typeof task.id === "number" ? task.id : Number(task.id);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      const cur = task.result ?? "";
+      const prev = lastResultRef.current.get(id);
+      if (prev !== undefined && prev !== cur) {
+        invalidate(id);
+        if (expandedTaskId === id) load(id);
+      }
+      lastResultRef.current.set(id, cur);
+    }
+  }, [tasks, expandedTaskId, invalidate, load]);
 
   const filterTypes = useMemo(() => {
     const counts = new Map<string, number>();

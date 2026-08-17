@@ -23,7 +23,6 @@ export function useAgentFilters(beacons: Beacon[]) {
     hostname: true, username: true, os: true, ip: true, last_seen: true,
     window: true, lock: true, tasks: true, status: true, version: true,
   });
-  const [colMenuOpen, setColMenuOpen] = useState(false);
 
   useEffect(() => { setPage(1); }, [searchInput]);
 
@@ -52,7 +51,6 @@ export function useAgentFilters(beacons: Beacon[]) {
     autoRefresh, setAutoRefresh,
     viewMode, setViewMode,
     visibleCols, setVisibleCols,
-    colMenuOpen, setColMenuOpen,
     sortedBeacons,
   };
 }

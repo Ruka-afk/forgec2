@@ -71,6 +71,8 @@ export default function RemoteDesktopPage() {
   const lastFrameRef = useRef<string | null>(null);
   const frameRafRef = useRef<number | null>(null);
   const pendingFrameRef = useRef<{ data: string; width?: number; height?: number } | null>(null);
+  const cursorRafRef = useRef<number | null>(null);
+  const pendingCursorRef = useRef<{ x: number; y: number } | null>(null);
   const captureBusyRef = useRef(false);
   const { subscribe } = useWS();
 
@@ -194,6 +196,7 @@ export default function RemoteDesktopPage() {
     return () => {
       if (moveThrottleRef.current) clearTimeout(moveThrottleRef.current);
       if (frameRafRef.current !== null) cancelAnimationFrame(frameRafRef.current);
+      if (cursorRafRef.current !== null) cancelAnimationFrame(cursorRafRef.current);
       if (!id) return;
       api.post(paths.agents.screenStop(id)).catch((e) => { console.error("RemoteDesktop stop failed:", e); });
     };
@@ -225,10 +228,21 @@ export default function RemoteDesktopPage() {
       if (!monitoring || !id) return;
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
-        setMouseX(e.clientX - rect.left);
-        setMouseY(e.clientY - rect.top);
+        // Throttle cursor re-renders to once per animation frame instead
+        // of a state update per mousemove event.
+        pendingCursorRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        if (cursorRafRef.current === null) {
+          cursorRafRef.current = requestAnimationFrame(() => {
+            cursorRafRef.current = null;
+            const p = pendingCursorRef.current;
+            pendingCursorRef.current = null;
+            if (!p) return;
+            setMouseX(p.x);
+            setMouseY(p.y);
+            setShowCursor(true);
+          });
+        }
       }
-      setShowCursor(true);
 
       if (moveThrottleRef.current) return;
       moveThrottleRef.current = setTimeout(() => {

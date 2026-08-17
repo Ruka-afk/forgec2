@@ -9,7 +9,7 @@ import type { Beacon, Tag } from "./types";
 import { avatarColor, formatUptime, osIcon, agentStatusBorderClass, integrityTone } from "./types";
 import type { AgentMenuPoint } from "./agent-menu-actions";
 import { groupBeaconsByHost } from "./groupBeaconsByHost";
-import { Clock, Globe } from "lucide-react";
+import { Clock, Globe, Square, CheckSquare } from "lucide-react";
 import { StatusDot } from "@/components/ui/status-dot";
 
 interface AgentGridProps {
@@ -20,9 +20,11 @@ interface AgentGridProps {
   onInteract: (id: string) => void;
   onDetails: (id: string) => void;
   onMenu: (point: AgentMenuPoint) => void;
+  selected?: Set<string>;
+  onToggleSelect?: (id: string, checked: boolean) => void;
 }
 
-export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCountMap, activeId, onInteract, onDetails, onMenu }: AgentGridProps) {
+export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCountMap, activeId, onInteract, onDetails, onMenu, selected, onToggleSelect }: AgentGridProps) {
   const { t } = useI18n();
   const groups = groupBeaconsByHost(beacons);
   return (
@@ -35,6 +37,7 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
         const os = group.os || "";
         const status = group.status || "offline";
         const sessionN = group.sessions.length;
+        const isSelected = selected?.has(id) ?? false;
         const OsIcon = osIcon(os);
         const itone = integrityTone(beacon.integrity);
         const integrityClass = itone === "destructive" ? "bg-destructive/10 text-destructive"
@@ -53,10 +56,25 @@ export const AgentGrid = memo(function AgentGrid({ beacons, tagsByAgent, taskCou
               onMenu({ x: e.clientX, y: e.clientY, beacon });
             }}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onInteract(id); } }}
-            className={`p-4 cursor-pointer hover:ring-2 hover:ring-primary/50 hover:shadow-md transition-all duration-200 ${agentStatusBorderClass(status)} group ring-0 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 ${activeId === id ? "ring-2 ring-primary/50" : ""}`}
+            className={`p-4 cursor-pointer hover:ring-2 hover:ring-primary/50 hover:shadow-md transition-all duration-200 ${agentStatusBorderClass(status)} group ring-0 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 ${activeId === id ? "ring-2 ring-primary/50" : ""} ${isSelected ? "ring-2 ring-primary/60" : ""}`}
           >
             <div className="flex items-start justify-between mb-2">
               <div className="flex items-center gap-2.5 min-w-0">
+                {onToggleSelect && (
+                  <span
+                    role="checkbox"
+                    tabIndex={0}
+                    aria-checked={isSelected}
+                    aria-label={t("agents.select_agent")}
+                    onClick={(e) => { e.stopPropagation(); onToggleSelect(id, !isSelected); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onToggleSelect(id, !isSelected); }
+                    }}
+                    className={`shrink-0 ${isSelected ? "text-primary" : "text-muted-foreground/50 hover:text-foreground"}`}
+                  >
+                    {isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  </span>
+                )}
                 <AvatarFallback name={hostname} size="md" shape="xl" color={avatarColor(hostname)} />
                 <div className="min-w-0">
                   <span className="font-semibold text-sm text-primary truncate block group-hover:underline">{hostname}</span>

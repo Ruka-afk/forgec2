@@ -146,22 +146,6 @@ export default function AgentsPageContent() {
     [sortedBeacons, agentVirtualized, agentVirtStart, agentVirtEnd],
   );
 
-  useEffect(() => {
-    if (loading) return;
-    const visibleIds = new Set(visibleBeacons.map((b) => b.id).filter(Boolean) as string[]);
-    setSelected((prev) => {
-      if (prev.size === 0) return prev;
-      let next: Set<string> | null = null;
-      prev.forEach((id) => {
-        if (!visibleIds.has(id) && (!next || !next.has(id))) {
-          next ??= new Set(prev);
-          next.delete(id);
-        }
-      });
-      return next ?? prev;
-    });
-  }, [visibleBeacons, loading, setSelected]);
-
   const loadBeacons = useCallback(() => {
     loadBeaconsRaw(searchQuery, statusFilter, osFilter, page, 50, tagFilter, linkedFilter, sortKey, sortDir);
   }, [loadBeaconsRaw, searchQuery, statusFilter, osFilter, page, tagFilter, linkedFilter, sortKey, sortDir]);
@@ -251,10 +235,10 @@ export default function AgentsPageContent() {
 
   const bulkTask = async (agentIds: string[], type: string, command: string) => {
     try {
-      const data = await api.postJson<{ success?: boolean; task_count?: number; failed?: string[]; error?: string }>(paths.agents.bulkTask, { agent_ids: agentIds, type, command });
+      const data = await api.postJson<{ success?: boolean; tasks_created?: number; failed?: number; error?: string }>(paths.agents.bulkTask, { agent_ids: agentIds, task_type: type, command });
       if (data.success) {
-        let bulkMsg = t("agents.bulk_type_result").replace("{type}", type).replace("{count}", String(data.task_count ?? agentIds.length));
-        if (data.failed?.length) bulkMsg += ` (${data.failed.length} ${t("agents.failed_suffix")})`;
+        let bulkMsg = t("agents.bulk_type_result").replace("{type}", type).replace("{count}", String(data.tasks_created ?? agentIds.length));
+        if (data.failed) bulkMsg += ` (${data.failed} ${t("agents.failed_suffix")})`;
         setActionMsg(bulkMsg);
         setSelected(new Set());
         loadBeacons();
@@ -286,7 +270,13 @@ export default function AgentsPageContent() {
   const doBatchSleep = () => {
     const ids = Array.from(selected);
     if (!ids.length) return;
-    runBatch({ agent_ids: ids, task_type: "sleep", args: `${batchSleepInterval},${batchSleepJitter}` });
+    const interval = Number(batchSleepInterval);
+    const jitter = Number(batchSleepJitter);
+    if (!Number.isFinite(interval) || interval < 1 || interval > 86400 || !Number.isFinite(jitter) || jitter < 0 || jitter > 100) {
+      setActionMsg(t("agents.sleep_invalid"));
+      return;
+    }
+    runBatch({ agent_ids: ids, task_type: "sleep", args: `${interval},${jitter}` });
     closeBatchSleep();
   };
 
@@ -423,8 +413,14 @@ export default function AgentsPageContent() {
 
   const submitQuickSleep = async () => {
     if (!quickSleepAgent) return;
+    const interval = Number(sleepInterval);
+    const jitter = Number(sleepJitter);
+    if (!Number.isFinite(interval) || interval < 1 || interval > 86400 || !Number.isFinite(jitter) || jitter < 0 || jitter > 100) {
+      setActionMsg(t("agents.sleep_invalid"));
+      return;
+    }
     try {
-      await api.postJson(paths.agents.setSleep(quickSleepAgent.id), { interval: Number(sleepInterval), jitter: Number(sleepJitter) });
+      await api.postJson(paths.agents.setSleep(quickSleepAgent.id), { interval, jitter });
       setActionMsg(t("agents.sleep_updated").replace("{name}", quickSleepAgent.hostname));
       closeQuickSleep();
       loadBeacons();
@@ -688,7 +684,7 @@ export default function AgentsPageContent() {
           <TableBody className="divide-y divide-border">
             {loading && Array.from({ length: 6 }).map((_, i) => (
               <TableRow key={`skel-${i}`}>
-                {Array.from({ length: 12 }).map((_, j) => (
+                {Array.from({ length: emptyColSpan }).map((_, j) => (
                   <TableCell key={j} className="py-3 px-3 sm:py-3.5 sm:px-4">
                     <Skeleton className="h-4 w-3/4" />
                   </TableCell>
@@ -790,6 +786,8 @@ export default function AgentsPageContent() {
             onInteract={handleSelectAgent}
             onDetails={handleSelectAgent}
             onMenu={setMenuPoint}
+            selected={selected}
+            onToggleSelect={toggleSelect}
           />
           <Pagination page={page} pageSize={50} total={total} onPageChange={setPage} />
         </>
@@ -802,7 +800,7 @@ export default function AgentsPageContent() {
         confirmText={t("agents.confirm_kill_btn")}
         danger
         requireText={confirm?.hostname || ""}
-        onConfirm={() => confirm?.id && killAgent(confirm.id)}
+        onConfirm={() => { if (confirm?.id) void killAgent(confirm.id); }}
         onCancel={() => setConfirm(null)}
       />
       <ConfirmModal
@@ -812,7 +810,7 @@ export default function AgentsPageContent() {
         confirmText={t("agents.confirm_delete_btn")}
         danger
         requireText={confirm?.hostname || ""}
-        onConfirm={() => confirm?.id && deleteAgent(confirm.id)}
+        onConfirm={() => { if (confirm?.id) void deleteAgent(confirm.id); }}
         onCancel={() => setConfirm(null)}
       />
       <ConfirmModal
@@ -822,7 +820,7 @@ export default function AgentsPageContent() {
         confirmText={t("agents.uninstall")}
         danger
         requireText={confirm?.hostname || ""}
-        onConfirm={() => confirm?.id && uninstallAgent(confirm.id)}
+        onConfirm={() => { if (confirm?.id) void uninstallAgent(confirm.id); }}
         onCancel={() => setConfirm(null)}
       />
       <ConfirmModal

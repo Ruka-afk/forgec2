@@ -213,8 +213,8 @@ interface ScreenshotItem {
   }, [subscribe, id, applyFrame]);
 
   const statusIndicator = () => {
-    if (status === "capturing") return { color: "bg-warning animate-pulse", text: "Capturing...", icon: <Spinner size="xs" /> };
-    if (status === "error") return { color: "bg-destructive", text: "Error", icon: <TriangleAlert className="w-3 h-3" /> };
+    if (status === "capturing") return { color: "bg-warning animate-pulse", text: t("screen.capturing"), icon: <Spinner size="xs" /> };
+    if (status === "error") return { color: "bg-destructive", text: t("screen.error"), icon: <TriangleAlert className="w-3 h-3" /> };
     if (monitoring && monitoringStatus === "connected") return { color: "bg-success/60 animate-pulse", text: t("agents.rdp_connected"), icon: <span className="w-1.5 h-1.5 rounded-full bg-current" /> };
     return { color: "bg-muted-foreground", text: t("agents.rdp_standby"), icon: <span className="w-1.5 h-1.5 rounded-full bg-current" /> };
   };
@@ -316,7 +316,7 @@ interface ScreenshotItem {
             <Card className="p-4 shrink-0">
               <div className="text-xs text-muted-foreground mb-3 font-semibold uppercase tracking-wider flex items-center justify-between">
                 <span>{t("agents.screen_controls")}</span>
-                 <span className={`flex items-center gap-1.5 text-(--fs-micro-sm) font-normal ${monitoring ? "text-success" : "text-muted-foreground/70"}`}>                  <span className={`w-1.5 h-1.5 rounded-full ${monitoring ? "bg-success animate-pulse" : "bg-muted-foreground"}`}></span>                  {monitoring ? "LIVE" : "OFF"}
+                 <span className={`flex items-center gap-1.5 text-(--fs-micro-sm) font-normal ${monitoring ? "text-success" : "text-muted-foreground/70"}`}>                  <span className={`w-1.5 h-1.5 rounded-full ${monitoring ? "bg-success animate-pulse" : "bg-muted-foreground"}`}></span>                  {monitoring ? t("screen.live") : t("screen.off")}
                 </span>
               </div>
               <div className="space-y-3">

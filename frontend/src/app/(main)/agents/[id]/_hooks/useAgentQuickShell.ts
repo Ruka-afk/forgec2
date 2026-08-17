@@ -33,6 +33,15 @@ export function useAgentQuickShell(agentId: string, os: string | undefined, succ
     return () => { mountedRef.current = false; };
   }, []);
 
+  // Reset operator state when navigating to a different agent so drafts
+  // and history never carry over (or get sent to the wrong agent).
+  useEffect(() => {
+    setCommand("");
+    setHistory([]);
+    shellTouchedRef.current = false;
+    setShell(defaultShellForOS(os));
+  }, [agentId, os]);
+
   // Keep the interpreter defaulted to the agent's OS until the operator
   // explicitly picks one (detail loads async, so os may arrive late).
   useEffect(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useWS } from "@/lib/wsContext";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import type { AgentDetailResponse, TaskEntry } from "../_components/agent-detail-utils";
@@ -36,6 +36,7 @@ export function useAgentTaskSync(
   reloadThrottled: (background?: boolean) => void,
 ) {
   const { subscribe } = useWS();
+  const seenTaskIdsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     if (!agentId) return;
@@ -50,7 +51,7 @@ export function useAgentTaskSync(
           prev ? { ...prev, agent: { ...(prev.agent || {}), ...patch } } : prev,
         );
       } else if (msg.type === "task_update") {
-        setData((prev) => (prev ? applyTaskUpdate(prev, msg as TaskUpdateFrame) : prev));
+        setData((prev) => (prev ? applyTaskUpdate(prev, msg as TaskUpdateFrame, seenTaskIdsRef.current) : prev));
       }
     });
   }, [agentId, subscribe, setData, reloadThrottled]);
@@ -65,6 +66,7 @@ export function useAgentTaskSync(
 export function applyTaskUpdate(
   prev: AgentDetailResponse,
   frame: TaskUpdateFrame,
+  seenTaskIds?: Set<number>,
 ): AgentDetailResponse {
   const taskId = Number(frame.task_id);
   if (!Number.isFinite(taskId) || taskId <= 0) return prev;
@@ -94,6 +96,9 @@ export function applyTaskUpdate(
   }
 
   // Brand-new task: prepend a minimal record so it shows up instantly.
+  // A task already prepended once (id in seenTaskIds) is never re-inserted,
+  // so replayed/duplicate frames cannot inflate the list or the counters.
+  if (seenTaskIds?.has(taskId)) return prev;
   const entry: TaskEntry = {
     id: taskId,
     type: frame.task_type,
@@ -105,6 +110,7 @@ export function applyTaskUpdate(
     created_at: new Date().toISOString(),
   };
   const stats = adjustStats(prev, undefined, frame.status);
+  seenTaskIds?.add(taskId);
   return { ...prev, ...stats, tasks: [entry, ...tasks] };
 }
 

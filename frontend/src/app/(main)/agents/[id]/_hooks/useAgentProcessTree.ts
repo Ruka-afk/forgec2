@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { describeProcessSnapshot } from "../_components/process-snapshot";
@@ -14,6 +14,12 @@ export function useAgentProcessTree(agentId: string, emptyMessage: string, error
     persistKey ?? `agents.detail.${agentId}.process`,
     false,
   );
+
+  useEffect(() => {
+    setProcessList(null);
+    setLoadFailed(false);
+    setLoading(false);
+  }, [agentId]);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     if (!agentId) return;
@@ -37,6 +43,24 @@ export function useAgentProcessTree(agentId: string, emptyMessage: string, error
     }
   }, [agentId, expanded, processList, loadFailed, emptyMessage, errorMessage, setExpanded]);
 
+  const refresh = useCallback(async () => {
+    if (!agentId) return;
+    setProcessList(null);
+    setLoadFailed(false);
+    setLoading(true);
+    try {
+      const response = await api.get(paths.agents.processTree(agentId)) as Record<string, unknown>;
+      const snap = describeProcessSnapshot(response);
+      setProcessList(snap.text || emptyMessage);
+      setLoadFailed(false);
+    } catch {
+      setProcessList(errorMessage);
+      setLoadFailed(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [agentId, emptyMessage, errorMessage]);
+
   return {
     processList,
     loading,
@@ -44,5 +68,6 @@ export function useAgentProcessTree(agentId: string, emptyMessage: string, error
     expanded,
     setExpanded,
     load,
+    refresh,
   };
 }

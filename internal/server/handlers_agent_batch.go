@@ -74,6 +74,7 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 		Command  string   `json:"command"`
 		Shell    string   `json:"shell"`
 		TaskType string   `json:"task_type"`
+		Type     string   `json:"type"`
 		File     string   `json:"file"`
 		Args     string   `json:"args"`
 	}
@@ -90,6 +91,10 @@ func (s *Server) handleBatchCommand(c *gin.Context) {
 	if len(req.AgentIDs) > MaxBatchAgentLimit {
 		respondError(c, http.StatusBadRequest, fmt.Sprintf("too many agents (max %d)", MaxBatchAgentLimit))
 		return
+	}
+
+	if req.TaskType == "" {
+		req.TaskType = req.Type
 	}
 
 	if req.TaskType == "" {

@@ -76,6 +76,9 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const [lbIndex, setLbIndex] = useState(0);
   const lbOpenRef = useRef(false);
   lbOpenRef.current = lbOpen;
+  const confirmOpen = confirmUninstall || confirmKill || confirmKillDate || confirmClearKillDate || confirmMigrate;
+  const confirmOpenRef = useRef(confirmOpen);
+  confirmOpenRef.current = confirmOpen;
   const [childrenExpanded, setChildrenExpanded] = usePersistedState(`agents.detail.${id}.children`, false);
 
   const { data, setData, loading, loadError, reload: loadDetail, reloadThrottled } = useAgentDetail<AgentDetailResponse>(id);
@@ -103,7 +106,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
   const [credCount, setCredCount] = useState<number | null>(null);
   const [mimikatzReady, setMimikatzReady] = useState(false);
 
-  const { processList, loading: processLoading, loadFailed, expanded: processExpanded, setExpanded: setProcessExpanded, load: loadProcessList } = useAgentProcessTree(
+  const { processList, loading: processLoading, loadFailed, expanded: processExpanded, setExpanded: setProcessExpanded, load: loadProcessList, refresh: refreshProcessList } = useAgentProcessTree(
     id,
     t("agents.detail_no_data"),
     t("agents.detail_process_load_failed"),
@@ -149,6 +152,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (lbOpenRef.current) return;
+      if (confirmOpenRef.current) return;
       if (onCloseRef.current && e.key === "Escape") { onCloseRef.current(); return; }
       if (e.key === "s") router.push(`/agents/${id}/shell`);
       else if (e.key === "f") router.push(`/agents/${id}/files`);
@@ -405,6 +409,7 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             loadFailed={loadFailed}
             expanded={processExpanded}
             onToggle={handleToggleProcess}
+            onRefresh={refreshProcessList}
           />
 
           <EvasionSection agentId={id} online={status === "online"} />
