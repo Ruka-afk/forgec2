@@ -25,11 +25,13 @@ interface CredentialRowProps {
   entry: VaultEntry;
   isSelected: boolean;
   showPassword: boolean;
+  showHash: boolean;
   onToggleSelect: (id: string) => void;
   onToggleConfirm: (entry: VaultEntry) => void;
   onEdit: (entry: VaultEntry) => void;
   onDelete: (id: string) => void;
   togglePasswordVisibility: (id: string) => void;
+  toggleHashVisibility: (id: string) => void;
   t: (key: string) => string;
 }
 
@@ -37,11 +39,13 @@ function CredentialRowInner({
   entry,
   isSelected,
   showPassword,
+  showHash,
   onToggleSelect,
   onToggleConfirm,
   onEdit,
   onDelete,
   togglePasswordVisibility,
+  toggleHashVisibility,
   t,
 }: CredentialRowProps) {
   return (
@@ -73,6 +77,34 @@ function CredentialRowInner({
               text={entry.password}
               label={t("cred.copy_password")}
               title={t("cred.copy_password")}
+              size="icon-xs"
+            />
+          </div>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )}
+      </TableCell>
+      <TableCell className="max-sm:hidden py-3 px-4 font-mono text-xs">
+        {entry.hash ? (
+          <div className="flex items-center gap-1">
+            <span
+              className={`text-muted-foreground ${showHash ? "max-w-[220px] truncate" : ""}`}
+              title={showHash ? entry.hash : undefined}
+            >
+              {showHash ? entry.hash : "????????"}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => toggleHashVisibility(entry.id)}
+              aria-label={showHash ? t("cred.hide_hash") : t("cred.show_hash")}
+            >
+              {showHash ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+            </Button>
+            <CopyButton
+              text={entry.hash}
+              label={t("cred.copy_hash")}
+              title={t("cred.copy_hash")}
               size="icon-xs"
             />
           </div>

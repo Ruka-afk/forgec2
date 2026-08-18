@@ -50,6 +50,7 @@ export default function CredentialsPage() {
   const [page, setPage] = useState(1);
 
   const [showPasswords, setShowPasswords] = useState<Set<string>>(new Set());
+  const [showHashes, setShowHashes] = useState<Set<string>>(new Set());
 
   type CredFormValues = {
     domain: string;
@@ -237,6 +238,14 @@ export default function CredentialsPage() {
 
   const togglePasswordVisibility = useCallback((id: string) => {
     setShowPasswords(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleHashVisibility = useCallback((id: string) => {
+    setShowHashes(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
@@ -449,6 +458,7 @@ export default function CredentialsPage() {
                   </TableHead>                  <TableHead className="text-left py-3 px-4 font-normal">{t("cred.col_type")}</TableHead>
                   <TableHead className="text-left py-3 px-4 font-normal">{t("cred.col_username")}</TableHead>
                   <TableHead className="text-left py-3 px-4 font-normal">{t("cred.col_password")}</TableHead>
+                  <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal">{t("cred.col_hash")}</TableHead>
                   <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal">{t("cred.col_domain")}</TableHead>
                   <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal">{t("cred.col_source")}</TableHead>
                   <TableHead className="max-sm:hidden text-left py-3 px-4 font-normal">{t("cred.col_confirmed")}</TableHead>
@@ -463,11 +473,13 @@ export default function CredentialsPage() {
                     entry={entry}
                     isSelected={selectedIds.has(entry.id)}
                     showPassword={showPasswords.has(entry.id)}
+                    showHash={showHashes.has(entry.id)}
                     onToggleSelect={toggleSelect}
                     onToggleConfirm={handleToggleConfirm}
                     onEdit={openEdit}
                     onDelete={requestDelete}
                     togglePasswordVisibility={togglePasswordVisibility}
+                    toggleHashVisibility={toggleHashVisibility}
                     t={t}
                   />
                 ))}
