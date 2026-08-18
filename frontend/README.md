@@ -1,6 +1,6 @@
 # ForgeC2 Frontend
 
-Next.js 16 前端，使用 Tailwind CSS 和 shadcn/ui 构建。
+Vite 7 + React Router v7 前端，使用 Tailwind CSS 和 shadcn/ui 构建。
 
 ## 开发
 
@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-访问 `http://localhost:8000` 查看结果（Go 服务器托管的嵌入式前端）。
+访问 `http://localhost:5173` 查看结果（dev server 将 `/api`、`/login`、`/extc2`、`/ws` 代理到 Go 后端 `127.0.0.1:8000`）。生产模式下直接访问 Go 服务器（嵌入式 `internal/webdist/dist`）。
 
 ## 构建
 
@@ -21,7 +21,7 @@ npm run build
 
 ## 技术栈
 
-- Next.js 16.2 (App Router)
+- Vite 7 + React Router v7 (BrowserRouter)
 - React 19
 - TypeScript 5
 - Tailwind CSS 4 (PostCSS)
@@ -39,7 +39,7 @@ src/types/        — TypeScript 类型定义
 
 ## 关键特性
 
-- 静态导出 (`output: "export"`)，由 Go 服务器通过 `spaFS` 提供服务
+- 静态导出（`src/lib/vite/staticExport.ts` 插件按 `STATIC_ROUTES` 产出 `<route>.html` + `<route>/index.html`），由 Go 服务器通过 `spaFS` 提供服务
 - 暗色模式 (`.dark` class on `<html>`)
 - 国际化 (`useI18n()` hook)
 - WebSocket 实时更新
@@ -48,4 +48,4 @@ src/types/        — TypeScript 类型定义
 
 - 使用 CDN 版 Tailwind (`public/js/tailwind.min.js`)
 - `@tailwind base;` / `@tailwind components;` / `@tailwind utilities;`
-- 使用 `next/font`（使用 Google Fonts CDN 链接）
+- 添加真实 Next 运行时依赖（`next/link`、`next/navigation`、`next/dynamic` 由 `src/lib/next/*` 兼容层 shim，勿还原 Next 本体）
