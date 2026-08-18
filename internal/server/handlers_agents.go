@@ -314,7 +314,7 @@ func (s *Server) handleKillAgent(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "kill", "exit", "", "", "", 0, 0)
+	task, err := s.createTask(id, "kill", "exit", "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		slog.Error("Failed to create kill task", "agent_id", id, "err", err)
 		respondError(c, http.StatusInternalServerError, "failed to create kill task")
@@ -843,7 +843,7 @@ func (s *Server) handleSetKillDate(c *gin.Context) {
 	}
 
 	// Create a task for the agent to pick up the kill date at next beacon
-	task, err := s.createTask(id, "set_kill_date", req.KillDate, "", "", "", 0, 0)
+	task, err := s.createTask(id, "set_kill_date", req.KillDate, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		slog.Error("Failed to create kill date task", "agent_id", id, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create kill date task")
@@ -869,7 +869,7 @@ func (s *Server) handleClearKillDate(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "clear_kill_date", "", "", "", "", 0, 0)
+	task, err := s.createTask(id, "clear_kill_date", "", "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		slog.Error("Failed to create clear kill date task", "agent_id", id, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create clear kill date task")

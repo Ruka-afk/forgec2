@@ -32,6 +32,7 @@ interface CredentialRowProps {
   onEdit: (entry: VaultEntry) => void;
   onDelete: (id: string) => void;
   onVerify?: (entry: VaultEntry) => void;
+  onMarkUsed?: (id: string) => void;
   togglePasswordVisibility: (id: string) => void;
   toggleHashVisibility: (id: string) => void;
   t: (key: string) => string;
@@ -47,6 +48,7 @@ function CredentialRowInner({
   onEdit,
   onDelete,
   onVerify,
+  onMarkUsed,
   togglePasswordVisibility,
   toggleHashVisibility,
   t,
@@ -130,6 +132,15 @@ function CredentialRowInner({
           {entry.confirmed ? <CircleCheck className="w-4 h-4" /> : <CircleQuestionMark className="w-4 h-4" />}
           {entry.confirmed ? t("cred.confirmed") : t("cred.unconfirmed")}
         </Button>
+        {entry.lifecycle && (
+          <Badge variant={
+            entry.lifecycle === "verified" ? "success" :
+            entry.lifecycle === "used" ? "warning" :
+            entry.lifecycle === "stale" ? "destructive" : "outline"
+          } className="ml-1">
+            {t(`cred.lifecycle_${entry.lifecycle}`)}
+          </Badge>
+        )}
       </TableCell>
       <TableCell className="max-sm:hidden py-3 px-4">
         {entry.tags ? (
@@ -149,6 +160,14 @@ function CredentialRowInner({
               <ShieldCheck className="w-4 h-4" />
             </TooltipTrigger>
             <TooltipContent>{t("cred.verify")}</TooltipContent>
+          </Tooltip>
+        )}
+        {onMarkUsed && (
+          <Tooltip>
+            <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => onMarkUsed(entry.id)} aria-label={t("cred.mark_used")} />}>
+              <ShieldCheck className="w-4 h-4 text-warning" />
+            </TooltipTrigger>
+            <TooltipContent>{t("cred.mark_used")}</TooltipContent>
           </Tooltip>
         )}
         <Tooltip>

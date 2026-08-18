@@ -53,7 +53,7 @@ func (s *Server) handleListDir(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "ls", path, "", path, "", 0, 0)
+	task, err := s.createTask(id, "ls", path, "", path, "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create task")
@@ -84,7 +84,7 @@ func (s *Server) handleFileDelete(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "delete", filePath, "", filePath, "", 0, 0)
+	task, err := s.createTask(id, "delete", filePath, "", filePath, "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create task")
@@ -110,7 +110,7 @@ func (s *Server) handleFileRead(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "read", filePath, "", filePath, "", 0, 0)
+	task, err := s.createTask(id, "read", filePath, "", filePath, "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create task")
@@ -195,7 +195,7 @@ func (s *Server) handleDownload(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "download", fileURL, targetPath, targetPath, "", 0, 0)
+	task, err := s.createTask(id, "download", fileURL, targetPath, targetPath, "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create task")
@@ -244,7 +244,7 @@ func (s *Server) handleUploadFile(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "upload", targetPath, "", targetPath, fileData, 0, 0)
+	task, err := s.createTask(id, "upload", targetPath, "", targetPath, fileData, 0, 0, callerOpts(c)...)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create task")

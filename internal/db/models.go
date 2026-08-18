@@ -650,6 +650,57 @@ func (TokenEntry) TableName() string      { return "token_entries" }
 func (SocksSession) TableName() string    { return "socks_sessions" }
 func (CredentialEntry) TableName() string { return "credential_entries" }
 
+// CredentialUsage is an append-only ledger recording every interaction with a
+// vault credential. Lifecycle status (fresh / verified / used / stale) is
+// computed at read time from the latest entries, never stored.
+type CredentialUsage struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	CredentialID uint      `gorm:"index;not null" json:"credential_id"`
+	TaskID       uint      `json:"task_id"` // 0 = manual
+	AgentID      string    `json:"agent_id"`
+	Action       string    `json:"action"` // spray, lateral, verify, manual
+	Result       string    `json:"result"` // ok, fail, locked, unknown
+	Detail       string    `json:"detail"`
+	Operator     string    `json:"operator"`
+	CreatedAt    time.Time `gorm:"index" json:"created_at"`
+}
+
+func (CredentialUsage) TableName() string { return "credential_usages" }
+
+// CredentialLifecycle computes the lifecycle status of a vault entry from its
+// latest usage record and confirmation state.  The result is never stored;
+// callers compute it on read.
+//
+// Statuses:
+//   - fresh    — no usage records, not confirmed
+//   - verified — last action was a successful verify or cred_check
+//   - used     — last action was a successful spray/lateral
+//   - stale    — expired or last action was a failure
+func CredentialLifecycle(entry CredentialEntry, latestUsage *CredentialUsage, now time.Time) string {
+	if !entry.ExpiresAt.IsZero() && entry.ExpiresAt.Before(now) {
+		return "stale"
+	}
+	if latestUsage == nil {
+		if entry.Confirmed {
+			return "verified"
+		}
+		return "fresh"
+	}
+	if latestUsage.Result == "fail" || latestUsage.Result == "locked" {
+		return "stale"
+	}
+	if latestUsage.Action == "verify" && latestUsage.Result == "ok" {
+		return "verified"
+	}
+	if (latestUsage.Action == "spray" || latestUsage.Action == "lateral") && latestUsage.Result == "ok" {
+		return "used"
+	}
+	if entry.Confirmed {
+		return "verified"
+	}
+	return "fresh"
+}
+
 // BuildLog records a build attempt
 type BuildLog struct {
 	ID         uint      `gorm:"primaryKey" json:"id"`

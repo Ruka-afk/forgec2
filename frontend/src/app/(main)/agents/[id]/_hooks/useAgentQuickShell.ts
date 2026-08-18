@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { api, ApiError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { usePersistedState } from "@/lib/hooks/usePersistedState";
 
@@ -62,8 +63,13 @@ export function useAgentQuickShell(agentId: string, os: string | undefined, succ
     try {
       const response = await api.postJson(paths.agents.command(agentId), { command: cmd, shell }) as { output?: string; result?: string; message?: string };
       entry.result = response?.output || response?.result || response?.message || successMessage;
-    } catch {
-      entry.result = errorMessage;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        entry.result = err.message;
+        toast.warning(err.message);
+      } else {
+        entry.result = errorMessage;
+      }
     }
     if (!mountedRef.current) return;
     setHistory((prev) => [entry, ...prev].slice(0, 5));

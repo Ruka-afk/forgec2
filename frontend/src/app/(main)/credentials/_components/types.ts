@@ -11,6 +11,7 @@ export interface VaultEntry {
   confirmed: boolean;
   agent_id: string;
   notes: string;
+  lifecycle?: string;
 }
 
 export interface CredentialData {

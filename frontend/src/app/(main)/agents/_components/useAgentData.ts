@@ -55,6 +55,7 @@ export function useAgentData(t: (key: string) => string) {
   const queryRef = useRef<BeaconQueryParams>(DEFAULT_QUERY);
   const [tagsByAgent, setTagsByAgent] = useState<Record<string, AgentTag[]>>({});
   const [agentLocks, setAgentLocks] = useState<Record<string, string>>({});
+  const [operatorPresence, setOperatorPresence] = useState<Record<string, string[]>>({});
 
   const { data, loading, error, setError, refresh: refreshList, setData } = useApiResource<BeaconPage>({
     fetcher: async (signal) => {
@@ -180,6 +181,8 @@ export function useAgentData(t: (key: string) => string) {
     taskCountMap,
     agentLocks,
     setAgentLocks,
+    operatorPresence,
+    setOperatorPresence,
     loadBeacons,
     loadLocks,
   };

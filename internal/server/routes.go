@@ -737,6 +737,7 @@ func (s *Server) registerCredentialRoutes(auth *gin.RouterGroup) {
 		credsWrite.PUT("/credentials/:cred_id", s.handleUpdateCredential)
 		credsWrite.POST("/credentials/batch/tags", s.handleBatchAddTags)
 		credsWrite.POST("/credentials/:cred_id/confirm", s.handleToggleConfirmed)
+		credsWrite.POST("/credentials/:cred_id/usage", s.apiRecordUsage)
 	}
 	credsDelete := auth.Group("/")
 	credsDelete.Use(middleware.RequirePermission(db.PermCredsDelete))

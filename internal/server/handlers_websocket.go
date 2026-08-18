@@ -449,6 +449,65 @@ func (t *operatorSessionTracker) BroadcastToOperators(msg []byte) {
 	}
 }
 
+// operatorHeartbeatTimeout is how long since the last ping before an operator
+// is considered inactive for soft-lock purposes.
+const operatorHeartbeatTimeout = 60 * time.Second
+
+// ActiveOperatorsForAgent returns the usernames of operators who are currently
+// viewing the given agent and have pinged within operatorHeartbeatTimeout.
+// The caller (identified by excludeUserID) is excluded from the list.
+func (t *operatorSessionTracker) ActiveOperatorsForAgent(agentID string, excludeUserID uint) []string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	cutoff := time.Now().Add(-operatorHeartbeatTimeout)
+	var names []string
+	for uid, s := range t.sessions {
+		if uid == excludeUserID {
+			continue
+		}
+		if s.AgentView == agentID && !s.LastSeen.Before(cutoff) {
+			names = append(names, s.Username)
+		}
+	}
+	return names
+}
+
+// ActiveOperatorCount returns the number of operators connected and seen
+// within operatorHeartbeatTimeout.
+func (t *operatorSessionTracker) ActiveOperatorCount() int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	cutoff := time.Now().Add(-operatorHeartbeatTimeout)
+	count := 0
+	for _, s := range t.sessions {
+		if !s.LastSeen.Before(cutoff) {
+			count++
+		}
+	}
+	return count
+}
+
+// OperatorPresenceSnapshot returns a snapshot of all active operators and the
+// agent they are viewing (if any). Used for broadcasting presence events.
+func (t *operatorSessionTracker) OperatorPresenceSnapshot() []map[string]interface{} {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	cutoff := time.Now().Add(-operatorHeartbeatTimeout)
+	var ops []map[string]interface{}
+	for _, s := range t.sessions {
+		if !s.LastSeen.Before(cutoff) {
+			entry := map[string]interface{}{
+				"user": s.Username,
+			}
+			if s.AgentView != "" {
+				entry["agent_id"] = s.AgentView
+			}
+			ops = append(ops, entry)
+		}
+	}
+	return ops
+}
+
 // broadcastOperatorEvent dispatches a JSON event to every connected operator
 // dashboard. Events fan out to BOTH the legacy /ws hub and any /ws/operator
 // sessions, so every browser client receives the same stream regardless of
@@ -462,6 +521,20 @@ func (s *Server) broadcastOperatorEvent(payload map[string]interface{}) {
 	if s.operatorSessions != nil {
 		s.operatorSessions.BroadcastToOperators(msg)
 	}
+}
+
+// broadcastOperatorPresence pushes the current operator presence snapshot to
+// all connected clients. Called on connect/disconnect/heartbeat/agent_view
+// changes so dashboards can show who is active and where.
+func (s *Server) broadcastOperatorPresence() {
+	if s.operatorSessions == nil {
+		return
+	}
+	ops := s.operatorSessions.OperatorPresenceSnapshot()
+	s.broadcastOperatorEvent(map[string]interface{}{
+		"type":     "operator_presence",
+		"operators": ops,
+	})
 }
 
 // sendOperatorSyncSnapshot pushes the current state snapshot (active build
@@ -524,6 +597,7 @@ func (s *Server) handleOperatorWS(c *gin.Context) {
 
 	defer func() {
 		s.operatorSessions.remove(session.UserID, session)
+		s.broadcastOperatorPresence()
 		conn.Close()
 	}()
 
@@ -550,9 +624,13 @@ func (s *Server) handleOperatorWS(c *gin.Context) {
 		case "agent_view":
 			if agentID, ok := msg["agent_id"].(string); ok {
 				session.AgentView = agentID
+				session.LastSeen = time.Now()
+				s.broadcastOperatorPresence()
 			}
 		case "ping":
+			session.LastSeen = time.Now()
 			conn.WriteJSON(map[string]string{"type": "pong"})
+			s.broadcastOperatorPresence()
 		}
 	}
 }

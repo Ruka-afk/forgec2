@@ -21,7 +21,7 @@ func (s *Server) handleRequestScreenshot(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "screenshot", "", "", "", "", 0, 0)
+	task, err := s.createTask(id, "screenshot", "", "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create task")
@@ -104,7 +104,7 @@ func (s *Server) handleRequestScreenshotWindow(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "screenshot_window", "", "", "", "", 0, 0)
+	task, err := s.createTask(id, "screenshot_window", "", "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		slog.Error("Failed to create task", "agent_id", id, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create task")

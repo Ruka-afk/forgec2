@@ -431,6 +431,9 @@ func (s *Server) parseAndStorePasswordSprayResults(agentID string, task db.Task,
 		slog.Error("Failed to store password spray credentials", "agent_id", agentID, "err", err)
 		return 0
 	}
+	for _, e := range newEntries {
+		s.RecordUsage(e.ID, task.ID, agentID, "spray", "ok", "", "")
+	}
 	slog.Info("Password spray hits stored in vault", "agent_id", agentID, "count", len(newEntries))
 	s.LogAuditRecord(nil, "credential_ingest", "credential", agentID,
 		"stored "+strconv.Itoa(len(newEntries))+" password spray credentials", true, nil)
@@ -535,6 +538,8 @@ func (s *Server) parseAndStoreCredCheckResult(agentID string, task db.Task, raw 
 				return false
 			}
 			confirmed = true
+			s.RecordUsage(matched.ID, task.ID, agentID, "verify", "ok",
+				fmt.Sprintf("%s@%s", entryUser, entryDomain), "")
 			slog.Info("Credential confirmed via cred_check", "agent_id", agentID, "user", entryUser, "domain", entryDomain)
 			s.LogAuditRecord(nil, "cred_check", "credential", agentID,
 				fmt.Sprintf("credential confirmed: %s@%s", entryUser, entryDomain), true, nil)
@@ -656,6 +661,7 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 	expiryFilter := c.Query("expiry")
 	confirmedFilter := c.Query("confirmed")
 	agentFilter := c.Query("agent_id")
+	lifecycleFilter := c.Query("lifecycle")
 
 	if agentFilter != "" {
 		query = query.Where("agent_id = ?", agentFilter)
@@ -719,6 +725,38 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 		creds[i].Notes = decryptCredNotes(creds[i].Notes)
 	}
 
+	// Aggregate latest usage per credential for lifecycle computation.
+	credIDs := make([]uint, len(creds))
+	for i, c := range creds {
+		credIDs[i] = c.ID
+	}
+	latestUsageMap := make(map[uint]*db.CredentialUsage)
+	if len(credIDs) > 0 {
+		var usages []db.CredentialUsage
+		if err := s.db.Where("credential_id IN ?", credIDs).
+			Order("created_at desc").Find(&usages).Error; err == nil {
+			for i := range usages {
+				if _, exists := latestUsageMap[usages[i].CredentialID]; !exists {
+					latestUsageMap[usages[i].CredentialID] = &usages[i]
+				}
+			}
+		}
+	}
+
+	now := time.Now()
+	type credWithLifecycle struct {
+		db.CredentialEntry
+		Lifecycle string `json:"lifecycle"`
+	}
+	var enriched []credWithLifecycle
+	for _, cred := range creds {
+		lc := db.CredentialLifecycle(cred, latestUsageMap[cred.ID], now)
+		if lifecycleFilter != "" && lc != lifecycleFilter {
+			continue
+		}
+		enriched = append(enriched, credWithLifecycle{cred, lc})
+	}
+
 	var allTags []string
 	var tagStrings []string
 	if err := s.db.Model(&db.CredentialEntry{}).Where("tags != '' AND tags IS NOT NULL").Limit(5000).Pluck("tags", &tagStrings).Error; err != nil {
@@ -756,18 +794,19 @@ func (s *Server) handleCredentialsPage(c *gin.Context) {
 
 	stats := s.getNavStats(c)
 	data := gin.H{
-		"Title":        "ForgeC2 - Credential Center",
-		"ActiveNav":    "credentials",
-		"VaultEntries": creds,
-		"CredsTasks":   credsTasks,
-		"RelatedTasks": related,
-		"VaultCount":   len(creds),
-		"Total":        int(total),
-		"AllTags":      allTags,
-		"TagFilter":    tagFilter,
-		"search_query": searchQuery,
-		"ExpiryFilter": expiryFilter,
-		"AgentFilter":  agentFilter,
+		"Title":           "ForgeC2 - Credential Center",
+		"ActiveNav":       "credentials",
+		"VaultEntries":    enriched,
+		"CredsTasks":      credsTasks,
+		"RelatedTasks":    related,
+		"VaultCount":      len(enriched),
+		"Total":           int(total),
+		"AllTags":         allTags,
+		"TagFilter":       tagFilter,
+		"search_query":    searchQuery,
+		"ExpiryFilter":    expiryFilter,
+		"AgentFilter":     agentFilter,
+		"LifecycleFilter": lifecycleFilter,
 	}
 	for k, v := range stats {
 		data[k] = v
@@ -1059,4 +1098,58 @@ func (s *Server) handleToggleConfirmed(c *gin.Context) {
 		"agent_id":     cred.AgentID,
 	})
 	c.JSON(http.StatusOK, gin.H{"success": true, "confirmed": cred.Confirmed})
+}
+
+// RecordUsage appends an entry to the credential usage ledger. It is safe to
+// call with a zero credentialID (no-op).
+func (s *Server) RecordUsage(credentialID uint, taskID uint, agentID, action, result, detail, operator string) {
+	if credentialID == 0 {
+		return
+	}
+	entry := db.CredentialUsage{
+		CredentialID: credentialID,
+		TaskID:       taskID,
+		AgentID:      agentID,
+		Action:       action,
+		Result:       result,
+		Detail:       detail,
+		Operator:     operator,
+	}
+	if err := s.db.Create(&entry).Error; err != nil {
+		slog.Error("Failed to record credential usage", "credential_id", credentialID, "action", action, "error", err)
+	}
+}
+
+// apiRecordUsage handles POST /api/credentials/:id/usage — manual usage
+// recording by an operator.
+func (s *Server) apiRecordUsage(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	idStr := c.Param("cred_id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "invalid credential id")
+		return
+	}
+	action := strings.TrimSpace(c.PostForm("action"))
+	detail := strings.TrimSpace(c.PostForm("detail"))
+	if action == "" {
+		action = "manual"
+	}
+	var cred db.CredentialEntry
+	if err := s.db.First(&cred, uint(id)).Error; err != nil {
+		respondError(c, http.StatusNotFound, "credential not found")
+		return
+	}
+	username, _ := c.Get("user")
+	operator, _ := username.(string)
+	s.RecordUsage(cred.ID, 0, cred.AgentID, action, "ok", detail, operator)
+	s.broadcastOperatorEvent(map[string]interface{}{
+		"type":     "credential_update",
+		"action":   "used",
+		"id":       cred.ID,
+		"agent_id": cred.AgentID,
+	})
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }

@@ -25,7 +25,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 	err = database.AutoMigrate(
 		&db.Implant{}, &db.Task{}, &db.AuditLog{}, &db.Listener{},
 		&db.TokenEntry{}, &db.SocksSession{}, &db.User{},
-		&db.CredentialEntry{}, &db.CloudCred{},
+		&db.CredentialEntry{}, &db.CredentialUsage{}, &db.CloudCred{},
 		&db.BuildLog{}, &db.ScanResult{}, &db.NetworkHost{}, &db.CommandTemplate{},
 		&db.BOFFile{}, &db.BOFLibrary{}, &db.ServerConfig{}, &db.WebhookConfig{},
 		&db.Plugin{}, &db.PluginReview{}, &db.PluginDependency{}, &db.PluginUpdateStatus{},

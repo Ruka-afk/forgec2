@@ -26,7 +26,7 @@ func (s *Server) handleGetProcesses(c *gin.Context) {
 	}
 	agentID := c.Param("id")
 
-	task, err := s.createTask(agentID, "ps", "", "", "", "", 0, 0)
+	task, err := s.createTask(agentID, "ps", "", "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create ps task")
 		return

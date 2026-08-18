@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -23,8 +24,40 @@ func (s *Server) getAgentOrFail(c *gin.Context, id string) (db.Implant, bool) {
 	return agent, true
 }
 
+// TaskOption configures optional createTask behaviour.
+type TaskOption func(*taskOptions)
+type taskOptions struct {
+	callerUserID uint
+}
+
+// WithCaller tags a createTask call with the operator user ID so the
+// soft-lock check can exclude the caller from the conflict list.
+func WithCaller(uid uint) TaskOption {
+	return func(o *taskOptions) { o.callerUserID = uid }
+}
+
+// callerOpts extracts the user_id from gin.Context and returns a WithCaller
+// option. If the context has no user_id (e.g. automation, scripting), it
+// returns nil so the soft-lock check is skipped.
+func callerOpts(c *gin.Context) []TaskOption {
+	if c == nil {
+		return nil
+	}
+	uid, _ := c.Get("user_id")
+	u, ok := uid.(uint)
+	if !ok || u == 0 {
+		return nil
+	}
+	return []TaskOption{WithCaller(u)}
+}
+
 // createTask creates and persists a new pending task. Returns the task or error.
-func (s *Server) createTask(agentID, taskType, command, shell, path, data string, offset, size int64) (*db.Task, error) {
+func (s *Server) createTask(agentID, taskType, command, shell, path, data string, offset, size int64, opts ...TaskOption) (*db.Task, error) {
+	var tOpts taskOptions
+	for _, opt := range opts {
+		opt(&tOpts)
+	}
+
 	if !IsKnownTaskType(taskType) && !protocol.ValidTaskType(taskType) {
 		return nil, fmt.Errorf("unknown task type: %s", taskType)
 	}
@@ -38,6 +71,14 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		s.LogAuditRecord(nil, "opsec_block", "agent", agentID,
 			"blocked "+taskType+" (critical threat level)", false, nil)
 		return nil, fmt.Errorf("blocked by adaptive opsec: %s is not allowed on a critical-threat host", taskType)
+	}
+
+	// Soft-lock: if another operator is actively viewing this agent, reject
+	// the task to prevent conflicting concurrent commands.
+	if tOpts.callerUserID != 0 && s.operatorSessions != nil {
+		if others := s.operatorSessions.ActiveOperatorsForAgent(agentID, tOpts.callerUserID); len(others) > 0 {
+			return nil, fmt.Errorf("agent conflict: %s is being actively operated by %s", agentID, joinUsernames(others))
+		}
 	}
 
 	if len(command) > MaxCommandLength {
@@ -233,4 +274,34 @@ func (s *Server) decPendingTasks(agentID string) {
 		}
 	}
 	s.agentPendingTasksMu.Unlock()
+}
+
+// joinUsernames joins a slice of usernames with commas for error messages.
+func joinUsernames(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0]
+	case 2:
+		return names[0] + " and " + names[1]
+	default:
+		return names[0] + " and " + fmt.Sprintf("%d others", len(names)-1)
+	}
+}
+
+// isConflictError returns true if the error is an agent conflict (soft-lock).
+func isConflictError(err error) bool {
+	return err != nil && strings.HasPrefix(err.Error(), "agent conflict:")
+}
+
+// respondTaskError writes the appropriate HTTP error for a createTask failure.
+// Agent conflicts are surfaced as 409; everything else is 500.
+func respondTaskError(c *gin.Context, err error) {
+	if isConflictError(err) {
+		respondError(c, http.StatusConflict, err.Error())
+		return
+	}
+	slog.Error("Failed to create task", "error", err)
+	respondError(c, http.StatusInternalServerError, "failed to create task")
 }

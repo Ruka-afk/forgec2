@@ -58,6 +58,7 @@ export default function AgentsPageContent() {
   const {
     beacons, setBeacons, loading, total, error, setError,
     allTags, tagsByAgent, taskCountMap, agentLocks, setAgentLocks,
+    operatorPresence, setOperatorPresence,
     loadBeacons: loadBeaconsRaw, loadLocks,
   } = useAgentData(t);
 
@@ -195,6 +196,16 @@ export default function AgentsPageContent() {
           delete next[String(msg.agent_id)];
           return next;
         });
+      } else if (msg.type === "operator_presence") {
+        const ops = (msg.operators as { user?: string; agent_id?: string }[]) || [];
+        const presence: Record<string, string[]> = {};
+        for (const op of ops) {
+          if (op.user && op.agent_id) {
+            if (!presence[op.agent_id]) presence[op.agent_id] = [];
+            presence[op.agent_id].push(op.user);
+          }
+        }
+        setOperatorPresence(presence);
       }
     });
     return () => {
@@ -202,7 +213,7 @@ export default function AgentsPageContent() {
       unsub();
     };
     // loadBeaconsRef always points at latest loadBeacons — intentional stable subscribe
-  }, [subscribe, setAgentLocks, setBeacons]);
+  }, [subscribe, setAgentLocks, setBeacons, setOperatorPresence]);
 
   const sortIcon = (field: typeof sortKey) => {
     if (sortKey !== field) return <ArrowUpDown className="w-3 h-3 text-muted-foreground" />;
@@ -710,6 +721,7 @@ export default function AgentsPageContent() {
                 onEditNotes={openNotesEdit}
                 taskCount={taskCountMap[beacon.id || ""] ?? 0}
                 lockUser={agentLocks[beacon.id || ""] || null}
+                presenceUsers={operatorPresence[beacon.id || ""] || null}
                 visibleCols={visibleCols}
               />
             ))}

@@ -11,7 +11,7 @@ import { agentStatusBorderClass, osIcon, integrityTone } from "./types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { TableCell } from "@/components/ui/table";
-import { Check, Copy, FolderOpen, Link as LinkIcon, Lock, Maximize2, Monitor, MoreHorizontal, Shield, StickyNote, Terminal, Unlock } from "lucide-react";
+import { Check, Copy, FolderOpen, Link as LinkIcon, Lock, Maximize2, Monitor, MoreHorizontal, Shield, StickyNote, Terminal, Unlock, Users } from "lucide-react";
 import type { AgentMenuPoint } from "./agent-menu-actions";
 import { knownImplantVersion } from "./implant-version";
 import { copyToClipboard } from "./types";
@@ -27,6 +27,7 @@ interface AgentRowProps {
   onQuickNav?: (beacon: Beacon, view: "shell" | "files" | "screen") => void;
   taskCount: number;
   lockUser: string | null;
+  presenceUsers: string[] | null;
   visibleCols: Record<string, boolean>;
 }
 
@@ -41,6 +42,7 @@ export const AgentRow = memo(function AgentRow({
   onQuickNav,
   taskCount,
   lockUser,
+  presenceUsers,
   visibleCols,
 }: AgentRowProps) {
   const id = beacon.id || "";
@@ -186,6 +188,12 @@ export const AgentRow = memo(function AgentRow({
         ) : (
           <span className="text-muted-foreground/70 text-(--fs-xs-sm)">
             <Unlock className="w-4 h-4" />
+          </span>
+        )}
+        {presenceUsers && presenceUsers.length > 0 && (
+          <span className="inline-flex items-center gap-1 text-xs ml-1" title={t("agents.active_operator").replace("{user}", presenceUsers.join(", "))}>
+            <Users className="w-3.5 h-3.5 text-info" />
+            <span className="text-(--fs-micro-sm) text-info truncate max-w-[80px]">{presenceUsers.length}</span>
           </span>
         )}
       </TableCell>

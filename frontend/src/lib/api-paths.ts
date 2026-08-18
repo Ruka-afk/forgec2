@@ -110,6 +110,7 @@ export const paths = {
     add: "/credentials/add",
     one: (id: string | number) => `/credentials/${id}`,
     confirm: (id: string | number) => `/credentials/${id}/confirm`,
+    usage: (id: string | number) => `/credentials/${id}/usage`,
     batchTags: "/credentials/batch/tags",
   },
   config: {

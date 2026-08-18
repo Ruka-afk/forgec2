@@ -134,10 +134,9 @@ func (s *Server) handleSendCommand(c *gin.Context) {
 		}
 	}
 
-	task, err := s.createTask(id, "shell", cmd, shell, "", "", 0, 0)
+	task, err := s.createTask(id, "shell", cmd, shell, "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
-		slog.Error("Failed to create task", "agent_id", id, "error", err)
-		respondError(c, http.StatusInternalServerError, "failed to create task")
+		respondTaskError(c, err)
 		return
 	}
 
@@ -293,7 +292,7 @@ func (s *Server) handleSuspendProcess(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	task, err := s.createTask(id, "suspend", target, "", "", "", 0, 0)
+	task, err := s.createTask(id, "suspend", target, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -319,7 +318,7 @@ func (s *Server) handleResumeProcess(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	task, err := s.createTask(id, "resume", target, "", "", "", 0, 0)
+	task, err := s.createTask(id, "resume", target, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -345,7 +344,7 @@ func (s *Server) handleKillProcess(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	task, err := s.createTask(id, "killproc", target, "", "", "", 0, 0)
+	task, err := s.createTask(id, "killproc", target, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -371,7 +370,7 @@ func (s *Server) handleClipboardSet(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	task, err := s.createTask(id, "clipboard_set", data, "", "", "", 0, 0)
+	task, err := s.createTask(id, "clipboard_set", data, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -390,7 +389,7 @@ func (s *Server) handleFindFiles(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	task, err := s.createTask(id, "find", pattern, "", path, "", 0, 0)
+	task, err := s.createTask(id, "find", pattern, "", path, "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -495,7 +494,7 @@ func (s *Server) handlePortScan(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	task, err := s.createTask(id, "portscan", target, "", "", "", 0, 0)
+	task, err := s.createTask(id, "portscan", target, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -529,7 +528,7 @@ func (s *Server) handleDownloadURL(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	task, err := s.createTask(id, "download_url", url, dest, dest, "", 0, 0)
+	task, err := s.createTask(id, "download_url", url, dest, dest, "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -568,7 +567,7 @@ func (s *Server) handleSetSleep(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	task, err := s.createTask(id, "set_sleep", sleep, "", "", "", 0, 0)
+	task, err := s.createTask(id, "set_sleep", sleep, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -589,7 +588,7 @@ func (s *Server) handleElevate(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	task, err := s.createTask(id, "elevate", cmd, "", "", "", 0, 0)
+	task, err := s.createTask(id, "elevate", cmd, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -684,7 +683,7 @@ func (s *Server) handleInject(c *gin.Context) {
 		return
 	}
 	cmd := pidStr + "|" + tech
-	task, err := s.createTask(id, "inject", cmd, "", "", scB64, 0, 0)
+	task, err := s.createTask(id, "inject", cmd, "", "", scB64, 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -724,7 +723,7 @@ func (s *Server) handleSpawn(c *gin.Context) {
 	}
 
 	cmd := target + "|" + technique + "|" + b64Data
-	task, err := s.createTask(id, "spawn", cmd, "", "", "", 0, 0)
+	task, err := s.createTask(id, "spawn", cmd, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -752,7 +751,7 @@ func (s *Server) handleMigrate(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "migrate", path, "", "", "", 0, 0)
+	task, err := s.createTask(id, "migrate", path, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -774,7 +773,7 @@ func (s *Server) handleLateral(c *gin.Context) {
 	if _, ok := s.getAgentOrFail(c, id); !ok {
 		return
 	}
-	task, err := s.createTask(id, "lateral", spec, "", "", "", 0, 0)
+	task, err := s.createTask(id, "lateral", spec, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -805,7 +804,7 @@ func (s *Server) handleSocks(c *gin.Context) {
 		return
 	}
 	// Command carries the listen port on the *agent*
-	task, err := s.createTask(id, "socks", port, "", "", "", 0, 0)
+	task, err := s.createTask(id, "socks", port, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -952,7 +951,7 @@ func (s *Server) handleExecuteAssembly(c *gin.Context) {
 		return
 	}
 
-	task, err := s.createTask(id, "execute_assembly", "", "", "", b64Data, 0, 0)
+	task, err := s.createTask(id, "execute_assembly", "", "", "", b64Data, 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -996,7 +995,7 @@ func (s *Server) handlePasswordSpray(c *gin.Context) {
 	}
 
 	cmd := password + "|" + domain + "|" + dc + "|" + delayMs
-	task, err := s.createTask(id, "password_spray", cmd, "", "", usernames, 0, 0)
+	task, err := s.createTask(id, "password_spray", cmd, "", "", usernames, 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -1044,7 +1043,7 @@ func (s *Server) handleCredCheck(c *gin.Context) {
 	}
 
 	cmd := user + "|" + domain + "|" + password + "|" + dc
-	task, err := s.createTask(id, "cred_check", cmd, "", "", "", 0, 0)
+	task, err := s.createTask(id, "cred_check", cmd, "", "", "", 0, 0, callerOpts(c)...)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
@@ -1198,7 +1197,7 @@ func (s *Server) handleMimikatz(c *gin.Context) {
 	}
 	// Auto-attach local module (data/modules/Invoke-Mimikatz.ps1) — no remote IEX.
 	moduleB64 := s.loadMimikatzModuleB64()
-	task, err := s.createTask(id, "mimikatz", cmd, "", "", moduleB64, 0, 0)
+	task, err := s.createTask(id, "mimikatz", cmd, "", "", moduleB64, 0, 0, callerOpts(c)...)
 	if err != nil {
 		slog.Error("Failed to create mimikatz task", "agent_id", id, "error", err)
 		respondError(c, http.StatusInternalServerError, "failed to create task")

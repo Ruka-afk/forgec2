@@ -41,6 +41,7 @@ export default function CredentialsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [confirmedFilter, setConfirmedFilter] = useState("");
+  const [lifecycleFilter, setLifecycleFilter] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -192,6 +193,16 @@ export default function CredentialsPage() {
     }
   }, [loadData, t]);
 
+  const handleMarkUsed = useCallback(async (id: string) => {
+    try {
+      await api.post(paths.credentials.usage(id), { action: "manual", detail: "operator marked used" });
+      showToastNotify(t("cred.toast.used"), "success");
+      loadData();
+    } catch {
+      showToastNotify(t("cred.toast.verify_failed"), "error");
+    }
+  }, [loadData, t]);
+
   const handleBatchTags = async () => {
     if (!batchTags || selectedIds.size === 0) return;
     try {
@@ -288,6 +299,7 @@ export default function CredentialsPage() {
     if (typeFilter !== "all" && entry.type !== typeFilter) return false;
     if (confirmedFilter === "true" && !entry.confirmed) return false;
     if (confirmedFilter === "false" && entry.confirmed) return false;
+    if (lifecycleFilter && entry.lifecycle !== lifecycleFilter) return false;
     return true;
   });
 
@@ -301,7 +313,8 @@ export default function CredentialsPage() {
   const handleSearchChange = (value: string) => { setSearchQuery(value); setPage(1); };
   const handleTypeFilterChange = (value: string | null) => { setTypeFilter(value ?? ""); setPage(1); };
   const handleConfirmedFilterChange = (value: string | null) => { setConfirmedFilter(value ?? ""); setPage(1); };
-  const handleClearFilters = () => { setSearchQuery(""); setTypeFilter("all"); setConfirmedFilter(""); setPage(1); };
+  const handleLifecycleFilterChange = (value: string | null) => { setLifecycleFilter(value ?? ""); setPage(1); };
+  const handleClearFilters = () => { setSearchQuery(""); setTypeFilter("all"); setConfirmedFilter(""); setLifecycleFilter(""); setPage(1); };
 
   const stats = useMemo(() => ({
     total: data?.VaultCount || 0,
@@ -400,6 +413,18 @@ export default function CredentialsPage() {
               <SelectItem value="">{t("cred.filter_all_status")}</SelectItem>
               <SelectItem value="true">{t("cred.filter_confirmed")}</SelectItem>
               <SelectItem value="false">{t("cred.filter_unconfirmed")}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={lifecycleFilter} onValueChange={handleLifecycleFilterChange}>
+            <SelectTrigger className="w-[130px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">{t("cred.filter_all_lifecycle")}</SelectItem>
+              <SelectItem value="fresh">{t("cred.lifecycle_fresh")}</SelectItem>
+              <SelectItem value="verified">{t("cred.lifecycle_verified")}</SelectItem>
+              <SelectItem value="used">{t("cred.lifecycle_used")}</SelectItem>
+              <SelectItem value="stale">{t("cred.lifecycle_stale")}</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -501,6 +526,7 @@ export default function CredentialsPage() {
                     onEdit={openEdit}
                     onDelete={requestDelete}
                     onVerify={handleVerify}
+                    onMarkUsed={handleMarkUsed}
                     togglePasswordVisibility={togglePasswordVisibility}
                     toggleHashVisibility={toggleHashVisibility}
                     t={t}

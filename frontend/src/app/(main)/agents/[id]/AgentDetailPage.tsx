@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, useMemo, useRef, memo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadText } from "@/lib/download";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -229,8 +229,12 @@ export default memo(function AgentDetailPage({ agentId: agentIdProp, onClose }: 
             : undefined,
         });
       } catch (err) {
-        console.error("quickAction failed:", err);
-        toast.error(t("agents.detail_action_failed").replace("{label}", label));
+        if (err instanceof ApiError && err.status === 409) {
+          toast.warning(err.message);
+        } else {
+          console.error("quickAction failed:", err);
+          toast.error(t("agents.detail_action_failed").replace("{label}", label));
+        }
       } finally {
         setActionLoading(null);
       }
