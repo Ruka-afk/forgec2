@@ -1,22 +1,29 @@
 "use client";
 
 import { useEffect } from "react";
-import { useReportWebVitals } from "next/web-vitals";
+import { onCLS, onFCP, onINP, onLCP, onTTFB, type Metric } from "web-vitals";
 import { recordVital, recordClientError, type VitalName } from "@/lib/telemetry";
 
 const VITAL_NAMES = new Set(["TTFB", "FCP", "LCP", "CLS", "FID", "INP"]);
 
 /**
  * Mounted once in AppLayout. Feeds the local telemetry ring buffer from
- * Web Vitals (via Next's built-in useReportWebVitals) and uncaught
+ * Web Vitals (via the web-vitals core listeners) and uncaught
  * window errors / promise rejections. Nothing leaves the browser.
  */
 export default function TelemetryCollector() {
-  useReportWebVitals((metric) => {
-    if (VITAL_NAMES.has(metric.name)) {
-      recordVital(metric.name as VitalName, metric.value);
-    }
-  });
+  useEffect(() => {
+    const report = (metric: Metric) => {
+      if (VITAL_NAMES.has(metric.name)) {
+        recordVital(metric.name as VitalName, metric.value);
+      }
+    };
+    onLCP(report);
+    onFCP(report);
+    onINP(report);
+    onCLS(report);
+    onTTFB(report);
+  }, []);
 
   useEffect(() => {
     const onError = (e: ErrorEvent) => recordClientError("window.error", e.message || e.filename || "unknown");

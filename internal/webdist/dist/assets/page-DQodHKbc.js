@@ -1,0 +1,1 @@
+import{j as s,r as n,bH as a,bI as o}from"./index-CN-W2WrT.js";function i(){const t=a(),e=o();return n.useEffect(()=>{const r=new URLSearchParams(e.toString());r.set("tab","alerts"),t.replace(`/timeline?${r.toString()}`)},[t,e]),null}function u(){return s.jsx(n.Suspense,{fallback:null,children:s.jsx(i,{})})}export{u as default};

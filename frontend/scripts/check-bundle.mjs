@@ -4,13 +4,13 @@
 // (e.g. an un-split import of a large chart/graph lib).
 //
 // Baseline measured 2026-08-18: 4.58MB JS + 0.16MB CSS (4.74MB total).
-// Threshold = 6.5MB (~37% headroom) for JS+CSS in out/_next/static.
+// Threshold = 6.5MB (~37% headroom) for JS+CSS in out/ (Vite build output).
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const LIMIT_BYTES = 6.5 * 1024 * 1024;
-const staticDir = join(fileURLToPath(new URL(".", import.meta.url)), "..", "out", "_next", "static");
+const staticDir = join(fileURLToPath(new URL(".", import.meta.url)), "..", "out");
 
 let total = 0;
 let files = 0;
@@ -29,7 +29,7 @@ try {
     }
   }
 } catch (err) {
-  console.error("check-bundle: cannot walk out/_next/static:", err.message);
+  console.error("check-bundle: cannot walk out/:", err.message);
   console.error("Run `npm run build` first.");
   process.exit(1);
 }

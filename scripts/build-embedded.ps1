@@ -4,9 +4,15 @@ $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
 try {
     # 1. Build frontend
-    Write-Host "==> Building Next.js frontend..." -ForegroundColor Cyan
+    Write-Host "==> Building frontend..." -ForegroundColor Cyan
     Push-Location frontend
-    npm run build 2>&1 | ForEach-Object { Write-Host $_ }
+    # PS 5.1: native stderr lines become ErrorRecords under 2>&1 and would
+    # abort the pipeline with $ErrorActionPreference=Stop. Relax locally.
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $buildOut = & npm run build 2>&1 | Out-String
+    $ErrorActionPreference = $prevEAP
+    Write-Host $buildOut
     if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
     Pop-Location
 

@@ -7,11 +7,12 @@
 go build ./... ; go vet ./internal/... ./pkg/... ./cmd/... ; go test ./internal/... -count=1 -timeout 5m
 
 # Frontend verification (inside frontend/):
-npm run build             # Next.js static export -> frontend/out
+npm run build             # Vite production build (static SPA) -> frontend/out
 npm run gen:openapi       # regenerate src/lib/api-schema.d.ts after api/openapi.yaml changes
 npm run check             # css + i18n(en/zh) + api-paths + openapi-types + webdist + bundle gates
 npx tsc --noEmit          # type check (noUnusedLocals is OFF: unused imports are NOT flagged — remove them by hand)
 npm test                  # vitest unit tests
+npm run dev               # Vite dev server (proxies /api /login /ws to the Go backend on 127.0.0.1:8000)
 
 # Backend-only dev loop:
 powershell -File scripts\dev-backend.ps1
@@ -25,7 +26,7 @@ powershell -File scripts\build-embedded.ps1
 - **Module**: `github.com/forgec2/forgec2` (Go 1.25, Gin + GORM + SQLite)
 - **Entrypoint**: `cmd/server/main.go`
 - **Implant source**: `internal/payload/agent/` (Windows/Linux/macOS)
-- **Frontend**: Next.js 16, `frontend/` directory, embedded via `//go:embed all:dist` into Go binary
+- **Frontend**: Vite 7 + React Router v7, `frontend/` directory, embedded via `//go:embed all:dist` into Go binary. The Next.js "app dir" page structure was preserved: all pages still live under `src/app/` (route table in `src/app/router.tsx`), and `next/link` / `next/navigation` / `next/dynamic` are shimmed by `src/lib/next/*` (aliased in vite.config.ts + tsconfig paths + vitest.config). The static export plugin (`src/lib/vite/staticExport.ts`) re-emits the index.html shell as `<route>.html` + `<route>/index.html` so the Go spaFS contract (directory path -> sibling `<name>.html`, missing file -> root index.html) is unchanged.
 - **Config**: `config.yaml` at root (also `config.example.yaml` for CI)
 - **OpenAPI spec**: `api/openapi.yaml`, served at `/api/docs`, validated by `cmd/checkopenapi`
 - **Initial account**: username `admin`; password auto-generated on first boot if `auth.default_password` is empty (weak passwords like `admin` are rejected by `isWeakDefaultPassword`)
@@ -62,6 +63,7 @@ powershell -File scripts\build-embedded.ps1
 7. **Frontend embed sync**: `check:webdist` compares `frontend/out` to the embedded `internal/webdist/dist`. After editing frontend source, run `powershell -File scripts/build-embedded.ps1` (builds + copies to webdist + builds Go). Plain `npm run build` leaves `check:webdist` failing because the embed is stale.
 8. **tsc unused imports**: `noUnusedLocals` is not enabled, so dead imports pass `tsc` silently. Before deleting an exported helper, grep the whole `src` tree and drop now-unused imports by hand.
 9. **OpenAPI contract types**: `frontend/src/lib/api-schema.d.ts` is GENERATED from `api/openapi.yaml` via `npm run gen:openapi` (openapi-typescript) and is compile-time only — unlike the removed Zod `lib/api-schemas.ts`, it adds zero runtime bytes. Never hand-edit it; `check:openapi-types` (part of `npm run check`) fails if it drifts from the spec. After any spec edit, run `npm run gen:openapi` from `frontend/`. Contract-backed fetchers/DTO aliases live in `src/lib/typed-api.ts` — reuse it instead of hand-typing `api.get<{...}>` inline.
+10. **next/* shims**: `import ... from "next/link"` / `"next/navigation"` / `"next/dynamic"` resolve to `src/lib/next/*` (vite alias + tsconfig paths + vitest alias). `useRouter().refresh()` maps to `window.location.reload()` and `redirect()` to `location.assign` — never add real Next runtime deps back. Route code-splitting: pages are `lazy()` in `src/app/router.tsx`; `dynamic(fn, { ssr: false })` maps to `React.lazy` + Suspense (the `ssr` flag is a no-op). After renaming/moving a page file, update BOTH `router.tsx` and `src/lib/vite/staticExport.ts` (STATIC_ROUTES drives the exported `<route>.html` files).
 
 ## i18n Policy
 

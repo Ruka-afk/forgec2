@@ -4,6 +4,28 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ── Self-hosted fonts (was next/font/local) ── */
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("./fonts/Inter-Variable.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "JetBrains Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url("./fonts/JetBrainsMono-Variable.ttf") format("truetype");
+}
+
+:root {
+  --font-inter: "Inter Variable", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-jbmono: "JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+}
+
 /* ── ForgeC2 Design System (v2) ── */
 :root {
   --code-accent: oklch(0.50 0.20 265);
