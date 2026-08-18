@@ -11,7 +11,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { PageSpinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Bell, Bot, Cpu, Database, FileCode, Globe, Lock, Palette, Server, Shield, User, Users, Wrench, Archive, Radio, AlertTriangle } from "lucide-react";
+import { Bell, Bot, Cpu, Database, FileCode, Globe, Lock, Palette, Server, Shield, User, Users, Wrench, Archive, Radio, AlertTriangle, Activity } from "lucide-react";
 import { useTOTP } from "./_components/useTOTP";
 import { useSettingsData } from "./_components/useSettingsData";
 import ProfileSection from "./_components/ProfileSection";
@@ -33,6 +33,7 @@ const CertificatesSection = dynamic(() => import("./_components/CertificatesSect
 const ModulesSection = dynamic(() => import("./_components/ModulesSection"), { ssr: false });
 const EmergencySection = dynamic(() => import("./_components/EmergencySection"), { ssr: false });
 const AccessSection = dynamic(() => import("./_components/AccessSection"), { ssr: false });
+const TelemetrySection = dynamic(() => import("./_components/TelemetrySection"), { ssr: false });
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -220,6 +221,7 @@ export default function SettingsPage() {
     { key: "certificates", label: t("settings.certificates.label"), icon: <Lock className="w-4 h-4" /> },
     { key: "modules", label: t("settings.modules.title"), icon: <FileCode className="w-4 h-4" /> },
     { key: "emergency", label: t("settings.emergency.title"), icon: <AlertTriangle className="w-4 h-4" /> },
+    { key: "telemetry", label: t("settings.telemetry"), icon: <Activity className="w-4 h-4" /> },
     { key: "about", label: t("settings.about"), icon: <Cpu className="w-4 h-4" /> },
   ];
 
@@ -281,6 +283,7 @@ export default function SettingsPage() {
               <TabsContent value="certificates" className="mt-0"><CertificatesSection data={data} saving={saving} onRefresh={loadSettings} /></TabsContent>
               <TabsContent value="modules" className="mt-0"><ModulesSection /></TabsContent>
               <TabsContent value="emergency" className="mt-0"><EmergencySection /></TabsContent>
+              <TabsContent value="telemetry" className="mt-0"><TelemetrySection /></TabsContent>
             </div>
           </div>
         </div>

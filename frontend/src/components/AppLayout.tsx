@@ -9,6 +9,7 @@ import ShortcutsHelp from "@/components/ShortcutsHelp";
 import ScrollToTop from "@/components/ScrollToTop";
 import CommandPalette from "@/components/CommandPalette";
 import GlobalInteractDock from "@/components/GlobalInteractDock";
+import TelemetryCollector from "@/components/TelemetryCollector";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { usePathname } from "next/navigation";
 import { useAppStore, selectSidebarWidth } from "@/lib/store";
@@ -103,6 +104,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <ShortcutsHelp />
       <ScrollToTop />
       <CommandPalette />
+      <TelemetryCollector />
     </div>
   );
 }
