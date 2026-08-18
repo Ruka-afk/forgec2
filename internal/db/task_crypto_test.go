@@ -129,3 +129,54 @@ func TestTaskNonSensitiveCommandStaysPlaintext(t *testing.T) {
 		t.Fatalf("shell Command must stay plaintext at rest, got %q", task.Command)
 	}
 }
+
+// TestTaskTokenMakeShellEncryptionAtRest verifies token_make's password (which
+// rides the Shell field) gets the same at-rest treatment as Command/Data, and
+// that the Shell field of ordinary types (shell interpreter) stays plaintext.
+func TestTaskTokenMakeShellEncryptionAtRest(t *testing.T) {
+	db := setupTestDB(t)
+
+	task := Task{AgentID: "agent-enc", Type: "token_make", Command: "CORP\\jsmith", Shell: "S3cretP@ss!", Path: "2"}
+	if err := db.Create(&task).Error; err != nil {
+		t.Fatalf("create token_make task: %v", err)
+	}
+	if !strings.HasPrefix(task.Command, "FC2ENC:") || !strings.HasPrefix(task.Shell, "FC2ENC:") {
+		t.Fatalf("token_make fields must be encrypted at rest: %q / %q", task.Command, task.Shell)
+	}
+	var raw struct {
+		Shell string
+		Path  string
+	}
+	if err := db.Table("tasks").Where("id = ?", task.ID).Scan(&raw).Error; err != nil {
+		t.Fatalf("raw scan: %v", err)
+	}
+	if !strings.HasPrefix(raw.Shell, "FC2ENC:") {
+		t.Fatalf("raw Shell must be ciphertext, got %q", raw.Shell)
+	}
+	if raw.Path != "2" {
+		t.Fatalf("non-secret Path must stay plaintext, got %q", raw.Path)
+	}
+
+	var loaded Task
+	if err := db.First(&loaded, task.ID).Error; err != nil {
+		t.Fatalf("load task: %v", err)
+	}
+	if loaded.Shell != "S3cretP@ss!" {
+		t.Fatalf("Shell not decrypted on load: %q", loaded.Shell)
+	}
+	if err := db.Save(&loaded).Error; err != nil {
+		t.Fatalf("re-save: %v", err)
+	}
+	if !strings.HasPrefix(loaded.Shell, "FC2ENC:") {
+		t.Fatalf("re-saved Shell leaked plaintext: %q", loaded.Shell)
+	}
+
+	// The shell interpreter on ordinary types must never be encrypted.
+	shellTask := Task{AgentID: "agent-enc", Type: "shell", Command: "whoami", Shell: "powershell.exe"}
+	if err := db.Create(&shellTask).Error; err != nil {
+		t.Fatalf("create shell task: %v", err)
+	}
+	if shellTask.Shell != "powershell.exe" {
+		t.Fatalf("shell interpreter must stay plaintext, got %q", shellTask.Shell)
+	}
+}

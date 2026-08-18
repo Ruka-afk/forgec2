@@ -253,6 +253,14 @@ var SensitiveTaskTypes = map[string]bool{
 	"powerpick": true, "reg_set": true, "clipboard_set": true,
 }
 
+// SensitiveShellTypes are task types whose Shell field carries a secret
+// rather than an interpreter/path/arguments: token_make rides the plaintext
+// password in Shell (Command=DOMAIN\\user, Shell=password, Path=logon type).
+// These Shell values are encrypted/decrypted alongside Command/Data.
+var SensitiveShellTypes = map[string]bool{
+	"token_make": true,
+}
+
 // AfterFind transparently decrypts task Result/Error (AES-256-GCM, FC2ENC:)
 // on every load so callers always see plaintext. DecryptLoot is a no-op for
 // legacy plaintext values, preserving backward compatibility with existing
@@ -281,6 +289,13 @@ func (t *Task) AfterFind(_ *gorm.DB) error {
 			}
 		}
 	}
+	if SensitiveShellTypes[t.Type] {
+		if t.Shell != "" {
+			if dec, err := crypto.DecryptLoot(t.Shell); err == nil {
+				t.Shell = dec
+			}
+		}
+	}
 	return nil
 }
 
@@ -290,20 +305,28 @@ func (t *Task) AfterFind(_ *gorm.DB) error {
 // freshly built plaintext task is encrypted exactly once. If loot encryption
 // is unconfigured the original value is kept so no data is lost.
 func (t *Task) encryptSensitiveFields() {
-	if !SensitiveTaskTypes[t.Type] {
-		return
-	}
-	if t.Command != "" {
-		if dec, err := crypto.DecryptLoot(t.Command); err == nil {
-			if enc, err2 := crypto.EncryptLoot(dec); err2 == nil {
-				t.Command = enc
+	if SensitiveTaskTypes[t.Type] {
+		if t.Command != "" {
+			if dec, err := crypto.DecryptLoot(t.Command); err == nil {
+				if enc, err2 := crypto.EncryptLoot(dec); err2 == nil {
+					t.Command = enc
+				}
+			}
+		}
+		if t.Data != "" {
+			if dec, err := crypto.DecryptLoot(t.Data); err == nil {
+				if enc, err2 := crypto.EncryptLoot(dec); err2 == nil {
+					t.Data = enc
+				}
 			}
 		}
 	}
-	if t.Data != "" {
-		if dec, err := crypto.DecryptLoot(t.Data); err == nil {
-			if enc, err2 := crypto.EncryptLoot(dec); err2 == nil {
-				t.Data = enc
+	if SensitiveShellTypes[t.Type] {
+		if t.Shell != "" {
+			if dec, err := crypto.DecryptLoot(t.Shell); err == nil {
+				if enc, err2 := crypto.EncryptLoot(dec); err2 == nil {
+					t.Shell = enc
+				}
 			}
 		}
 	}

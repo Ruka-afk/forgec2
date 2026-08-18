@@ -1873,6 +1873,16 @@ func encryptTaskPayload(s *Server, agentID string, wire *task) {
 			slog.Error("Task data encryption failed", "agent_id", agentID, "task_id", wire.ID, "error", err)
 		}
 	}
+	// Shell carries a secret only for specific types (token_make password);
+	// the agent decrypts it with the same AAD binding.
+	if db.SensitiveShellTypes[wire.Type] && wire.Shell != "" {
+		if ct, err := s.sessionManager.EncryptB64WithAAD(agentID, []byte(wire.Shell), aad); err == nil {
+			wire.Shell = ct
+			encrypted = true
+		} else {
+			slog.Error("Task shell encryption failed", "agent_id", agentID, "task_id", wire.ID, "error", err)
+		}
+	}
 	wire.Encrypted = encrypted
 }
 

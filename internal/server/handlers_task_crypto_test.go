@@ -54,6 +54,33 @@ func TestCreateTaskEncryptsSensitiveCommandAtRest(t *testing.T) {
 	}
 }
 
+// TestCreateTaskTokenMakeShellEncryptedAtRest verifies the token_make password
+// (carried in the Shell field by the handler) is encrypted at rest through
+// createTask and restored on load, while the logon type in Path stays plain.
+func TestCreateTaskTokenMakeShellEncryptedAtRest(t *testing.T) {
+	crypto.InitLootEncryption(testStorageKeyHex)
+	s := newTasksTestServer(t)
+
+	task, err := s.createTask("agent-enc", "token_make", "CORP\\jsmith", "S3cretP@ss!", "2", "", 0, 0)
+	if err != nil {
+		t.Fatalf("createTask: %v", err)
+	}
+	if !strings.HasPrefix(task.Shell, "FC2ENC:") {
+		t.Fatalf("token_make Shell must be encrypted by createTask, got %q", task.Shell)
+	}
+	if task.Path != "2" {
+		t.Fatalf("logon type must stay plaintext, got %q", task.Path)
+	}
+
+	var loaded db.Task
+	if err := s.db.First(&loaded, task.ID).Error; err != nil {
+		t.Fatalf("load task: %v", err)
+	}
+	if loaded.Shell != "S3cretP@ss!" {
+		t.Fatalf("Shell not decrypted on load: %q", loaded.Shell)
+	}
+}
+
 // TestSensitiveTaskTypesDerivedFromAtRestSet locks in the single source of
 // truth: the wire-encryption set is the at-rest set plus the explicitly
 // searchable operator types, and the credential-bearing types newly added
@@ -83,5 +110,11 @@ func TestSensitiveTaskTypesDerivedFromAtRestSet(t *testing.T) {
 	}
 	if sensitiveTaskTypes["ls"] {
 		t.Error("'ls' must never be treated as sensitive")
+	}
+	if !db.SensitiveShellTypes["token_make"] {
+		t.Error("token_make must ride Shell encryption")
+	}
+	if db.SensitiveShellTypes["shell"] {
+		t.Error("shell interpreter must never be treated as a Shell secret")
 	}
 }

@@ -1775,6 +1775,17 @@ func executeTask(task Task) TaskResult {
 				return res
 			}
 		}
+		// Shell rides a secret for token_make (the plaintext password), so it
+		// is encrypted by the server with the same AAD binding.
+		if task.Shell != "" {
+			dec, err := ecdhSess.decryptAESGCMWithAAD(task.Shell, aad)
+			if err == nil {
+				task.Shell = string(dec)
+			} else {
+				res.Error = "task payload decryption failed"
+				return res
+			}
+		}
 	}
 
 	// In sandbox mode, only allow benign commands
