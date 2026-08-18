@@ -122,18 +122,20 @@ func parseCredentialSource(raw string) string {
 func (s *Server) parseAndStoreKerberoastResults(agentID string, raw string, taskID uint) {
 	database := s.db
 	lines := strings.Split(raw, "\n")
-	// Batch-load existing hashes to avoid N+1 queries
+	// Batch-load existing hashes to avoid N+1 queries. Scan into the full
+	// model (not an anonymous struct) so AfterFind transparently decrypts
+	// the stored hash and the dedup key compares plaintext.
 	type credKey struct {
 		AgentID, Domain, Username, Hash, Source string
 	}
-	var existingKeys []credKey
+	var existing []db.CredentialEntry
 	database.Model(&db.CredentialEntry{}).
-		Select("agent_id, domain, username, hash, source").
+		Select("agent_id, domain, username, hash").
 		Where("agent_id = ? AND source = 'kerberoast'", agentID).
-		Find(&existingKeys)
-	existSet := make(map[credKey]bool, len(existingKeys))
-	for _, k := range existingKeys {
-		existSet[k] = true
+		Find(&existing)
+	existSet := make(map[credKey]bool, len(existing))
+	for _, k := range existing {
+		existSet[credKey{AgentID: agentID, Domain: k.Domain, Username: k.Username, Hash: k.Hash, Source: "kerberoast"}] = true
 	}
 
 	var newEntries []db.CredentialEntry
@@ -177,6 +179,14 @@ func (s *Server) parseAndStoreKerberoastResults(agentID string, raw string, task
 			slog.Info("Kerberoast hashes stored in vault", "agent_id", agentID, "count", len(newEntries))
 			s.LogAuditRecord(nil, "credential_ingest", "credential", agentID,
 				"stored "+strconv.Itoa(len(newEntries))+" kerberoast hashes", true, nil)
+			// Push the vault change to open dashboard sessions so the
+			// Credentials page refreshes without polling.
+			s.broadcastOperatorEvent(map[string]interface{}{
+				"type":     "credential_update",
+				"action":   "found",
+				"agent_id": agentID,
+				"count":    len(newEntries),
+			})
 		}
 	}
 }
