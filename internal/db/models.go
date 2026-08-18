@@ -238,6 +238,21 @@ type Task struct {
 	Agent          Implant   `gorm:"foreignKey:AgentID" json:"-"`
 }
 
+// SensitiveTaskTypes are task types whose Command/Data fields carry secrets
+// or code payloads: sprayed domain passwords, token_make/lateral-movement
+// credentials, shellcode/assembly blobs. Their Command/Data are encrypted at
+// rest by the Task BeforeCreate/BeforeUpdate hooks and transparently decrypted
+// by AfterFind, mirroring the Result/Error treatment. Operator-facing types
+// that stay searchable in the database (shell, ps, upload, download_url) are
+// intentionally NOT listed here; they are only wire-encrypted at dispatch.
+var SensitiveTaskTypes = map[string]bool{
+	"password_spray": true, "token_make": true, "lateral": true,
+	"mimikatz": true, "creds": true, "dcsync": true,
+	"execute_assembly": true, "bof": true, "peloader": true,
+	"inject": true, "spawn": true, "shinject": true, "shspawn": true,
+	"powerpick": true, "reg_set": true, "clipboard_set": true,
+}
+
 // AfterFind transparently decrypts task Result/Error (AES-256-GCM, FC2ENC:)
 // on every load so callers always see plaintext. DecryptLoot is a no-op for
 // legacy plaintext values, preserving backward compatibility with existing
@@ -254,6 +269,53 @@ func (t *Task) AfterFind(_ *gorm.DB) error {
 			t.Error = dec
 		}
 	}
+	if SensitiveTaskTypes[t.Type] {
+		if t.Command != "" {
+			if dec, err := crypto.DecryptLoot(t.Command); err == nil {
+				t.Command = dec
+			}
+		}
+		if t.Data != "" {
+			if dec, err := crypto.DecryptLoot(t.Data); err == nil {
+				t.Data = dec
+			}
+		}
+	}
+	return nil
+}
+
+// encryptSensitiveFields is the BeforeCreate/BeforeUpdate counterpart of the
+// AfterFind decryption. Decrypt-then-encrypt keeps the hook idempotent: an
+// already-encrypted in-memory value normalizes back to ciphertext, and a
+// freshly built plaintext task is encrypted exactly once. If loot encryption
+// is unconfigured the original value is kept so no data is lost.
+func (t *Task) encryptSensitiveFields() {
+	if !SensitiveTaskTypes[t.Type] {
+		return
+	}
+	if t.Command != "" {
+		if dec, err := crypto.DecryptLoot(t.Command); err == nil {
+			if enc, err2 := crypto.EncryptLoot(dec); err2 == nil {
+				t.Command = enc
+			}
+		}
+	}
+	if t.Data != "" {
+		if dec, err := crypto.DecryptLoot(t.Data); err == nil {
+			if enc, err2 := crypto.EncryptLoot(dec); err2 == nil {
+				t.Data = enc
+			}
+		}
+	}
+}
+
+func (t *Task) BeforeCreate(_ *gorm.DB) error {
+	t.encryptSensitiveFields()
+	return nil
+}
+
+func (t *Task) BeforeUpdate(_ *gorm.DB) error {
+	t.encryptSensitiveFields()
 	return nil
 }
 
