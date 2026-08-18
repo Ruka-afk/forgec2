@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/crypto"
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/forgec2/forgec2/internal/server/opsec"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -437,7 +439,7 @@ func TestOpsecAdaptive_BlockCritical(t *testing.T) {
 		t.Fatalf("expected ThreatCritical")
 	}
 
-	actions := []string{"mimikatz", "dcsync", "kerberoast", "shinject"}
+	actions := []string{"mimikatz", "dcsync", "kerberoast", "shinject", "creds", "password_spray"}
 	for _, action := range actions {
 		if !am.ShouldBlockAction("agent-z", action) {
 			t.Errorf("expected %q to be blocked at ThreatCritical", action)
@@ -446,6 +448,94 @@ func TestOpsecAdaptive_BlockCritical(t *testing.T) {
 
 	if am.ShouldBlockAction("agent-z", "ls") {
 		t.Error("non-high-risk action 'ls' should not be blocked")
+	}
+}
+
+// TestOpsecCreateTaskBlockedAtCritical proves the adaptive gate is enforced at
+// task creation: once an agent's threat level reaches ThreatCritical,
+// credential-access ops (spray/creds/mimikatz/kerberoast) are rejected before
+// any task is persisted, benign ops still work, and the block is audited.
+func TestOpsecCreateTaskBlockedAtCritical(t *testing.T) {
+	s := newTasksTestServer(t)
+	s.opsecAdaptive = opsec.NewAdaptiveManager()
+
+	// Normal threat: the same credential op is allowed.
+	if _, err := s.createTask("agent-opsec", "password_spray", "P@ss|CORP||0", "", "", "jsmith", 0, 0); err != nil {
+		t.Fatalf("spray must be allowed at normal threat: %v", err)
+	}
+
+	for i := 0; i < 10; i++ {
+		s.opsecAdaptive.RecordIntegrityFailure("agent-opsec")
+	}
+	if s.opsecAdaptive.GetThreatLevel("agent-opsec") != opsec.ThreatCritical {
+		t.Fatalf("expected ThreatCritical")
+	}
+
+	blocked := []struct {
+		taskType, command, data string
+	}{
+		{"password_spray", "P@ss|CORP||0", "jsmith"},
+		{"creds", "", ""},
+		{"mimikatz", "sekurlsa::logonpasswords", ""},
+		{"kerberoast", "", ""},
+	}
+	for _, tc := range blocked {
+		if _, err := s.createTask("agent-opsec", tc.taskType, tc.command, "", "", tc.data, 0, 0); err == nil {
+			t.Fatalf("expected %s to be blocked at ThreatCritical", tc.taskType)
+		} else if !strings.Contains(err.Error(), "adaptive opsec") {
+			t.Fatalf("%s error must cite adaptive opsec, got: %v", tc.taskType, err)
+		}
+	}
+
+	// No blocked task may be persisted, and benign ops still dispatch.
+	var count int64
+	s.db.Model(&db.Task{}).Where("agent_id = ?", "agent-opsec").Count(&count)
+	if count != 1 {
+		t.Fatalf("expected only the pre-escalation task in DB, got %d", count)
+	}
+	if _, err := s.createTask("agent-opsec", "shell", "whoami", "", "", "", 0, 0); err != nil {
+		t.Fatalf("shell must not be blocked at critical: %v", err)
+	}
+
+	// The blocks are audited.
+	var blockLogs int64
+	s.db.Model(&db.AuditLog{}).Where("action = ? AND agent_id = ?", "opsec_block", "agent-opsec").Count(&blockLogs)
+	if blockLogs != 4 {
+		t.Fatalf("expected 4 opsec_block audit entries, got %d", blockLogs)
+	}
+}
+
+// TestOpsecSleepMaskAlertEscalatesThreat proves the memory-scanner alert path
+// feeds the adaptive manager: repeated sleep-mask integrity failures push the
+// agent to ThreatCritical, after which credential ops are rejected.
+func TestOpsecSleepMaskAlertEscalatesThreat(t *testing.T) {
+	s := newTasksTestServer(t)
+	s.opsecAdaptive = opsec.NewAdaptiveManager()
+
+	s.autoSwitchSleepMask("agent-mask", "sleep_mask_integrity_failure: mask=advanced page=2")
+	if level := s.opsecAdaptive.GetThreatLevel("agent-mask"); level != opsec.ThreatNormal {
+		t.Fatalf("1 alert should stay ThreatNormal, got %d", level)
+	}
+
+	s.autoSwitchSleepMask("agent-mask", "sleep_mask_integrity_failure: mask=advanced page=2")
+	if level := s.opsecAdaptive.GetThreatLevel("agent-mask"); level != opsec.ThreatElevated {
+		t.Fatalf("2 alerts should yield ThreatElevated, got %d", level)
+	}
+
+	for i := 0; i < 8; i++ {
+		s.autoSwitchSleepMask("agent-mask", "sleep_mask_integrity_failure: mask=advanced page=2")
+	}
+	if level := s.opsecAdaptive.GetThreatLevel("agent-mask"); level != opsec.ThreatCritical {
+		t.Fatalf("10 alerts should yield ThreatCritical, got %d", level)
+	}
+
+	// Auto-switch (set_sleep_mask) is not credential access: it must still
+	// dispatch on a hostile host, while a credential op is now blocked.
+	if _, err := s.createTask("agent-mask", "mimikatz", "sekurlsa::logonpasswords", "", "", "", 0, 0); err == nil {
+		t.Fatal("mimikatz must be blocked at ThreatCritical")
+	}
+	if _, err := s.createTask("agent-mask", "set_sleep_mask", "zilean", "", "", "", 0, 0); err != nil {
+		t.Fatalf("set_sleep_mask must not be blocked: %v", err)
 	}
 }
 

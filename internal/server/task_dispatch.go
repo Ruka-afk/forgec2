@@ -29,6 +29,17 @@ func (s *Server) createTask(agentID, taskType, command, shell, path, data string
 		return nil, fmt.Errorf("unknown task type: %s", taskType)
 	}
 
+	// Adaptive OPSEC gate: agents at critical threat level cannot launch
+	// credential-access / injection operations. Enforced at creation so every
+	// path (handlers, bulk, automation, workflow, scripting) inherits the gate.
+	if s.opsecAdaptive != nil && s.opsecAdaptive.ShouldBlockAction(agentID, taskType) {
+		slog.Warn("Task blocked by adaptive opsec (critical threat level)",
+			"agent_id", agentID, "task_type", taskType)
+		s.LogAuditRecord(nil, "opsec_block", "agent", agentID,
+			"blocked "+taskType+" (critical threat level)", false, nil)
+		return nil, fmt.Errorf("blocked by adaptive opsec: %s is not allowed on a critical-threat host", taskType)
+	}
+
 	if len(command) > MaxCommandLength {
 		return nil, fmt.Errorf("command too long (max %d characters)", MaxCommandLength)
 	}

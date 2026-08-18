@@ -2285,6 +2285,13 @@ func (s *Server) handleServeScreenshot(c *gin.Context) {
 func (s *Server) autoSwitchSleepMask(agentID string, output string) {
 	slog.Error("Sleep mask integrity failure — auto-switching variant", "agent_id", agentID, "output", output)
 
+	// Escalate the adaptive OPSEC threat score: a memory-scanner hit means
+	// the host is actively hostile, and repeated hits push the agent toward
+	// ThreatCritical where credential-access operations are blocked.
+	if s.opsecAdaptive != nil {
+		s.opsecAdaptive.RecordIntegrityFailure(agentID)
+	}
+
 	// Parse the current mask name from the alert output
 	currentMask := ""
 	if idx := strings.Index(output, "mask="); idx >= 0 {

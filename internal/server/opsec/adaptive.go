@@ -119,7 +119,14 @@ func (am *AdaptiveManager) ShouldBlockAction(agentID string, action string) bool
 	}
 
 	if state.Level == ThreatCritical {
-		blockList := map[string]bool{"mimikatz": true, "dcsync": true, "kerberoast": true, "shinject": true}
+		// Credential-access and process-injection operations are gated when
+		// the host is confirmed hostile. "creds" and "password_spray" are
+		// the same class as mimikatz/kerberoast: once the threat score is
+		// critical, no further credential harvesting is allowed.
+		blockList := map[string]bool{
+			"mimikatz": true, "dcsync": true, "kerberoast": true,
+			"shinject": true, "creds": true, "password_spray": true,
+		}
 		if blockList[action] {
 			slog.Warn("Blocked high-risk action due to critical threat level",
 				"agent_id", agentID, "action", action)
