@@ -243,17 +243,19 @@ export default function Sidebar() {
   const currentUsername = useAppStore((s) => s.currentUsername);
   const setCurrentUsername = useAppStore((s) => s.setCurrentUsername);
   const setCurrentUserRole = useAppStore((s) => s.setCurrentUserRole);
+  const setCurrentPermissions = useAppStore((s) => s.setCurrentPermissions);
 
   useEffect(() => { Promise.resolve().then(() => setSections(getSavedSections())); }, []);
 
   useEffect(() => {
     if (currentUsername) return;
-    api.get<{ data?: { username?: string; role?: string } }>(paths.auth.me).then((d) => {
+    api.get<{ data?: { username?: string; role?: string; permissions?: string[] } }>(paths.auth.me).then((d) => {
       const me = d?.data;
       if (me?.username) setCurrentUsername(me.username);
       if (me?.role) setCurrentUserRole(me.role);
+      if (Array.isArray(me?.permissions)) setCurrentPermissions(me.permissions);
     }).catch((e) => { if (process.env.NODE_ENV === "development") console.error("Sidebar: failed to fetch current user", e); });
-  }, [currentUsername, setCurrentUsername, setCurrentUserRole]);
+  }, [currentUsername, setCurrentUsername, setCurrentUserRole, setCurrentPermissions]);
 
   const collapsed = sidebarCollapsed;
 

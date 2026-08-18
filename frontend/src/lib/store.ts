@@ -40,6 +40,8 @@ interface AppState {
   setCurrentUsername: (name: string) => void;
   currentUserRole: string;
   setCurrentUserRole: (role: string) => void;
+  currentPermissions: string[];
+  setCurrentPermissions: (perms: string[]) => void;
 
   // Command palette
   commandPaletteOpen: boolean;
@@ -74,6 +76,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   onlineUsers: [],
   currentUsername: "",
   currentUserRole: "",
+  currentPermissions: [],
 
   sidebarCollapsed: typeof window !== "undefined"
     ? localStorage.getItem("forgec2_sidebar_collapsed") === "true"
@@ -108,6 +111,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setOnlineUsers: (users) => set({ onlineUsers: users }),
   setCurrentUsername: (name) => set({ currentUsername: name }),
   setCurrentUserRole: (role) => set({ currentUserRole: role }),
+  setCurrentPermissions: (perms) => set({ currentPermissions: perms }),
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
 
   setDensity: (d) => {

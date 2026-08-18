@@ -201,6 +201,152 @@ func TestHandleGetCurrentUser_ReturnsSessionExp(t *testing.T) {
 	}
 }
 
+func TestHandleGetCurrentUser_ReturnsPermissions(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := newContractDB(t)
+	s := &Server{db: database}
+
+	cases := []struct {
+		name string
+		role string
+		want []string
+	}{
+		{"built-in user role", db.RoleUser, db.GetPermissionsForRole(db.RoleUser)},
+		{"admin gets every permission", db.RoleAdmin, db.GetAllPermissions()},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			user := db.User{Username: "perms-" + tc.role, Role: tc.role, IsActive: true}
+			if err := database.Create(&user).Error; err != nil {
+				t.Fatalf("create user: %v", err)
+			}
+
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request, _ = http.NewRequest(http.MethodGet, "/api/me", nil)
+			c.Set("user_id", user.ID)
+
+			s.handleGetCurrentUser(c)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+			}
+			var resp struct {
+				Success bool `json:"success"`
+				Data    struct {
+					Permissions []string `json:"permissions"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+			}
+			if len(resp.Data.Permissions) == 0 {
+				t.Fatal("expected a non-empty permissions list")
+			}
+			for _, want := range tc.want {
+				found := false
+				for _, got := range resp.Data.Permissions {
+					if got == want {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("missing permission %q in %v", want, resp.Data.Permissions)
+				}
+			}
+		})
+	}
+}
+
+func TestHandleGetCurrentUser_CustomRolePermissions(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := newContractDB(t)
+	s := &Server{db: database}
+
+	customRole := db.CustomRole{
+		Name:        "blue-team",
+		Description: "read-only blue team role",
+		Permissions: `["agents.read","audit.read"]`,
+	}
+	if err := database.Create(&customRole).Error; err != nil {
+		t.Fatalf("create custom role: %v", err)
+	}
+
+	user := db.User{Username: "bt-user", Role: "blue-team", IsActive: true}
+	if err := database.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/api/me", nil)
+	c.Set("user_id", user.ID)
+
+	s.handleGetCurrentUser(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Role        string   `json:"role"`
+			Permissions []string `json:"permissions"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+	}
+	if resp.Data.Role != "blue-team" {
+		t.Errorf("expected role=blue-team, got %s", resp.Data.Role)
+	}
+	want := []string{"agents.read", "audit.read"}
+	if len(resp.Data.Permissions) != len(want) {
+		t.Fatalf("expected permissions %v, got %v", want, resp.Data.Permissions)
+	}
+	for i := range want {
+		if resp.Data.Permissions[i] != want[i] {
+			t.Errorf("expected permissions %v, got %v", want, resp.Data.Permissions)
+			break
+		}
+	}
+}
+
+func TestHandleGetCurrentUser_UnknownRoleNoPermissions(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := newContractDB(t)
+	s := &Server{db: database}
+
+	user := db.User{Username: "ghost-role", Role: "no-such-role", IsActive: true}
+	if err := database.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest(http.MethodGet, "/api/me", nil)
+	c.Set("user_id", user.ID)
+
+	s.handleGetCurrentUser(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d; body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Permissions []string `json:"permissions"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid json: %v; body=%s", err, w.Body.String())
+	}
+	if len(resp.Data.Permissions) != 0 {
+		t.Errorf("expected no permissions for unknown role, got %v", resp.Data.Permissions)
+	}
+}
+
 func TestHandleGetCurrentUser_Inactive(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := newContractDB(t)

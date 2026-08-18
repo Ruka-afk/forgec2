@@ -20267,7 +20267,23 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: {
+                            id: number;
+                            username: string;
+                            /** @description Built-in (admin|user) or custom role name */
+                            role: string;
+                            permissions: string[];
+                            /**
+                             * Format: int64
+                             * @description Session expiry as ms epoch, when known
+                             */
+                            session_exp?: number;
+                        };
+                    };
+                };
             };
         };
     };

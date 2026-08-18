@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -368,9 +369,10 @@ func (s *Server) handleGetCurrentUser(c *gin.Context) {
 	}
 
 	data := gin.H{
-		"id":       user.ID,
-		"username": user.Username,
-		"role":     user.Role,
+		"id":          user.ID,
+		"username":    user.Username,
+		"role":        user.Role,
+		"permissions": s.permissionsForRole(user.Role),
 	}
 	// Expose session expiry (ms epoch) for client-side timeout warnings.
 	if exp, ok := c.Get("session_exp"); ok {
@@ -382,6 +384,29 @@ func (s *Server) handleGetCurrentUser(c *gin.Context) {
 		"success": true,
 		"data":    data,
 	})
+}
+
+// permissionsForRole resolves the effective permission set for a user role.
+// Admin overrides everything (all permissions); built-in roles read
+// db.RolePermissionsMap; custom roles read the DB-backed custom_roles row —
+// mirroring middleware.RoleHasPermissionDB so /api/me agrees with the
+// per-route enforcement.
+func (s *Server) permissionsForRole(role string) []string {
+	if role == db.RoleAdmin {
+		return db.GetAllPermissions()
+	}
+	if _, ok := db.RolePermissionsMap[role]; ok {
+		return db.GetPermissionsForRole(role)
+	}
+	var customRole db.CustomRole
+	if err := s.db.Where("name = ?", role).First(&customRole).Error; err != nil || customRole.Permissions == "" {
+		return nil
+	}
+	var perms []string
+	if err := json.Unmarshal([]byte(customRole.Permissions), &perms); err != nil {
+		return nil
+	}
+	return perms
 }
 
 // handleExtendSession re-issues the session JWT and replaces the cookie,

@@ -8766,6 +8766,34 @@ paths:
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [id, username, role, permissions]
+                    properties:
+                      id:
+                        type: integer
+                      username:
+                        type: string
+                      role:
+                        type: string
+                        description: Built-in (admin|user) or custom role name
+                      permissions:
+                        type: array
+                        items:
+                          type: string
+                          description: Effective permissions for the role (admin = full set)
+                      session_exp:
+                        type: integer
+                        format: int64
+                        description: Session expiry as ms epoch, when known
   /api/docs:
     get:
       tags: [Settings]
