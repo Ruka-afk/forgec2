@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { normalizeAgentList } from "@/lib/agents";
+import { fetchAgentListCached } from "@/lib/agents";
 import {
   CRED_HARVEST_ACTIONS,
   credActionAllowed,
@@ -44,12 +44,12 @@ export function CredHarvestCard() {
 
   const load = useCallback(async () => {
     try {
-      const [modRes, agentRes] = await Promise.all([
+      const [modRes, agentList] = await Promise.all([
         api.get(paths.modules.list),
-        api.get(paths.agents.list("page=1&pageSize=50")),
+        fetchAgentListCached(),
       ]);
       setHasModule(hasMimikatzModule(parseModuleNames(modRes)));
-      const list = normalizeAgentList(agentRes).map((a) => ({
+      const list = agentList.map((a) => ({
         id: String(a.id || ""),
         hostname: String(a.hostname || a.id || ""),
         status: a.status,

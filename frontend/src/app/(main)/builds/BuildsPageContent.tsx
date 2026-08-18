@@ -4,11 +4,10 @@ import { ErrorState } from "@/components/ui/error-state";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { API_BASE } from "@/lib/constants";
-import { downloadFromResponse } from "@/lib/download";
-import { api, getCsrfToken } from "@/lib/api";
+import { downloadBlob } from "@/lib/download";
+import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { normalizeAgentList } from "@/lib/agents";
+import { fetchAgentListCached } from "@/lib/agents";
 import { firstNumber, normalizeListEnvelope } from "@/lib/envelope";
 import { toast } from "sonner";
 import { useWS } from "@/lib/wsContext";
@@ -128,7 +127,7 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
       if (filterStatus) params.set("status", filterStatus);
       const [data, agents] = await Promise.all([
         api.get(paths.builds.list(params.toString())),
-        api.get(paths.agents.list()).catch(() => null),
+        fetchAgentListCached().catch(() => []),
       ]);
       const logs = dedupeBuilds(normalizeListEnvelope(data, ["logs", "Logs", "builds", "data"]) as BuildLog[]);
       setBuilds(logs);
@@ -150,10 +149,9 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
         return parseFloat(d) || 0;
       });
       setAvgDuration(durations.length > 0 ? Math.round(durations.reduce((a: number, b: number) => a + b, 0) / durations.length) : 0);
-      if (agents) {
-        const list = normalizeAgentList(agents) as { version?: string; Version?: string }[];
+      if (agents.length > 0) {
         const counts: Record<string, number> = {};
-        list.forEach(a => { const v = a.version || a.Version || "unknown"; counts[v] = (counts[v] || 0) + 1; });
+        agents.forEach(a => { const v = a.version || "unknown"; counts[v] = (counts[v] || 0) + 1; });
         setVersionDist(Object.entries(counts).map(([version, count]) => ({ version, count })).sort((a, b) => b.count - a.count));
       }
     } catch (e) {
@@ -209,12 +207,11 @@ export default function BuildsPage({ embedded = false }: { embedded?: boolean })
     const buildId = build.id;
     if (!buildId) return;
     try {
-      const resp = await fetch(`${API_BASE}${paths.builds.download(String(buildId))}`, { credentials: "include", headers: { "X-CSRF-Token": getCsrfToken() } });
-      if (!resp.ok) {
-        toast.error(t("builds.toast.download_failed"));
-        return;
-      }
-      await downloadFromResponse(resp, build.filename || `build-${buildId}`);
+      const { blob, filename } = await api.downloadGet(
+        paths.builds.download(String(buildId)),
+        build.filename || `build-${buildId}`,
+      );
+      downloadBlob(blob, filename);
     } catch {
       toast.error(t("builds.toast.download_failed"));
     }

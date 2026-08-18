@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { fetchAgentListCached } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -64,14 +65,14 @@ export default function ScriptingPage() {
     fetcher: async () => {
       let failed = 0;
       const [agentData, scriptData, historyData] = await Promise.all([
-        api.get(paths.agents.list()).catch(() => { failed++; return { agents: [] }; }),
+        fetchAgentListCached().catch(() => { failed++; return [] as Agent[]; }),
         api.get(paths.scripts.list).catch(() => { failed++; return { scripts: [] as SavedScript[] }; }),
         api.get(paths.scripts.history).catch(() => { return { history: [] }; }),
       ]);
       if (failed > 0) toast.error(t("scripting.toast.load_failed"));
       const scriptRes = scriptData as { scripts?: SavedScript[]; data?: SavedScript[] };
       return {
-        agents: (agentData.agents || (Array.isArray(agentData) ? agentData : [])) as Agent[],
+        agents: agentData,
         savedScripts: (scriptRes.scripts || scriptRes.data || []) as SavedScript[],
         runHistory: (historyData.history || []) as RunHistory[],
       };

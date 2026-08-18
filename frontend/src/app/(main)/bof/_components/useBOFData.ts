@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { fetchAgentListCached } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
 import type { BOFFile, BOFLibraryItem, Execution, RepoItem } from "./types";
 
@@ -23,10 +24,9 @@ export function useBOFData() {
       setFiles(data.bofs || data.files || []);
       const execData = await api.get<{ results?: Execution[]; Results?: Execution[] }>(paths.bof.results);
       setExecutions(execData.results || []);
-const agentData = await api.get<{ Agents?: Array<Record<string, unknown>>; agents?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>(paths.agents.list());
-      const agentList = ((agentData as Array<Record<string, unknown>>).length != null ? agentData : (agentData as Record<string, unknown>).agents) as Array<Record<string, unknown>> | undefined;
+      const agentList = await fetchAgentListCached();
       setAgents(
-        (agentList || []).map((a: Record<string, unknown>) => ({
+        agentList.map((a) => ({
           id: String(a.id || ""),
           hostname: String(a.hostname || ""),
         }))

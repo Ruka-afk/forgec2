@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { fetchAgentListCached } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { toast } from "sonner";
@@ -65,12 +66,12 @@ export default function ToolkitPage() {
 
   const { data, loading, refresh } = useApiResource<{ toolkitAgents: ToolkitAgent[]; recentTasks: RecentTask[] }>({
     fetcher: async () => {
-      const [agentsData, tasksData] = await Promise.all([
-        api.get(paths.agents.list()),
+      const [agentsList, tasksData] = await Promise.all([
+        fetchAgentListCached(),
         api.get(paths.toolkit.results),
       ]);
       return {
-        toolkitAgents: (agentsData.agents || (Array.isArray(agentsData) ? agentsData : [])) as ToolkitAgent[],
+        toolkitAgents: agentsList as ToolkitAgent[],
         recentTasks: (tasksData.tasks || tasksData.results || tasksData.data || []) as RecentTask[],
       };
     },

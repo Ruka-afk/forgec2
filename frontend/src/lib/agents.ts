@@ -1,6 +1,8 @@
 import { api } from "./api";
 import { paths } from "./api-paths";
 import { firstArray } from "./envelope";
+import { fetchCached } from "./hooks/useCachedData";
+import { fetchAgentsPage } from "./typed-api";
 import type { Agent, AgentStatus, NormalizedAgent } from "@/types/agent";
 
 export type { NormalizedAgent as AgentSummary };
@@ -24,6 +26,29 @@ function toNormalized(r: Record<string, unknown>): NormalizedAgent {
     listener_id: String(r.listener_id ?? ""),
     tags: String(r.tags ?? ""),
   };
+}
+
+/**
+ * Shared agent-list cache (single key across the app, 60s TTL).
+ *
+ * The backend caps page_size at 100 and defaults to 20, so dropdown-style
+ * consumers that used the default were silently seeing only 20 agents; use
+ * page_size=100 here so every consumer gets the full fleet from one request.
+ * Callers that need fresher data (polling dashboards, paginated tables) should
+ * keep their own requests — the cache is intentionally a snapshot for lists.
+ */
+export const AGENTS_CACHE_KEY = "agents:list";
+const AGENTS_CACHE_TTL_MS = 60_000;
+
+export async function fetchAgentListCached(): Promise<Agent[]> {
+  return fetchCached<Agent[]>(
+    AGENTS_CACHE_KEY,
+    async () => {
+      const { agents } = await fetchAgentsPage({ page_size: 100 });
+      return normalizeAgentList(agents);
+    },
+    AGENTS_CACHE_TTL_MS,
+  );
 }
 
 interface FetchAgentListResult {

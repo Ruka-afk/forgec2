@@ -15,14 +15,12 @@ import { Badge } from "@/components/ui/badge";
 import { DataState } from "@/components/ui/data-state";
 import OperatorBadge from "@/components/OperatorBadge";
 import { useAppStore } from "@/lib/store";
-import type { Agent } from "@/types/agent";
-import { normalizeAgentList } from "@/lib/agents";
 import { paths } from "@/lib/api-paths";
 import { firstArray, firstNumber } from "@/lib/envelope";
 import { formatTime } from "@/lib/utils";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
-import { useCachedData } from "@/lib/hooks/useCachedData";
+import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useWS } from "@/lib/wsContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,14 +50,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
   const searchParams = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const { data: agents } = useCachedData<Agent[]>("agents:names", {
-    fetcher: async () => {
-      const data = await api.get(paths.agents.list("page=1&pageSize=200"));
-      return normalizeAgentList(data);
-    },
-    ttlMs: 120_000,
-    onError: () => toast.error(t("tasks.toast_load_agents_failed")),
-  });
+  const { agents } = useAgentList();
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

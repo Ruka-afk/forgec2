@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { fetchAgentListCached } from "@/lib/agents";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FieldError } from "@/components/ui/field-error";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { Button } from "@/components/ui/button";
-import { NormalizedAgent as Agent } from "@/types/agent";
+import type { Agent } from "@/types/agent";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
@@ -58,13 +59,13 @@ export function ScheduledRulesCard({ onChanged }: { onChanged?: () => void }) {
 
   const { data, loading, refresh: fetchData } = useApiResource<{ tasks: ScheduledRule[]; agents: Agent[] }>({
     fetcher: async () => {
-      const [rules, a] = await Promise.all([
+      const [rules, agentList] = await Promise.all([
         api.get<{ data?: ScheduledRule[] }>(paths.automation.rules),
-        api.get<{ agents?: Agent[]; data?: Agent[] } | Agent[]>(paths.agents.list()),
+        fetchAgentListCached(),
       ]);
       return {
         tasks: (rules.data || []).filter((r) => r.event_type === "schedule"),
-        agents: ((Array.isArray(a) ? a : a.agents || a.data) || []) as Agent[],
+        agents: agentList,
       };
     },
     toastThrottleMs: 0,

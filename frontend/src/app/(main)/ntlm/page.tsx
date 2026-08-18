@@ -9,6 +9,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { fetchAgentListCached } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { toast } from "sonner";
@@ -39,8 +40,8 @@ export default function NtlmPage() {
 
   const { data: agentsData, error: agentsError, setError: setAgentsError } = useApiResource<{ agents?: Agent[] }>({
     fetcher: async () => {
-      const data = await api.get(paths.agents.list());
-      return data as { agents?: Agent[] };
+      const agents = await fetchAgentListCached();
+      return { agents };
     },
     toastThrottleMs: 10_000,
     errorMessage: t("ntlm.toast.load_agents_failed"),

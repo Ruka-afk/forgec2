@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
+import { fetchAgentListCached } from "@/lib/agents";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
@@ -61,11 +62,7 @@ export default function ModulesSection() {
 
   const loadAgents = useCallback(async () => {
     try {
-      const data = await api.get<{ agents?: AgentOption[] } | AgentOption[]>(paths.agents.list());
-      const list = Array.isArray(data)
-        ? data
-        : ((data as { agents?: AgentOption[] })?.agents || []);
-      setAgents(list as AgentOption[]);
+      setAgents((await fetchAgentListCached()) as AgentOption[]);
     } catch {
       setAgents([]);
     }
