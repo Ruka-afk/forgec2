@@ -81,6 +81,9 @@ type Server struct {
 	// Event system
 	eventManager *EventManager
 
+	// Per-(agent,domain) consecutive-failure fuse for credential checks
+	credCheckFuse *credCheckFuseTracker
+
 	// Beacon cipher removed, use ECDH session encryption (cfg.Crypto.Key = "ecdh:")
 
 	// ECDH session manager (nil = disabled / old XOR mode)
@@ -318,6 +321,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		trafficLog:            newTrafficRing(),
 		eventManager:          NewEventManager(database),
 		operatorSessions:      &operatorSessionTracker{sessions: make(map[uint]*WSOperatorSession)},
+		credCheckFuse:         newCredCheckFuseTracker(),
 		extraListeners:        make(map[string]io.Closer),
 		domainFrontStatus:     make(map[string]*frontDomainState),
 		agentPendingTasks:     make(map[string]int),

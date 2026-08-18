@@ -246,7 +246,7 @@ type Task struct {
 // that stay searchable in the database (shell, ps, upload, download_url) are
 // intentionally NOT listed here; they are only wire-encrypted at dispatch.
 var SensitiveTaskTypes = map[string]bool{
-	"password_spray": true, "token_make": true, "lateral": true,
+	"password_spray": true, "cred_check": true, "token_make": true, "lateral": true,
 	"mimikatz": true, "creds": true, "dcsync": true,
 	"execute_assembly": true, "bof": true, "peloader": true,
 	"inject": true, "spawn": true, "shinject": true, "shspawn": true,

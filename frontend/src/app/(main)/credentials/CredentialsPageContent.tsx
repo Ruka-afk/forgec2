@@ -170,6 +170,28 @@ export default function CredentialsPage() {
     } catch { toast.error(t("cred.toast.confirm_failed")); }
   }, [loadData, t]);
 
+  const handleVerify = useCallback(async (entry: VaultEntry) => {
+    if (!entry.password || !entry.agent_id) return;
+    try {
+      await api.post(paths.agents.cmd(entry.agent_id, "cred_check"), {
+        user: entry.username,
+        domain: entry.domain || "",
+        password: entry.password,
+      });
+      showToastNotify(t("cred.toast.verify_success"), "success");
+      loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("fuse_tripped")) {
+        showToastNotify(t("cred.toast.verify_fuse"), "error");
+      } else if (msg.includes("403") || msg.includes("Forbidden")) {
+        showToastNotify(t("cred.toast.verify_forbidden"), "error");
+      } else {
+        showToastNotify(t("cred.toast.verify_failed") + ": " + msg, "error");
+      }
+    }
+  }, [loadData, t]);
+
   const handleBatchTags = async () => {
     if (!batchTags || selectedIds.size === 0) return;
     try {
@@ -478,6 +500,7 @@ export default function CredentialsPage() {
                     onToggleConfirm={handleToggleConfirm}
                     onEdit={openEdit}
                     onDelete={requestDelete}
+                    onVerify={handleVerify}
                     togglePasswordVisibility={togglePasswordVisibility}
                     toggleHashVisibility={toggleHashVisibility}
                     t={t}

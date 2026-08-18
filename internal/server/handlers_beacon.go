@@ -1372,6 +1372,11 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			}
 		}
 
+		// Confirm matching vault entries on successful credential checks
+		if r.Type == "cred_check" && task.Status == "completed" && task.Result != "" {
+			s.parseAndStoreCredCheckResult(uuid, *task, task.Result)
+		}
+
 		// Result size cap is enforced before parsing (see above); screenshots
 		// are exempt from the cap.
 		// Encrypt Result/Error at rest (H3): build a DB copy so the in-memory

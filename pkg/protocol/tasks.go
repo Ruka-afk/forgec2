@@ -242,6 +242,9 @@ const (
 	// Process list alias (implant handlePS; not a live tree viewer)
 	TaskTypeProcessTree       = "process_tree"
 	TaskTypePasswordSpray     = "password_spray"
+
+	// Single-credential validation against the domain (lockout-aware)
+	TaskTypeCredCheck = "cred_check"
 )
 
 // AllTaskTypes returns every defined task type constant in a deduplicated slice.
@@ -452,6 +455,9 @@ func AllTaskTypes() []string {
 
 		// Password Spray
 		TaskTypePasswordSpray,
+
+		// Credential Check
+		TaskTypeCredCheck,
 	}
 }
 

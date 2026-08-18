@@ -1016,6 +1016,46 @@ func (s *Server) handlePasswordSpray(c *gin.Context) {
 	s.dispatchTask(c, task, "password_spray", detail)
 }
 
+// handleCredCheck queues a single-credential validation task. The password
+// never appears in audit or logs; dispatch is refused with 429 when the
+// per-(agent,domain) fuse is tripped.
+func (s *Server) handleCredCheck(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	user := strings.TrimSpace(c.PostForm("user"))
+	domain := strings.TrimSpace(c.PostForm("domain"))
+	password := c.PostForm("password")
+	dc := strings.TrimSpace(c.PostForm("dc"))
+
+	if user == "" || domain == "" || password == "" {
+		respondError(c, http.StatusBadRequest, "user, domain and password are required")
+		return
+	}
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+
+	if s.credCheckFuse.tripped(id, domain) {
+		slog.Warn("Credential check blocked by fuse", "agent_id", id, "domain", domain)
+		respondError(c, http.StatusTooManyRequests, "fuse_tripped")
+		return
+	}
+
+	cmd := user + "|" + domain + "|" + password + "|" + dc
+	task, err := s.createTask(id, "cred_check", cmd, "", "", "", 0, 0)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to create task")
+		return
+	}
+
+	detail := fmt.Sprintf("Credential check: %s@%s", user, domain)
+	slog.Info("Credential check requested", "agent_id", id, "user", user, "domain", domain)
+	s.LogAuditRecord(c, "cred_check", "agent", id, detail, true, nil)
+	s.dispatchTask(c, task, "cred_check", detail)
+}
+
 // 鈹€鈹€ elevate_printnightmare: PrintNightmare exploit 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleElevatePrintNightmare(c *gin.Context) {
 	if !s.requireOperator(c) {

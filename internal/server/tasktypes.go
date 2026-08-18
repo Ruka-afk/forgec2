@@ -114,6 +114,10 @@ func init() {
 				{Name: "command", Type: "string", Required: true, Description: "password|domain|[dc_ip]|[delay_ms]"},
 				{Name: "data", Type: "string", Required: true, Description: "Newline-separated username list"},
 			}},
+		{Type: protocol.TaskTypeCredCheck, Name: "Credential Check", Description: "Validate a single credential against the domain with a lockout fuse", Category: "credential-access",
+			Parameters: []TaskTypeParam{
+				{Name: "command", Type: "string", Required: true, Description: "user|domain|password|[dc_ip]"},
+			}},
 		{Type: protocol.TaskTypeMimikatz, Name: "Mimikatz (scripted)", Description: "Scripted: requires Settings → Modules Invoke-Mimikatz.ps1 (no remote IEX)", Category: "credential-access",
 			Parameters: []TaskTypeParam{{Name: "command", Type: "string", Required: true, Description: "Mimikatz command"}}},
 		{Type: protocol.TaskTypeDPAPIMasterKey, Name: "DPAPI MasterKey", Description: "Extract DPAPI master keys", Category: "credential-access"},

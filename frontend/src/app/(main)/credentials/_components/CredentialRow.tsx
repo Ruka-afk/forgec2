@@ -16,6 +16,7 @@ import {
   PenLine,
   Pencil,
   Shield,
+  ShieldCheck,
   Trash2,
   WandSparkles,
 } from "lucide-react";
@@ -30,6 +31,7 @@ interface CredentialRowProps {
   onToggleConfirm: (entry: VaultEntry) => void;
   onEdit: (entry: VaultEntry) => void;
   onDelete: (id: string) => void;
+  onVerify?: (entry: VaultEntry) => void;
   togglePasswordVisibility: (id: string) => void;
   toggleHashVisibility: (id: string) => void;
   t: (key: string) => string;
@@ -44,6 +46,7 @@ function CredentialRowInner({
   onToggleConfirm,
   onEdit,
   onDelete,
+  onVerify,
   togglePasswordVisibility,
   toggleHashVisibility,
   t,
@@ -140,6 +143,14 @@ function CredentialRowInner({
         )}
       </TableCell>
       <TableCell className="py-3 px-4 text-center whitespace-nowrap">
+        {entry.password && onVerify && (
+          <Tooltip>
+            <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => onVerify(entry)} aria-label={t("cred.verify")} />}>
+              <ShieldCheck className="w-4 h-4" />
+            </TooltipTrigger>
+            <TooltipContent>{t("cred.verify")}</TooltipContent>
+          </Tooltip>
+        )}
         <Tooltip>
           <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={() => onEdit(entry)} aria-label={t("cred.edit_title")} />}>
             <Pencil className="w-4 h-4" />

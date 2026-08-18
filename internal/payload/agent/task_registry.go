@@ -263,5 +263,8 @@ func init() {
 
 		// Password Spray
 		"password_spray": handlePasswordSpray,
+
+		// Credential Check
+		"cred_check": handleCredCheck,
 	}
 }

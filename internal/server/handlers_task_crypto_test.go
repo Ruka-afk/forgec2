@@ -88,7 +88,7 @@ func TestCreateTaskTokenMakeShellEncryptedAtRest(t *testing.T) {
 // by BOTH wire and at-rest encryption.
 func TestSensitiveTaskTypesDerivedFromAtRestSet(t *testing.T) {
 	for _, k := range []string{
-		"password_spray", "token_make", "lateral", "mimikatz", "creds",
+		"password_spray", "cred_check", "token_make", "lateral", "mimikatz", "creds",
 		"dcsync", "execute_assembly", "bof", "peloader", "inject", "spawn",
 		"shinject", "shspawn", "powerpick", "reg_set", "clipboard_set",
 	} {

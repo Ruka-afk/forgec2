@@ -72,6 +72,7 @@ func (r *TaskHandlerRegistry) registerBuiltinHandlers() {
 	r.Register("creds", &credentialDumpHandler{}, 0, "Credential dump")
 	r.Register("kerberoast", &credentialDumpHandler{}, 0, "Kerberoast")
 	r.Register("password_spray", &credentialDumpHandler{}, 0, "Password Spray")
+	r.Register("cred_check", &credentialDumpHandler{}, 0, "Credential Check")
 	r.Register("execute_assembly", &injectionHandler{}, 0, "Execute .NET assembly")
 	r.Register("bof", &injectionHandler{}, 0, "Execute BOF")
 	r.Register("spawn", &injectionHandler{}, 0, "Spawn process")

@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -440,6 +441,126 @@ func (s *Server) parseAndStorePasswordSprayResults(agentID string, task db.Task,
 		"count":    len(newEntries),
 	})
 	return len(newEntries)
+}
+
+// parseAndStoreCredCheckResult processes a completed cred_check task result:
+// a "valid" status confirms the matching vault entry (agent + domain +
+// username + password) and resets the per-(agent,domain) fuse; invalid/locked
+// results record a fuse failure. The task Command carries
+// user|domain|password|[dc_ip]; the password is never written to audit.
+// Returns true when at least one vault entry was confirmed.
+func (s *Server) parseAndStoreCredCheckResult(agentID string, task db.Task, raw string) bool {
+	if task.Command == "" || raw == "" {
+		return false
+	}
+	cmdParts := strings.SplitN(task.Command, "|", 4)
+	if len(cmdParts) < 3 {
+		return false
+	}
+	cmdDomain := strings.TrimSpace(cmdParts[1])
+	cmdPassword := cmdParts[2]
+
+	var out struct {
+		Results []struct {
+			User   string `json:"user"`
+			Status string `json:"status"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(raw), &out); err != nil || len(out.Results) == 0 {
+		return false
+	}
+	r := out.Results[0]
+	status := r.Status
+
+	switch status {
+	case "valid":
+		s.credCheckFuse.reset(agentID, cmdDomain)
+	case "invalid", "locked":
+		s.credCheckFuse.recordFailure(agentID, cmdDomain)
+	default:
+		return false
+	}
+
+	confirmed := false
+	if status == "valid" {
+		entryUser := strings.TrimSpace(r.User)
+		entryDomain := cmdDomain
+		if atIdx := strings.Index(entryUser, "@"); atIdx > 0 {
+			if entryDomain == "" {
+				entryDomain = entryUser[atIdx+1:]
+			}
+			entryUser = entryUser[:atIdx]
+		}
+		if slashIdx := strings.Index(entryUser, "\\"); slashIdx > 0 {
+			if entryDomain == "" {
+				entryDomain = entryUser[:slashIdx]
+			}
+			entryUser = entryUser[slashIdx+1:]
+		}
+		if entryUser == "" {
+			return false
+		}
+
+		var entries []db.CredentialEntry
+		err := s.db.Where("agent_id = ? AND domain = ? AND username = ?",
+			agentID, entryDomain, entryUser).Find(&entries).Error
+		if err != nil {
+			slog.Error("Failed to load candidate credentials", "agent_id", agentID, "error", err)
+			return false
+		}
+		// Password is encrypted at rest (BeforeCreate), so the match happens in
+		// Go against the AfterFind-decrypted value, like the spray dedup.
+		var matched *db.CredentialEntry
+		for i := range entries {
+			if entries[i].Password == cmdPassword {
+				matched = &entries[i]
+				break
+			}
+		}
+		if matched == nil {
+			// The checked credential is not (or no longer) in the vault —
+			// still log the successful validation for the audit trail.
+			slog.Info("Credential validated but not in vault",
+				"agent_id", agentID, "user", entryUser, "domain", entryDomain)
+		} else {
+			entry := *matched
+			entry.Confirmed = true
+			entry.TaskID = task.ID
+			if err := s.db.Model(&entry).Updates(map[string]interface{}{
+				"confirmed": true,
+				"task_id":   task.ID,
+				"notes":     appendCredCheckNote(entry.Notes),
+			}).Error; err != nil {
+				slog.Error("Failed to confirm credential entry", "agent_id", agentID, "error", err)
+				return false
+			}
+			confirmed = true
+			slog.Info("Credential confirmed via cred_check", "agent_id", agentID, "user", entryUser, "domain", entryDomain)
+			s.LogAuditRecord(nil, "cred_check", "credential", agentID,
+				fmt.Sprintf("credential confirmed: %s@%s", entryUser, entryDomain), true, nil)
+		}
+	}
+
+	if confirmed {
+		s.broadcastOperatorEvent(map[string]interface{}{
+			"type":     "credential_update",
+			"action":   "confirmed",
+			"agent_id": agentID,
+			"count":    1,
+		})
+	}
+	return confirmed
+}
+
+// appendCredCheckNote marks a vault entry as validated by a credential check.
+func appendCredCheckNote(notes string) string {
+	if strings.Contains(notes, "validated via credential check") {
+		return notes
+	}
+	if notes == "" {
+		return "validated via credential check"
+	}
+	return notes + "; validated via credential check"
 }
 
 // parseCredentialsFromText handles multiple output formats

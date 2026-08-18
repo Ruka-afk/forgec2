@@ -140,6 +140,7 @@ func (s *Server) registerAgentCommandRoutes(auth *gin.RouterGroup) {
 		agentCmd.POST("/execute_assembly", s.handleExecuteAssembly)
 		agentCmd.POST("/kerberoast", s.handleKerberoast)
 		agentCmd.POST("/password_spray", s.handlePasswordSpray)
+		agentCmd.POST("/cred_check", s.handleCredCheck)
 		agentCmd.POST("/mimikatz", s.handleMimikatz)
 		agentCmd.POST("/modules/deploy", s.handleModulesDeploy)
 		agentCmd.POST("/powerpick", s.handlePowerPick)
