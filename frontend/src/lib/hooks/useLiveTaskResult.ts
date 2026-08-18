@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { runTask, type TaskStatus } from "@/lib/api";
 
 export type LiveTaskStatus = "idle" | "pending" | "running" | "completed" | "failed" | "timeout";
@@ -21,19 +21,35 @@ export function useLiveTaskResult(opts: UseLiveTaskResultOptions = {}) {
   const [error, setError] = useState("");
   const [taskId, setTaskId] = useState<number | null>(null);
   const seqRef = useRef(0);
+  const cancelRef = useRef<AbortController | null>(null);
+
+  const cancel = useCallback(() => {
+    seqRef.current += 1;
+    if (cancelRef.current) {
+      cancelRef.current.abort();
+      cancelRef.current = null;
+    }
+  }, []);
+
+  // Abort any in-flight poll on unmount so the global WS listener and the
+  // 1.5s HTTP fallback poll are torn down instead of calling setState on a
+  // dead component for up to the task timeout.
+  useEffect(() => cancel, [cancel]);
 
   const reset = useCallback(() => {
-    seqRef.current += 1;
+    cancel();
     setStatus("idle");
     setResult("");
     setError("");
     setTaskId(null);
-  }, []);
+  }, [cancel]);
 
   const run = useCallback(
     async (agentId: string, path: string, body: Record<string, string>): Promise<TaskStatus | null> => {
-      seqRef.current += 1;
+      cancel();
       const seq = seqRef.current;
+      const controller = new AbortController();
+      cancelRef.current = controller;
       setStatus("pending");
       setResult("");
       setError("");
@@ -42,6 +58,7 @@ export function useLiveTaskResult(opts: UseLiveTaskResultOptions = {}) {
         const final = await runTask(agentId, path, {
           body,
           timeoutMs: opts.timeoutMs,
+          signal: controller.signal,
           onStatus: (st: TaskStatus) => {
             if (seqRef.current !== seq) return;
             setTaskId(st.id);
@@ -62,9 +79,11 @@ export function useLiveTaskResult(opts: UseLiveTaskResultOptions = {}) {
         setError(msg);
         setStatus(msg.includes("did not respond") ? "timeout" : "failed");
         return null;
+      } finally {
+        if (seqRef.current === seq) cancelRef.current = null;
       }
     },
-    [opts.timeoutMs],
+    [opts.timeoutMs, cancel],
   );
 
   return { taskId, status, result, error, run, reset, running: status === "pending" || status === "running" };

@@ -187,6 +187,25 @@ describe("api.get network layer", () => {
     const headers = init.headers as Record<string, string>;
     expect(headers["X-CSRF-Token"]).toBe("tok-csrf");
   });
+
+  it("aborts the underlying fetch on timeout", async () => {
+    let capturedSignal: AbortSignal | null = null;
+    vi.mocked(fetch).mockImplementation((_input, init) => {
+      capturedSignal = init?.signal ?? null;
+      return new Promise<Response>(() => { /* never settles */ });
+    });
+    const t0 = Date.now();
+    try {
+      await api.get<unknown>("/hang", { retries: 0, timeout: 50 });
+      expect.fail("should throw on timeout");
+    } catch (e) {
+      expect(e).toBeInstanceOf(Error);
+      expect((e as Error).message).toMatch(/timed out after/);
+    }
+    expect(Date.now() - t0).toBeLessThan(2000);
+    expect(capturedSignal).not.toBeNull();
+    expect(capturedSignal!.aborted).toBe(true);
+  });
 });
 
 describe("api.download filename parsing", () => {

@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { DEFAULT_WS_HOST, DEFAULT_WS_PORT } from "./constants";
+import { probeSessionExpiry } from "./api";
 
 export interface WSMessage {
   type: string;
@@ -42,12 +43,6 @@ interface WSContextValue {
 }
 
 const WSContext = createContext<WSContextValue | null>(null);
-
-function getCookie(name: string): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(new RegExp("(?:^|; )" + name.replace(/([$?*|{}[\]()\\^])/g, "\\$1") + "=([^;]*)"));
-  return match ? decodeURIComponent(match[1]) : null;
-}
 
 export function getWSURL(path = "/ws"): string {
   const envURL = process.env.NEXT_PUBLIC_WS_URL;
@@ -150,13 +145,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         stopHeartbeat();
         setConnected(false);
         if (disposed) return;
-        if (!getCookie("forgec2_session")) {
-          setReconnectFailed(true);
-          if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-            window.location.href = "/login";
-          }
-          return;
-        }
+        // NOTE: the session cookie is HttpOnly, so its presence can never be
+        // checked from JS. An expired session is detected via the HTTP layer
+        // (handleUnauthorized / probeSessionExpiry below) instead of redirecting
+        // on every transient disconnect.
         if (reconnectAttemptRef.current < MAX_RECONNECT_ATTEMPTS) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttemptRef.current), MAX_RECONNECT_DELAY);
           reconnectAttemptRef.current++;
@@ -168,6 +160,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           // is reachable again. The banner stays up until a connection succeeds.
           reconnectAttemptRef.current = 0;
           reconnectRef.current = setTimeout(connect, BACKGROUND_RETRY_DELAY_MS);
+          // The socket can only stay down this long when the backend is gone
+          // or the session is dead — probe once so an expired session routes
+          // the user to /login through the debounced 401 handler.
+          probeSessionExpiry();
         }
       };
       ws.onerror = () => { ws.close(); };

@@ -3,23 +3,20 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { buildUrl, api } from "@/lib/api";
+import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 
 const CHECK_INTERVAL_MS = 60_000;
 const WARN_BEFORE_MS = 5 * 60 * 1000;
 
-interface MeResponse {
-  data?: { session_exp?: number };
-}
-
 async function fetchSessionExpiry(): Promise<number | null> {
   try {
-    const res = await fetch(buildUrl(paths.auth.me), { credentials: "include" });
-    if (!res.ok) return null;
-    const body = (await res.json()) as MeResponse;
-    const exp = body?.data?.session_exp;
+    // api.get routes 401 through the shared handleUnauthorized (debounced
+    // redirect to /login), so an expired session logs the user out instead of
+    // silently dropping the warning.
+    const body = await api.get<{ session_exp?: number }>(paths.auth.me);
+    const exp = body?.session_exp;
     return typeof exp === "number" && exp > 0 ? exp : null;
   } catch {
     return null;

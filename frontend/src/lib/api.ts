@@ -33,16 +33,6 @@ export function unwrapBody<T>(body: unknown): T {
   return body as T;
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  return Promise.race([
-    promise.finally(() => clearTimeout(timer)),
-    new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`Request timed out after ${ms}ms`)), ms);
-    }),
-  ]);
-}
-
 let authRedirecting = false;
 let authRedirectTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -85,6 +75,18 @@ export function handleUnauthorized(res: Pick<Response, "status">): void {
   }, 80);
 }
 
+/**
+ * Lightweight session probe used when the WebSocket drops: reuses the
+ * debounced 401 redirect so an expired session sends the user to /login
+ * while a merely flaky network only shows the reconnect banner.
+ */
+export function probeSessionExpiry(): void {
+  if (typeof window === "undefined" || window.location.pathname === "/login") return;
+  fetch(buildUrl(paths.auth.me), { credentials: "include" })
+    .then((res) => handleUnauthorized(res))
+    .catch(() => { /* network blip: rely on the reconnect path */ });
+}
+
 interface RequestOptions {
   method?: string;
   retries?: number;
@@ -100,7 +102,7 @@ interface RequestOptions {
 }
 
 async function request<T>(path: string, options: RequestOptions & { body?: unknown; raw?: boolean } = {}): Promise<T> {
-  const { retries = 0, timeout = TIMEOUT_MS, signal, headers: extraHeaders } = options;
+  const { retries = 0, timeout = TIMEOUT_MS, signal: externalSignal, headers: extraHeaders } = options;
   const method = options.method || "GET";
   const headers: Record<string, string> = {
     "Accept": "application/json",
@@ -133,14 +135,41 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
   }
 
   const doFetch = async (attempt: number): Promise<T> => {
+    // Timeout and the caller's AbortSignal are merged into one controller per
+    // attempt. The timeout is raced against the fetch so it always rejects
+    // even when the environment does not honor abort (e.g. jsdom mocks), while
+    // aborting the controller still cancels the real request in browsers —
+    // important for mutations, where a "timed out" POST may otherwise execute
+    // server-side while the caller believes it failed and re-submits.
+    const controller = new AbortController();
+    const onExternalAbort = () => controller.abort();
+    externalSignal?.addEventListener("abort", onExternalAbort, { once: true });
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let timedOut = false;
     try {
-      const res = await withTimeout(fetch(buildUrl(path), {
+      const fetchPromise = fetch(buildUrl(path), {
         method,
         credentials: "include",
         headers,
         body,
-        signal,
-      }), timeout);
+        signal: controller.signal,
+      });
+
+      let res: Response;
+      if (timeout > 0) {
+        res = await Promise.race([
+          fetchPromise,
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => {
+              timedOut = true;
+              controller.abort();
+              reject(new Error(`Request timed out after ${timeout}ms`));
+            }, timeout);
+          }),
+        ]);
+      } else {
+        res = await fetchPromise;
+      }
 
       if (!res.ok) {
         handleUnauthorized(res);
@@ -172,19 +201,24 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
       const respBody = await res.json();
       return options.unwrap === false ? (respBody as T) : unwrapBody<T>(respBody);
     } catch (e) {
+      if (externalSignal?.aborted) throw e;
+      if (timedOut) throw e;
       if (process.env.NODE_ENV === "development") console.error("api request failed", path, e);
       if (attempt >= retries) throw e;
       return new Promise<T>((resolve) =>
         setTimeout(() => resolve(doFetch(attempt + 1)), 800 * Math.pow(2, attempt))
       );
+    } finally {
+      if (timer) clearTimeout(timer);
+      externalSignal?.removeEventListener("abort", onExternalAbort);
     }
   };
 
   return doFetch(0);
 }
 
-function parseFilenameFromDisposition(cd: string | null): string {
-  if (!cd) return "download.bin";
+function parseFilenameFromDisposition(cd: string | null, fallback = "download.bin"): string {
+  if (!cd) return fallback;
   const star = cd.match(/filename\*\s*=\s*(?:UTF-8'')?([^;]+)/i);
   if (star) {
     try {
@@ -193,26 +227,27 @@ function parseFilenameFromDisposition(cd: string | null): string {
     } catch { /* fall back to plain filename */ }
   }
   const plain = cd.match(/filename\s*=\s*"?([^";]+)"?/i);
-  return plain ? plain[1].trim() : "download.bin";
+  return plain ? plain[1].trim() : fallback;
 }
 
 export const api = {
-  get<T = Record<string, unknown>>(path: string, opts?: { retries?: number; signal?: AbortSignal; unwrap?: boolean }): Promise<T> {
-    return request<T>(path, { method: "GET", retries: opts?.retries ?? 0, signal: opts?.signal, unwrap: opts?.unwrap });
+  get<T = Record<string, unknown>>(path: string, opts?: { retries?: number; signal?: AbortSignal; unwrap?: boolean; timeout?: number }): Promise<T> {
+    return request<T>(path, { method: "GET", retries: opts?.retries ?? 0, signal: opts?.signal, unwrap: opts?.unwrap, timeout: opts?.timeout });
   },
 
-  post<T = Record<string, unknown>>(path: string, data?: Record<string, string>, opts?: { signal?: AbortSignal }): Promise<T> {
+  post<T = Record<string, unknown>>(path: string, data?: Record<string, string>, opts?: { signal?: AbortSignal; timeout?: number }): Promise<T> {
     const body = data ? new URLSearchParams(data).toString() : undefined;
     return request<T>(path, {
       method: "POST",
       headers: body ? { "Content-Type": "application/x-www-form-urlencoded" } : {},
       body,
       signal: opts?.signal,
+      timeout: opts?.timeout,
     });
   },
 
-  postJson<T = Record<string, unknown>>(path: string, body: unknown, opts?: { signal?: AbortSignal }): Promise<T> {
-    return request<T>(path, { method: "POST", body, signal: opts?.signal });
+  postJson<T = Record<string, unknown>>(path: string, body: unknown, opts?: { signal?: AbortSignal; timeout?: number }): Promise<T> {
+    return request<T>(path, { method: "POST", body, signal: opts?.signal, timeout: opts?.timeout });
   },
 
   postFormData<T = Record<string, unknown>>(path: string, body: FormData): Promise<T> {
@@ -236,7 +271,7 @@ export const api = {
     return request<T>(path, { method: "DELETE" });
   },
 
-  async download(path: string, data?: Record<string, string>): Promise<{ blob: Blob; filename: string }> {
+  async download(path: string, data?: Record<string, string>, fallbackFilename = "download.bin"): Promise<{ blob: Blob; filename: string }> {
     const body = data ? new URLSearchParams(data).toString() : undefined;
     const res = await request<Response>(path, {
       method: "POST",
@@ -244,15 +279,15 @@ export const api = {
       body,
       raw: true,
     });
-    return { blob: await res.blob(), filename: parseFilenameFromDisposition(res.headers.get("Content-Disposition")) };
+    return { blob: await res.blob(), filename: parseFilenameFromDisposition(res.headers.get("Content-Disposition"), fallbackFilename) };
   },
 
-  async downloadGet(path: string): Promise<{ blob: Blob; filename: string }> {
+  async downloadGet(path: string, fallbackFilename = "download.bin"): Promise<{ blob: Blob; filename: string }> {
     const res = await request<Response>(path, {
       method: "GET",
       raw: true,
     });
-    return { blob: await res.blob(), filename: parseFilenameFromDisposition(res.headers.get("Content-Disposition")) };
+    return { blob: await res.blob(), filename: parseFilenameFromDisposition(res.headers.get("Content-Disposition"), fallbackFilename) };
   },
 };
 
