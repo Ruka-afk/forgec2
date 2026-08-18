@@ -8,6 +8,7 @@ import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { ErrorState } from "@/components/ui/error-state";
 import Link from "next/link";
 import { CloudUpload, Download, File, Folder, FolderUp } from "lucide-react";
 import { formatSize, joinPath, parentPath, type FileEntry } from "../[id]/files/_components/types";
@@ -198,7 +199,7 @@ export function AgentDockFiles({ agentId, osType }: AgentDockFilesProps) {
             <p className="text-center text-xs text-muted-foreground">{t("agents.dock_files_waiting")}</p>
           </div>
         ) : error ? (
-          <p className="px-3 py-6 text-center text-xs text-destructive">{error}</p>
+          <ErrorState message={error} className="mx-3 my-6" />
         ) : entries.length === 0 ? (
           <p className="px-3 py-6 text-center text-xs text-muted-foreground">{t("agents.dock_files_empty")}</p>
         ) : (

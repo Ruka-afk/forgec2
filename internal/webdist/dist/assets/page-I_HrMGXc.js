@@ -1,0 +1,1 @@
+import{j as r,r as a,bI as n,bJ as c}from"./index-q0pD-DLI.js";function o(){const e=n(),s=c();return a.useEffect(()=>{const t=new URLSearchParams(s.toString());t.set("tab","tasks"),e.replace(`/timeline?${t.toString()}`)},[e,s]),null}function i(){return r.jsx(a.Suspense,{fallback:null,children:r.jsx(o,{})})}export{i as default};

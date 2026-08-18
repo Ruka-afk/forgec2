@@ -5,8 +5,10 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { onWSMessage } from "@/lib/wsContext";
 import { useI18n } from "@/lib/i18n";
+import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -50,10 +52,7 @@ export default function ActiveMissions({ className = "" }: { className?: string 
   const { t } = useI18n();
   const [now, setNow] = useState(() => Date.now());
 
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 15000);
-    return () => clearInterval(timer);
-  }, []);
+  useVisibleInterval(() => setNow(Date.now()), 15000);
 
   const { data, error, refresh: load } = useApiResource<{ missions: Mission[] }>({
     fetcher: async () => {
@@ -92,7 +91,9 @@ export default function ActiveMissions({ className = "" }: { className?: string 
         <Badge variant={active.length > 0 ? "success" : "secondary"}>{active.length}</Badge>
       </CardHeader>
       {error ? (
-        <div className="p-(--card-spacing) text-center text-muted-foreground text-sm">{error}</div>
+        <div className="p-(--card-spacing)">
+          <ErrorState title={t("common.error")} message={error} />
+        </div>
       ) : active.length === 0 ? (
         <div className="p-(--card-spacing)">
           <EmptyState icon={Target} title={t("dashboard.missions_empty")} />

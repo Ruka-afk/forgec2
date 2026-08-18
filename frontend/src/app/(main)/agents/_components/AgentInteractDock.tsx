@@ -25,6 +25,7 @@ import { shouldRefreshDockShot } from "./dock-shot";
 import { applyTaskEvent, canApproveOwnTask, canCancelTask, canReviewTask, isDockTaskEvent, shouldRevealTaskResult, taskEventId } from "./dock-tasks";
 import { diffChangeLines, diffResults, previousComparableTask, resultLooksComparable } from "./result-diff";
 import { useAppStore } from "@/lib/store";
+import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { clampDockHeight, type InteractTab } from "./interact-workspace";
 import { useInteractStore } from "@/lib/interact-store";
 
@@ -119,11 +120,11 @@ export function AgentInteractDock({
     });
   }, [id, subscribe]);
 
-  useEffect(() => {
-    if (!id || connected) return;
-    const timer = window.setInterval(() => { void loadTasks(true); }, 8000);
-    return () => window.clearInterval(timer);
-  }, [id, connected, loadTasks]);
+  // While the socket is down, poll the task list in the background (pauses
+  // when the tab is hidden; standalone fetches are gated by the guard).
+  useVisibleInterval(() => {
+    if (id && !connected) void loadTasks(true);
+  }, 8000);
 
   const reviewTask = useCallback(async (taskId: number, action: "approve" | "reject") => {
     if (!id) return;

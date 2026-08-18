@@ -16,6 +16,7 @@ import { useApiResource } from "@/lib/hooks/useApiResource";
 import { useLiveTaskResult } from "@/lib/hooks/useLiveTaskResult";
 import { Spinner } from "@/components/ui/spinner";
 import { Banner } from "@/components/ui/banner";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Shield, Play, CheckCircle2, XCircle, AlertTriangle, Lock, Database, Key } from "lucide-react";
 import { toast } from "sonner";
 
@@ -282,24 +283,24 @@ export default function PasswordSprayPage() {
 
               {lastResult.results && (
                 <div className="max-h-96 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-2">{t("spray.col_status")}</th>
-                        <th className="text-left py-2">{t("spray.col_username")}</th>
-                        <th className="text-left py-2">{t("spray.col_detail")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-left">{t("spray.col_status")}</TableHead>
+                        <TableHead className="text-left">{t("spray.col_username")}</TableHead>
+                        <TableHead className="text-left">{t("spray.col_detail")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {lastResult.results.map((r, i) => (
-                        <tr key={i} className="border-b border-border/50">
-                          <td className="py-1.5">{statusIcon(r.status)}</td>
-                          <td className="py-1.5 font-mono">{r.user}</td>
-                          <td className="py-1.5 text-muted-foreground">{r.error || r.status}</td>
-                        </tr>
+                        <TableRow key={i}>
+                          <TableCell>{statusIcon(r.status)}</TableCell>
+                          <TableCell className="font-mono">{r.user}</TableCell>
+                          <TableCell className="text-muted-foreground">{r.error || r.status}</TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               )}
 
