@@ -3714,6 +3714,7 @@ export const en: Record<string, string> = {
     "spray.col_status": "Status",
     "spray.col_username": "Username",
     "spray.config_title": "Spray Configuration",
+    "spray.creds_imported": "Valid credentials were imported into the Credential Vault automatically.",
     "spray.dc_hint": "Auto-detect",
     "spray.dc_ip": "Domain Controller",
     "spray.delay_ms": "Delay (ms)",

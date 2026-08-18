@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -178,6 +179,108 @@ func (s *Server) parseAndStoreKerberoastResults(agentID string, raw string, task
 				"stored "+strconv.Itoa(len(newEntries))+" kerberoast hashes", true, nil)
 		}
 	}
+}
+
+// parseAndStorePasswordSprayResults ingests valid password spray hits into
+// the credential vault. The spray output is JSON with per-user status; the
+// sprayed password and domain travel in the agent-side task (Command) and are
+// copied into the stored entries. Only status "valid" hits are stored (they
+// were verified by LogonUser on the agent), locked/erroneous results are
+// discarded. Returns the number of new entries stored.
+func (s *Server) parseAndStorePasswordSprayResults(agentID string, task db.Task, raw string) int {
+	if task.Command == "" || raw == "" {
+		return 0
+	}
+	cmdParts := strings.SplitN(task.Command, "|", 4)
+	if len(cmdParts) < 2 {
+		return 0
+	}
+	password := cmdParts[0]
+	domain := cmdParts[1]
+
+	var out struct {
+		Results []struct {
+			User   string `json:"user"`
+			Status string `json:"status"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(raw), &out); err != nil || len(out.Results) == 0 {
+		return 0
+	}
+
+	type credKey struct {
+		AgentID, Domain, Username, Password, Source string
+	}
+	var existing []db.CredentialEntry
+	s.db.Model(&db.CredentialEntry{}).
+		Select("domain, username, password").
+		Where("agent_id = ? AND source = ?", agentID, "password_spray").
+		Find(&existing)
+	existSet := make(map[credKey]bool, len(existing))
+	for _, k := range existing {
+		existSet[credKey{agentID, k.Domain, k.Username, k.Password, "password_spray"}] = true
+	}
+
+	var newEntries []db.CredentialEntry
+	for _, r := range out.Results {
+		if r.Status != "valid" {
+			continue
+		}
+		entryUser := strings.TrimSpace(r.User)
+		if entryUser == "" {
+			continue
+		}
+		entryDomain := domain
+		if atIdx := strings.Index(entryUser, "@"); atIdx > 0 {
+			if entryDomain == "" {
+				entryDomain = entryUser[atIdx+1:]
+			}
+			entryUser = entryUser[:atIdx]
+		}
+		if slashIdx := strings.Index(entryUser, "\\"); slashIdx > 0 {
+			if entryDomain == "" {
+				entryDomain = entryUser[:slashIdx]
+			}
+			entryUser = entryUser[slashIdx+1:]
+		}
+		if entryUser == "" {
+			continue
+		}
+		k := credKey{agentID, entryDomain, entryUser, password, "password_spray"}
+		if existSet[k] {
+			continue
+		}
+		existSet[k] = true
+		newEntries = append(newEntries, db.CredentialEntry{
+			AgentID:   agentID,
+			Domain:    entryDomain,
+			Username:  entryUser,
+			Password:  password,
+			Source:    "password_spray",
+			Type:      "cleartext",
+			Confirmed: true, // verified by LogonUser during the spray
+			Notes:     "validated via password spray",
+			TaskID:    task.ID,
+		})
+	}
+
+	if len(newEntries) == 0 {
+		return 0
+	}
+	if err := s.db.Create(&newEntries).Error; err != nil {
+		slog.Error("Failed to store password spray credentials", "agent_id", agentID, "err", err)
+		return 0
+	}
+	slog.Info("Password spray hits stored in vault", "agent_id", agentID, "count", len(newEntries))
+	s.LogAuditRecord(nil, "credential_ingest", "credential", agentID,
+		"stored "+strconv.Itoa(len(newEntries))+" password spray credentials", true, nil)
+	s.broadcastOperatorEvent(map[string]interface{}{
+		"type":     "credential_update",
+		"action":   "found",
+		"agent_id": agentID,
+		"count":    len(newEntries),
+	})
+	return len(newEntries)
 }
 
 // parseCredentialsFromText handles multiple output formats

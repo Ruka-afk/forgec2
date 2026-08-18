@@ -3714,6 +3714,7 @@ export const zh: Record<string, string> = {
     "spray.col_status": "状态",
     "spray.col_username": "用户名",
     "spray.config_title": "喷洒配置",
+    "spray.creds_imported": "有效凭据已自动导入凭证库。",
     "spray.dc_hint": "自动检测",
     "spray.dc_ip": "域控制器",
     "spray.delay_ms": "延迟 (ms)",

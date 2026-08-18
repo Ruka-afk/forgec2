@@ -15,7 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { useLiveTaskResult } from "@/lib/hooks/useLiveTaskResult";
 import { Spinner } from "@/components/ui/spinner";
-import { Shield, Play, CheckCircle2, XCircle, AlertTriangle, Lock } from "lucide-react";
+import { Banner } from "@/components/ui/banner";
+import { Shield, Play, CheckCircle2, XCircle, AlertTriangle, Lock, Database } from "lucide-react";
 import { toast } from "sonner";
 
 interface Agent {
@@ -197,6 +198,11 @@ export default function PasswordSprayPage() {
             </div>
           ) : (
             <div className="space-y-4">
+              {lastResult.summary && lastResult.summary.valid > 0 && (
+                <Banner tone="success" icon={<Database className="w-4 h-4" />}>
+                  {t("spray.creds_imported")}
+                </Banner>
+              )}
               {lastResult.raw && (
                 <pre className="max-h-96 overflow-y-auto text-xs font-mono bg-muted/50 rounded-lg p-3 whitespace-pre-wrap">
                   {lastResult.raw}
