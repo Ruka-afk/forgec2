@@ -3,15 +3,18 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { firstField, normalizeListEnvelope } from "@/lib/envelope";
+import { normalizeListEnvelope } from "@/lib/envelope";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { FieldError } from "@/components/ui/field-error";
+import { PermissionGate } from "@/components/ui/permission-gate";
 import { StatCard } from "@/components/ui/animated-stat-card";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { PageContainer } from "@/components/ui/page-container";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { usePermissions } from "@/lib/hooks/usePermissions";
 import { DataState } from "@/components/ui/data-state";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -74,7 +77,7 @@ export default function UsersPage() {
   const [revokeLoading, setRevokeLoading] = useState<string | null>(null);
   const { t } = useI18n();
 
-  const { data, loading, error, refresh } = useApiResource<{ users: User[]; customRoles: string[]; userRole: string }>({
+  const { data, loading, error, refresh } = useApiResource<{ users: User[]; customRoles: string[] }>({
     fetcher: async () => {
       const data = await api.get(paths.users.list);
       let customRoles: string[] = [];
@@ -87,7 +90,6 @@ export default function UsersPage() {
       return {
         users: normalizeListEnvelope(data, ["users", "Users", "data"]) as User[],
         customRoles,
-        userRole: String(firstField<string>(data, ["user_role", "UserRole", "CurrentUserRole"]) ?? "admin"),
       };
     },
     toastThrottleMs: 0,
@@ -95,7 +97,8 @@ export default function UsersPage() {
   });
   const users = data?.users ?? [];
   const customRoles = data?.customRoles ?? [];
-  const userRole = data?.userRole ?? "admin";
+  const { can } = usePermissions();
+  const canManageUsers = can("users.write");
 
   const loadUsers = () => {
     void refresh();
@@ -249,10 +252,15 @@ export default function UsersPage() {
   };
 
   return (
-    <PageContainer title={t("users.title")} icon={<Users className="w-4 h-4" />} subtitle={t("users.subtitle")} actions={<>
+    <PermissionGate perms={["users.read"]} fallback={
+      <PageContainer title={t("users.title")} icon={<Users className="w-4 h-4" />} subtitle={t("users.subtitle")}>
+        <ErrorState title={t("common.denied_title")} message={t("common.denied_desc")} />
+      </PageContainer>
+    }>
+      <PageContainer title={t("users.title")} icon={<Users className="w-4 h-4" />} subtitle={t("users.subtitle")} actions={<>
         <div className="flex items-center gap-2 flex-wrap">
           <SearchInput value={search} onChange={setSearch} placeholder={t("users.search_placeholder")} className="w-40 sm:w-48" label={t("common.search")} />
-          {userRole === "admin" && (
+          {canManageUsers && (
             <Button onClick={() => setShowAdd(true)}>
               <Plus className="w-4 h-4" /> {t("users.add_user")}
             </Button>
@@ -326,7 +334,7 @@ export default function UsersPage() {
               <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_active")}</TableHead>
               <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_last_activity")}</TableHead>
               <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_created_at")}</TableHead>
-              {userRole === "admin" && <TableHead className="py-3 px-4 sm:py-3.5 font-semibold text-center">{t("users.col_actions")}</TableHead>}
+              {canManageUsers && <TableHead className="py-3 px-4 sm:py-3.5 font-semibold text-center">{t("users.col_actions")}</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -355,7 +363,7 @@ export default function UsersPage() {
                   <TableCell className="py-3 px-4 sm:py-3.5 font-mono text-xs text-muted-foreground">
                     {formatTime(u.created_at)}
                   </TableCell>
-                  {userRole === "admin" && (
+                  {canManageUsers && (
                     <TableCell className="py-3 px-4 sm:py-3.5 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <Button variant="ghost" size="icon-sm" onClick={() => handleToggle(uid)} disabled={actionLoading === uid + "_toggle"} className={`${isActive ? "text-warning hover:bg-warning/10" : "text-success hover:bg-success/10"}`} title={isActive ? t("users.disable") : t("users.enable")} aria-label={isActive ? t("users.disable") : t("users.enable")}>
@@ -387,7 +395,7 @@ export default function UsersPage() {
             })}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={userRole === "admin" ? 6 : 5} className="py-20 text-center text-muted-foreground">
+                <TableCell colSpan={canManageUsers ? 6 : 5} className="py-20 text-center text-muted-foreground">
                   <EmptyState icon={UserIcon} title={t("users.empty_title")} message={t("users.empty_message")} />
                 </TableCell>
               </TableRow>
@@ -541,6 +549,7 @@ export default function UsersPage() {
       </Dialog>
       {modal}
     </PageContainer>
+    </PermissionGate>
   );
 }
 

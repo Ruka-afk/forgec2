@@ -36,11 +36,12 @@ interface AppState {
   // Online users
   onlineUsers: OnlineUser[];
   setOnlineUsers: (users: OnlineUser[]) => void;
-  currentUsername: string;
+currentUsername: string;
   setCurrentUsername: (name: string) => void;
   currentUserRole: string;
   setCurrentUserRole: (role: string) => void;
-  currentPermissions: string[];
+  /** null = not yet loaded from /api/me; UI gates fail open until known. */
+  currentPermissions: string[] | null;
   setCurrentPermissions: (perms: string[]) => void;
 
   // Command palette
@@ -76,7 +77,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   onlineUsers: [],
   currentUsername: "",
   currentUserRole: "",
-  currentPermissions: [],
+  currentPermissions: null,
 
   sidebarCollapsed: typeof window !== "undefined"
     ? localStorage.getItem("forgec2_sidebar_collapsed") === "true"

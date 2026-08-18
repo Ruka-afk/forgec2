@@ -1226,6 +1226,9 @@ export const en: Record<string, string> = {
     "common.expand": "Expand",
     "common.export_png": "Export PNG",
 
+    "common.denied_title": "Permission required",
+    "common.denied_desc": "Your role does not include the permissions needed to open this page.",
+
     "common.language": "Language",
     "common.live": "Live",
     "common.load_failed": "Failed to load",

@@ -1,0 +1,1 @@
+import{j as n,r,bG as a,bH as o}from"./index-C42oj2dz.js";function c(){const s=a(),e=o();return r.useEffect(()=>{const t=e.get("agent_id")||e.get("id");s.replace(t?`/agents/${encodeURIComponent(t)}/files`:"/agents")},[s,e]),null}function i(){return n.jsx(r.Suspense,{fallback:null,children:n.jsx(c,{})})}export{i as default};

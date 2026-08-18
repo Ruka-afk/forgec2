@@ -1,0 +1,1 @@
+import{j as s,r as n,bG as a,bH as o}from"./index-C42oj2dz.js";function i(){const t=a(),e=o();return n.useEffect(()=>{const r=new URLSearchParams(e.toString());r.set("tab","alerts"),t.replace(`/timeline?${r.toString()}`)},[t,e]),null}function u(){return s.jsx(n.Suspense,{fallback:null,children:s.jsx(i,{})})}export{u as default};

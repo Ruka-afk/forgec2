@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { NAV_SECTIONS } from "@/lib/navigation";
+import { NAV_SECTIONS, filterNavByPermissions } from "@/lib/navigation";
 import { useI18n } from "@/lib/i18n";
 import { useAppStore } from "@/lib/store";
 import { useAgentList } from "@/lib/hooks/useAgentList";
@@ -30,6 +30,7 @@ export default function CommandPalette() {
   const router = useRouter();
   const open = useAppStore((s) => s.commandPaletteOpen);
   const setOpen = useAppStore((s) => s.setCommandPaletteOpen);
+  const permissions = useAppStore((s) => s.currentPermissions);
   const { agents } = useAgentList();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -39,7 +40,7 @@ export default function CommandPalette() {
   const items: PaletteItem[] = useMemo(() => {
     const out: PaletteItem[] = [];
     for (const section of NAV_SECTIONS) {
-      for (const item of section.items) {
+      for (const item of filterNavByPermissions(section.items, permissions)) {
         out.push({
           href: item.href,
           label: t(item.labelKey),
@@ -49,7 +50,7 @@ export default function CommandPalette() {
       }
     }
     return out;
-  }, [t]);
+  }, [t, permissions]);
 
   const agentItems: PaletteItem[] = useMemo(() => {
     const q = normalize(query.trim());

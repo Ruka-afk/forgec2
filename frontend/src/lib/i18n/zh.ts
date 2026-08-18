@@ -1226,6 +1226,9 @@ export const zh: Record<string, string> = {
     "common.expand": "展开",
     "common.export_png": "导出 PNG",
 
+    "common.denied_title": "需要权限",
+    "common.denied_desc": "您的角色不具备打开此页面所需的权限。",
+
     "common.language": "语言",
     "common.live": "实时",
     "common.load_failed": "加载失败",

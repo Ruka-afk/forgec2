@@ -5,7 +5,9 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { PageSpinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { PageContainer } from "@/components/ui/page-container";
+import { PermissionGate } from "@/components/ui/permission-gate";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { toast } from "sonner";
@@ -110,7 +112,11 @@ export default function RolesPage() {
   if (loading) return <PageContainer title={t("roles.title")} icon={<ShieldUser className="w-4 h-4" />} subtitle={t("roles.subtitle")}><PageSpinner /></PageContainer>;
 
   return (
-    <>
+    <PermissionGate perms={["roles.read"]} fallback={
+      <PageContainer title={t("roles.title")} icon={<ShieldUser className="w-4 h-4" />} subtitle={t("roles.subtitle")}>
+        <ErrorState title={t("common.denied_title")} message={t("common.denied_desc")} />
+      </PageContainer>
+    }>
       <PageContainer title={t("roles.title")} icon={<ShieldUser className="w-4 h-4" />} subtitle={t("roles.subtitle")} actions={<>
           <Button onClick={() => setShowCreate(true)}>
             <Plus className="w-4 h-4" />{t("roles.new_role")}
@@ -185,7 +191,7 @@ export default function RolesPage() {
         </div>
       </PageContainer>
       {modal}
-    </>
+    </PermissionGate>
   );
 }
 

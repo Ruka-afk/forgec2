@@ -20,7 +20,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { StatusDot } from "@/components/ui/status-dot";
 import { ConnectionDot } from "@/components/ui/connection-dot";
 import { Shield, ChevronDown } from "lucide-react";
-import { sidebarNavSections } from "@/lib/navigation";
+import { sidebarNavSections, filterNavByPermissions } from "@/lib/navigation";
 import {
   defaultSidebarSections as defaultSections,
   mergeSidebarSections,
@@ -87,7 +87,7 @@ const SidebarLogo = memo(function SidebarLogo({
   );
 });
 
-const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection, pathname, stats, t, searchQuery }: {
+const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection, pathname, stats, t, searchQuery, permissions }: {
   collapsed: boolean;
   sections: Record<string, boolean>;
   toggleSection: (key: string) => void;
@@ -95,6 +95,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
   stats: DashboardStats | null;
   t: (key: string, params?: Record<string, string | number>) => string;
   searchQuery: string;
+  permissions: readonly string[] | null | undefined;
 }) {
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -107,11 +108,14 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
   const filteredSections = searching
     ? sidebarNavSections().map((section) => ({
         ...section,
-        items: section.items.filter((item) =>
+        items: filterNavByPermissions(section.items, permissions).filter((item) =>
           t(item.labelKey).toLowerCase().includes(query)
         ),
       })).filter((section) => section.items.length > 0)
-    : sidebarNavSections();
+    : sidebarNavSections().map((section) => ({
+        ...section,
+        items: filterNavByPermissions(section.items, permissions),
+      })).filter((section) => section.items.length > 0);
 
   return (
     <nav className={collapsed ? 'flex flex-col items-center gap-1' : 'space-y-0 text-(--fs-body-sm)'}>
@@ -244,6 +248,7 @@ export default function Sidebar() {
   const setCurrentUsername = useAppStore((s) => s.setCurrentUsername);
   const setCurrentUserRole = useAppStore((s) => s.setCurrentUserRole);
   const setCurrentPermissions = useAppStore((s) => s.setCurrentPermissions);
+  const permissions = useAppStore((s) => s.currentPermissions);
 
   useEffect(() => { Promise.resolve().then(() => setSections(getSavedSections())); }, []);
 
@@ -322,6 +327,7 @@ export default function Sidebar() {
             stats={stats}
             t={t}
             searchQuery={searchQuery}
+            permissions={permissions}
           />
         </ScrollArea>
       </div>
