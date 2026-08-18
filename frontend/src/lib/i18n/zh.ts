@@ -3743,6 +3743,8 @@ export const zh: Record<string, string> = {
     "spray.usernames_placeholder": "user1\nuser2\nsvc_sql\n...",
     "spray.users_counted": "个用户",
     "spray.valid": "有效",
+    "spray.vault_empty": "保险库暂无明文密码可选",
+    "spray.vault_pick": "从保险库选取",
     "spray.waiting_result": "任务已排队 — 查看任务输出获取结果",
     "workflows.toast.updated": "工作流已更新",
 };

@@ -1,7 +1,7 @@
 "use client";
 
 import { PageContainer } from "@/components/ui/page-container";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
@@ -16,7 +16,7 @@ import { useApiResource } from "@/lib/hooks/useApiResource";
 import { useLiveTaskResult } from "@/lib/hooks/useLiveTaskResult";
 import { Spinner } from "@/components/ui/spinner";
 import { Banner } from "@/components/ui/banner";
-import { Shield, Play, CheckCircle2, XCircle, AlertTriangle, Lock, Database } from "lucide-react";
+import { Shield, Play, CheckCircle2, XCircle, AlertTriangle, Lock, Database, Key } from "lucide-react";
 import { toast } from "sonner";
 
 interface Agent {
@@ -59,6 +59,8 @@ export default function PasswordSprayPage() {
   const { t } = useI18n();
   const [selectedAgent, setSelectedAgent] = useState("");
   const [password, setPassword] = useState("");
+  const [pickedVault, setPickedVault] = useState("");
+  const [vaultPasswords, setVaultPasswords] = useState<{ id: number; label: string; password: string; domain: string }[]>([]);
   const [domain, setDomain] = useState("");
   const [dc, setDc] = useState("");
   const [delayMs, setDelayMs] = useState("500");
@@ -70,6 +72,29 @@ export default function PasswordSprayPage() {
     raw?: string;
   } | null>(null);
   const live = useLiveTaskResult({ timeoutMs: 600_000 });
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .get<{ vault_entries: { id: number; domain: string; username: string; password: string }[] }>(paths.credentials.list())
+      .then((d) => {
+        if (!alive) return;
+        const seen = new Set<string>();
+        const opts: { id: number; label: string; password: string; domain: string }[] = [];
+        for (const e of d.vault_entries ?? []) {
+          if (!e.password || /^\?+$/.test(e.password)) continue;
+          const key = `${e.domain || ""}\\${e.username || ""}:${e.password}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          opts.push({ id: e.id, label: `${e.domain ? `${e.domain}\\` : ""}${e.username || ""}`, password: e.password, domain: e.domain });
+        }
+        setVaultPasswords(opts.slice(0, 50));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const { data } = useApiResource<{ agents: Agent[] }>({
     fetcher: async () => {
@@ -158,6 +183,36 @@ export default function PasswordSprayPage() {
               <Label>{t("spray.dc_ip")}</Label>
               <Input value={dc} onChange={(e) => setDc(e.target.value)} placeholder={t("spray.dc_hint")} />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5">
+              <Key className="w-3.5 h-3.5" />
+              {t("spray.vault_pick")}
+            </Label>
+            <Select
+              value={pickedVault}
+              onValueChange={(v) => {
+                const opt = vaultPasswords.find((o) => String(o.id) === v);
+                if (!opt) return;
+                setPickedVault(v ?? "");
+                setPassword(opt.password);
+                if (!domain && opt.domain) setDomain(opt.domain.split(".")[0].toUpperCase());
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t("spray.vault_pick")} />
+              </SelectTrigger>
+              <SelectContent>
+                {vaultPasswords.length === 0 ? (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">{t("spray.vault_empty")}</div>
+                ) : (
+                  vaultPasswords.map((o) => (
+                    <SelectItem key={o.id} value={String(o.id)}>{o.label}</SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

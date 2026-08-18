@@ -3743,6 +3743,8 @@ export const en: Record<string, string> = {
     "spray.usernames_placeholder": "user1\nuser2\nsvc_sql\n...",
     "spray.users_counted": "users",
     "spray.valid": "Valid",
+    "spray.vault_empty": "No cleartext passwords in the vault",
+    "spray.vault_pick": "Pick from vault",
     "spray.waiting_result": "Task queued — check the task output for results",
     "workflows.toast.updated": "Workflow updated",
 };
