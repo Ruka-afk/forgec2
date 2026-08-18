@@ -240,7 +240,8 @@ const (
 	TaskTypeDCSyncMachine    = "dcsync_machine"
 
 	// Process list alias (implant handlePS; not a live tree viewer)
-	TaskTypeProcessTree = "process_tree"
+	TaskTypeProcessTree       = "process_tree"
+	TaskTypePasswordSpray     = "password_spray"
 )
 
 // AllTaskTypes returns every defined task type constant in a deduplicated slice.
@@ -448,6 +449,9 @@ func AllTaskTypes() []string {
 
 		// Process list alias
 		TaskTypeProcessTree,
+
+		// Password Spray
+		TaskTypePasswordSpray,
 	}
 }
 

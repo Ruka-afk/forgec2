@@ -73,6 +73,7 @@ func (r *TaskHandlerRegistry) registerBuiltinHandlers() {
 	r.Register("portscan", &defaultTaskHandler{}, 0, "Port scan")
 	r.Register("hashdump", &credentialDumpHandler{}, 0, "Credential dump")
 	r.Register("kerberoast", &credentialDumpHandler{}, 0, "Kerberoast")
+	r.Register("password_spray", &credentialDumpHandler{}, 0, "Password Spray")
 	r.Register("execute_assembly", &injectionHandler{}, 0, "Execute .NET assembly")
 	r.Register("bof", &injectionHandler{}, 0, "Execute BOF")
 	r.Register("spawn", &injectionHandler{}, 0, "Spawn process")

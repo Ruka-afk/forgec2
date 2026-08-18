@@ -67,6 +67,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { href: "/scanner", labelKey: "nav.scanner", icon: SatelliteDish, sidebar: false },
       { href: "/scripting", labelKey: "nav.scripting", icon: Code, sidebar: false },
       { href: "/toolkit", labelKey: "nav.toolkit", icon: Wrench, sidebar: false },
+      { href: "/password-spray", labelKey: "nav.password_spray", icon: Shield, sidebar: false },
     ],
   },
   {

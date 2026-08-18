@@ -260,5 +260,8 @@ func init() {
 		// Audio / Webcam Collection (P2)
 		"webcam": handleWebcam,
 		"mic":    handleMic,
+
+		// Password Spray
+		"password_spray": handlePasswordSpray,
 	}
 }
