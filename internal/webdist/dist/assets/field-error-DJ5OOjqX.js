@@ -1,0 +1,1 @@
+import{j as s,f as o}from"./index-D2nrxydv.js";function a({id:r,children:t,className:e}){return t?s.jsx("p",{id:r,role:"alert",className:o("text-xs text-destructive mt-1",e),children:t}):null}export{a as F};

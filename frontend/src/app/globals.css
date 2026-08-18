@@ -467,6 +467,12 @@ body {
   --color-avatar-6-fg: var(--avatar-6-fg);
   --color-avatar-7-fg: var(--avatar-7-fg);
   --color-avatar-8-fg: var(--avatar-8-fg);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
   --z-scroll-to-top: 70;
   --z-skip-link: 100;
   --tracking-wide: 0.08em;
