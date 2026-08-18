@@ -117,8 +117,59 @@ func parseCredentialSource(raw string) string {
 	}
 }
 
-// parseAndStoreKerberoastResults parses kerberoast TGS hash output (SPN:HASH)
-// and stores entries in the credential vault.
+// splitKerberoastLine splits one kerberoast output line into
+// (user, domain, spn, hash). Two formats are accepted:
+//   - legacy "SPN:HASH" from older implants (user/domain derived from the SPN),
+//   - hashcat-mode lines "$krb5tgs$23$*user$realm$spn*$checksum$edata2" emitted
+//     by the agent's DER converter; the account segment carries user, realm and
+//     spn verbatim and the full line is kept as the stored hash so it can be
+//     dropped straight into hashcat -m 13100 (or 19600 for etype 18).
+func splitKerberoastLine(line string) (user string, domain string, spn string, hash string, ok bool) {
+	if strings.HasPrefix(line, "$krb5tgs$") {
+		// "$krb5tgs$23$*user$realm$spn*$checksum$edata2" — the account segment
+		// is delimited by the leading "$*" and the trailing "*$".
+		acctStart := strings.Index(line, "$*")
+		if acctStart < 0 {
+			return "", "", "", "", false
+		}
+		acctBody := line[acctStart+2:]
+		acctEnd := strings.Index(acctBody, "*$")
+		if acctEnd < 0 {
+			return "", "", "", "", false
+		}
+		ap := strings.Split(acctBody[:acctEnd], "$")
+		if len(ap) != 3 || ap[0] == "" || ap[1] == "" || ap[2] == "" {
+			return "", "", "", "", false
+		}
+		payload := acctBody[acctEnd+2:]
+		sep := strings.Index(payload, "$")
+		if sep != 32 || len(payload) <= sep+1 {
+			return "", "", "", "", false
+		}
+		return ap[0], ap[1], ap[2], line, true
+	}
+	parts := strings.SplitN(line, ":", 2)
+	if len(parts) != 2 {
+		return "", "", "", "", false
+	}
+	spn = strings.TrimSpace(parts[0])
+	hash = strings.TrimSpace(parts[1])
+	if spn == "" || hash == "" {
+		return "", "", "", "", false
+	}
+	user = spn
+	if atIdx := strings.Index(spn, "@"); atIdx > 0 {
+		user = spn[:atIdx]
+		domain = spn[atIdx+1:]
+	} else if slashIdx := strings.Index(spn, "/"); slashIdx > 0 {
+		user = spn[slashIdx+1:]
+		domain = spn[:slashIdx]
+	}
+	return user, domain, spn, hash, true
+}
+
+// parseAndStoreKerberoastResults parses kerberoast TGS hash output (SPN:HASH
+// or hashcat-mode lines) and stores entries in the credential vault.
 func (s *Server) parseAndStoreKerberoastResults(agentID string, raw string, taskID uint) {
 	database := s.db
 	lines := strings.Split(raw, "\n")
@@ -144,23 +195,9 @@ func (s *Server) parseAndStoreKerberoastResults(agentID string, raw string, task
 		if line == "" {
 			continue
 		}
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) != 2 {
+		user, domain, spn, hash, ok := splitKerberoastLine(line)
+		if !ok {
 			continue
-		}
-		spn := strings.TrimSpace(parts[0])
-		hash := strings.TrimSpace(parts[1])
-		if spn == "" || hash == "" {
-			continue
-		}
-		user := spn
-		domain := ""
-		if atIdx := strings.Index(spn, "@"); atIdx > 0 {
-			user = spn[:atIdx]
-			domain = spn[atIdx+1:]
-		} else if slashIdx := strings.Index(spn, "/"); slashIdx > 0 {
-			user = spn[slashIdx+1:]
-			domain = spn[:slashIdx]
 		}
 		k := credKey{AgentID: agentID, Domain: domain, Username: user, Hash: hash, Source: "kerberoast"}
 		if existSet[k] {

