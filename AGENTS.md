@@ -9,7 +9,7 @@ go build ./... ; go vet ./internal/... ./pkg/... ./cmd/... ; go test ./internal/
 # Frontend verification (inside frontend/):
 npm run build             # Next.js static export -> frontend/out
 npm run gen:openapi       # regenerate src/lib/api-schema.d.ts after api/openapi.yaml changes
-npm run check             # css + i18n(en/zh) + api-paths + openapi-types + webdist gates
+npm run check             # css + i18n(en/zh) + api-paths + openapi-types + webdist + bundle gates
 npx tsc --noEmit          # type check (noUnusedLocals is OFF: unused imports are NOT flagged — remove them by hand)
 npm test                  # vitest unit tests
 
