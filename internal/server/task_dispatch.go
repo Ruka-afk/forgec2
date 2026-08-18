@@ -177,6 +177,13 @@ func (s *Server) failStaleAcknowledgedTasks() {
 		slog.Error("Failed to fail stale acknowledged tasks", "count", len(taskIDs), "error", err)
 		return
 	}
+	for i := range staleTasks {
+		t := staleTasks[i]
+		t.Status = "failed"
+		t.Error = "task acknowledged but no result received within timeout"
+		t.Result = ""
+		s.broadcastTaskUpdate(t.AgentID, t)
+	}
 	slog.Info("Failed stale acknowledged tasks with no result", "count", len(staleTasks))
 }
 

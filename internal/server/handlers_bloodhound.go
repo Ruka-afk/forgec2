@@ -12,6 +12,7 @@ import (
 	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 	"github.com/forgec2/forgec2/internal/util"
+	"github.com/forgec2/forgec2/pkg/protocol"
 )
 
 const bloodHoundDir = "data/bloodhound"
@@ -58,12 +59,12 @@ func (s *Server) handleBloodHoundCollect(c *gin.Context) {
 		req.Method = "Default"
 	}
 
-	task, err := s.createTask(req.AgentID, "bloodhound", req.Method, "", "", "", 0, 0)
+	task, err := s.createTask(req.AgentID, protocol.TaskTypeSharpHound, req.Method, "", "", "", 0, 0)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Create task"))
 		return
 	}
-	s.dispatchTask(c, task, "bloodhound", "dispatched "+req.Method+" collection")
+	s.dispatchTask(c, task, protocol.TaskTypeSharpHound, "dispatched "+req.Method+" collection")
 }
 
 // handleBloodHoundDownload serves the collected ZIP for a result.

@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { useLiveTaskResult } from "@/lib/hooks/useLiveTaskResult";
+import { Spinner } from "@/components/ui/spinner";
 import { Shield, Play, CheckCircle2, XCircle, AlertTriangle, Lock } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,6 +25,35 @@ interface Agent {
   os: string;
 }
 
+interface SpraySummary {
+  total: number;
+  valid: number;
+  invalid: number;
+  locked: number;
+  errors: number;
+}
+
+interface SprayResultRow {
+  user: string;
+  status: string;
+  error?: string;
+}
+
+interface SprayOutput {
+  summary: SpraySummary;
+  results: SprayResultRow[];
+}
+
+function parseSprayOutput(raw: string): SprayOutput | null {
+  try {
+    const data = JSON.parse(raw) as SprayOutput;
+    if (!data || !Array.isArray(data.results)) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 export default function PasswordSprayPage() {
   const { t } = useI18n();
   const [selectedAgent, setSelectedAgent] = useState("");
@@ -31,12 +62,13 @@ export default function PasswordSprayPage() {
   const [dc, setDc] = useState("");
   const [delayMs, setDelayMs] = useState("500");
   const [usernames, setUsernames] = useState("");
-  const [sending, setSending] = useState(false);
   const [lastResult, setLastResult] = useState<{
     task_id: number;
-    summary?: { total: number; valid: number; invalid: number; locked: number; errors: number };
-    results?: Array<{ user: string; status: string; error?: string }>;
+    summary?: SpraySummary;
+    results?: SprayResultRow[];
+    raw?: string;
   } | null>(null);
+  const live = useLiveTaskResult({ timeoutMs: 600_000 });
 
   const { data } = useApiResource<{ agents: Agent[] }>({
     fetcher: async () => {
@@ -51,27 +83,33 @@ export default function PasswordSprayPage() {
   const onlineAgents = agents.filter((a) => a.status === "online");
 
   const usernameList = usernames.split("\n").filter((u) => u.trim());
-  const canSubmit = selectedAgent && password && domain && usernameList.length > 0 && !sending;
+  const running = live.running;
+  const canSubmit = selectedAgent && password && domain && usernameList.length > 0 && !running;
 
   async function handleSpray() {
     if (!canSubmit) return;
-    setSending(true);
     setLastResult(null);
-    try {
-      const res = await api.post(paths.agents.cmd(selectedAgent, "password_spray"), {
-        password,
-        domain,
-        dc,
-        delay_ms: delayMs,
-        usernames: usernames.trim(),
-      });
-      const taskId = (res as Record<string, unknown>).task_id;
-      toast.success(t("spray.task_sent"));
-      setLastResult({ task_id: taskId as number });
-    } catch (e) {
-      toast.error(t("spray.send_failed") + ": " + (e instanceof Error ? e.message : String(e)));
-    } finally {
-      setSending(false);
+    toast.success(t("spray.task_sent"));
+    const final = await live.run(selectedAgent, paths.agents.cmd(selectedAgent, "password_spray"), {
+      password,
+      domain,
+      dc,
+      delay_ms: delayMs,
+      usernames: usernames.trim(),
+    });
+    if (!final) {
+      toast.error(t("spray.send_failed") + ": " + live.error);
+      return;
+    }
+    if (final.status === "completed") {
+      const parsed = parseSprayOutput(final.result);
+      if (parsed) {
+        setLastResult({ task_id: final.id, summary: parsed.summary, results: parsed.results });
+      } else {
+        setLastResult({ task_id: final.id, raw: final.result });
+      }
+    } else {
+      toast.error(t("spray.send_failed") + ": " + (final.error || live.error));
     }
   }
 
@@ -145,7 +183,7 @@ export default function PasswordSprayPage() {
 
           <Button onClick={handleSpray} disabled={!canSubmit} variant="gradient" className="w-full">
             <Play className="w-4 h-4" />
-            {sending ? t("spray.sending") : t("spray.execute")}
+            {running ? t("spray.sending") : t("spray.execute")}
           </Button>
         </Card>
 
@@ -153,11 +191,17 @@ export default function PasswordSprayPage() {
           <h3 className="text-lg font-semibold">{t("spray.results_title")}</h3>
 
           {!lastResult ? (
-            <div className="flex items-center justify-center h-64 text-muted-foreground">
-              {t("spray.no_results")}
+            <div className="flex items-center justify-center gap-3 h-64 text-muted-foreground">
+              {running && <Spinner className="w-5 h-5" />}
+              {running ? t("spray.waiting_result") : t("spray.no_results")}
             </div>
           ) : (
             <div className="space-y-4">
+              {lastResult.raw && (
+                <pre className="max-h-96 overflow-y-auto text-xs font-mono bg-muted/50 rounded-lg p-3 whitespace-pre-wrap">
+                  {lastResult.raw}
+                </pre>
+              )}
               {lastResult.summary && (
                 <div className="grid grid-cols-5 gap-2">
                   {[
@@ -198,7 +242,7 @@ export default function PasswordSprayPage() {
                 </div>
               )}
 
-              {!lastResult.summary && lastResult.task_id && (
+              {!lastResult.summary && !lastResult.raw && lastResult.task_id && (
                 <div className="flex items-center justify-center h-32 text-muted-foreground">
                   {t("spray.waiting_result")}
                 </div>
