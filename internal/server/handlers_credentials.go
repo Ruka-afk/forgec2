@@ -42,6 +42,93 @@ func initCredRegexps() {
 	})
 }
 
+// splitASREPRoastLine parses one agent asreproast line
+// ("$krb5asrep$<etype>$<user>@<realm>:<cipherhex>") into user and realm. The
+// agent requests RC4-only tickets (etype 23), so the stored line is directly
+// hashcat -m 18200 crackable; any other valid etype is kept as an artifact.
+func splitASREPRoastLine(line string) (user string, realm string, ok bool) {
+	if !strings.HasPrefix(line, "$krb5asrep$") {
+		return "", "", false
+	}
+	rest := line[len("$krb5asrep$"):]
+	etypeEnd := strings.Index(rest, "$")
+	if etypeEnd <= 0 {
+		return "", "", false
+	}
+	for _, c := range rest[:etypeEnd] {
+		if c < '0' || c > '9' {
+			return "", "", false
+		}
+	}
+	acct := rest[etypeEnd+1:]
+	at := strings.Index(acct, "@")
+	colon := strings.LastIndex(acct, ":")
+	if at <= 0 || colon <= at+1 {
+		return "", "", false
+	}
+	if len(acct[colon+1:]) < 16 {
+		return "", "", false
+	}
+	return acct[:at], acct[at+1 : colon], true
+}
+
+// parseAndStoreASREPRoastResults ingests agent asreproast output into the
+// credential vault. The agent emits one hashcat -m 18200 line per Roastable
+// account; failure notes ("[!] ...") and foreign lines are skipped. The stored
+// hash is the full line so operators can paste it straight into hashcat.
+func (s *Server) parseAndStoreASREPRoastResults(agentID string, raw string, taskID uint) {
+	database := s.db
+	lines := strings.Split(raw, "\n")
+	type credKey struct {
+		AgentID, Domain, Username, Hash, Source string
+	}
+	var existing []db.CredentialEntry
+	database.Model(&db.CredentialEntry{}).
+		Select("agent_id, domain, username, hash").
+		Where("agent_id = ? AND source = 'asreproast'", agentID).
+		Find(&existing)
+	existSet := make(map[credKey]bool, len(existing))
+	for _, k := range existing {
+		existSet[credKey{AgentID: agentID, Domain: k.Domain, Username: k.Username, Hash: k.Hash, Source: "asreproast"}] = true
+	}
+
+	var newEntries []db.CredentialEntry
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "[!]") {
+			continue
+		}
+		user, realm, ok := splitASREPRoastLine(line)
+		if !ok {
+			continue
+		}
+		k := credKey{AgentID: agentID, Domain: realm, Username: user, Hash: line, Source: "asreproast"}
+		if existSet[k] {
+			continue
+		}
+		existSet[k] = true
+		newEntries = append(newEntries, db.CredentialEntry{
+			AgentID: agentID, Domain: realm, Username: user, Hash: line,
+			Source: "asreproast", Type: "krb_asrep", Notes: "AS-REP: " + user + "@" + realm, TaskID: taskID,
+		})
+	}
+	if len(newEntries) > 0 {
+		if err := database.Create(&newEntries).Error; err != nil {
+			slog.Error("Failed to store asreproast hashes", "agent_id", agentID, "err", err)
+		} else {
+			slog.Info("AS-REP roast hashes stored in vault", "agent_id", agentID, "count", len(newEntries))
+			s.LogAuditRecord(nil, "credential_ingest", "credential", agentID,
+				"stored "+strconv.Itoa(len(newEntries))+" asreproast hashes", true, nil)
+			s.broadcastOperatorEvent(map[string]interface{}{
+				"type":     "credential_update",
+				"action":   "found",
+				"agent_id": agentID,
+				"count":    len(newEntries),
+			})
+		}
+	}
+}
+
 // parseAndStoreCredentials parses common credential dump formats (mimikatz-style)
 // and stores extracted entries in the credential vault.
 func (s *Server) parseAndStoreCredentials(agentID string, raw string, taskID uint) {

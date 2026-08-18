@@ -1345,6 +1345,19 @@ func (s *Server) processTaskResults(agent db.Implant, results []taskResult, uuid
 			})
 		}
 
+		// Auto-parse asreproast hashes into the credential vault
+		if r.Type == "asreproast" && task.Status == "completed" && task.Result != "" {
+			s.parseAndStoreASREPRoastResults(uuid, task.Result, task.ID)
+			s.eventManager.Emit(Event{
+				Type:      EventCredentialFound,
+				AgentID:   uuid,
+				AgentHost: agent.Hostname,
+				AgentIP:   agent.IP,
+				Timestamp: now,
+				Data:      map[string]interface{}{"source": "asreproast"},
+			})
+		}
+
 		// Auto-ingest valid password spray hits into the credential vault
 		if r.Type == "password_spray" && task.Status == "completed" && task.Result != "" {
 			if stored := s.parseAndStorePasswordSprayResults(uuid, *task, task.Result); stored > 0 {

@@ -125,7 +125,8 @@ func (am *AdaptiveManager) ShouldBlockAction(agentID string, action string) bool
 		// critical, no further credential harvesting is allowed.
 		blockList := map[string]bool{
 			"mimikatz": true, "dcsync": true, "kerberoast": true,
-			"shinject": true, "creds": true, "password_spray": true,
+			"asreproast": true, "shinject": true, "creds": true,
+			"password_spray": true,
 		}
 		if blockList[action] {
 			slog.Warn("Blocked high-risk action due to critical threat level",

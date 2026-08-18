@@ -19,7 +19,7 @@ export interface CredentialData {
   AllTags: string[];
 }
 
-export const CRED_TYPES = ["all", "password", "hash", "token", "key", "ntlm", "kerberos", "cleartext"];
+export const CRED_TYPES = ["all", "password", "hash", "token", "key", "ntlm", "kerberos", "krb_tgs", "krb_asrep", "cleartext"];
 
 export const TYPE_BADGE_VARIANT: Record<string, "success" | "warning" | "outline"> = {
   cleartext: "success",
@@ -29,6 +29,8 @@ export const TYPE_BADGE_VARIANT: Record<string, "success" | "warning" | "outline
   token: "outline",
   key: "outline",
   kerberos: "outline",
+  krb_tgs: "warning",
+  krb_asrep: "warning",
   sha1: "warning",
 };
 
