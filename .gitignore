@@ -50,8 +50,9 @@ dist/
 !internal/webdist/webdist.go
 !internal/webdist/dist/
 
-# Next.js
+# Next.js (legacy — replaced by Vite; entries kept for stale tooling)
 .next/
+.next-build-output.txt
 node_modules/
 
 # Docker

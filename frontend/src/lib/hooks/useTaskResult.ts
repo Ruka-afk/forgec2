@@ -93,9 +93,9 @@ export function useTaskResult(agentId: string, pollMs = 2000, maxAttempts = 45) 
         // keep polling until timeout
       } finally {
         inFlight.current = false;
-        if (seqRef.current !== seq) return;
-        if (document.hidden) return;
-        timer.current = setTimeout(tick, pollMs);
+        if (seqRef.current === seq && !document.hidden) {
+          timer.current = setTimeout(tick, pollMs);
+        }
       }
     };
 

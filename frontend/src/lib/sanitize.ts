@@ -18,7 +18,7 @@ export function esc(s: string): string {
     .replace(/\//g, "&#x2F;");
 }
 
-const SAFE_URI_REGEXP = /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i;
+const SAFE_URI_REGEXP = /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i;
 
 export async function sanitizeHtml(html: string): Promise<string> {
   const DOMPurify = await getDOMPurify();
