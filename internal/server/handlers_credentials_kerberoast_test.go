@@ -122,6 +122,56 @@ func TestKerberoastIngestHashcatLines(t *testing.T) {
 	}
 }
 
+// TestKerberoastIngestAESHashcatLines verifies the 5-field AES forms
+// "$krb5tgs$17$user$realm$checksum$edata2" / "$krb5tgs$18$…" (hashcat 19600 /
+// 19700) land in the vault with user/realm from the line, the full line kept
+// as the crackable hash, and that field-shape violations are dropped.
+func TestKerberoastIngestAESHashcatLines(t *testing.T) {
+	s := newCredentialsTestServer(t)
+
+	line18 := "$krb5tgs$18$svc_aes$CORP.LOCAL$aabbccddeeff001122334455$00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff0011"
+	raw := line18 + "\n" +
+		"$krb5tgs$17$svc_aes128$CORP.LOCAL$feedcafe0000111122223333$ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100ffeeddccbbaa9988776655443322110099\n" +
+		"$krb5tgs$18$bad_checksum$CORP.LOCAL$aabbccddeeff0011223344$00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff0011\n" +
+		"$krb5tgs$18$short_edata$CORP.LOCAL$aabbccddeeff001122334455$aabb\n" +
+		"$krb5tgs$18$nothex$CORP.LOCAL$aabbccddeeff001122334455$zz0112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabb\n" +
+		"$krb5tgs$18$$CORP.LOCAL$aabbccddeeff001122334455$00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff0011\n" +
+		"$krb5tgs$18$extra$field$CORP.LOCAL$aabbccddeeff001122334455$00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff0011\n" +
+		"\n"
+	s.parseAndStoreKerberoastResults("cred-agent-krb-aes", raw, 45)
+
+	var entries []db.CredentialEntry
+	if err := s.db.Where("agent_id = ? AND source = ?", "cred-agent-krb-aes", "kerberoast").Order("id").Find(&entries).Error; err != nil {
+		t.Fatalf("query entries: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 vault entries, got %d", len(entries))
+	}
+
+	e0 := entries[0]
+	if e0.Username != "svc_aes" || e0.Domain != "CORP.LOCAL" {
+		t.Fatalf("AES account parse wrong: user=%q domain=%q", e0.Username, e0.Domain)
+	}
+	if e0.Hash != line18 {
+		t.Fatalf("full 19700 line not preserved: %q", e0.Hash)
+	}
+	if e0.Type != "krb_tgs" || e0.Source != "kerberoast" || e0.TaskID != 45 {
+		t.Fatalf("entry metadata wrong: %+v", e0)
+	}
+
+	e1 := entries[1]
+	if e1.Username != "svc_aes128" || e1.Domain != "CORP.LOCAL" {
+		t.Fatalf("etype-17 account parse wrong: %+v", e1)
+	}
+
+	s.parseAndStoreKerberoastResults("cred-agent-krb-aes", raw, 45)
+	var count int64
+	s.db.Model(&db.CredentialEntry{}).Where("agent_id = ? AND source = ?", "cred-agent-krb-aes", "kerberoast").Count(&count)
+	if count != 2 {
+		t.Fatalf("expected 2 entries after re-run, got %d", count)
+	}
+}
+
 // TestKerberoastIngestSkipsMalformed verifies garbage lines and empty SPN/hash
 // fragments are dropped without side effects.
 func TestKerberoastIngestSkipsMalformed(t *testing.T) {

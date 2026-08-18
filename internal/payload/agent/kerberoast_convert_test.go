@@ -145,18 +145,51 @@ func TestConvertKerberoastLineSPNEGOWrapped(t *testing.T) {
 	}
 }
 
-func TestConvertKerberoastLineNonRC4FallsBackToLegacy(t *testing.T) {
+func TestConvertKerberoastLineAESToHashcat(t *testing.T) {
+	cipher := make([]byte, 80)
+	for i := range cipher {
+		cipher[i] = byte(i)
+	}
+	apreq := fixtureAPREQ(fixtureTicket(18, cipher))
+	line := convertKerberoastLine("svc_http@CORP.LOCAL\t" + hex.EncodeToString(apreq))
+	// hashcat 19700: "$krb5tgs$18$user$realm$<24-hex checksum>$<edata2>" where
+	// the checksum is the LAST 12 ciphertext bytes (HMAC-SHA1-96 truncated).
+	want := "$krb5tgs$18$svc_http$CORP.LOCAL$" +
+		hex.EncodeToString(cipher[len(cipher)-12:]) + "$" + hex.EncodeToString(cipher[:len(cipher)-12])
+	if line != want {
+		t.Fatalf("etype-18 convert mismatch:\n got: %s\nwant: %s", line, want)
+	}
+	rest := line[len("$krb5tgs$18$"):]
+	fields := strings.Split(rest, "$")
+	if len(fields) != 4 || fields[0] != "svc_http" || fields[1] != "CORP.LOCAL" {
+		t.Fatalf("19700 fields wrong: %v", fields)
+	}
+	if len(fields[2]) != 24 {
+		t.Fatalf("checksum must be 12 bytes (24 hex), got %d hex chars", len(fields[2]))
+	}
+	if len(fields[3]) < 128 {
+		t.Fatalf("edata2 too short: %d", len(fields[3]))
+	}
+	// A cipher too short to hold checksum+payload degrades to legacy UPN:hex.
+	short := fixtureAPREQ(fixtureTicket(18, make([]byte, 16)))
+	line2 := convertKerberoastLine("svc_http@CORP.LOCAL\t" + hex.EncodeToString(short))
+	if !strings.HasPrefix(line2, "svc_http@CORP.LOCAL:") {
+		t.Fatalf("short AES cipher must degrade to legacy, got %q", line2)
+	}
+}
+
+func TestConvertKerberoastLineUnknownEtypeFallsBackToLegacy(t *testing.T) {
 	cipher := make([]byte, 56)
 	for i := range cipher {
 		cipher[i] = byte(i)
 	}
-	// etype 18 (AES256): not 13100-crackable → keep "UPN:hex" so the ingest
-	// still records the artifact instead of dropping it.
-	apreq := fixtureAPREQ(fixtureTicket(18, cipher))
+	// etype 24 (a future/unknown type): not crackable → keep "UPN:hex" so the
+	// ingest still records the artifact instead of dropping it.
+	apreq := fixtureAPREQ(fixtureTicket(24, cipher))
 	hexBlob := hex.EncodeToString(apreq)
 	line := convertKerberoastLine("svc_http@CORP.LOCAL\t" + hexBlob)
 	if line != "svc_http@CORP.LOCAL:"+hexBlob {
-		t.Fatalf("etype-18 must degrade to legacy UPN:hex, got %q", line)
+		t.Fatalf("unknown etype must degrade to legacy UPN:hex, got %q", line)
 	}
 }
 

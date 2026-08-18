@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -205,13 +206,37 @@ func parseCredentialSource(raw string) string {
 }
 
 // splitKerberoastLine splits one kerberoast output line into
-// (user, domain, spn, hash). Two formats are accepted:
+// (user, domain, spn, hash). Three formats are accepted:
 //   - legacy "SPN:HASH" from older implants (user/domain derived from the SPN),
 //   - hashcat-mode lines "$krb5tgs$23$*user$realm$spn*$checksum$edata2" emitted
 //     by the agent's DER converter; the account segment carries user, realm and
-//     spn verbatim and the full line is kept as the stored hash so it can be
-//     dropped straight into hashcat -m 13100 (or 19600 for etype 18).
+//     spn verbatim,
+//   - AES lines "$krb5tgs$17$user$realm$checksum$edata2" / "$krb5tgs$18$…"
+//     (hashcat 19600/19700) where the UPN-derived user/realm are the fields and
+//     there is no SPN segment.
+//
+// The full hashcat line is always kept as the stored hash so it can be dropped
+// straight into hashcat -m 13100 / 19600 / 19700.
 func splitKerberoastLine(line string) (user string, domain string, spn string, hash string, ok bool) {
+	if strings.HasPrefix(line, "$krb5tgs$17$") || strings.HasPrefix(line, "$krb5tgs$18$") {
+		// "$krb5tgs$18$user$realm$checksum$edata2" — four $-delimited fields.
+		fields := strings.Split(line[len("$krb5tgs$18$"):], "$")
+		if len(fields) != 4 || fields[0] == "" || fields[1] == "" {
+			return "", "", "", "", false
+		}
+		checksum, edata2 := fields[2], fields[3]
+		hexBytes, err := hex.DecodeString(checksum)
+		if err != nil || len(hexBytes) != 12 {
+			return "", "", "", "", false
+		}
+		if len(edata2) < 64 {
+			return "", "", "", "", false
+		}
+		if _, err := hex.DecodeString(edata2); err != nil {
+			return "", "", "", "", false
+		}
+		return fields[0], fields[1], fields[0], line, true
+	}
 	if strings.HasPrefix(line, "$krb5tgs$") {
 		// "$krb5tgs$23$*user$realm$spn*$checksum$edata2" — the account segment
 		// is delimited by the leading "$*" and the trailing "*$".
