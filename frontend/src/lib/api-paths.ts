@@ -198,6 +198,8 @@ export const paths = {
     profiles: "/api/generate/profiles",
     profileImport: "/api/generate/profile/import",
     profileDelete: (name: string) => `/api/generate/profile/${encodeURIComponent(name)}`,
+    buildStatus: (id: string | number) => `/generate/builds/${id}`,
+    buildDownload: (id: string | number) => `/generate/builds/${id}/download`,
   },
   automation: {
     rules: "/api/automation/rules",
@@ -251,6 +253,7 @@ export const paths = {
     upload: "/bloodhound/upload",
     collect: "/bloodhound/collect",
     one: (id: string | number) => `/bloodhound/${id}`,
+    download: (id: string | number) => `/bloodhound/${id}/download`,
   },
   chrome: {
     agents: "/api/chrome/agents",

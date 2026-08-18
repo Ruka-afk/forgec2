@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { API_BASE } from "@/lib/constants";
-import { api, getCsrfToken } from "@/lib/api";
+import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { downloadFromResponse } from "@/lib/download";
+import { downloadBlob } from "@/lib/download";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { useAgentList } from "@/lib/hooks/useAgentList";
@@ -116,9 +115,8 @@ export default function BloodHoundPage() {
 
   const handleDownload = async (id: number) => {
     try {
-      const res = await fetch(`${API_BASE}/bloodhound/${id}/download`, { credentials: "include", headers: { "X-CSRF-Token": getCsrfToken() } });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      await downloadFromResponse(res, `bloodhound-${id}.zip`);
+      const { blob, filename } = await api.downloadGet(paths.bloodhound.download(id), `bloodhound-${id}.zip`);
+      downloadBlob(blob, filename);
     } catch { toast.error(t("bloodhound.toast.download_report_failed")); }
   };
 

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { api, getCsrfToken, buildUrl } from "@/lib/api";
+import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
-import { downloadFromResponse } from "@/lib/download";
+import { downloadBlob } from "@/lib/download";
 import { useI18n } from "@/lib/i18n";
 import { Pagination } from "@/components/ui/pagination";
 import { Spinner } from "@/components/ui/spinner";
@@ -150,9 +150,8 @@ export default function PluginsPage() {
 
   const handleExport = async (pluginId: string) => {
     try {
-      const res = await fetch(buildUrl(paths.plugins.export(pluginId)), { credentials: "include", headers: { "Accept": "application/octet-stream", "X-CSRF-Token": getCsrfToken() } });
-      if (!res.ok) throw new Error("Export failed");
-      await downloadFromResponse(res, `plugin_${pluginId}.json`);
+      const { blob, filename } = await api.downloadGet(paths.plugins.export(pluginId), `plugin_${pluginId}.json`);
+      downloadBlob(blob, filename);
       toast.success(t("plugins.toast.exported"));
     } catch { toast.error(t("plugins.toast.export_failed")); }
   };

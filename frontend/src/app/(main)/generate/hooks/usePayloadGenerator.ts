@@ -3,11 +3,11 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { API_BASE } from "@/lib/constants";
-import { api, getCsrfToken } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useWS } from "@/lib/wsContext";
 import { extractProfilePresets, normalizeListeners } from "@/lib/generate-load";
-import { downloadFromResponse } from "@/lib/download";
+import { downloadFromResponse, downloadBlob } from "@/lib/download";
+import { api, getCsrfToken, handleUnauthorized } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import {
   Listener, ProfilePreset, SharedState, PayloadForms, PayloadStates, PayloadExtras,
@@ -209,9 +209,7 @@ export function usePayloadGenerator() {
         if (settled) return;
         if (connectedRef.current) { fallback = setTimeout(poll, 2000); return; }
         try {
-          const pollRes = await fetch(`${API_BASE}/generate/builds/${buildId}`, { credentials: "include", headers: { "Accept": "application/json" }, signal });
-          if (!pollRes.ok) { fallback = setTimeout(poll, 2000); return; }
-          const pollData = await pollRes.json();
+          const pollData = await api.get<{ status?: string; error?: string }>(paths.generate.buildStatus(buildId), { signal });
           if (pollData.status === "completed") finish({ status: "completed" });
           else if (pollData.status === "failed") finish({ status: "failed", error: pollData.error });
           else fallback = setTimeout(poll, 2000);
@@ -257,6 +255,7 @@ export function usePayloadGenerator() {
       // 1) Start the build (or synchronous request)
       const res = await fetch(`${API_BASE}/generate${endpoint}`, { method: "POST", body: formData, headers: { "X-CSRF-Token": getCsrfToken() }, credentials: "include" });
       if (!res.ok) {
+        handleUnauthorized(res);
         const ct = res.headers.get("content-type") || "";
         if (ct.includes("application/json")) {
           try { const j = await res.json(); return { error: j.error || JSON.stringify(j) }; } catch { /* fallthrough */ }
@@ -291,9 +290,8 @@ export function usePayloadGenerator() {
       if (outcome.status === "timeout") return { error: "Build timed out after 10 minutes" };
 
       // 3) Download the result
-      const dlRes = await fetch(`${API_BASE}/generate/builds/${buildId}/download`, { credentials: "include" });
-      if (!dlRes.ok) return { error: `Download failed (${dlRes.status})` };
-      await downloadFromResponse(dlRes, formName);
+      const { blob, filename } = await api.downloadGet(paths.generate.buildDownload(buildId), formName);
+      downloadBlob(blob, filename);
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -422,6 +420,7 @@ export function usePayloadGenerator() {
           toast.success(t("generate.toast.donut_generated"));
           setStates((s) => ({ ...s, donut: { busy: false, result: "" } }));
         } else {
+          handleUnauthorized(res);
           const text = await res.text();
           setStates((s) => ({ ...s, donut: { busy: false, result: text } }));
         }
