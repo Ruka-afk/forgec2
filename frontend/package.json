@@ -14,7 +14,9 @@
     "check:webdist": "node ../scripts/check-webdist.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:paths": "node scripts/check-api-paths.mjs",
-    "check": "npm run check:css && npm run check:i18n && npm run check:paths && npm run check:webdist"
+    "check:openapi-types": "node scripts/check-openapi-types.mjs",
+    "gen:openapi": "openapi-typescript ../api/openapi.yaml -o src/lib/api-schema.d.ts",
+    "check": "npm run check:css && npm run check:i18n && npm run check:paths && npm run check:openapi-types && npm run check:webdist"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -46,6 +48,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "jsdom": "^25.0.0",
+    "openapi-typescript": "^7.13.0",
     "postcss": "^8.5.19",
     "shadcn": "^4.13.0",
     "tailwindcss": "^4.3.2",

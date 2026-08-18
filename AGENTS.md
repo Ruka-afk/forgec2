@@ -8,7 +8,8 @@ go build ./... ; go vet ./internal/... ./pkg/... ./cmd/... ; go test ./internal/
 
 # Frontend verification (inside frontend/):
 npm run build             # Next.js static export -> frontend/out
-npm run check             # css + i18n(en/zh) + api-paths + webdist gates
+npm run gen:openapi       # regenerate src/lib/api-schema.d.ts after api/openapi.yaml changes
+npm run check             # css + i18n(en/zh) + api-paths + openapi-types + webdist gates
 npx tsc --noEmit          # type check (noUnusedLocals is OFF: unused imports are NOT flagged — remove them by hand)
 npm test                  # vitest unit tests
 
@@ -60,6 +61,7 @@ powershell -File scripts\build-embedded.ps1
 6. **Login CSRF**: Login page does NOT require CSRF (public route). CSRF is enforced only on authenticated routes.
 7. **Frontend embed sync**: `check:webdist` compares `frontend/out` to the embedded `internal/webdist/dist`. After editing frontend source, run `powershell -File scripts/build-embedded.ps1` (builds + copies to webdist + builds Go). Plain `npm run build` leaves `check:webdist` failing because the embed is stale.
 8. **tsc unused imports**: `noUnusedLocals` is not enabled, so dead imports pass `tsc` silently. Before deleting an exported helper, grep the whole `src` tree and drop now-unused imports by hand.
+9. **OpenAPI contract types**: `frontend/src/lib/api-schema.d.ts` is GENERATED from `api/openapi.yaml` via `npm run gen:openapi` (openapi-typescript) and is compile-time only — unlike the removed Zod `lib/api-schemas.ts`, it adds zero runtime bytes. Never hand-edit it; `check:openapi-types` (part of `npm run check`) fails if it drifts from the spec. After any spec edit, run `npm run gen:openapi` from `frontend/`. Contract-backed fetchers/DTO aliases live in `src/lib/typed-api.ts` — reuse it instead of hand-typing `api.get<{...}>` inline.
 
 ## i18n Policy
 

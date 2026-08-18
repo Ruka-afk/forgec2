@@ -1,8 +1,7 @@
 "use client";
 
-import { api } from "@/lib/api";
 import { normalizeAgentList } from "@/lib/agents";
-import { paths } from "@/lib/api-paths";
+import { fetchAgentsPage } from "@/lib/typed-api";
 import { useCachedData } from "@/lib/hooks/useCachedData";
 import type { Agent } from "@/types/agent";
 
@@ -15,8 +14,8 @@ import type { Agent } from "@/types/agent";
 export function useAgentList() {
   const { data, loading, error, refresh } = useCachedData<Agent[]>("agents:list", {
     fetcher: async () => {
-      const data = await api.get(paths.agents.list());
-      return normalizeAgentList(data);
+      const { agents } = await fetchAgentsPage();
+      return normalizeAgentList(agents);
     },
     ttlMs: 60_000,
   });
