@@ -779,8 +779,10 @@ func (s *Server) handleLateral(c *gin.Context) {
 		respondError(c, http.StatusInternalServerError, "failed to create task")
 		return
 	}
-	slog.Info("Lateral movement requested", "agent_id", id, "spec", spec)
-	s.dispatchTask(c, task, "lateral", spec)
+	// Never log/audit the raw spec: it can embed domain passwords, PTH
+	// hashes and pivots. Only a redacted summary may reach either sink.
+	slog.Info("Lateral movement requested", "agent_id", id, "summary", lateralAuditSummary(spec))
+	s.dispatchTask(c, task, "lateral", lateralAuditSummary(spec))
 }
 
 func (s *Server) handleSocks(c *gin.Context) {

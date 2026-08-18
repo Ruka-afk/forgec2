@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/forgec2/forgec2/internal/db"
@@ -126,26 +127,49 @@ func (s *Server) handleProcessLateralResult(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
+type lateralSpec struct {
+	Source     string `json:"source"`
+	Target     string `json:"target"`
+	Method     string `json:"method"`
+	Credential string `json:"credential,omitempty"`
+	Username   string `json:"username,omitempty"`
+	Password   string `json:"password,omitempty"`
+	Command    string `json:"command,omitempty"`
+	Hash       string `json:"hash,omitempty"`
+	KeyPath    string `json:"key_path,omitempty"`
+	Port       string `json:"port,omitempty"`
+	Share      string `json:"share,omitempty"`
+	Namespace  string `json:"namespace,omitempty"`
+	Pivot      string `json:"pivot,omitempty"`
+}
+
+// lateralAuditSummary renders a redacted summary of a lateral-movement spec
+// for logs and the tamper-evident audit chain. Credential material
+// (password/hash/credential/key_path/pivot) is never written to either sink;
+// unparsable specs degrade to a byte count.
+func lateralAuditSummary(spec string) string {
+	if strings.TrimSpace(spec) == "" {
+		return "lateral movement"
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(spec), &m); err != nil {
+		return fmt.Sprintf("lateral movement (spec %d bytes)", len(spec))
+	}
+	method, _ := m["method"].(string)
+	target, _ := m["target"].(string)
+	user, _ := m["username"].(string)
+	if method == "" {
+		method = "unknown"
+	}
+	return fmt.Sprintf("lateral movement: method=%s target=%s username=%s", method, target, user)
+}
+
 // handleAPILateralExecute dispatches a lateral movement task via JSON API
 func (s *Server) handleAPILateralExecute(c *gin.Context) {
 	if !s.requireOperator(c) {
 		return
 	}
-	var req struct {
-		Source     string `json:"source"`
-		Target     string `json:"target"`
-		Method     string `json:"method"`
-		Credential string `json:"credential,omitempty"`
-		Username   string `json:"username,omitempty"`
-		Password   string `json:"password,omitempty"`
-		Command    string `json:"command,omitempty"`
-		Hash       string `json:"hash,omitempty"`
-		KeyPath    string `json:"key_path,omitempty"`
-		Port       string `json:"port,omitempty"`
-		Share      string `json:"share,omitempty"`
-		Namespace  string `json:"namespace,omitempty"`
-		Pivot      string `json:"pivot,omitempty"`
-	}
+	var req lateralSpec
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid request")
 		return
@@ -165,6 +189,7 @@ func (s *Server) handleAPILateralExecute(c *gin.Context) {
 		return
 	}
 	slog.Info("Lateral movement via JSON API", "agent_id", req.Source, "target", req.Target, "method", req.Method)
+	s.LogAuditRecord(c, "lateral", "agent", req.Source, lateralAuditSummary(string(spec)), true, nil)
 	s.broadcastTaskUpdate(req.Source, *task)
 	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID})
 }
