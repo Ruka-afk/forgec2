@@ -1,0 +1,191 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useWebSocket } from "@/lib/useWebSocket";
+import { useI18n } from "@/lib/i18n";
+import { api } from "@/lib/api";
+import { paths } from "@/lib/api-paths";
+import { nowTime } from "@/lib/utils";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Bell, BellOff } from "lucide-react";
+
+interface Notification {
+  id: number;
+  type: "info" | "warning" | "error" | "success";
+  message: string;
+  time: string;
+  read: boolean;
+}
+
+let notifSeq = 1;
+
+function formatNotifTime(raw: string): string {
+  const d = new Date(raw);
+  if (raw && !isNaN(d.getTime())) return d.toLocaleString();
+  return raw || new Date().toLocaleTimeString();
+}
+
+export function NotificationDropdown() {
+  const { t } = useI18n();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  const loadNotifications = useCallback(() => {
+    api.get(paths.notifications.list("page=1&pageSize=20"))
+      .then((data) => {
+        const list = (data.notifications || data.data || []) as Array<Record<string, unknown>>;
+        const mapped: Notification[] = list.slice(0, 20).map((n) => ({
+          id: Number(n.id) || 0,
+          type: (["info", "warning", "error", "success"].includes(String(n.severity || n.type || "info"))
+            ? String(n.severity || n.type || "info")
+            : "info") as Notification["type"],
+          message: String(n.message || n.title || ""),
+          time: formatNotifTime(String(n.created_at || "")),
+          read: Boolean(n.read),
+        }));
+        setNotifications(mapped);
+      })
+      .catch(() => { /* silent */ });
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
+
+  const pushNotification = useCallback((type: Notification["type"], message: string) => {
+    const id = notifSeq++;
+    setNotifications((prev) => [
+      { id, type, message, time: nowTime(), read: false },
+      ...prev.slice(0, 49),
+    ]);
+  }, []);
+
+  // Coalesce bursty task_update WS events into a single notification per
+  // status/task-type within a 4s window, so a large task batch does not flood
+  // the dropdown with dozens of entries.
+  const taskPendingRef = useRef<Map<string, { status: string; taskType: string; cmd: string; count: number }>>(new Map());
+  const taskFlushRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushTaskNotifications = useCallback(() => {
+    taskFlushRef.current = null;
+    const pending = taskPendingRef.current;
+    taskPendingRef.current = new Map();
+    for (const item of pending.values()) {
+      if (item.status === "completed") {
+        pushNotification(
+          "success",
+          item.count === 1
+            ? t("topbar.notif.task_done", { type: item.taskType, cmd: item.cmd })
+            : t("topbar.notif.task_done_multi", { count: item.count }),
+        );
+      } else {
+        pushNotification(
+          "error",
+          item.count === 1
+            ? t("topbar.notif.task_failed", { type: item.taskType, cmd: item.cmd })
+            : t("topbar.notif.task_failed_multi", { count: item.count }),
+        );
+      }
+    }
+  }, [pushNotification, t]);
+
+  const queueTaskNotification = useCallback((status: string, taskType: string, cmd: string) => {
+    const key = `${status}:${taskType}`;
+    const existing = taskPendingRef.current.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      taskPendingRef.current.set(key, { status, taskType, cmd, count: 1 });
+    }
+    if (!taskFlushRef.current) {
+      taskFlushRef.current = setTimeout(flushTaskNotifications, 4000);
+    }
+  }, [flushTaskNotifications]);
+
+  useEffect(() => () => {
+    if (taskFlushRef.current) clearTimeout(taskFlushRef.current);
+  }, []);
+
+  const handleWSMessage = useCallback((msg: { type: string; [key: string]: unknown }) => {
+    const name = String(msg.hostname || msg.agent_id || "").slice(0, 32);
+    if (msg.type === "agent_online") pushNotification("success", t("topbar.notif.agent_online", { name }));
+    else if (msg.type === "agent_offline") pushNotification("warning", t("topbar.notif.agent_offline", { name }));
+    else if (msg.type === "task_update") {
+      const status = String(msg.status || "");
+      const type = String(msg.task_type || "");
+      const cmd = String(msg.command || "").slice(0, 40);
+      if (status === "completed" || status === "failed") queueTaskNotification(status, type, cmd);
+    } else if (msg.type === "credential_found") pushNotification("success", t("topbar.notif.credential_found"));
+    else if (msg.type === "system_alert") pushNotification("warning", String(msg.message || msg.title || t("topbar.notif.system_alert")));
+    else if (msg.type === "update_available") pushNotification("info", t("topbar.notif.update_available", { version: String(msg.latest || "") }));
+  }, [pushNotification, queueTaskNotification, t]);
+
+  useWebSocket(handleWSMessage);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  const markAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    api.put(paths.notifications.readAll).catch(() => { /* silent */ });
+  };
+
+  const typeColors: Record<string, string> = {
+    success: "bg-success",
+    warning: "bg-warning",
+    error: "bg-destructive",
+    info: "bg-info",
+  };
+
+  return (
+    <DropdownMenu onOpenChange={(next) => { if (next) loadNotifications(); }}>
+      <DropdownMenuTrigger render={
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon" className="relative" aria-label={t("topbar.notifications")} />}>
+            <Bell className="w-5 h-5 text-muted-foreground" />
+            {unreadCount > 0 && (
+              <Badge variant="destructive" className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-0.5 text-(--fs-micro) font-bold rounded-full flex items-center justify-center animate-scale-in">
+                {unreadCount > 99 ? "99+" : String(unreadCount)}
+              </Badge>
+            )}
+          </TooltipTrigger>
+          <TooltipContent>{t("topbar.notifications")}</TooltipContent>
+        </Tooltip>
+      }>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <div className="px-3 py-2 border-b border-border text-sm font-medium">
+          <div className="flex items-center justify-between">
+            <span>{t("topbar.notifications")}</span>
+            {unreadCount > 0 && (
+              <Button variant="ghost" size="xs" onClick={markAllRead} className="text-(--fs-micro-sm) text-primary hover:text-primary/80">
+                {t("topbar.mark_all_read")}
+              </Button>
+            )}
+          </div>
+        </div>
+        <ScrollArea className="max-h-64">
+          {notifications.length === 0 ? (
+            <div className="p-6 text-center text-muted-foreground/70 text-sm">
+              <BellOff className="w-6 h-6 mx-auto mb-2" />
+              {t("topbar.no_notifications")}
+            </div>
+          ) : (
+            notifications.map((n) => (
+              <div key={n.id} className={`px-4 py-3 border-b border-border last:border-0 ${!n.read ? "bg-primary/5" : ""}`}>
+                <div className="flex items-start gap-2">
+                  <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${typeColors[n.type] || typeColors.info}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-foreground truncate">{n.message}</p>
+                    <p className="text-(--fs-micro-sm) text-muted-foreground/70 mt-0.5">{n.time}</p>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </ScrollArea>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

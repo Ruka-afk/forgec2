@@ -22,6 +22,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Award, CheckCircle, CircleAlert, Code, Copy, Download, FileUp, FileDown, Globe, Info, Mail, Pencil, Plug, Plus, Rocket, Save, Server, Share2, ShieldCheck, Terminal, Trash2, WandSparkles } from "lucide-react";
 import { DataState } from "@/components/ui/data-state";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useInfrastructureData } from "./_components/useInfrastructureData";
 import { useInfrastructureDialogs } from "./_components/useInfrastructureDialogs";
 import { useInfrastructureConfigForm } from "./_components/useInfrastructureConfigForm";
@@ -72,7 +73,7 @@ export default function InfrastructurePage() {
   return (
     <PageContainer title={t("infra.title")} icon={<Server className="w-4 h-4" />} subtitle={t("infra.subtitle")}>
 
-      <DataState loading={loading} error={error} onRetry={() => { loadListeners(); if (activeSection === "redirectors") loadRedirectors(); }}>
+      <DataState loading={loading} error={error} onRetry={() => { loadListeners(); if (activeSection === "redirectors") loadRedirectors(); }} loadingSkeleton={<PageSkeleton />}>
       <Tabs value={activeSection} onValueChange={setActiveSection}>
         <TabsList className="flex w-full justify-start rounded-none border-b border-border bg-transparent p-0 h-auto">
           {sections.map(s => (

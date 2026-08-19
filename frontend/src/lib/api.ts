@@ -8,6 +8,9 @@ const TIMEOUT_MS = 30000;
 
 let rateLimitRetryAfter = 0;
 
+// In-flight GET dedup cache (see request()). Deleted on settle.
+const getDedupCache = new Map<string, Promise<unknown>>();
+
 export function getRateLimitRetryAfter(): number {
   return Math.max(0, rateLimitRetryAfter - Math.floor(Date.now() / 1000));
 }
@@ -108,6 +111,24 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
     "Accept": "application/json",
     ...extraHeaders,
   };
+
+  // Coalesce concurrent identical GETs (no signal = caller is not cancelling):
+  // e.g. two components mounting at once hitting the same endpoint share one
+  // network request instead of firing two. Cleared on settle, so sequential
+  // polls are never cached.
+  const isGet = method === "GET";
+  if (isGet && !externalSignal) {
+    const key = `GET ${path} ${options.unwrap === false ? "raw" : "unwrap"}`;
+    const inflight = getDedupCache.get(key);
+    if (inflight) return inflight as Promise<T>;
+    const promise = doRequest();
+    getDedupCache.set(key, promise);
+    promise.finally(() => getDedupCache.delete(key)).catch(() => { /* handled by caller */ });
+    return promise as Promise<T>;
+  }
+  return doRequest();
+
+  async function doRequest(): Promise<T> {
 
   const isMutation = method !== "GET" && method !== "HEAD";
   const csrf = isMutation ? readCsrfCookie() : "";
@@ -215,6 +236,7 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
   };
 
   return doFetch(0);
+  }
 }
 
 function parseFilenameFromDisposition(cd: string | null, fallback = "download.bin"): string {

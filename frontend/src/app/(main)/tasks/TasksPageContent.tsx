@@ -20,6 +20,7 @@ import { firstArray, firstNumber } from "@/lib/envelope";
 import { formatTime } from "@/lib/utils";
 import { useVirtualWindow } from "@/lib/hooks/useVirtualWindow";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { POLL } from "@/lib/polling";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useWS } from "@/lib/wsContext";
 import { Card } from "@/components/ui/card";
@@ -143,7 +144,7 @@ function TasksPage({ embedded = false }: { embedded?: boolean }) {
     };
   }, [subscribe]);
 
-  useVisibleInterval(pollTasks, 30000);
+  useVisibleInterval(pollTasks, POLL.tasks);
 
   const handleExportCSV = () => {
     const headers = ["Time", "Agent", "Type", "Command", "Status", "Result", "Duration"];

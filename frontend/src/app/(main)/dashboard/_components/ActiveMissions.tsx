@@ -6,6 +6,7 @@ import { paths } from "@/lib/api-paths";
 import { onWSMessage } from "@/lib/wsContext";
 import { useI18n } from "@/lib/i18n";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { POLL } from "@/lib/polling";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -52,7 +53,7 @@ export default function ActiveMissions({ className = "" }: { className?: string 
   const { t } = useI18n();
   const [now, setNow] = useState(() => Date.now());
 
-  useVisibleInterval(() => setNow(Date.now()), 15000);
+  useVisibleInterval(() => setNow(Date.now()), POLL.clockTick);
 
   const { data, error, refresh: load } = useApiResource<{ missions: Mission[] }>({
     fetcher: async () => {

@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadText, downloadJSON } from "@/lib/download";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { POLL } from "@/lib/polling";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { Spinner } from "@/components/ui/spinner";
@@ -125,7 +126,7 @@ export default function ScannerPage() {
   }, [portMode]);
 
   const hasActiveScan = data?.active_scans && data.active_scans.some(s => (s.status) === "running");
-  useVisibleInterval(loadData, hasActiveScan ? 3000 : 0);
+  useVisibleInterval(loadData, hasActiveScan ? POLL.scanActive : 0);
 
   const handleStartScan = async () => {
     if (!selectedAgent || !targetAddr) return;

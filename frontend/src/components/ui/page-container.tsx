@@ -23,6 +23,8 @@ interface PageContainerProps {
   /** Extra classes on the inner content region. */
   contentClassName?: string;
   loading?: boolean;
+  /** Custom loading placeholder (e.g. <PageSkeleton/>); defaults to a centered spinner. */
+  loadingSkeleton?: ReactNode;
   error?: string | null;
   empty?: boolean;
   emptyIcon?: ComponentType<{ className?: string }>;
@@ -48,6 +50,7 @@ export function PageContainer({
   embedded = false,
   contentClassName,
   loading = false,
+  loadingSkeleton,
   error = null,
   empty = false,
   emptyIcon,
@@ -64,7 +67,7 @@ export function PageContainer({
         </PageHeader>
       )}
       {loading ? (
-        <PageSpinner />
+        loadingSkeleton ?? <PageSpinner />
       ) : error ? (
         <DataError message={error} onRetry={onRetry} />
       ) : empty ? (

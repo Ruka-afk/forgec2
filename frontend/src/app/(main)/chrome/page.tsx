@@ -8,6 +8,7 @@ import { useI18n } from "@/lib/i18n";
 import { Banner } from "@/components/ui/banner";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { DataState } from "@/components/ui/data-state";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { timeAgo } from "@/lib/utils";
@@ -115,7 +116,7 @@ export default function ChromeC2Page() {
       </Card>
       
 
-      <DataState loading={loading} error={error} onRetry={fetchAgents}>
+      <DataState loading={loading} error={error} onRetry={fetchAgents} loadingSkeleton={<PageSkeleton rows={4} />}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Agent List */}
           <div className="lg:col-span-2">

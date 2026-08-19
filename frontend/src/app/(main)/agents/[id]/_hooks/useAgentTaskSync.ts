@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useWS } from "@/lib/wsContext";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { POLL } from "@/lib/polling";
 import type { AgentDetailResponse, TaskEntry } from "../_components/agent-detail-utils";
 
 interface TaskUpdateFrame {
@@ -17,8 +18,6 @@ interface TaskUpdateFrame {
   error?: string;
   data?: Record<string, unknown>;
 }
-
-const CORRECTION_INTERVAL_MS = 30_000;
 
 /**
  * Reconciles the periodic full-detail refresh with live WS events so busy
@@ -59,7 +58,7 @@ export function useAgentTaskSync(
   // Periodic correction: incremental merges can drift from server truth
   // (cancel/rerun/queueing outside this session), so re-sync on a timer —
   // paused while the tab is hidden (catch-up tick on return).
-  useVisibleInterval(() => reloadThrottled(), online ? CORRECTION_INTERVAL_MS : 0);
+  useVisibleInterval(() => reloadThrottled(), online ? POLL.taskCorrection : 0);
 }
 
 /** Pure merge of one task_update frame into a detail snapshot. */

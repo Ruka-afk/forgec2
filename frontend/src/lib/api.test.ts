@@ -206,6 +206,48 @@ describe("api.get network layer", () => {
     expect(capturedSignal).not.toBeNull();
     expect(capturedSignal!.aborted).toBe(true);
   });
+
+  it("deduplicates concurrent identical GET requests", async () => {
+    let resolveFirst: (r: Response) => void = () => {};
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => { resolveFirst = resolve; }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const p1 = api.get("/agents");
+    const p2 = api.get("/agents");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    resolveFirst(new Response(JSON.stringify({ success: true, data: { agents: [] } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    const [r1, r2] = await Promise.all([p1, p2]);
+    expect(r1).toEqual({ agents: [] });
+    expect(r2).toEqual({ agents: [] });
+
+    // Cache clears after settle: a later request fires a fresh fetch.
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { agents: ["x"] } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    await api.get("/agents");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not dedup GETs with a caller-supplied signal", async () => {
+    vi.mocked(fetch).mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ success: true, data: {} }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })),
+    );
+    const ac = new AbortController();
+    const p1 = api.get("/agents", { signal: ac.signal });
+    const p2 = api.get("/agents", { signal: ac.signal });
+    await Promise.all([p1, p2]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("api.download filename parsing", () => {

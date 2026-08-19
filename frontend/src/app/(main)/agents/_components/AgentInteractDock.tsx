@@ -26,6 +26,7 @@ import { applyTaskEvent, canApproveOwnTask, canCancelTask, canReviewTask, isDock
 import { diffChangeLines, diffResults, previousComparableTask, resultLooksComparable } from "./result-diff";
 import { useAppStore } from "@/lib/store";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { POLL } from "@/lib/polling";
 import { clampDockHeight, type InteractTab } from "./interact-workspace";
 import { useInteractStore } from "@/lib/interact-store";
 
@@ -124,7 +125,7 @@ export function AgentInteractDock({
   // when the tab is hidden; standalone fetches are gated by the guard).
   useVisibleInterval(() => {
     if (id && !connected) void loadTasks(true);
-  }, 8000);
+  }, POLL.wsDownPoll);
 
   const reviewTask = useCallback(async (taskId: number, action: "approve" | "reject") => {
     if (!id) return;

@@ -10,6 +10,7 @@ import { useAppStore, initStatsWSListener } from "@/lib/store";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { POLL } from "@/lib/polling";
 import type { DashboardStats } from "@/types/agent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -266,7 +267,7 @@ export default function Sidebar() {
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
   useEffect(() => { initStatsWSListener(); }, []);
-  useVisibleInterval(fetchStats, 30000);
+  useVisibleInterval(fetchStats, POLL.stats);
 
   useEffect(() => {
     return subscribe((msg) => {

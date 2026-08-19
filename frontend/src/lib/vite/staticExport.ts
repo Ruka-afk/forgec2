@@ -35,6 +35,7 @@ export const STATIC_ROUTES: string[] = [
   "docs",
   "domain-fronting",
   "files",
+  "forbidden",
   "generate",
   "groups",
   "infrastructure",

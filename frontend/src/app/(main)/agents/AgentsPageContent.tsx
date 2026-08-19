@@ -8,6 +8,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { POLL } from "@/lib/polling";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataError } from "@/components/ui/data-state";
@@ -159,7 +160,7 @@ export default function AgentsPageContent() {
   useEffect(() => { loadBeacons(); }, [loadBeacons]);
   useEffect(() => { loadLocks(); }, [loadLocks]);
 
-  useVisibleInterval(() => loadBeacons(), autoRefresh ? 30000 : 0);
+  useVisibleInterval(() => loadBeacons(), autoRefresh ? POLL.agents : 0);
 
   useEffect(() => {
     if (!actionMsg) return;

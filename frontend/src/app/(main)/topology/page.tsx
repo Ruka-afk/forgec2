@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { POLL } from "@/lib/polling";
 import { exportElementPng } from "@/lib/chartExport";
 import { nowTime } from "@/lib/utils";
 import { PageContainer } from "@/components/ui/page-container";
@@ -244,7 +245,7 @@ export default function TopologyPage() {
     loadTopology(controller.signal);
     return () => controller.abort();
   }, [loadTopology]);
-  useVisibleInterval(loadTopology, 10000);
+  useVisibleInterval(loadTopology, POLL.topology);
 
   useEffect(() => { setNow(nowTime()); }, []);
 

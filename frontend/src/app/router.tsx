@@ -1,9 +1,13 @@
 import { lazy, type ComponentType } from "react";
-import { Outlet, Route, Routes } from "react-router-dom";
+import { Outlet, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import AppLayout from "@/components/AppLayout";
 import NotFound from "@/app/not-found";
+import Forbidden from "@/app/forbidden/page";
 import HomePage from "@/app/page";
 import LoginPage from "@/app/login/page";
+import { NAV_ITEMS } from "@/lib/navigation";
+import { useAppStore } from "@/lib/store";
+import { canAny } from "@/lib/permissions";
 
 const lazyPage = (imp: () => Promise<{ default: unknown }>) =>
   lazy(imp as () => Promise<{ default: ComponentType }>);
@@ -88,25 +92,50 @@ function MainLayout() {
   );
 }
 
+/** href -> any-of perms from the nav registry (longest prefix match wins). */
+const ROUTE_PERMS: Record<string, string[] | undefined> = Object.fromEntries(
+  NAV_ITEMS.map((i) => [i.href, i.perms]),
+);
+
+function requiredPerms(pathname: string): string[] | undefined {
+  let best = "";
+  for (const [href, perms] of Object.entries(ROUTE_PERMS)) {
+    if (perms && pathname.startsWith(href) && href.length > best.length) best = href;
+  }
+  return best ? ROUTE_PERMS[best] : undefined;
+}
+
+/** Route-level permission gate. Fail-open while permissions are still
+ *  loading — the backend remains authoritative for enforcement. */
+function PermissionRoute({ children }: { children: React.ReactNode }) {
+  const pathname = useLocation().pathname;
+  const permissions = useAppStore((s) => s.currentPermissions);
+  const perms = requiredPerms(pathname);
+  if (!perms || permissions == null) return <>{children}</>;
+  if (!canAny(permissions, perms)) return <Navigate to="/forbidden" replace />;
+  return <>{children}</>;
+}
+
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/forbidden" element={<Forbidden />} />
       <Route element={<MainLayout />}>
         {Object.entries(MAIN_PAGES).map(([name, Comp]) => (
-          <Route key={name} path={`/${name}`} element={<Comp />} />
+          <Route key={name} path={`/${name}`} element={<PermissionRoute><Comp /></PermissionRoute>} />
         ))}
-        <Route path="/agents/:id" element={<AgentDetailPage />} />
-        <Route path="/agents/:id/config" element={<AgentConfigPage />} />
-        <Route path="/agents/:id/files" element={<AgentFilesPage />} />
-        <Route path="/agents/:id/persistence" element={<AgentPersistencePage />} />
-        <Route path="/agents/:id/remote-desktop" element={<AgentRemoteDesktopPage />} />
-        <Route path="/agents/:id/screen" element={<AgentScreenPage />} />
-        <Route path="/agents/:id/shell" element={<AgentShellPage />} />
-        <Route path="/agents/:id/token" element={<AgentTokenPage />} />
-        <Route path="/agents/:id/traffic" element={<AgentTrafficPage />} />
-        <Route path="/listeners/:id" element={<ListenerDetailPage />} />
+        <Route path="/agents/:id" element={<PermissionRoute><AgentDetailPage /></PermissionRoute>} />
+        <Route path="/agents/:id/config" element={<PermissionRoute><AgentConfigPage /></PermissionRoute>} />
+        <Route path="/agents/:id/files" element={<PermissionRoute><AgentFilesPage /></PermissionRoute>} />
+        <Route path="/agents/:id/persistence" element={<PermissionRoute><AgentPersistencePage /></PermissionRoute>} />
+        <Route path="/agents/:id/remote-desktop" element={<PermissionRoute><AgentRemoteDesktopPage /></PermissionRoute>} />
+        <Route path="/agents/:id/screen" element={<PermissionRoute><AgentScreenPage /></PermissionRoute>} />
+        <Route path="/agents/:id/shell" element={<PermissionRoute><AgentShellPage /></PermissionRoute>} />
+        <Route path="/agents/:id/token" element={<PermissionRoute><AgentTokenPage /></PermissionRoute>} />
+        <Route path="/agents/:id/traffic" element={<PermissionRoute><AgentTrafficPage /></PermissionRoute>} />
+        <Route path="/listeners/:id" element={<PermissionRoute><ListenerDetailPage /></PermissionRoute>} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

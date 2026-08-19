@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { downloadText, downloadJSON } from "@/lib/download";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
+import { POLL } from "@/lib/polling";
 import { useI18n } from "@/lib/i18n";
 import { formatTime } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
@@ -129,7 +130,7 @@ export default function PrivescPage() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
-  useVisibleInterval(loadData, 10000);
+  useVisibleInterval(loadData, POLL.listing);
 
   const handleRun = async () => {
     if (!selectedAgent) {

@@ -10,6 +10,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { DataState } from "@/components/ui/data-state";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -272,7 +273,7 @@ export default function PluginsPage() {
         })}
       </div>
 
-      <DataState loading={loading} error={error} onRetry={loadPlugins} empty={!loading && !error && filtered.length === 0} emptyIcon={Puzzle} emptyTitle={t("plugins.empty")}>
+      <DataState loading={loading} error={error} onRetry={loadPlugins} empty={!loading && !error && filtered.length === 0} emptyIcon={Puzzle} emptyTitle={t("plugins.empty")} loadingSkeleton={<PageSkeleton />}>
       {viewMode === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {paginatedFiltered.map((p, i) => <PluginCard key={p.id || String(i)} plugin={p} actionState={actionStates[p.id || String(i)]} onInstall={handleInstall} onUninstall={handleUninstall} onDelete={handleDelete} onToggle={handleToggle} onDetail={() => { setDetailPlugin(p); handleLoadDependencies(p); }} onExecute={() => { setExecutePlugin(p); setShowExecute(true); setExecuteResult(null); }} onExport={() => handleExport(p.id || "")} onUpdate={() => handleUpdate(p.id || "")} onReviews={() => handleLoadReviews(p)} onRating={(r) => handleRating(p.id || "", r)} />)}
