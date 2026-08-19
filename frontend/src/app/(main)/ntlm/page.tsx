@@ -15,6 +15,7 @@ import { useApiResource } from "@/lib/hooks/useApiResource";
 import { POLL } from "@/lib/polling";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { Banner } from "@/components/ui/banner";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -117,10 +118,10 @@ export default function NtlmPage() {
   return (
     <PageContainer title={t("ntlm.title")} icon={<Zap className="w-4 h-4" />} subtitle={t("ntlm.subtitle")} contentClassName="space-y-6">
 
-      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+      <Banner tone="warning" className="items-start">
         <div className="font-semibold">{t("ntlm.experimental_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("ntlm.experimental_desc")}</div>
-      </Card>
+      </Banner>
 
       {agentsError && (
         <ErrorState message={agentsError} className="mb-4" action={<Button variant="ghost" size="sm" onClick={() => setAgentsError(null)} aria-label={t("common.dismiss")}>&times;</Button>} />

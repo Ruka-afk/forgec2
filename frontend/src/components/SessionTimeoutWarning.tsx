@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { bannerSurface } from "@/components/ui/banner";
+import { cn } from "@/lib/utils";
 
 const CHECK_INTERVAL_MS = 60_000;
 const WARN_BEFORE_MS = 5 * 60 * 1000;
@@ -94,11 +96,7 @@ export default function SessionTimeoutWarning() {
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm">
       <div
-        className={`rounded-xl border p-4 shadow-lg backdrop-blur-sm ${
-          urgent
-            ? "border-destructive/40 bg-destructive/10"
-            : "border-warning/40 bg-warning/10"
-        }`}
+        className={cn(bannerSurface(urgent ? "destructive" : "warning", "rounded-xl p-4 shadow-lg backdrop-blur-sm"))}
       >
         <p
           className={`text-sm font-medium ${

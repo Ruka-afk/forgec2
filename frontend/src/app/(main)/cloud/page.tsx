@@ -9,6 +9,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { POLL } from "@/lib/polling";
 import { Card } from "@/components/ui/card";
+import { Banner } from "@/components/ui/banner";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -110,10 +111,10 @@ export default function CloudPage() {
   const getIP = (a: Agent) => a.ip || "";
   return (
     <PageContainer title={t("cloud.title")} subtitle={t("cloud.subtitle")} contentClassName="space-y-6">
-      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+      <Banner tone="warning" className="items-start">
         <div className="font-semibold">{t("cloud.experimental_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("cloud.experimental_desc")}</div>
-      </Card>
+      </Banner>
 
       <Card className="p-(--card-spacing)">
         <div className="flex items-center gap-x-3 mb-5">

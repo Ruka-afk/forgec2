@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { Banner } from "@/components/ui/banner";
 import { PageContainer } from "@/components/ui/page-container";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -338,13 +339,10 @@ export default function RemoteDesktopPage() {
 
   return (
     <PageContainer className="space-y-4">
-      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground flex items-start gap-2">
-        <TriangleAlert className="w-4 h-4 mt-0.5 shrink-0" />
-        <div>
-          <div className="font-semibold">{t("agents.rdp_experimental_title")}</div>
-          <div className="text-xs text-muted-foreground">{t("agents.rdp_experimental_desc")}</div>
-        </div>
-      </Card>
+      <Banner tone="warning" icon={<TriangleAlert className="w-4 h-4" />} className="items-start">
+        <div className="font-semibold">{t("agents.rdp_experimental_title")}</div>
+        <div className="text-xs text-muted-foreground">{t("agents.rdp_experimental_desc")}</div>
+      </Banner>
       <div className="flex flex-col h-[calc(100vh-4rem)]">
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap shrink-0">
         <div className="flex items-center gap-3">

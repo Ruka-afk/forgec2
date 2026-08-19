@@ -11,6 +11,7 @@ import { useConfirm } from "@/lib/hooks/useConfirm";
 import { Spinner, PageSpinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { Banner } from "@/components/ui/banner";
 import { PageContainer } from "@/components/ui/page-container";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -192,10 +193,10 @@ export default function AgentPersistencePage() {
         </div>
       </Card>
 
-      <Card className="p-3 mb-4 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+      <Banner tone="warning" className="items-start mb-4">
         <div className="font-semibold">{t("agents.persistence_honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("agents.persistence_honesty_desc")}</div>
-      </Card>
+      </Banner>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Card className="p-(--card-spacing)">

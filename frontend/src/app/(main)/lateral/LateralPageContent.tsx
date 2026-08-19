@@ -10,6 +10,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { PageSpinner, Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
+import { Banner } from "@/components/ui/banner";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { StatCard } from "@/components/ui/animated-stat-card";
 import { Button } from "@/components/ui/button";
@@ -312,10 +313,10 @@ export default function LateralPageContent() {
   return (
     <PageContainer title={t("lateral.title")} subtitle={`SMB/WinRM/WMI/PsExec ${t("lateral.subtitle_exec")} / Pass-the-Hash`} contentClassName="space-y-6">
 
-      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+      <Banner tone="warning" className="items-start">
         <div className="font-semibold">{t("lateral.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("lateral.honesty_desc")}</div>
-      </Card>
+      </Banner>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard label={t("lateral.online_implant")} value={stats.online_agents || 0} color="success" icon={<Bot className="w-4 h-4" />} sub={t("lateral.pivot_available")} />

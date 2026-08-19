@@ -15,6 +15,7 @@ import { IconBadge } from "@/components/ui/icon-badge";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -191,10 +192,10 @@ export default function PrivescPage() {
         </div>
       </>}>
 
-      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning dark:text-warning">
+      <Banner tone="warning" className="items-start">
         <div className="font-semibold">{t("privesc.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("privesc.honesty_desc")}</div>
-      </Card>
+      </Banner>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <Card className="p-4">

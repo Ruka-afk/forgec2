@@ -10,6 +10,7 @@ import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { POLL } from "@/lib/polling";
 import { Card } from "@/components/ui/card";
+import { Banner } from "@/components/ui/banner";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -163,10 +164,10 @@ export default function AttackPage() {
         </Select>
       </>}>
 
-      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+      <Banner tone="warning" className="items-start">
         <div className="font-semibold">{t("attack.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("attack.honesty_desc")}</div>
-      </Card>
+      </Banner>
 
       {/* Summary Card */}
       <Card className="p-(--card-spacing)">

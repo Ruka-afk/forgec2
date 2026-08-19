@@ -16,6 +16,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { DataState } from "@/components/ui/data-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Banner } from "@/components/ui/banner";
 import { Input } from "@/components/ui/input";
 import { SearchInput } from "@/components/framework/SearchInput";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -356,10 +357,10 @@ export default function CredentialsPage() {
         }
       >
 
-      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+      <Banner tone="warning" className="items-start">
         <div className="font-semibold">{t("cred.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("cred.honesty_desc")}</div>
-      </Card>
+      </Banner>
 
       <CredHarvestCard />
 

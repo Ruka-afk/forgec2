@@ -15,6 +15,7 @@ import { StatCard } from "@/components/ui/animated-stat-card";
 import { toast } from "sonner";
 
 import { Card } from "@/components/ui/card";
+import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-indicator";
@@ -105,10 +106,10 @@ export default function CampaignPageContent() {
         </Button>
       </>}>
 
-      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+      <Banner tone="warning" className="items-start">
         <div className="font-semibold">{t("campaign.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("campaign.honesty_desc")}</div>
-      </Card>
+      </Banner>
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="sm:max-w-md">

@@ -111,10 +111,10 @@ export default function ChromeC2Page() {
           </Button>
         </a>
       </>}>
-      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning dark:text-warning">
+      <Banner tone="warning" className="items-start">
         <div className="font-semibold">{t("chrome.experimental_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("chrome.experimental_desc")}</div>
-      </Card>
+      </Banner>
       
 
       <DataState loading={loading} error={error} onRetry={fetchAgents} loadingSkeleton={<PageSkeleton rows={4} />}>

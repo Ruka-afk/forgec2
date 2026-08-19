@@ -12,6 +12,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { Card } from "@/components/ui/card";
+import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -180,10 +181,10 @@ export default function ScannerPage() {
 
   return (
     <PageContainer title={t("scanner.title")} icon={<Radar className="w-4 h-4" />} subtitle={t("scanner.subtitle")} contentClassName="space-y-6">
-      <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+      <Banner tone="warning" className="items-start">
         <div className="font-semibold">{t("scanner.honesty_title")}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{t("scanner.honesty_desc")}</div>
-      </Card>
+      </Banner>
 
       <Card className="p-(--card-spacing) gap-0 hover:shadow-lg dark:hover:shadow-black/30 transition-shadow">
         <div className="flex items-center gap-x-3 mb-5">

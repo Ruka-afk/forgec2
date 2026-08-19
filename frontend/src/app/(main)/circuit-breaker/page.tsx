@@ -13,6 +13,7 @@ import { StatusIndicator } from "@/components/ui/status-indicator";
 import { toast } from "sonner";
 import { formatTime } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
+import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -139,10 +140,10 @@ export default function CircuitBreakerPage() {
         </div>
       </>}>
 
-        <Card className="p-3 border-warning/40 bg-warning/10 text-sm text-warning-foreground">
+        <Banner tone="warning" className="items-start">
           <div className="font-semibold">{t("cb.honesty_title")}</div>
           <div className="text-xs text-muted-foreground mt-0.5">{t("cb.honesty_desc")}</div>
-        </Card>
+        </Banner>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-5">
           <StatCard label={t("cb.closed")} value={healthyCount} color="emerald" icon={<ShieldCheck className="w-4 h-4" />} sub={t("cb.closed_desc")} />
