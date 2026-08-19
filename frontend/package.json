@@ -16,9 +16,11 @@
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:paths": "node scripts/check-api-paths.mjs",
     "check:openapi-types": "node scripts/check-openapi-types.mjs",
+    "check:permissions": "node scripts/check-permissions.mjs",
     "check:bundle": "node scripts/check-bundle.mjs",
     "gen:openapi": "openapi-typescript ../api/openapi.yaml -o src/lib/api-schema.d.ts",
-    "check": "npm run check:css && npm run check:tokens && npm run check:i18n && npm run check:paths && npm run check:openapi-types && npm run check:webdist && npm run check:bundle"
+    "gen:permissions": "node scripts/gen-permissions.mjs",
+    "check": "npm run check:css && npm run check:tokens && npm run check:i18n && npm run check:paths && npm run check:openapi-types && npm run check:permissions && npm run check:webdist && npm run check:bundle"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

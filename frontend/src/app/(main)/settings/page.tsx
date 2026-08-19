@@ -9,7 +9,7 @@ import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { PageContainer } from "@/components/ui/page-container";
 import { ErrorState } from "@/components/ui/error-state";
-import { PermissionGate } from "@/components/ui/permission-gate";
+import { Permission } from "@/components/ui/permission";
 import { PageSpinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -231,7 +231,7 @@ export default function SettingsPage() {
   ];
 
   return (
-    <PermissionGate perms={["settings.read"]} fallback={
+    <Permission perms="settings.read" fallback={
       <PageContainer title={t("settings.title")} subtitle={t("settings.subtitle")}>
         <ErrorState title={t("common.denied_title")} message={t("common.denied_desc")} />
       </PageContainer>
@@ -302,6 +302,6 @@ export default function SettingsPage() {
       {modalAction}
       {modalPurge}
     </PageContainer>
-    </PermissionGate>
+    </Permission>
   );
 }

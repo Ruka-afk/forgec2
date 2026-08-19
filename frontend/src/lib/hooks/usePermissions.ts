@@ -2,6 +2,7 @@
 
 import { useAppStore } from "@/lib/store";
 import { can, canAny, canAll } from "@/lib/permissions";
+import type { PermissionKey } from "@/lib/permissions";
 
 /**
  * Current operator's effective permissions (from /api/me → data.permissions,
@@ -14,8 +15,8 @@ export function usePermissions() {
   return {
     permissions,
     role,
-    can: (perm: string) => can(permissions, perm),
-    canAny: (perms: readonly string[]) => canAny(permissions, perms),
-    canAll: (perms: readonly string[]) => canAll(permissions, perms),
+    can: (perm: PermissionKey) => can(permissions, perm),
+    canAny: (perms: readonly PermissionKey[]) => canAny(permissions, perms),
+    canAll: (perms: readonly PermissionKey[]) => canAll(permissions, perms),
   };
 }

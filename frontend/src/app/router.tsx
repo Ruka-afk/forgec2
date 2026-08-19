@@ -10,6 +10,7 @@ import LoginPage from "@/app/login/page";
 import { NAV_ITEMS } from "@/lib/navigation";
 import { useAppStore } from "@/lib/store";
 import { canAny } from "@/lib/permissions";
+import type { PermissionKey } from "@/lib/permission-keys";
 
 const lazyPage = (imp: () => Promise<{ default: unknown }>) =>
   lazy(imp as () => Promise<{ default: ComponentType }>);
@@ -102,11 +103,11 @@ function MainLayout() {
 }
 
 /** href -> any-of perms from the nav registry (longest prefix match wins). */
-const ROUTE_PERMS: Record<string, string[] | undefined> = Object.fromEntries(
+const ROUTE_PERMS: Record<string, PermissionKey[] | undefined> = Object.fromEntries(
   NAV_ITEMS.map((i) => [i.href, i.perms]),
 );
 
-function requiredPerms(pathname: string): string[] | undefined {
+function requiredPerms(pathname: string): PermissionKey[] | undefined {
   let best = "";
   for (const [href, perms] of Object.entries(ROUTE_PERMS)) {
     if (perms && pathname.startsWith(href) && href.length > best.length) best = href;

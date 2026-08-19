@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
-import { PermissionGate } from "@/components/ui/permission-gate";
+import { Permission } from "@/components/ui/permission";
 import { Layers, Shield, Tags, Users, Wand2 } from "lucide-react";
 
 // perms mirror the per-route enforcement in internal/server/routes.go:
@@ -26,7 +26,7 @@ export default function AccessSection() {
         {LINKS.map((item) => {
           const Icon = item.icon;
           return (
-            <PermissionGate key={item.href} perms={item.perms}>
+            <Permission key={item.href} perms={item.perms}>
               <Link href={item.href}>
                 <Card className="flex items-start gap-3 p-4 hover:bg-secondary/50 transition-colors">
                   <Icon className="mt-0.5 h-4 w-4 text-primary shrink-0" />
@@ -36,7 +36,7 @@ export default function AccessSection() {
                   </div>
                 </Card>
               </Link>
-            </PermissionGate>
+            </Permission>
           );
         })}
       </div>

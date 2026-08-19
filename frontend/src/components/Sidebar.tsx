@@ -22,6 +22,7 @@ import { StatusDot } from "@/components/ui/status-dot";
 import { ConnectionDot } from "@/components/ui/connection-dot";
 import { Shield, ChevronDown } from "lucide-react";
 import { sidebarNavSections, filterNavByPermissions } from "@/lib/navigation";
+import type { PermissionKey } from "@/lib/permission-keys";
 import {
   defaultSidebarSections as defaultSections,
   mergeSidebarSections,
@@ -96,7 +97,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
   stats: DashboardStats | null;
   t: (key: string, params?: Record<string, string | number>) => string;
   searchQuery: string;
-  permissions: readonly string[] | null | undefined;
+  permissions: readonly PermissionKey[] | null | undefined;
 }) {
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -259,7 +260,7 @@ export default function Sidebar() {
       const me = d?.data;
       if (me?.username) setCurrentUsername(me.username);
       if (me?.role) setCurrentUserRole(me.role);
-      if (Array.isArray(me?.permissions)) setCurrentPermissions(me.permissions);
+      if (Array.isArray(me?.permissions)) setCurrentPermissions(me.permissions as PermissionKey[]);
     }).catch((e) => { if (process.env.NODE_ENV === "development") console.error("Sidebar: failed to fetch current user", e); });
   }, [currentUsername, setCurrentUsername, setCurrentUserRole, setCurrentPermissions]);
 

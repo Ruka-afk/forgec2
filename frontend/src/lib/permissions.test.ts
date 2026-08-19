@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { can, canAny, canAll } from "./permissions";
 
-const PERMS = ["agents.read", "agents.write", "users.read", "settings.read"];
+const PERMS = ["agents.read", "agents.write", "users.read", "settings.read"] as const;
 
 describe("can", () => {
   it("returns true when the permission is held", () => {
@@ -20,24 +20,24 @@ describe("can", () => {
 
 describe("canAny", () => {
   it("returns true when any permission is held", () => {
-    expect(canAny(PERMS, ["users.write", "users.read"])).toBe(true);
+    expect(canAny(PERMS, ["users.write", "users.read"] as const)).toBe(true);
   });
 
   it("returns false when none are held", () => {
-    expect(canAny(PERMS, ["users.delete", "plugins.read"])).toBe(false);
+    expect(canAny(PERMS, ["users.delete", "plugins.read"] as const)).toBe(false);
   });
 
   it("returns false for an empty required list", () => {
-    expect(canAny(PERMS, [])).toBe(false);
+    expect(canAny(PERMS, [] as const)).toBe(false);
   });
 });
 
 describe("canAll", () => {
   it("returns true when every permission is held", () => {
-    expect(canAll(PERMS, ["agents.read", "settings.read"])).toBe(true);
+    expect(canAll(PERMS, ["agents.read", "settings.read"] as const)).toBe(true);
   });
 
   it("returns false when any permission is missing", () => {
-    expect(canAll(PERMS, ["agents.read", "users.delete"])).toBe(false);
+    expect(canAll(PERMS, ["agents.read", "users.delete"] as const)).toBe(false);
   });
 });

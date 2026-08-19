@@ -7,7 +7,7 @@ import { normalizeListEnvelope } from "@/lib/envelope";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { FieldError } from "@/components/ui/field-error";
-import { PermissionGate } from "@/components/ui/permission-gate";
+import { Permission } from "@/components/ui/permission";
 import { StatCard } from "@/components/ui/animated-stat-card";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { PageContainer } from "@/components/ui/page-container";
@@ -252,7 +252,7 @@ export default function UsersPage() {
   };
 
   return (
-    <PermissionGate perms={["users.read"]} fallback={
+    <Permission perms="users.read" fallback={
       <PageContainer title={t("users.title")} icon={<Users className="w-4 h-4" />} subtitle={t("users.subtitle")}>
         <ErrorState title={t("common.denied_title")} message={t("common.denied_desc")} />
       </PageContainer>
@@ -549,7 +549,7 @@ export default function UsersPage() {
       </Dialog>
       {modal}
     </PageContainer>
-    </PermissionGate>
+    </Permission>
   );
 }
 

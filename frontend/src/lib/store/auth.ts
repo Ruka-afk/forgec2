@@ -2,6 +2,7 @@
 
 import type { StateCreator } from "zustand";
 import type { AppStore, OnlineUser } from "./types";
+import type { PermissionKey } from "@/lib/permission-keys";
 
 export interface AuthSlice {
   onlineUsers: OnlineUser[];
@@ -10,8 +11,8 @@ export interface AuthSlice {
   setCurrentUsername: (name: string) => void;
   currentUserRole: string;
   setCurrentUserRole: (role: string) => void;
-  currentPermissions: string[] | null;
-  setCurrentPermissions: (perms: string[]) => void;
+  currentPermissions: PermissionKey[] | null;
+  setCurrentPermissions: (perms: PermissionKey[]) => void;
 }
 
 export const createAuthSlice: StateCreator<AppStore, [], [], AuthSlice> = (set) => ({

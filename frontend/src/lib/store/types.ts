@@ -1,6 +1,7 @@
 "use client";
 
 import type { DashboardStats } from "@/types/agent";
+import type { PermissionKey } from "@/lib/permission-keys";
 
 export interface OnlineUser {
   username: string;
@@ -23,8 +24,8 @@ export interface AppStore {
   currentUserRole: string;
   setCurrentUserRole: (role: string) => void;
   /** null = not yet loaded from /api/me; UI gates fail open until known. */
-  currentPermissions: string[] | null;
-  setCurrentPermissions: (perms: string[]) => void;
+  currentPermissions: PermissionKey[] | null;
+  setCurrentPermissions: (perms: PermissionKey[]) => void;
 
   // UI preferences (ui slice)
   sidebarCollapsed: boolean;

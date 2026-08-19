@@ -7,7 +7,7 @@ import { PageSpinner } from "@/components/ui/spinner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { PageContainer } from "@/components/ui/page-container";
-import { PermissionGate } from "@/components/ui/permission-gate";
+import { Permission } from "@/components/ui/permission";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { POLL } from "@/lib/polling";
@@ -113,7 +113,7 @@ export default function RolesPage() {
   if (loading) return <PageContainer title={t("roles.title")} icon={<ShieldUser className="w-4 h-4" />} subtitle={t("roles.subtitle")}><PageSpinner /></PageContainer>;
 
   return (
-    <PermissionGate perms={["roles.read"]} fallback={
+    <Permission perms="roles.read" fallback={
       <PageContainer title={t("roles.title")} icon={<ShieldUser className="w-4 h-4" />} subtitle={t("roles.subtitle")}>
         <ErrorState title={t("common.denied_title")} message={t("common.denied_desc")} />
       </PageContainer>
@@ -192,7 +192,7 @@ export default function RolesPage() {
         </div>
       </PageContainer>
       {modal}
-    </PermissionGate>
+    </Permission>
   );
 }
 

@@ -2,6 +2,7 @@
 // from here, and the breadcrumb derives segment labels from the same hrefs,
 // so a page added here is automatically labelled everywhere.
 import type { LucideIcon } from "lucide-react";
+import type { PermissionKey } from "./permission-keys";
 import {
   Activity, Bot, Shield, Fish, Zap, Bug, Tags, Layers, Wand2, Clock,
   MessageSquare, GitBranch, Link as LinkIcon, Boxes,
@@ -23,7 +24,7 @@ export interface NavItemDef {
    * internal/server/routes.go. Items without perms are visible to every
    * authenticated operator. UI-only: backend stays authoritative.
    */
-  perms?: string[];
+  perms?: PermissionKey[];
 }
 
 export interface NavSectionDef {
@@ -133,7 +134,7 @@ export function sidebarNavSections(sections: NavSectionDef[] = NAV_SECTIONS): Na
  */
 export function filterNavByPermissions(
   items: NavItemDef[],
-  permissions: readonly string[] | null | undefined,
+  permissions: readonly PermissionKey[] | null | undefined,
 ): NavItemDef[] {
   if (!permissions) return items;
   return items.filter((i) => !i.perms || i.perms.some((p) => permissions.includes(p)));
