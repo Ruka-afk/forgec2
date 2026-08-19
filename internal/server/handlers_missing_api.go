@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -23,11 +24,15 @@ func (s *Server) handleAPIPackerTemplates(c *gin.Context) {
 
 func (s *Server) handleAPIPackerInfo(c *gin.Context) {
 	respond(c, gin.H{
-		"encode_types": []string{"none", "xor", "aes256", "rc4"},
+		// Every value advertised here maps to an implemented code path in
+		// payload.BuildArtifact. Anything not listed (dll, self-signed /
+		// authenticode certificates, tls entry point) is not implemented and
+		// must not be offered.
+		"encode_types": []string{"none", "xor", "aes", "sgn"},
 		"entry_points": []string{"direct", "thread", "callback"},
-		"timestamps":   []string{"random", "fixed", "none"},
-		"cert_options": []string{"self_signed", "none", "authenticode"},
-		"output_types": []string{"exe", "dll", "ps1", "raw"},
+		"timestamps":   []string{"random", "keep", "custom"},
+		"cert_options": []string{"none"},
+		"output_types": []string{"exe", "ps1", "raw", "shellcode"},
 	})
 }
 
@@ -383,6 +388,11 @@ func (s *Server) handlePackerArtifact(c *gin.Context) {
 	artifact, filename, err := payload.BuildArtifact(req, dataDir)
 	if err != nil {
 		slog.Error("Packer artifact build failed", "err", err)
+		var verr *payload.ArtifactValidationError
+		if errors.As(err, &verr) {
+			respondError(c, http.StatusBadRequest, verr.Msg)
+			return
+		}
 		respondError(c, http.StatusInternalServerError, sanitizeError(err, "Build"))
 		return
 	}
@@ -505,15 +515,12 @@ func (s *Server) handleMeshRoute(c *gin.Context) {
 func (s *Server) handlePackerBundle(c *gin.Context) {
 	var req struct {
 		AgentEXEB64    string `json:"agent_exe"`
-		EncodeType     string `json:"encode_type"`
 		PESectionText  string `json:"pe_section_text"`
 		PESectionData  string `json:"pe_section_data"`
 		PESectionRdata string `json:"pe_section_rdata"`
 		PESectionReloc string `json:"pe_section_reloc"`
-		EntryPoint     string `json:"entry_point"`
 		Timestamp      string `json:"timestamp"`
 		TimestampDate  string `json:"timestamp_date"`
-		CertOption     string `json:"cert_option"`
 		ImportDLLs     string `json:"import_dlls"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -529,6 +536,10 @@ func (s *Server) handlePackerBundle(c *gin.Context) {
 	artifact, err := base64.StdEncoding.DecodeString(req.AgentEXEB64)
 	if err != nil {
 		respondErrorSafe(c, http.StatusBadRequest, err, "invalid agent_exe base64")
+		return
+	}
+	if len(artifact) < 0x40 || artifact[0] != 'M' || artifact[1] != 'Z' {
+		respondError(c, http.StatusBadRequest, "agent_exe does not decode to a PE image (missing MZ header)")
 		return
 	}
 
@@ -550,11 +561,18 @@ func (s *Server) handlePackerBundle(c *gin.Context) {
 		payload.ApplyPESectionNames(artifact, sections)
 	}
 
+	// Timestamp handling: an empty value means "leave the original alone".
+	// Defaulting an empty selection to "random" would silently rewrite the
+	// binary the operator asked to keep untouched.
 	tsOpt := payload.TimestampOption(req.Timestamp)
 	if tsOpt == "" {
-		tsOpt = "random"
+		tsOpt = payload.TSKeep
 	}
-	ts, _ := payload.GenerateTimestamp(tsOpt, req.TimestampDate)
+	ts, err := payload.GenerateTimestamp(tsOpt, req.TimestampDate)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	payload.ApplyTimestamp(artifact, ts)
 
 	if req.ImportDLLs != "" {
@@ -563,6 +581,11 @@ func (s *Server) handlePackerBundle(c *gin.Context) {
 			dlls[i] = strings.TrimSpace(dlls[i])
 		}
 		if err := payload.AddBenignImports(artifact, dlls); err != nil {
+			var verr *payload.ArtifactValidationError
+			if errors.As(err, &verr) {
+				respondError(c, http.StatusBadRequest, verr.Msg)
+				return
+			}
 			respondErrorSafe(c, http.StatusBadRequest, err, "import manipulation failed")
 			return
 		}

@@ -2335,48 +2335,48 @@ export const zh: Record<string, string> = {
     "packer.building": "构建中...",
     "packer.bundle_payload": "打包载荷",
     "packer.bundling": "打包中...",
-    "packer.call": "调用",
-    "packer.callback": "回调",
+    
+    
     "packer.certificate": "证书",
-    "packer.company_name": "公司名称",
+    
     "packer.custom": "自定义",
     "packer.custom_val": "自定义",
-    "packer.direct": "直接",
+    
     "packer.download": "下载",
     "packer.encode_type": "编码类型",
     "packer.entry_point": "入口技术",
     "packer.exe_loaded": "已加载 EXE（{size} KB）",
-    "packer.file_description": "文件描述",
-    "packer.file_version": "文件版本",
-    "packer.icon": "图标",
-    "packer.icon_loaded": "图标已加载",
+    
+    
+    
+    
     "packer.import_manipulation": "导入表操作",
     "packer.keep_original": "保留原始",
-    "packer.optional": "（可选）",
-    "packer.original_filename": "原始文件名",
+    
+    
     "packer.output_type": "输出类型",
     "packer.payload_exe": "载荷 EXE",
     "packer.pe_sections": "PE 节名称",
     "packer.pe_transformations": "PE 变换",
-    "packer.product_name": "产品名称",
+    
     "packer.random": "随机",
     "packer.ready": "就绪",
     "packer.select_exe_first": "请先选择 EXE 文件",
     "packer.shellcode_encoding": "Shellcode 编码",
     "packer.shellcode_file": "Shellcode 文件",
     "packer.shellcode_loaded": "Shellcode 已加载",
-    "packer.subtitle": "构建自定义 Artifact、编码 Shellcode、嵌入图标和版本信息。",
+    "packer.subtitle": "构建自定义 Artifact 并编码 Shellcode。",
     "packer.tab_artifact": "Artifact 构建器",
     "packer.tab_bundle": "载荷打包器",
     "packer.template": "模板",
     "packer.timestamp": "时间戳",
     "packer.title": "Artifact Kit 与 Packer",
-    "packer.tls": "TLS",
+    
     "packer.toast.load_failed": "加载 Packer 数据失败",
     "packer.upload_bof": "上传 BOF 工件",
     "packer.upload_dll": "上传 DLL 或 EXE",
-    "packer.upload_icon": "上传图标",
-    "packer.version_info": "版本信息",
+    
+    
         "palette.agents": "代理",
 "palette.no_results": "无结果",
     "palette.placeholder": "输入以跳转到页面…",

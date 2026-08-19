@@ -2,8 +2,85 @@ package payload
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
 )
+
+func TestSGN_RoundTrip(t *testing.T) {
+	data := []byte("\xEB\x02\x90\x90\x48\x31\xC0\xC3")
+	key := []byte{0x5C}
+
+	encoded, err := EncodeShellcode(data, EncodeSGN, key)
+	if err != nil {
+		t.Fatalf("EncodeShellcode SGN failed: %v", err)
+	}
+	if len(encoded) != sgnStubLen+len(data) {
+		t.Fatalf("expected blob length %d, got %d", sgnStubLen+len(data), len(encoded))
+	}
+	decoded, err := DecodeShellcode(encoded, EncodeSGN, key)
+	if err != nil {
+		t.Fatalf("DecodeShellcode SGN failed: %v", err)
+	}
+	if !bytes.Equal(decoded, data) {
+		t.Fatal("SGN round-trip decode should match original")
+	}
+}
+
+func TestSGN_StubKeyByteMatchesEncodeKey(t *testing.T) {
+	key := byte(0x7B)
+	encoded, err := EncodeShellcode([]byte("\xEB\x02\x90\xC3"), EncodeSGN, []byte{key})
+	if err != nil {
+		t.Fatalf("EncodeShellcode SGN failed: %v", err)
+	}
+	// The executed decoder stub must XOR with the same key the blob was
+	// encoded with, or the artifact would decode to garbage at runtime.
+	if got := encoded[sgnKeyByteOffset]; got != key {
+		t.Fatalf("stub key byte = 0x%02X, want 0x%02X", got, key)
+	}
+}
+
+func TestSGN_StubLengthField(t *testing.T) {
+	data := []byte("\xEB\x02\x90\x90\xC3")
+	encoded, err := EncodeShellcode(data, EncodeSGN, []byte{0x11})
+	if err != nil {
+		t.Fatalf("EncodeShellcode SGN failed: %v", err)
+	}
+	// The loop count must be payloadLen+1: the decoder starts one byte before
+	// the payload (pop rdx; dec rdx) and must still cover the last payload byte.
+	want := uint16(len(data) + 1)
+	if got := binary.LittleEndian.Uint16(encoded[8:10]); got != want {
+		t.Fatalf("stub loop count = %d, want %d", got, want)
+	}
+}
+
+func TestSGN_EmptyPayload(t *testing.T) {
+	if _, err := EncodeShellcode(nil, EncodeSGN, []byte{0x11}); err == nil {
+		t.Fatal("expected error for empty SGN payload")
+	}
+}
+
+func TestSGN_TooLarge(t *testing.T) {
+	data := make([]byte, 0xFFFF)
+	if _, err := EncodeShellcode(data, EncodeSGN, []byte{0x11}); err == nil {
+		t.Fatal("expected error for oversized SGN payload")
+	}
+}
+
+func TestSGN_DecodeDefaultsToStubKey(t *testing.T) {
+	data := []byte("\xEB\x02\x90\xC3")
+	key := []byte{0x33}
+	encoded, err := EncodeShellcode(data, EncodeSGN, key)
+	if err != nil {
+		t.Fatalf("EncodeShellcode SGN failed: %v", err)
+	}
+	decoded, err := DecodeShellcode(encoded, EncodeSGN, nil)
+	if err != nil {
+		t.Fatalf("DecodeShellcode SGN without key failed: %v", err)
+	}
+	if !bytes.Equal(decoded, data) {
+		t.Fatal("SGN decode without key should recover the stub-embedded key")
+	}
+}
 
 func TestEncodeShellcode_XOR(t *testing.T) {
 	data := []byte("hello world\x90\x90\x90")

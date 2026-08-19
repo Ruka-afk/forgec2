@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -35,7 +35,7 @@ const buildCompileTimeout = 15 * time.Minute
 // (donut, stager, obfuscation) that has not been given a dedicated timeout.
 const buildTimeout = buildCompileTimeout
 
-//go:embed agent/* powershell_template.ps1 profiles/*
+//go:embed agent/* powershell_template.ps1 profiles/* loader/*.go
 var payloadFS embed.FS
 
 // ttlCache memoizes a resolved string (e.g. a toolchain path) but refreshes it

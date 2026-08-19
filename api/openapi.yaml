@@ -4345,12 +4345,34 @@ paths:
     get:
       tags: [Generate]
       summary: Packer capability info
+      description: Advertises the packer options that have real implementations (encode types, entry points, timestamps, cert options, output types)
       operationId: packerInfo
       security:
         - SessionCookie: []
       responses:
         '200':
           description: Info
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [encode_types, entry_points, timestamps, cert_options, output_types]
+                properties:
+                  encode_types:
+                    type: array
+                    items: { type: string }
+                  entry_points:
+                    type: array
+                    items: { type: string }
+                  timestamps:
+                    type: array
+                    items: { type: string }
+                  cert_options:
+                    type: array
+                    items: { type: string }
+                  output_types:
+                    type: array
+                    items: { type: string }
   /timeline/events:
     get:
       tags: [Timeline]
@@ -6254,23 +6276,106 @@ paths:
     post:
       tags: [Generate]
       summary: Packer artifact
+      description: Builds a real artifact from shellcode (EXE loader, PS1 loader, or encoded blob) or passes through a raw PE image
       operationId: packerArtifact
       security:
         - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shellcode_b64]
+              properties:
+                template_name: { type: string }
+                output_type:
+                  type: string
+                  enum: [exe, ps1, raw, shellcode, service_exe]
+                  description: exe builds a real loader binary; dll is not supported
+                shellcode_b64: { type: string, description: Base64 of the shellcode to load (or raw PE bytes when raw_exe_b64 is used) }
+                raw_exe_b64: { type: string, description: Base64 of a PE image for raw passthrough }
+                encode_type:
+                  type: string
+                  enum: [none, xor, aes, sgn]
+                encode_key_hex: { type: string, description: Optional hex key; a random key is generated when omitted }
+                pe_section_text: { type: string }
+                pe_section_data: { type: string }
+                pe_section_rdata: { type: string }
+                pe_section_reloc: { type: string }
+                entry_point:
+                  type: string
+                  enum: [direct, thread, callback]
+                timestamp:
+                  type: string
+                  enum: [random, keep, custom]
+                timestamp_date: { type: string, description: 'YYYY-MM-DD when timestamp is custom' }
+                cert_option:
+                  type: string
+                  enum: [none]
+                import_dlls: { type: string, description: Comma-separated benign DLLs to append to the import table }
+                output_filename: { type: string }
       responses:
         '200':
-          description: OK
+          description: Built artifact (base64 in data)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, filename, size]
+                properties:
+                  data: { type: string, description: Base64 of the built artifact }
+                  filename: { type: string }
+                  size: { type: integer }
+        '400':
+          description: Invalid request (unknown enum value, empty payload, unsupported option)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /payload/bundle:
     post:
       tags: [Generate]
       summary: Payload bundle
+      description: Applies PE transformations (section names, timestamp, benign imports) to an uploaded executable
       operationId: payloadBundle
       security:
         - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_exe]
+              properties:
+                agent_exe: { type: string, description: Base64 of the PE image to transform }
+                pe_section_text: { type: string }
+                pe_section_data: { type: string }
+                pe_section_rdata: { type: string }
+                pe_section_reloc: { type: string }
+                timestamp:
+                  type: string
+                  enum: [keep, random, custom]
+                  description: Defaults to keep when omitted
+                timestamp_date: { type: string, description: 'YYYY-MM-DD when timestamp is custom' }
+                import_dlls: { type: string, description: Comma-separated benign DLLs to append to the import table }
       responses:
         '200':
-          description: OK
+          description: Bundled payload (base64 in data)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, size]
+                properties:
+                  data: { type: string }
+                  size: { type: integer }
+        '400':
+          description: Invalid request (not a PE image, bad timestamp, import manipulation failure)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /mesh/route/{agentId}:
     post:

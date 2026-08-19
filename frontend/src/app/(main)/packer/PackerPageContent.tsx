@@ -49,7 +49,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
   const [entryPoint, setEntryPoint] = useState("direct");
   const [timestamp, setTimestamp] = useState("random");
   const [timestampDate, setTimestampDate] = useState("");
-  const [certOption, setCertOption] = useState("self_signed");
+  const [certOption, setCertOption] = useState("none");
   const [importDLLs, setImportDLLs] = useState("");
   const [peText, setPeText] = useState(".text");
   const [peData, setPeData] = useState(".data");
@@ -57,15 +57,8 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
   const [peReloc, setPeReloc] = useState(".reloc");
 
   const [exeB64, setExeB64] = useState("");
-  const [iconB64, setIconB64] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [fileVersion, setFileVersion] = useState("");
-  const [productName, setProductName] = useState("");
-  const [fileDescription, setFileDescription] = useState("");
-  const [originalFilename, setOriginalFilename] = useState("");
   const [bundleTimestamp, setBundleTimestamp] = useState("");
   const [bundleTimestampDate, setBundleTimestampDate] = useState("");
-  const [bundleEntryPoint, setBundleEntryPoint] = useState("");
 
   const [resultB64, setResultB64] = useState("");
   const [resultSize, setResultSize] = useState(0);
@@ -155,46 +148,23 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
     reader.readAsDataURL(file);
   }
 
-  function handleIconSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const b64 = (reader.result as string).split(",")[1];
-      setIconB64(b64);
-    };
-    reader.readAsDataURL(file);
-  }
-
   async function handleBundle() {
     if (!exeB64) { showMessage(t("packer.select_exe_first"), { tone: "warning" }); return; }
     setLoading(true); clearMessage();
     try {
       const res = await api.postJson<{ data: string; size: number }>("/payload/bundle", {
         agent_exe: exeB64,
-        icon_data: iconB64,
-        version_info: {
-          company_name: companyName,
-          file_version: fileVersion,
-          product_name: productName,
-          file_description: fileDescription,
-          original_filename: originalFilename,
-        },
-        pe_sections: {
-          text: peText,
-          data: peData,
-          rdata: peRdata,
-          reloc: peReloc,
-        },
-        entry_point: bundleEntryPoint || undefined,
+        pe_section_text: peText,
+        pe_section_data: peData,
+        pe_section_rdata: peRdata,
+        pe_section_reloc: peReloc,
         timestamp: bundleTimestamp || undefined,
         timestamp_date: bundleTimestampDate || undefined,
-        cert_option: certOption,
         import_dlls: importDLLs,
       });
       setResultB64(res.data);
       setResultSize(res.size);
-      setResultFilename(originalFilename || "bundled.exe");
+      setResultFilename("bundled.exe");
       showMessage(t("packer.bundle_created"), { tone: "success" });
     } catch (e: unknown) {
       showMessage(`${t("packer.build_failed")}: ${e instanceof Error ? e.message : t("packer.build_failed")}`, { tone: "destructive" });
@@ -287,7 +257,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
             </div>
             <div>
               <Label className="text-xs">{t("packer.certificate")}</Label>
-              <Select value={certOption} onValueChange={(v) => setCertOption(v ?? "self_signed")}>
+              <Select value={certOption} onValueChange={(v) => setCertOption(v ?? "none")}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -367,12 +337,6 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
           </div>
 
           <div className="border-t border-border pt-4">
-            <h3 className="text-sm font-semibold text-foreground mb-3">{t("packer.icon")} <span className="text-muted-foreground font-normal">{t("packer.optional")}</span></h3>
-            <Input type="file" accept=".ico" onChange={handleIconSelect} aria-label={t("packer.upload_icon")} />
-            {iconB64 && <span className="text-xs text-success mt-1 flex items-center gap-1"><CheckCircle className="w-4 h-4" />{t("packer.icon_loaded")}</span>}
-          </div>
-
-          <div className="border-t border-border pt-4">
             <h3 className="text-sm font-semibold text-foreground mb-3">{t("packer.pe_transformations")}</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -391,21 +355,6 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
                   <Input type="date" value={bundleTimestampDate} onChange={e => setBundleTimestampDate(e.target.value)} className="mt-1" />
                 )}
               </div>
-              <div>
-                <Label className="text-xs">{t("packer.entry_point")}</Label>
-                <Select value={bundleEntryPoint} onValueChange={(v) => setBundleEntryPoint(v ?? "")}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">{t("packer.keep_original")}</SelectItem>
-                    <SelectItem value="direct">{t("packer.direct")}</SelectItem>
-                    <SelectItem value="call">{t("packer.call")}</SelectItem>
-                    <SelectItem value="callback">{t("packer.callback")}</SelectItem>
-                    <SelectItem value="tls">{t("packer.tls")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
               <div>
@@ -423,32 +372,6 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
               <div>
                 <Label className="text-xs">.reloc</Label>
                 <Input value={peReloc} onChange={e => setPeReloc(e.target.value)} />
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-border pt-4">
-            <h3 className="text-sm font-semibold text-foreground mb-3">{t("packer.version_info")} <span className="text-muted-foreground font-normal">{t("packer.optional")}</span></h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">{t("packer.company_name")}</Label>
-                <Input value={companyName} onChange={e => setCompanyName(e.target.value)} />
-              </div>
-              <div>
-                <Label className="text-xs">{t("packer.file_version")}</Label>
-                <Input value={fileVersion} onChange={e => setFileVersion(e.target.value)} placeholder="1.0.0.0" />
-              </div>
-              <div>
-                <Label className="text-xs">{t("packer.product_name")}</Label>
-                <Input value={productName} onChange={e => setProductName(e.target.value)} />
-              </div>
-              <div>
-                <Label className="text-xs">{t("packer.file_description")}</Label>
-                <Input value={fileDescription} onChange={e => setFileDescription(e.target.value)} />
-              </div>
-              <div className="sm:col-span-2">
-                <Label className="text-xs">{t("packer.original_filename")}</Label>
-                <Input value={originalFilename} onChange={e => setOriginalFilename(e.target.value)} placeholder="bundled.exe" />
               </div>
             </div>
           </div>

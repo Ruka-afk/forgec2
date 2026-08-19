@@ -3296,7 +3296,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Packer capability info */
+        /**
+         * Packer capability info
+         * @description Advertises the packer options that have real implementations (encode types, entry points, timestamps, cert options, output types)
+         */
         get: operations["packerInfo"];
         put?: never;
         post?: never;
@@ -5493,7 +5496,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Packer artifact */
+        /**
+         * Packer artifact
+         * @description Builds a real artifact from shellcode (EXE loader, PS1 loader, or encoded blob) or passes through a raw PE image
+         */
         post: operations["packerArtifact"];
         delete?: never;
         options?: never;
@@ -5510,7 +5516,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Payload bundle */
+        /**
+         * Payload bundle
+         * @description Applies PE transformations (section names, timestamp, benign imports) to an uploaded executable
+         */
         post: operations["payloadBundle"];
         delete?: never;
         options?: never;
@@ -14176,7 +14185,15 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        encode_types: string[];
+                        entry_points: string[];
+                        timestamps: string[];
+                        cert_options: string[];
+                        output_types: string[];
+                    };
+                };
             };
         };
     };
@@ -16947,14 +16964,64 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    template_name?: string;
+                    /**
+                     * @description exe builds a real loader binary; dll is not supported
+                     * @enum {string}
+                     */
+                    output_type?: "exe" | "ps1" | "raw" | "shellcode" | "service_exe";
+                    /** @description Base64 of the shellcode to load (or raw PE bytes when raw_exe_b64 is used) */
+                    shellcode_b64: string;
+                    /** @description Base64 of a PE image for raw passthrough */
+                    raw_exe_b64?: string;
+                    /** @enum {string} */
+                    encode_type?: "none" | "xor" | "aes" | "sgn";
+                    /** @description Optional hex key; a random key is generated when omitted */
+                    encode_key_hex?: string;
+                    pe_section_text?: string;
+                    pe_section_data?: string;
+                    pe_section_rdata?: string;
+                    pe_section_reloc?: string;
+                    /** @enum {string} */
+                    entry_point?: "direct" | "thread" | "callback";
+                    /** @enum {string} */
+                    timestamp?: "random" | "keep" | "custom";
+                    /** @description YYYY-MM-DD when timestamp is custom */
+                    timestamp_date?: string;
+                    /** @enum {string} */
+                    cert_option?: "none";
+                    /** @description Comma-separated benign DLLs to append to the import table */
+                    import_dlls?: string;
+                    output_filename?: string;
+                };
+            };
+        };
         responses: {
-            /** @description OK */
+            /** @description Built artifact (base64 in data) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @description Base64 of the built artifact */
+                        data: string;
+                        filename: string;
+                        size: number;
+                    };
+                };
+            };
+            /** @description Invalid request (unknown enum value, empty payload, unsupported option) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
         };
     };
@@ -16965,14 +17032,48 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Base64 of the PE image to transform */
+                    agent_exe: string;
+                    pe_section_text?: string;
+                    pe_section_data?: string;
+                    pe_section_rdata?: string;
+                    pe_section_reloc?: string;
+                    /**
+                     * @description Defaults to keep when omitted
+                     * @enum {string}
+                     */
+                    timestamp?: "keep" | "random" | "custom";
+                    /** @description YYYY-MM-DD when timestamp is custom */
+                    timestamp_date?: string;
+                    /** @description Comma-separated benign DLLs to append to the import table */
+                    import_dlls?: string;
+                };
+            };
+        };
         responses: {
-            /** @description OK */
+            /** @description Bundled payload (base64 in data) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        data: string;
+                        size: number;
+                    };
+                };
+            };
+            /** @description Invalid request (not a PE image, bad timestamp, import manipulation failure) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
         };
     };

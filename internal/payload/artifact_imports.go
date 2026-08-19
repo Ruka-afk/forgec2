@@ -10,26 +10,26 @@ import (
 // shipped version of the DLL. The Windows loader validates every imported
 // function name at load time, so only real exports may be used.
 var benignFuncs = map[string]string{
-	"kernel32.dll":  "GetModuleHandleA",
-	"advapi32.dll":  "RegOpenKeyExA",
-	"user32.dll":    "MessageBoxA",
-	"ws2_32.dll":    "WSAStartup",
-	"bcrypt.dll":    "BCryptOpenAlgorithmProvider",
-	"ntdll.dll":     "NtQueryInformationProcess",
-	"shell32.dll":   "ShellExecuteA",
-	"ole32.dll":     "CoCreateInstance",
-	"wininet.dll":   "InternetOpenA",
-	"gdi32.dll":     "GetDeviceCaps",
-	"comctl32.dll":  "InitCommonControlsEx",
-	"version.dll":   "GetFileVersionInfoA",
-	"crypt32.dll":   "CertOpenStore",
-	"iphlpapi.dll":  "GetAdaptersInfo",
-	"netapi32.dll":  "NetApiBufferFree",
-	"psapi.dll":     "EnumProcesses",
-	"secur32.dll":   "AcquireCredentialsHandleA",
-	"setupapi.dll":  "SetupDiGetClassDevsA",
-	"winmm.dll":     "waveOutOpen",
-	"wldap32.dll":   "ldap_init",
+	"kernel32.dll": "GetModuleHandleA",
+	"advapi32.dll": "RegOpenKeyExA",
+	"user32.dll":   "MessageBoxA",
+	"ws2_32.dll":   "WSAStartup",
+	"bcrypt.dll":   "BCryptOpenAlgorithmProvider",
+	"ntdll.dll":    "NtQueryInformationProcess",
+	"shell32.dll":  "ShellExecuteA",
+	"ole32.dll":    "CoCreateInstance",
+	"wininet.dll":  "InternetOpenA",
+	"gdi32.dll":    "GetDeviceCaps",
+	"comctl32.dll": "InitCommonControlsEx",
+	"version.dll":  "GetFileVersionInfoA",
+	"crypt32.dll":  "CertOpenStore",
+	"iphlpapi.dll": "GetAdaptersInfo",
+	"netapi32.dll": "NetApiBufferFree",
+	"psapi.dll":    "EnumProcesses",
+	"secur32.dll":  "AcquireCredentialsHandleA",
+	"setupapi.dll": "SetupDiGetClassDevsA",
+	"winmm.dll":    "waveOutOpen",
+	"wldap32.dll":  "ldap_init",
 }
 
 type peSectionView struct {
@@ -223,10 +223,29 @@ func (v *peImportView) importedDLLs() []string {
 }
 
 // AddBenignImports ensures the requested DLLs appear in the import table of a
-// PE image. Already-imported DLLs are left untouched; missing DLLs are appended
-// after the existing import descriptor table when the owning section has
-// contiguous zero slack, otherwise an explicit error is returned instead of
-// silently doing nothing.
+// PE image. Already-imported DLLs are left untouched. Missing DLLs are added
+// using one of two strategies:
+//
+//  1. In-place: when the descriptor table is followed by contiguous zero
+//     slack (typical of hand-packed binaries), new descriptors are appended
+//     right after the existing table.
+//  2. Relocation: otherwise the entire descriptor array is rewritten into the
+//     trailing zero region of the section that holds the import table (Go
+//     toolchain binaries always leave zero padding at the end of .idata),
+//     and the import data directory is repointed at the new array. Only the
+//     descriptor array is moved; the ILT/IAT/name data of existing imports
+//     stays where it is (the copied descriptors reference it by its original
+//     RVA), so no base relocations need to be rewritten.
+//
+// If neither strategy has enough zero space, an explicit error is returned
+// instead of silently doing nothing.
+// missingDLL pairs a DLL to add with a benign export that provably exists in
+// every shipped version of that DLL.
+type missingDLL struct {
+	name   string
+	export string
+}
+
 func AddBenignImports(data []byte, dlls []string) error {
 	if len(dlls) == 0 {
 		return nil
@@ -246,10 +265,6 @@ func AddBenignImports(data []byte, dlls []string) error {
 		return false
 	}
 
-	type missingDLL struct {
-		name   string
-		export string
-	}
 	var missing []missingDLL
 	for _, raw := range dlls {
 		name := strings.ToLower(strings.TrimSpace(raw))
@@ -264,7 +279,7 @@ func AddBenignImports(data []byte, dlls []string) error {
 		}
 		export, ok := benignFuncs[name]
 		if !ok {
-			return fmt.Errorf("import manipulation: no known benign export for %s", name)
+			return artifactValidationError("import manipulation: no known benign export for %s", name)
 		}
 		missing = append(missing, missingDLL{name: name, export: export})
 	}
@@ -272,8 +287,34 @@ func AddBenignImports(data []byte, dlls []string) error {
 		return nil
 	}
 
-	// Space needed: new descriptors plus a final null terminator, then
-	// per-DLL ILT (16B), IAT (16B), hint/name and DLL name strings.
+	if err := injectImportsInPlace(view, missing); err == nil {
+		return nil
+	} else if err := injectImportsRelocated(view, missing); err == nil {
+		return nil
+	} else {
+		return artifactValidationError("import manipulation: no zero slack space for %d new import(s)", len(missing))
+	}
+}
+
+// spaceForMissing computes the total bytes needed for the new descriptors
+// plus per-DLL ILT (16B), IAT (16B), hint/name and DLL name strings.
+func spaceForMissing(missing int) int {
+	align8 := func(pos int) int { return (pos + 7) &^ 7 }
+	p := 20 * missing
+	for i := 0; i < missing; i++ {
+		p = align8(p)
+		p += 16 // ILT
+		p = align8(p)
+		p += 16         // IAT
+		p += 2 + 20 + 1 // longest known benign export name
+		p += 20 + 1     // longest known DLL name
+	}
+	return p
+}
+
+// injectImportsInPlace appends new import descriptors immediately after the
+// existing table when the section has contiguous zero slack there.
+func injectImportsInPlace(view *peImportView, missing []missingDLL) error {
 	align8 := func(pos int) int { return (pos + 7) &^ 7 }
 	p := view.tableEnd + 20*len(missing)
 	for _, m := range missing {
@@ -285,13 +326,13 @@ func AddBenignImports(data []byte, dlls []string) error {
 		p += len(m.name) + 1
 	}
 	if p > view.sectionRawEnd {
-		return fmt.Errorf("import manipulation: no slack space after the import table (%d bytes needed, %d available); binary cannot be extended in place", p-view.tableEnd+20, view.sectionRawEnd-(view.tableEnd-20))
+		return fmt.Errorf("no slack space after the import table")
 	}
 	// The old null terminator is already zero; everything through the end of
 	// the new thunk area must be untouched zeros so the PE keeps loading.
 	for i := view.tableEnd - 20; i < p; i++ {
 		if view.data[i] != 0 {
-			return fmt.Errorf("import manipulation: no contiguous zero slack after the import table")
+			return fmt.Errorf("no contiguous zero slack after the import table")
 		}
 	}
 
@@ -323,13 +364,13 @@ func AddBenignImports(data []byte, dlls []string) error {
 		pos += len(m.name) + 1
 
 		dpos := descPos + k*20
-		writeU32(dpos, iltRVA)          // OriginalFirstThunk -> ILT
-		writeU32(dpos+4, 0)             // TimeDateStamp
-		writeU32(dpos+8, 0)             // ForwarderChain
-		writeU32(dpos+12, nameRVA)      // Name
-		writeU32(dpos+16, iatRVA)       // FirstThunk -> IAT
-		writeU32(iltPos, hintNameRVA)   // first thunk -> hint/name
-		writeU32(iltPos+8, 0)           // null terminator thunk
+		writeU32(dpos, iltRVA)        // OriginalFirstThunk -> ILT
+		writeU32(dpos+4, 0)           // TimeDateStamp
+		writeU32(dpos+8, 0)           // ForwarderChain
+		writeU32(dpos+12, nameRVA)    // Name
+		writeU32(dpos+16, iatRVA)     // FirstThunk -> IAT
+		writeU32(iltPos, hintNameRVA) // first thunk -> hint/name
+		writeU32(iltPos+8, 0)         // null terminator thunk
 		writeU32(iatPos, hintNameRVA)
 		writeU32(iatPos+8, 0)
 	}
@@ -338,5 +379,165 @@ func AddBenignImports(data []byte, dlls []string) error {
 	for i := 0; i < 20; i++ {
 		view.data[nullPos+i] = 0
 	}
+	// The loader walks the table from the data directory's declared size, so
+	// it must cover the new entries (plus the null terminator). The section
+	// VirtualSize is raised to the new table extent when the old size is
+	// page-rounded below it.
+	view.setImportDirectory(view.importRVA, uint32(20*(view.descCount+len(missing)+1)))
+	if err := view.expandImportSectionVirtualSize(uint32(p - view.rawPtrForImport())); err != nil {
+		return err
+	}
 	return nil
+}
+
+// injectImportsRelocated rewrites the import descriptor array into the
+// trailing zero region of the import section and repoints the import data
+// directory at it. Existing descriptors are copied verbatim (their ILT/IAT
+// references stay at their original RVAs), so existing imports keep binding
+// through the same thunks the code already points at.
+func injectImportsRelocated(view *peImportView, missing []missingDLL) error {
+	align8 := func(pos int) int { return (pos + 7) &^ 7 }
+
+	// Find the trailing zero region of the section that owns the import
+	// table: from the last non-zero byte to the end of the section's raw
+	// data. Go toolchain binaries always leave this padding in .idata.
+	trailStart := view.sectionRawEnd
+	for trailStart > view.importOff && view.data[trailStart-1] == 0 {
+		trailStart--
+	}
+	if trailStart >= view.sectionRawEnd {
+		return fmt.Errorf("no trailing zero space in import section")
+	}
+
+	// Needed: relocated descriptor array (existing + new + null) plus the new
+	// ILT/IAT/name data.
+	needed := 20*(view.descCount+len(missing)+1) + spaceForMissing(len(missing))
+	if trailStart+needed > view.sectionRawEnd {
+		return fmt.Errorf("trailing zero space too small")
+	}
+	// The section's VirtualSize must cover the rewritten array. The raw data
+	// exists (it is part of the file), so this only requires the mapped
+	// region not to collide with the next section.
+	requiredVsz := (trailStart - view.rawPtrForImport()) + needed
+	if err := view.expandImportSectionVirtualSize(uint32(requiredVsz)); err != nil {
+		return err
+	}
+
+	// Copy the existing descriptors verbatim, then append the new ones and a
+	// fresh null terminator. Thunk/name data is laid out AFTER the whole
+	// descriptor array (descriptors + new entries + null), so it never
+	// overlaps the array itself.
+	firstNewDesc := trailStart + 20*view.descCount
+	pos := trailStart + 20*(view.descCount+len(missing)+1)
+	copy(view.data[trailStart:firstNewDesc], view.data[view.importOff:view.importOff+20*view.descCount])
+	writeU32 := func(p int, v uint32) {
+		binary.LittleEndian.PutUint32(view.data[p:], v)
+	}
+	for k, m := range missing {
+		pos = align8(pos)
+		iltPos := pos
+		iltRVA, _ := view.offsetToRVA(pos)
+		pos += 16
+		pos = align8(pos)
+		iatPos := pos
+		iatRVA, _ := view.offsetToRVA(pos)
+		pos += 16
+		hintNameRVA, _ := view.offsetToRVA(pos)
+		view.data[pos] = 0
+		view.data[pos+1] = 0
+		copy(view.data[pos+2:], m.export)
+		view.data[pos+2+len(m.export)] = 0
+		pos += 2 + len(m.export) + 1
+		nameRVA, _ := view.offsetToRVA(pos)
+		copy(view.data[pos:], m.name)
+		view.data[pos+len(m.name)] = 0
+		pos += len(m.name) + 1
+
+		dpos := firstNewDesc + k*20
+		writeU32(dpos, iltRVA)
+		writeU32(dpos+4, 0)
+		writeU32(dpos+8, 0)
+		writeU32(dpos+12, nameRVA)
+		writeU32(dpos+16, iatRVA)
+		writeU32(iltPos, hintNameRVA)
+		writeU32(iltPos+8, 0)
+		writeU32(iatPos, hintNameRVA)
+		writeU32(iatPos+8, 0)
+	}
+	for i := 0; i < 20; i++ {
+		view.data[pos+i] = 0
+	}
+
+	// Repoint the import data directory at the relocated array.
+	newRVA, _ := view.offsetToRVA(trailStart)
+	view.setImportDirectory(newRVA, uint32(20*(view.descCount+len(missing)+1)))
+	return nil
+}
+
+// rawPtrForImport returns the PointerToRawData of the section that owns the
+// import table.
+func (v *peImportView) rawPtrForImport() int {
+	for _, s := range v.sections {
+		if uint32(v.importOff) >= s.rawPtr && uint32(v.importOff) < s.rawPtr+s.rawSize {
+			return int(s.rawPtr)
+		}
+	}
+	return 0
+}
+
+// expandImportSectionVirtualSize raises the VirtualSize of the section that
+// owns the import table to cover the rewritten data, failing when the mapped
+// region would collide with the next section.
+func (v *peImportView) expandImportSectionVirtualSize(required uint32) error {
+	data := v.data
+	peOff := int(data[0x3C]) | int(data[0x3D])<<8
+	numSections := int(data[peOff+6]) | int(data[peOff+7])<<8
+	sizeOpt := int(data[peOff+20]) | int(data[peOff+21])<<8
+	secOff := peOff + 4 + 20 + sizeOpt
+	idx := -1
+	importSectionRaw := v.rawPtrForImport()
+	for i := 0; i < numSections; i++ {
+		h := secOff + i*40
+		rawPtr := binary.LittleEndian.Uint32(data[h+20:])
+		if rawPtr == uint32(importSectionRaw) {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return fmt.Errorf("import section header not found")
+	}
+	curVsz := binary.LittleEndian.Uint32(data[secOff+idx*40+8:])
+	if required <= curVsz {
+		return nil
+	}
+	// Next section VA limits the mapped extent.
+	nextVA := uint32(0)
+	baseVA := binary.LittleEndian.Uint32(data[secOff+idx*40+12:])
+	for i := 0; i < numSections; i++ {
+		h := secOff + i*40
+		va := binary.LittleEndian.Uint32(data[h+12:])
+		if va > baseVA && (nextVA == 0 || va < nextVA) {
+			nextVA = va
+		}
+	}
+	if nextVA != 0 && baseVA+required > nextVA {
+		return fmt.Errorf("import section cannot be extended without overlapping the next section")
+	}
+	binary.LittleEndian.PutUint32(data[secOff+idx*40+8:], required)
+	return nil
+}
+
+// setImportDirectory rewrites the IMAGE_DIRECTORY_ENTRY_IMPORT entry (RVA and
+// size) in the optional header's data directory.
+func (v *peImportView) setImportDirectory(rva, size uint32) {
+	data := v.data
+	peOff := int(data[0x3C]) | int(data[0x3D])<<8
+	magic := binary.LittleEndian.Uint16(data[peOff+24:])
+	dirBase := peOff + 24 + 0x60
+	if magic == 0x20B {
+		dirBase = peOff + 24 + 0x70
+	}
+	binary.LittleEndian.PutUint32(data[dirBase+8:], rva)
+	binary.LittleEndian.PutUint32(data[dirBase+12:], size)
 }
