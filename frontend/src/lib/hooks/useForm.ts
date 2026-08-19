@@ -2,8 +2,7 @@
 
 import { useState, useCallback, useMemo } from "react";
 import type { ZodSchema, ZodError } from "zod";
-import { toast } from "sonner";
-import { useI18n } from "@/lib/i18n";
+import { useErrorToast } from "@/lib/hooks/useErrorToast";
 
 export interface UseFormOptions<T extends Record<string, unknown>> {
   initialValues: T;
@@ -33,7 +32,7 @@ export function useForm<T extends Record<string, unknown>>({
   const [errors, setErrors] = useState<Partial<Record<keyof T, string>>>({});
   const [touched, setTouched] = useState<Partial<Record<keyof T, boolean>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { t } = useI18n();
+  const { toastError } = useErrorToast();
 
   const validate = useCallback(
     (vals: T): Partial<Record<keyof T, string>> => {
@@ -100,12 +99,12 @@ export function useForm<T extends Record<string, unknown>>({
       try {
         await onSubmit(values);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : t("common.submit_failed"));
+        toastError(err, "common.submit_failed");
       } finally {
         setIsSubmitting(false);
       }
     },
-    [validate, values, onSubmit, t],
+    [validate, values, onSubmit, toastError],
   );
 
   const setFieldValue = useCallback((field: keyof T, value: unknown) => {

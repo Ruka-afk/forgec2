@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useWebSocket } from "@/lib/useWebSocket";
+import { useTypedWS, isWSEvent } from "@/lib/typed-ws";
 import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
@@ -109,21 +109,44 @@ export function NotificationDropdown() {
     if (taskFlushRef.current) clearTimeout(taskFlushRef.current);
   }, []);
 
-  const handleWSMessage = useCallback((msg: { type: string; [key: string]: unknown }) => {
-    const name = String(msg.hostname || msg.agent_id || "").slice(0, 32);
-    if (msg.type === "agent_online") pushNotification("success", t("topbar.notif.agent_online", { name }));
-    else if (msg.type === "agent_offline") pushNotification("warning", t("topbar.notif.agent_offline", { name }));
-    else if (msg.type === "task_update") {
-      const status = String(msg.status || "");
-      const type = String(msg.task_type || "");
-      const cmd = String(msg.command || "").slice(0, 40);
-      if (status === "completed" || status === "failed") queueTaskNotification(status, type, cmd);
-    } else if (msg.type === "credential_found") pushNotification("success", t("topbar.notif.credential_found"));
-    else if (msg.type === "system_alert") pushNotification("warning", String(msg.message || msg.title || t("topbar.notif.system_alert")));
-    else if (msg.type === "update_available") pushNotification("info", t("topbar.notif.update_available", { version: String(msg.latest || "") }));
-  }, [pushNotification, queueTaskNotification, t]);
-
-  useWebSocket(handleWSMessage);
+  useTypedWS(
+    ["agent_online", "agent_offline", "task_update", "credential_found", "system_alert", "update_available"],
+    (msg) => {
+      const online = isWSEvent(msg, "agent_online") ? msg : null;
+      if (online) {
+        const name = String(online.hostname || online.agent_id || "").slice(0, 32);
+        pushNotification("success", t("topbar.notif.agent_online", { name }));
+        return;
+      }
+      const offline = isWSEvent(msg, "agent_offline") ? msg : null;
+      if (offline) {
+        const name = String(offline.hostname || offline.agent_id || "").slice(0, 32);
+        pushNotification("warning", t("topbar.notif.agent_offline", { name }));
+        return;
+      }
+      const task = isWSEvent(msg, "task_update") ? msg : null;
+      if (task) {
+        const status = String(task.status || "");
+        const type = String(task.task_type || "");
+        const cmd = String(task.command || "").slice(0, 40);
+        if (status === "completed" || status === "failed") queueTaskNotification(status, type, cmd);
+        return;
+      }
+      if (isWSEvent(msg, "credential_found")) {
+        pushNotification("success", t("topbar.notif.credential_found"));
+        return;
+      }
+      const alert = isWSEvent(msg, "system_alert") ? msg : null;
+      if (alert) {
+        pushNotification("warning", String(alert.message || alert.title || t("topbar.notif.system_alert")));
+        return;
+      }
+      const update = isWSEvent(msg, "update_available") ? msg : null;
+      if (update) {
+        pushNotification("info", t("topbar.notif.update_available", { version: String(update.latest || "") }));
+      }
+    },
+  );
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const markAllRead = () => {

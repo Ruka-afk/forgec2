@@ -1,24 +1,24 @@
 import type { WSMessage } from "@/lib/wsContext";
+import { isWSEvent } from "@/lib/typed-ws";
 import type { UnifiedEvent } from "./types";
 
 export function unifiedFromWS(msg: WSMessage, now = new Date().toISOString()): UnifiedEvent | null {
-  const type = String(msg.type || "");
   const agentId = msg.agent_id != null ? String(msg.agent_id) : undefined;
 
-  if (type === "agent_online" || type === "agent_offline") {
-    const host = String(msg.hostname || agentId || type);
+  if (isWSEvent(msg, "agent_online") || isWSEvent(msg, "agent_offline")) {
+    const host = String(msg.hostname || agentId || msg.type);
     return {
-      id: `ws-${type}-${agentId || host}`,
+      id: `ws-${msg.type}-${agentId || host}`,
       at: now,
       source: "timeline",
-      kind: type,
+      kind: msg.type,
       title: host,
-      detail: [type === "agent_online" ? "online" : "offline", msg.username, msg.ip].filter(Boolean).join(" · "),
+      detail: [msg.type === "agent_online" ? "online" : "offline", msg.username, msg.ip].filter(Boolean).join(" · "),
       agentId,
     };
   }
 
-  if (type === "task_update" || type === "task_created") {
+  if (isWSEvent(msg, "task_update") || isWSEvent(msg, "task_created")) {
     const taskId = msg.task_id ?? msg.id;
     if (taskId == null) return null;
     return {
@@ -33,13 +33,13 @@ export function unifiedFromWS(msg: WSMessage, now = new Date().toISOString()): U
     };
   }
 
-  if (type === "system_alert" || type === "credential_found") {
+  if (isWSEvent(msg, "system_alert") || isWSEvent(msg, "credential_found")) {
     return {
-      id: `ws-${type}-${agentId || now}`,
+      id: `ws-${msg.type}-${agentId || now}`,
       at: now,
       source: "alert",
-      kind: type,
-      title: String(msg.title || type),
+      kind: msg.type,
+      title: String(msg.title || msg.type),
       detail: String(msg.message || msg.alert_type || ""),
       agentId,
     };

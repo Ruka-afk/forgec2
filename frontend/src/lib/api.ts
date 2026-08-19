@@ -1,7 +1,8 @@
 ﻿"use client";
 
 import { API_BASE } from "./constants";
-import { onWSMessage } from "./wsContext";
+import { subscribeTyped } from "./typed-ws";
+import { logger } from "./logger";
 import { paths } from "./api-paths";
 
 const TIMEOUT_MS = 30000;
@@ -224,7 +225,7 @@ async function request<T>(path: string, options: RequestOptions & { body?: unkno
     } catch (e) {
       if (externalSignal?.aborted) throw e;
       if (timedOut) throw e;
-      if (process.env.NODE_ENV === "development") console.error("api request failed", path, e);
+      if (process.env.NODE_ENV === "development") logger.debug("api request failed", { path }, e);
       if (attempt >= retries) throw e;
       return new Promise<T>((resolve) =>
         setTimeout(() => resolve(doFetch(attempt + 1)), 800 * Math.pow(2, attempt))
@@ -390,35 +391,35 @@ function pollTaskWithCancel(
 
     try {
       let streamedOutput = "";
-      unsub = onWSMessage((msg) => {
-        if (msg.type === "task_output" && Number(msg.task_id) === taskId) {
-          // Ordered streaming frame for large shell results: deliver the
-          // accumulated output so callers can render incrementally.
-          streamedOutput += String(msg.chunk ?? "");
-          opts.onStatus?.({
+      unsub = subscribeTyped(["task_update", "task_output"], (ev) => {
+        if (Number(ev.task_id) !== taskId) return;
+        if ("status" in ev) {
+          const status = String(ev.status) as TaskStatus["status"];
+          const partial = {
             id: taskId,
-            status: "running",
-            result: streamedOutput,
-          } as TaskStatus);
-          if (msg.done) {
-            finish({
-              id: taskId,
-              status: "completed",
-              result: streamedOutput,
-            } as TaskStatus);
-          }
+            status,
+            result: ev.result as string | undefined,
+            error: ev.error as string | undefined,
+          } as TaskStatus;
+          opts.onStatus?.(partial);
+          if (status === "completed" || status === "failed") finish(partial);
           return;
         }
-        if (msg.type !== "task_update" || Number(msg.task_id) !== taskId) return;
-        const status = String(msg.status) as TaskStatus["status"];
-        const partial = {
+        // Ordered streaming frame for large shell results: deliver the
+        // accumulated output so callers can render incrementally.
+        streamedOutput += String(ev.chunk ?? "");
+        opts.onStatus?.({
           id: taskId,
-          status,
-          result: msg.result as string | undefined,
-          error: msg.error as string | undefined,
-        } as TaskStatus;
-        opts.onStatus?.(partial);
-        if (status === "completed" || status === "failed") finish(partial);
+          status: "running",
+          result: streamedOutput,
+        } as TaskStatus);
+        if (ev.done) {
+          finish({
+            id: taskId,
+            status: "completed",
+            result: streamedOutput,
+          } as TaskStatus);
+        }
       });
     } catch {
       unsub = null;
@@ -433,7 +434,7 @@ function pollTaskWithCancel(
         opts.onStatus?.(st);
         if (st.status === "completed" || st.status === "failed") return finish(st);
       } catch (err) {
-        if (process.env.NODE_ENV === "development") console.error("[API:pollTask]", err);
+        if (process.env.NODE_ENV === "development") logger.debug("pollTask failed", { agentId, taskId }, err);
       }
       timer = setTimeout(tick, intervalMs);
     };

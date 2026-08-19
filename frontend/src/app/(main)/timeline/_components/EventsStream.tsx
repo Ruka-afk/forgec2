@@ -9,6 +9,8 @@ import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { POLL } from "@/lib/polling";
 import { useWS } from "@/lib/wsContext";
+import { subscribeTyped } from "@/lib/typed-ws";
+import { TIMELINE_EVENTS } from "@/lib/ws-events";
 import { formatTime } from "@/lib/utils";
 import { DataState } from "@/components/ui/data-state";
 import { Card } from "@/components/ui/card";
@@ -32,7 +34,7 @@ const SOURCES: { id: UnifiedSource | "all"; labelKey: string }[] = [
 
 export default function EventsStream() {
   const { t } = useI18n();
-  const { connected, subscribe } = useWS();
+  const { connected } = useWS();
   const [source, setSource] = useState<UnifiedSource | "all">("all");
   const [query, setQuery] = useState("");
   const [live, setLive] = useState<UnifiedEvent[]>([]);
@@ -71,7 +73,7 @@ export default function EventsStream() {
   });
 
   useEffect(() => {
-    const unsub = subscribe((msg) => {
+    const unsub = subscribeTyped(TIMELINE_EVENTS, (msg) => {
       const ev = unifiedFromWS(msg);
       if (!ev) return;
       liveBuffer.current.push(ev);
@@ -86,7 +88,7 @@ export default function EventsStream() {
         rafId.current = null;
       }
     };
-  }, [subscribe, flushLive]);
+  }, [flushLive]);
 
   const rows = useMemo(
     () => filterUnified(

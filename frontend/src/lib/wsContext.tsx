@@ -34,6 +34,17 @@ export function onWSMessage(listener: WSListener): () => void {
   };
 }
 
+/**
+ * Test-only: push a synthetic frame through the module-global listener
+ * channel (the same channel onWSMessage / subscribeTyped consume) without a
+ * live socket. Never call from application code.
+ */
+export function __testDispatchWS(msg: WSMessage): void {
+  for (const fn of globalListeners) {
+    try { fn(msg); } catch { /* listener error: skip */ }
+  }
+}
+
 interface WSContextValue {
   connected: boolean;
   reconnectFailed: boolean;
