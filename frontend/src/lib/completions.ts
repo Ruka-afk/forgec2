@@ -1,4 +1,4 @@
-export const WINDOWS_COMMANDS = [
+const WINDOWS_COMMANDS = [
   "whoami", "hostname", "ipconfig", "ipconfig /all", "systeminfo",
   "tasklist", "tasklist /v", "netstat -ano", "netstat -anob",
   "net user", "net localgroup administrators", "net group",
@@ -33,7 +33,7 @@ export const WINDOWS_COMMANDS = [
   "bof", "net",
 ];
 
-export const LINUX_COMMANDS = [
+const LINUX_COMMANDS = [
   "whoami", "id", "uname -a", "hostname", "hostname -f",
   "ps aux", "ps -ef", "top -bn1",
   "ip addr", "ip route", "ip neigh",
@@ -56,7 +56,7 @@ export const LINUX_COMMANDS = [
   "upload", "download",
 ];
 
-export const SUB_COMMANDS: Record<string, string[]> = {
+const SUB_COMMANDS: Record<string, string[]> = {
   "netstat": ["-ano", "-anob", "-p tcp", "-p udp", "-r"],
   "ipconfig": ["/all", "/release", "/renew", "/flushdns"],
   "dir": ["/s", "/b", "/a", "/w"],

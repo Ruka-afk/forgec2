@@ -330,7 +330,7 @@ type TaskCompleted = TaskStatusBase & { status: "completed"; result: string };
 type TaskFailed = TaskStatusBase & { status: "failed"; error: string };
 export type TaskStatus = TaskRunning | TaskCompleted | TaskFailed;
 
-export interface PollTaskHandle {
+interface PollTaskHandle {
   promise: Promise<TaskStatus>;
   cancel: () => void;
 }
@@ -460,7 +460,7 @@ async function getAgentStatus(agentId: string): Promise<AgentStatus | "unknown">
   return (VALID_STATUSES.includes(raw) ? raw : "unknown") as AgentStatus | "unknown";
 }
 
-export interface RunTaskOptions {
+interface RunTaskOptions {
   method?: "post" | "postJson";
   body?: Record<string, unknown> | Record<string, string>;
   intervalMs?: number;
