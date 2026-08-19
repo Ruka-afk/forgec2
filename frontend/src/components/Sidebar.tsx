@@ -119,7 +119,7 @@ const SidebarNav = memo(function SidebarNav({ collapsed, sections, toggleSection
       })).filter((section) => section.items.length > 0);
 
   return (
-    <nav className={collapsed ? 'flex flex-col items-center gap-1' : 'space-y-0 text-(--fs-body-sm)'}>
+    <nav className={collapsed ? 'flex flex-col items-center gap-1' : 'space-y-0 text-sm'}>
       {filteredSections.map((section, idx) => (
         <div key={section.titleKey} className={collapsed ? 'w-full' : ''}>
           {!collapsed && (
@@ -348,7 +348,7 @@ export default function Sidebar() {
     return (
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
         <SheetContent side="left" showCloseButton={false}
-          className="w-48 p-0 bg-sidebar border-r border-border">
+          className="w-64 p-0 bg-sidebar border-r border-border">
           <SheetTitle className="sr-only">{t("a11y.navigation")}</SheetTitle>
           <div className="flex flex-col h-full">
             {navContent}

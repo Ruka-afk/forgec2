@@ -91,11 +91,11 @@ export default function PasswordSprayPage() {
         }
         setVaultPasswords(opts.slice(0, 50));
       })
-      .catch(() => {});
+      .catch(() => toast.error(t("spray.vault_load_failed")));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [t]);
 
   const { data } = useApiResource<{ agents: Agent[] }>({
     fetcher: async () => {

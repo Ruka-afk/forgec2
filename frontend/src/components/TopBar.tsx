@@ -51,13 +51,17 @@ export default function TopBar({ onMenuToggle }: { onMenuToggle?: () => void }) 
           </Tooltip>
         </div>
 
-        <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" size="icon" onClick={toggleFocusMode} aria-label={focusMode ? t("topbar.focus_mode_exit") : t("topbar.focus_mode")} />}>
-            {focusMode ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
-          </TooltipTrigger>
-          <TooltipContent>{focusMode ? t("topbar.focus_mode_exit") : t("topbar.focus_mode")}</TooltipContent>
-        </Tooltip>
-        <ShortcutsHelpButton />
+        <span className="hidden md:inline-flex">
+          <Tooltip>
+            <TooltipTrigger render={<Button variant="ghost" size="icon" onClick={toggleFocusMode} aria-label={focusMode ? t("topbar.focus_mode_exit") : t("topbar.focus_mode")} />}>
+              {focusMode ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+            </TooltipTrigger>
+            <TooltipContent>{focusMode ? t("topbar.focus_mode_exit") : t("topbar.focus_mode")}</TooltipContent>
+          </Tooltip>
+        </span>
+        <span className="hidden md:inline-flex">
+          <ShortcutsHelpButton />
+        </span>
         <ThemeSelector />
         <LanguageSelector />
         <NotificationDropdown />

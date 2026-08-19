@@ -1,2 +1,0 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/vendor-misc-C6GVfPCT.js","assets/vendor-react-gxa0FIDe.js"])))=>i.map(i=>d[i]);
-import{_ as i}from"./index-Jrjr8EYT.js";async function d(o,a){const{toPng:e}=await i(async()=>{const{toPng:r}=await import("./vendor-misc-C6GVfPCT.js").then(c=>c.N);return{toPng:r}},__vite__mapDeps([0,1])),n=await e(o,{cacheBust:!0,pixelRatio:2,backgroundColor:getComputedStyle(o).backgroundColor||"#ffffff"}),t=document.createElement("a");t.download=a,t.href=n,t.click()}export{d as e};

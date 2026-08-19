@@ -58,7 +58,7 @@ export function SectionCard({
       )}
     >
       <div className="flex min-w-0 items-center gap-2">
-        <h3 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
+        <h3 className="flex min-w-0 items-center gap-2 text-(--fs-section) font-semibold text-foreground">
           {icon}
           <span className="truncate">{title}</span>
           {typeof count === "number" && (

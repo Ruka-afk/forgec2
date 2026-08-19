@@ -77,7 +77,6 @@
   --fs-micro-sm: 0.625rem;    /* 10px — eyebrow, tiny labels */
   --fs-xs-sm: 0.6875rem;      /* 11px — dense captions */
   --fs-compact: 0.8125rem;    /* 13px — dense UI text */
-  --fs-body-sm: 0.84375rem;   /* 13.5px — card body captions */
   --fs-body: 0.9375rem;       /* 15px — default body (html root) */
   --fs-xs: 0.75rem;           /* 12px */
   --fs-sm: 0.875rem;          /* 14px */
@@ -91,6 +90,7 @@
   --fs-6xl: 3.75rem;          /* 60px */
   --fs-7xl: 4.5rem;           /* 72px — error pages */
   --fs-page-title: 1.375rem;  /* 22px — PageHeader h1 */
+  --fs-section: var(--fs-lg); /* 18px — section titles (CardHeaderRow / SectionCard) */
   --fs-stat-value: 1.625rem;  /* 26px — StatCard value */
   --fs-prose: 1.05rem;        /* 16.8px — markdown body */
 
@@ -126,6 +126,8 @@
   --elevation-1: 0 1px 2px oklch(0.2 0.02 265 / 0.05), 0 1px 1px oklch(0.2 0.02 265 / 0.04);
   --elevation-2: 0 2px 4px oklch(0.2 0.02 265 / 0.06), 0 4px 12px oklch(0.2 0.02 265 / 0.05);
   --elevation-3: 0 4px 8px oklch(0.2 0.02 265 / 0.07), 0 12px 32px oklch(0.2 0.02 265 / 0.10);
+  --elevation-4: 0 8px 16px oklch(0.2 0.02 265 / 0.08), 0 24px 64px oklch(0.2 0.02 265 / 0.12);
+  --shadow-dock-up: 0 -8px 24px -12px oklch(0.2 0.02 265 / 0.35);
 
   --chart-1: oklch(0.62 0.15 158);   /* emerald */
   --chart-2: oklch(0.60 0.13 215);   /* cyan */
@@ -134,7 +136,7 @@
   --chart-5: oklch(0.61 0.19 20);    /* rose */
   --chart-6: oklch(0.60 0.17 300);   /* violet */
 
-  --content-width: 80rem;
+  --content-width: 90rem;
   --z-scroll-to-top: 70;
   --z-skip-link: 100;
   --tracking-wide: 0.08em;
@@ -184,6 +186,8 @@
   --elevation-1: 0 1px 2px oklch(0 0 0 / 0.35);
   --elevation-2: 0 2px 6px oklch(0 0 0 / 0.40), 0 8px 20px oklch(0 0 0 / 0.25);
   --elevation-3: 0 6px 12px oklch(0 0 0 / 0.45), 0 20px 50px oklch(0 0 0 / 0.40);
+  --elevation-4: 0 8px 16px oklch(0 0 0 / 0.50), 0 28px 72px oklch(0 0 0 / 0.48);
+  --shadow-dock-up: 0 -8px 24px -12px oklch(0 0 0 / 0.55);
 
   --chart-1: oklch(0.72 0.15 158);
   --chart-2: oklch(0.70 0.13 215);
@@ -442,9 +446,12 @@ body {
   --shadow-1: var(--elevation-1);
   --shadow-2: var(--elevation-2);
   --shadow-3: var(--elevation-3);
+  --shadow-none: 0 0 #0000;
   --shadow-sm: var(--elevation-1);
   --shadow-md: var(--elevation-2);
   --shadow-lg: var(--elevation-3);
+  --shadow-xl: var(--elevation-4);
+  --shadow-2xl: var(--elevation-4);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -479,7 +486,7 @@ body {
   --tracking-label: 0.12em;
   --tracking-sublabel: 0.08em;
   --blur-orb: 60px;
-  --content-width: 80rem;
+  --content-width: 90rem;
 }
 
 @layer base {

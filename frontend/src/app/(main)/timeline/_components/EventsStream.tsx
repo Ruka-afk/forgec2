@@ -52,15 +52,19 @@ export default function EventsStream() {
 
   const { data, loading, error, refresh } = useApiResource<{ timeline: TimelineEvent[]; tasks: Task[]; alerts: AlertLike[] }>({
     fetcher: async () => {
-      const [tl, tk, nt] = await Promise.all([
-        api.get(paths.timeline.data("page=1")).catch(() => ({})),
-        api.get(paths.tasks.list("page=1&pageSize=50")).catch(() => ({})),
-        api.get(paths.notifications.list("page=1&pageSize=50")).catch(() => ({})),
+      const [tl, tk, nt] = await Promise.allSettled([
+        api.get(paths.timeline.data("page=1")),
+        api.get(paths.tasks.list("page=1&pageSize=50")),
+        api.get(paths.notifications.list("page=1&pageSize=50")),
       ]);
+      // Partial failure degrades gracefully (only the failed source is empty);
+      // only when every source is down do we surface the error state.
+      const failures = [tl, tk, nt].filter((r) => r.status === "rejected").length;
+      if (failures === 3) throw new Error(t("events.load_failed"));
       return {
-        timeline: firstArray(tl, ["events", "data", "Events"]) as TimelineEvent[],
-        tasks: firstArray(tk, ["tasks", "data", "Tasks"]) as Task[],
-        alerts: firstArray(nt, ["notifications", "data"]) as AlertLike[],
+        timeline: tl.status === "fulfilled" ? firstArray(tl.value, ["events", "data", "Events"]) as TimelineEvent[] : [],
+        tasks: tk.status === "fulfilled" ? firstArray(tk.value, ["tasks", "data", "Tasks"]) as Task[] : [],
+        alerts: nt.status === "fulfilled" ? firstArray(nt.value, ["notifications", "data"]) as AlertLike[] : [],
       };
     },
     pollMs: connected ? POLL_CONNECTED_MS : POLL_FALLBACK_MS,

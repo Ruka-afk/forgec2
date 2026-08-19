@@ -69,12 +69,6 @@ export interface PhaseTask {
   agent_id?: string;
 }
 
-export const STATUS_COLORS: Record<string, string> = {
-  active: "#6366f1",
-  completed: "#059669",
-  archived: "#64748b",
-};
-
 export const PHASE_ORDER = [
   "Reconnaissance",
   "Resource Development",

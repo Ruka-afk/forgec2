@@ -6,6 +6,8 @@ import { exfilBasename, fileTaskId, pullPlan, transferProgressAt, type TransferP
 
 type TFn = (key: string, params?: Record<string, string | number>) => string;
 
+const MAX_PUSH_BYTES = 1024 * 1024 * 1024; // 1 GiB client-side sanity cap
+
 export async function pullRemoteFile(opts: {
   agentId: string;
   remotePath: string;
@@ -49,6 +51,10 @@ export function pushLocalFile(opts: {
   signal?: AbortSignal;
 }): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (opts.file.size > MAX_PUSH_BYTES) {
+      reject(new Error(opts.t("agents.files_upload_too_large", { max: "1 GiB" })));
+      return;
+    }
     const formData = new FormData();
     formData.append("file", opts.file);
     formData.append("target_path", opts.destPath);

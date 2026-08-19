@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import UpdateBanner from "@/components/UpdateBanner";
@@ -26,8 +26,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const sidebarWidth = useAppStore(selectSidebarWidth);
 
+  const prevWidthRef = useRef<number>(typeof window !== "undefined" ? window.innerWidth : 1920);
+
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 1024);
+    const check = () => {
+      const w = window.innerWidth;
+      const mobile = w < 1024;
+      setIsMobile(mobile);
+      // Entering the 1024–1280 compact band: default-collapse the sidebar so
+      // narrow laptops get full content width. Leaving the band never fights
+      // the operator's explicit toggle (only the crossing triggers it).
+      if (!mobile && w < 1280 && prevWidthRef.current >= 1280) {
+        useAppStore.setState({ sidebarCollapsed: true });
+      }
+      prevWidthRef.current = w;
+    };
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
@@ -87,12 +100,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Sticky breadcrumb dock — merges into the topbar chrome plane */}
           {!focusMode && (
             <div className="sticky top-14 z-20 bg-background/85 backdrop-blur-xl border-b border-border/40">
-              <div className="mx-auto w-full max-w-screen-2xl px-5 sm:px-8 lg:px-10 py-2">
+              <div className="mx-auto w-full max-w-(--content-width) px-5 sm:px-8 lg:px-10 py-2">
                 <Breadcrumb />
               </div>
             </div>
           )}
-            <div className={`mx-auto h-full w-full max-w-screen-2xl px-5 sm:px-8 lg:px-10 py-5 sm:py-7 lg:py-8 ${focusMode ? "pt-5" : ""}`}>
+            <div className={`mx-auto h-full w-full max-w-(--content-width) px-5 sm:px-8 lg:px-10 py-5 sm:py-7 lg:py-8 ${focusMode ? "pt-5" : ""}`}>
             <UpdateBanner />
             <AgentStatusBanner />
             {children}

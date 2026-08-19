@@ -214,7 +214,7 @@ export function AgentInteractDock({
 
   return (
     <div
-      className="relative z-20 flex shrink-0 flex-col border-t border-border bg-card shadow-[0_-8px_24px_-12px_rgb(0_0_0/0.35)]"
+      className="relative z-20 flex shrink-0 flex-col border-t border-border bg-card shadow-(--shadow-dock-up)"
       style={{ height }}
       role="region"
       aria-label={t("agents.interact")}

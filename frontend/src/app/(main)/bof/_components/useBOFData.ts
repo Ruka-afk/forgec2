@@ -5,7 +5,10 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
+import { toast } from "sonner";
 import type { BOFFile, BOFLibraryItem, Execution, RepoItem } from "./types";
+
+const MAX_BOF_SIZE = 10 * 1024 * 1024; // 10MB client-side sanity cap for .o files
 
 export function useBOFData() {
   const { t } = useI18n();
@@ -70,6 +73,10 @@ export function useBOFData() {
 
   const uploadBOF = useCallback(
     async (file: File, arch: string, name: string, desc: string) => {
+      if (file.size > MAX_BOF_SIZE) {
+        toast.error(t("bof.toast.file_too_large", { max: "10MB" }));
+        return;
+      }
       const formData = new FormData();
       formData.append("file", file);
       formData.append("name", name);
@@ -79,10 +86,11 @@ export function useBOFData() {
         await api.postFormData(paths.bof.upload, formData);
       } catch (e) {
         if (process.env.NODE_ENV === "development") console.error("BOF: upload failed", e);
+        toast.error(t("bof.toast.upload_failed"));
       }
       loadFiles();
     },
-    [loadFiles]
+    [loadFiles, t]
   );
 
   const deleteBOF = useCallback(
@@ -166,6 +174,10 @@ export function useBOFData() {
 
   const uploadLibrary = useCallback(
     async (file: File, arch: string, name: string, desc: string, author: string) => {
+      if (file.size > MAX_BOF_SIZE) {
+        toast.error(t("bof.toast.file_too_large", { max: "10MB" }));
+        return;
+      }
       const formData = new FormData();
       formData.append("file", file);
       formData.append("name", name);
@@ -176,10 +188,11 @@ export function useBOFData() {
         await api.postFormData(paths.bof.upload, formData);
       } catch (e) {
         if (process.env.NODE_ENV === "development") console.error("BOFLibrary: upload failed", e);
+        toast.error(t("bof.toast.upload_failed"));
       }
       loadLibrary();
     },
-    [loadLibrary]
+    [loadLibrary, t]
   );
 
   const runLibrary = useCallback(
