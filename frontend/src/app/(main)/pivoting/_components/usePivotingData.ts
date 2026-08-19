@@ -7,6 +7,7 @@ import { paths } from "@/lib/api-paths";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import type { PivotAgent, RelaySession, RPortForwardStatus } from "./types";
 
 export function usePivotingData() {
@@ -29,8 +30,8 @@ export function usePivotingData() {
         rportForwards: rportData ? normalizeListEnvelope(rportData, ["forwards", "data"]) as RPortForwardStatus[] : [],
       };
     },
-    pollMs: 5_000,
-    toastThrottleMs: 5_000,
+    pollMs: POLL.pivoting,
+    toastThrottleMs: POLL.toastThrottleShort,
     errorMessage: t("pivoting.toast.load_failed"),
   });
   const sessions = data?.sessions ?? [];

@@ -6,6 +6,8 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { useMutation } from "@/lib/hooks/useMutation";
+import { POLL } from "@/lib/polling";
 import { DataSpinner } from "@/components/ui/data-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FieldError } from "@/components/ui/field-error";
@@ -37,15 +39,25 @@ export default function DomainFrontingPage() {
   const [checking, setChecking] = useState(false);
   const [newDomain, setNewDomain] = useState("");
   const [domainError, setDomainError] = useState("");
-  const [saving, setSaving] = useState(false);
   const { confirm, modal } = useConfirm();
+
+  const { mutate: saveConfig, isPending: saving } = useMutation({
+    fn: async (cfgDomains: string[], cfgAuto: boolean) => {
+      await api.postJson(paths.domainFront.config, { domains: cfgDomains, auto_failover: cfgAuto });
+    },
+    onSuccess: () => {
+      toast.success(t("domain_fronting.toast.config_saved"));
+      fetchStatus();
+    },
+    onError: () => toast.error(t("domain_fronting.toast.config_save_failed")),
+  });
 
   const { data, loading, refresh: fetchStatus } = useApiResource<{ domains: FrontDomain[]; auto_failover?: boolean }>({
     fetcher: async () => {
       const data = await api.postJson(paths.domainFront.list, {});
       return data as { domains: FrontDomain[]; auto_failover?: boolean };
     },
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("domain_fronting.toast.fetch_status_failed"),
   });
   const domains = data?.domains ?? [];
@@ -61,19 +73,6 @@ export default function DomainFrontingPage() {
       toast.error(t("domain_fronting.toast.health_check_failed"));
     } finally {
       setChecking(false);
-    }
-  };
-
-  const saveConfig = async (cfgDomains: string[], cfgAuto: boolean) => {
-    setSaving(true);
-    try {
-      await api.postJson(paths.domainFront.config, { domains: cfgDomains, auto_failover: cfgAuto });
-      toast.success(t("domain_fronting.toast.config_saved"));
-      fetchStatus();
-    } catch {
-      toast.error(t("domain_fronting.toast.config_save_failed"));
-    } finally {
-      setSaving(false);
     }
   };
 

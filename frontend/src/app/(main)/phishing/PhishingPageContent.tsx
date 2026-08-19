@@ -8,6 +8,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { PageSpinner } from "@/components/ui/spinner";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { formatTime } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -104,7 +105,7 @@ export default function PhishingPageContent() {
         captures: (cap.data as CaptureEntry[]) || [],
       };
     },
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("phishing.toast.load_failed"),
   });
   const templates = data?.templates ?? [];

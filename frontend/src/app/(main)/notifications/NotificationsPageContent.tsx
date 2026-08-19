@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Pagination } from "@/components/ui/pagination";
@@ -57,7 +58,7 @@ export default function NotificationsPage({ embedded = false }: { embedded?: boo
       };
     },
     errorMessage: t("notifications.toast.load_failed"),
-    toastThrottleMs: 15_000,
+    toastThrottleMs: POLL.toastThrottleAlerts,
     retainOnError: false,
   });
   const notifications = data?.notifications ?? [];

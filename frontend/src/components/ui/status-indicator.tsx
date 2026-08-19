@@ -3,9 +3,8 @@
 import { memo } from "react";
 import { cn } from "@/lib/utils";
 import { toneForStatus, toneStyles } from "@/lib/ui/statusStyles";
+import type { AgentStatus, TaskStatus } from "@/lib/status";
 
-type AgentStatus = "online" | "offline" | "stale";
-type TaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 type ConnectionStatus = "connected" | "disconnected" | "reconnecting";
 type GenericStatus = "active" | "inactive" | "locked" | "warning" | "error";
 type BreakerStatus = "healthy" | "unstable" | "burned" | "unknown";

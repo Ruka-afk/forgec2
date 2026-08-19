@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { withChartData } from "@/components/withChartData";
 import { paths } from "@/lib/api-paths";
 import { osColor } from "@/lib/chart-palette";
@@ -9,13 +10,27 @@ interface OSPoint { name: string; value: number; color: string }
 
 function OSBody({ data }: { data: OSPoint[] }) {
   const { t } = useI18n();
-  const total = data.reduce((s, d) => s + d.value, 0);
-  const items = data.map((d) => ({ ...d, color: osColor(d.name) }));
+  const { total, items } = useMemo(() => {
+    const total = data.reduce((s, d) => s + d.value, 0);
+    const items = data.map((d) => ({ ...d, color: osColor(d.name) }));
+    return { total, items };
+  }, [data]);
+  const gradient = useMemo(() => {
+    if (total <= 0) return undefined;
+    let acc = 0;
+    const segments = items.map((d) => {
+      const start = (acc / total) * 360;
+      acc += d.value;
+      const end = (acc / total) * 360;
+      return `${d.color} ${start}deg ${end}deg`;
+    });
+    return `conic-gradient(${segments.join(", ")})`;
+  }, [items, total]);
   return (
     <div className="flex items-center gap-4">
       <div className="relative w-20 h-20 shrink-0" aria-hidden="true">
         {total > 0 ? (
-          <div className="w-full h-full rounded-full" style={{ background: `conic-gradient(${items.map((d, i) => { const prev = items.slice(0, i).reduce((s, x) => s + x.value, 0); return `${d.color} ${(prev / total) * 360}deg ${((prev + d.value) / total) * 360}deg`; }).join(", ")})` }}></div>
+          <div className="w-full h-full rounded-full" style={{ background: gradient }}></div>
         ) :           <div className="w-full h-full rounded-full bg-secondary"></div>}
         <div className="absolute inset-2 rounded-full bg-card flex items-center justify-center text-xs font-bold text-foreground">{total}</div>
       </div>

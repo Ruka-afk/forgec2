@@ -7,6 +7,8 @@ import { paths } from "@/lib/api-paths";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useConfirm } from "@/lib/hooks/useConfirm";
+import { useTransientMessage } from "@/lib/hooks/useTransientMessage";
+import { Banner } from "@/components/ui/banner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -67,7 +69,7 @@ export default function AutoTagPage() {
     return [{ _key: conditionKeyCounter, field: "hostname", op: "contains", value: "" }];
   });
   const { confirm, modal } = useConfirm();
-  const [message, setMessage] = useState("");
+  const { message, showMessage, clearMessage } = useTransientMessage();
 
   const { data, loading, refresh: fetchData } = useApiResource<{ rules: AutoTagRule[]; tags: AgentTag[] }>({
     fetcher: async () => {
@@ -79,7 +81,7 @@ export default function AutoTagPage() {
     },
     toastThrottleMs: 0,
     errorMessage: t("autotag.load_failed"),
-    onError: () => setMessage(t("autotag.load_failed")),
+    onError: () => showMessage(t("autotag.load_failed"), { tone: "destructive" }),
   });
   const rules = data?.rules ?? [];
   const tags = data?.tags ?? [];
@@ -91,7 +93,7 @@ export default function AutoTagPage() {
 
   async function handleSave() {
     if (!name || !tagId || conditions.length === 0 || conditions.some(c => !c.value)) {
-      setMessage(t("autotag.fill_fields")); return;
+      showMessage(t("autotag.fill_fields"), { tone: "warning" }); return;
     }
     const body = { name, enabled: true, condition: conditions, tag_id: tagId, priority };
     try {
@@ -100,26 +102,26 @@ export default function AutoTagPage() {
       } else {
         await api.postJson(paths.autotag.rules, body);
       }
-      resetForm(); setShowForm(false); setMessage(t("autotag.saved")); fetchData();
-    } catch { setMessage(t("autotag.save_failed")); }
+      resetForm(); setShowForm(false); showMessage(t("autotag.saved"), { tone: "success" }); fetchData();
+    } catch { showMessage(t("autotag.save_failed"), { tone: "destructive" }); }
   }
 
   async function handleToggle(id: string) {
       try { await api.postJson(paths.autotag.toggle(id), {}); fetchData(); }
-    catch { setMessage(t("autotag.toggle_failed")); }
+    catch { showMessage(t("autotag.toggle_failed"), { tone: "destructive" }); }
   }
 
   async function handleDelete(id: string) {
     if (!(await confirm({ message: t("autotag.delete_confirm") }))) return;
     try { await api.del(paths.autotag.rule(id)); fetchData(); }
-    catch { setMessage(t("autotag.delete_failed")); }
+    catch { showMessage(t("autotag.delete_failed"), { tone: "destructive" }); }
   }
 
   async function handleApplyAll() {
     try {
       const res = await api.postJson<{ data?: { applied: number } }>(paths.autotag.apply, {});
-      setMessage(t("autotag.applied", { count: res.data?.applied ?? 0 }));
-    } catch { setMessage(t("autotag.apply_failed")); }
+      showMessage(t("autotag.applied", { count: res.data?.applied ?? 0 }), { tone: "success" });
+    } catch { showMessage(t("autotag.apply_failed"), { tone: "destructive" }); }
   }
 
   function editRule(rule: AutoTagRule) {
@@ -158,12 +160,13 @@ export default function AutoTagPage() {
         </Button>
       </>}>
       {message && (
-        <div className="mb-4 px-4 py-2 rounded-lg bg-info/8 text-info text-sm border border-info/20 flex items-center justify-between animate-fade-in">
-          <span>{message}</span>
-          <Button variant="ghost" size="icon-sm" onClick={() => setMessage("")} aria-label={t("common.dismiss")}>
+        <Banner tone={message.tone} className="mb-4 animate-fade-in" action={
+          <Button variant="ghost" size="icon-sm" onClick={clearMessage} aria-label={t("common.dismiss")}>
             <X className="w-4 h-4" />
           </Button>
-        </div>
+        }>
+          {message.text}
+        </Banner>
       )}
 
       

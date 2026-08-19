@@ -21,4 +21,38 @@ export const POLL = {
   wsDownPoll: 8_000,
   /** Relative-time "now" ticker. */
   clockTick: 15_000,
+  /** Circuit-breaker breaker state page. */
+  circuitBreaker: 15_000,
+  /** Chrome session list page. */
+  chrome: 15_000,
+  /** DNS record/listener status page. */
+  dns: 5_000,
+  /** Password-spray agents listing. */
+  spray: 30_000,
+  /** Dashboard ops aggregate fetch (outside the WS stats stream). */
+  opsHome: 15_000,
+  /** Listener list page. */
+  listeners: 15_000,
+  /** Report run data page. */
+  report: 30_000,
+  /** Pivoting relay/forward status page. */
+  pivoting: 5_000,
+  /** Traffic page auto-refresh toggle. */
+  traffic: 5_000,
+  /** Dashboard active-missions board. */
+  missions: 30_000,
+  /** Timeline events stream while the WS is connected. */
+  events: 30_000,
+  /** Timeline events stream fallback while the WS is down. */
+  eventsFallback: 10_000,
+  /** Error-toast throttle window for polling fetchers (default cadence). */
+  toastThrottle: 10_000,
+  /** Error-toast throttle for slow-polling (30s) surfaces. */
+  toastThrottleLong: 30_000,
+  /** Error-toast throttle for fast-polling (5s) surfaces. */
+  toastThrottleShort: 5_000,
+  /** Error-toast throttle for alert/notification surfaces. */
+  toastThrottleAlerts: 15_000,
+  /** Cloud credential-steal progress poll while an operation is in flight. */
+  stealPoll: 3_000,
 } as const;

@@ -1,3 +1,4 @@
+import { isTaskStatus } from "@/lib/status";
 import type { AgentTaskRecord, TaskStatus } from "@/types/agent";
 
 const TASK_EVENT_TYPES = new Set(["task_update", "task_created", "task_output"]);
@@ -17,9 +18,8 @@ export function shouldRevealTaskResult(msg: Record<string, unknown>): boolean {
 }
 
 function asTaskStatus(raw: unknown, fallback: TaskStatus = "pending"): TaskStatus {
-  const s = String(raw || "");
-  if (s === "pending" || s === "running" || s === "completed" || s === "failed" || s === "cancelled" || s === "pending_approval") return s;
-  return fallback;
+  const s = String(raw ?? "");
+  return isTaskStatus(s) ? s : fallback;
 }
 
 export function applyTaskEvent(

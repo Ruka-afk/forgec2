@@ -7,6 +7,7 @@ import { PageSpinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +50,7 @@ export default function ChainPage() {
       const data = await api.get<{ nodes: ChainNode[] }>("/chain/graph");
       return data;
     },
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("chain.load_failed"),
   });
   const graph = graphData?.nodes || [];

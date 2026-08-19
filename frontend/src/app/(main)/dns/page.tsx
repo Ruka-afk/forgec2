@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { Spinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 import { IconBadge } from "@/components/ui/icon-badge";
@@ -37,7 +38,7 @@ export default function DNSPage() {
       const data = await api.get<DNSStatus>(paths.dns.status);
       return data;
     },
-    pollMs: 5_000,
+    pollMs: POLL.dns,
     toastThrottleMs: 0,
     errorMessage: t("dns.toast.load_failed"),
   });

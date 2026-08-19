@@ -4,6 +4,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { useI18n } from "@/lib/i18n";
 import { PageContainer } from "@/components/ui/page-container";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -44,7 +45,7 @@ export default function TagsPage() {
       const data = await fetchTags();
       return (Array.isArray(data) ? data : data.tags || []) as Tag[];
     },
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("tags.toast.load_failed"),
   });
   const tags = data ?? [];

@@ -7,6 +7,7 @@ import { paths } from "@/lib/api-paths";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import {
   computeDateRange,
   type AgentRow,
@@ -33,8 +34,8 @@ export function useReportData() {
 
   const { data: statsData, loading: loadingOverview } = useApiResource<ReportStats>({
     fetcher: async () => api.get<ReportStats>(paths.report.overview),
-    pollMs: 30_000,
-    toastThrottleMs: 30_000,
+    pollMs: POLL.report,
+    toastThrottleMs: POLL.toastThrottleLong,
     errorMessage: t("report.toast.load_overview_failed"),
   });
   const stats = statsData ?? {};
@@ -75,7 +76,7 @@ export function useReportData() {
         findings: findResp.findings || [],
       };
     },
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("report.toast.load_preview_failed"),
   });
 
@@ -91,7 +92,7 @@ export function useReportData() {
   const { data: historyData, loading: loadingHistory, refresh: loadHistory } = useApiResource<ReportHistoryRow[]>({
     fetcher: async () =>
       normalizeListEnvelope(await api.get(paths.report.history), ["reports", "Reports", "data"]) as ReportHistoryRow[],
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("report.toast.load_history_failed"),
   });
 

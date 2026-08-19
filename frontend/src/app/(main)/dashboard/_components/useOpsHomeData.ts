@@ -6,6 +6,8 @@ import { paths } from "@/lib/api-paths";
 import { firstArray, normalizeListEnvelope } from "@/lib/envelope";
 import { normalizeAgentList } from "@/lib/agents";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { isAgentStatus } from "@/lib/status";
+import { POLL } from "@/lib/polling";
 import { useI18n } from "@/lib/i18n";
 import type { NormalizedAgent } from "@/types/agent";
 import type { Task } from "@/types/task";
@@ -15,7 +17,7 @@ import { indexListenerHealth, type ListenerHealth } from "../../listeners/_compo
 
 function asAgent(row: Record<string, unknown>): NormalizedAgent {
   const statusRaw = String(row.status ?? "");
-  const status = statusRaw === "online" || statusRaw === "stale" ? statusRaw : "offline";
+  const status: NormalizedAgent["status"] = isAgentStatus(statusRaw) ? statusRaw : "offline";
   return {
     id: String(row.id ?? ""),
     hostname: String(row.hostname ?? ""),
@@ -111,7 +113,7 @@ export function useOpsHomeData(): OpsHomeData {
       if (failedLoads === settled.length) throw new Error("all-ops-endpoints-failed");
       return { agents, healthByTarget, failedTasks, pendingTasks, approvalTasks, loot };
     }, []),
-    pollMs: 15_000,
+    pollMs: POLL.opsHome,
     errorMessage: t("dashboard.ops_load_failed"),
   });
 

@@ -3,6 +3,8 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { useMutation } from "@/lib/hooks/useMutation";
+import { POLL } from "@/lib/polling";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FieldError } from "@/components/ui/field-error";
 import { PageContainer } from "@/components/ui/page-container";
@@ -32,7 +34,6 @@ interface Integration {
 
 export default function IntegrationsPage() {
   const { t } = useI18n();
-  const [saving, setSaving] = useState(false);
   const [testResult, setTestResult] = useState("");
 
   const [formType, setFormType] = useState("slack");
@@ -52,7 +53,7 @@ export default function IntegrationsPage() {
       const data = await api.get<{ integrations?: Integration[] }>("/integrations");
       return data;
     },
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("integrations.load_failed"),
   });
   const integrations = data?.integrations ?? [];
@@ -70,20 +71,8 @@ export default function IntegrationsPage() {
     setFormErrors({});
   }
 
-  async function saveIntegration() {
-    const errors: { name?: string; url?: string; smtp?: string } = {};
-    if (!formName.trim()) errors.name = t("integrations.name_required");
-    if (formType !== "email" && !formUrl.trim()) errors.url = t("integrations.url_required");
-    if (formType === "email") {
-      const port = parseInt(formSMTPPort, 10);
-      if (!formSMTPHost.trim() || !port || port < 1 || port > 65535) {
-        errors.smtp = t("integrations.err_smtp_invalid");
-      }
-    }
-    setFormErrors(errors);
-    if (Object.keys(errors).length > 0) return;
-    setSaving(true);
-    try {
+  const { mutate: runSave, isPending: saving } = useMutation({
+    fn: async () => {
       await api.postJson(paths.integrations.list, {
         type: formType,
         name: formName.trim(),
@@ -98,13 +87,28 @@ export default function IntegrationsPage() {
         enabled: true,
         event_type: "all",
       });
+    },
+    onSuccess: () => {
       toast.success(t("integrations.toast.saved"));
       resetForm();
       fetchIntegrations();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t("integrations.toast.save_failed"));
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : t("integrations.toast.save_failed")),
+  });
+
+  async function saveIntegration() {
+    const errors: { name?: string; url?: string; smtp?: string } = {};
+    if (!formName.trim()) errors.name = t("integrations.name_required");
+    if (formType !== "email" && !formUrl.trim()) errors.url = t("integrations.url_required");
+    if (formType === "email") {
+      const port = parseInt(formSMTPPort, 10);
+      if (!formSMTPHost.trim() || !port || port < 1 || port > 65535) {
+        errors.smtp = t("integrations.err_smtp_invalid");
+      }
     }
-    setSaving(false);
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+    await runSave();
   }
 
   async function toggleIntegration(id?: number) {

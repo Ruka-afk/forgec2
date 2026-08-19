@@ -4,11 +4,10 @@ import {
   DOCK_HEIGHT_DEFAULT,
   DOCK_HEIGHT_MAX,
   DOCK_HEIGHT_MIN,
-  isEditableTarget,
   readInteractPrefs,
-  tabFromDigit,
   writeInteractPrefs,
-} from "./interact-workspace";
+} from "@/lib/interact-storage";
+import { isEditableTarget, tabFromDigit } from "./interact-workspace";
 
 describe("clampDockHeight", () => {
   it("clamps to the operator range", () => {

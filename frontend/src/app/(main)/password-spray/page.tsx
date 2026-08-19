@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { useLiveTaskResult } from "@/lib/hooks/useLiveTaskResult";
 import { Spinner } from "@/components/ui/spinner";
 import { Banner } from "@/components/ui/banner";
@@ -102,7 +103,7 @@ export default function PasswordSprayPage() {
       const d = await api.get<{ agents: Agent[] }>(paths.agents.list());
       return d;
     },
-    pollMs: 30_000,
+    pollMs: POLL.spray,
     errorMessage: t("spray.load_failed"),
   });
 

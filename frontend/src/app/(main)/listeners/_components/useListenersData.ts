@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { firstArray, normalizeListEnvelope } from "@/lib/envelope";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { useWS } from "@/lib/wsContext";
 import { useI18n } from "@/lib/i18n";
 import type { CreateListenerForm, EditListenerForm, Listener } from "./types";
@@ -25,7 +26,7 @@ export function useListenersData() {
       return normalizeListEnvelope(data, ["data", "listeners", "Listeners"]) as Listener[];
     },
     retainOnError: false,
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("listeners.toast_load_failed"),
   });
   const listeners = listenersData ?? [];
@@ -35,7 +36,7 @@ export function useListenersData() {
       const data = await api.get(paths.circuitBreaker.detail, { signal });
       return firstArray(data, ["listeners", "data"]) as ListenerHealth[];
     },
-    pollMs: 15_000,
+    pollMs: POLL.listeners,
     errorMessage: "",
   });
   const loadHealthRef = useRef(loadHealth);

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
+import { useMutation } from "@/lib/hooks/useMutation";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -32,7 +33,17 @@ interface ListenerBreakerConfigDialogProps {
 export function ListenerBreakerConfigDialog({ open, onOpenChange }: ListenerBreakerConfigDialogProps) {
   const { t } = useI18n();
   const [form, setForm] = useState<BreakerConfig>(EMPTY_CONFIG);
-  const [saving, setSaving] = useState(false);
+
+  const { mutate: save, isPending: saving } = useMutation({
+    fn: async () => {
+      await api.postJson(paths.circuitBreaker.config, form);
+    },
+    onSuccess: () => {
+      toast.success(t("cb.config_saved"));
+      onOpenChange(false);
+    },
+    onError: () => toast.error(t("cb.config_save_failed")),
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -52,19 +63,6 @@ export function ListenerBreakerConfigDialog({ open, onOpenChange }: ListenerBrea
       });
     return () => controller.abort();
   }, [open, t]);
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      await api.postJson(paths.circuitBreaker.config, form);
-      toast.success(t("cb.config_saved"));
-      onOpenChange(false);
-    } catch {
-      toast.error(t("cb.config_save_failed"));
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

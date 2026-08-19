@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { formatTime, formatBytes } from "@/lib/utils";
 import { PageContainer } from "@/components/ui/page-container";
 import { CardHeaderRow } from "@/components/ui/card-header-row";
@@ -63,8 +64,8 @@ export default function TrafficPage() {
       const arr = Array.isArray(data) ? data : (data?.data ?? data?.traffic ?? []);
       return Array.isArray(arr) ? (arr as TrafficEntry[]) : [];
     },
-    pollMs: autoRefresh ? 5_000 : 0,
-    toastThrottleMs: 10_000,
+    pollMs: autoRefresh ? POLL.traffic : 0,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("traffic.toast.load_failed"),
   });
   const entries = data ?? EMPTY_TRAFFIC;

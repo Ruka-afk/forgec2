@@ -1,1 +1,0 @@
-import{a6 as a,aj as t,ak as c,al as i}from"./index-eOfLZqL2.js";function u(){const s=a(n=>n.currentPermissions),r=a(n=>n.currentUserRole);return{permissions:s,role:r,can:n=>i(s,n),canAny:n=>c(s,n),canAll:n=>t(s,n)}}function m({perms:s,fallback:r=null,children:n}){const{permissions:e,canAny:o}=u();return e==null||o(s)?n:r}export{m as P,u};

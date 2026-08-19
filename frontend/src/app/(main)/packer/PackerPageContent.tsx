@@ -7,6 +7,7 @@ import { downloadBase64 } from "@/lib/download";
 import { Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -79,7 +80,7 @@ export default function PackerPageContent({ embedded = false }: { embedded?: boo
       ]);
       return { templates: templates.templates || [], info };
     },
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("packer.toast.load_failed"),
   });
   const templates = data?.templates ?? [];

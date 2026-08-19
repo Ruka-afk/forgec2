@@ -12,6 +12,7 @@ import { paths } from "@/lib/api-paths";
 import { fetchAgentListCached } from "@/lib/agents";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { StatusDot } from "@/components/ui/status-dot";
@@ -43,7 +44,7 @@ export default function NtlmPage() {
       const agents = await fetchAgentListCached();
       return { agents };
     },
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("ntlm.toast.load_agents_failed"),
   });
   const agents = (agentsData?.agents || agentsData || []) as Agent[];
@@ -54,7 +55,7 @@ export default function NtlmPage() {
       return data;
     },
     enabled: activeTab === "status",
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("ntlm.toast.relay_status_failed"),
   });
   const relayStatus = relayData ?? { active: [], count: 0, running: false };

@@ -8,6 +8,7 @@ import { PageSpinner } from "@/components/ui/spinner";
 import { PageContainer } from "@/components/ui/page-container";
 import { useAgentList } from "@/lib/hooks/useAgentList";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -310,7 +311,7 @@ function PhaseCoverageCard() {
       const json = await api.get(paths.mitre.phases);
       return json;
     },
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("attack.load_phases_failed"),
   });
   const phases = resp?.data ?? [];

@@ -54,10 +54,6 @@ export function avatarColor(hostname: string) {
   return colors[Math.abs(h) % colors.length];
 }
 
-export function copyToClipboard(text: string, key: string, setCopied: (k: string) => void) {
-  navigator.clipboard.writeText(text).then(() => { setCopied(key); setTimeout(() => setCopied(""), 1500); }).catch(() => {});
-}
-
 export function formatUptime(dateStr: string, t?: (key: string, params?: Record<string, string | number>) => string): string {
   if (!dateStr) return t?.("time.ago.unknown") ?? "";
   const diff = Date.now() - new Date(dateStr).getTime();

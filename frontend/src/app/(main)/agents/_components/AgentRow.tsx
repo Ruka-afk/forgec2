@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-indicator";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -14,7 +14,7 @@ import { TableCell } from "@/components/ui/table";
 import { Check, Copy, FolderOpen, Link as LinkIcon, Lock, Maximize2, Monitor, MoreHorizontal, Shield, StickyNote, Terminal, Unlock, Users } from "lucide-react";
 import type { AgentMenuPoint } from "./agent-menu-actions";
 import { knownImplantVersion } from "./implant-version";
-import { copyToClipboard } from "./types";
+import { useCopiedField } from "@/lib/hooks/useCopiedField";
 
 interface AgentRowProps {
   beacon: Beacon;
@@ -47,7 +47,7 @@ export const AgentRow = memo(function AgentRow({
 }: AgentRowProps) {
   const id = beacon.id || "";
   const { t } = useI18n();
-  const [copiedField, setCopiedField] = useState("");
+  const { copiedField, copy } = useCopiedField();
   const hostname = beacon.hostname || "-";
   const username = beacon.username || "-";
   const ip = beacon.ip || "-";
@@ -103,7 +103,7 @@ export const AgentRow = memo(function AgentRow({
             <Button
               variant="ghost"
               size="icon-xs"
-              onClick={(e) => { e.stopPropagation(); copyToClipboard(hostname, `host-${id}`, setCopiedField); }}
+              onClick={(e) => { e.stopPropagation(); copy(hostname, `host-${id}`); }}
               className="ml-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
               aria-label={t("agents.copy_hostname")}
             >
@@ -155,7 +155,7 @@ export const AgentRow = memo(function AgentRow({
         <Button
           variant="ghost"
           size="icon-xs"
-          onClick={(e) => { e.stopPropagation(); copyToClipboard(ip, `ip-${id}`, setCopiedField); }}
+          onClick={(e) => { e.stopPropagation(); copy(ip, `ip-${id}`); }}
           className="ml-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
           aria-label={t("agents.copy_ip")}
         >

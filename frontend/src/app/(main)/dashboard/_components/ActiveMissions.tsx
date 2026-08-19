@@ -60,7 +60,7 @@ export default function ActiveMissions({ className = "" }: { className?: string 
       const data = await api.get<{ missions: Mission[] }>(paths.dashboard.activeMissions);
       return { missions: data?.missions || [] };
     },
-    pollMs: 30_000,
+    pollMs: POLL.missions,
     errorMessage: "Failed to load missions",
   });
 

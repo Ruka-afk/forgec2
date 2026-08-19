@@ -1,11 +1,14 @@
 "use client";
 import { PageContainer } from "@/components/ui/page-container";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
+import { useTransientMessage } from "@/lib/hooks/useTransientMessage";
+import { Banner } from "@/components/ui/banner";
 import { downloadText } from "@/lib/download";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/spinner";
@@ -46,7 +49,7 @@ interface Listener {
 export default function StagerPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n();
 
-  const [message, setMessage] = useState("");
+  const { message, showMessage, clearMessage } = useTransientMessage();
 
   const [listenerId, setListenerId] = useState("");
   const [arch, setArch] = useState("amd64");
@@ -69,21 +72,15 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
       const list = Array.isArray(lres) ? (lres as Listener[]) : (((lres as Record<string, unknown>)?.data as Listener[]) || ((lres as Record<string, unknown>)?.listeners as Listener[]) || []);
       return { tokens: res.success ? res.data : [], listeners: list };
     },
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("stager.toast.create_failed"),
   });
   const tokens = data?.tokens ?? [];
   const listeners = data?.listeners ?? [];
 
-  useEffect(() => {
-    if (!message) return;
-    const t = setTimeout(() => setMessage(""), 5000);
-    return () => clearTimeout(t);
-  }, [message]);
-
   async function handleRegister() {
-    if (!listenerId) { setMessage(t("stager.field_listener")); return; }
-    setCreating(true); setMessage(""); setCreatedToken(null);
+    if (!listenerId) { showMessage(t("stager.field_listener"), { tone: "warning" }); return; }
+    setCreating(true); clearMessage(); setCreatedToken(null);
     try {
       const res = await api.postJson<{
         success: boolean; token: string; stager_url: string;
@@ -100,11 +97,11 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
       });
       if (res.success) {
         setCreatedToken(res);
-        setMessage(t("stager.toast.created"));
+        showMessage(t("stager.toast.created"), { tone: "success" });
         loadData();
       }
     } catch (e: unknown) {
-      setMessage(e instanceof Error ? e.message : t("stager.toast.create_failed"));
+      showMessage(e instanceof Error ? e.message : t("stager.toast.create_failed"), { tone: "destructive" });
     } finally {
       setCreating(false);
     }
@@ -114,9 +111,9 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
     if (!(await confirm({ message: t("stager.delete_token") }))) return;
     try {
       await api.del(paths.stager.one(id));
-      setMessage(t("stager.toast.deleted"));
+      showMessage(t("stager.toast.deleted"), { tone: "success" });
       loadData();
-    } catch { setMessage(t("stager.toast.delete_failed")); }
+    } catch { showMessage(t("stager.toast.delete_failed"), { tone: "destructive" }); }
   }
 
   function isExpired(t: StagerToken) {
@@ -131,10 +128,13 @@ export default function StagerPage({ embedded = false }: { embedded?: boolean })
     <PageContainer embedded={embedded} title={!embedded ? t("stager.title") : undefined} subtitle={!embedded ? t("stager.subtitle") : undefined}>
 
       {message && (
-        <div className="px-4 py-2 bg-primary/10 border border-primary/20 rounded-lg text-sm text-primary animate-fade-in">
-          {message}
-          <Button variant="ghost" size="icon-sm" onClick={() => setMessage("")} className="ml-2 text-muted-foreground hover:text-foreground" aria-label={t("common.dismiss")}>&times;</Button>
-        </div>
+        <Banner tone={message.tone} className="mb-4 animate-fade-in" action={
+          <Button variant="ghost" size="icon-sm" onClick={clearMessage} className="text-muted-foreground hover:text-foreground" aria-label={t("common.dismiss")}>
+            &times;
+          </Button>
+        }>
+          {message.text}
+        </Banner>
       )}
 
       {createdToken && (

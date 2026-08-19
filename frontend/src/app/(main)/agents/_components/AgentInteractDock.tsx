@@ -27,7 +27,7 @@ import { diffChangeLines, diffResults, previousComparableTask, resultLooksCompar
 import { useAppStore } from "@/lib/store";
 import { useVisibleInterval } from "@/lib/hooks/useVisibleInterval";
 import { POLL } from "@/lib/polling";
-import { clampDockHeight, type InteractTab } from "./interact-workspace";
+import { clampDockHeight, type InteractTab } from "@/lib/interact-storage";
 import { useInteractStore } from "@/lib/interact-store";
 
 const ShellTerminal = dynamic(() => import("@/components/ShellTerminal"), {

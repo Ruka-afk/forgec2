@@ -7,7 +7,7 @@ import {
   readInteractPrefs,
   writeInteractPrefs,
   type InteractTab,
-} from "@/app/(main)/agents/_components/interact-workspace";
+} from "@/lib/interact-storage";
 
 export function isAgentSessionPath(path: string, agentId: string): boolean {
   if (!agentId || !path) return false;

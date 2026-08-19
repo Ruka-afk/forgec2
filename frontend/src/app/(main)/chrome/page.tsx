@@ -7,6 +7,7 @@ import { paths } from "@/lib/api-paths";
 import { useI18n } from "@/lib/i18n";
 import { Banner } from "@/components/ui/banner";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { DataState } from "@/components/ui/data-state";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Spinner } from "@/components/ui/spinner";
@@ -61,8 +62,8 @@ export default function ChromeC2Page() {
       const data = await api.get<{ agents: ChromeAgent[] }>(paths.chrome.agents);
       return data;
     },
-    pollMs: 15_000,
-    toastThrottleMs: 10_000,
+    pollMs: POLL.chrome,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("chrome.toast.load_failed"),
   });
   const agents = data?.agents ?? [];

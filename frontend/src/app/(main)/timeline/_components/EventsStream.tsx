@@ -7,6 +7,7 @@ import { paths } from "@/lib/api-paths";
 import { firstArray } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { useWS } from "@/lib/wsContext";
 import { formatTime } from "@/lib/utils";
 import { DataState } from "@/components/ui/data-state";
@@ -22,8 +23,6 @@ import { filterUnified, mergeEvents, type AlertLike } from "./merge-events";
 import { mergePolledWithLive, unifiedFromWS, upsertLiveEvent } from "./ws-to-event";
 import { useInteractStore } from "@/lib/interact-store";
 
-const POLL_CONNECTED_MS = 30_000;
-const POLL_FALLBACK_MS = 10_000;
 const SOURCES: { id: UnifiedSource | "all"; labelKey: string }[] = [
   { id: "all", labelKey: "events.filter_all" },
   { id: "timeline", labelKey: "events.source_timeline" },
@@ -67,7 +66,7 @@ export default function EventsStream() {
         alerts: nt.status === "fulfilled" ? firstArray(nt.value, ["notifications", "data"]) as AlertLike[] : [],
       };
     },
-    pollMs: connected ? POLL_CONNECTED_MS : POLL_FALLBACK_MS,
+    pollMs: connected ? POLL.events : POLL.eventsFallback,
     errorMessage: t("events.load_failed"),
   });
 

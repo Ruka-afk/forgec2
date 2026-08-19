@@ -3,6 +3,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { normalizeListEnvelope } from "@/lib/envelope";
 import { useI18n } from "@/lib/i18n";
 import { PageContainer } from "@/components/ui/page-container";
@@ -38,7 +39,7 @@ export default function GroupsPage() {
       const data = await api.get(paths.groups.list);
       return normalizeListEnvelope(data, ["groups", "data"]) as AgentGroup[];
     },
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("groups.toast.load_failed"),
   });
   const groups = data ?? [];

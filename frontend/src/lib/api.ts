@@ -450,9 +450,10 @@ function pollTaskWithCancel(
   };
 }
 
+import { AGENT_STATUSES } from "@/lib/status";
 import type { AgentStatus } from "@/types/agent";
 
-const VALID_STATUSES: readonly string[] = ["online", "stale", "offline"];
+const VALID_STATUSES: readonly string[] = AGENT_STATUSES;
 
 async function getAgentStatus(agentId: string): Promise<AgentStatus | "unknown"> {
   const data = await api.get<{ Agent?: { status?: string } }>(paths.agents.one(agentId));

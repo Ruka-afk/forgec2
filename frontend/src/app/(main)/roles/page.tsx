@@ -10,6 +10,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { PermissionGate } from "@/components/ui/permission-gate";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,7 +71,7 @@ export default function RolesPage() {
       const data = await api.get<{ success: boolean; data?: Role[] }>(paths.roles.list);
       return data;
     },
-    toastThrottleMs: 10_000,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("roles.load_failed"),
   });
   const roles = data?.data ?? [];

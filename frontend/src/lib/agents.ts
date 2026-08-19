@@ -3,6 +3,7 @@ import { paths } from "./api-paths";
 import { firstArray } from "./envelope";
 import { fetchCached } from "./hooks/useCachedData";
 import { fetchAgentsPage } from "./typed-api";
+import { isAgentStatus } from "./status";
 import type { Agent, AgentStatus, NormalizedAgent } from "@/types/agent";
 
 export type { NormalizedAgent as AgentSummary };
@@ -14,7 +15,7 @@ export function normalizeAgentList(data: unknown): Agent[] {
 
 function toNormalized(r: Record<string, unknown>): NormalizedAgent {
   const statusRaw = String(r.status ?? "");
-  const status = (["online", "stale", "offline"].includes(statusRaw) ? statusRaw : "offline") as AgentStatus;
+  const status: AgentStatus = isAgentStatus(statusRaw) ? statusRaw : "offline";
   return {
     id: String(r.id ?? ""),
     hostname: String(r.hostname ?? ""),

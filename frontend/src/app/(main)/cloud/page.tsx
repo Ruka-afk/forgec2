@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { Spinner } from "@/components/ui/spinner";
 import { useAgentList } from "@/lib/hooks/useAgentList";
+import { POLL } from "@/lib/polling";
 import { Card } from "@/components/ui/card";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { Button } from "@/components/ui/button";
@@ -99,7 +100,7 @@ export default function CloudPage() {
           if (pollRef.current) clearInterval(pollRef.current);
           pollRef.current = null;
         }
-      }, 3000);
+      }, POLL.stealPoll);
     } catch { toast.error(t("cloud.steal_failed")); }
     setStealing(false);
   };

@@ -1,0 +1,1 @@
+import{a7 as a,ak as t,al as c,am as i}from"./index-exeasHq2.js";function u(){const s=a(n=>n.currentPermissions),r=a(n=>n.currentUserRole);return{permissions:s,role:r,can:n=>i(s,n),canAny:n=>c(s,n),canAll:n=>t(s,n)}}function m({perms:s,fallback:r=null,children:n}){const{permissions:e,canAny:o}=u();return e==null||o(s)?n:r}export{m as P,u};

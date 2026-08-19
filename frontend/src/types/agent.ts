@@ -1,6 +1,6 @@
-export type AgentStatus = "online" | "stale" | "offline";
+import type { AgentStatus, TaskStatus } from "@/lib/status";
 
-export type TaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled" | "pending_approval";
+export type { AgentStatus, TaskStatus } from "@/lib/status";
 
 export interface AgentBase {
   id: string;

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { useApiResource } from "@/lib/hooks/useApiResource";
+import { POLL } from "@/lib/polling";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageSpinner } from "@/components/ui/spinner";
@@ -77,8 +78,8 @@ export default function CircuitBreakerPage() {
         events: (evtData.events || []) as BreakerEvent[],
       };
     },
-    pollMs: 15_000,
-    toastThrottleMs: 10_000,
+    pollMs: POLL.circuitBreaker,
+    toastThrottleMs: POLL.toastThrottle,
     errorMessage: t("cb.load_failed"),
   });
   const listeners = data?.listeners ?? [];
