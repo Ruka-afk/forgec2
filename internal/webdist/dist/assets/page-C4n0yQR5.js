@@ -1,1 +1,0 @@
-import{W as o}from"./index-DRuYy-9T.js";import"./vendor-react-CasLP3f6.js";import"./vendor-misc-BJX4Yuat.js";import"./vendor-router-bjcp5fWE.js";import"./vendor-sonner-CY3mybMB.js";import"./vendor-baseui-Czj7WBuQ.js";import"./vendor-icons-DiyV07PG.js";import"./vendor-zod-BAGC-vYU.js";function s(){o("/automation#tab=workflows")}export{s as default};

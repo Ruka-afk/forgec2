@@ -6,16 +6,13 @@ import { paths } from "@/lib/api-paths";
 import { toast } from "sonner";
 import { downloadText } from "@/lib/download";
 import { PageContainer } from "@/components/ui/page-container";
-import { Pagination } from "@/components/ui/pagination";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { DataState } from "@/components/ui/data-state";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Download, FileText, Filter, Terminal } from "lucide-react";
 import { StatTile } from "@/components/ui/stat-tile";
 import { IconBadge } from "@/components/ui/icon-badge";
@@ -213,114 +210,104 @@ export default function AuditPage() {
       </Card>
 
       <Card className="overflow-hidden">
-        <DataState
+        <DataTable<AuditLog>
+          data={logs.filter(Boolean)}
           loading={loading}
           error={error}
           onRetry={() => loadLogs()}
-          empty={!loading && !error && logs.length === 0}
           emptyTitle={t("audit.empty")}
-          loadingSkeleton={
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-border">
-                    <TableHead className="text-left">{t("audit.time")}</TableHead>
-                    <TableHead className="text-left">{t("audit.user")}</TableHead>
-                    <TableHead className="text-left">IP</TableHead>
-                    <TableHead className="text-left">{t("audit.action")}</TableHead>
-                    <TableHead className="text-left">{t("audit.severity")}</TableHead>
-                    <TableHead className="text-left">{t("audit.resource")}</TableHead>
-                    <TableHead className="text-left">{t("audit.col_target")}</TableHead>
-                    <TableHead className="text-left">{t("audit.status")}</TableHead>
-                    <TableHead className="text-left">{t("audit.details")}</TableHead>
-                    <TableHead className="text-right">{t("audit.interact")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
-                      {Array.from({ length: 10 }).map((_, j) => (
-                        <TableCell key={j} className="py-3 px-4"><Skeleton className="h-4 w-full" /></TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          }
-        >
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border">
-                <TableHead className="text-left">{t("audit.time")}</TableHead>
-                <TableHead className="text-left">{t("audit.user")}</TableHead>
-                <TableHead className="text-left">IP</TableHead>
-                <TableHead className="text-left">{t("audit.action")}</TableHead>
-                <TableHead className="text-left">{t("audit.severity")}</TableHead>
-                <TableHead className="text-left">{t("audit.resource")}</TableHead>
-                <TableHead className="text-left">{t("audit.col_target")}</TableHead>
-                <TableHead className="text-left">{t("audit.status")}</TableHead>
-                <TableHead className="text-left">{t("audit.details")}</TableHead>
-                <TableHead className="text-right">{t("audit.interact")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {logs.filter(Boolean).map((log, i) => {
-                const action = getLogField(log, "action");
-                const severity = getLogField(log, "severity");
+          columns={[
+            {
+              id: "timestamp",
+              header: t("audit.time"),
+              sortValue: (log) => log.timestamp || "",
+              cell: (log) => <span className="text-xs font-mono whitespace-nowrap">{getLogField(log, "timestamp")}</span>,
+            },
+            {
+              id: "username",
+              header: t("audit.user"),
+              sortValue: (log) => log.username || "",
+              cell: (log) => <span className="text-sm font-medium text-muted-foreground">{getLogField(log, "username")}</span>,
+            },
+            {
+              id: "ip",
+              header: "IP",
+              cell: (log) => <span className="text-xs font-mono">{getLogField(log, "ip")}</span>,
+            },
+            {
+              id: "action",
+              header: t("audit.action"),
+              sortValue: (log) => getLogField(log, "action"),
+              cell: (log) => (
+                <Badge variant={getActionBadge(getLogField(log, "action")) as "success" | "secondary" | "warning" | "destructive"}>
+                  {getLogField(log, "action")}
+                </Badge>
+              ),
+            },
+            {
+              id: "severity",
+              header: t("audit.severity"),
+              sortValue: (log) => getLogField(log, "severity"),
+              cell: (log) => (
+                <Badge variant={getSeverityBadge(getLogField(log, "severity")) as "secondary" | "warning" | "destructive"}>
+                  {getLogField(log, "severity")}
+                </Badge>
+              ),
+            },
+            {
+              id: "resource",
+              header: t("audit.resource"),
+              cell: (log) => <span className="text-xs max-w-[200px] truncate">{getLogField(log, "resource")}</span>,
+              cellClassName: "max-w-[200px]",
+            },
+            {
+              id: "target",
+              header: t("audit.col_target"),
+              cell: (log) => <span className="text-xs font-mono">{getLogField(log, "target")}</span>,
+            },
+            {
+              id: "status",
+              header: t("audit.status"),
+              cell: (log) => (
+                <Badge variant={getLogField(log, "status").toLowerCase().includes("fail") ? "destructive" : "success"}>
+                  {getLogField(log, "status")}
+                </Badge>
+              ),
+            },
+            {
+              id: "details",
+              header: t("audit.details"),
+              cell: (log) => <span className="text-xs max-w-[300px] truncate">{getLogField(log, "details")}</span>,
+              cellClassName: "max-w-[300px]",
+            },
+            {
+              id: "interact",
+              header: t("audit.interact"),
+              align: "right",
+              cell: (log) => {
                 const sessionId = auditSessionId(log);
-                return (
-                  <TableRow key={getLogField(log, "id") || String(i)} onClick={() => setSelectedLog(log)} className="cursor-pointer"
-                    tabIndex={0} role="button"
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedLog(log); } }}>
-                    <TableCell className="text-xs font-mono whitespace-nowrap">{getLogField(log, "timestamp")}</TableCell>
-                    <TableCell className="text-sm font-medium text-muted-foreground">{getLogField(log, "username")}</TableCell>
-                    <TableCell className="text-xs font-mono">{getLogField(log, "ip")}</TableCell>
-                    <TableCell>
-                      <Badge variant={getActionBadge(action) as "success" | "secondary" | "warning" | "destructive"}>
-                        {action}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getSeverityBadge(severity) as "secondary" | "warning" | "destructive"}>
-                        {severity}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs max-w-[200px] truncate">{getLogField(log, "resource")}</TableCell>
-                    <TableCell className="text-xs font-mono">{getLogField(log, "target")}</TableCell>
-                    <TableCell>
-                      <Badge variant={(getLogField(log, "status") || "").toLowerCase().includes("fail") ? "destructive" : "success"}>
-                        {getLogField(log, "status")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs max-w-[300px] truncate">{getLogField(log, "details")}</TableCell>
-                    <TableCell className="text-right">
-                      {sessionId ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          className="gap-1"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openSession(sessionId);
-                          }}
-                        >
-                          <Terminal aria-hidden="true" className="w-3.5 h-3.5" />
-                          {t("audit.interact")}
-                        </Button>
-                      ) : null}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-        </DataState>
-
-        <Pagination page={page} pageSize={perPage} total={total} onPageChange={setPage} />
+                return sessionId ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="gap-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openSession(sessionId);
+                    }}
+                  >
+                    <Terminal aria-hidden="true" className="w-3.5 h-3.5" />
+                    {t("audit.interact")}
+                  </Button>
+                ) : null;
+              },
+            },
+          ]}
+          rowKey={(log, i) => getLogField(log, "id") || String(i)}
+          onRowClick={(log) => setSelectedLog(log)}
+          pagination={{ page, pageSize: perPage, total, onPageChange: setPage }}
+        />
       </Card>
 
       <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>

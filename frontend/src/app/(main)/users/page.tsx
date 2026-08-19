@@ -4,7 +4,6 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { paths } from "@/lib/api-paths";
 import { normalizeListEnvelope } from "@/lib/envelope";
-import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { FieldError } from "@/components/ui/field-error";
 import { Permission } from "@/components/ui/permission";
@@ -15,7 +14,8 @@ import { IconBadge } from "@/components/ui/icon-badge";
 import { useConfirm } from "@/lib/hooks/useConfirm";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { usePermissions } from "@/lib/hooks/usePermissions";
-import { DataState } from "@/components/ui/data-state";
+import { DataTable } from "@/components/ui/data-table";
+import type { DataTableColumn } from "@/components/ui/data-table";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,6 @@ import { SearchInput } from "@/components/framework/SearchInput";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Ban, Check, Crown, Key, Laptop, LogOut, Pencil, Plus, Trash2, User as UserIcon, Users } from "lucide-react";
@@ -99,6 +98,87 @@ export default function UsersPage() {
   const customRoles = data?.customRoles ?? [];
   const { can } = usePermissions();
   const canManageUsers = can("users.write");
+
+  const columns: DataTableColumn<User>[] = [
+    {
+      id: "username",
+      header: t("users.col_username"),
+      sortValue: (u) => u.username || "",
+      cell: (u) => <div className="font-medium text-foreground">{u.username || "-"}</div>,
+    },
+    {
+      id: "role",
+      header: t("users.col_role"),
+      sortValue: (u) => u.role || "user",
+      cell: (u) => {
+        const badge = getRoleBadge(u.role || "user");
+        return (
+          <Badge variant="outline" className={badge.cls}>
+            {badge.icon} {t(badge.key)}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: "active",
+      header: t("users.col_active"),
+      cell: (u) => <StatusBadge status={u.is_active === true ? "online" : "offline"} />,
+    },
+    {
+      id: "last_activity",
+      header: t("users.col_last_activity"),
+      sortValue: (u) => u.last_activity || u.last_login || "",
+      cell: (u) => (
+        <span className="font-mono text-xs text-muted-foreground">{formatTime(u.last_activity || u.last_login)}</span>
+      ),
+    },
+    {
+      id: "created_at",
+      header: t("users.col_created_at"),
+      sortValue: (u) => u.created_at || "",
+      cell: (u) => (
+        <span className="font-mono text-xs text-muted-foreground">{formatTime(u.created_at)}</span>
+      ),
+    },
+    ...(canManageUsers
+      ? [{
+          id: "actions",
+          header: t("users.col_actions"),
+          align: "center" as const,
+          cell: (u: User) => {
+            const uid = u.id || "";
+            const name = u.username || "-";
+            const urole = u.role || "user";
+            const isActive = u.is_active === true;
+            return (
+              <div className="flex items-center justify-center gap-1">
+                <Button variant="ghost" size="icon-sm" onClick={() => handleToggle(uid)} disabled={actionLoading === uid + "_toggle"} className={`${isActive ? "text-warning hover:bg-warning/10" : "text-success hover:bg-success/10"}`} title={isActive ? t("users.disable") : t("users.enable")} aria-label={isActive ? t("users.disable") : t("users.enable")}>
+                  {isActive ? <Ban className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                </Button>
+                <Button variant="ghost" size="icon-sm" onClick={() => { setEditUser(u); setForm({ username: name, password: "", role: urole }); setShowEdit(true); }} className="text-info hover:bg-info/10" title={t("common.edit")} aria-label={t("common.edit")}>
+                  <Pencil className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="icon-sm" onClick={() => { setPasswordUserId(uid); setNewPassword(""); setShowPasswordModal(true); }} className="text-primary hover:bg-primary/10" title={t("users.set_password")} aria-label={t("users.set_password")}>
+                  <Key className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="icon-sm" onClick={() => openSessions(u)} className="text-info hover:bg-info/10" title={t("users.sessions")} aria-label={t("users.sessions")}>
+                  <Laptop className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="icon-sm" onClick={() => handleForceLogout(uid)} className="text-warning hover:bg-warning/10" title={t("users.force_logout")} aria-label={t("users.force_logout")}>
+                  <LogOut className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="icon-sm" onClick={() => handleKick(uid)} className="text-destructive hover:bg-destructive/10" title={t("users.kick_user")} aria-label={t("users.kick_user")}>
+                  <LogOut className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(uid, name)} disabled={actionLoading === uid + "_delete"} className="text-destructive hover:bg-destructive/10" title={t("common.delete")} aria-label={t("common.delete")}>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            );
+          },
+        }]
+      : []),
+  ] as DataTableColumn<User>[];
 
   const loadUsers = () => {
     void refresh();
@@ -308,103 +388,20 @@ export default function UsersPage() {
         </div>
       </div>
 
-      <DataState
-        loading={loading}
-        error={error}
-        onRetry={() => void loadUsers()}
-        empty={!loading && !error && users.length === 0}
-        emptyIcon={Users}
-        emptyTitle={t("users.empty_title")}
-        emptyMessage={t("users.empty_message")}
-        loadingSkeleton={
-          <Card className="p-4 space-y-2">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-10 w-full" />
-            ))}
-          </Card>
-        }
-      >
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_username")}</TableHead>
-              <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_role")}</TableHead>
-              <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_active")}</TableHead>
-              <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_last_activity")}</TableHead>
-              <TableHead className="py-3 px-4 sm:py-3.5 font-semibold">{t("users.col_created_at")}</TableHead>
-              {canManageUsers && <TableHead className="py-3 px-4 sm:py-3.5 font-semibold text-center">{t("users.col_actions")}</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((u) => {
-              const uid = u.id || "";
-              const name = u.username || "-";
-              const urole = u.role || "user";
-              const isActive = u.is_active === true;
-              const badge = getRoleBadge(urole);
-              return (
-                <TableRow key={uid}>
-                  <TableCell className="py-3 px-4 sm:py-3.5">
-                    <div className="font-medium text-foreground">{name}</div>
-                  </TableCell>
-                  <TableCell className="py-3 px-4 sm:py-3.5">
-                    <Badge variant="outline" className={badge.cls}>
-                      {badge.icon} {t(badge.key)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="py-3 px-4 sm:py-3.5">
-                    <StatusBadge status={isActive ? "online" : "offline"} />
-                  </TableCell>
-                  <TableCell className="py-3 px-4 sm:py-3.5 font-mono text-xs text-muted-foreground">
-                    {formatTime(u.last_activity || u.last_login)}
-                  </TableCell>
-                  <TableCell className="py-3 px-4 sm:py-3.5 font-mono text-xs text-muted-foreground">
-                    {formatTime(u.created_at)}
-                  </TableCell>
-                  {canManageUsers && (
-                    <TableCell className="py-3 px-4 sm:py-3.5 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleToggle(uid)} disabled={actionLoading === uid + "_toggle"} className={`${isActive ? "text-warning hover:bg-warning/10" : "text-success hover:bg-success/10"}`} title={isActive ? t("users.disable") : t("users.enable")} aria-label={isActive ? t("users.disable") : t("users.enable")}>
-                          {isActive ? <Ban className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-                        </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => { setEditUser(u); setForm({ username: name, password: "", role: urole }); setShowEdit(true); }} className="text-info hover:bg-info/10" title={t("common.edit")} aria-label={t("common.edit")}>
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => { setPasswordUserId(uid); setNewPassword(""); setShowPasswordModal(true); }} className="text-primary hover:bg-primary/10" title={t("users.set_password")} aria-label={t("users.set_password")}>
-                          <Key className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => openSessions(u)} className="text-info hover:bg-info/10" title={t("users.sessions")} aria-label={t("users.sessions")}>
-                          <Laptop className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleForceLogout(uid)} className="text-warning hover:bg-warning/10" title={t("users.force_logout")} aria-label={t("users.force_logout")}>
-                          <LogOut className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleKick(uid)} className="text-destructive hover:bg-destructive/10" title={t("users.kick_user")} aria-label={t("users.kick_user")}>
-                          <LogOut className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(uid, name)} disabled={actionLoading === uid + "_delete"} className="text-destructive hover:bg-destructive/10" title={t("common.delete")} aria-label={t("common.delete")}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  )}
-                </TableRow>
-              );
-            })}
-            {filtered.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={canManageUsers ? 6 : 5} className="py-20 text-center text-muted-foreground">
-                  <EmptyState icon={UserIcon} title={t("users.empty_title")} message={t("users.empty_message")} />
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-        </div>
+        <DataTable<User>
+          data={filtered}
+          loading={loading}
+          error={error}
+          onRetry={() => void loadUsers()}
+          emptyTitle={t("users.empty_title")}
+          emptyMessage={t("users.empty_message")}
+          emptyIcon={UserIcon}
+          columns={columns}
+          rowKey={(u) => u.id || u.username || ""}
+          defaultSort={{ column: "username", dir: "asc" }}
+        />
       </Card>
-      </DataState>
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="sm:max-w-md">

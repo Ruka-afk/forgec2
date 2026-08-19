@@ -5,15 +5,14 @@ import { api } from "@/lib/api";
 import { useApiResource } from "@/lib/hooks/useApiResource";
 import { paths } from "@/lib/api-paths";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 import { formatTime } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DataTable } from "@/components/ui/data-table";
+import type { DataTableColumn } from "@/components/ui/data-table";
 import { toast } from "sonner";
 import { BadgeInfo, Lock, RotateCcw, RotateCw } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -108,6 +107,78 @@ export default function TokensPage() {
     return map[source] || "secondary";
   };
 
+  const agentHostname = (token: Token): string =>
+    agentMap[token.agent_id] || token.agent_id?.substring(0, 8) || "-";
+
+  const columns: DataTableColumn<Token>[] = [
+    {
+      id: "agent",
+      header: t("tokens.col_agent"),
+      sortValue: agentHostname,
+      cell: (token) => <span className="text-xs font-mono text-primary font-medium">{agentHostname(token)}</span>,
+    },
+    {
+      id: "user",
+      header: t("tokens.col_user"),
+      sortValue: (token) => `${token.domain || ""}\\${token.username || ""}`,
+      cell: (token) => <span className="font-semibold text-sm">{token.domain || ""}\{token.username || ""}</span>,
+    },
+    {
+      id: "integrity",
+      header: t("tokens.col_integrity"),
+      sortValue: (token) => token.integrity || "Medium",
+      cell: (token) => <Badge variant={getIntegrityVariant(token.integrity || "Medium")}>{token.integrity || "Medium"}</Badge>,
+    },
+    {
+      id: "source",
+      header: t("tokens.col_source"),
+      sortValue: (token) => token.source || "steal",
+      cell: (token) => <Badge variant={getSourceVariant(token.source || "steal")}>{token.source || "steal"}</Badge>,
+    },
+    {
+      id: "process",
+      header: t("tokens.col_process"),
+      cell: (token) => (
+        <span className="text-xs font-mono text-muted-foreground">
+          {token.pid ? `[${token.pid}] ` : ""}{token.process_name || ""}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: t("tokens.col_status"),
+      cell: (token) =>
+        token.active ? (
+          <Badge variant="warning" className="gap-1.5 text-xs">
+            <span className="w-2 h-2 bg-warning rounded-full animate-pulse" />{t("tokens.active")}
+          </Badge>
+        ) : (
+          <Badge variant="secondary" className="text-xs">{t("tokens.inactive")}</Badge>
+        ),
+    },
+    {
+      id: "time",
+      header: t("tokens.col_time"),
+      sortValue: (token) => token.created_at || "",
+      cell: (token) => (
+        <span className="text-xs font-mono text-muted-foreground">{token.created_at ? formatTime(token.created_at) : "-"}</span>
+      ),
+    },
+    {
+      id: "actions",
+      header: t("tokens.col_actions"),
+      align: "right",
+      cell: (token) => (
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleRevert(token)} aria-label={t("tokens.revert")} />}>
+            <RotateCcw className="w-4 h-4" />
+          </TooltipTrigger>
+          <TooltipContent>{t("tokens.revert")}</TooltipContent>
+        </Tooltip>
+      ),
+    },
+  ];
+
   return (
     <PageContainer
       title={t("tokens.title")} icon={<BadgeInfo className="w-4 h-4" />}
@@ -169,75 +240,15 @@ export default function TokensPage() {
       </div>
 
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("tokens.col_agent")}</TableHead>
-                <TableHead>{t("tokens.col_user")}</TableHead>
-                <TableHead>{t("tokens.col_integrity")}</TableHead>
-                <TableHead>{t("tokens.col_source")}</TableHead>
-                <TableHead>{t("tokens.col_process")}</TableHead>
-                <TableHead>{t("tokens.col_status")}</TableHead>
-                <TableHead>{t("tokens.col_time")}</TableHead>
-                <TableHead>{t("tokens.col_actions")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!loading && filtered.map((token) => {
-                const tid = token.id || "";
-                const domain = token.domain || "";
-                const username = token.username || "";
-                const integrity = token.integrity || "Medium";
-                const source = token.source || "steal";
-                const pid = token.pid;
-                const procName = token.process_name;
-                const active = token.active;
-                const createdAt = token.created_at || "";
-                const agentHostname = agentMap[token.agent_id] || token.agent_id?.substring(0, 8) || "-";
-                return (
-                  <TableRow key={tid}>
-                    <TableCell><span className="text-xs font-mono text-primary font-medium">{agentHostname}</span></TableCell>
-                    <TableCell><span className="font-semibold text-sm">{domain}\{username}</span></TableCell>
-                    <TableCell><Badge variant={getIntegrityVariant(integrity)}>{integrity}</Badge></TableCell>
-                    <TableCell><Badge variant={getSourceVariant(source)}>{source}</Badge></TableCell>
-                    <TableCell className="text-xs font-mono text-muted-foreground">{pid ? `[${pid}]` : ""} {procName || ""}</TableCell>
-                    <TableCell>
-                      {active ? (
-                        <Badge variant="warning" className="gap-1.5 text-xs">
-                          <span className="w-2 h-2 bg-warning rounded-full animate-pulse"></span>{t("tokens.active")}
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary" className="text-xs">{t("tokens.inactive")}</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs font-mono text-muted-foreground">{createdAt ? formatTime(createdAt) : "-"}</TableCell>
-                    <TableCell>
-                      <Tooltip>
-                        <TooltipTrigger render={<Button variant="ghost" size="sm" onClick={() => handleRevert(token)} aria-label={t("tokens.revert")} />}>
-                        <RotateCcw className="w-4 h-4" />
-                        </TooltipTrigger>
-                        <TooltipContent>{t("tokens.revert")}</TooltipContent>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {loading && Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell colSpan={8}><Skeleton className="h-8 w-full" /></TableCell>
-                </TableRow>
-              ))}
-              {!loading && filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="py-20 text-center text-muted-foreground">
-                    <EmptyState icon={Lock} title={t("tokens.empty_title")} message={t("tokens.empty_message")} />
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <DataTable<Token>
+          data={filtered}
+          loading={loading}
+          columns={columns}
+          emptyTitle={t("tokens.empty_title")}
+          emptyMessage={t("tokens.empty_message")}
+          emptyIcon={Lock}
+          rowKey={(token, i) => token.id || `${token.agent_id}-${i}`}
+        />
       </Card>
     </PageContainer>
   );
