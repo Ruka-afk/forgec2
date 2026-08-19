@@ -141,6 +141,7 @@ type Implant struct {
 	// Per-agent sleep config (server-side tracking)
 	CurrentInterval int    `json:"current_interval"` // current sleep interval (seconds)
 	CurrentJitter   int    `json:"current_jitter"`   // current jitter percentage
+	AutoAdapt       bool   `gorm:"default:false" json:"auto_adapt"` // operator-enabled traffic auto-adaptation
 	ActiveWindow    string `json:"active_window"`    // foreground window title (reported each beacon)
 	// Working hours (server-side tracking)
 	WorkingHoursStart string `gorm:"size:5" json:"working_hours_start"` // HH:MM

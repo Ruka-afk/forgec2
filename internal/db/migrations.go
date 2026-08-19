@@ -536,6 +536,19 @@ var schemaMigrations = []*gormigrate.Migration{
 			return nil
 		},
 	},
+	{
+		// Persist the per-agent traffic auto-adapt toggle. Fresh databases get
+		// the column from AutoMigrate; legacy ones get it here.
+		ID: "2026-08-19-implant-auto-adapt",
+		Migrate: func(tx *gorm.DB) error {
+			execMigration(tx, "ALTER TABLE implants ADD COLUMN auto_adapt BOOLEAN DEFAULT FALSE", "add_implants_auto_adapt")
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			execMigration(tx, "ALTER TABLE implants DROP COLUMN auto_adapt", "drop_implants_auto_adapt")
+			return nil
+		},
+	},
 }
 
 // indexMigrations create/drop indexes and run AFTER AutoMigrate, so their

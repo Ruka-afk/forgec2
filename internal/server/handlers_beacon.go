@@ -2236,6 +2236,10 @@ func (s *Server) processBeacon(req beaconRequest, publicIP string) beaconRespons
 	s.processTaskAcknowledgements(req.UUID, req.AckTaskIDs, now)
 	s.processTaskResults(agent, req.Results, req.UUID, now)
 
+	// Server-side traffic auto-adapt loop: queues a real set_sleep task when
+	// the observed beacon timing deviates from the agent's stored sleep config.
+	s.maybeAutoAdaptBeacon(agent)
+
 	if len(req.Relayed) > 0 {
 		s.processRelayedResults(req.Relayed, req.UUID, now)
 	}

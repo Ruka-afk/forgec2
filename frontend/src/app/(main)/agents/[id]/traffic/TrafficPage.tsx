@@ -21,11 +21,11 @@ import { Activity, Wand2 } from "lucide-react";
 import { formatTime } from "@/lib/utils";
 
 interface BeaconRecord {
-  timestamp: string;
-  body_size: number;
-  transport: string;
-  interval: number;
-  jitter: number;
+  time: string;
+  method: string;
+  path: string;
+  status: number;
+  size: number;
 }
 
 interface AdaptationSuggestion {
@@ -88,6 +88,7 @@ export default function AgentTrafficPage() {
       const data = await api.postJson(paths.agents.trafficAdapt(id), {});
       if (data.success) {
         toast.success(t("agents.traffic_adapt_queued").replace("{message}", String(data.message || "")));
+        loadReport();
       } else {
         toast.error(t("agents.traffic_adapt_error").replace("{error}", String(data.error || t("agents.unknown"))));
       }
@@ -242,7 +243,6 @@ export default function AgentTrafficPage() {
                       <TableHead className="text-left font-medium">{t("agents.traffic_col_time")}</TableHead>
                       <TableHead className="text-right font-medium">{t("agents.traffic_col_size")}</TableHead>
                       <TableHead className="text-right font-medium">{t("agents.traffic_col_interval")}</TableHead>
-                      <TableHead className="text-right font-medium">{t("agents.traffic_col_jitter")}</TableHead>
                       <TableHead className="text-center font-medium">{t("agents.traffic_col_transport")}</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -250,15 +250,14 @@ export default function AgentTrafficPage() {
                     {report.recent_records.map((rec, i) => {
                       const prev = i > 0 ? report.recent_records[i - 1] : null;
                       const interval = prev
-                        ? ((new Date(rec.timestamp).getTime() - new Date(prev.timestamp).getTime()) / 1000).toFixed(1)
+                        ? ((new Date(rec.time).getTime() - new Date(prev.time).getTime()) / 1000).toFixed(1)
                         : "—";
                       return (
                         <TableRow key={i}>
-                          <TableCell className="text-foreground">{formatTime(rec.timestamp)}</TableCell>
-                          <TableCell className="text-right text-foreground">{rec.body_size.toLocaleString()}b</TableCell>
+                          <TableCell className="text-foreground">{formatTime(rec.time)}</TableCell>
+                          <TableCell className="text-right text-foreground">{rec.size.toLocaleString()}b</TableCell>
                           <TableCell className="text-right text-foreground">{interval}s</TableCell>
-                          <TableCell className="text-right text-foreground">{rec.jitter}%</TableCell>
-                          <TableCell className="text-center text-muted-foreground">{rec.transport}</TableCell>
+                          <TableCell className="text-center text-muted-foreground">{rec.method} {rec.path}</TableCell>
                         </TableRow>
                       );
                     })}

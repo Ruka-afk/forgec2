@@ -602,7 +602,6 @@ export const zh: Record<string, string> = {
     "agents.traffic_baseline_val": "基线：{value} 字节",
     "agents.traffic_beacon_timeline": "信标时间线（{count}）",
     "agents.traffic_col_interval": "间隔",
-    "agents.traffic_col_jitter": "抖动",
     "agents.traffic_col_size": "大小",
     "agents.traffic_col_time": "时间",
     "agents.traffic_col_transport": "传输",

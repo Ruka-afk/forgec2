@@ -602,7 +602,6 @@ export const en: Record<string, string> = {
     "agents.traffic_baseline_val": "Baseline: {value} bytes",
     "agents.traffic_beacon_timeline": "Beacon Timeline ({count})",
     "agents.traffic_col_interval": "Interval",
-    "agents.traffic_col_jitter": "Jitter",
     "agents.traffic_col_size": "Size",
     "agents.traffic_col_time": "Time",
     "agents.traffic_col_transport": "Transport",

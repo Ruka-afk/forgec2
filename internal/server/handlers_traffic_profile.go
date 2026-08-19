@@ -1,22 +1,45 @@
 package server
 
 import (
+	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"sort"
 	"time"
 
+	"github.com/forgec2/forgec2/internal/db"
 	"github.com/gin-gonic/gin"
 )
 
-// handleTrafficProfileGet returns a baseline report and recent beacon records for an agent.
-func (s *Server) handleTrafficProfileGet(c *gin.Context) {
-	agentID := c.Param("id")
-	if agentID == "" {
-		respondError(c, http.StatusBadRequest, "agent id required")
-		return
-	}
+// autoAdaptMinInterval rate-limits the server-side auto-adapt loop so a broken
+// agent cannot churn out a new set_sleep task on every beacon.
+const autoAdaptMinInterval = 10 * time.Minute
 
+// adaptationSuggestion is a typed traffic-profile recommendation. It mirrors
+// the JSON shape the frontend consumes and is also used by the auto-adapt loop.
+type adaptationSuggestion struct {
+	DesiredInterval int    `json:"desired_interval"`
+	DesiredJitter   int    `json:"desired_jitter"`
+	PadSize         int    `json:"pad_size"`
+	Reason          string `json:"reason"`
+	Confidence      string `json:"confidence"`
+	SuggestedAt     string `json:"suggested_at"`
+}
+
+// trafficProfileStats is the raw timing/body-size report for one agent.
+type trafficProfileStats struct {
+	agentLogs        []TrafficEntry
+	baselineInterval int
+	baselineJitter   int
+	baselinePacket   int
+	meanInterval     float64
+	stddevInterval   float64
+	meanPacketSize   float64
+	cv               float64
+}
+
+func (s *Server) trafficProfileStatsFor(agentID string) trafficProfileStats {
 	logs := s.trafficLog.recent(500)
 	var agentLogs []TrafficEntry
 	for _, l := range logs {
@@ -25,22 +48,9 @@ func (s *Server) handleTrafficProfileGet(c *gin.Context) {
 		}
 	}
 
+	st := trafficProfileStats{agentLogs: agentLogs}
 	if len(agentLogs) < 2 {
-		c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
-			"agent_id":             agentID,
-			"sample_count":         len(agentLogs),
-			"baseline_interval":    0,
-			"baseline_jitter":      0,
-			"baseline_packet_size": 0,
-			"mean_interval":        0,
-			"stddev_interval":      0,
-			"mean_packet_size":     0,
-			"cv":                   0,
-			"auto_adapt":           false,
-			"recent_records":       agentLogs,
-			"suggestion":           nil,
-		}})
-		return
+		return st
 	}
 
 	sort.Slice(agentLogs, func(i, j int) bool {
@@ -64,46 +74,106 @@ func (s *Server) handleTrafficProfileGet(c *gin.Context) {
 		cv = stddevInterval / meanInterval
 	}
 
-	baselineInterval := int(math.Round(meanInterval))
-	baselineJitter := 0
-	if baselineInterval > 0 {
-		baselineJitter = int(math.Round(cv * 100))
+	st.baselineInterval = int(math.Round(meanInterval))
+	if st.baselineInterval > 0 {
+		st.baselineJitter = int(math.Round(cv * 100))
+	}
+	st.baselinePacket = int(math.Round(meanSize))
+	st.meanInterval = meanInterval
+	st.stddevInterval = stddevInterval
+	st.meanPacketSize = meanSize
+	st.cv = cv
+	return st
+}
+
+// handleTrafficProfileGet returns a baseline report and recent beacon records for an agent.
+func (s *Server) handleTrafficProfileGet(c *gin.Context) {
+	agentID := c.Param("id")
+	if agentID == "" {
+		respondError(c, http.StatusBadRequest, "agent id required")
+		return
 	}
 
-	suggestion := computeAdaptationSuggestion(baselineInterval, baselineJitter, int(meanSize))
+	st := s.trafficProfileStatsFor(agentID)
+
+	autoAdapt := false
+	var agent db.Implant
+	if err := s.db.First(&agent, "id = ?", agentID).Error; err == nil {
+		autoAdapt = agent.AutoAdapt
+	}
+
+	var suggestion *adaptationSuggestion
+	if len(st.agentLogs) >= 2 {
+		suggestion = computeAdaptationSuggestion(st.baselineInterval, st.baselineJitter, st.baselinePacket)
+	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
 		"agent_id":             agentID,
-		"sample_count":         len(agentLogs),
-		"baseline_interval":    baselineInterval,
-		"baseline_jitter":      baselineJitter,
-		"baseline_packet_size": int(math.Round(meanSize)),
-		"mean_interval":        int(math.Round(meanInterval)),
-		"stddev_interval":      int(math.Round(stddevInterval)),
-		"mean_packet_size":     int(math.Round(meanSize)),
-		"cv":                   math.Round(cv*1000) / 1000,
-		"auto_adapt":           false,
-		"recent_records":       agentLogs,
+		"sample_count":         len(st.agentLogs),
+		"baseline_interval":    st.baselineInterval,
+		"baseline_jitter":      st.baselineJitter,
+		"baseline_packet_size": st.baselinePacket,
+		"mean_interval":        int(math.Round(st.meanInterval)),
+		"stddev_interval":      int(math.Round(st.stddevInterval)),
+		"mean_packet_size":     int(math.Round(st.meanPacketSize)),
+		"cv":                   math.Round(st.cv*1000) / 1000,
+		"auto_adapt":           autoAdapt,
+		"recent_records":       st.agentLogs,
 		"suggestion":           suggestion,
 	}})
 }
 
-// handleTrafficProfileAdapt queues an adaptation task for the agent.
+// handleTrafficProfileAdapt queues a real set_sleep task that moves the agent
+// onto the suggested interval/jitter profile.
 func (s *Server) handleTrafficProfileAdapt(c *gin.Context) {
 	agentID := c.Param("id")
 	if agentID == "" {
 		respondError(c, http.StatusBadRequest, "agent id required")
 		return
 	}
-	s.LogAuditRecord(c, "traffic_adapt", "agent", agentID, "Traffic adaptation triggered", true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Adaptation task queued for agent " + agentID})
+	agent, ok := s.getAgentOrFail(c, agentID)
+	if !ok {
+		return
+	}
+
+	st := s.trafficProfileStatsFor(agentID)
+	if len(st.agentLogs) < 2 {
+		respondError(c, http.StatusBadRequest, "insufficient beacon samples to adapt")
+		return
+	}
+	suggestion := computeAdaptationSuggestion(st.baselineInterval, st.baselineJitter, st.baselinePacket)
+	if suggestion == nil {
+		respondError(c, http.StatusBadRequest, "no adaptation suggestion available")
+		return
+	}
+
+	interval := clampInt(suggestion.DesiredInterval, 1, 86400)
+	jitter := clampInt(suggestion.DesiredJitter, 0, 100)
+	if interval == agent.CurrentInterval && jitter == agent.CurrentJitter {
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "agent already matches the suggested profile"})
+		return
+	}
+
+	sleep := fmt.Sprintf("%d,%d", interval, jitter)
+	task, err := s.createTask(agentID, "set_sleep", sleep, "", "", "", 0, 0, callerOpts(c)...)
+	if err != nil {
+		slog.Error("Failed to create traffic adaptation task", "agent_id", agentID, "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to create adaptation task")
+		return
+	}
+	slog.Info("Traffic adaptation task queued", "agent_id", agentID, "task_id", task.ID, "sleep", sleep)
+	s.LogAuditRecord(c, "traffic_adapt", "agent", agentID, "Adaptation task queued: set_sleep "+sleep, true, nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "task_id": task.ID, "message": "set_sleep " + sleep})
 }
 
-// handleTrafficProfileAutoAdapt toggles auto-adapt for an agent.
+// handleTrafficProfileAutoAdapt persists the per-agent auto-adapt toggle.
 func (s *Server) handleTrafficProfileAutoAdapt(c *gin.Context) {
 	agentID := c.Param("id")
 	if agentID == "" {
 		respondError(c, http.StatusBadRequest, "agent id required")
+		return
+	}
+	if _, ok := s.getAgentOrFail(c, agentID); !ok {
 		return
 	}
 
@@ -114,9 +184,86 @@ func (s *Server) handleTrafficProfileAutoAdapt(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "invalid request")
 		return
 	}
+
+	if err := s.db.Model(&db.Implant{}).Where("id = ?", agentID).Update("auto_adapt", req.Enabled).Error; err != nil {
+		slog.Error("Failed to persist auto-adapt toggle", "agent_id", agentID, "error", err)
+		respondError(c, http.StatusInternalServerError, "failed to update auto-adapt")
+		return
+	}
+	s.broadcastAgentDataUpdate(agentID, map[string]interface{}{"auto_adapt": req.Enabled})
 	s.LogAuditRecord(c, "traffic_auto_adapt", "agent", agentID,
-		"Auto-adapt toggled", true, nil)
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "auto-adapt set"})
+		"Auto-adapt toggled "+boolWord(req.Enabled), true, nil)
+	c.JSON(http.StatusOK, gin.H{"success": true, "auto_adapt": req.Enabled, "message": "auto-adapt " + boolWord(req.Enabled)})
+}
+
+// maybeAutoAdaptBeacon implements the server-side auto-adapt loop: on every
+// beacon from an auto-adapt agent, compare the observed beacon timing to the
+// stored sleep config and queue a real set_sleep task when they deviate.
+// Rate-limited per agent so a failing implant cannot spam tasks.
+func (s *Server) maybeAutoAdaptBeacon(agent db.Implant) {
+	if !agent.AutoAdapt {
+		return
+	}
+	st := s.trafficProfileStatsFor(agent.ID)
+	if len(st.agentLogs) < 2 {
+		return
+	}
+	suggestion := computeAdaptationSuggestion(st.baselineInterval, st.baselineJitter, st.baselinePacket)
+	if suggestion == nil {
+		return
+	}
+
+	interval := clampInt(suggestion.DesiredInterval, 1, 86400)
+	jitter := clampInt(suggestion.DesiredJitter, 0, 100)
+	if interval == agent.CurrentInterval && jitter == agent.CurrentJitter {
+		return
+	}
+
+	s.autoAdaptMu.Lock()
+	last := s.autoAdaptLast[agent.ID]
+	s.autoAdaptMu.Unlock()
+	if time.Since(last) < autoAdaptMinInterval {
+		return
+	}
+
+	// Never pile up adaptations: a pending/running set_sleep means the agent is
+	// still converging toward the target profile.
+	var pending int64
+	if err := s.db.Model(&db.Task{}).
+		Where("agent_id = ? AND type = ? AND status IN ?", agent.ID, "set_sleep", []string{"pending", "running"}).
+		Count(&pending).Error; err != nil || pending > 0 {
+		return
+	}
+
+	task, err := s.createTask(agent.ID, "set_sleep", fmt.Sprintf("%d,%d", interval, jitter), "", "", "", 0, 0)
+	if err != nil {
+		slog.Warn("Auto-adapt task creation failed", "agent_id", agent.ID, "error", err)
+		return
+	}
+
+	s.autoAdaptMu.Lock()
+	s.autoAdaptLast[agent.ID] = time.Now()
+	s.autoAdaptMu.Unlock()
+
+	slog.Info("Auto-adapt queued set_sleep", "agent_id", agent.ID, "task_id", task.ID, "interval", interval, "jitter", jitter)
+	s.broadcastAgentDataUpdate(agent.ID, map[string]interface{}{"auto_adapt": true})
+}
+
+func boolWord(b bool) string {
+	if b {
+		return "enabled"
+	}
+	return "disabled"
+}
+
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
 
 func avg(vals []float64) float64 {
@@ -142,7 +289,7 @@ func stddev(vals []float64, mean float64) float64 {
 	return math.Sqrt(ss / float64(len(vals)))
 }
 
-func computeAdaptationSuggestion(interval, jitter, packetSize int) map[string]interface{} {
+func computeAdaptationSuggestion(interval, jitter, packetSize int) *adaptationSuggestion {
 	if interval <= 0 {
 		return nil
 	}
@@ -158,12 +305,12 @@ func computeAdaptationSuggestion(interval, jitter, packetSize int) map[string]in
 	if desired < 5 {
 		desired = 5
 	}
-	return map[string]interface{}{
-		"desired_interval": desired,
-		"desired_jitter":   jitter,
-		"pad_size":         packetSize + 32,
-		"reason":           reason,
-		"confidence":       "medium",
-		"suggested_at":     time.Now().Format(time.RFC3339),
+	return &adaptationSuggestion{
+		DesiredInterval: desired,
+		DesiredJitter:   jitter,
+		PadSize:         packetSize + 32,
+		Reason:          reason,
+		Confidence:      "medium",
+		SuggestedAt:     time.Now().Format(time.RFC3339),
 	}
 }
